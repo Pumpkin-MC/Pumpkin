@@ -3,6 +3,7 @@ use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::player_server_data::ServerPlayerData;
 use crate::entity::NBTStorage;
+use crate::item::fuel_registry::FuelRegistry;
 use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::plugin::player::player_login::PlayerLoginEvent;
@@ -17,6 +18,7 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
+use pumpkin_data::recipes::init_recipe_registry;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
@@ -100,6 +102,7 @@ pub struct Server {
     /// Total number of ticks processed by the server
     pub tick_count: AtomicI32,
     tasks: TaskTracker,
+    pub fuel_registry: Arc<FuelRegistry>,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<RwLock<LevelData>>,
@@ -183,6 +186,8 @@ impl Server {
 
         let world_name = world_path.to_str().unwrap();
 
+        init_recipe_registry();
+
         Self {
             cached_registry: Registry::get_synced(),
             container_id: 0.into(),
@@ -214,6 +219,7 @@ impl Server {
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
+            fuel_registry: Arc::new(FuelRegistry::default()),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info: Arc::new(RwLock::new(level_info)),

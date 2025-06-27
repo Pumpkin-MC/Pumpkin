@@ -14,6 +14,7 @@ use blocks::fence_gates::FenceGateBlock;
 use blocks::fences::FenceBlock;
 use blocks::fire::fire::FireBlock;
 use blocks::fire::soul_fire::SoulFireBlock;
+use blocks::furnace::furnace::FurnaceBlock;
 use blocks::glass_panes::GlassPaneBlock;
 use blocks::grindstone::GrindstoneBlock;
 use blocks::iron_bars::IronBarsBlock;
@@ -61,9 +62,7 @@ use blocks::torches::TorchBlock;
 use blocks::trapdoor::TrapDoorBlock;
 use blocks::vine::VineBlock;
 use blocks::walls::WallBlock;
-use blocks::{
-    chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
-};
+use blocks::{chest::ChestBlock, redstone::lever::LeverBlock, tnt::TNTBlock};
 use fluid::lava::FlowingLava;
 use fluid::water::FlowingWater;
 use loot::LootTableExt;
