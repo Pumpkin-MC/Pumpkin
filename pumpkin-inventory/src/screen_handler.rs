@@ -468,9 +468,9 @@ pub trait ScreenHandler: Send + Sync {
     ) {
         // azom jump-point
         log::info!("=========================on_slot_click=========================");
-        log::info!("SlotActionType: {:?}", action_type);
-        log::info!("slot_index: {:?}", slot_index);
-        log::info!("button: {:?}", button);
+        log::info!("SlotActionType: {action_type:?}");
+        log::info!("slot_index: {slot_index:?}");
+        log::info!("button: {button:?}");
 
         if action_type == SlotActionType::PickupAll && button == 0 {
             let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
@@ -505,10 +505,7 @@ pub trait ScreenHandler: Send + Sync {
                 behaviour.drag_slots.clear();
             } else if drag_type == 1 {
                 if slot_index < 0 {
-                    warn!(
-                        "Invalid slot index for drag action: {}. Must be >= 0",
-                        slot_index
-                    );
+                    warn!("Invalid slot index for drag action: {slot_index}. Must be >= 0");
                     return;
                 }
                 let cursor_stack = behaviour.cursor_stack.lock().await;
@@ -532,6 +529,8 @@ pub trait ScreenHandler: Send + Sync {
                     let _ = behaviour;
                     self.internal_on_slot_click(slot, drag_button, SlotActionType::Pickup, player)
                         .await;
+
+                    log::info!("Finished drag with one slot: {slot}");
                     return;
                 }
 
@@ -549,7 +548,7 @@ pub trait ScreenHandler: Send + Sync {
                         } else if drag_button == 2 {
                             cursor_stack.item_count.div_ceil(2)
                         } else {
-                            panic!("Invalid drag button: {}", drag_button);
+                            panic!("Invalid drag button: {drag_button}");
                         };
                         insertion_count = insertion_count
                             .min(slot.get_max_item_count_for_stack(&stack).await - stack.item_count)
@@ -565,6 +564,7 @@ pub trait ScreenHandler: Send + Sync {
                     }
                 }
 
+                log::info!("Finished drag with {} slots", behaviour.drag_slots.len());
                 behaviour.drag_slots.clear();
             }
         } else if action_type == SlotActionType::Throw {
