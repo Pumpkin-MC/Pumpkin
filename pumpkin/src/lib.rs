@@ -341,7 +341,7 @@ impl PumpkinServer {
                     .await;
 
                     if process_result.is_err() {
-                        log::warn!("Client {} timed out during packet processing", id);
+                        log::warn!("Client {id} timed out during packet processing");
                         client.close();
                         client.await_tasks().await;
                         return;
