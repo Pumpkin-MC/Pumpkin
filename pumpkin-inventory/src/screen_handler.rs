@@ -526,6 +526,9 @@ pub trait ScreenHandler: Send + Sync {
 
                     return;
                 }
+                if drag_type == 2 && !player.has_infinite_materials() {
+                    return; // Only creative
+                }
 
                 let mut cursor_stack = behaviour.cursor_stack.lock().await;
                 let initial_count = cursor_stack.item_count;
