@@ -2,7 +2,7 @@ use std::{any::Any, collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use log::warn;
-use pumpkin_data::{item::Item, screen::WindowType};
+use pumpkin_data::screen::WindowType;
 use pumpkin_protocol::{
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
@@ -497,30 +497,40 @@ pub trait ScreenHandler: Send + Sync {
                     item_stack.item_count -= take;
                 }
             }
-        } else if action_type == SlotActionType::QuickCraft && button == 5 {
-            if slot_index == SLOT_INDEX_OUTSIDE {
-                return;
+        } else if action_type == SlotActionType::QuickCraft {
+            let drag_type = button & 3;
+            let drag_button = (button >> 2) & 3;
+            let behaviour = self.get_behaviour_mut();
+            if drag_type == 0 {
+                behaviour.drag_slots.clear();
+            } else if drag_type == 1 {
+                if slot_index < 0 {
+                    warn!(
+                        "Invalid slot index for drag action: {}. Must be >= 0",
+                        slot_index
+                    );
+                    return;
+                }
+                behaviour.drag_slots.push(slot_index as u32);
+                // todo: check if the item can be placed here.
+            } else if drag_type == 2 && !behaviour.drag_slots.is_empty() {
+                // process drag end
+                if behaviour.drag_slots.len() == 1 {
+                    let slot = behaviour.drag_slots[0] as i32;
+                    behaviour.drag_slots.clear();
+                    let _ = behaviour;
+                    self.internal_on_slot_click(
+                        slot,
+                        drag_button,
+                        SlotActionType::Pickup,
+                        player,
+                    )
+                    .await;
+                    return;
+                }
+                //todo
+                behaviour.drag_slots.clear();
             }
-            let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
-            let slot = self.get_behaviour().slots[slot_index as usize].clone();
-            let stack_lock = slot.get_stack().await;
-            let mut target_stack = stack_lock.lock().await;
-
-            if target_stack.is_empty() {
-                cursor_stack.decrement(1);
-                *target_stack = ItemStack::new(1, cursor_stack.item);
-            } else if target_stack.item == cursor_stack.item {
-                cursor_stack.decrement(1);
-                target_stack.increment(1);
-            }
-            if cursor_stack.item_count == 0 {
-                *cursor_stack = ItemStack::EMPTY;
-            }
-        } else if action_type == SlotActionType::QuickCraft
-            && (button == 0 || button == 1 || button == 2)
-        {
-            todo!("Implement QuickCraft left click");
-            // https://minecraft.wiki/w/Java_Edition_protocol/Packets#Click_Container
         } else if action_type == SlotActionType::Throw {
             let slot = self.get_behaviour().slots[slot_index as usize].clone();
             let stack_lock = slot.get_stack().await;
@@ -785,6 +795,7 @@ pub struct ScreenHandlerBehaviour {
     pub properties: Vec<ScreenProperty>,
     pub tracked_property_values: Vec<i32>,
     pub window_type: Option<WindowType>,
+    pub drag_slots: Vec<u32>,
 }
 
 impl ScreenHandlerBehaviour {
@@ -803,6 +814,7 @@ impl ScreenHandlerBehaviour {
             properties: Vec::new(),
             tracked_property_values: Vec::new(),
             window_type,
+            drag_slots: Vec::new(),
         }
     }
 
