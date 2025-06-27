@@ -468,16 +468,18 @@ pub trait ScreenHandler: Send + Sync {
         player: &dyn InventoryPlayer,
     ) {
         if action_type == SlotActionType::PickupAll && button == 0 {
-            let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
+            let behavior = self.get_behaviour_mut();
+            let mut cursor_stack = behavior.cursor_stack.lock().await;
             let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
 
             // TODO: we also need to iterate over the item stacks in the crafting spaces
-            for item_stack in player.get_inventory().main_inventory.iter() {
+            for slot in behavior.slots.iter() {
                 if to_pick_up == 0 {
                     break;
                 }
 
-                let mut item_stack = item_stack.lock().await;
+                let stack_lock = slot.get_stack().await;
+                let mut item_stack = stack_lock.lock().await;
                 if item_stack.item != cursor_stack.get_item() {
                     continue;
                 }
@@ -487,9 +489,13 @@ pub trait ScreenHandler: Send + Sync {
                 to_pick_up -= take;
 
                 if item_stack.item_count == take {
-                    *item_stack = ItemStack::EMPTY;
+                    drop(item_stack);
+                    slot.set_stack(ItemStack::EMPTY).await;
                 } else {
-                    item_stack.item_count -= take;
+                    let mut stack_clone = *item_stack;
+                    drop(item_stack);
+                    stack_clone.decrement(take);
+                    slot.set_stack(stack_clone).await;
                 }
             }
         } else if action_type == SlotActionType::QuickCraft {
@@ -526,7 +532,7 @@ pub trait ScreenHandler: Send + Sync {
 
                     return;
                 }
-                if drag_type == 2 && !player.has_infinite_materials() {
+                if drag_button == 2 && !player.has_infinite_materials() {
                     return; // Only creative
                 }
 
