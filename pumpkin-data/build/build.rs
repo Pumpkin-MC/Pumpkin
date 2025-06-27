@@ -7,6 +7,7 @@ use proc_macro2::TokenStream;
 mod biome;
 mod block;
 mod chunk_status;
+mod composter_increase_chance;
 mod damage_type;
 mod entity_pose;
 mod entity_status;
@@ -59,6 +60,10 @@ pub fn main() {
     write_generated_file(block::build(), "block.rs");
     write_generated_file(tag::build(), "tag.rs");
     write_generated_file(noise_router::build(), "noise_router.rs");
+    write_generated_file(
+        composter_increase_chance::build(),
+        "composter_increase_chance.rs",
+    );
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {

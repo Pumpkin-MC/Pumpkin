@@ -904,6 +904,7 @@ mod tests {
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
                     region_folder: region_path,
+                    entities_folder: PathBuf::from(""),
                 },
                 &[Vector2::new(0, 0)],
                 send,
@@ -932,6 +933,7 @@ mod tests {
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
             region_folder: temp_dir.path().join("region"),
+            entities_folder: PathBuf::from("entities"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
         let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
@@ -1209,6 +1211,7 @@ mod tests {
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
             region_folder: temp_dir.path().join("region"),
+            entities_folder: PathBuf::from("entities"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
         let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();

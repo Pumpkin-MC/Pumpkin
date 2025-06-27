@@ -79,16 +79,18 @@ fn waterlogged_check(block: &Block, state: &BlockState) -> Option<bool> {
 
 fn set_waterlogged(block: &Block, state: &BlockState, waterlogged: bool) -> u16 {
     let original_props = &block.properties(state.id).unwrap().to_props();
-    let mut props_vec: Vec<(&str, &str)> = Vec::with_capacity(original_props.len());
     let waterlogged = waterlogged.to_string();
-    for (key, value) in original_props {
-        if key == "waterlogged" {
-            props_vec.push((key.as_str(), &waterlogged));
-        } else {
-            props_vec.push((key.as_str(), value.as_str()));
-        }
-    }
-    block.from_properties(props_vec).unwrap().to_state_id(block)
+    let props = original_props
+        .iter()
+        .map(|(key, value)| {
+            if key == "waterlogged" {
+                ("waterlogged", waterlogged.as_str())
+            } else {
+                (key.as_str(), value.as_str())
+            }
+        })
+        .collect();
+    block.from_properties(props).unwrap().to_state_id(block)
 }
 
 #[async_trait]
