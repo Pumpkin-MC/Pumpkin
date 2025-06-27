@@ -483,7 +483,7 @@ pub trait ScreenHandler: Send + Sync {
                     continue;
                 }
 
-                if !slot.can_take_items(player) {
+                if !slot.can_take_items(player).await {
                     continue;
                 }
 
