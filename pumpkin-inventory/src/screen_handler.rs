@@ -536,7 +536,7 @@ pub trait ScreenHandler: Send + Sync {
                     if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
                         && slot.can_insert(&cursor_stack).await
                     {
-                        let mut insertion_count = if drag_button == 0 {
+                        let mut inserting_count = if drag_button == 0 {
                             initial_count / behaviour.drag_slots.len() as u8
                         } else if drag_button == 1 {
                             1
@@ -545,19 +545,22 @@ pub trait ScreenHandler: Send + Sync {
                         } else {
                             panic!("Invalid drag button: {drag_button}");
                         };
-                        insertion_count = insertion_count
+                        inserting_count = inserting_count
                             .min(max(
                                 0,
                                 slot.get_max_item_count_for_stack(&stack).await - stack.item_count,
                             ))
                             .min(cursor_stack.item_count);
-                        if insertion_count > 0 {
+                        if inserting_count > 0 {
                             let mut stack_clone = stack.clone();
                             drop(stack);
-                            stack_clone.increment(insertion_count);
+                            if stack_clone.is_empty() {
+                                stack_clone = cursor_stack.copy_with_count(0);
+                            }
+                            stack_clone.increment(inserting_count);
                             slot.set_stack(stack_clone).await;
                             if drag_button != 2 {
-                                cursor_stack.decrement(insertion_count);
+                                cursor_stack.decrement(inserting_count);
                             }
                             if cursor_stack.is_empty() {
                                 break;
@@ -575,7 +578,9 @@ pub trait ScreenHandler: Send + Sync {
                 let mut target_stack = stack_lock.lock().await;
                 if !target_stack.is_empty() {
                     if button == 1 {
-                        player.drop_item(*target_stack, true).await;
+                        let clone = target_stack.clone();
+                        player.drop_item(clone, true).await;
+                        drop(target_stack);
                         slot.set_stack(ItemStack::EMPTY).await;
                     } else {
                         player.drop_item(target_stack.split(1), true).await;
@@ -654,7 +659,6 @@ pub trait ScreenHandler: Send + Sync {
 
                 if slot_stack.is_empty() {
                     if !cursor_stack.is_empty() {
-                        //println!("Cursor -> Slot");
                         let transfer_count = if click_type == MouseClick::Left {
                             cursor_stack.item_count
                         } else {
@@ -665,7 +669,6 @@ pub trait ScreenHandler: Send + Sync {
                     }
                 } else if slot.can_take_items(player).await {
                     if cursor_stack.is_empty() {
-                        //println!("Slot -> Cursor");
                         let take_count = if click_type == MouseClick::Left {
                             slot_stack.item_count
                         } else {
