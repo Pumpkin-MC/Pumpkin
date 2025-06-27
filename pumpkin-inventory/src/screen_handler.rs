@@ -45,6 +45,7 @@ impl ScreenProperty {
 pub trait InventoryPlayer: Send + Sync {
     async fn drop_item(&self, item: ItemStack, retain_ownership: bool);
     fn get_inventory(&self) -> Arc<PlayerInventory>;
+    fn has_infinite_materials(&self) -> bool;
     async fn enqueue_inventory_packet(&self, packet: &CSetContainerContent);
     async fn enqueue_slot_packet(&self, packet: &CSetContainerSlot);
     async fn enqueue_cursor_packet(&self, packet: &CSetCursorItem);
@@ -552,7 +553,7 @@ pub trait ScreenHandler: Send + Sync {
                             ))
                             .min(cursor_stack.item_count);
                         if inserting_count > 0 {
-                            let mut stack_clone = stack.clone();
+                            let mut stack_clone = *stack;
                             drop(stack);
                             if stack_clone.is_empty() {
                                 stack_clone = cursor_stack.copy_with_count(0);
@@ -578,14 +579,23 @@ pub trait ScreenHandler: Send + Sync {
                 let mut target_stack = stack_lock.lock().await;
                 if !target_stack.is_empty() {
                     if button == 1 {
-                        let clone = target_stack.clone();
-                        player.drop_item(clone, true).await;
+                        let stack_clone = *target_stack;
+                        player.drop_item(stack_clone, true).await;
                         drop(target_stack);
                         slot.set_stack(ItemStack::EMPTY).await;
                     } else {
                         player.drop_item(target_stack.split(1), true).await;
                     }
                 }
+            }
+        } else if action_type == SlotActionType::Clone {
+            if player.has_infinite_materials() && slot_index >= 0 {
+                let behaviour = self.get_behaviour_mut();
+                let slot = behaviour.slots[slot_index as usize].clone();
+                let stack_lock = slot.get_stack().await;
+                let stack = stack_lock.lock().await;
+                let mut cursor_stack = behaviour.cursor_stack.lock().await;
+                *cursor_stack = stack.copy_with_count(stack.get_max_stack_size());
             }
         } else if (action_type == SlotActionType::Pickup
             || action_type == SlotActionType::QuickMove)
