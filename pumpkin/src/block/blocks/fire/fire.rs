@@ -160,6 +160,7 @@ impl FireBlock {
             }
             if let Some(flammable) = neighbor_block.flammable {
                 total_burn_chance += i32::from(flammable.burn_chance);
+                total_burn_chance += flammable.burn_chance;
             }
         }
 

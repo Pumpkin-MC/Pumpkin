@@ -52,6 +52,10 @@ pub mod chunk {
 pub mod game_event;
 
 #[rustfmt::skip]
+#[path ="generated/game_rules.rs"]
+pub mod game_rules;
+
+#[rustfmt::skip]
 #[path = "generated/entity_pose.rs"]
 mod entity_pose;
 
