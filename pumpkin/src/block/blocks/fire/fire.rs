@@ -140,7 +140,7 @@ impl FireBlock {
                     .await;
             }
 
-            if block.default_state.id == Block::TNT.default_state.id {
+            if block == Block::TNT {
                 TNTBlock::prime(world, pos).await;
             }
         }
