@@ -1,5 +1,3 @@
-use std::{any::Any, collections::HashMap, sync::Arc};
-
 use async_trait::async_trait;
 use log::warn;
 use pumpkin_data::screen::WindowType;
@@ -14,6 +12,8 @@ use pumpkin_protocol::{
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::inventory::{ComparableInventory, Inventory};
 use pumpkin_world::item::ItemStack;
+use std::cmp::max;
+use std::{any::Any, collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -466,12 +466,6 @@ pub trait ScreenHandler: Send + Sync {
         action_type: SlotActionType,
         player: &dyn InventoryPlayer,
     ) {
-        // azom jump-point
-        log::info!("=========================on_slot_click=========================");
-        log::info!("SlotActionType: {action_type:?}");
-        log::info!("slot_index: {slot_index:?}");
-        log::info!("button: {button:?}");
-
         if action_type == SlotActionType::PickupAll && button == 0 {
             let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
             let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
@@ -510,14 +504,13 @@ pub trait ScreenHandler: Send + Sync {
                 }
                 let cursor_stack = behaviour.cursor_stack.lock().await;
 
-                let stack_lock = behaviour.slots[slot_index as usize].get_stack().await;
+                let slot = &behaviour.slots[slot_index as usize];
+                let stack_lock = slot.get_stack().await;
                 let stack = stack_lock.lock().await;
                 if !cursor_stack.is_empty()
-                    && stack.are_items_and_components_equal(&cursor_stack)
-                    && stack.item_count
-                        > behaviour.slots[slot_index as usize]
-                            .get_max_item_count_for_stack(&stack)
-                            .await
+                    && slot.can_insert(&cursor_stack).await
+                    && (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
+                    && slot.get_max_item_count_for_stack(&stack).await > stack.item_count
                 {
                     behaviour.drag_slots.push(slot_index as u32);
                 }
@@ -530,7 +523,6 @@ pub trait ScreenHandler: Send + Sync {
                     self.internal_on_slot_click(slot, drag_button, SlotActionType::Pickup, player)
                         .await;
 
-                    log::info!("Finished drag with one slot: {slot}");
                     return;
                 }
 
@@ -540,23 +532,30 @@ pub trait ScreenHandler: Send + Sync {
                     let stack_lock = slot.get_stack().await;
                     let mut stack = stack_lock.lock().await;
 
-                    if stack.are_items_and_components_equal(&cursor_stack) {
+                    if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
+                        && slot.can_insert(&cursor_stack).await
+                    {
                         let mut insertion_count = if drag_button == 0 {
                             cursor_stack.item_count / behaviour.drag_slots.len() as u8
                         } else if drag_button == 1 {
                             1
                         } else if drag_button == 2 {
-                            cursor_stack.item_count.div_ceil(2)
+                            cursor_stack.get_max_stack_size()
                         } else {
                             panic!("Invalid drag button: {drag_button}");
                         };
                         insertion_count = insertion_count
-                            .min(slot.get_max_item_count_for_stack(&stack).await - stack.item_count)
+                            .min(max(
+                                0,
+                                slot.get_max_item_count_for_stack(&stack).await - stack.item_count,
+                            ))
                             .min(cursor_stack.item_count);
                         if insertion_count > 0 {
                             stack.increment(insertion_count);
-                            cursor_stack.decrement(insertion_count);
-                            slot.mark_dirty().await;
+                            slot.set_stack(*stack).await;
+                            if drag_button != 2 {
+                                cursor_stack.decrement(insertion_count);
+                            }
                             if cursor_stack.is_empty() {
                                 break;
                             }
@@ -564,20 +563,23 @@ pub trait ScreenHandler: Send + Sync {
                     }
                 }
 
-                log::info!("Finished drag with {} slots", behaviour.drag_slots.len());
                 behaviour.drag_slots.clear();
             }
         } else if action_type == SlotActionType::Throw {
-            let slot = self.get_behaviour().slots[slot_index as usize].clone();
-            let stack_lock = slot.get_stack().await;
-            let mut target_stack = stack_lock.lock().await;
-            if !target_stack.is_empty() {
-                if button == 1 {
-                    player.drop_item(*target_stack, true).await;
-                    *target_stack = ItemStack::EMPTY;
-                } else {
-                    player.drop_item(target_stack.split(1), true).await;
+            if slot_index != SLOT_INDEX_OUTSIDE {
+                let slot = self.get_behaviour().slots[slot_index as usize].clone();
+                let stack_lock = slot.get_stack().await;
+                let mut target_stack = stack_lock.lock().await;
+                if !target_stack.is_empty() {
+                    if button == 1 {
+                        player.drop_item(*target_stack, true).await;
+                        *target_stack = ItemStack::EMPTY;
+                    } else {
+                        player.drop_item(target_stack.split(1), true).await;
+                    }
                 }
+            } else {
+                //todo
             }
         } else if (action_type == SlotActionType::Pickup
             || action_type == SlotActionType::QuickMove)
