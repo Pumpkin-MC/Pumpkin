@@ -1,7 +1,9 @@
 use crate::block::blocks::fire::FireBlockBase;
+use crate::block::blocks::fire::fire::FireBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
@@ -25,6 +27,10 @@ impl Ignition {
         let world = player.world().await;
         let pos = location.offset(face.to_offset());
 
+        if world.get_fluid(&location).await.name != Fluid::EMPTY.name {
+            // if block is in fluid, do not ignite
+            return;
+        }
         let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
 
         let result_block_id = get_ignite_result(block, &world, &location)
@@ -42,20 +48,15 @@ impl Ignition {
         if result_is_fire {
             // calling if result is fire block.
             // will be contained fire direction logic
-            if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
-                ignite_logic(world, pos, result_block_id).await;
+            let state_id = FireBlock.get_state_for_position(&world, block, &pos).await;
+            if FireBlockBase::can_place_at(&world, &pos).await {
+                ignite_logic(world, pos, state_id).await;
             }
             return;
         }
 
         // ignite candles, campfire
         ignite_logic(world, location, result_block_id).await;
-    }
-
-    pub fn run_fire_spread(_world: Arc<World>, _start_pos: &BlockPos) {
-        tokio::spawn(async move {
-            // todo
-        });
     }
 }
 

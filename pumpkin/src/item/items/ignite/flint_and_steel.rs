@@ -40,9 +40,6 @@ impl PumpkinItem for FlintAndSteelItem {
                 world
                     .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
-
-                Ignition::run_fire_spread(world, &pos);
-                // TODO
             },
             item,
             player,

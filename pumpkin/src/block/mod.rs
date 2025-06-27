@@ -4,6 +4,7 @@ use blocks::bed::BedBlock;
 use blocks::cactus::CactusBlock;
 use blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
 use blocks::command::CommandBlock;
+use blocks::composter::ComposterBlock;
 use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::DoorBlock;
 use blocks::end_portal::EndPortalBlock;
@@ -137,6 +138,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NoteBlock);
     manager.register(PumpkinBlock);
     manager.register(CommandBlock);
+    manager.register(ComposterBlock);
     manager.register(PressurePlateBlock);
     manager.register(WeightedPressurePlateBlock);
     manager.register(EndPortalBlock);

@@ -6,6 +6,7 @@ pub mod campfire;
 pub mod carpet;
 pub mod chest;
 pub mod command;
+pub mod composter;
 pub mod crafting_table;
 pub mod dirt_path;
 pub mod doors;
