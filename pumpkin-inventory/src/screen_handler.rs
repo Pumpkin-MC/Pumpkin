@@ -566,7 +566,7 @@ pub trait ScreenHandler: Send + Sync {
                 behaviour.drag_slots.clear();
             }
         } else if action_type == SlotActionType::Throw {
-            if slot_index != SLOT_INDEX_OUTSIDE {
+            if slot_index >= 0 && self.get_behaviour().cursor_stack.lock().await.is_empty() {
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
                 let stack_lock = slot.get_stack().await;
                 let mut target_stack = stack_lock.lock().await;
@@ -578,8 +578,6 @@ pub trait ScreenHandler: Send + Sync {
                         player.drop_item(target_stack.split(1), true).await;
                     }
                 }
-            } else {
-                //todo
             }
         } else if (action_type == SlotActionType::Pickup
             || action_type == SlotActionType::QuickMove)
