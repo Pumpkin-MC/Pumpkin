@@ -511,24 +511,60 @@ pub trait ScreenHandler: Send + Sync {
                     );
                     return;
                 }
-                behaviour.drag_slots.push(slot_index as u32);
-                // todo: check if the item can be placed here.
+                let cursor_stack = behaviour.cursor_stack.lock().await;
+
+                let stack_lock = behaviour.slots[slot_index as usize].get_stack().await;
+                let stack = stack_lock.lock().await;
+                if !cursor_stack.is_empty()
+                    && stack.are_items_and_components_equal(&cursor_stack)
+                    && stack.item_count
+                        > behaviour.slots[slot_index as usize]
+                            .get_max_item_count_for_stack(&stack)
+                            .await
+                {
+                    behaviour.drag_slots.push(slot_index as u32);
+                }
             } else if drag_type == 2 && !behaviour.drag_slots.is_empty() {
                 // process drag end
                 if behaviour.drag_slots.len() == 1 {
                     let slot = behaviour.drag_slots[0] as i32;
                     behaviour.drag_slots.clear();
                     let _ = behaviour;
-                    self.internal_on_slot_click(
-                        slot,
-                        drag_button,
-                        SlotActionType::Pickup,
-                        player,
-                    )
-                    .await;
+                    self.internal_on_slot_click(slot, drag_button, SlotActionType::Pickup, player)
+                        .await;
                     return;
                 }
-                //todo
+
+                let mut cursor_stack = behaviour.cursor_stack.lock().await;
+                for slot_index in behaviour.drag_slots.iter() {
+                    let slot = behaviour.slots[*slot_index as usize].clone();
+                    let stack_lock = slot.get_stack().await;
+                    let mut stack = stack_lock.lock().await;
+
+                    if stack.are_items_and_components_equal(&cursor_stack) {
+                        let mut insertion_count = if drag_button == 0 {
+                            cursor_stack.item_count / behaviour.drag_slots.len() as u8
+                        } else if drag_button == 1 {
+                            1
+                        } else if drag_button == 2 {
+                            cursor_stack.item_count.div_ceil(2)
+                        } else {
+                            panic!("Invalid drag button: {}", drag_button);
+                        };
+                        insertion_count = insertion_count
+                            .min(slot.get_max_item_count_for_stack(&stack) - stack.item_count)
+                            .min(cursor_stack.item_count);
+                        if insertion_count > 0 {
+                            stack.increment(insertion_count);
+                            cursor_stack.decrement(insertion_count);
+                            slot.mark_dirty().await;
+                            if cursor_stack.is_empty() {
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 behaviour.drag_slots.clear();
             }
         } else if action_type == SlotActionType::Throw {
@@ -543,9 +579,8 @@ pub trait ScreenHandler: Send + Sync {
                     player.drop_item(target_stack.split(1), true).await;
                 }
             }
-        }
-
-        if (action_type == SlotActionType::Pickup || action_type == SlotActionType::QuickMove)
+        } else if (action_type == SlotActionType::Pickup
+            || action_type == SlotActionType::QuickMove)
             && (button == 0 || button == 1)
         {
             let click_type = if button == 0 {
