@@ -123,7 +123,7 @@ impl ToTokens for PropertyStruct {
                 fn from_index(index: u16) -> Self {
                     match index {
                         #(#values_index => Self::#values_3,)*
-                        _ => panic!("Invalid index: {}", index),
+                        _ => panic!("Invalid index: {index}"),
                     }
                 }
 
@@ -136,7 +136,7 @@ impl ToTokens for PropertyStruct {
                 fn from_value(value: &str) -> Self {
                     match value {
                         #(#from_values),*,
-                        _ => panic!("Invalid value: {:?}", value),
+                        _ => panic!("Invalid value: {value:?}"),
                     }
                 }
 
@@ -321,7 +321,7 @@ impl ToTokens for BlockPropertyStruct {
                     for (key, value) in props {
                         match key {
                             #(#from_props_values),*,
-                            _ => panic!("Invalid key: {}", key),
+                            _ => panic!("Invalid key: {key}"),
                         }
                     }
                     block_props

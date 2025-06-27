@@ -2074,6 +2074,10 @@ impl Player {
                 self.handle_confirm_teleport(SConfirmTeleport::read(payload)?)
                     .await;
             }
+            SChangeGameMode::PACKET_ID => {
+                self.handle_change_game_mode(SChangeGameMode::read(payload)?)
+                    .await;
+            }
             SChatCommand::PACKET_ID => {
                 self.handle_chat_command(server, &(SChatCommand::read(payload)?))
                     .await;
