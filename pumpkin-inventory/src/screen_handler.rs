@@ -472,20 +472,22 @@ pub trait ScreenHandler: Send + Sync {
             let mut cursor_stack = behavior.cursor_stack.lock().await;
             let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
 
-            // TODO: we also need to iterate over the item stacks in the crafting spaces
             for slot in behavior.slots.iter() {
                 if to_pick_up == 0 {
                     break;
                 }
 
                 let stack_lock = slot.get_stack().await;
-                let mut item_stack = stack_lock.lock().await;
-                if item_stack.item != cursor_stack.get_item() {
+                let item_stack = stack_lock.lock().await;
+                if item_stack.are_items_and_components_equal(&cursor_stack) {
+                    continue;
+                }
+
+                if !slot.can_take_items(player) {
                     continue;
                 }
 
                 let take = item_stack.item_count.min(to_pick_up);
-                cursor_stack.increment(take);
                 to_pick_up -= take;
 
                 if item_stack.item_count == take {
@@ -497,6 +499,7 @@ pub trait ScreenHandler: Send + Sync {
                     stack_clone.decrement(take);
                     slot.set_stack(stack_clone).await;
                 }
+                cursor_stack.increment(take);
             }
         } else if action_type == SlotActionType::QuickCraft {
             let drag_type = button & 3;
