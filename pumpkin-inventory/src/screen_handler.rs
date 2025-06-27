@@ -552,7 +552,7 @@ pub trait ScreenHandler: Send + Sync {
                             panic!("Invalid drag button: {}", drag_button);
                         };
                         insertion_count = insertion_count
-                            .min(slot.get_max_item_count_for_stack(&stack) - stack.item_count)
+                            .min(slot.get_max_item_count_for_stack(&stack).await - stack.item_count)
                             .min(cursor_stack.item_count);
                         if insertion_count > 0 {
                             stack.increment(insertion_count);
