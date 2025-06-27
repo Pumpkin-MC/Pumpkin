@@ -14,16 +14,17 @@ use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::block::BlockIsReplacing;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
-use pumpkin_data::item::Item;
 use pumpkin_protocol::server::play::SUseItemOn;
 
 use crate::server::Server;
@@ -238,7 +239,7 @@ impl PumpkinBlock for DoorBlock {
         block: &Block,
         player: &Player,
         location: BlockPos,
-        _item: &Item,
+        _item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {

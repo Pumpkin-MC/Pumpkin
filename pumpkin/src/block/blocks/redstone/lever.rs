@@ -8,15 +8,16 @@ use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, HorizontalFacingExt,
     block_properties::{BlockFace, BlockProperties, LeverLikeProperties},
-    item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     BlockStateId,
+    item::ItemStack,
     world::{BlockAccessor, BlockFlags},
 };
+use tokio::sync::Mutex;
 
 use crate::{
     block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -50,7 +51,7 @@ impl PumpkinBlock for LeverBlock {
         _block: &Block,
         _player: &Player,
         location: BlockPos,
-        _item: &Item,
+        _item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {

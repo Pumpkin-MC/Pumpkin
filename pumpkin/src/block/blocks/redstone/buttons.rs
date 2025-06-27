@@ -7,15 +7,16 @@ use pumpkin_data::BlockState;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockFace;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::item::Item;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
+use tokio::sync::Mutex;
 
 type ButtonLikeProperties = pumpkin_data::block_properties::LeverLikeProperties;
 
@@ -79,7 +80,7 @@ impl PumpkinBlock for ButtonBlock {
         _block: &Block,
         _player: &Player,
         location: BlockPos,
-        _item: &Item,
+        _item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {

@@ -6,13 +6,16 @@ use pumpkin_data::{
     block_properties::{
         BlockProperties, EnumVariants, HorizontalFacing, Integer1To4, get_state_by_state_id,
     },
-    item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use pumpkin_world::{BlockStateId, chunk::TickPriority};
+use pumpkin_world::{
+    item::ItemStack,
+    world::{BlockAccessor, BlockFlags},
+};
+use tokio::sync::Mutex;
 
 use crate::{
     block::{BlockIsReplacing, pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -139,7 +142,7 @@ impl PumpkinBlock for RepeaterBlock {
         block: &Block,
         _player: &Player,
         location: BlockPos,
-        _item: &Item,
+        _item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {

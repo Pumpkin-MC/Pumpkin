@@ -9,14 +9,15 @@ use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{BlockHalf, BlockProperties};
-use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 type TrapDoorProperties = pumpkin_data::block_properties::OakTrapdoorLikeProperties;
 
@@ -90,7 +91,7 @@ impl PumpkinBlock for TrapDoorBlock {
         block: &Block,
         _player: &Player,
         location: BlockPos,
-        _item: &Item,
+        _item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {

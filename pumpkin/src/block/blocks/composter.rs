@@ -13,6 +13,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, chunk::TickPriority, item::ItemStack, world::BlockFlags};
 use rand::Rng;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::{
@@ -47,7 +48,7 @@ impl PumpkinBlock for ComposterBlock {
         block: &Block,
         _player: &Player,
         location: BlockPos,
-        item: &Item,
+        item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
@@ -58,7 +59,9 @@ impl PumpkinBlock for ComposterBlock {
             self.clear_composter(world, location, state_id, block).await;
         }
         if level < 7 {
-            if let Some(chance) = get_composter_increase_chance_from_item_id(item.id) {
+            if let Some(chance) =
+                get_composter_increase_chance_from_item_id(item.lock().await.item.id)
+            {
                 if level == 0 || rand::rng().random_bool(f64::from(chance)) {
                     self.update_level_composter(world, location, state_id, block, level + 1)
                         .await;

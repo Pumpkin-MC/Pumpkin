@@ -16,8 +16,10 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use rand::Rng;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use super::redstone::block_receives_redstone_power;
@@ -60,11 +62,12 @@ impl PumpkinBlock for TNTBlock {
         _block: &Block,
         player: &Player,
         location: BlockPos,
-        item: &Item,
+        item_stack: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         _world: &Arc<World>,
     ) -> BlockActionResult {
-        if *item != Item::FLINT_AND_STEEL || *item == Item::FIRE_CHARGE {
+        let held_item = item_stack.lock().await.item;
+        if held_item != &Item::FLINT_AND_STEEL || held_item == &Item::FIRE_CHARGE {
             return BlockActionResult::Continue;
         }
         let world = player.world().await;

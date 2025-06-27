@@ -8,7 +8,6 @@ use pumpkin_data::{
         get_state_by_state_id,
     },
     entity::EntityType,
-    item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -17,8 +16,10 @@ use pumpkin_world::{
     BlockStateId,
     block::entities::{BlockEntity, comparator::ComparatorBlockEntity},
     chunk::TickPriority,
+    item::ItemStack,
     world::{BlockAccessor, BlockFlags},
 };
+use tokio::sync::Mutex;
 
 use crate::{
     block::{BlockIsReplacing, pumpkin_block::PumpkinBlock, registry::BlockActionResult},
@@ -66,7 +67,7 @@ impl PumpkinBlock for ComparatorBlock {
         block: &Block,
         _player: &Player,
         location: BlockPos,
-        _item: &Item,
+        _item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {

@@ -15,9 +15,11 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::Rng;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 type SeaPickleProperties = pumpkin_data::block_properties::SeaPickleLikeProperties;
 
@@ -32,11 +34,11 @@ impl PumpkinBlock for SeaPickleBlock {
         block: &Block,
         _player: &Player,
         location: BlockPos,
-        item: &Item,
+        item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        if item != &Item::BONE_MEAL
+        if item.lock().await.item != &Item::BONE_MEAL
             || !world
                 .get_block(&location.down())
                 .await

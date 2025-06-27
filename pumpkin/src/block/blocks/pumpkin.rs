@@ -12,6 +12,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 #[pumpkin_block("minecraft:pumpkin")]
 pub struct PumpkinBlock;
@@ -23,11 +24,11 @@ impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
         _block: &Block,
         _player: &Player,
         pos: BlockPos,
-        item: &Item,
+        item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        if item != &Item::SHEARS {
+        if item.lock().await.item != &Item::SHEARS {
             return BlockActionResult::Continue;
         }
         // TODO: set direction

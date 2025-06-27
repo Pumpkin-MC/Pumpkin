@@ -6,7 +6,6 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::item::Item;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
     Block, BlockState,
@@ -15,7 +14,9 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
+use tokio::sync::Mutex;
 
 #[pumpkin_block("minecraft:jukebox")]
 pub struct JukeboxBlock;
@@ -67,7 +68,7 @@ impl PumpkinBlock for JukeboxBlock {
         block: &Block,
         player: &Player,
         location: BlockPos,
-        item: &Item,
+        item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         _world: &Arc<World>,
     ) -> BlockActionResult {
@@ -79,7 +80,7 @@ impl PumpkinBlock for JukeboxBlock {
             return BlockActionResult::Consume;
         }
 
-        let Some(jukebox_playable) = &item.components.jukebox_playable else {
+        let Some(jukebox_playable) = &item.lock().await.item.components.jukebox_playable else {
             return BlockActionResult::Continue;
         };
 

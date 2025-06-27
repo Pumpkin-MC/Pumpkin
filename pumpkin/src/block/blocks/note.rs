@@ -5,7 +5,6 @@ use crate::server::Server;
 use crate::{block::registry::BlockActionResult, entity::player::Player};
 use async_trait::async_trait;
 use pumpkin_data::block_properties::Axis;
-use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
     Block, BlockDirection,
@@ -17,7 +16,9 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
+use tokio::sync::Mutex;
 
 use crate::{block::pumpkin_block::PumpkinBlock, world::World};
 
@@ -113,7 +114,7 @@ impl PumpkinBlock for NoteBlock {
         _block: &Block,
         _player: &Player,
         _location: BlockPos,
-        _item: &Item,
+        _item: &Arc<Mutex<ItemStack>>,
         _server: &Server,
         _world: &Arc<World>,
     ) -> BlockActionResult {
