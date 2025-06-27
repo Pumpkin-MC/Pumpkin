@@ -2185,11 +2185,6 @@ impl Player {
                 self.handle_chat_session_update(server, SPlayerSession::read(payload)?)
                     .await;
             }
-            SChangeGameMode::PACKET_ID => {
-                self.clone()
-                    .handle_change_game_mode(SChangeGameMode::read(payload)?)
-                    .await;
-            }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);
                 // TODO: We give an error if all play packets are implemented
