@@ -1803,7 +1803,7 @@ impl World {
                     Some(player) => {
                         self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
                             .await;
-                        }
+                    }
                     None => self.broadcast_packet_all(&particles_packet).await,
                 }
             }
@@ -1815,7 +1815,6 @@ impl World {
                 };
                 block::drop_loot(self, &broken_block, position, true, params).await;
             }
-
         }
     }
 
