@@ -146,7 +146,7 @@ impl FireBlock {
         }
     }
 
-    pub async fn get_burn_chance(&self, world: &Arc<World>, pos: &BlockPos) -> u8 {
+    pub async fn get_burn_chance(&self, world: &Arc<World>, pos: &BlockPos) -> i32 {
         let block_state = world.get_block_state(pos).await;
         if !block_state.is_air() {
             return 0;
@@ -159,7 +159,7 @@ impl FireBlock {
                 continue; // Skip if there is a fluid
             }
             if let Some(flammable) = neighbor_block.flammable {
-                total_burn_chance += flammable.burn_chance;
+                total_burn_chance += i32::from(flammable.burn_chance);
             }
         }
 
@@ -405,11 +405,10 @@ impl PumpkinBlock for FireBlock {
                         let burn_chance = Self.get_burn_chance(world, &offset_pos).await;
                         if burn_chance > 0 {
                             let o = 100 + if n > 1 { (n - 1) * 100 } else { 0 };
-                            let p: i32 = i32::from(
-                                burn_chance
-                                    + 40
-                                    + world.level_info.read().await.difficulty.to_int() * 7,
-                            ) / i32::from(age + 30);
+                            let p: i32 = burn_chance
+                                + 40
+                                + i32::from(world.level_info.read().await.difficulty.to_int()) * 7
+                                    / i32::from(age + 30);
 
                             if p > 0 && rand::rng().random_range(0..o) <= p {
                                 let new_age = (age + rand::rng().random_range(0..5) / 4).min(15);

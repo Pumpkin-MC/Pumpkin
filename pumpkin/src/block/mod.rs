@@ -36,6 +36,7 @@ use blocks::plant::tall_plant::TallPlantBlock;
 use blocks::pumpkin::PumpkinBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::comparator::ComparatorBlock;
+use blocks::redstone::copper_bulb::CopperBulbBlock;
 use blocks::redstone::observer::ObserverBlock;
 use blocks::redstone::pressure_plate::plate::PressurePlateBlock;
 use blocks::redstone::pressure_plate::weighted::WeightedPressurePlateBlock;
@@ -78,6 +79,7 @@ use crate::block::blocks::plant::crop::potatoes::PotatoBlock;
 use crate::block::blocks::plant::crop::torch_flower::TorchFlowerBlock;
 use crate::block::blocks::plant::crop::wheat::WheatBlock;
 use crate::block::blocks::plant::nether_wart::NetherWartBlock;
+use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
@@ -104,6 +106,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SaplingBlock);
     manager.register(CactusBlock);
     manager.register(CarpetBlock);
+    manager.register(CampfireBlock);
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
@@ -175,6 +178,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     manager.register(RedstoneBlock);
     manager.register(RedstoneLamp);
+    manager.register(CopperBulbBlock);
     manager.register(RedstoneTorchBlock);
     manager.register(RedstoneWireBlock);
     manager.register(RepeaterBlock);

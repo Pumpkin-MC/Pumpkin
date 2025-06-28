@@ -2481,6 +2481,10 @@ impl InventoryPlayer for Player {
         self.drop_item(item).await;
     }
 
+    fn has_infinite_materials(&self) -> bool {
+        self.gamemode.load() == GameMode::Creative
+    }
+
     fn get_inventory(&self) -> Arc<PlayerInventory> {
         self.inventory.clone()
     }
