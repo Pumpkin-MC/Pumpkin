@@ -7,7 +7,6 @@ use crate::{
 use async_trait::async_trait;
 use log::warn;
 use pumpkin_data::screen::WindowType;
-use pumpkin_protocol::client::play::Player;
 use pumpkin_protocol::{
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
