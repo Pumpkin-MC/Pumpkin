@@ -9,12 +9,11 @@ use pumpkin_protocol::{
     codec::item_stack_seralizer::OptionalItemStackHash,
     server::play::SlotActionType,
 };
-use pumpkin_protocol::codec::item_stack_seralizer::OptionalItemStackHash;
-use pumpkin_protocol::server::play::SlotActionType;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::inventory::{ComparableInventory, Inventory};
 use pumpkin_world::item::ItemStack;
 use std::cmp::max;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -597,8 +596,13 @@ pub trait ScreenHandler: Send + Sync {
                         player.drop_item(stack_clone, true).await;
                         drop(target_stack);
                         slot.set_stack(ItemStack::EMPTY).await;
+                        slot.on_take_item(player, &stack_clone).await;
                     } else {
-                        player.drop_item(target_stack.split(1), true).await;
+                        let Some(drop_stack) = slot.try_take_stack_range(1,1,player).await
+                        {
+                            slot.on_take_item(player, &drop_stack).await;
+                            player.drop_item(drop_stack, true).await;
+                        }
                     }
                 }
             }
@@ -758,7 +762,6 @@ pub trait ScreenHandler: Send + Sync {
                             .get_inventory()
                             .set_stack(button as usize, source_stack)
                             .await;
-                        source_slot.on_take(source_stack.item_count);
                         source_slot.set_stack(ItemStack::EMPTY).await;
                         source_slot.on_take_item(player, &source_stack).await;
                     }

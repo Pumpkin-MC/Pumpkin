@@ -20,16 +20,16 @@ use super::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
 #[derive(Debug)]
 pub struct ResultSlot {
     pub inventory: Arc<dyn RecipeInputInventory>,
-    pub amount: AtomicU8,
     pub id: AtomicU8,
     pub result: Arc<Mutex<ItemStack>>,
 }
 
 impl ResultSlot {
+    fn stat_crafted(&self, _crafted_amount: u8) {}
+
     pub fn new(inventory: Arc<dyn RecipeInputInventory>) -> Self {
         Self {
             inventory,
-            amount: AtomicU8::new(0),
             id: AtomicU8::new(0),
             result: Arc::new(Mutex::new(ItemStack::EMPTY)),
         }
@@ -37,13 +37,38 @@ impl ResultSlot {
 
     async fn match_recipe(&self) -> Option<&RecipeResultStruct> {
         let mut count: usize = 0;
-
+        let inventory_width = self.inventory.get_width();
+        let mut top_x = 9;
+        let mut top_y = 9;
+        let mut bottom_x = -1;
+        let mut bottom_y = -1;
         for i in 0..self.inventory.size() {
+            let x = i % inventory_width;
+            let y = i / inventory_width;
+            if x < top_x {
+                top_x = x;
+            }
+            if y < top_y {
+                top_y = y;
+            }
+            if x > bottom_x {
+                bottom_x = x;
+            }
+            if y > bottom_y {
+                bottom_y = y;
+            }
+
             let slot = self.inventory.get_stack(i).await;
             let slot = slot.lock().await;
             if !slot.is_empty() {
                 count += 1;
             }
+        }
+        let input_width = bottom_x - top_x + 1;
+        let input_height = bottom_y - top_y + 1;
+
+        if count == 0 {
+            return None;
         }
 
         'next_recipe: for recipe in RECIPES_CRAFTING {
@@ -54,8 +79,8 @@ impl ResultSlot {
                     result,
                     ..
                 } => {
-                    if pattern.len() > self.inventory.get_height()
-                        || pattern.first().unwrap().len() > self.inventory.get_width()
+                    if pattern.len() != input_height
+                        || pattern.first().unwrap().len() != input_width
                     {
                         continue;
                     }
@@ -207,22 +232,19 @@ impl Slot for ResultSlot {
         false
     }
 
-    async fn take_stack(&self, amount: u8) -> ItemStack {
-        // self.amount.fetch_add(
-        //     amount.min(self.get_stack().await.lock().await.item_count),
-        //     Ordering::Relaxed,
-        // );
-
+    async fn take_stack(&self, _amount: u8) -> ItemStack {
         if self.has_stack().await {
-            let stack = *self.result.lock().await;
-            self.on_crafted(stack, amount).await;
-            stack.copy_with_count(amount)
+            let stack = self.result.lock().await;
+            // Vanilla: net.minecraft.world.inventory.ResultContainer#removeItem
+            // Regardless of the amount, we always return the full stack
+            Self.stat_crafted(stack.item_count);
+            *stack
         } else {
             ItemStack::EMPTY
         }
     }
 
-    async fn on_crafted(&self, _stack: ItemStack, amount: u8) {
+    async fn on_quick_move(&self, _stack: ItemStack, amount: u8) {
         // self.amount.fetch_add(amount, Ordering::Relaxed);
 
         // if self.amount.load(Ordering::Relaxed) > 0 {
@@ -242,7 +264,7 @@ impl Slot for ResultSlot {
     }
 
     async fn on_take_item(&self, _player: &dyn InventoryPlayer, stack: &ItemStack) {
-        self.on_crafted(*stack, stack.item_count).await;
+        self.on_quick_move(*stack, stack.item_count).await;
         self.mark_dirty().await;
     }
 

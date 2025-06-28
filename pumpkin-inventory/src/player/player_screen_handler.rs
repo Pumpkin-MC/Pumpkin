@@ -118,7 +118,7 @@ impl ScreenHandler for PlayerScreenHandler {
                 }
 
                 // TODO: Fix when inv is full and multiple item per craft
-                slot.on_crafted(
+                slot.on_quick_move(
                     stack_left,
                     (max_craftable - slot_stack.item_count) / stack_left.item_count,
                 )

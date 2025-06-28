@@ -24,9 +24,9 @@ mod sound_category;
 #[path = "generated/sound.rs"]
 mod sound_enum;
 
-pub mod recipes {
-    include!(concat!(env!("OUT_DIR"), "/recipes.rs"));
-}
+#[rustfmt::skip]
+#[path = "generated/recipes.rs"]
+pub mod recipes;
 
 pub mod sound {
     pub use crate::sound_category::*;
