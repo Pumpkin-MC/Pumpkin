@@ -18,8 +18,7 @@ use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-// TODO: Implement ResultSlot
-// CraftingResultSlot.java
+/// CraftingResultSlot.java
 #[derive(Debug)]
 pub struct ResultSlot {
     pub inventory: Arc<dyn RecipeInputInventory>,
@@ -278,9 +277,15 @@ impl Slot for ResultSlot {
         }
     }
 
+    async fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
+        self.refill_output().await;
+    }
+
+    async fn set_stack(&self, _stack: ItemStack) {
+        self.refill_output().await;
+    }
+
     async fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
-        // Vanilla does not have this check, but it is a good idea to have it
-        debug_assert_eq!(stack.item_count, self.get_cloned_stack().await.item_count);
         for i in 0..self.inventory.size() {
             let slot = self.inventory.get_stack(i).await;
             let mut stack = slot.lock().await;
@@ -487,6 +492,7 @@ impl ScreenHandler for CraftingTableScreenHandler {
             }
 
             if stack.item_count == stack_prev.item_count {
+                // Nothing changed
                 return ItemStack::EMPTY;
             }
 

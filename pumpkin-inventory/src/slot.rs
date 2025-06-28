@@ -22,7 +22,7 @@ pub trait Slot: Send + Sync + Debug {
 
     fn set_id(&self, index: usize);
 
-    /// Used to notify result slots that they need to update their contents.
+    /// Used to notify result slots that they need to update their contents. (e.g. refill)
     /// Note that you **MUST** call this after changing the stack in the slot, and releasing any
     /// locks to the stack to avoid deadlocks.
     ///
@@ -70,6 +70,7 @@ pub trait Slot: Send + Sync + Debug {
         self.set_stack_no_callbacks(stack).await;
     }
 
+    /// Changes the stack in the slot with the given `stack`.
     async fn set_stack_prev(&self, stack: ItemStack, _previous_stack: ItemStack) {
         self.set_stack_no_callbacks(stack).await;
     }
