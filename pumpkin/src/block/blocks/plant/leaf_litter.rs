@@ -3,6 +3,7 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
+use std::sync::Arc;
 
 use crate::block::BlockIsReplacing;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
@@ -91,7 +92,7 @@ impl PumpkinBlock for LeafLitterBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         _block: &Block,
         state: BlockStateId,
         pos: &BlockPos,

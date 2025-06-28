@@ -1,4 +1,5 @@
 use crate::block::BlockIsReplacing;
+use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
@@ -170,4 +171,20 @@ impl PumpkinBlock for SeaPickleBlock {
         player.get_entity().pose.load() != EntityPose::Crouching
             && SeaPickleProperties::from_state_id(state_id, block).pickles != Integer1To4::L4
     }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &Arc<World>,
+        _block: &Block,
+        state: BlockStateId,
+        pos: &BlockPos,
+        _direction: BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(self, world.as_ref(), pos, state)
+            .await
+    }
 }
+
+impl PlantBlockBase for SeaPickleBlock {}

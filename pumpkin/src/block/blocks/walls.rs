@@ -15,6 +15,7 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use std::sync::Arc;
 
 type WallProperties = pumpkin_data::block_properties::ResinBrickWallLikeProperties;
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
@@ -56,7 +57,7 @@ impl PumpkinBlock for WallBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state_id: BlockStateId,
         block_pos: &BlockPos,

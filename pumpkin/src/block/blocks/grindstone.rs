@@ -7,6 +7,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
+use std::sync::Arc;
 
 use crate::server::Server;
 use crate::world::World;
@@ -55,7 +56,7 @@ impl PumpkinBlock for GrindstoneBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state: BlockStateId,
         pos: &BlockPos,
@@ -63,9 +64,16 @@ impl PumpkinBlock for GrindstoneBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        WallMountedBlock::get_state_for_neighbor_update(self, state, block, direction, world, pos)
-            .await
-            .unwrap_or(state)
+        WallMountedBlock::get_state_for_neighbor_update(
+            self,
+            state,
+            block,
+            direction,
+            world.as_ref(),
+            pos,
+        )
+        .await
+        .unwrap_or(state)
     }
 }
 

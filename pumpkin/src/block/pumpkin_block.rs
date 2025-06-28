@@ -185,7 +185,7 @@ pub trait PumpkinBlock: Send + Sync {
     #[allow(clippy::too_many_arguments)]
     async fn get_state_for_neighbor_update(
         &self,
-        _world: &World,
+        _world: &Arc<World>,
         _block: &Block,
         state: BlockStateId,
         _pos: &BlockPos,

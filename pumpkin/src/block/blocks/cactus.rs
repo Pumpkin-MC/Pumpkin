@@ -71,7 +71,7 @@ impl PumpkinBlock for CactusBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state: BlockStateId,
         pos: &BlockPos,
@@ -79,7 +79,7 @@ impl PumpkinBlock for CactusBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if !can_place_at(world, pos).await {
+        if !can_place_at(world.as_ref(), pos).await {
             world
                 .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
                 .await;

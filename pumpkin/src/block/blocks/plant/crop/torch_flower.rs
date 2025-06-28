@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -8,25 +8,17 @@ use pumpkin_world::world::BlockAccessor;
 use std::sync::Arc;
 
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::blocks::plant::crop::CropBlockBase;
+use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 
-pub struct FlowerBlock;
-
-impl BlockMetadata for FlowerBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "c:flowers/small").unwrap()
-    }
-}
+#[pumpkin_block("minecraft:torchflower_crop")]
+pub struct TorchFlowerBlock;
 
 #[async_trait]
-impl PumpkinBlock for FlowerBlock {
+impl PumpkinBlock for TorchFlowerBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
@@ -38,7 +30,7 @@ impl PumpkinBlock for FlowerBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        <Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await
+        <Self as CropBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down()).await
     }
 
     async fn get_state_for_neighbor_update(
@@ -54,6 +46,12 @@ impl PumpkinBlock for FlowerBlock {
         <Self as PlantBlockBase>::get_state_for_neighbor_update(self, world.as_ref(), pos, state)
             .await
     }
+
+    async fn random_tick(&self, _block: &Block, world: &Arc<World>, pos: &BlockPos) {
+        <Self as CropBlockBase>::random_tick(self, world, pos).await;
+    }
 }
 
-impl PlantBlockBase for FlowerBlock {}
+impl PlantBlockBase for TorchFlowerBlock {}
+
+impl CropBlockBase for TorchFlowerBlock {}

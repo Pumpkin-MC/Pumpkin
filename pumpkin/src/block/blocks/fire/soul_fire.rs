@@ -32,7 +32,7 @@ impl SoulFireBlock {
 impl PumpkinBlock for SoulFireBlock {
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         _block: &Block,
         state_id: BlockStateId,
         block_pos: &BlockPos,

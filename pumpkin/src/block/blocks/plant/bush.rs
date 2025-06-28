@@ -1,10 +1,10 @@
 use async_trait::async_trait;
-use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
 
+use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -35,7 +35,8 @@ impl PumpkinBlock for BushBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        let block_below = block_accessor.get_block(&block_pos.down()).await;
-        block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == Block::FARMLAND
+        <Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await
     }
 }
+
+impl PlantBlockBase for BushBlock {}

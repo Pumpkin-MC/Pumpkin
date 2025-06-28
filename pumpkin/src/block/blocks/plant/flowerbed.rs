@@ -4,8 +4,10 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
+use std::sync::Arc;
 
 use crate::block::BlockIsReplacing;
+use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -92,25 +94,20 @@ impl PumpkinBlock for FlowerbedBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         _block: &Block,
         state: BlockStateId,
         pos: &BlockPos,
-        direction: BlockDirection,
+        _direction: BlockDirection,
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if direction == BlockDirection::Down {
-            let block_below = world.get_block(&pos.down()).await;
-            if !(block_below.is_tagged_with("minecraft:dirt").unwrap()
-                || block_below == Block::FARMLAND)
-            {
-                return Block::AIR.default_state.id;
-            }
-        }
-        state
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(self, world.as_ref(), pos, state)
+            .await
     }
 }
+
+impl PlantBlockBase for FlowerbedBlock {}
 
 impl Segmented for FlowerbedBlock {
     type Properties = FlowerbedProperties;

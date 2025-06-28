@@ -137,7 +137,7 @@ impl PumpkinBlock for TripwireBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        _world: &World,
+        _world: &Arc<World>,
         block: &Block,
         state: BlockStateId,
         _pos: &BlockPos,

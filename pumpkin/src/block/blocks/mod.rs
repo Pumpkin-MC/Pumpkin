@@ -27,7 +27,6 @@ pub mod piston;
 pub mod plant;
 pub mod pumpkin;
 pub mod redstone;
-pub mod sea_pickles;
 pub mod signs;
 pub mod slabs;
 pub mod stairs;

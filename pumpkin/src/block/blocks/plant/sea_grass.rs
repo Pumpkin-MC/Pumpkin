@@ -1,47 +1,23 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::{BlockStateId, world::BlockAccessor};
+use std::sync::Arc;
 
 use crate::{
     block::{blocks::plant::PlantBlockBase, pumpkin_block::PumpkinBlock},
-    entity::{EntityBase, player::Player},
+    entity::player::Player,
     server::Server,
     world::World,
 };
 
-#[pumpkin_block("minecraft:lily_pad")]
-pub struct LilyPadBlock;
+#[pumpkin_block("minecraft:seagrass")]
+pub struct SeaGrassBlock;
 
 #[async_trait]
-impl PumpkinBlock for LilyPadBlock {
-    async fn on_entity_collision(
-        &self,
-        world: &Arc<World>,
-        entity: &dyn EntityBase,
-        pos: BlockPos,
-        _block: Block,
-        _state: BlockState,
-        _server: &Server,
-    ) {
-        // Proberbly not the best solution, but works
-        if entity
-            .get_entity()
-            .entity_type
-            .resource_name
-            .ends_with("_boat")
-        {
-            world.break_block(&pos, None, BlockFlags::empty()).await;
-        }
-    }
-
+impl PumpkinBlock for SeaGrassBlock {
     async fn can_place_at(
         &self,
         _server: Option<&Server>,
@@ -71,11 +47,14 @@ impl PumpkinBlock for LilyPadBlock {
     }
 }
 
-impl PlantBlockBase for LilyPadBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+impl PlantBlockBase for SeaGrassBlock {
+    async fn can_plant_on_top(
+        &self,
+        block_accessor: &dyn pumpkin_world::world::BlockAccessor,
+        pos: &pumpkin_util::math::position::BlockPos,
+    ) -> bool {
         let block = block_accessor.get_block(pos).await;
-        let above_fluid = block_accessor.get_block(&pos.up()).await;
-        (block == Block::WATER || block == Block::ICE)
-            && (above_fluid != Block::WATER && above_fluid != Block::LAVA)
+        let block_state = block_accessor.get_block_state(pos).await;
+        block_state.is_side_solid(BlockDirection::Up) && block != Block::MAGMA_BLOCK
     }
 }
