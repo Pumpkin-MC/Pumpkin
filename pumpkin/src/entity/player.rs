@@ -1768,11 +1768,14 @@ impl Player {
 
         self.increment_screen_handler_sync_id();
 
-        if let Some(screen_handler) = screen_handler_factory.create_screen_handler(
-            self.screen_handler_sync_id.load(Ordering::Relaxed),
-            &self.inventory,
-            self,
-        ) {
+        if let Some(screen_handler) = screen_handler_factory
+            .create_screen_handler(
+                self.screen_handler_sync_id.load(Ordering::Relaxed),
+                &self.inventory,
+                self,
+            )
+            .await
+        {
             let screen_handler_temp = screen_handler.lock().await;
             self.client
                 .enqueue_packet(&COpenScreen::new(

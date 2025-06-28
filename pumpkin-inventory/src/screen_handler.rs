@@ -1,6 +1,13 @@
+use crate::{
+    container_click::MouseClick,
+    player::player_inventory::PlayerInventory,
+    slot::{NormalSlot, Slot},
+    sync_handler::{SyncHandler, TrackedStack},
+};
 use async_trait::async_trait;
 use log::warn;
 use pumpkin_data::screen::WindowType;
+use pumpkin_protocol::client::play::Player;
 use pumpkin_protocol::{
     client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
@@ -16,13 +23,6 @@ use std::cmp::max;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
-
-use crate::{
-    container_click::MouseClick,
-    player::player_inventory::PlayerInventory,
-    slot::{NormalSlot, Slot},
-    sync_handler::{SyncHandler, TrackedStack},
-};
 
 const SLOT_INDEX_OUTSIDE: i32 = -999;
 
@@ -839,8 +839,9 @@ pub trait ScreenHandlerListener: Send + Sync {
     }
 }
 
+#[async_trait]
 pub trait ScreenHandlerFactory: Send + Sync {
-    fn create_screen_handler(
+    async fn create_screen_handler(
         &self,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,

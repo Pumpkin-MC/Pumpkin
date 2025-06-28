@@ -392,16 +392,12 @@ pub struct CraftingTableScreenHandler {
 }
 
 impl CraftingTableScreenHandler {
-    pub async fn new(
-        player_inventory: &Arc<PlayerInventory>,
-        window_type: Option<WindowType>,
-        sync_id: u8,
-    ) -> Self {
+    pub async fn new(sync_id: u8, player_inventory: &Arc<PlayerInventory>) -> Self {
         let crafting_inventory: Arc<dyn RecipeInputInventory> =
             Arc::new(CraftingInventory::new(3, 3));
 
         let mut crafting_table_handler = CraftingTableScreenHandler {
-            behaviour: ScreenHandlerBehaviour::new(sync_id, window_type),
+            behaviour: ScreenHandlerBehaviour::new(sync_id, Some(WindowType::Crafting)),
             crafting_inventory: crafting_inventory.clone(),
         };
 

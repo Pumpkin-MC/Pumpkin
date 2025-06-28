@@ -22,6 +22,10 @@ pub trait Slot: Send + Sync + Debug {
 
     fn set_id(&self, index: usize);
 
+    /// Used to notify result slots that they need to update their contents.
+    /// Note that you **MUST** call this after changing the stack in the slot, and releasing any
+    /// locks to the stack to avoid deadlocks.
+    ///
     /// Also see: `ScreenHandler::quick_move`
     async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {}
 
