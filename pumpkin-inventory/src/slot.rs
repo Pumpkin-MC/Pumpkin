@@ -96,8 +96,14 @@ pub trait Slot: Send + Sync + Debug {
         inv.remove_stack_specific(self.get_index(), amount).await
     }
 
+    /// Mojang name: `mayPickup`
     async fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
         true
+    }
+
+    /// Mojang name: `allowModification`
+    async fn allow_modification(&self, player: &dyn InventoryPlayer) -> bool {
+        self.can_insert(&self.get_cloned_stack().await).await && self.can_take_items(player).await
     }
 
     /// Mojang name: `tryRemove`
@@ -107,8 +113,12 @@ pub trait Slot: Send + Sync + Debug {
         max: u8,
         player: &dyn InventoryPlayer,
     ) -> Option<ItemStack> {
-        // TODO: Check if the player can take items from this slot
         if !self.can_take_items(player).await {
+            return None;
+        }
+        if !self.allow_modification(player).await && self.get_cloned_stack().await.item_count > max
+        {
+            // If the slot is not allowed to be modified, we cannot take a partial stack from it.
             return None;
         }
         let min = min.min(max);

@@ -111,23 +111,24 @@ impl ScreenHandler for PlayerScreenHandler {
 
             #[allow(clippy::if_same_then_else)]
             if slot_index == 0 {
-                let max_craftable = slot.get_max_item_count().await * slot_stack.item_count;
-                let mut slot_stack = slot_stack.copy_with_count(max_craftable);
+                // From crafting result slot
                 if !self.insert_item(&mut slot_stack, 9, 45, true).await {
                     return ItemStack::EMPTY;
                 }
 
-                // TODO: Fix when inv is full and multiple item per craft
-                slot.on_quick_move(
-                    stack_left,
-                    (max_craftable - slot_stack.item_count) / stack_left.item_count,
-                )
-                .await;
+                //TODO: Fix when inv is full and multiple item per craft
+                // slot.on_quick_move(
+                //     stack_left,
+                //     (max_craftable - slot_stack.item_count) / stack_left.item_count,
+                // )
+                // .await;
             } else if (1..5).contains(&slot_index) {
+                // From craft ingredient slots
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                     return ItemStack::EMPTY;
                 }
             } else if (5..9).contains(&slot_index) {
+                // From armour slots
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                     return ItemStack::EMPTY;
                 }

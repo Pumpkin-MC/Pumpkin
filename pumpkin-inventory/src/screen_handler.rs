@@ -598,7 +598,7 @@ pub trait ScreenHandler: Send + Sync {
                             // player.handleCreativeModeItemDrop(itemStack);
                         }
                     } else {
-                        let drop_stack = slot.safe_take(1, 1, player).await;
+                        let drop_stack = slot.safe_take(1, u8::MAX, player).await;
                         if !drop_stack.is_empty() {
                             slot.on_take_item(player, &drop_stack).await;
                             player.drop_item(drop_stack, true).await;

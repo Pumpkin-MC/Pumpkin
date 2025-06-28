@@ -45,31 +45,23 @@ impl ResultSlot {
         for i in 0..self.inventory.size() {
             let x = i % inventory_width;
             let y = i / inventory_width;
-            if x < top_x {
-                top_x = x;
-            }
-            if y < top_y {
-                top_y = y;
-            }
-            if x > bottom_x {
-                bottom_x = x;
-            }
-            if y > bottom_y {
-                bottom_y = y;
-            }
 
             let slot = self.inventory.get_stack(i).await;
             let slot = slot.lock().await;
             if !slot.is_empty() {
+                top_x = top_x.min(x);
+                top_y = top_y.min(y);
+                bottom_x = bottom_x.max(x);
+                bottom_y = bottom_y.max(y);
                 count += 1;
             }
         }
-        let input_width = bottom_x - top_x + 1;
-        let input_height = bottom_y - top_y + 1;
 
         if count == 0 {
             return None;
         }
+        let input_width = bottom_x + 1 - top_x;
+        let input_height = bottom_y + 1 - top_y;
 
         'next_recipe: for recipe in RECIPES_CRAFTING {
             match recipe {
