@@ -45,7 +45,16 @@ impl FluidLevel {
 #[enum_dispatch(FluidLevelSamplerImpl)]
 pub enum FluidLevelSampler {
     Static(StaticFluidLevelSampler),
-    Chunk(StandardChunkFluidLevelSampler),
+    Chunk(Box<StandardChunkFluidLevelSampler>),
+}
+
+impl FluidLevelSamplerImpl for FluidLevelSampler {
+    fn get_fluid_level(&self, x: i32, y: i32, z: i32) -> FluidLevel {
+        match self {
+            FluidLevelSampler::Static(sampler) => sampler.get_fluid_level(x, y, z),
+            FluidLevelSampler::Chunk(sampler) => sampler.get_fluid_level(x, y, z),
+        }
+    }
 }
 
 pub struct StaticFluidLevelSampler {
@@ -65,7 +74,6 @@ impl FluidLevelSamplerImpl for StaticFluidLevelSampler {
     }
 }
 
-#[enum_dispatch]
 pub trait FluidLevelSamplerImpl {
     fn get_fluid_level(&self, x: i32, y: i32, z: i32) -> FluidLevel;
 }
@@ -692,10 +700,10 @@ mod test {
             .unwrap();
         let shape = &surface_config.shape;
         let chunk_pos = Vector2::new(7, 4);
-        let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(63, WATER_BLOCK),
             FluidLevel::new(-54, LAVA_BLOCK),
-        ));
+        )));
         const CHUNK_WIDTH: usize = 16;
         let noise = ChunkNoiseGenerator::new(
             &base_router.noise,

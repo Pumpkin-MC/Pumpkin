@@ -13,6 +13,17 @@ pub enum Difficulty {
     Hard,
 }
 
+impl Difficulty {
+    pub fn to_int(&self) -> u8 {
+        match self {
+            Self::Peaceful => 0,
+            Self::Easy => 1,
+            Self::Normal => 2,
+            Self::Hard => 3,
+        }
+    }
+}
+
 impl FromStr for Difficulty {
     type Err = ParseDifficultyError;
 

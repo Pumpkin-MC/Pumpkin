@@ -11,6 +11,7 @@ use crate::world::World;
 
 pub mod buttons;
 pub mod comparator;
+pub mod copper_bulb;
 pub mod lever;
 pub mod observer;
 pub mod pressure_plate;

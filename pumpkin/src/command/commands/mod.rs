@@ -20,6 +20,7 @@ mod effect;
 mod experience;
 mod fill;
 mod gamemode;
+mod gamerule;
 mod give;
 mod help;
 mod kick;
@@ -99,6 +100,7 @@ pub async fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(bossbar::init_command_tree(), "minecraft:command.bossbar");
     dispatcher.register(say::init_command_tree(), "minecraft:command.say");
     dispatcher.register(gamemode::init_command_tree(), "minecraft:command.gamemode");
+    dispatcher.register(gamerule::init_command_tree(), "minecraft:command.gamerule");
     dispatcher.register(
         difficulty::init_command_tree(),
         "minecraft:command.difficulty",
@@ -343,6 +345,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
     registry
         .register_permission(Permission::new(
             "minecraft:command.gamemode",
+            "Sets a player's game mode",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.gamerule",
             "Sets a player's game mode",
             PermissionDefault::Op(PermissionLvl::Two),
         ))

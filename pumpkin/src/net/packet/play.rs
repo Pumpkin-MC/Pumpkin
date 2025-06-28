@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use pumpkin_util::PermissionLvl;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
@@ -29,13 +30,13 @@ use pumpkin_protocol::client::play::{
 };
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::server::play::{
-    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChatCommand, SChatMessage, SChunkBatch,
-    SClientCommand, SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
-    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput,
-    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
-    SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
-    Status,
+    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
+    SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
+    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
+    SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
+    SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
+    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
+    SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
@@ -184,6 +185,19 @@ impl Player {
         } else {
             self.kick(TextComponent::text(
                 "Send Teleport confirm, but we did not teleport",
+            ))
+            .await;
+        }
+    }
+
+    pub async fn handle_change_game_mode(self: &Arc<Self>, change_game_mode: SChangeGameMode) {
+        if self.permission_lvl.load() >= PermissionLvl::Two {
+            self.set_gamemode(change_game_mode.game_mode).await;
+            let gamemode_string = format!("{:?}", change_game_mode.game_mode).to_lowercase();
+            let gamemode_string = format!("gameMode.{gamemode_string}");
+            self.send_system_message(&TextComponent::translate(
+                "commands.gamemode.success.self",
+                [TextComponent::translate(gamemode_string, [])],
             ))
             .await;
         }
