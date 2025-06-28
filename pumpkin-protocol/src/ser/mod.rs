@@ -10,7 +10,6 @@ pub mod deserializer;
 use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
 use pumpkin_util::resource_location::ResourceLocation;
 use thiserror::Error;
-pub mod packet;
 pub mod serializer;
 
 // TODO: This is a bit hacky

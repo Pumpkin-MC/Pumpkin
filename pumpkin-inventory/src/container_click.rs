@@ -1,5 +1,5 @@
 use crate::InventoryError;
-use pumpkin_protocol::server::play::SlotActionType;
+use pumpkin_protocol::java::server::play::SlotActionType;
 use pumpkin_world::item::ItemStack;
 
 #[derive(Debug)]

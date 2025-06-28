@@ -1,14 +1,19 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::world::BlockFlags;
 
 use crate::entity::player::Player;
-use crate::item::items::ignite::flint_and_steel::ignite_with_special_cases;
+use crate::item::items::ignite::ignition::Ignition;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
+use crate::world::World;
 
 pub struct FireChargeItem;
 
@@ -22,21 +27,29 @@ impl ItemMetadata for FireChargeItem {
 impl PumpkinItem for FireChargeItem {
     async fn use_on_block(
         &self,
-        item: &Item,
+        _item: &Item,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
-        block: &Block,
-        server: &Server,
+        _block: &Block,
+        _server: &Server,
     ) {
-        ignite_with_special_cases(
-            item,
+        Ignition::ignite_block(
+            |world: Arc<World>, pos: BlockPos, new_state_id: u16| async move {
+                world
+                    .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
+                    .await;
+
+                world
+                    .play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos)
+                    .await;
+            },
+            _item,
             player,
             location,
             face,
-            block,
-            server,
-            Sound::ItemFirechargeUse,
+            _block,
+            _server,
         )
         .await;
     }

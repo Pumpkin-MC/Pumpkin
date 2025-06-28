@@ -163,7 +163,7 @@ impl FancyTrunkPlacer {
                     let original_props = &block.properties(trunk_provider.id).unwrap().to_props();
                     let axis = axis.to_value();
                     // Set the right Axis
-                    let props_vec: Vec<(&str, &str)> = original_props
+                    let props = original_props
                         .iter()
                         .map(|(key, value)| {
                             if key == "axis" {
@@ -173,10 +173,7 @@ impl FancyTrunkPlacer {
                             }
                         })
                         .collect();
-                    let state = block
-                        .from_properties(props_vec)
-                        .unwrap()
-                        .to_state_id(&block);
+                    let state = block.from_properties(props).unwrap().to_state_id(&block);
                     if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
                         chunk.set_block_state(
                             &block_pos_2.0,

@@ -445,8 +445,7 @@ mod tests {
             let value = provider.get(&mut random);
             assert!(
                 (1..=10).contains(&value),
-                "Value {} is outside range [1, 10]",
-                value
+                "Value {value} is outside range [1, 10]"
             );
         }
     }
@@ -466,8 +465,7 @@ mod tests {
             let value = provider.get(&mut random);
             assert!(
                 (1..=20).contains(&value),
-                "Value {} is outside range [1, 20]",
-                value
+                "Value {value} is outside range [1, 20]"
             );
         }
     }
@@ -487,8 +485,7 @@ mod tests {
             let value = provider.get(&mut random);
             assert!(
                 (1..=10).contains(&value),
-                "Value {} is outside range [1, 10]",
-                value
+                "Value {value} is outside range [1, 10]"
             );
         }
     }
@@ -510,8 +507,7 @@ mod tests {
             let value = provider.get(&mut random);
             assert!(
                 (5..=15).contains(&value),
-                "Value {} is outside clamped range [5, 15]",
-                value
+                "Value {value} is outside clamped range [5, 15]"
             );
         }
     }
@@ -547,8 +543,7 @@ mod tests {
             let value = provider.get(&mut random);
             assert!(
                 (1..=3).contains(&value),
-                "Value {} is not from the weighted list",
-                value
+                "Value {value} is not from the weighted list"
             );
         }
     }
@@ -579,8 +574,7 @@ mod tests {
         let value = provider.get(&mut random);
         assert!(
             (5..=15).contains(&value),
-            "Value {} is outside range [5, 15]",
-            value
+            "Value {value} is outside range [5, 15]"
         );
     }
 }

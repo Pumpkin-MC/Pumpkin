@@ -7,7 +7,7 @@ use crate::command::tree::RawArgs;
 use crate::server::Server;
 use crate::world::bossbar::BossbarColor;
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
 pub struct BossbarColorArgumentConsumer;
 

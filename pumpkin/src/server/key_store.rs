@@ -1,5 +1,5 @@
 use num_bigint::BigInt;
-use pumpkin_protocol::client::login::CEncryptionRequest;
+use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, traits::PublicKeyParts as _};
 use sha1::Sha1;
 use sha2::Digest;

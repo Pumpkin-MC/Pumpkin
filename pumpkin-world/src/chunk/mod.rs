@@ -122,6 +122,13 @@ pub struct ChunkData {
     pub dirty: bool,
 }
 
+pub struct ChunkEntityData {
+    pub chunk_position: Vector2<i32>,
+    pub data: HashMap<uuid::Uuid, NbtCompound>,
+
+    pub dirty: bool,
+}
+
 /// Represents pure block data for a chunk.
 /// Subchunks are vertical portions of a chunk. They are 16 blocks tall.
 /// There are currently 24 subchunks per chunk.

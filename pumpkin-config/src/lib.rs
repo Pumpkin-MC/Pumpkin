@@ -108,8 +108,14 @@ pub struct AdvancedConfiguration {
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct BasicConfiguration {
-    /// The address to bind the server to.
-    pub server_address: SocketAddr,
+    // Whether Java Edition Client's are Accepted
+    pub java_edition: bool,
+    /// The address and port to which the Java Edition server will bind
+    pub java_edition_address: SocketAddr,
+    // Whether Bedrock/Pocket Edition Client's are Accepted
+    pub bedrock_edition: bool,
+    /// The address and port to which the Bedrock/Pocket Edition server will bind
+    pub bedrock_edition_address: SocketAddr,
     /// The seed for world generation.
     pub seed: String,
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
@@ -157,7 +163,10 @@ pub struct BasicConfiguration {
 impl Default for BasicConfiguration {
     fn default() -> Self {
         Self {
-            server_address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 25565),
+            java_edition: true,
+            java_edition_address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 25565),
+            bedrock_edition: true,
+            bedrock_edition_address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 19132),
             seed: "".to_string(),
             max_players: 100000,
             view_distance: NonZeroU8::new(10).unwrap(),

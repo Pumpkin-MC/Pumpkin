@@ -1,4 +1,4 @@
-use std::{fs, path::Path, sync::Arc};
+use std::{fs, path::Path, path::PathBuf, sync::Arc};
 
 use crate::command::client_suggestions;
 use pumpkin_util::{
@@ -61,9 +61,9 @@ impl Context {
     /// # Returns
     /// A string representing the path to the data folder.
     #[must_use]
-    pub fn get_data_folder(&self) -> String {
-        let path = format!("./plugins/{}", self.metadata.name);
-        if !Path::new(&path).exists() {
+    pub fn get_data_folder(&self) -> PathBuf {
+        let path = Path::new("./plugins").join(self.metadata.name);
+        if !path.exists() {
             fs::create_dir_all(&path).unwrap();
         }
         path

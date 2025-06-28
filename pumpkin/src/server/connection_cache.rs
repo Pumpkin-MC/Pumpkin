@@ -6,8 +6,8 @@ use pumpkin_config::{BASIC_CONFIG, BasicConfiguration};
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::{
     Players, StatusResponse, Version,
-    client::{config::CPluginMessage, status::CStatusResponse},
     codec::var_int::VarInt,
+    java::client::{config::CPluginMessage, status::CStatusResponse},
 };
 use std::sync::atomic::Ordering;
 use std::{
