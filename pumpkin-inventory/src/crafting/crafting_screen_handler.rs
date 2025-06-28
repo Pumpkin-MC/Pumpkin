@@ -19,6 +19,10 @@ use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
 /// CraftingResultSlot.java
+///
+/// Note: This implementation is different from the original Minecraft code.
+/// Particularly, it does not have a 'result' inventory, we directly store it in the slot.
+/// This slot should be never modified outside. any modifications to it make change in its input.
 #[derive(Debug)]
 pub struct ResultSlot {
     pub inventory: Arc<dyn RecipeInputInventory>,
@@ -262,26 +266,21 @@ impl ResultSlot {
 
 #[async_trait]
 impl Slot for ResultSlot {
-    async fn can_insert(&self, _stack: &ItemStack) -> bool {
-        false
+    fn get_inventory(&self) -> Arc<dyn Inventory> {
+        self.inventory.clone()
     }
 
-    async fn take_stack(&self, _amount: u8) -> ItemStack {
-        if self.has_stack().await {
-            let stack = self.result.lock().await;
-            // Vanilla: net.minecraft.world.inventory.ResultContainer#removeItem
-            // Regardless of the amount, we always return the full stack
-            *stack
-        } else {
-            ItemStack::EMPTY
-        }
+    fn get_index(&self) -> usize {
+        999 // this slot does not belong to any inventory
     }
 
-    async fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
-        self.refill_output().await;
+    fn set_id(&self, id: usize) {
+        self.id
+            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
     }
 
-    async fn set_stack(&self, _stack: ItemStack) {
+    async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {
+        // refill the result slot with the recipe result
         self.refill_output().await;
     }
 
@@ -298,6 +297,34 @@ impl Slot for ResultSlot {
         self.mark_dirty().await;
     }
 
+    async fn can_insert(&self, _stack: &ItemStack) -> bool {
+        false
+    }
+
+    async fn get_stack(&self) -> Arc<Mutex<ItemStack>> {
+        self.result.clone()
+    }
+
+    async fn get_cloned_stack(&self) -> ItemStack {
+        *self.result.lock().await
+    }
+
+    async fn has_stack(&self) -> bool {
+        !self.result.lock().await.is_empty()
+    }
+
+    async fn set_stack(&self, _stack: ItemStack) {
+        self.refill_output().await;
+    }
+
+    async fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
+        self.refill_output().await;
+    }
+
+    async fn mark_dirty(&self) {
+        self.inventory.mark_dirty();
+    }
+
     async fn get_max_item_count(&self) -> u8 {
         let mut count = u8::MAX;
         for i in 0..self.inventory.size() {
@@ -310,38 +337,15 @@ impl Slot for ResultSlot {
         count
     }
 
-    async fn has_stack(&self) -> bool {
-        !self.result.lock().await.is_empty()
-    }
-
-    async fn get_stack(&self) -> Arc<Mutex<ItemStack>> {
-        self.result.clone()
-    }
-
-    async fn get_cloned_stack(&self) -> ItemStack {
-        *self.result.lock().await
-    }
-
-    fn get_inventory(&self) -> Arc<dyn Inventory> {
-        self.inventory.clone()
-    }
-
-    fn get_index(&self) -> usize {
-        0
-    }
-
-    fn set_id(&self, id: usize) {
-        self.id
-            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {
-        // refill the result slot with the recipe result
-        self.refill_output().await;
-    }
-
-    async fn mark_dirty(&self) {
-        self.inventory.mark_dirty();
+    async fn take_stack(&self, _amount: u8) -> ItemStack {
+        if self.has_stack().await {
+            let stack = self.result.lock().await;
+            // Vanilla: net.minecraft.world.inventory.ResultContainer#removeItem
+            // Regardless of the amount, we always return the full stack
+            *stack
+        } else {
+            ItemStack::EMPTY
+        }
     }
 }
 
