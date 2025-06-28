@@ -5,6 +5,7 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
+use rand::Rng;
 use std::sync::Arc;
 
 use crate::block::blocks::plant::PlantBlockBase;
@@ -48,10 +49,16 @@ impl PumpkinBlock for BeetrootBlock {
     }
 
     async fn random_tick(&self, _block: &Block, world: &Arc<World>, pos: &BlockPos) {
-        <Self as CropBlockBase>::random_tick(self, world, pos).await;
+        if rand::rng().random_range(0..2) != 0 {
+            <Self as CropBlockBase>::random_tick(self, world, pos).await;
+        }
     }
 }
 
 impl PlantBlockBase for BeetrootBlock {}
 
-impl CropBlockBase for BeetrootBlock {}
+impl CropBlockBase for BeetrootBlock {
+    fn max_age(&self) -> i32 {
+        3
+    }
+}

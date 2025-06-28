@@ -75,7 +75,7 @@ impl PumpkinBlock for CampfireBlock {
     #[allow(clippy::too_many_arguments)]
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state: BlockStateId,
         pos: &BlockPos,

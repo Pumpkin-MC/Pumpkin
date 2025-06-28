@@ -24,10 +24,14 @@ trait CropBlockBase: PlantBlockBase {
         block == Block::FARMLAND
     }
 
+    fn max_age(&self) -> i32 {
+        7
+    }
+
     async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
         let (block, state) = world.get_block_and_block_state(pos).await;
         let mut props = CropProperties::from_state_id(state.id, &block);
-        if i32::from(props.age.to_index()) < 7 {
+        if i32::from(props.age.to_index()) < self.max_age() {
             //TODO add moisture check
             let f = 5;
             if rand::rng().random_range(0..=(25 / f)) == 0 {
