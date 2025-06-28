@@ -140,7 +140,6 @@ impl ScreenHandler for PlayerScreenHandler {
             }
 
             let stack = *slot_stack;
-            dbg!(stack);
             drop(slot_stack); // release the lock before calling other methods
             if stack.is_empty() {
                 slot.set_stack_prev(ItemStack::EMPTY, stack_prev).await;
