@@ -158,6 +158,10 @@ impl ScreenHandler for PlayerScreenHandler {
                 // From crafting result slot
                 // Notify the result slot to refill
                 slot.on_quick_move_crafted(stack, stack_prev).await;
+                // For crafting result slot, drop any remaining items
+                if !stack.is_empty() {
+                    player.drop_item(stack, false).await;
+                }
             }
 
             return stack_prev;

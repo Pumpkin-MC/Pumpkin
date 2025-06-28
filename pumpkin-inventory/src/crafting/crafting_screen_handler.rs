@@ -1,20 +1,22 @@
+use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU8;
 
-use async_trait::async_trait;
-use crossbeam_utils::atomic::AtomicCell;
-use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING, RecipeResultStruct};
-use pumpkin_data::tag::Tagable;
-use pumpkin_world::inventory::Inventory;
-use pumpkin_world::item::ItemStack;
-use tokio::sync::Mutex;
-
+use super::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
+use crate::crafting::crafting_inventory::CraftingInventory;
+use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{
     InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerListener,
 };
 use crate::slot::{NormalSlot, Slot};
-
-use super::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
+use async_trait::async_trait;
+use crossbeam_utils::atomic::AtomicCell;
+use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING, RecipeResultStruct};
+use pumpkin_data::screen::WindowType;
+use pumpkin_data::tag::Tagable;
+use pumpkin_world::inventory::Inventory;
+use pumpkin_world::item::ItemStack;
+use tokio::sync::Mutex;
 
 // TODO: Implement ResultSlot
 // CraftingResultSlot.java
@@ -81,7 +83,7 @@ async fn recipe_matches<'a>(
             }
 
             // TODO: Apply components
-            return Some(result);
+            Some(result)
         }
         CraftingRecipeTypes::CraftingShapeless {
             ingredients,
@@ -112,7 +114,7 @@ async fn recipe_matches<'a>(
             }
 
             // TODO: Apply components
-            return Some(result);
+            Some(result)
         }
         CraftingRecipeTypes::CraftingTransmute {
             input,
@@ -138,7 +140,7 @@ async fn recipe_matches<'a>(
             }
 
             // TODO: Copy components
-            return Some(result);
+            Some(result)
         }
         CraftingRecipeTypes::CraftingDecoratedPot { .. } => {
             if count != 4 || inventory.get_width() != 3 || inventory.get_height() != 3 {
@@ -160,12 +162,12 @@ async fn recipe_matches<'a>(
             }
 
             // TODO: Handle side textures
-            return Some(&RecipeResultStruct {
+            Some(&RecipeResultStruct {
                 id: "minecraft:decorated_pot",
                 count: 1,
-            });
+            })
         }
-        CraftingRecipeTypes::CraftingSpecial => return None,
+        CraftingRecipeTypes::CraftingSpecial => None,
     }
 }
 
@@ -382,3 +384,131 @@ pub trait CraftingScreenHandler<I: RecipeInputInventory>:
         self.add_listener(result_slot).await;
     }
 }
+
+// CraftingMenu
+pub struct CraftingTableScreenHandler {
+    behaviour: ScreenHandlerBehaviour,
+    crafting_inventory: Arc<dyn RecipeInputInventory>,
+}
+
+impl CraftingTableScreenHandler {
+    pub async fn new(
+        player_inventory: &Arc<PlayerInventory>,
+        window_type: Option<WindowType>,
+        sync_id: u8,
+    ) -> Self {
+        let crafting_inventory: Arc<dyn RecipeInputInventory> =
+            Arc::new(CraftingInventory::new(3, 3));
+
+        let mut crafting_table_handler = CraftingTableScreenHandler {
+            behaviour: ScreenHandlerBehaviour::new(sync_id, window_type),
+            crafting_inventory: crafting_inventory.clone(),
+        };
+
+        crafting_table_handler
+            .add_recipe_slots(crafting_inventory)
+            .await;
+
+        // Add player inventory slots
+        let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
+        crafting_table_handler.add_player_slots(&player_inventory);
+
+        crafting_table_handler
+    }
+}
+
+impl RecipeFinderScreenHandler for CraftingTableScreenHandler {}
+
+#[async_trait]
+impl ScreenHandler for CraftingTableScreenHandler {
+    async fn on_closed(&mut self, player: &dyn InventoryPlayer) {
+        self.default_on_closed(player).await;
+        //TODO: this.craftingResultInventory.clear();
+        self.drop_inventory(player, self.crafting_inventory.clone())
+            .await;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn get_behaviour(&self) -> &ScreenHandlerBehaviour {
+        &self.behaviour
+    }
+
+    fn get_behaviour_mut(&mut self) -> &mut ScreenHandlerBehaviour {
+        &mut self.behaviour
+    }
+
+    async fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+        let slot = self.get_behaviour().slots[slot_index as usize].clone();
+
+        if slot.has_stack().await {
+            let slot_stack = slot.get_stack().await;
+            let mut slot_stack = slot_stack.lock().await;
+            let stack_prev = *slot_stack;
+
+            if slot_index == 0 {
+                // From crafting result slot - move to player inventory (slots 10-46)
+                if !self.insert_item(&mut slot_stack, 10, 46, true).await {
+                    return ItemStack::EMPTY;
+                }
+            } else if (1..=9).contains(&slot_index) {
+                // From crafting input slots - try to move to player inventory (slots 10-46)
+                if !self.insert_item(&mut slot_stack, 10, 46, false).await {
+                    return ItemStack::EMPTY;
+                }
+            } else if (10..46).contains(&slot_index) {
+                // From player inventory - try to move to crafting input slots first (1-9)
+                if !self.insert_item(&mut slot_stack, 1, 10, false).await {
+                    // If that fails, try moving within player inventory
+                    if slot_index < 37 {
+                        // From main inventory to hotbar
+                        if !self.insert_item(&mut slot_stack, 37, 46, false).await {
+                            return ItemStack::EMPTY;
+                        }
+                    } else {
+                        // From hotbar to main inventory
+                        if !self.insert_item(&mut slot_stack, 10, 37, false).await {
+                            return ItemStack::EMPTY;
+                        }
+                    }
+                }
+            } else {
+                // Any other slot - try to move to player inventory
+                if !self.insert_item(&mut slot_stack, 10, 46, false).await {
+                    return ItemStack::EMPTY;
+                }
+            }
+
+            let stack = *slot_stack;
+            drop(slot_stack); // release the lock before calling other methods
+
+            if stack.is_empty() {
+                slot.set_stack_prev(ItemStack::EMPTY, stack_prev).await;
+            } else {
+                slot.mark_dirty().await;
+            }
+
+            if stack.item_count == stack_prev.item_count {
+                return ItemStack::EMPTY;
+            }
+
+            slot.on_take_item(player, &stack).await;
+
+            if slot_index == 0 {
+                slot.on_quick_move_crafted(stack, stack_prev).await;
+                // For crafting result slot, drop any remaining items
+                if !stack.is_empty() {
+                    player.drop_item(stack, false).await;
+                }
+            }
+
+            return stack_prev;
+        }
+
+        ItemStack::EMPTY
+    }
+}
+
+impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
