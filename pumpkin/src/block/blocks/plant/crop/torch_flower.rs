@@ -1,4 +1,7 @@
 use async_trait::async_trait;
+use pumpkin_data::block_properties::{
+    BlockProperties, EnumVariants, Integer0To1, TorchflowerCropLikeProperties,
+};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -14,6 +17,8 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+
+type TorchFlowerProperties = TorchflowerCropLikeProperties;
 
 #[pumpkin_block("minecraft:torchflower_crop")]
 pub struct TorchFlowerBlock;
@@ -60,5 +65,25 @@ impl PlantBlockBase for TorchFlowerBlock {}
 impl CropBlockBase for TorchFlowerBlock {
     fn max_age(&self) -> i32 {
         2
+    }
+
+    fn get_age(&self, state: &pumpkin_data::BlockState, block: &Block) -> i32 {
+        let props = TorchFlowerProperties::from_state_id(state.id, block);
+        i32::from(props.age.to_index())
+    }
+
+    fn state_with_age(
+        &self,
+        block: &Block,
+        state: &pumpkin_data::BlockState,
+        age: i32,
+    ) -> BlockStateId {
+        if age == 1 {
+            let mut properties = TorchFlowerProperties::from_state_id(state.id, block);
+            properties.age = Integer0To1::L1;
+            properties.to_state_id(block)
+        } else {
+            Block::TORCHFLOWER.default_state.id
+        }
     }
 }

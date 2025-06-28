@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block,
+    Block, BlockState,
     block_properties::{BlockProperties, EnumVariants, Integer0To7, WheatLikeProperties},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use pumpkin_world::{
+    BlockStateId,
+    world::{BlockAccessor, BlockFlags},
+};
 use rand::Rng;
 
 use crate::{block::blocks::plant::PlantBlockBase, world::World};
@@ -28,16 +31,30 @@ trait CropBlockBase: PlantBlockBase {
         7
     }
 
+    fn get_age(&self, state: &BlockState, block: &Block) -> i32 {
+        let props = CropProperties::from_state_id(state.id, block);
+        i32::from(props.age.to_index())
+    }
+
+    fn state_with_age(&self, block: &Block, state: &BlockState, age: i32) -> BlockStateId {
+        let mut props = CropProperties::from_state_id(state.id, block);
+        props.age = Integer0To7::from_index(age as u16);
+        props.to_state_id(block)
+    }
+
     async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
         let (block, state) = world.get_block_and_block_state(pos).await;
-        let mut props = CropProperties::from_state_id(state.id, &block);
-        if i32::from(props.age.to_index()) < self.max_age() {
+        let age = self.get_age(&state, &block);
+        if age < self.max_age() {
             //TODO add moisture check
             let f = 5;
             if rand::rng().random_range(0..=(25 / f)) == 0 {
-                props.age = Integer0To7::from_index(i32::from(props.age.to_index()) as u16 + 1);
                 world
-                    .set_block_state(pos, props.to_state_id(&block), BlockFlags::NOTIFY_NEIGHBORS)
+                    .set_block_state(
+                        pos,
+                        self.state_with_age(&block, &state, age + 1),
+                        BlockFlags::NOTIFY_NEIGHBORS,
+                    )
                     .await;
             }
         }

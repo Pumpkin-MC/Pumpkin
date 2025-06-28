@@ -1,4 +1,7 @@
 use async_trait::async_trait;
+use pumpkin_data::block_properties::{
+    BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties,
+};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
@@ -14,6 +17,8 @@ use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+
+type BeetrootProperties = NetherWartLikeProperties;
 
 #[pumpkin_block("minecraft:beetroots")]
 pub struct BeetrootBlock;
@@ -60,5 +65,21 @@ impl PlantBlockBase for BeetrootBlock {}
 impl CropBlockBase for BeetrootBlock {
     fn max_age(&self) -> i32 {
         3
+    }
+
+    fn get_age(&self, state: &pumpkin_data::BlockState, block: &Block) -> i32 {
+        let props = BeetrootProperties::from_state_id(state.id, block);
+        i32::from(props.age.to_index())
+    }
+
+    fn state_with_age(
+        &self,
+        block: &Block,
+        state: &pumpkin_data::BlockState,
+        age: i32,
+    ) -> BlockStateId {
+        let mut props = BeetrootProperties::from_state_id(state.id, block);
+        props.age = Integer0To3::from_index(age as u16);
+        props.to_state_id(block)
     }
 }
