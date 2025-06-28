@@ -7,7 +7,7 @@ use pumpkin_world::item::ItemStack;
 
 use crate::crafting::crafting_inventory::CraftingInventory;
 use crate::crafting::crafting_screen_handler::CraftingScreenHandler;
-use crate::crafting::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
+use crate::crafting::recipes::{ RecipeInputInventory};
 use crate::equipment_slot::EquipmentSlot;
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::{ArmorSlot, NormalSlot, Slot};
@@ -19,7 +19,6 @@ pub struct PlayerScreenHandler {
     crafting_inventory: Arc<dyn RecipeInputInventory>,
 }
 
-impl RecipeFinderScreenHandler for PlayerScreenHandler {}
 
 impl CraftingScreenHandler<CraftingInventory> for PlayerScreenHandler {}
 
