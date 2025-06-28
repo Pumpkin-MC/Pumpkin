@@ -1,5 +1,4 @@
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU8;
 
@@ -33,14 +32,13 @@ pub struct ResultSlot {
 }
 
 fn is_symmetrical_horizontally(pattern: &'static [&'static str]) -> bool {
-    let height = pattern.len();
     let width = pattern.first().map_or(0, |s| s.len());
-    for i in 0..height {
-        if pattern[i].len() != width {
+    for row in pattern {
+        if row.len() != width {
             return false; // All rows must have the same length
         }
         for j in 0..width / 2 {
-            if pattern[i].chars().nth(j) != pattern[i].chars().nth(width - j - 1) {
+            if row.chars().nth(j) != row.chars().nth(width - j - 1) {
                 return false; // Characters must match symmetrically
             }
         }
