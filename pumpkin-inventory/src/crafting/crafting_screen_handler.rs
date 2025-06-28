@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU8;
 
 use async_trait::async_trait;
+use crossbeam_utils::atomic::AtomicCell;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING, RecipeResultStruct};
 use pumpkin_data::tag::Tagable;
 use pumpkin_world::inventory::Inventory;
@@ -22,6 +23,150 @@ pub struct ResultSlot {
     pub inventory: Arc<dyn RecipeInputInventory>,
     pub id: AtomicU8,
     pub result: Arc<Mutex<ItemStack>>,
+    recipe_cache: AtomicCell<Option<&'static CraftingRecipeTypes>>,
+}
+
+async fn recipe_matches<'a>(
+    recipe: &'static CraftingRecipeTypes,
+    input_height: usize,
+    input_width: usize,
+    top_x: usize,
+    top_y: usize,
+    count: usize,
+    inventory: &'a dyn RecipeInputInventory,
+) -> Option<&'a RecipeResultStruct> {
+    match recipe {
+        CraftingRecipeTypes::CraftingShaped {
+            key,
+            pattern,
+            result,
+            ..
+        } => {
+            if pattern.len() != input_height || pattern.first().unwrap().len() != input_width {
+                return None;
+            }
+
+            if count
+                != pattern
+                    .iter()
+                    .map(|l| l.chars().filter(|c| *c != ' ').count())
+                    .sum::<usize>()
+            {
+                return None;
+            }
+
+            let x_offset = top_x;
+            let y_offset = top_y;
+            for y in 0..pattern.len() {
+                for x in 0..pattern[y].len() {
+                    let current_key = pattern[y].chars().nth(x).unwrap();
+                    if current_key == ' ' {
+                        continue;
+                    }
+
+                    let ingredient = key
+                        .iter()
+                        .find_map(|(k, v)| (*k == current_key).then_some(v))
+                        .expect("Crafting recipe used invalid key");
+
+                    let slot = inventory
+                        .get_stack((y + y_offset) * inventory.get_height() + (x + x_offset))
+                        .await;
+                    let slot = slot.lock().await;
+
+                    if !ingredient.match_item(slot.item) {
+                        return None;
+                    }
+                }
+            }
+
+            // TODO: Apply components
+            return Some(result);
+        }
+        CraftingRecipeTypes::CraftingShapeless {
+            ingredients,
+            result,
+            ..
+        } => {
+            if count != ingredients.len() {
+                return None;
+            }
+
+            let mut ingredient_used = vec![false; ingredients.len()];
+            'next_slot: for i in 0..inventory.size() {
+                let slot = inventory.get_stack(i).await;
+                let slot = slot.lock().await;
+
+                if slot.is_empty() {
+                    continue 'next_slot;
+                }
+
+                for i in 0..ingredients.len() {
+                    if !ingredient_used[i] && ingredients[i].match_item(slot.item) {
+                        ingredient_used[i] = true;
+                        continue 'next_slot;
+                    }
+                }
+
+                return None;
+            }
+
+            // TODO: Apply components
+            return Some(result);
+        }
+        CraftingRecipeTypes::CraftingTransmute {
+            input,
+            material,
+            result,
+            ..
+        } => {
+            if count != 2 {
+                return None;
+            }
+
+            'item_stack: for i in 0..inventory.size() {
+                let slot = inventory.get_stack(i).await;
+                let slot = slot.lock().await;
+
+                if slot.is_empty() {
+                    continue 'item_stack;
+                }
+
+                if !material.match_item(slot.item) && !input.match_item(slot.item) {
+                    return None;
+                }
+            }
+
+            // TODO: Copy components
+            return Some(result);
+        }
+        CraftingRecipeTypes::CraftingDecoratedPot { .. } => {
+            if count != 4 || inventory.get_width() != 3 || inventory.get_height() != 3 {
+                return None;
+            }
+
+            for position in (1..=7).step_by(2) {
+                let slot = inventory.get_stack(position).await;
+                let slot = slot.lock().await;
+
+                if slot.is_empty()
+                    || !slot
+                        .item
+                        .is_tagged_with("#minecraft:decorated_pot_ingredients")
+                        .unwrap()
+                {
+                    return None;
+                }
+            }
+
+            // TODO: Handle side textures
+            return Some(&RecipeResultStruct {
+                id: "minecraft:decorated_pot",
+                count: 1,
+            });
+        }
+        CraftingRecipeTypes::CraftingSpecial => return None,
+    }
 }
 
 impl ResultSlot {
@@ -32,10 +177,14 @@ impl ResultSlot {
             inventory,
             id: AtomicU8::new(0),
             result: Arc::new(Mutex::new(ItemStack::EMPTY)),
+            recipe_cache: AtomicCell::new(None),
         }
     }
 
-    async fn match_recipe(&self) -> Option<&RecipeResultStruct> {
+    /// Matches the recipe in the crafting inventory and returns the result.
+    ///
+    /// If no recipe matches, returns `None`.
+    async fn match_recipe(&self) -> Option<(&RecipeResultStruct, &'static CraftingRecipeTypes)> {
         let mut count: usize = 0;
         let inventory_width = self.inventory.get_width();
         let mut top_x = 9;
@@ -63,158 +212,50 @@ impl ResultSlot {
         let input_width = bottom_x + 1 - top_x;
         let input_height = bottom_y + 1 - top_y;
 
-        'next_recipe: for recipe in RECIPES_CRAFTING {
-            match recipe {
-                CraftingRecipeTypes::CraftingShaped {
-                    key,
-                    pattern,
-                    result,
-                    ..
-                } => {
-                    if pattern.len() != input_height
-                        || pattern.first().unwrap().len() != input_width
-                    {
-                        continue;
-                    }
+        if let Some(cached_recipe) = self.recipe_cache.load() {
+            if let Some(result) = recipe_matches(
+                cached_recipe,
+                input_height,
+                input_width,
+                top_x,
+                top_y,
+                count,
+                &*self.inventory,
+            )
+            .await
+            {
+                return Some((result, cached_recipe));
+            }
+        }
 
-                    if count
-                        != pattern
-                            .iter()
-                            .map(|l| l.chars().filter(|c| *c != ' ').count())
-                            .sum::<usize>()
-                    {
-                        continue;
-                    }
-
-                    for y_offset in 0..=(self.inventory.get_height() - pattern.len()) {
-                        'next_offset: for x_offset in
-                            0..=(self.inventory.get_width() - pattern[0].len())
-                        {
-                            // Check if pattern matches
-                            for y in 0..pattern.len() {
-                                for x in 0..pattern[y].len() {
-                                    let current_key = pattern[y].chars().nth(x).unwrap();
-                                    if current_key == ' ' {
-                                        continue;
-                                    }
-
-                                    let ingredient = key
-                                        .iter()
-                                        .find_map(|(k, v)| (*k == current_key).then_some(v))
-                                        .expect("Crafting recipe used invalid key");
-
-                                    let slot = self
-                                        .inventory
-                                        .get_stack(
-                                            (y + y_offset) * self.inventory.get_height()
-                                                + (x + x_offset),
-                                        )
-                                        .await;
-                                    let slot = slot.lock().await;
-
-                                    if !ingredient.match_item(slot.item) {
-                                        continue 'next_offset;
-                                    }
-                                }
-                            }
-
-                            // TODO: Apply components
-                            return Some(result);
-                        }
-                    }
-
-                    continue 'next_recipe;
-                }
-                CraftingRecipeTypes::CraftingShapeless {
-                    ingredients,
-                    result,
-                    ..
-                } => {
-                    if count != ingredients.len() {
-                        continue;
-                    }
-
-                    let mut ingredient_used = vec![false; ingredients.len()];
-                    'next_slot: for i in 0..self.inventory.size() {
-                        let slot = self.inventory.get_stack(i).await;
-                        let slot = slot.lock().await;
-
-                        if slot.is_empty() {
-                            continue 'next_slot;
-                        }
-
-                        for i in 0..ingredients.len() {
-                            if !ingredient_used[i] && ingredients[i].match_item(slot.item) {
-                                ingredient_used[i] = true;
-                                continue 'next_slot;
-                            }
-                        }
-
-                        continue 'next_recipe;
-                    }
-
-                    // TODO: Apply components
-                    return Some(result);
-                }
-                CraftingRecipeTypes::CraftingTransmute {
-                    input,
-                    material,
-                    result,
-                    ..
-                } => {
-                    if count != 2 {
-                        continue;
-                    }
-
-                    'item_stack: for i in 0..self.inventory.size() {
-                        let slot = self.inventory.get_stack(i).await;
-                        let slot = slot.lock().await;
-
-                        if slot.is_empty() {
-                            continue 'item_stack;
-                        }
-
-                        if !material.match_item(slot.item) && !input.match_item(slot.item) {
-                            continue 'next_recipe;
-                        }
-                    }
-
-                    // TODO: Copy components
-                    return Some(result);
-                }
-                CraftingRecipeTypes::CraftingDecoratedPot { .. } => {
-                    if count != 4
-                        || self.inventory.get_width() != 3
-                        || self.inventory.get_height() != 3
-                    {
-                        continue 'next_recipe;
-                    }
-
-                    for position in (1..=7).step_by(2) {
-                        let slot = self.inventory.get_stack(position).await;
-                        let slot = slot.lock().await;
-
-                        if slot.is_empty()
-                            || !slot
-                                .item
-                                .is_tagged_with("#minecraft:decorated_pot_ingredients")
-                                .unwrap()
-                        {
-                            continue 'next_recipe;
-                        }
-                    }
-
-                    // TODO: Handle side textures
-                    return Some(&RecipeResultStruct {
-                        id: "minecraft:decorated_pot",
-                        count: 1,
-                    });
-                }
-                CraftingRecipeTypes::CraftingSpecial => continue,
+        for recipe in RECIPES_CRAFTING {
+            if let Some(result) = recipe_matches(
+                recipe,
+                input_height,
+                input_width,
+                top_x,
+                top_y,
+                count,
+                &*self.inventory,
+            )
+            .await
+            {
+                self.recipe_cache.store(Some(recipe));
+                return Some((result, recipe));
             }
         }
 
         None
+    }
+
+    async fn refill_output(&self) -> ItemStack {
+        let result = self
+            .match_recipe()
+            .await
+            .map(|x| ItemStack::from(x.0))
+            .unwrap_or(ItemStack::EMPTY);
+        *self.result.lock().await = result;
+        result
     }
 }
 
@@ -287,6 +328,11 @@ impl Slot for ResultSlot {
             .store(id as u8, std::sync::atomic::Ordering::Relaxed);
     }
 
+    async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {
+        // refill the result slot with the recipe result
+        self.refill_output().await;
+    }
+
     async fn mark_dirty(&self) {
         self.inventory.mark_dirty();
     }
@@ -303,12 +349,7 @@ impl ScreenHandlerListener for ResultSlot {
         if (0..=(self.inventory.get_width() * self.inventory.get_height()))
             .contains(&(slot as usize))
         {
-            let result = self
-                .match_recipe()
-                .await
-                .map(ItemStack::from)
-                .unwrap_or(ItemStack::EMPTY);
-            *self.result.lock().await = result;
+            let result = self.refill_output().await;
 
             let next_revision = screen_handler.next_revision();
             if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {

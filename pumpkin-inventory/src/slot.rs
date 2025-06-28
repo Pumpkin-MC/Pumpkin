@@ -22,7 +22,8 @@ pub trait Slot: Send + Sync + Debug {
 
     fn set_id(&self, index: usize);
 
-    async fn on_quick_move(&self, _stack: ItemStack, _amount: u8) {}
+    /// Also see: `ScreenHandler::quick_move`
+    async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {}
 
     /// Callback for when an item is taken from the slot.
     ///
