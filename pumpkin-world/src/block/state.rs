@@ -4,27 +4,25 @@ use crate::BlockStateId;
 
 /// Instead of using a memory heavy normal BlockState This is used for internal representation in chunks to save memory
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RawBlockState {
-    pub state_id: BlockStateId,
-}
+pub struct RawBlockState(pub BlockStateId);
 
 impl RawBlockState {
-    pub const AIR: RawBlockState = RawBlockState { state_id: 0 };
+    pub const AIR: RawBlockState = RawBlockState(0);
 
     /// Get a Block from the Vanilla Block registry at Runtime
     pub fn new(registry_id: &str) -> Option<Self> {
         let block = get_block(registry_id);
-        block.map(|block| Self {
-            state_id: block.default_state_id,
-        })
+        block.map(|block| Self(block.default_state.id))
     }
 
+    #[inline]
     pub fn to_state(&self) -> pumpkin_data::BlockState {
-        get_state_by_state_id(self.state_id).unwrap()
+        get_state_by_state_id(self.0).unwrap()
     }
 
+    #[inline]
     pub fn to_block(&self) -> pumpkin_data::Block {
-        get_block_by_state_id(self.state_id).unwrap()
+        get_block_by_state_id(self.0).unwrap()
     }
 }
 

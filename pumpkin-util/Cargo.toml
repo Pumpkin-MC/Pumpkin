@@ -8,13 +8,12 @@ pumpkin-nbt = { path = "../pumpkin-nbt" }
 serde.workspace = true
 serde_json.workspace = true
 bytes.workspace = true
-rand = "0.9"
 
 num-derive = "0.4"
 num-traits = "0.2"
 
 colored = "3.0"
-md5 = "0.7"
+md5 = "0.8"
 quote = "1.0"
 syn = "2.0"
 proc-macro2 = "1.0"

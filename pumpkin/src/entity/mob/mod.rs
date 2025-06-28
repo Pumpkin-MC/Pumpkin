@@ -1,12 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::entity::EntityType;
-use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex;
-use zombie::Zombie;
 
-use crate::{server::Server, world::World};
+use crate::server::Server;
 
 use super::{
     Entity, EntityBase,
@@ -48,31 +45,5 @@ impl EntityBase for MobEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
-    }
-}
-
-pub async fn from_type(
-    entity_type: EntityType,
-    position: Vector3<f64>,
-    world: &Arc<World>,
-) -> Arc<dyn EntityBase> {
-    let entity = world.create_entity(position, entity_type);
-    let mob = MobEntity {
-        living_entity: LivingEntity::new(entity),
-        goals: Mutex::new(vec![]),
-        navigator: Mutex::new(Navigator::default()),
-    };
-    #[expect(clippy::single_match)]
-    match entity_type {
-        EntityType::ZOMBIE => Zombie::make(&mob).await,
-        // TODO
-        _ => (),
-    }
-    Arc::new(mob)
-}
-
-impl MobEntity {
-    pub async fn goal<T: Goal + 'static>(&self, goal: T) {
-        self.goals.lock().await.push((Arc::new(goal), false));
     }
 }

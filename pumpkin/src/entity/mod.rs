@@ -20,6 +20,7 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     ser::serializer::Serializer,
 };
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
     get_section_cord,
@@ -50,6 +51,7 @@ pub mod mob;
 pub mod player;
 pub mod projectile;
 pub mod tnt;
+pub mod r#type;
 
 mod combat;
 
@@ -69,6 +71,22 @@ pub trait EntityBase: Send + Sync {
             living.tick(caller, server).await;
         } else {
             self.get_entity().tick(caller, server).await;
+        }
+    }
+
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        if let Some(living) = self.get_living_entity() {
+            living.write_nbt(nbt).await;
+        } else {
+            self.get_entity().write_nbt(nbt).await;
+        }
+    }
+
+    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
+        if let Some(living) = self.get_living_entity() {
+            living.read_nbt(nbt).await;
+        } else {
+            self.get_entity().read_nbt(nbt).await;
         }
     }
 
@@ -150,6 +168,8 @@ pub struct Entity {
     pub fire_ticks: AtomicI32,
     pub has_visual_fire: AtomicBool,
 
+    pub first_loaded_chunk_position: AtomicCell<Option<Vector3<i32>>>,
+
     pub portal_cooldown: AtomicU32,
 
     pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
@@ -190,6 +210,7 @@ impl Entity {
             velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             standing_eye_height: entity_type.eye_height,
             pose: AtomicCell::new(EntityPose::Standing),
+            first_loaded_chunk_position: AtomicCell::new(None),
             bounding_box: AtomicCell::new(BoundingBox::new_from_pos(
                 position.x,
                 position.y,
@@ -321,9 +342,33 @@ impl Entity {
                 // reset cooldown
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
+                let pos = self.pos.load();
+                // TODO: this is bad
+                let scale_factor_new = if portal_manager.portal_world.dimension_type
+                    == VanillaDimensionType::TheNether
+                {
+                    8.0
+                } else {
+                    1.0
+                };
+                // TODO: this is bad
+                let scale_factor_current =
+                    if self.world.read().await.dimension_type == VanillaDimensionType::TheNether {
+                        8.0
+                    } else {
+                        1.0
+                    };
+                let scale_factor = scale_factor_current / scale_factor_new;
+                // TODO
+                let pos = BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
                 caller
                     .clone()
-                    .teleport(None, None, None, portal_manager.portal_world.clone())
+                    .teleport(
+                        Some(pos.0.to_f64()),
+                        None,
+                        None,
+                        portal_manager.portal_world.clone(),
+                    )
                     .await;
             } else if portal_manager.ticks_in_portal == 0 {
                 should_remove = true;
@@ -449,7 +494,7 @@ impl Entity {
     }
 
     pub fn get_horizontal_facing(&self) -> HorizontalFacing {
-        let adjusted_yaw = (self.yaw.load() % 360.0 + 360.0) % 360.0; // Normalize yaw to [0, 360)
+        let adjusted_yaw = self.yaw.load().rem_euclid(360.0); // Normalize yaw to [0, 360)
 
         match adjusted_yaw {
             0.0..=45.0 | 315.0..=360.0 => HorizontalFacing::South,
@@ -648,11 +693,42 @@ impl Entity {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
                     let (block, state) = world.get_block_and_block_state(&pos).await;
-                    world
-                        .block_registry
-                        .on_entity_collision(block, &world, entity, pos, state, server)
-                        .await;
-                    if let Ok(fluid) = world.get_fluid(&pos).await {
+                    let block_outlines = state.get_block_outline_shapes();
+
+                    if let Some(outlines) = block_outlines {
+                        if outlines.is_empty() {
+                            world
+                                .block_registry
+                                .on_entity_collision(block, &world, entity, pos, state, server)
+                                .await;
+                            let fluid = world.get_fluid(&pos).await;
+                            world
+                                .block_registry
+                                .on_entity_collision_fluid(&fluid, entity)
+                                .await;
+                            continue;
+                        }
+                        for outline in outlines {
+                            let outline_aabb = outline.at_pos(pos);
+                            if outline_aabb.intersects(&aabb) {
+                                world
+                                    .block_registry
+                                    .on_entity_collision(block, &world, entity, pos, state, server)
+                                    .await;
+                                let fluid = world.get_fluid(&pos).await;
+                                world
+                                    .block_registry
+                                    .on_entity_collision_fluid(&fluid, entity)
+                                    .await;
+                                break;
+                            }
+                        }
+                    } else {
+                        world
+                            .block_registry
+                            .on_entity_collision(block, &world, entity, pos, state, server)
+                            .await;
+                        let fluid = world.get_fluid(&pos).await;
                         world
                             .block_registry
                             .on_entity_collision_fluid(&fluid, entity)
@@ -732,28 +808,43 @@ impl EntityBase for Entity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-}
 
-#[async_trait]
-impl NBTStorage for Entity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         let position = self.pos.load();
+        nbt.put_string(
+            "id",
+            format!("minecraft:{}", self.entity_type.resource_name),
+        );
+        let uuid = self.entity_uuid.as_u128();
+        nbt.put(
+            "UUID",
+            NbtTag::IntArray(vec![
+                (uuid >> 96) as i32,
+                ((uuid >> 64) & 0xFFFF_FFFF) as i32,
+                ((uuid >> 32) & 0xFFFF_FFFF) as i32,
+                (uuid & 0xFFFF_FFFF) as i32,
+            ]),
+        );
         nbt.put(
             "Pos",
-            NbtTag::List(
-                vec![position.x.into(), position.y.into(), position.z.into()].into_boxed_slice(),
-            ),
+            NbtTag::List(vec![
+                position.x.into(),
+                position.y.into(),
+                position.z.into(),
+            ]),
         );
         let velocity = self.velocity.load();
         nbt.put(
             "Motion",
-            NbtTag::List(
-                vec![velocity.x.into(), velocity.y.into(), velocity.z.into()].into_boxed_slice(),
-            ),
+            NbtTag::List(vec![
+                velocity.x.into(),
+                velocity.y.into(),
+                velocity.z.into(),
+            ]),
         );
         nbt.put(
             "Rotation",
-            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice()),
+            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
         );
         nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
         nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
@@ -766,12 +857,14 @@ impl NBTStorage for Entity {
         // todo more...
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
         let position = nbt.get_list("Pos").unwrap();
         let x = position[0].extract_double().unwrap_or(0.0);
         let y = position[1].extract_double().unwrap_or(0.0);
         let z = position[2].extract_double().unwrap_or(0.0);
-        self.set_pos(Vector3::new(x, y, z));
+        let pos = Vector3::new(x, y, z);
+        self.set_pos(pos);
+        self.first_loaded_chunk_position.store(Some(pos.to_i32()));
         let velocity = nbt.get_list("Motion").unwrap();
         let x = velocity[0].extract_double().unwrap_or(0.0);
         let y = velocity[1].extract_double().unwrap_or(0.0);
@@ -798,7 +891,7 @@ impl NBTStorage for Entity {
 
 #[async_trait]
 pub trait NBTStorage: Send + Sync + Sized {
-    async fn write_nbt(&self, nbt: &mut NbtCompound);
+    async fn write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     async fn read_nbt(&mut self, _nbt: &mut NbtCompound) {}
 

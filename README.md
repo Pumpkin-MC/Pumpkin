@@ -5,7 +5,7 @@
 ![CI](https://github.com/Snowiiii/Pumpkin/actions/workflows/rust.yml/badge.svg)
 [![Discord](https://img.shields.io/discord/1268592337445978193.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/wT8XjrjKkf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Current version)](https://img.shields.io/badge/current_version-1.21.5-blue)
+![Current version)](https://img.shields.io/badge/current_version-1.21.6-blue)
 
 
 </div>
@@ -49,7 +49,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] World Loading
   - [x] World Time
   - [x] World Borders
-  - [x] World Saving (W.I.P)
+  - [x] World Saving 
   - [x] Lighting
   - [x] Entity Spawning
   - [x] Item drops (W.I.P)
@@ -62,6 +62,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Redstone (W.I.P)
   - [x] Liquid Physics
   - [x] Vegetation
+  - [ ] Structure Generation
 - Player
   - [x] Skins
   - [x] Client brand
@@ -72,7 +73,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Combat
   - [x] Experience
   - [x] Hunger
-  - [ ] Off Hand
+  - [X] Off Hand
   - [ ] Advancements 
   - [ ] Eating
 - Entities
@@ -82,10 +83,10 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Mobs (W.I.P)
   - [x] Animals (W.I.P)
   - [x] Entity AI (W.I.P)
-  - [ ] Entity Saving
   - [ ] Boss
   - [ ] Villagers
   - [ ] Mobs Inventory
+  - [X] Entity Saving
 - Server
   - [x] Plugins (W.I.P)
   - [x] Query
@@ -120,4 +121,4 @@ Consider joining [our Discord server](https://discord.gg/wT8XjrjKkf) to stay up-
 
 ## Funding
 
-If you want to fund me and help the project, check out my [GitHub sponsors](https://github.com/sponsors/Snowiiii) or my [PayPal](https://www.paypal.me/alexxmedvedev).
+If you want to fund me and help the project, check out my [GitHub sponsors](https://github.com/sponsors/Snowiiii).

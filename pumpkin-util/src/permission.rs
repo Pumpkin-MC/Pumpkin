@@ -172,7 +172,7 @@ impl PermissionManager {
 
                 // Check wildcard permissions at each level
                 let mut current_node = namespace.to_string();
-                if let Some(value) = attachment.has_permission_set(&format!("{}:*", current_node)) {
+                if let Some(value) = attachment.has_permission_set(&format!("{current_node}:*")) {
                     return value;
                 }
 
@@ -186,7 +186,7 @@ impl PermissionManager {
 
                     if i < key_parts.len() - 1 {
                         if let Some(value) =
-                            attachment.has_permission_set(&format!("{}.*", current_node))
+                            attachment.has_permission_set(&format!("{current_node}.*"))
                         {
                             return value;
                         }
@@ -240,7 +240,7 @@ pub enum PermissionLvl {
 
 impl PartialOrd for PermissionLvl {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some((*self as u8).cmp(&(*other as u8)))
+        Some(self.cmp(other))
     }
 }
 

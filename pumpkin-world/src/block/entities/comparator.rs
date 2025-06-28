@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
 use super::BlockEntity;
@@ -10,13 +11,19 @@ pub struct ComparatorBlockEntity {
 
 impl ComparatorBlockEntity {
     pub const ID: &'static str = "minecraft:comparator";
+    pub fn new(position: BlockPos) -> Self {
+        Self {
+            position,
+            output_signal: 0,
+        }
+    }
 }
 
 const OUTPUT_SIGNAL: &str = "OutputSignal";
 
 #[async_trait]
 impl BlockEntity for ComparatorBlockEntity {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         Self::ID
     }
 
@@ -24,7 +31,7 @@ impl BlockEntity for ComparatorBlockEntity {
         self.position
     }
 
-    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
+    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
@@ -35,8 +42,14 @@ impl BlockEntity for ComparatorBlockEntity {
         }
     }
 
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_int(OUTPUT_SIGNAL, self.output_signal);
+    }
+
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        nbt.put_int(OUTPUT_SIGNAL, self.output_signal);
+        Some(nbt)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

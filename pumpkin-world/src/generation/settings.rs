@@ -39,6 +39,7 @@ pub struct GenerationSettings {
     pub ore_veins_enabled: bool,
     pub legacy_random_source: bool,
     pub sea_level: i32,
+    pub default_fluid: BlockStateCodec,
     #[serde(rename = "noise")]
     pub shape: GenerationShapeConfig,
     pub surface_rule: MaterialRule,

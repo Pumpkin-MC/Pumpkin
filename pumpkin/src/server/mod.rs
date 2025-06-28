@@ -7,6 +7,7 @@ use crate::item::registry::ItemRegistry;
 use crate::net::EncryptionError;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
+use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
     command::dispatcher::CommandDispatcher, entity::player::Player, net::Client, world::World,
@@ -16,11 +17,13 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::client::login::CEncryptionRequest;
 use pumpkin_protocol::client::play::CChangeDifficulty;
+use pumpkin_protocol::client::play::CSetSelectedSlot;
 use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
-use pumpkin_registry::{DimensionType, Registry};
+use pumpkin_registry::{Registry, VanillaDimensionType};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
@@ -31,12 +34,13 @@ use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
-use rand::prelude::SliceRandom;
+use rand::seq::IndexedRandom;
 use rsa::RsaPublicKey;
 use std::fs;
 use std::net::IpAddr;
-use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{
+    future::Future,
     sync::{Arc, atomic::Ordering},
     time::Duration,
 };
@@ -47,9 +51,10 @@ use tokio_util::task::TaskTracker;
 mod connection_cache;
 mod key_store;
 pub mod seasonal_events;
+pub mod tick_rate_manager;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.5";
+pub const CURRENT_MC_VERSION: &str = "1.21.6";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -68,7 +73,7 @@ pub struct Server {
     /// Manages multiple worlds within the server.
     pub worlds: RwLock<Vec<Arc<World>>>,
     /// All the dimensions that exist on the server.
-    pub dimensions: Vec<DimensionType>,
+    pub dimensions: Vec<VanillaDimensionType>,
     /// Caches game registries for efficient access.
     pub cached_registry: Vec<Registry>,
     /// Assigns unique IDs to containers.
@@ -86,6 +91,14 @@ pub struct Server {
     pub player_data_storage: ServerPlayerData,
     // Whether the server whitelist is on or off
     pub white_list: AtomicBool,
+    /// Manages the server's tick rate, freezing, and sprinting
+    pub tick_rate_manager: Arc<ServerTickRateManager>,
+    /// Stores the duration of the last 100 ticks for performance analysis
+    pub tick_times_nanos: Mutex<[i64; 100]>,
+    /// Aggregated tick times for efficient rolling average calculation
+    pub aggregated_tick_times_nanos: AtomicI64,
+    /// Total number of ticks processed by the server
+    pub tick_count: AtomicI32,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
@@ -146,23 +159,23 @@ impl Server {
         let overworld = World::load(
             Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
-            DimensionType::Overworld,
+            VanillaDimensionType::Overworld,
             block_registry.clone(),
         );
         log::info!("Loading Nether: {seed}");
         let nether = World::load(
             Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
-            DimensionType::TheNether,
+            VanillaDimensionType::TheNether,
             block_registry.clone(),
         );
-        // log::info!("Loading End: {}", seed);
-        // let end = World::load(
-        //     Dimension::End.into_level(world_path.clone(), seed),
-        //     level_info.clone(),
-        //     DimensionType::TheEnd,
-        //     block_registry.clone(),
-        // );
+        log::info!("Loading End: {seed}");
+        let end = World::load(
+            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::TheEnd,
+            block_registry.clone(),
+        );
 
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
@@ -173,12 +186,12 @@ impl Server {
         Self {
             cached_registry: Registry::get_synced(),
             container_id: 0.into(),
-            worlds: RwLock::new(vec![Arc::new(overworld), Arc::new(nether)]),
+            worlds: RwLock::new(vec![Arc::new(overworld), Arc::new(nether), Arc::new(end)]),
             dimensions: vec![
-                DimensionType::Overworld,
-                DimensionType::OverworldCaves,
-                DimensionType::TheNether,
-                DimensionType::TheEnd,
+                VanillaDimensionType::Overworld,
+                VanillaDimensionType::OverworldCaves,
+                VanillaDimensionType::TheNether,
+                VanillaDimensionType::TheEnd,
             ],
             command_dispatcher,
             block_registry,
@@ -196,6 +209,10 @@ impl Server {
                 Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
             white_list: AtomicBool::new(BASIC_CONFIG.white_list),
+            tick_rate_manager: Arc::new(ServerTickRateManager::default()),
+            tick_times_nanos: Mutex::new([0; 100]),
+            aggregated_tick_times_nanos: AtomicI64::new(0),
+            tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
@@ -226,14 +243,14 @@ impl Server {
         self.tasks.spawn(task)
     }
 
-    pub async fn get_world_from_dimension(&self, dimension: DimensionType) -> Arc<World> {
+    pub async fn get_world_from_dimension(&self, dimension: VanillaDimensionType) -> Arc<World> {
         // TODO: this is really bad
         let world_guard = self.worlds.read().await;
         let world = match dimension {
-            DimensionType::Overworld => world_guard.first(),
-            DimensionType::OverworldCaves => todo!(),
-            DimensionType::TheEnd => todo!(),
-            DimensionType::TheNether => world_guard.get(1),
+            VanillaDimensionType::Overworld => world_guard.first(),
+            VanillaDimensionType::OverworldCaves => todo!(),
+            VanillaDimensionType::TheEnd => world_guard.get(2),
+            VanillaDimensionType::TheNether => world_guard.get(1),
         };
         world.cloned().unwrap()
     }
@@ -270,7 +287,9 @@ impl Server {
 
         let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&uuid) {
             if let Some(dimension_key) = data.get_string("Dimension") {
-                if let Some(dimension) = DimensionType::from_name(dimension_key) {
+                if let Some(dimension) =
+                    VanillaDimensionType::from_resource_location_string(dimension_key)
+                {
                     let world = self.get_world_from_dimension(dimension).await;
                     (world, Some(data))
                 } else {
@@ -321,6 +340,13 @@ impl Server {
                             self.listing.lock().await.add_player(&player);
                         }
                     }
+
+                    player.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
+                        player.get_inventory().get_selected_slot() as i8,
+                    )).await;
+
+                    // Send tick rate information to the new player
+                    self.tick_rate_manager.update_joining_player(&player).await;
 
                     Some((player, world.clone()))
                 } else {
@@ -497,7 +523,7 @@ impl Server {
     pub async fn get_random_player(&self) -> Option<Arc<Player>> {
         let players = self.get_all_players().await;
 
-        players.choose(&mut rand::thread_rng()).map(Arc::<_>::clone)
+        players.choose(&mut rand::rng()).map(Arc::<_>::clone)
     }
 
     /// Searches for a player by their UUID across all worlds.
@@ -578,13 +604,114 @@ impl Server {
         self.key_store.get_digest(secret)
     }
 
-    async fn tick(&self) {
+    /// Main server tick method. This now handles both player/network ticking (which always runs)
+    /// and world/game logic ticking (which is affected by freeze state).
+    pub async fn tick(&self) {
+        // Always run player and network ticking, even when game is frozen
+        self.tick_players_and_network().await;
+
+        // Only run world/game logic if the tick rate manager allows it
+        if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
+            self.tick_worlds(self).await;
+        }
+    }
+
+    /// Ticks essential server functions that must run even when the game is frozen.
+    /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
+    pub async fn tick_players_and_network(&self) {
+        // First, flush pending block updates and synced block events to clients
         for world in self.worlds.read().await.iter() {
-            world.tick(self).await;
+            world.flush_block_updates().await;
+            world.flush_synced_block_events().await;
         }
 
+        let players_to_tick: Vec<_> = self.get_all_players().await;
+        for player in players_to_tick {
+            player.tick(self).await;
+        }
+    }
+    /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
+    pub async fn tick_worlds(&self, server: &Self) {
+        for world in self.worlds.read().await.iter() {
+            // Tick world-specific logic like time and weather
+            world.level_time.lock().await.tick_time();
+            world.weather.lock().await.tick_weather(world).await;
+
+            if world.should_skip_night().await {
+                let mut level_time = world.level_time.lock().await;
+                let time = level_time.time_of_day + 24000;
+                level_time.set_time(time - time % 24000);
+                level_time.send_time(world).await;
+
+                for player in world.players.read().await.values() {
+                    player.wake_up().await;
+                }
+
+                let mut weather = world.weather.lock().await;
+                if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
+                    weather.reset_weather_cycle(world).await;
+                }
+            } else if world.level_time.lock().await.world_age % 20 == 0 {
+                world.level_time.lock().await.send_time(world).await;
+            }
+
+            // Tick scheduled block/fluid updates
+            world.tick_scheduled_block_ticks().await;
+
+            // Tick non-player entities
+            let entities_to_tick: Vec<_> = world.entities.read().await.values().cloned().collect();
+            for entity in entities_to_tick {
+                entity.tick(entity.clone(), server).await;
+                // Handle entity-player collision detection
+                for player in world.players.read().await.values() {
+                    if player
+                        .living_entity
+                        .entity
+                        .bounding_box
+                        .load()
+                        // TODO: change this when is in a vehicle
+                        .expand(1.0, 0.5, 1.0)
+                        .intersects(&entity.get_entity().bounding_box.load())
+                    {
+                        entity.on_player_collision(player).await;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Global periodic tasks
         if let Err(e) = self.player_data_storage.tick(self).await {
             log::error!("Error ticking player data: {e}");
         }
+    }
+
+    /// Updates the tick time statistics with the duration of the last tick.
+    pub async fn update_tick_times(&self, tick_duration_nanos: i64) {
+        let tick_count = self.tick_count.fetch_add(1, Ordering::Relaxed);
+        let index = (tick_count % 100) as usize;
+
+        let mut tick_times = self.tick_times_nanos.lock().await;
+        let old_time = tick_times[index];
+        tick_times[index] = tick_duration_nanos;
+        drop(tick_times);
+
+        self.aggregated_tick_times_nanos
+            .fetch_add(tick_duration_nanos - old_time, Ordering::Relaxed);
+    }
+
+    /// Gets the rolling average tick time over the last 100 ticks, in nanoseconds.
+    pub fn get_average_tick_time_nanos(&self) -> i64 {
+        let tick_count = self.tick_count.load(Ordering::Relaxed);
+        let sample_size = (tick_count as usize).min(100);
+        if sample_size == 0 {
+            return 0;
+        }
+        self.aggregated_tick_times_nanos.load(Ordering::Relaxed) / sample_size as i64
+    }
+
+    /// Returns a copy of the last 100 tick times.
+    pub async fn get_tick_times_nanos_copy(&self) -> [i64; 100] {
+        *self.tick_times_nanos.lock().await
     }
 }

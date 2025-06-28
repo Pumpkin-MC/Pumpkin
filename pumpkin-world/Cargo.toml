@@ -7,7 +7,6 @@ edition.workspace = true
 pumpkin-nbt = { path = "../pumpkin-nbt" }
 pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-config = { path = "../pumpkin-config" }
-pumpkin-macros = { path = "../pumpkin-macros" }
 pumpkin-data = { path = "../pumpkin-data" }
 
 async-trait.workspace = true
@@ -34,7 +33,7 @@ num-traits = "0.2"
 
 # Compression
 flate2 = "1.1"
-lz4 = "1.28"
+lz4-java-wrc = "0.2.0"
 zstd = "0.13.3"
 
 itertools = "0.14.0"
@@ -43,7 +42,7 @@ indexmap = "2.9"
 enum_dispatch = "0.3"
 derive-getters = "0.5.0"
 
-thread_local = "1.1.8"
+thread_local = "1.1.9"
 lru = "0.14.0"
 
 tokio-util = { version = "0.7.15", features = ["rt"] }

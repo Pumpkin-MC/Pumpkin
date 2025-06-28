@@ -1,6 +1,6 @@
 use chrono::{Datelike, Local};
 use pumpkin_config::advanced_config;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{rng, seq::SliceRandom};
 
 // In fact Mojang also has some Seasonal Events, so we can use that later to match Vanilla :D
 
@@ -19,7 +19,7 @@ pub fn modify_chat_message(message: &str) -> Option<String> {
     if words.is_empty() {
         return None;
     }
-    let mut rng = thread_rng();
+    let mut rng = rng();
     words.shuffle(&mut rng);
     let result = words.join(" ");
     Some(result)

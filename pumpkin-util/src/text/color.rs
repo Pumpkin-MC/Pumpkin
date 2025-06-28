@@ -39,7 +39,7 @@ impl<'de> Deserialize<'de> for Color {
             let b = u8::from_str_radix(&hex[4..6], 16)
                 .map_err(|_| serde::de::Error::custom("Invalid blue component in hex color"))?;
 
-            return Ok(Color::Rgb(RGBColor::new(r, g, b)));
+            Ok(Color::Rgb(RGBColor::new(r, g, b)))
         } else {
             Ok(Color::Named(NamedColor::try_from(s.as_str()).map_err(
                 |_| serde::de::Error::custom("Invalid named color"),

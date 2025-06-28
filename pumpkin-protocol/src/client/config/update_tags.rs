@@ -2,7 +2,6 @@ use std::io::Write;
 
 use crate::{
     ClientPacket,
-    codec::identifier::Identifier,
     ser::{NetworkWriteExt, WritingError},
 };
 
@@ -13,6 +12,7 @@ use pumpkin_data::{
     tag::{RegistryKey, get_registry_key_tags},
 };
 use pumpkin_macros::packet;
+use pumpkin_util::resource_location::ResourceLocation;
 
 #[packet(CONFIG_UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {
@@ -29,7 +29,9 @@ impl ClientPacket for CUpdateTags<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list(self.tags, |p, registry_key| {
-            p.write_identifier(&Identifier::vanilla(registry_key.identifier_string()))?;
+            p.write_resource_location(&ResourceLocation::vanilla(
+                registry_key.identifier_string(),
+            ))?;
 
             let values = get_registry_key_tags(registry_key);
             p.write_var_int(&values.len().try_into().map_err(|_| {
@@ -37,7 +39,7 @@ impl ClientPacket for CUpdateTags<'_> {
             })?)?;
 
             for (key, values) in values.iter() {
-                // This is technically an `Identifier` but same thing
+                // This is technically a `ResourceLocation` but same thing
                 p.write_string_bounded(key, u16::MAX as usize)?;
                 p.write_list(values, |p, string_id| {
                     let id = match registry_key {

@@ -5,6 +5,7 @@ use barrel::BarrelBlockEntity;
 use bed::BedBlockEntity;
 use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
+use end_portal::EndPortalBlockEntity;
 use piston::PistonBlockEntity;
 use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
@@ -18,6 +19,7 @@ pub mod bed;
 pub mod chest;
 pub mod command_block;
 pub mod comparator;
+pub mod end_portal;
 pub mod piston;
 pub mod sign;
 
@@ -29,10 +31,10 @@ pub trait BlockEntity: Send + Sync {
     where
         Self: Sized;
     async fn tick(&self, _world: &Arc<dyn SimpleWorld>) {}
-    fn identifier(&self) -> &'static str;
+    fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
     async fn write_internal(&self, nbt: &mut NbtCompound) {
-        nbt.put_string("id", self.identifier().to_string());
+        nbt.put_string("id", self.resource_location().to_string());
         let position = self.get_position();
         nbt.put_int("x", position.0.x);
         nbt.put_int("y", position.0.y);
@@ -43,7 +45,7 @@ pub trait BlockEntity: Send + Sync {
         pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
             .iter()
             .position(|block_entity_name| {
-                *block_entity_name == self.identifier().split(":").last().unwrap()
+                *block_entity_name == self.resource_location().split(":").last().unwrap()
             })
             .unwrap() as u32
     }
@@ -81,6 +83,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         PistonBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<PistonBlockEntity>(
             nbt,
         ))),
+        EndPortalBlockEntity::ID => Some(Arc::new(
+            block_entity_from_generic::<EndPortalBlockEntity>(nbt),
+        )),
         _ => None,
     }
 }

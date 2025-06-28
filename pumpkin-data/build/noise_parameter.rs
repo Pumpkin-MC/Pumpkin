@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use proc_macro2::TokenStream;
 use pumpkin_util::DoublePerlinNoiseParametersCodec;
@@ -8,7 +8,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/noise_parameters.json");
 
     let json: HashMap<String, DoublePerlinNoiseParametersCodec> =
-        serde_json::from_str(include_str!("../../assets/noise_parameters.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/noise_parameters.json").unwrap())
             .expect("Failed to parse noise_parameters.json");
     let mut variants = TokenStream::new();
     let mut match_variants = TokenStream::new();

@@ -57,12 +57,12 @@ impl CoralFeature {
             }
             let wall_coral = Self::get_random_tag_entry_block("minecraft:wall_corals", random);
             let original_props = &wall_coral
-                .properties(wall_coral.default_state_id)
+                .properties(wall_coral.default_state.id)
                 .unwrap()
                 .to_props();
             let facing = dir.to_facing();
             // Set the right Axis
-            let props_vec: Vec<(&str, &str)> = original_props
+            let props = original_props
                 .iter()
                 .map(|(key, value)| {
                     if key == "facing" {
@@ -76,7 +76,7 @@ impl CoralFeature {
                 &dir_pos.0,
                 &get_state_by_state_id(
                     wall_coral
-                        .from_properties(props_vec)
+                        .from_properties(props)
                         .unwrap()
                         .to_state_id(&wall_coral),
                 )
@@ -89,7 +89,7 @@ impl CoralFeature {
 
     pub fn get_random_tag_entry(tag: &str, random: &mut RandomGenerator) -> BlockState {
         let block = Self::get_random_tag_entry_block(tag, random);
-        get_state_by_state_id(block.default_state_id).unwrap()
+        block.default_state
     }
 
     pub fn get_random_tag_entry_block(tag: &str, random: &mut RandomGenerator) -> Block {

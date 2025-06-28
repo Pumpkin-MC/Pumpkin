@@ -1,5 +1,5 @@
 {
-  "version": 770,
+  "version": 771,
   "serverbound": {
     "handshake": [
       "intention"
@@ -23,13 +23,15 @@
       "keep_alive",
       "pong",
       "resource_pack",
-      "select_known_packs"
+      "select_known_packs",
+      "custom_click_action"
     ],
     "play": [
       "accept_teleportation",
       "block_entity_tag_query",
       "bundle_item_selected",
       "change_difficulty",
+      "change_game_mode",
       "chat_ack",
       "chat_command",
       "chat_command_signed",
@@ -89,7 +91,8 @@
       "teleport_to_entity",
       "test_instance_block_action",
       "use_item_on",
-      "use_item"
+      "use_item",
+      "custom_click_action"
     ]
   },
   "clientbound": {
@@ -122,7 +125,9 @@
       "update_tags",
       "select_known_packs",
       "custom_report_details",
-      "server_links"
+      "server_links",
+      "clear_dialog",
+      "show_dialog"
     ],
     "play": [
       "bundle_delimiter",
@@ -255,7 +260,10 @@
       "update_tags",
       "projectile_power",
       "custom_report_details",
-      "server_links"
+      "server_links",
+      "waypoint",
+      "clear_dialog",
+      "show_dialog"
     ]
   }
 }

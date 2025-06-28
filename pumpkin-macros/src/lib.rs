@@ -1,6 +1,8 @@
 use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro::TokenStream;
+use proc_macro_error2::{abort, abort_call_site, proc_macro_error};
 use quote::quote;
+use syn::spanned::Spanned;
 use syn::{self};
 use syn::{
     Block, Expr, Field, Fields, ItemStruct, Stmt,
@@ -70,6 +72,7 @@ pub fn cancellable(args: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
+#[proc_macro_error]
 #[proc_macro]
 pub fn send_cancellable(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as Block);
@@ -149,7 +152,7 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
             .into()
         }
     } else {
-        panic!("Event must be specified");
+        abort_call_site!("Event must be specified");
     }
 }
 
@@ -202,6 +205,7 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
     code.into()
 }
 
+#[proc_macro_error]
 #[proc_macro_attribute]
 pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
     let ast: syn::DeriveInput = syn::parse(item.clone()).unwrap();
@@ -227,20 +231,28 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
             enum_item.variants.into_iter().map(|v| v.ident).collect(),
             true,
         ),
-        syn::Data::Struct(struct_type) => {
-            let fields = match struct_type.fields {
-                Fields::Named(_) => panic!("Block properties can't have named fields"),
+        syn::Data::Struct(s) => {
+            let fields = match s.fields {
+                Fields::Named(f) => abort!(f.span(), "Block properties can't have named fields"),
                 Fields::Unnamed(fields) => fields.unnamed,
-                Fields::Unit => panic!("Block properties must have fields"),
+                Fields::Unit => abort!(s.fields.span(), "Block properties must have fields"),
             };
             if fields.len() != 1 {
-                panic!("Block properties `struct`s must have exactly one field");
+                abort!(
+                    fields.span(),
+                    "Block properties `struct`s must have exactly one field"
+                );
             }
-            let struct_type = match fields.first().unwrap().ty {
+            let field = fields.first().unwrap();
+            let ty = &field.ty;
+            let struct_type = match field.ty {
                 syn::Type::Path(ref type_path) => {
                     type_path.path.segments.first().unwrap().ident.to_string()
                 }
-                _ => panic!("Block properties can only have primitive types"),
+                ref other => abort!(
+                    other.span(),
+                    "Block properties can only have primitive types"
+                ),
             };
             match struct_type.as_str() {
                 "bool" => (
@@ -250,10 +262,13 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
                     ],
                     false,
                 ),
-                _ => panic!("This type is not supported (why not implement it yourself?)"),
+                other => abort!(
+                    ty.span(),
+                    format!("`{other}` is not supported (why not implement it yourself?)")
+                ),
             }
         }
-        _ => panic!("Block properties can only be `enum`s or `struct`s"),
+        _ => abort_call_site!("Block properties can only be `enum`s or `struct`s"),
     };
 
     let values = variants.iter().enumerate().map(|(i, v)| match is_enum {
@@ -316,7 +331,7 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let code = quote! {
         #item
-        impl #impl_generics crate::block::properties::BlockPropertyMetadata for #name #ty_generics {
+        impl #impl_generics pumpkin_world::block::properties::BlockPropertyMetadata for #name #ty_generics {
             fn name(&self) -> &'static str {
                 #property_name
             }
@@ -336,10 +351,4 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     code.into()
-}
-
-mod block_state;
-#[proc_macro]
-pub fn default_block_state(item: TokenStream) -> TokenStream {
-    block_state::default_block_state_impl(item)
 }

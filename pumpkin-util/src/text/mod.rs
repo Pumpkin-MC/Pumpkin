@@ -296,8 +296,8 @@ impl TextComponent {
 
     /// Allows you to change the font of the text.
     /// Default fonts: `minecraft:default`, `minecraft:uniform`, `minecraft:alt`, `minecraft:illageralt`
-    pub fn font(mut self, identifier: String) -> Self {
-        self.0.style.font = Some(identifier);
+    pub fn font(mut self, resource_location: String) -> Self {
+        self.0.style.font = Some(resource_location);
         self
     }
 

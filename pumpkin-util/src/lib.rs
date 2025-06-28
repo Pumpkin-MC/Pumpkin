@@ -14,9 +14,21 @@ pub mod noise;
 pub mod permission;
 pub mod random;
 pub mod registry;
+pub mod resource_location;
 pub mod serde_enum_as_integer;
 pub mod text;
 pub mod translation;
+
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum HeightMap {
+    WorldSurfaceWg,
+    WorldSurface,
+    OceanFloorWg,
+    OceanFloor,
+    MotionBlocking,
+    MotionBlockingNoLeaves,
+}
 
 #[macro_export]
 macro_rules! global_path {

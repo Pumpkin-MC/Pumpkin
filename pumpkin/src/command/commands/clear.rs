@@ -5,7 +5,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_world::inventory::Clearable;
+use pumpkin_world::item::ItemStack;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
@@ -20,15 +20,29 @@ const DESCRIPTION: &str = "Clear yours or targets inventory.";
 
 const ARG_TARGET: &str = "target";
 
-async fn clear_player(target: &Player) -> usize {
+async fn clear_player(target: &Player) -> u64 {
     let inventory = target.inventory();
+    let mut count: u64 = 0;
+    for slot in &inventory.main_inventory {
+        let mut slot_lock = slot.lock().await;
+        count += u64::from(slot_lock.item_count);
+        *slot_lock = ItemStack::EMPTY;
+    }
 
-    inventory.clear().await;
-    //target.set_container_content(None).await; TODO: Inv
-    0 //TODO: Count items
+    let entity_equipment_lock = inventory.entity_equipment.lock().await;
+    for slot in entity_equipment_lock.equipment.values() {
+        let mut slot_lock = slot.lock().await;
+        if slot_lock.is_empty() {
+            continue;
+        }
+        count += 1u64;
+        *slot_lock = ItemStack::EMPTY;
+    }
+
+    count
 }
 
-fn clear_command_text_output(item_count: usize, targets: &[Arc<Player>]) -> TextComponent {
+fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> TextComponent {
     match targets {
         [target] if item_count == 0 => TextComponent::translate(
             "clear.failed.single",

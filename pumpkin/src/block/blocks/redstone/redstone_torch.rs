@@ -55,7 +55,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
         if face == BlockDirection::Down {
             let support_block = world.get_block_state(&block_pos.down()).await;
             if support_block.is_center_solid(BlockDirection::Up) {
-                return block.default_state_id;
+                return block.default_state.id;
             }
         }
         let mut directions = player.get_entity().get_entity_facing_order();
@@ -74,7 +74,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
         } else if directions[0] == Facing::Down {
             let support_block = world.get_block_state(&block_pos.down()).await;
             if support_block.is_center_solid(BlockDirection::Up) {
-                return block.default_state_id;
+                return block.default_state.id;
             }
         }
 
@@ -95,7 +95,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
 
         let support_block = world.get_block_state(&block_pos.down()).await;
         if support_block.is_center_solid(BlockDirection::Up) {
-            block.default_state_id
+            block.default_state.id
         } else {
             0
         }

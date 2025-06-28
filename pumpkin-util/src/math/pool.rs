@@ -6,22 +6,19 @@ use crate::random::{RandomGenerator, RandomImpl};
 pub struct Pool;
 
 impl Pool {
-    pub fn get<E: Clone>(
-        &self,
-        distribution: &[Weighted<E>],
-        random: &mut RandomGenerator,
-    ) -> Option<E> {
+    pub fn get<E: Clone>(distribution: &[Weighted<E>], random: &mut RandomGenerator) -> Option<E> {
         let mut total_weight = 0;
         for dist in distribution {
             total_weight += dist.weight;
         }
-        let index = random.next_bounded_i32(total_weight);
+        let mut index = random.next_bounded_i32(total_weight);
         if total_weight < 64 {
             return Some(FlattenedContent::get(index, distribution, total_weight));
         } else {
             // WrappedContent
             for dist in distribution {
-                if index - dist.weight >= 0 {
+                index -= dist.weight;
+                if index >= 0 {
                     continue;
                 }
                 return Some(dist.data.clone());

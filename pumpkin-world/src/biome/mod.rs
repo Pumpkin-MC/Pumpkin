@@ -8,6 +8,7 @@ use pumpkin_util::math::vector3::Vector3;
 use crate::{
     dimension::Dimension, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
 };
+pub mod end;
 pub mod multi_noise;
 
 thread_local! {
@@ -26,8 +27,6 @@ pub trait BiomeSupplier {
 
 pub struct MultiNoiseBiomeSupplier;
 
-// TODO: Add Nether & End supplier
-
 impl BiomeSupplier for MultiNoiseBiomeSupplier {
     fn biome(
         global_biome_pos: &Vector3<i32>,
@@ -37,7 +36,7 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
         let source: &'static BiomeTree = match dimension {
             Dimension::Overworld => &OVERWORLD_BIOME_SOURCE,
             Dimension::Nether => &NETHER_BIOME_SOURCE,
-            Dimension::End => &OVERWORLD_BIOME_SOURCE, // TODO: this is wrong, end has its own thing
+            Dimension::End => unreachable!(), // Use TheEndBiomeSupplier
         };
         let point = noise.sample(global_biome_pos.x, global_biome_pos.y, global_biome_pos.z);
         let point_list = point.convert_to_list();

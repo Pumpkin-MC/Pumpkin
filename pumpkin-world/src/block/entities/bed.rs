@@ -7,13 +7,9 @@ pub struct BedBlockEntity {
     pub position: BlockPos,
 }
 
-impl BedBlockEntity {
-    pub const ID: &'static str = "minecraft:bed";
-}
-
 #[async_trait]
 impl BlockEntity for BedBlockEntity {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         Self::ID
     }
 
@@ -32,5 +28,12 @@ impl BlockEntity for BedBlockEntity {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+impl BedBlockEntity {
+    pub const ID: &'static str = "minecraft:bed";
+    pub fn new(position: BlockPos) -> Self {
+        Self { position }
     }
 }

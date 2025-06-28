@@ -8,7 +8,7 @@ use crate::command::{
     tree::{CommandTree, builder::argument},
 };
 use async_trait::async_trait;
-use pumpkin_protocol::codec::identifier::Identifier;
+use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["stopsound"];
@@ -39,7 +39,7 @@ impl CommandExecutor for Executor {
                     sound
                         .as_ref()
                         .cloned()
-                        .map(|s| Identifier::vanilla(s.to_name()))
+                        .map(|s| ResourceLocation::vanilla(s.to_name()))
                         .ok(),
                     category.as_ref().map(|s| **s).ok(),
                 )

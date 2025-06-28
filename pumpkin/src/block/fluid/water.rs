@@ -19,16 +19,18 @@ const WATER_FLOW_SPEED: u16 = 5;
 impl PumpkinFluid for FlowingWater {
     async fn placed(
         &self,
-        world: &World,
+        world: &Arc<World>,
         fluid: &Fluid,
-        _state_id: BlockStateId,
+        state_id: BlockStateId,
         block_pos: &BlockPos,
-        _old_state_id: BlockStateId,
+        old_state_id: BlockStateId,
         _notify: bool,
     ) {
-        world
-            .schedule_fluid_tick(fluid.id, *block_pos, WATER_FLOW_SPEED)
-            .await;
+        if old_state_id != state_id {
+            world
+                .schedule_fluid_tick(fluid.id, *block_pos, WATER_FLOW_SPEED)
+                .await;
+        }
     }
 
     async fn on_scheduled_tick(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
@@ -37,7 +39,7 @@ impl PumpkinFluid for FlowingWater {
 
     async fn on_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         fluid: &Fluid,
         block_pos: &BlockPos,
         _notify: bool,

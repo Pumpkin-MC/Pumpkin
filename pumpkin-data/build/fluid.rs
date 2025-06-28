@@ -2,7 +2,10 @@ use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+};
 use syn::{Ident, LitInt, LitStr};
 
 fn const_fluid_name_from_fluid_name(fluid: &str) -> String {
@@ -108,7 +111,7 @@ impl ToTokens for PropertyStruct {
                 fn from_index(index: u16) -> Self {
                     match index {
                         #(#values_index => Self::#values_3,)*
-                        _ => panic!("Invalid index: {}", index),
+                        _ => panic!("Invalid index: {index}"),
                     }
                 }
 
@@ -121,7 +124,7 @@ impl ToTokens for PropertyStruct {
                 fn from_value(value: &str) -> Self {
                     match value {
                         #(#from_values),*,
-                        _ => panic!("Invalid value: {:?}", value),
+                        _ => panic!("Invalid value: {value:?}"),
                     }
                 }
             }
@@ -170,7 +173,7 @@ impl ToTokens for FluidPropertyStruct {
             let key2 = Ident::new_raw(&entry.original_name, Span::call_site());
 
             quote! {
-                props.push((#key.to_string(), self.#key2.to_value().to_string()));
+                (#key.to_string(), self.#key2.to_value().to_string()),
             }
         });
 
@@ -252,13 +255,8 @@ impl ToTokens for FluidPropertyStruct {
                     Self::from_state_id(fluid.default_state_index, fluid)
                 }
 
-                #[allow(clippy::vec_init_then_push)]
                 fn to_props(&self) -> Vec<(String, String)> {
-                    let mut props = vec![];
-
-                    #(#to_props_values)*
-
-                    props
+                   vec![#(#to_props_values)*]
                 }
 
                 fn from_props(props: Vec<(String, String)>, fluid: &Fluid) -> Self {
@@ -271,7 +269,7 @@ impl ToTokens for FluidPropertyStruct {
                     for (key, value) in props {
                         match key.as_str() {
                             #(#from_props_values),*,
-                            _ => panic!("Invalid key: {}", key),
+                            _ => panic!("Invalid key: {key}"),
                         }
                     }
 
@@ -343,10 +341,11 @@ fn default_flow_distance() -> u32 {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/fluids.json");
 
-    let fluids: Vec<Fluid> = match serde_json::from_str(include_str!("../../assets/fluids.json")) {
-        Ok(fluids) => fluids,
-        Err(e) => panic!("Failed to parse fluids.json: {e}"),
-    };
+    let fluids: Vec<Fluid> =
+        match serde_json::from_str(&fs::read_to_string("../assets/fluids.json").unwrap()) {
+            Ok(fluids) => fluids,
+            Err(e) => panic!("Failed to parse fluids.json: {e}"),
+        };
 
     let mut constants = TokenStream::new();
     let mut id_matches = Vec::new();

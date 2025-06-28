@@ -10,7 +10,7 @@ use pumpkin_data::block_properties::{Axis, BlockProperties, NetherPortalLikeProp
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_registry::DimensionType;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -58,7 +58,7 @@ impl PumpkinBlock for NetherPortalBlock {
         {
             return state;
         }
-        Block::AIR.default_state_id
+        Block::AIR.default_state.id
     }
 
     async fn on_entity_collision(
@@ -70,13 +70,13 @@ impl PumpkinBlock for NetherPortalBlock {
         _state: BlockState,
         server: &Server,
     ) {
-        let target_world = if world.dimension_type == DimensionType::TheNether {
+        let target_world = if world.dimension_type == VanillaDimensionType::TheNether {
             server
-                .get_world_from_dimension(DimensionType::Overworld)
+                .get_world_from_dimension(VanillaDimensionType::Overworld)
                 .await
         } else {
             server
-                .get_world_from_dimension(DimensionType::TheNether)
+                .get_world_from_dimension(VanillaDimensionType::TheNether)
                 .await
         };
 

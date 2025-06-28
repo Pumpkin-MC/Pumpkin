@@ -20,7 +20,7 @@ pub trait PumpkinFluid: Send + Sync {
         _player: &Player,
         _location: BlockPos,
         _server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) {
     }
     async fn use_with_item(
@@ -30,14 +30,14 @@ pub trait PumpkinFluid: Send + Sync {
         _location: BlockPos,
         _item: &Item,
         _server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
     ) -> BlockActionResult {
         BlockActionResult::Continue
     }
 
     async fn placed(
         &self,
-        _world: &World,
+        _world: &Arc<World>,
         _fluid: &Fluid,
         _state_id: BlockStateId,
         _block_pos: &BlockPos,
@@ -50,7 +50,7 @@ pub trait PumpkinFluid: Send + Sync {
     async fn on_place(
         &self,
         _server: &Server,
-        _world: &World,
+        _world: &Arc<World>,
         fluid: &Fluid,
         _face: BlockDirection,
         _block_pos: &BlockPos,
@@ -62,7 +62,7 @@ pub trait PumpkinFluid: Send + Sync {
 
     async fn get_state_for_neighbour_update(
         &self,
-        _world: &World,
+        _world: &Arc<World>,
         _fluid: &Fluid,
         _block_pos: &BlockPos,
         _notify: bool,
@@ -72,7 +72,7 @@ pub trait PumpkinFluid: Send + Sync {
 
     async fn on_neighbor_update(
         &self,
-        _world: &World,
+        _world: &Arc<World>,
         _fluid: &Fluid,
         _block_pos: &BlockPos,
         _notify: bool,
@@ -83,5 +83,5 @@ pub trait PumpkinFluid: Send + Sync {
 
     async fn on_scheduled_tick(&self, _world: &Arc<World>, _fluid: &Fluid, _block_pos: &BlockPos) {}
 
-    async fn create_legacy_block(&self, _world: &World, _block_pos: &BlockPos) {}
+    async fn create_legacy_block(&self, _world: &Arc<World>, _block_pos: &BlockPos) {}
 }

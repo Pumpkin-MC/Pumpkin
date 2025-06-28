@@ -42,25 +42,14 @@ impl NoteBlock {
         state: BlockStateId,
         block: &Block,
     ) -> BlockStateId {
-        let upper_instrument = Instrument::from_value(
-            &world
-                .get_block_state(&pos.up())
-                .await
-                .instrument
-                .to_lowercase(),
-        );
+        let upper_instrument = world.get_block_state(&pos.up()).await.instrument;
+
         let mut note_props = NoteBlockLikeProperties::from_state_id(state, block);
         if !is_base_block(upper_instrument) {
             note_props.instrument = upper_instrument;
             return note_props.to_state_id(block);
         }
-        let below_instrument = Instrument::from_value(
-            &world
-                .get_block_state(&pos.down())
-                .await
-                .instrument
-                .to_lowercase(),
-        );
+        let below_instrument = world.get_block_state(&pos.down()).await.instrument;
         let below_instrument = if is_base_block(below_instrument) {
             below_instrument
         } else {
@@ -173,7 +162,7 @@ impl PumpkinBlock for NoteBlock {
         _replacing: BlockIsReplacing,
         _use_item_on: &SUseItemOn,
     ) -> BlockStateId {
-        Self::get_state_with_instrument(world, pos, Block::NOTE_BLOCK.default_state_id, block).await
+        Self::get_state_with_instrument(world, pos, Block::NOTE_BLOCK.default_state.id, block).await
     }
 
     async fn get_state_for_neighbor_update(

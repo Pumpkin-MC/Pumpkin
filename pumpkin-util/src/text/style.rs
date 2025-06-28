@@ -106,8 +106,8 @@ impl Style {
 
     /// Allows you to change the font of the text.
     /// Default fonts: `minecraft:default`, `minecraft:uniform`, `minecraft:alt`, `minecraft:illageralt`
-    pub fn font(mut self, identifier: String) -> Self {
-        self.font = Some(identifier);
+    pub fn font(mut self, resource_location: String) -> Self {
+        self.font = Some(resource_location);
         self
     }
 

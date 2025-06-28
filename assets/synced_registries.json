@@ -2766,9 +2766,9 @@
   },
   "dimension_type": {
     "overworld": {
-      "infiniburn": "#minecraft:infiniburn_overworld",
       "effects": "minecraft:overworld",
       "ambient_light": 0.0,
+      "cloud_height": 192,
       "piglin_safe": false,
       "has_raids": true,
       "monster_spawn_light_level": {
@@ -2777,21 +2777,22 @@
         "type": "minecraft:uniform"
       },
       "monster_spawn_block_light_limit": 0,
-      "respawn_anchor_works": false,
       "min_y": -64,
       "height": 384,
       "logical_height": 384,
-      "ultrawarm": false,
+      "infiniburn": "#minecraft:infiniburn_overworld",
       "natural": true,
       "coordinate_scale": 1.0,
       "bed_works": true,
+      "respawn_anchor_works": false,
       "has_skylight": true,
-      "has_ceiling": false
+      "has_ceiling": false,
+      "ultrawarm": false
     },
     "overworld_caves": {
-      "infiniburn": "#minecraft:infiniburn_overworld",
       "effects": "minecraft:overworld",
       "ambient_light": 0.0,
+      "cloud_height": 192,
       "piglin_safe": false,
       "has_raids": true,
       "monster_spawn_light_level": {
@@ -2800,19 +2801,19 @@
         "type": "minecraft:uniform"
       },
       "monster_spawn_block_light_limit": 0,
-      "respawn_anchor_works": false,
       "min_y": -64,
       "height": 384,
       "logical_height": 384,
-      "ultrawarm": false,
+      "infiniburn": "#minecraft:infiniburn_overworld",
       "natural": true,
       "coordinate_scale": 1.0,
       "bed_works": true,
+      "respawn_anchor_works": false,
       "has_skylight": true,
-      "has_ceiling": true
+      "has_ceiling": true,
+      "ultrawarm": false
     },
     "the_end": {
-      "infiniburn": "#minecraft:infiniburn_end",
       "effects": "minecraft:the_end",
       "ambient_light": 0.0,
       "piglin_safe": false,
@@ -2823,37 +2824,38 @@
         "type": "minecraft:uniform"
       },
       "monster_spawn_block_light_limit": 0,
-      "respawn_anchor_works": false,
       "min_y": 0,
       "height": 256,
       "logical_height": 256,
-      "ultrawarm": false,
+      "infiniburn": "#minecraft:infiniburn_end",
       "natural": false,
       "coordinate_scale": 1.0,
       "bed_works": false,
+      "respawn_anchor_works": false,
       "fixed_time": 6000,
       "has_skylight": false,
-      "has_ceiling": false
+      "has_ceiling": false,
+      "ultrawarm": false
     },
     "the_nether": {
-      "infiniburn": "#minecraft:infiniburn_nether",
       "effects": "minecraft:the_nether",
       "ambient_light": 0.1,
       "piglin_safe": true,
       "has_raids": false,
       "monster_spawn_light_level": 7,
       "monster_spawn_block_light_limit": 15,
-      "respawn_anchor_works": true,
       "min_y": 0,
       "height": 256,
       "logical_height": 128,
-      "ultrawarm": true,
+      "infiniburn": "#minecraft:infiniburn_nether",
       "natural": false,
       "coordinate_scale": 8.0,
       "bed_works": false,
+      "respawn_anchor_works": true,
       "fixed_time": 18000,
       "has_skylight": false,
-      "has_ceiling": true
+      "has_ceiling": true,
+      "ultrawarm": true
     }
   },
   "damage_type": {
@@ -5537,6 +5539,14 @@
       "length_in_seconds": 188.0,
       "comparator_output": 9
     },
+    "tears": {
+      "sound_event": "minecraft:music_disc.tears",
+      "description": {
+        "translate": "jukebox_song.minecraft.tears"
+      },
+      "length_in_seconds": 175.0,
+      "comparator_output": 10
+    },
     "wait": {
       "sound_event": "minecraft:music_disc.wait",
       "description": {
@@ -5635,6 +5645,61 @@
       "environment": "minecraft:default",
       "structure": "minecraft:empty",
       "type": "minecraft:function"
+    }
+  },
+  "dialog": {
+    "custom_options": {
+      "exit_action": {
+        "label": {
+          "translate": "gui.back"
+        },
+        "width": 200
+      },
+      "columns": 1,
+      "button_width": 310,
+      "title": {
+        "translate": "menu.custom_options.title"
+      },
+      "external_title": {
+        "translate": "menu.custom_options"
+      },
+      "dialogs": "#minecraft:pause_screen_additions",
+      "type": "minecraft:dialog_list"
+    },
+    "quick_actions": {
+      "exit_action": {
+        "label": {
+          "translate": "gui.back"
+        },
+        "width": 200
+      },
+      "columns": 1,
+      "button_width": 310,
+      "title": {
+        "translate": "menu.quick_actions.title"
+      },
+      "external_title": {
+        "translate": "menu.quick_actions"
+      },
+      "dialogs": "#minecraft:quick_actions",
+      "type": "minecraft:dialog_list"
+    },
+    "server_links": {
+      "title": {
+        "translate": "menu.server_links.title"
+      },
+      "external_title": {
+        "translate": "menu.server_links"
+      },
+      "exit_action": {
+        "label": {
+          "translate": "gui.back"
+        },
+        "width": 200
+      },
+      "columns": 1,
+      "button_width": 310,
+      "type": "minecraft:server_links"
     }
   }
 }

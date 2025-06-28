@@ -31,7 +31,7 @@ use crate::world::World;
 
 type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 
-async fn toggle_door(world: &Arc<World>, block_pos: &BlockPos) {
+async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_block_state(block_pos).await;
     let mut door_props = DoorProperties::from_state_id(block_state.id, &block);
     door_props.open = !door_props.open;
@@ -45,6 +45,15 @@ async fn toggle_door(world: &Arc<World>, block_pos: &BlockPos) {
     let (other_block, other_state_id) = world.get_block_and_block_state(&other_pos).await;
     let mut other_door_props = DoorProperties::from_state_id(other_state_id.id, &other_block);
     other_door_props.open = door_props.open;
+
+    world
+        .play_block_sound_expect(
+            player,
+            get_sound(&block, door_props.open),
+            SoundCategory::Blocks,
+            *block_pos,
+        )
+        .await;
 
     world
         .set_block_state(
@@ -93,7 +102,6 @@ fn get_sound(block: &Block, open: bool) -> Sound {
 #[inline]
 async fn get_hinge(
     world: &World,
-    block: &Block,
     pos: &BlockPos,
     use_item: &SUseItemOn,
     facing: HorizontalFacing,
@@ -101,12 +109,12 @@ async fn get_hinge(
     let top_pos = pos.up();
     let left_dir = facing.rotate_counter_clockwise();
     let left_pos = pos.offset(left_dir.to_block_direction().to_offset());
-    let left_state = world.get_block_state(&left_pos).await;
+    let (left_block, left_state) = world.get_block_and_block_state(&left_pos).await;
     let top_facing = top_pos.offset(facing.to_block_direction().to_offset());
     let top_state = world.get_block_state(&top_facing).await;
     let right_dir = facing.rotate_clockwise();
     let right_pos = pos.offset(right_dir.to_block_direction().to_offset());
-    let right_state = world.get_block_state(&right_pos).await;
+    let (right_block, right_state) = world.get_block_and_block_state(&right_pos).await;
     let top_right = top_pos.offset(facing.to_block_direction().to_offset());
     let top_right_state = world.get_block_state(&top_right).await;
 
@@ -115,14 +123,15 @@ async fn get_hinge(
         .await
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(left_state.id, block).half == DoubleBlockHalf::Lower;
+        && DoorProperties::from_state_id(left_state.id, &left_block).half == DoubleBlockHalf::Lower;
 
     let has_right_door = world
         .get_block(&right_pos)
         .await
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(right_state.id, block).half == DoubleBlockHalf::Lower;
+        && DoorProperties::from_state_id(right_state.id, &right_block).half
+            == DoubleBlockHalf::Lower;
 
     let score = -(left_state.is_full_cube() as i32) - (top_state.is_full_cube() as i32)
         + right_state.is_full_cube() as i32
@@ -177,7 +186,7 @@ impl PumpkinBlock for DoorBlock {
             || block_receives_redstone_power(world, &block_pos.up()).await;
 
         let direction = player.living_entity.entity.get_horizontal_facing();
-        let hinge = get_hinge(world, block, block_pos, use_item_on, direction).await;
+        let hinge = get_hinge(world, block_pos, use_item_on, direction).await;
 
         let mut door_props = DoorProperties::default(block);
         door_props.half = DoubleBlockHalf::Lower;
@@ -227,7 +236,7 @@ impl PumpkinBlock for DoorBlock {
     async fn use_with_item(
         &self,
         block: &Block,
-        _player: &Player,
+        player: &Player,
         location: BlockPos,
         _item: &Item,
         _server: &Server,
@@ -237,7 +246,7 @@ impl PumpkinBlock for DoorBlock {
             return BlockActionResult::Continue;
         }
 
-        toggle_door(world, &location).await;
+        toggle_door(player, world, &location).await;
 
         BlockActionResult::Consume
     }
@@ -245,13 +254,13 @@ impl PumpkinBlock for DoorBlock {
     async fn normal_use(
         &self,
         block: &Block,
-        _player: &Player,
+        player: &Player,
         location: BlockPos,
         _server: &Server,
         world: &Arc<World>,
     ) {
         if can_open_door(block) {
-            toggle_door(world, &location).await;
+            toggle_door(player, world, &location).await;
         }
     }
 

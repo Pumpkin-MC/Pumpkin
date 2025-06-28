@@ -25,7 +25,7 @@ pub struct BarrelBlockEntity {
 
 #[async_trait]
 impl BlockEntity for BarrelBlockEntity {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         Self::ID
     }
 

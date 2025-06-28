@@ -219,7 +219,7 @@ impl PumpkinServer {
 
         let rcon = advanced_config().networking.rcon.clone();
 
-        let mut ticker = Ticker::new(BASIC_CONFIG.tps);
+        let mut ticker = Ticker::new();
 
         if advanced_config().commands.use_console {
             if let Some((wrapper, _)) = &*LOGGER_IMPL {
@@ -293,7 +293,7 @@ impl PumpkinServer {
     }
 
     pub async fn start(&self) {
-        let mut master_client_id: usize = 0;
+        let mut master_client_id: u64 = 0;
         let tasks = TaskTracker::new();
 
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {

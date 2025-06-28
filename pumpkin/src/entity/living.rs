@@ -4,6 +4,7 @@ use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::EntityBase;
 use super::{Entity, EntityId, NBTStorage, effect::Effect};
+use crate::block::loot::{LootContextParameters, LootTableExt};
 use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -268,6 +269,20 @@ impl LivingEntity {
                 EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
             )
             .await;
+        self.drop_loot().await;
+    }
+
+    async fn drop_loot(&self) {
+        if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
+            let world = self.entity.world.read().await;
+            let pos = self.entity.block_pos.load();
+            let params = LootContextParameters {
+                ..Default::default()
+            };
+            for stack in loot_table.get_loot(params) {
+                world.drop_stack(&pos, stack).await;
+            }
+        }
     }
 
     async fn tick_move(&self, entity: &dyn EntityBase, server: &Server) {
@@ -356,10 +371,7 @@ impl EntityBase for LivingEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(self)
     }
-}
 
-#[async_trait]
-impl NBTStorage for LivingEntity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.entity.write_nbt(nbt).await;
         nbt.put("Health", NbtTag::Float(self.health.load()));
@@ -374,17 +386,14 @@ impl NBTStorage for LivingEntity {
                     effect.write_nbt(&mut effect_nbt).await;
                     effects_list.push(NbtTag::Compound(effect_nbt));
                 }
-                nbt.put(
-                    "active_effects",
-                    NbtTag::List(effects_list.into_boxed_slice()),
-                );
+                nbt.put("active_effects", NbtTag::List(effects_list));
             }
         }
         //TODO: write equipment
         // todo more...
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
         self.entity.read_nbt(nbt).await;
         self.health.store(nbt.get_float("Health").unwrap_or(0.0));
         self.fall_distance

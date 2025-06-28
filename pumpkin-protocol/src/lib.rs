@@ -5,8 +5,11 @@ use std::{
 
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, BlockSizeUser, generic_array::GenericArray};
 use bytes::Bytes;
-use codec::{identifier::Identifier, var_int::VarInt};
-use pumpkin_util::text::{TextComponent, style::Style};
+use codec::var_int::VarInt;
+use pumpkin_util::{
+    resource_location::ResourceLocation,
+    text::{TextComponent, style::Style},
+};
 use ser::{NetworkWriteExt, ReadingError, WritingError, packet::Packet};
 use serde::{
     Deserialize, Serialize, Serializer,
@@ -188,7 +191,7 @@ impl<T: Serialize> Serialize for IdOr<T> {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct SoundEvent {
-    pub sound_name: Identifier,
+    pub sound_name: ResourceLocation,
     pub range: Option<f32>,
 }
 
@@ -516,10 +519,8 @@ impl Serialize for LinkType {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        codec::identifier::Identifier,
-        ser::{deserializer::Deserializer, serializer::Serializer},
-    };
+    use crate::ser::{deserializer::Deserializer, serializer::Serializer};
+    use pumpkin_util::resource_location::ResourceLocation;
     use serde::{Deserialize, Serialize};
 
     use crate::{IdOr, SoundEvent};
@@ -541,7 +542,7 @@ mod test {
     fn test_serde_id_or_value() {
         let mut buf = Vec::new();
         let event = SoundEvent {
-            sound_name: Identifier::vanilla("test"),
+            sound_name: ResourceLocation::vanilla("test"),
             range: Some(1.0),
         };
 

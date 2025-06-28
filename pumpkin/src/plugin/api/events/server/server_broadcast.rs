@@ -9,7 +9,7 @@ use pumpkin_util::text::TextComponent;
 pub struct ServerBroadcastEvent {
     /// The message being broadcast.
     pub message: TextComponent,
-    /// The name of the sender as a TextComponent.
+    /// The name of the sender as a `TextComponent`.
     pub sender: TextComponent,
 }
 

@@ -144,7 +144,7 @@ impl Text {
 
 #[async_trait]
 impl BlockEntity for SignBlockEntity {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         Self::ID
     }
 

@@ -101,7 +101,7 @@ impl From<i32> for TickPriority {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ScheduledTick {
     pub block_pos: BlockPos,
     pub delay: u16,
@@ -118,6 +118,13 @@ pub struct ChunkData {
     pub fluid_ticks: Vec<ScheduledTick>,
     pub block_entities: HashMap<BlockPos, (NbtCompound, Arc<dyn BlockEntity>)>,
     pub light_engine: ChunkLight,
+
+    pub dirty: bool,
+}
+
+pub struct ChunkEntityData {
+    pub chunk_position: Vector2<i32>,
+    pub data: HashMap<uuid::Uuid, NbtCompound>,
 
     pub dirty: bool,
 }

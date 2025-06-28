@@ -1,3 +1,4 @@
+use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::server::Server;
 use crate::world::World;
@@ -11,6 +12,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
+use uuid::Uuid;
 #[pumpkin_block("minecraft:pumpkin")]
 pub struct PumpkinBlock;
 
@@ -32,11 +34,17 @@ impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
         world
             .set_block_state(
                 &pos,
-                Block::CARVED_PUMPKIN.default_state_id,
+                Block::CARVED_PUMPKIN.default_state.id,
                 BlockFlags::NOTIFY_ALL,
             )
             .await;
-        let entity = world.create_entity(pos.to_f64(), EntityType::ITEM);
+        let entity = Entity::new(
+            Uuid::new_v4(),
+            world.clone(),
+            pos.to_f64(),
+            EntityType::ITEM,
+            false,
+        );
         let item_entity =
             Arc::new(ItemEntity::new(entity, ItemStack::new(4, &Item::PUMPKIN_SEEDS)).await);
         world.spawn_entity(item_entity).await;

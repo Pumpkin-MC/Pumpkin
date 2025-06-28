@@ -248,7 +248,7 @@ impl PumpkinBlock for PistonBlock {
                     world
                         .set_block_state(
                             &extended_pos,
-                            Block::AIR.default_state_id,
+                            Block::AIR.default_state.id,
                             BlockFlags::NOTIFY_ALL,
                         )
                         .await;
@@ -259,7 +259,7 @@ impl PumpkinBlock for PistonBlock {
             world
                 .set_block_state(
                     &extended_pos,
-                    Block::AIR.default_state_id,
+                    Block::AIR.default_state.id,
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;
@@ -351,7 +351,7 @@ async fn move_piston(
         world
             .set_block_state(
                 &extended_pos,
-                Block::AIR.default_state_id,
+                Block::AIR.default_state.id,
                 BlockFlags::FORCE_STATE,
             )
             .await;
@@ -453,7 +453,7 @@ async fn move_piston(
             .await;
     }
 
-    let air_state = Block::AIR.default_state_id;
+    let air_state = Block::AIR.default_state.id;
     for &pos in moved_blocks_map.keys() {
         world
             .set_block_state(

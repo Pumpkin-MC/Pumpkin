@@ -18,7 +18,7 @@ impl BlockMetadata for BushBlock {
     }
 
     fn ids(&self) -> &'static [&'static str] {
-        &["bush"]
+        &[Block::BUSH.name, Block::FIREFLY_BUSH.name]
     }
 }
 

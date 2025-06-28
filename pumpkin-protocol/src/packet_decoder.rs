@@ -115,7 +115,7 @@ impl<R: AsyncRead + Unpin> NetworkDecoder<R> {
 
         let mut reader = if let Some(threshold) = self.compression {
             let decompressed_length = VarInt::decode_async(&mut bounded_reader).await?;
-            let raw_packet_length = packet_len as usize - decompressed_length.written_size();
+            let raw_packet_length = packet_len - decompressed_length.written_size() as u64;
             let decompressed_length = decompressed_length.0 as usize;
 
             if !(0..=MAX_PACKET_DATA_SIZE).contains(&decompressed_length) {
@@ -126,7 +126,7 @@ impl<R: AsyncRead + Unpin> NetworkDecoder<R> {
                 DecompressionReader::Decompress(ZlibDecoder::new(BufReader::new(bounded_reader)))
             } else {
                 // Validate that we are not less than the compression threshold
-                if raw_packet_length > threshold {
+                if raw_packet_length > threshold as u64 {
                     Err(PacketDecodeError::NotCompressed)?
                 }
 

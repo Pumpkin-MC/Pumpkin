@@ -1,5 +1,4 @@
-use pumpkin_data::BlockDirection;
-use pumpkin_macros::default_block_state;
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::RandomGenerator,
@@ -8,7 +7,6 @@ use serde::Deserialize;
 
 use crate::{
     ProtoChunk,
-    block::RawBlockState,
     generation::{chunk_noise::WATER_BLOCK, height_limit::HeightLimitView},
 };
 
@@ -18,10 +16,10 @@ use crate::{
 pub struct DesertWellFeature;
 
 impl DesertWellFeature {
-    const CAN_GENERATE: RawBlockState = default_block_state!("sand");
-    const SAND: RawBlockState = default_block_state!("sand");
-    const SLAB: RawBlockState = default_block_state!("sandstone_slab");
-    const WALL: RawBlockState = default_block_state!("sandstone");
+    const CAN_GENERATE: Block = Block::SAND;
+    const SAND: Block = Block::SAND;
+    const SLAB: Block = Block::SANDSTONE_SLAB;
+    const WALL: Block = Block::SANDSTONE;
 
     pub fn generate(
         &self,
@@ -37,8 +35,8 @@ impl DesertWellFeature {
             block_pos = block_pos.down();
         }
         let block = chunk.get_block_state(&pos.0).to_block();
-        const CAN_GENERATE: RawBlockState = default_block_state!("sand");
-        if CAN_GENERATE.to_block().id != block.id {
+        const CAN_GENERATE: Block = Block::SAND;
+        if CAN_GENERATE.id != block.id {
             return false;
         }
 
@@ -58,28 +56,28 @@ impl DesertWellFeature {
                 for k in -2..=2 {
                     chunk.set_block_state(
                         &block_pos.0.add(&Vector3::new(j2, i, k)),
-                        &Self::WALL.to_state(),
+                        &Self::WALL.default_state,
                     );
                 }
             }
         }
 
-        chunk.set_block_state(&block_pos.0, &WATER_BLOCK.to_state());
+        chunk.set_block_state(&block_pos.0, &WATER_BLOCK.default_state);
 
         for direction in BlockDirection::horizontal().iter() {
             chunk.set_block_state(
                 &block_pos.0.add(&direction.to_offset()),
-                &WATER_BLOCK.to_state(),
+                &WATER_BLOCK.default_state,
             );
         }
 
         let block_pos2 = &block_pos.0.add(&Vector3::new(0, -1, 0));
-        chunk.set_block_state(block_pos2, &Self::SAND.to_state());
+        chunk.set_block_state(block_pos2, &Self::SAND.default_state);
 
         for direction2 in BlockDirection::horizontal().iter() {
             chunk.set_block_state(
                 &block_pos2.add(&direction2.to_offset()),
-                &Self::SAND.to_state(),
+                &Self::SAND.default_state,
             );
         }
 
@@ -90,26 +88,26 @@ impl DesertWellFeature {
                 }
                 chunk.set_block_state(
                     &block_pos.0.add(&Vector3::new(j, 1, k)),
-                    &Self::WALL.to_state(),
+                    &Self::WALL.default_state,
                 );
             }
         }
 
         chunk.set_block_state(
             &block_pos.0.add(&Vector3::new(2, 1, 0)),
-            &Self::SLAB.to_state(),
+            &Self::SLAB.default_state,
         );
         chunk.set_block_state(
             &block_pos.0.add(&Vector3::new(-2, 1, 0)),
-            &Self::SLAB.to_state(),
+            &Self::SLAB.default_state,
         );
         chunk.set_block_state(
             &block_pos.0.add(&Vector3::new(0, 1, 2)),
-            &Self::SLAB.to_state(),
+            &Self::SLAB.default_state,
         );
         chunk.set_block_state(
             &block_pos.0.add(&Vector3::new(0, 1, -2)),
-            &Self::SLAB.to_state(),
+            &Self::SLAB.default_state,
         );
 
         for j in -1..=1 {
@@ -117,13 +115,13 @@ impl DesertWellFeature {
                 if j == 0 && k == 0 {
                     chunk.set_block_state(
                         &block_pos.0.add(&Vector3::new(j, 4, k)),
-                        &Self::WALL.to_state(),
+                        &Self::WALL.default_state,
                     );
                     continue;
                 }
                 chunk.set_block_state(
                     &block_pos.0.add(&Vector3::new(j, 4, k)),
-                    &Self::SLAB.to_state(),
+                    &Self::SLAB.default_state,
                 );
             }
         }
@@ -131,19 +129,19 @@ impl DesertWellFeature {
         for j in 1..=3 {
             chunk.set_block_state(
                 &block_pos.0.add(&Vector3::new(-1, j, -1)),
-                &Self::WALL.to_state(),
+                &Self::WALL.default_state,
             );
             chunk.set_block_state(
                 &block_pos.0.add(&Vector3::new(-1, j, 1)),
-                &Self::WALL.to_state(),
+                &Self::WALL.default_state,
             );
             chunk.set_block_state(
                 &block_pos.0.add(&Vector3::new(1, j, -1)),
-                &Self::WALL.to_state(),
+                &Self::WALL.default_state,
             );
             chunk.set_block_state(
                 &block_pos.0.add(&Vector3::new(1, j, 1)),
-                &Self::WALL.to_state(),
+                &Self::WALL.default_state,
             );
         }
 

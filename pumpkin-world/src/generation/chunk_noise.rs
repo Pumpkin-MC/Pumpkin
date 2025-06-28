@@ -1,7 +1,7 @@
-use pumpkin_macros::default_block_state;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::{floor_div, floor_mod, vector2::Vector2, vector3::Vector3};
 
-use crate::{block::RawBlockState, generation::section_coords};
+use crate::generation::section_coords;
 
 use super::{
     GlobalRandomConfig,
@@ -24,13 +24,13 @@ use super::{
     settings::GenerationShapeConfig,
 };
 
-pub const LAVA_BLOCK: RawBlockState = default_block_state!("lava");
-pub const WATER_BLOCK: RawBlockState = default_block_state!("water");
+pub const LAVA_BLOCK: Block = Block::LAVA;
+pub const WATER_BLOCK: Block = Block::WATER;
 
 pub const CHUNK_DIM: u8 = 16;
 
 pub enum BlockStateSampler {
-    Aquifer(AquiferSampler),
+    Aquifer(Box<AquiferSampler>),
     Ore(OreVeinSampler),
     Chained(ChainedBlockStateSampler),
 }
@@ -42,7 +42,7 @@ impl BlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<RawBlockState> {
+    ) -> Option<BlockState> {
         match self {
             Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
             Self::Ore(ore) => ore.sample(router, pos, sample_options),
@@ -66,7 +66,7 @@ impl ChainedBlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<RawBlockState> {
+    ) -> Option<BlockState> {
         self.samplers
             .iter_mut()
             .map(|sampler| sampler.sample(router, pos, sample_options, height_estimator))
@@ -221,7 +221,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
             AquiferSampler::SeaLevel(SeaLevelAquiferSampler::new(level_sampler))
         };
 
-        let mut samplers = vec![BlockStateSampler::Aquifer(aquifer_sampler)];
+        let mut samplers = vec![BlockStateSampler::Aquifer(Box::new(aquifer_sampler))];
 
         if ore_veins {
             let ore_sampler = OreVeinSampler::new(random_config.ore_random_deriver.clone());
@@ -262,7 +262,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
     fn sample_density(&mut self, start: bool, current_x: i32) {
         let x = current_x * self.horizontal_cell_block_count() as i32;
 
-        for cell_z in 0..=self.horizontal_cell_block_count() {
+        for cell_z in 0..=(16 / self.horizontal_cell_block_count()) {
             let current_cell_z_pos = self.start_cell_pos.z + cell_z as i32;
             let z = current_cell_z_pos * self.horizontal_cell_block_count() as i32;
             self.cache_fill_unique_id += 1;
@@ -370,7 +370,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         start_pos: Vector3<i32>,
         cell_pos: Vector3<i32>,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<RawBlockState> {
+    ) -> Option<BlockState> {
         //TODO: Fix this when Blender is added
         let pos = UnblendedNoisePos::new(
             start_pos.x + cell_pos.x,

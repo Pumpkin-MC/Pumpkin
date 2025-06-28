@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockFace;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::item::Item;
@@ -13,11 +14,13 @@ use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 
 type ButtonLikeProperties = pumpkin_data::block_properties::LeverLikeProperties;
 
 use crate::block::BlockIsReplacing;
+use crate::block::blocks::abstruct_wall_mounting::WallMountedBlock;
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
@@ -60,34 +63,6 @@ impl BlockMetadata for ButtonBlock {
 
 #[async_trait]
 impl PumpkinBlock for ButtonBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        player: &Player,
-        block: &Block,
-        _block_pos: &BlockPos,
-        face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        let mut props = ButtonLikeProperties::default(block);
-
-        match face {
-            BlockDirection::Up => props.face = BlockFace::Ceiling,
-            BlockDirection::Down => props.face = BlockFace::Floor,
-            _ => props.face = BlockFace::Wall,
-        }
-
-        if face == BlockDirection::Up || face == BlockDirection::Down {
-            props.facing = player.living_entity.entity.get_horizontal_facing();
-        } else {
-            props.facing = face.opposite().to_cardinal_direction();
-        }
-
-        props.to_state_id(block)
-    }
-
     async fn normal_use(
         &self,
         _block: &Block,
@@ -172,6 +147,64 @@ impl PumpkinBlock for ButtonBlock {
             if button_props.powered {
                 Self::update_neighbors(world, &location, &button_props).await;
             }
+        }
+    }
+
+    async fn on_place(
+        &self,
+        _server: &Server,
+        _world: &World,
+        player: &Player,
+        block: &Block,
+        _block_pos: &BlockPos,
+        direction: BlockDirection,
+        _replacing: BlockIsReplacing,
+        _use_item_on: &SUseItemOn,
+    ) -> BlockStateId {
+        let mut props = ButtonLikeProperties::from_state_id(block.default_state.id, block);
+        (props.face, props.facing) = WallMountedBlock::get_placement_face(self, player, direction);
+
+        props.to_state_id(block)
+    }
+
+    async fn can_place_at(
+        &self,
+        _server: Option<&Server>,
+        _world: Option<&World>,
+        block_accessor: &dyn BlockAccessor,
+        _player: Option<&Player>,
+        _block: &Block,
+        pos: &BlockPos,
+        face: BlockDirection,
+        _use_item_on: Option<&SUseItemOn>,
+    ) -> bool {
+        WallMountedBlock::can_place_at(self, block_accessor, pos, face).await
+    }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &World,
+        block: &Block,
+        state: BlockStateId,
+        pos: &BlockPos,
+        direction: BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        WallMountedBlock::get_state_for_neighbor_update(self, state, block, direction, world, pos)
+            .await
+            .unwrap_or(state)
+    }
+}
+
+#[async_trait]
+impl WallMountedBlock for ButtonBlock {
+    fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
+        let props = ButtonLikeProperties::from_state_id(state_id, block);
+        match props.face {
+            BlockFace::Floor => BlockDirection::Up,
+            BlockFace::Ceiling => BlockDirection::Down,
+            BlockFace::Wall => props.facing.to_block_direction(),
         }
     }
 }

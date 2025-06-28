@@ -61,10 +61,17 @@ impl CommandExecutor for Executor {
         };
 
         for target in targets {
-            let mut stack = ItemStack::new(item_count as u8, item);
-            target.inventory().insert_stack_anywhere(&mut stack).await;
-            if stack.is_empty() {
-                target.drop_item(stack).await;
+            let max_stack = i32::from(item.components.max_stack_size);
+            let mut remaining = item_count;
+
+            while remaining > 0 {
+                let take = remaining.min(max_stack);
+                let mut stack = ItemStack::new(take as u8, item);
+                target.inventory().insert_stack_anywhere(&mut stack).await;
+                if !stack.is_empty() {
+                    target.drop_item(stack).await;
+                }
+                remaining -= take;
             }
         }
         let msg = if targets.len() == 1 {

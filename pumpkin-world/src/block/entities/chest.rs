@@ -10,7 +10,7 @@ pub struct ChestBlockEntity {
 
 #[async_trait]
 impl BlockEntity for ChestBlockEntity {
-    fn identifier(&self) -> &'static str {
+    fn resource_location(&self) -> &'static str {
         Self::ID
     }
 

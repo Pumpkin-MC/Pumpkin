@@ -11,6 +11,10 @@ impl CollisionShape {
         unimplemented!()
     }
 
+    pub fn new(min: Vector3<f64>, max: Vector3<f64>) -> Self {
+        Self { min, max }
+    }
+
     pub fn intersects(&self, other: &BoundingBox) -> bool {
         self.min.x < other.max.x
             && self.max.x > other.min.x

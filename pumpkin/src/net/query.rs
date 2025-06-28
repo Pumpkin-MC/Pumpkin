@@ -90,7 +90,7 @@ async fn handle_packet(
         match raw_packet.packet_type {
             PacketType::Handshake => {
                 if let Ok(packet) = SHandshake::decode(&mut raw_packet).await {
-                    let challenge_token = rand::thread_rng().gen_range(1..=i32::MAX);
+                    let challenge_token = rand::rng().random_range(1..=i32::MAX);
                     let response = CHandshake {
                         session_id: packet.session_id,
                         challenge_token,

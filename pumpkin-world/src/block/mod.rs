@@ -22,24 +22,20 @@ pub struct BlockStateCodec {
 
 impl BlockStateCodec {
     pub fn get_state(&self) -> Option<BlockState> {
-        let block = get_block(self.name.as_str());
+        let block = get_block(self.name.as_str())?;
 
-        if let Some(block) = block {
-            let mut state_id = block.default_state_id;
+        let mut state_id = block.default_state.id;
 
-            if let Some(properties) = &self.properties {
-                let mut properties_vec: Vec<(&str, &str)> = Vec::with_capacity(properties.len());
-                for (key, value) in properties {
-                    properties_vec.push((key, value));
-                }
-                let block_properties = block.from_properties(properties_vec).unwrap();
-                state_id = block_properties.to_state_id(&block);
-            }
-
-            return get_state_by_state_id(state_id);
+        if let Some(properties) = &self.properties {
+            let props = properties
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+            let block_properties = block.from_properties(props).unwrap();
+            state_id = block_properties.to_state_id(&block);
         }
 
-        None
+        get_state_by_state_id(state_id)
     }
 }
 

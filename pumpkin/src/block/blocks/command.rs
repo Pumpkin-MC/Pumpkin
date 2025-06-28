@@ -64,7 +64,7 @@ impl PumpkinBlock for CommandBlock {
         if let Some((nbt, block_entity)) = world.get_block_entity(pos).await {
             let command_entity = CommandBlockEntity::from_nbt(&nbt, *pos);
 
-            if block_entity.identifier() != command_entity.identifier() {
+            if block_entity.resource_location() != command_entity.resource_location() {
                 return;
             }
             Self::update(
@@ -82,7 +82,7 @@ impl PumpkinBlock for CommandBlock {
         if let Some((nbt, block_entity)) = world.get_block_entity(pos).await {
             let command_entity = CommandBlockEntity::from_nbt(&nbt, *pos);
 
-            if block_entity.identifier() != command_entity.identifier() {
+            if block_entity.resource_location() != command_entity.resource_location() {
                 return;
             }
             // TODO

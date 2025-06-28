@@ -38,20 +38,14 @@ impl SeagrassFeature {
                 if chunk.get_block_state(&tall_pos.0).to_block() == Block::WATER {
                     let mut props = TallSeagrassLikeProperties::default(&Block::TALL_SEAGRASS);
                     props.half = DoubleBlockHalf::Upper;
-                    chunk.set_block_state(
-                        &top_pos.0,
-                        &get_state_by_state_id(Block::TALL_SEAGRASS.default_state_id).unwrap(),
-                    );
+                    chunk.set_block_state(&top_pos.0, &Block::TALL_SEAGRASS.default_state);
                     chunk.set_block_state(
                         &tall_pos.0,
                         &get_state_by_state_id(props.to_state_id(&Block::TALL_SEAGRASS)).unwrap(),
                     );
                 }
             } else {
-                chunk.set_block_state(
-                    &top_pos.0,
-                    &get_state_by_state_id(Block::SEAGRASS.default_state_id).unwrap(),
-                );
+                chunk.set_block_state(&top_pos.0, &Block::SEAGRASS.default_state);
             }
             return true;
         }

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
+use uuid::Uuid;
 
 use crate::{
     command::{
@@ -10,7 +11,7 @@ use crate::{
         },
         tree::{CommandTree, builder::argument},
     },
-    entity::mob,
+    entity::r#type::from_type,
 };
 const NAMES: [&str; 1] = ["summon"];
 
@@ -57,7 +58,7 @@ impl CommandExecutor for Executor {
                 (player.world().await, pos)
             }
         };
-        let mob = mob::from_type(entity, pos, &world).await;
+        let mob = from_type(entity, pos, &world, Uuid::new_v4());
         world.spawn_entity(mob).await;
 
         sender

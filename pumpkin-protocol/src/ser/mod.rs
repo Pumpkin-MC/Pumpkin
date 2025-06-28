@@ -3,11 +3,12 @@ use std::io::{Read, Write};
 
 use crate::{
     FixedBitSet,
-    codec::{bit_set::BitSet, identifier::Identifier, var_int::VarInt, var_long::VarLong},
+    codec::{bit_set::BitSet, var_int::VarInt, var_long::VarLong},
 };
 
 pub mod deserializer;
 use pumpkin_nbt::{serializer::WriteAdaptor, tag::NbtTag};
+use pumpkin_util::resource_location::ResourceLocation;
 use thiserror::Error;
 pub mod packet;
 pub mod serializer;
@@ -56,6 +57,8 @@ pub trait NetworkReadExt {
     fn get_u64_be(&mut self) -> Result<u64, ReadingError>;
     fn get_f32_be(&mut self) -> Result<f32, ReadingError>;
     fn get_f64_be(&mut self) -> Result<f64, ReadingError>;
+    fn get_i128_be(&mut self) -> Result<i128, ReadingError>;
+    fn get_u128_be(&mut self) -> Result<u128, ReadingError>;
     fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>, ReadingError>;
 
     fn read_remaining_to_boxed_slice(&mut self, bound: usize) -> Result<Box<[u8]>, ReadingError>;
@@ -65,7 +68,7 @@ pub trait NetworkReadExt {
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
     fn get_string(&mut self) -> Result<String, ReadingError>;
-    fn get_identifier(&mut self) -> Result<Identifier, ReadingError>;
+    fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError>;
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError>;
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
@@ -161,6 +164,20 @@ impl<R: Read> NetworkReadExt for R {
         Ok(f64::from_be_bytes(buf))
     }
 
+    fn get_i128_be(&mut self) -> Result<i128, ReadingError> {
+        let mut buf = [0u8; 16];
+        self.read_exact(&mut buf)
+            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
+        Ok(i128::from_be_bytes(buf))
+    }
+
+    fn get_u128_be(&mut self) -> Result<u128, ReadingError> {
+        let mut buf = [0u8; 16];
+        self.read_exact(&mut buf)
+            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
+        Ok(u128::from_be_bytes(buf))
+    }
+
     fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>, ReadingError> {
         let mut buf = vec![0u8; count];
         self.read_exact(&mut buf)
@@ -221,8 +238,15 @@ impl<R: Read> NetworkReadExt for R {
         self.get_string_bounded(i16::MAX as usize)
     }
 
-    fn get_identifier(&mut self) -> Result<Identifier, ReadingError> {
-        Identifier::decode(self)
+    fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError> {
+        let resource_location = self.get_string_bounded(ResourceLocation::MAX_SIZE.get())?;
+        match resource_location.split_once(":") {
+            Some((namespace, path)) => Ok(ResourceLocation {
+                namespace: namespace.to_string(),
+                path: path.to_string(),
+            }),
+            None => Err(ReadingError::Incomplete("ResourceLocation".to_string())),
+        }
     }
 
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError> {
@@ -285,7 +309,7 @@ pub trait NetworkWriteExt {
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
-    fn write_identifier(&mut self, data: &Identifier) -> Result<(), WritingError>;
+    fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError>;
 
     fn write_uuid(&mut self, data: &uuid::Uuid) -> Result<(), WritingError> {
         let (first, second) = data.as_u64_pair();
@@ -404,8 +428,8 @@ impl<W: Write> NetworkWriteExt for W {
         self.write_string_bounded(data, i16::MAX as usize)
     }
 
-    fn write_identifier(&mut self, data: &Identifier) -> Result<(), WritingError> {
-        data.encode(self)
+    fn write_resource_location(&mut self, data: &ResourceLocation) -> Result<(), WritingError> {
+        self.write_string_bounded(&data.to_string(), ResourceLocation::MAX_SIZE.get())
     }
 
     fn write_bitset(&mut self, data: &BitSet) -> Result<(), WritingError> {
@@ -492,5 +516,271 @@ mod test {
             Foo::deserialize(&mut deserializer::Deserializer::new(cursor)).unwrap();
 
         assert_eq!(foo, deserialized);
+    }
+
+    #[test]
+    fn test_char_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct CharStruct {
+            c: char,
+        }
+
+        // Test with normal char
+        let original = CharStruct { c: 'A' };
+        let mut bytes = Vec::new();
+        let mut ser = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut ser).unwrap();
+        assert_eq!(bytes, vec![0, 0, 0, 0x41]);
+
+        let de_cursor = Cursor::new(bytes);
+        let deserialized: CharStruct =
+            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+        assert_eq!(original, deserialized);
+
+        // Test with complex char
+        let original_complex = CharStruct { c: 'Ω' }; // Greek Omega, U+03A9
+        let mut bytes_complex = Vec::new();
+        let mut ser_complex = serializer::Serializer::new(&mut bytes_complex);
+        original_complex.serialize(&mut ser_complex).unwrap();
+        assert_eq!(bytes_complex, vec![0, 0, 0x03, 0xA9]);
+
+        let de_cursor_complex = Cursor::new(bytes_complex);
+        let deserialized_complex: CharStruct =
+            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor_complex))
+                .unwrap();
+        assert_eq!(original_complex, deserialized_complex);
+
+        // Test with an emoji
+        let original_emoji = CharStruct { c: '\u{1F383}' }; // Pumpkin emoji, U+1F383
+        let mut bytes_emoji = Vec::new();
+        let mut ser_emoji = serializer::Serializer::new(&mut bytes_emoji);
+        original_emoji.serialize(&mut ser_emoji).unwrap();
+        assert_eq!(bytes_emoji, vec![0, 0x01, 0xF3, 0x83]);
+
+        let de_cursor_emoji = Cursor::new(bytes_emoji);
+        let deserialized_emoji: CharStruct =
+            CharStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor_emoji)).unwrap();
+        assert_eq!(original_emoji, deserialized_emoji);
+    }
+
+    #[test]
+    fn test_i128_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct I128Struct {
+            val: i128,
+        }
+
+        let original = I128Struct {
+            val: 12345678901234567890123456789012345678,
+        };
+        let mut bytes = Vec::new();
+        let mut ser = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut ser).unwrap();
+        assert_eq!(bytes, original.val.to_be_bytes());
+
+        let de_cursor = Cursor::new(bytes);
+        let deserialized: I128Struct =
+            I128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+        assert_eq!(original, deserialized);
+
+        let original_neg = I128Struct {
+            val: -12345678901234567890123456789012345678,
+        };
+        let mut bytes_neg = Vec::new();
+        let mut ser_neg = serializer::Serializer::new(&mut bytes_neg);
+        original_neg.serialize(&mut ser_neg).unwrap();
+        assert_eq!(bytes_neg, original_neg.val.to_be_bytes());
+
+        let de_cursor_neg = Cursor::new(bytes_neg);
+        let deserialized_neg: I128Struct =
+            I128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor_neg)).unwrap();
+        assert_eq!(original_neg, deserialized_neg);
+    }
+
+    #[test]
+    fn test_u128_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct U128Struct {
+            val: u128,
+        }
+
+        let original = U128Struct {
+            val: 123456789012345678901234567890123456789,
+        };
+        let mut bytes = Vec::new();
+        let mut ser = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut ser).unwrap();
+        assert_eq!(bytes, original.val.to_be_bytes());
+
+        let de_cursor = Cursor::new(bytes);
+        let deserialized: U128Struct =
+            U128Struct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn test_unit_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct UnitStruct;
+
+        let original = UnitStruct;
+        let mut bytes = Vec::new();
+        let mut ser = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut ser).unwrap();
+        assert!(bytes.is_empty());
+
+        let de_cursor = Cursor::new(bytes);
+        let deserialized: UnitStruct =
+            UnitStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+        assert_eq!(original, deserialized);
+
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct StructWithUnit {
+            a: i32,
+            b: UnitStruct,
+            c: i32,
+        }
+
+        let original_with_unit = StructWithUnit {
+            a: 1,
+            b: UnitStruct,
+            c: 2,
+        };
+        let mut bytes_with_unit = Vec::new();
+        let mut ser_with_unit = serializer::Serializer::new(&mut bytes_with_unit);
+        original_with_unit.serialize(&mut ser_with_unit).unwrap();
+
+        // Check that only a and c were serialized
+        let mut expected_bytes = Vec::new();
+        expected_bytes.extend_from_slice(&1i32.to_be_bytes());
+        expected_bytes.extend_from_slice(&2i32.to_be_bytes());
+        assert_eq!(bytes_with_unit, expected_bytes);
+
+        let de_cursor_with_unit = Cursor::new(bytes_with_unit);
+        let deserialized_with_unit: StructWithUnit =
+            StructWithUnit::deserialize(&mut deserializer::Deserializer::new(de_cursor_with_unit))
+                .unwrap();
+        assert_eq!(original_with_unit, deserialized_with_unit);
+    }
+
+    #[test]
+    fn test_enum_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        enum MyEnum {
+            A,
+            B(i32),
+            C { x: i32, y: String },
+        }
+
+        let original_a = MyEnum::A;
+        let mut bytes_a = Vec::new();
+        let mut ser_a = serializer::Serializer::new(&mut bytes_a);
+        original_a.serialize(&mut ser_a).unwrap();
+        // VarInt for index 0
+        assert_eq!(bytes_a, vec![0x00]);
+        let de_cursor_a = Cursor::new(bytes_a);
+        let deserialized_a: MyEnum =
+            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_a)).unwrap();
+        assert_eq!(original_a, deserialized_a);
+
+        let original_b = MyEnum::B(123);
+        let mut bytes_b = Vec::new();
+        let mut ser_b = serializer::Serializer::new(&mut bytes_b);
+        original_b.serialize(&mut ser_b).unwrap();
+        // VarInt for index 1, then i32 for 123
+        let mut expected_bytes_b = vec![0x01];
+        expected_bytes_b.extend_from_slice(&123i32.to_be_bytes());
+        assert_eq!(bytes_b, expected_bytes_b);
+        let de_cursor_b = Cursor::new(bytes_b);
+        let deserialized_b: MyEnum =
+            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_b)).unwrap();
+        assert_eq!(original_b, deserialized_b);
+
+        let original_c = MyEnum::C {
+            x: 456,
+            y: "hello".to_string(),
+        };
+        let mut bytes_c = Vec::new();
+        let mut ser_c = serializer::Serializer::new(&mut bytes_c);
+        original_c.serialize(&mut ser_c).unwrap();
+        // VarInt for index 2, then i32 for 456, then string "hello"
+        let mut expected_bytes_c = vec![0x02];
+        expected_bytes_c.extend_from_slice(&456i32.to_be_bytes());
+        expected_bytes_c.push(0x05); // VarInt for string length 5
+        expected_bytes_c.extend_from_slice("hello".as_bytes());
+        assert_eq!(bytes_c, expected_bytes_c);
+        let de_cursor_c = Cursor::new(bytes_c);
+        let deserialized_c: MyEnum =
+            MyEnum::deserialize(&mut deserializer::Deserializer::new(de_cursor_c)).unwrap();
+        assert_eq!(original_c, deserialized_c);
+    }
+
+    #[test]
+    fn test_tuple_struct_reserialize() {
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct MyTupleStruct(i32, String);
+
+        let original = MyTupleStruct(789, "world".to_string());
+        let mut bytes = Vec::new();
+        let mut ser = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut ser).unwrap();
+
+        let mut expected_bytes = Vec::new();
+        expected_bytes.extend_from_slice(&789i32.to_be_bytes());
+        expected_bytes.push(0x05); // VarInt for string length 5
+        expected_bytes.extend_from_slice("world".as_bytes());
+        assert_eq!(bytes, expected_bytes);
+
+        let de_cursor = Cursor::new(bytes);
+        let deserialized: MyTupleStruct =
+            MyTupleStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn test_map_reserialize() {
+        use std::collections::HashMap;
+
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct MyMapStruct {
+            map: HashMap<String, i32>,
+        }
+
+        let mut map = HashMap::new();
+        map.insert("one".to_string(), 1);
+        map.insert("two".to_string(), 2);
+
+        let original = MyMapStruct { map };
+
+        let mut bytes = Vec::new();
+        let mut serializer = serializer::Serializer::new(&mut bytes);
+        original.serialize(&mut serializer).unwrap();
+
+        // Expected bytes: VarInt for map length (2), then key1, value1, key2, value2
+        // Order of elements in HashMap is not guaranteed, so we check deserialized content
+
+        let de_cursor = Cursor::new(bytes.clone()); // Clone bytes for potential debug
+        let deserialized: MyMapStruct =
+            MyMapStruct::deserialize(&mut deserializer::Deserializer::new(de_cursor)).unwrap();
+
+        assert_eq!(original.map.len(), deserialized.map.len());
+        for (k, v) in original.map {
+            assert_eq!(deserialized.map.get(&k), Some(&v));
+        }
+
+        // Test with an empty map
+        let empty_map_original = MyMapStruct {
+            map: HashMap::new(),
+        };
+        let mut empty_map_bytes = Vec::new();
+        let mut empty_map_ser = serializer::Serializer::new(&mut empty_map_bytes);
+        empty_map_original.serialize(&mut empty_map_ser).unwrap();
+        assert_eq!(empty_map_bytes, vec![0x00]); // VarInt for length 0
+
+        let empty_map_de_cursor = Cursor::new(empty_map_bytes);
+        let empty_map_deserialized: MyMapStruct =
+            MyMapStruct::deserialize(&mut deserializer::Deserializer::new(empty_map_de_cursor))
+                .unwrap();
+        assert_eq!(empty_map_original, empty_map_deserialized);
     }
 }

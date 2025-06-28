@@ -1,4 +1,6 @@
 use proc_macro::TokenStream;
+use proc_macro_error2::{abort, proc_macro_error};
+use proc_macro2::Ident;
 use quote::quote;
 use std::sync::LazyLock;
 use std::sync::Mutex;
@@ -6,6 +8,7 @@ use syn::{ImplItem, ItemFn, ItemImpl, ItemStruct, parse_macro_input, parse_quote
 
 static PLUGIN_METHODS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
+#[proc_macro_error]
 #[proc_macro_attribute]
 pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(item as ItemFn);
@@ -29,6 +32,7 @@ pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::new()
 }
 
+#[proc_macro_error]
 #[proc_macro_attribute]
 pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Parse the input struct
@@ -39,7 +43,14 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let methods: Vec<proc_macro2::TokenStream> = methods
         .iter()
-        .filter_map(|method_str| method_str.parse().ok())
+        .map(|s| {
+            s.parse::<proc_macro2::TokenStream>().unwrap_or_else(|e| {
+                abort!(
+                    struct_ident,
+                    format!("re-parsing cached method failed: {e}")
+                )
+            })
+        })
         .collect();
 
     // Combine the original struct definition with the impl block and plugin() function
@@ -71,11 +82,17 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+#[proc_macro_error]
 #[proc_macro_attribute]
 pub fn with_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemImpl);
 
-    let use_global = attr.to_string() == "global";
+    let mode: Ident = parse_macro_input!(attr as Ident);
+    let use_global = match mode.to_string().as_str() {
+        "global" => true,
+        "local" => false,
+        other => abort!(mode, format!("expected `global` or `local`, got `{other}`")),
+    };
 
     for item in &mut input.items {
         if let ImplItem::Fn(method) = item {

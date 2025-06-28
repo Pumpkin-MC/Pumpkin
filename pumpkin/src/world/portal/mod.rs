@@ -4,6 +4,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use super::World;
 
+pub mod end;
 pub mod nether;
 
 pub struct PortalManager {

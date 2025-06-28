@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -14,8 +14,9 @@ pub struct Packets {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/packets.json");
 
-    let packets: Packets = serde_json::from_str(include_str!("../../assets/packets.json"))
-        .expect("Failed to parse packets.json");
+    let packets: Packets =
+        serde_json::from_str(&fs::read_to_string("../assets/packets.json").unwrap())
+            .expect("Failed to parse packets.json");
     let version = packets.version;
     let serverbound_consts = parse_packets(packets.serverbound);
     let clientbound_consts = parse_packets(packets.clientbound);

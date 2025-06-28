@@ -38,7 +38,7 @@ impl ArgumentConsumer for ParticleArgumentConsumer {
         let name = args.pop()?;
 
         // Create a static damage type first
-        let particle = Particle::from_name(&name.replace("minecraft:", ""))?;
+        let particle = Particle::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
         // Find matching static damage type from values array
         Some(Arg::Particle(particle))
     }

@@ -15,7 +15,8 @@ use instrument::Instrument;
 use jukebox_song::JukeboxSong;
 use paint::Painting;
 use pig::PigVariant;
-use pumpkin_protocol::{client::config::RegistryEntry, codec::identifier::Identifier};
+use pumpkin_protocol::client::config::RegistryEntry;
+use pumpkin_util::resource_location::ResourceLocation;
 use serde::{Deserialize, Serialize};
 use trim_material::TrimMaterial;
 use trim_pattern::TrimPattern;
@@ -45,7 +46,7 @@ pub static SYNCED_REGISTRIES: LazyLock<SyncedRegistry> = LazyLock::new(|| {
 });
 
 pub struct Registry {
-    pub registry_id: Identifier,
+    pub registry_id: ResourceLocation,
     pub registry_entries: Vec<RegistryEntry>,
 }
 
@@ -72,32 +73,33 @@ pub struct SyncedRegistry {
     instrument: IndexMap<String, Instrument>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DimensionType {
-    Overworld,
-    OverworldCaves,
-    TheEnd,
-    TheNether,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct DataPool<T> {
     data: T,
     weight: i32,
 }
 
-impl DimensionType {
-    pub fn name(&self) -> Identifier {
+// TODO: remove in favor of numerical registry ids for `minecraft:dimension_type`
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VanillaDimensionType {
+    Overworld,
+    OverworldCaves,
+    TheEnd,
+    TheNether,
+}
+
+impl VanillaDimensionType {
+    pub fn resource_location(&self) -> ResourceLocation {
         match self {
-            Self::Overworld => Identifier::vanilla("overworld"),
-            Self::OverworldCaves => Identifier::vanilla("overworld_caves"),
-            Self::TheEnd => Identifier::vanilla("the_end"),
-            Self::TheNether => Identifier::vanilla("the_nether"),
+            Self::Overworld => ResourceLocation::vanilla("overworld"),
+            Self::OverworldCaves => ResourceLocation::vanilla("overworld_caves"),
+            Self::TheEnd => ResourceLocation::vanilla("the_end"),
+            Self::TheNether => ResourceLocation::vanilla("the_nether"),
         }
     }
 
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name {
+    pub fn from_resource_location_string(resource_location: &str) -> Option<Self> {
+        match resource_location {
             "minecraft:overworld" => Some(Self::Overworld),
             "minecraft:overworld_caves" => Some(Self::OverworldCaves),
             "minecraft:the_end" => Some(Self::TheEnd),
@@ -115,7 +117,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let biome = Registry {
-            registry_id: Identifier::vanilla("worldgen/biome"),
+            registry_id: ResourceLocation::vanilla("worldgen/biome"),
             registry_entries,
         };
 
@@ -143,7 +145,7 @@ impl Registry {
         ));
 
         let chat_type = Registry {
-            registry_id: Identifier::vanilla("chat_type"),
+            registry_id: ResourceLocation::vanilla("chat_type"),
             registry_entries,
         };
 
@@ -153,7 +155,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let wolf_variant = Registry {
-            registry_id: Identifier::vanilla("wolf_variant"),
+            registry_id: ResourceLocation::vanilla("wolf_variant"),
             registry_entries,
         };
 
@@ -163,7 +165,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let cat_variant = Registry {
-            registry_id: Identifier::vanilla("cat_variant"),
+            registry_id: ResourceLocation::vanilla("cat_variant"),
             registry_entries,
         };
         let registry_entries = SYNCED_REGISTRIES
@@ -172,7 +174,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let chicken_variant = Registry {
-            registry_id: Identifier::vanilla("chicken_variant"),
+            registry_id: ResourceLocation::vanilla("chicken_variant"),
             registry_entries,
         };
         let registry_entries = SYNCED_REGISTRIES
@@ -181,7 +183,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let cow_variant = Registry {
-            registry_id: Identifier::vanilla("cow_variant"),
+            registry_id: ResourceLocation::vanilla("cow_variant"),
             registry_entries,
         };
         let registry_entries = SYNCED_REGISTRIES
@@ -190,7 +192,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let frog_variant = Registry {
-            registry_id: Identifier::vanilla("frog_variant"),
+            registry_id: ResourceLocation::vanilla("frog_variant"),
             registry_entries,
         };
         let registry_entries = SYNCED_REGISTRIES
@@ -199,7 +201,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let pig_variant = Registry {
-            registry_id: Identifier::vanilla("pig_variant"),
+            registry_id: ResourceLocation::vanilla("pig_variant"),
             registry_entries,
         };
         let registry_entries = SYNCED_REGISTRIES
@@ -208,7 +210,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let wolf_sound_variant = Registry {
-            registry_id: Identifier::vanilla("wolf_sound_variant"),
+            registry_id: ResourceLocation::vanilla("wolf_sound_variant"),
             registry_entries,
         };
 
@@ -218,7 +220,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let painting_variant = Registry {
-            registry_id: Identifier::vanilla("painting_variant"),
+            registry_id: ResourceLocation::vanilla("painting_variant"),
             registry_entries,
         };
 
@@ -228,7 +230,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let dimension_type = Registry {
-            registry_id: Identifier::vanilla("dimension_type"),
+            registry_id: ResourceLocation::vanilla("dimension_type"),
             registry_entries,
         };
 
@@ -238,7 +240,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let damage_type = Registry {
-            registry_id: Identifier::vanilla("damage_type"),
+            registry_id: ResourceLocation::vanilla("damage_type"),
             registry_entries,
         };
 
@@ -248,7 +250,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let banner_pattern = Registry {
-            registry_id: Identifier::vanilla("banner_pattern"),
+            registry_id: ResourceLocation::vanilla("banner_pattern"),
             registry_entries,
         };
 
@@ -258,7 +260,7 @@ impl Registry {
             .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
             .collect();
         let jukebox_song = Registry {
-            registry_id: Identifier::vanilla("jukebox_song"),
+            registry_id: ResourceLocation::vanilla("jukebox_song"),
             registry_entries,
         };
 

@@ -233,8 +233,8 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
         self.write.write_slice(v)
     }
-    fn serialize_char(self, _v: char) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+    fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
+        self.write.write_u32_be(v as u32)
     }
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
         self.write.write_f32_be(v)
@@ -242,8 +242,10 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
         self.write.write_f64_be(v)
     }
-    fn serialize_i128(self, _v: i128) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+    fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
+        self.write
+            .write_all(&v.to_be_bytes())
+            .map_err(WritingError::IoError)
     }
     fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
         self.write.write_i16_be(v)
@@ -257,8 +259,16 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
         self.write.write_i8_be(v)
     }
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        unimplemented!()
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+        let Some(len) = len else {
+            return Err(WritingError::Serde("Maps must have a known length".into()));
+        };
+
+        self.write.write_var_int(&len.try_into().map_err(|_| {
+            WritingError::Message(format!("{len} isn't representable as a VarInt"))
+        })?)?;
+
+        Ok(self)
     }
     fn serialize_newtype_struct<T>(
         self,
@@ -334,11 +344,16 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     fn serialize_struct_variant(
         self,
         _name: &'static str,
-        _variant_index: u32,
+        variant_index: u32,
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        unimplemented!()
+        // Serialize ENUM index as varint
+        self.write
+            .write_var_int(&variant_index.try_into().map_err(|_| {
+                WritingError::Message(format!("{variant_index} isn't representable as a VarInt"))
+            })?)?;
+        Ok(self)
     }
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
         Ok(self)
@@ -348,7 +363,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        unimplemented!()
+        Ok(self)
     }
     fn serialize_tuple_variant(
         self,
@@ -364,8 +379,10 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
             })?)?;
         Ok(self)
     }
-    fn serialize_u128(self, _v: u128) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+    fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
+        self.write
+            .write_all(&v.to_be_bytes())
+            .map_err(WritingError::IoError)
     }
     fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
         self.write.write_u16_be(v)
@@ -380,7 +397,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         self.write.write_u8_be(v)
     }
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        unimplemented!()
+        Ok(())
     }
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
         Ok(())
@@ -443,15 +460,15 @@ impl<W: Write> ser::SerializeTupleStruct for &mut Serializer<W> {
     type Ok = ();
     type Error = WritingError;
 
-    fn serialize_field<T>(&mut self, _value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        todo!()
+        value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<(), Self::Error> {
-        todo!()
+        Ok(())
     }
 }
 
@@ -468,11 +485,11 @@ impl<W: Write> ser::SerializeTupleVariant for &mut Serializer<W> {
     type Ok = ();
     type Error = WritingError;
 
-    fn serialize_field<T>(&mut self, _value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        todo!()
+        value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<(), Self::Error> {
@@ -492,33 +509,22 @@ impl<W: Write> ser::SerializeMap for &mut Serializer<W> {
     type Ok = ();
     type Error = WritingError;
 
-    // The Serde data model allows map keys to be any serializable type. JSON
-    // only allows string keys, so the implementation below will produce invalid
-    // JSON if the key serializes as something other than a string.
-    //
-    // A real JSON serializer would need to validate that map keys are strings.
-    // This can be done by using a different `Serializer` to serialize the key
-    // (instead of `&mut **self`) and having that other `Serializer` only
-    // implement `serialize_str` and return an error on any other data type.
-    fn serialize_key<T>(&mut self, _key: &T) -> Result<(), Self::Error>
+    fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        todo!()
+        key.serialize(&mut **self)
     }
 
-    // It doesn't make a difference whether the colon is printed at the end of
-    // `serialize_key` or at the beginning of `serialize_value`. In this case,
-    // the code is a bit simpler having it here.
-    fn serialize_value<T>(&mut self, _value: &T) -> Result<(), Self::Error>
+    fn serialize_value<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        todo!()
+        value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<(), Self::Error> {
-        todo!()
+        Ok(())
     }
 }
 
@@ -551,14 +557,14 @@ impl<W: Write> ser::SerializeStructVariant for &mut Serializer<W> {
     type Ok = ();
     type Error = WritingError;
 
-    fn serialize_field<T>(&mut self, _key: &'static str, _value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        todo!()
+        value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<(), Self::Error> {
-        todo!()
+        Ok(())
     }
 }

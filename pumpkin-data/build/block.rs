@@ -3,8 +3,13 @@ use proc_macro2::{Span, TokenStream};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+};
 use syn::{Ident, LitInt, LitStr};
+
+use crate::loot::LootTableStruct;
 
 fn const_block_name_from_block_name(block: &str) -> String {
     block.to_shouty_snake_case()
@@ -118,7 +123,7 @@ impl ToTokens for PropertyStruct {
                 fn from_index(index: u16) -> Self {
                     match index {
                         #(#values_index => Self::#values_3,)*
-                        _ => panic!("Invalid index: {}", index),
+                        _ => panic!("Invalid index: {index}"),
                     }
                 }
 
@@ -131,7 +136,7 @@ impl ToTokens for PropertyStruct {
                 fn from_value(value: &str) -> Self {
                     match value {
                         #(#from_values),*,
-                        _ => panic!("Invalid value: {:?}", value),
+                        _ => panic!("Invalid value: {value:?}"),
                     }
                 }
 
@@ -177,14 +182,12 @@ impl ToTokens for BlockPropertyStruct {
                 let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
                 match &entry.property_type {
                     PropertyType::Bool => quote! {
-                        index += !self.#field_name as u16 * multiplier;
-                        multiplier *= 2;
+                        (!self.#field_name as u16, 2)
                     },
                     PropertyType::Enum { name } => {
                         let enum_ident = Ident::new(name, Span::call_site());
                         quote! {
-                            index += self.#field_name.to_index() * multiplier;
-                            multiplier *= #enum_ident::variant_count();
+                            (self.#field_name.to_index(), #enum_ident::variant_count())
                         }
                     }
                 }
@@ -225,10 +228,10 @@ impl ToTokens for BlockPropertyStruct {
             let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! {
-                    props.push((#key.to_string(), self.#field_name.to_string()));
+                    (#key.to_string(), self.#field_name.to_string()),
                 },
                 PropertyType::Enum { name: _ } => quote! {
-                    props.push((#key.to_string(), self.#field_name.to_value().to_string()));
+                    (#key.to_string(), self.#field_name.to_value().to_string()),
                 },
             }
         });
@@ -260,11 +263,12 @@ impl ToTokens for BlockPropertyStruct {
             }
 
             impl BlockProperties for #name {
-                #[allow(unused_assignments)]
                 fn to_index(&self) -> u16 {
-                    let mut index = 0;
-                    let mut multiplier = 1;
-                    #(#to_index_body)*
+                    let (index, _) = [#(#to_index_body),*]
+                    .iter()
+                    .fold((0, 1), |(current_index, multiplier), &(value, count)| {
+                      (current_index + value * multiplier, multiplier * count)
+                    });
                     index
                 }
 
@@ -303,16 +307,13 @@ impl ToTokens for BlockPropertyStruct {
                     if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
-                    Self::from_state_id(block.default_state_id, block)
+                    Self::from_state_id(block.default_state.id, block)
                 }
 
-                #[allow(clippy::vec_init_then_push)]
-                fn to_props(&self) -> Vec<(String, String)> {
-                    let mut props = vec![];
-                    #(#to_props_values)*
-                    props
+                fn to_props(&self) -> HashMap<String, String> {
+                   HashMap::from([#(#to_props_values)*])
                 }
-                fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self {
+                fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
@@ -320,11 +321,31 @@ impl ToTokens for BlockPropertyStruct {
                     for (key, value) in props {
                         match key {
                             #(#from_props_values),*,
-                            _ => panic!("Invalid key: {}", key),
+                            _ => panic!("Invalid key: {key}"),
                         }
                     }
                     block_props
                 }
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct FlammableStruct {
+    pub spread_chance: u8,
+    pub burn_chance: u8,
+}
+
+impl ToTokens for FlammableStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let spread_chance = &self.spread_chance;
+        let burn_chance = &self.burn_chance;
+
+        tokens.extend(quote! {
+            Flammable {
+                spread_chance: #spread_chance,
+                burn_chance: #burn_chance,
             }
         });
     }
@@ -365,6 +386,7 @@ pub struct BlockState {
     pub piston_behavior: PistonBehavior,
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
+    pub outline_shapes: Vec<u16>,
     pub opacity: Option<u8>,
     pub block_entity_type: Option<u16>,
 }
@@ -403,7 +425,7 @@ impl BlockState {
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
         let side_flags = LitInt::new(&self.side_flags.to_string(), Span::call_site());
-        let instrument = self.instrument.clone();
+        let instrument = format_ident!("{}", self.instrument.to_upper_camel_case());
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
         let hardness = self.hardness;
         let opacity = match self.opacity {
@@ -426,6 +448,10 @@ impl BlockState {
             .collision_shapes
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
+        let outline_shapes = self
+            .outline_shapes
+            .iter()
+            .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
         let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
@@ -433,11 +459,12 @@ impl BlockState {
                 id: #id,
                 state_flags: #state_flags,
                 side_flags: #side_flags,
-                instrument: #instrument,
+                instrument: Instrument::#instrument,
                 luminance: #luminance,
                 piston_behavior: #piston_behavior,
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],
+                outline_shapes: &[#(#outline_shapes),*],
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
             }
@@ -460,486 +487,6 @@ impl ToTokens for BlockStateRef {
     }
 }
 
-/// These are required to be defined twice because serde can't deseralize into static context for obvious reasons.
-#[derive(Deserialize, Clone, Debug)]
-pub struct LootTableStruct {
-    r#type: LootTableTypeStruct,
-    random_sequence: Option<String>,
-    pools: Option<Vec<LootPoolStruct>>,
-}
-
-impl ToTokens for LootTableStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let loot_table_type = self.r#type.to_token_stream();
-        let random_sequence = match &self.random_sequence {
-            Some(seq) => quote! { Some(#seq) },
-            None => quote! { None },
-        };
-        let pools = match &self.pools {
-            Some(pools) => {
-                let pool_tokens: Vec<_> = pools.iter().map(|pool| pool.to_token_stream()).collect();
-                quote! { Some(&[#(#pool_tokens),*]) }
-            }
-            None => quote! { None },
-        };
-
-        tokens.extend(quote! {
-            LootTable {
-                r#type: #loot_table_type,
-                random_sequence: #random_sequence,
-                pools: #pools,
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct LootPoolStruct {
-    entries: Vec<LootPoolEntryStruct>,
-    rolls: f32, // TODO
-    bonus_rolls: f32,
-}
-
-impl ToTokens for LootPoolStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let entries_tokens: Vec<_> = self
-            .entries
-            .iter()
-            .map(|entry| entry.to_token_stream())
-            .collect();
-        let rolls = &self.rolls;
-        let bonus_rolls = &self.bonus_rolls;
-
-        tokens.extend(quote! {
-            LootPool {
-                entries: &[#(#entries_tokens),*],
-                rolls: #rolls,
-                bonus_rolls: #bonus_rolls,
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct ItemEntryStruct {
-    name: String,
-}
-
-impl ToTokens for ItemEntryStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = LitStr::new(&self.name, Span::call_site());
-
-        tokens.extend(quote! {
-            ItemEntry {
-                name: #name,
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct AlternativeEntryStruct {
-    children: Vec<LootPoolEntryStruct>,
-}
-
-impl ToTokens for AlternativeEntryStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let children = self.children.iter().map(|entry| entry.to_token_stream());
-
-        tokens.extend(quote! {
-            AlternativeEntry {
-                children: &[#(#children),*],
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(tag = "type")]
-pub enum LootPoolEntryTypesStruct {
-    #[serde(rename = "minecraft:empty")]
-    Empty,
-    #[serde(rename = "minecraft:item")]
-    Item(ItemEntryStruct),
-    #[serde(rename = "minecraft:loot_table")]
-    LootTable,
-    #[serde(rename = "minecraft:dynamic")]
-    Dynamic,
-    #[serde(rename = "minecraft:tag")]
-    Tag,
-    #[serde(rename = "minecraft:alternatives")]
-    Alternatives(AlternativeEntryStruct),
-    #[serde(rename = "minecraft:sequence")]
-    Sequence,
-    #[serde(rename = "minecraft:group")]
-    Group,
-}
-
-impl ToTokens for LootPoolEntryTypesStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            LootPoolEntryTypesStruct::Empty => {
-                tokens.extend(quote! { LootPoolEntryTypes::Empty });
-            }
-            LootPoolEntryTypesStruct::Item(item) => {
-                tokens.extend(quote! { LootPoolEntryTypes::Item(#item) });
-            }
-            LootPoolEntryTypesStruct::LootTable => {
-                tokens.extend(quote! { LootPoolEntryTypes::LootTable });
-            }
-            LootPoolEntryTypesStruct::Dynamic => {
-                tokens.extend(quote! { LootPoolEntryTypes::Dynamic });
-            }
-            LootPoolEntryTypesStruct::Tag => {
-                tokens.extend(quote! { LootPoolEntryTypes::Tag });
-            }
-            LootPoolEntryTypesStruct::Alternatives(alt) => {
-                tokens.extend(quote! { LootPoolEntryTypes::Alternatives(#alt) });
-            }
-            LootPoolEntryTypesStruct::Sequence => {
-                tokens.extend(quote! { LootPoolEntryTypes::Sequence });
-            }
-            LootPoolEntryTypesStruct::Group => {
-                tokens.extend(quote! { LootPoolEntryTypes::Group });
-            }
-        }
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(tag = "condition")]
-pub enum LootConditionStruct {
-    #[serde(rename = "minecraft:inverted")]
-    Inverted,
-    #[serde(rename = "minecraft:any_of")]
-    AnyOf,
-    #[serde(rename = "minecraft:all_of")]
-    AllOf,
-    #[serde(rename = "minecraft:random_chance")]
-    RandomChance,
-    #[serde(rename = "minecraft:random_chance_with_enchanted_bonus")]
-    RandomChanceWithEnchantedBonus,
-    #[serde(rename = "minecraft:entity_properties")]
-    EntityProperties,
-    #[serde(rename = "minecraft:killed_by_player")]
-    KilledByPlayer,
-    #[serde(rename = "minecraft:entity_scores")]
-    EntityScores,
-    #[serde(rename = "minecraft:block_state_property")]
-    BlockStateProperty {
-        block: String,
-        properties: HashMap<String, String>,
-    },
-    #[serde(rename = "minecraft:match_tool")]
-    MatchTool,
-    #[serde(rename = "minecraft:table_bonus")]
-    TableBonus,
-    #[serde(rename = "minecraft:survives_explosion")]
-    SurvivesExplosion,
-    #[serde(rename = "minecraft:damage_source_properties")]
-    DamageSourceProperties,
-    #[serde(rename = "minecraft:location_check")]
-    LocationCheck,
-    #[serde(rename = "minecraft:weather_check")]
-    WeatherCheck,
-    #[serde(rename = "minecraft:reference")]
-    Reference,
-    #[serde(rename = "minecraft:time_check")]
-    TimeCheck,
-    #[serde(rename = "minecraft:value_check")]
-    ValueCheck,
-    #[serde(rename = "minecraft:enchantment_active_check")]
-    EnchantmentActiveCheck,
-}
-
-impl ToTokens for LootConditionStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = match self {
-            LootConditionStruct::Inverted => quote! { LootCondition::Inverted },
-            LootConditionStruct::AnyOf => quote! { LootCondition::AnyOf },
-            LootConditionStruct::AllOf => quote! { LootCondition::AllOf },
-            LootConditionStruct::RandomChance => quote! { LootCondition::RandomChance },
-            LootConditionStruct::RandomChanceWithEnchantedBonus => {
-                quote! { LootCondition::RandomChanceWithEnchantedBonus }
-            }
-            LootConditionStruct::EntityProperties => quote! { LootCondition::EntityProperties },
-            LootConditionStruct::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
-            LootConditionStruct::EntityScores => quote! { LootCondition::EntityScores },
-            LootConditionStruct::BlockStateProperty { block, properties } => {
-                let properties: Vec<_> = properties
-                    .iter()
-                    .map(|(k, v)| quote! { (#k, #v) })
-                    .collect();
-                quote! { LootCondition::BlockStateProperty { block: #block, properties: &[#(#properties),*] } }
-            }
-            LootConditionStruct::MatchTool => quote! { LootCondition::MatchTool },
-            LootConditionStruct::TableBonus => quote! { LootCondition::TableBonus },
-            LootConditionStruct::SurvivesExplosion => quote! { LootCondition::SurvivesExplosion },
-            LootConditionStruct::DamageSourceProperties => {
-                quote! { LootCondition::DamageSourceProperties }
-            }
-            LootConditionStruct::LocationCheck => quote! { LootCondition::LocationCheck },
-            LootConditionStruct::WeatherCheck => quote! { LootCondition::WeatherCheck },
-            LootConditionStruct::Reference => quote! { LootCondition::Reference },
-            LootConditionStruct::TimeCheck => quote! { LootCondition::TimeCheck },
-            LootConditionStruct::ValueCheck => quote! { LootCondition::ValueCheck },
-            LootConditionStruct::EnchantmentActiveCheck => {
-                quote! { LootCondition::EnchantmentActiveCheck }
-            }
-        };
-
-        tokens.extend(name);
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct LootFunctionStruct {
-    #[serde(flatten)]
-    content: LootFunctionTypesStruct,
-    conditions: Option<Vec<LootConditionStruct>>,
-}
-
-impl ToTokens for LootFunctionStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let functions_tokens = &self.content.to_token_stream();
-
-        let conditions_tokens = match &self.conditions {
-            Some(conds) => {
-                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
-                quote! { Some(&[#(#cond_tokens),*]) }
-            }
-            None => quote! { None },
-        };
-
-        tokens.extend(quote! {
-            LootFunction {
-                content: #functions_tokens,
-                conditions: #conditions_tokens,
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(tag = "function")]
-pub enum LootFunctionTypesStruct {
-    #[serde(rename = "minecraft:set_count")]
-    SetCount {
-        count: LootFunctionNumberProviderStruct,
-        add: Option<bool>,
-    },
-    #[serde(rename = "minecraft:limit_count")]
-    LimitCount { limit: LootFunctionLimitCountStruct },
-    #[serde(rename = "minecraft:apply_bonus")]
-    ApplyBonus {
-        enchantment: String,
-        formula: String,
-        parameters: Option<LootFunctionBonusParameterStruct>,
-    },
-    #[serde(rename = "minecraft:copy_components")]
-    CopyComponents {
-        source: String,
-        include: Vec<String>,
-    },
-    #[serde(rename = "minecraft:copy_state")]
-    CopyState {
-        block: String,
-        properties: Vec<String>,
-    },
-    #[serde(rename = "minecraft:explosion_decay")]
-    ExplosionDecay,
-}
-
-impl ToTokens for LootFunctionTypesStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = match self {
-            LootFunctionTypesStruct::SetCount { count, add } => {
-                let count = count.to_token_stream();
-                let add = add.unwrap_or(false);
-                quote! { LootFunctionTypes::SetCount { count: #count, add: #add } }
-            }
-            LootFunctionTypesStruct::LimitCount { limit } => {
-                let min = match limit.min {
-                    Some(min) => quote! { Some(#min) },
-                    None => quote! { None },
-                };
-                let max = match limit.max {
-                    Some(max) => quote! { Some(#max) },
-                    None => quote! { None },
-                };
-                quote! { LootFunctionTypes::LimitCount { min: #min, max: #max } }
-            }
-            LootFunctionTypesStruct::ApplyBonus {
-                enchantment,
-                formula,
-                parameters,
-            } => {
-                let parameters = match parameters {
-                    Some(params) => {
-                        let params = params.to_token_stream();
-                        quote! { Some(#params) }
-                    }
-                    None => quote! { None },
-                };
-
-                quote! {
-                    LootFunctionTypes::ApplyBonus {
-                        enchantment: #enchantment,
-                        formula: #formula,
-                        parameters: #parameters,
-                    }
-                }
-            }
-            LootFunctionTypesStruct::CopyComponents { source, include } => {
-                quote! {
-                    LootFunctionTypes::CopyComponents {
-                        source: #source,
-                        include: &[#(#include),*],
-                    }
-                }
-            }
-            LootFunctionTypesStruct::CopyState { block, properties } => {
-                quote! {
-                    LootFunctionTypes::CopyState {
-                        block: #block,
-                        properties: &[#(#properties),*],
-                    }
-                }
-            }
-            LootFunctionTypesStruct::ExplosionDecay => {
-                quote! { LootFunctionTypes::ExplosionDecay }
-            }
-        };
-
-        tokens.extend(name);
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(tag = "type")]
-pub enum LootFunctionNumberProviderStruct {
-    #[serde(rename = "minecraft:uniform")]
-    Uniform { min: f32, max: f32 },
-    #[serde(rename = "minecraft:binomial")]
-    Binomial { n: f32, p: f32 },
-    #[serde(rename = "minecraft:constant", untagged)]
-    Constant(f32),
-}
-
-impl ToTokens for LootFunctionNumberProviderStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = match self {
-            Self::Constant(value) => {
-                quote! { LootFunctionNumberProvider::Constant { value: #value } }
-            }
-            Self::Uniform { min, max } => {
-                quote! { LootFunctionNumberProvider::Uniform { min: #min, max: #max } }
-            }
-            Self::Binomial { n, p } => {
-                quote! { LootFunctionNumberProvider::Binomial { n: #n, p: #p } }
-            }
-        };
-
-        tokens.extend(name);
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct LootFunctionLimitCountStruct {
-    min: Option<f32>,
-    max: Option<f32>,
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(untagged)]
-pub enum LootFunctionBonusParameterStruct {
-    Multiplier {
-        #[serde(rename = "bonusMultiplier")]
-        bonus_multiplier: i32,
-    },
-    Probability {
-        extra: i32,
-        probability: f32,
-    },
-}
-
-impl ToTokens for LootFunctionBonusParameterStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = match self {
-            Self::Multiplier { bonus_multiplier } => {
-                quote! { LootFunctionBonusParameter::Multiplier { bonus_multiplier: #bonus_multiplier } }
-            }
-            Self::Probability { extra, probability } => {
-                quote! { LootFunctionBonusParameter::Probability { extra: #extra, probability: #probability } }
-            }
-        };
-
-        tokens.extend(name);
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct LootPoolEntryStruct {
-    #[serde(flatten)]
-    content: LootPoolEntryTypesStruct,
-    conditions: Option<Vec<LootConditionStruct>>,
-    functions: Option<Vec<LootFunctionStruct>>,
-}
-
-impl ToTokens for LootPoolEntryStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let content = &self.content;
-        let conditions_tokens = match &self.conditions {
-            Some(conds) => {
-                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
-                quote! { Some(&[#(#cond_tokens),*]) }
-            }
-            None => quote! { None },
-        };
-        let functions_tokens = match &self.functions {
-            Some(fns) => {
-                let cond_tokens: Vec<_> = fns.iter().map(|c| c.to_token_stream()).collect();
-                quote! { Some(&[#(#cond_tokens),*]) }
-            }
-            None => quote! { None },
-        };
-
-        tokens.extend(quote! {
-            LootPoolEntry {
-                content: #content,
-                conditions: #conditions_tokens,
-                functions: #functions_tokens,
-            }
-        });
-    }
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(rename = "snake_case")]
-pub enum LootTableTypeStruct {
-    #[serde(rename = "minecraft:empty")]
-    /// Nothing will be dropped.
-    Empty,
-    #[serde(rename = "minecraft:block")]
-    /// A block will be dropped.
-    Block,
-    #[serde(rename = "minecraft:chest")]
-    /// An item will be dropped.
-    Chest,
-}
-
-impl ToTokens for LootTableTypeStruct {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = match self {
-            LootTableTypeStruct::Empty => quote! { LootTableType::Empty },
-            LootTableTypeStruct::Block => quote! { LootTableType::Block },
-            LootTableTypeStruct::Chest => quote! { LootTableType::Chest },
-        };
-
-        tokens.extend(name);
-    }
-}
-
 #[derive(Deserialize, Clone, Debug)]
 pub struct Block {
     pub id: u16,
@@ -948,6 +495,7 @@ pub struct Block {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
+    pub flammable: Option<FlammableStruct>,
     pub loot_table: Option<LootTableStruct>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
@@ -966,6 +514,7 @@ pub struct OptimizedBlock {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
+    pub flammable: Option<FlammableStruct>,
     pub loot_table: Option<LootTableStruct>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
@@ -975,15 +524,14 @@ pub struct OptimizedBlock {
     pub experience: Option<Experience>,
 }
 
-impl ToTokens for OptimizedBlock {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+impl OptimizedBlock {
+    fn to_tokens(&self, tokens: &mut TokenStream, all_states: &[BlockState]) {
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let name = LitStr::new(&self.name, Span::call_site());
         let translation_key = LitStr::new(&self.translation_key, Span::call_site());
         let hardness = &self.hardness;
         let blast_resistance = &self.blast_resistance;
         let item_id = LitInt::new(&self.item_id.to_string(), Span::call_site());
-        let default_state_id = LitInt::new(&self.default_state_id.to_string(), Span::call_site());
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
         let jump_velocity_multiplier = &self.jump_velocity_multiplier;
@@ -1004,6 +552,21 @@ impl ToTokens for OptimizedBlock {
             None => quote! { None },
         };
 
+        let default_state_ref: &BlockStateRef = self
+            .states
+            .iter()
+            .find(|state| state.id == self.default_state_id)
+            .unwrap();
+        let mut default_state = all_states[default_state_ref.state_idx as usize].clone();
+        default_state.id = default_state_ref.id;
+        let default_state = default_state.to_tokens();
+        let flammable = match &self.flammable {
+            Some(flammable) => {
+                let flammable_tokens = flammable.to_token_stream();
+                quote! { Some(#flammable_tokens) }
+            }
+            None => quote! { None },
+        };
         tokens.extend(quote! {
             Block {
                 id: #id,
@@ -1015,8 +578,9 @@ impl ToTokens for OptimizedBlock {
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,
                 item_id: #item_id,
-                default_state_id: #default_state_id,
+                default_state: #default_state,
                 states: &[#(#states),*],
+                flammable: #flammable,
                 loot_table: #loot_table,
                 experience: #experience,
             }
@@ -1093,11 +657,12 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/blocks.json");
     println!("cargo:rerun-if-changed=../assets/properties.json");
 
-    let blocks_assets: BlockAssets = serde_json::from_str(include_str!("../../assets/blocks.json"))
-        .expect("Failed to parse blocks.json");
+    let blocks_assets: BlockAssets =
+        serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
+            .expect("Failed to parse blocks.json");
 
     let generated_properties: Vec<GeneratedProperty> =
-        serde_json::from_str(include_str!("../../assets/properties.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/properties.json").unwrap())
             .expect("Failed to parse properties.json");
 
     let mut type_from_raw_id_arms = TokenStream::new();
@@ -1147,6 +712,7 @@ pub(crate) fn build() -> TokenStream {
             slipperiness: block.slipperiness,
             velocity_multiplier: block.velocity_multiplier,
             jump_velocity_multiplier: block.jump_velocity_multiplier,
+            flammable: block.flammable,
             loot_table: block.loot_table,
             experience: block.experience,
             states: block
@@ -1255,7 +821,7 @@ pub(crate) fn build() -> TokenStream {
         .iter()
         .map(|shape| shape.to_token_stream());
 
-    let unique_states = unique_states.iter().map(|state| state.to_tokens());
+    let unique_states_tokens = unique_states.iter().map(|state| state.to_tokens());
 
     let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
     let properties = property_enums.values().map(|prop| prop.to_token_stream());
@@ -1269,7 +835,8 @@ pub(crate) fn build() -> TokenStream {
     // Generate constants and `match` arms for each block.
     for (name, block) in optimized_blocks {
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&name));
-        let block_tokens = block.to_token_stream();
+        let mut block_tokens = TokenStream::new();
+        block.to_tokens(&mut block_tokens, &unique_states);
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
         let state_start = block.states.iter().map(|state| state.id).min().unwrap();
         let state_end = block.states.iter().map(|state| state.id).max().unwrap();
@@ -1301,12 +868,14 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use crate::{BlockState, BlockStateRef, Block, CollisionShape};
+        use crate::{BlockState, BlockStateRef, Block, CollisionShape, blocks::Flammable};
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
+        use std::collections::HashMap;
+
 
         #[derive(Clone, Copy, Debug)]
         pub struct BlockProperty {
@@ -1331,10 +900,10 @@ pub(crate) fn build() -> TokenStream {
             fn default(block: &Block) -> Self where Self: Sized;
 
             // Convert properties to a `Vec` of `(name, value)`
-            fn to_props(&self) -> Vec<(String, String)>;
+            fn to_props(&self) -> HashMap<String, String>;
 
             // Convert properties to a block state, and add them onto the default state.
-            fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self where Self: Sized;
+            fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
@@ -1345,21 +914,61 @@ pub(crate) fn build() -> TokenStream {
             fn from_value(value: &str) -> Self;
         }
 
-
-
         pub static COLLISION_SHAPES: &[CollisionShape] = &[
             #(#shapes),*
         ];
 
         pub static BLOCK_STATES: &[BlockState] = &[
-            #(#unique_states),*
+            #(#unique_states_tokens),*
         ];
 
         pub static BLOCK_ENTITY_TYPES: &[&str] = &[
             #(#block_entity_types),*
         ];
 
+        pub fn get_block(registry_id: &str) -> Option<Block> {
+           let key = registry_id.strip_prefix("minecraft:").unwrap_or(registry_id);
+           Block::from_registry_key(key)
+        }
 
+        pub fn get_block_by_id(id: u16) -> Option<Block> {
+            Block::from_id(id)
+        }
+
+        pub fn get_state_by_state_id(id: u16) -> Option<BlockState> {
+            if let Some(block) = Block::from_state_id(id) {
+                let state: &BlockStateRef = block.states.iter().find(|state| state.id == id)?;
+                Some(state.get_state())
+            } else {
+                None
+            }
+        }
+
+        pub fn get_block_by_state_id(id: u16) -> Option<Block> {
+            Block::from_state_id(id)
+        }
+
+        pub fn get_block_and_state_by_state_id(id: u16) -> Option<(Block, BlockState)> {
+            if let Some(block) = Block::from_state_id(id) {
+                let state: &BlockStateRef = block.states.iter().find(|state| state.id == id)?;
+                Some((block, state.get_state()))
+            } else {
+                None
+            }
+        }
+
+        pub fn get_block_by_item(item_id: u16) -> Option<Block> {
+            Block::from_item_id(item_id)
+        }
+
+        pub fn blocks_movement(block_state: &BlockState) -> bool {
+            if block_state.is_solid() {
+                if let Some(block) = get_block_by_state_id(block_state.id) {
+                    return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
+                }
+            }
+            false
+        }
 
         impl Block {
             #constants
@@ -1406,7 +1015,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Get the properties of the block."]
-            pub fn from_properties(&self, props: Vec<(&str, &str)>) -> Option<Box<dyn BlockProperties>> {
+            pub fn from_properties(&self, props: HashMap<&str, &str>) -> Option<Box<dyn BlockProperties>> {
                 match self.id {
                     #block_properties_from_props_and_name
                     _ => None

@@ -1105,6 +1105,24 @@
     "type": "minecraft:smelting"
   },
   {
+    "key": {
+      "#": "minecraft:black_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:black_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
+  },
+  {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:black_dye",
     "result": {
@@ -1408,6 +1426,24 @@
     "category": "blocks",
     "ingredient": "minecraft:blue_terracotta",
     "type": "minecraft:smelting"
+  },
+  {
+    "key": {
+      "#": "minecraft:blue_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:blue_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
   },
   {
     "category": "building",
@@ -1893,6 +1929,24 @@
     "category": "blocks",
     "ingredient": "minecraft:brown_terracotta",
     "type": "minecraft:smelting"
+  },
+  {
+    "key": {
+      "#": "minecraft:brown_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:brown_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
   },
   {
     "input": "#minecraft:shulker_boxes",
@@ -4122,6 +4176,24 @@
     "type": "minecraft:smelting"
   },
   {
+    "key": {
+      "#": "minecraft:cyan_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:cyan_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
+  },
+  {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:cyan_dye",
     "result": {
@@ -5199,6 +5271,24 @@
     "type": "minecraft:crafting_shaped"
   },
   {
+    "key": {
+      "#": "minecraft:ghast_tear",
+      "X": "minecraft:soul_sand"
+    },
+    "pattern": [
+      "###",
+      "#X#",
+      "###"
+    ],
+    "result": {
+      "id": "minecraft:dried_ghast",
+      "count": 1
+    },
+    "group": "dry_ghast",
+    "category": "building",
+    "type": "minecraft:crafting_shaped"
+  },
+  {
     "category": "misc",
     "result": {
       "id": "minecraft:dried_kelp",
@@ -5313,8 +5403,8 @@
     "type": "minecraft:smithing_trim"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:black_bed",
       "count": 1
@@ -5342,8 +5432,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:black_carpet",
       "count": 1
@@ -5366,6 +5456,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:black_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:black_dye",
+      [
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -5400,8 +5519,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:blue_bed",
       "count": 1
@@ -5429,8 +5548,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:blue_carpet",
       "count": 1
@@ -5453,6 +5572,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:blue_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:blue_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -5487,8 +5635,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:brown_bed",
       "count": 1
@@ -5516,8 +5664,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:brown_carpet",
       "count": 1
@@ -5540,6 +5688,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:brown_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:brown_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -5574,8 +5751,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:cyan_bed",
       "count": 1
@@ -5603,8 +5780,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:cyan_carpet",
       "count": 1
@@ -5627,6 +5804,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:cyan_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:cyan_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -5661,8 +5867,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:gray_bed",
       "count": 1
@@ -5690,8 +5896,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:gray_carpet",
       "count": 1
@@ -5714,6 +5920,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:gray_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:gray_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -5748,8 +5983,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:green_bed",
       "count": 1
@@ -5777,8 +6012,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:green_carpet",
       "count": 1
@@ -5801,6 +6036,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:green_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:green_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -5835,8 +6099,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:light_blue_bed",
       "count": 1
@@ -5864,8 +6128,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:light_blue_carpet",
       "count": 1
@@ -5888,6 +6152,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:light_blue_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:light_blue_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -5922,8 +6215,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:light_gray_bed",
       "count": 1
@@ -5951,8 +6244,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:light_gray_carpet",
       "count": 1
@@ -5975,6 +6268,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:light_gray_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:light_gray_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -6009,8 +6331,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:lime_bed",
       "count": 1
@@ -6038,8 +6360,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:lime_carpet",
       "count": 1
@@ -6062,6 +6384,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:lime_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:lime_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -6096,8 +6447,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:magenta_bed",
       "count": 1
@@ -6125,8 +6476,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:magenta_carpet",
       "count": 1
@@ -6149,6 +6500,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:magenta_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:magenta_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -6183,8 +6563,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:orange_bed",
       "count": 1
@@ -6212,8 +6592,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:orange_carpet",
       "count": 1
@@ -6236,6 +6616,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:orange_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:orange_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -6270,8 +6679,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:pink_bed",
       "count": 1
@@ -6299,8 +6708,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:pink_carpet",
       "count": 1
@@ -6323,6 +6732,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:pink_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:pink_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -6357,8 +6795,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:purple_bed",
       "count": 1
@@ -6386,8 +6824,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:purple_carpet",
       "count": 1
@@ -6410,6 +6848,35 @@
         "minecraft:red_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:purple_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:purple_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -6444,8 +6911,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:red_bed",
       "count": 1
@@ -6473,8 +6940,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:red_carpet",
       "count": 1
@@ -6497,6 +6964,35 @@
         "minecraft:purple_carpet",
         "minecraft:yellow_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:red_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:red_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:yellow_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -6531,8 +7027,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:white_bed",
       "count": 1
@@ -6560,8 +7056,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:white_carpet",
       "count": 1
@@ -6584,6 +7080,35 @@
         "minecraft:purple_carpet",
         "minecraft:red_carpet",
         "minecraft:yellow_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:white_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:white_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:yellow_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -6618,8 +7143,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "bed",
-    "category": "building",
+    "group": "bed_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:yellow_bed",
       "count": 1
@@ -6647,8 +7172,8 @@
     "type": "minecraft:crafting_shapeless"
   },
   {
-    "group": "carpet",
-    "category": "building",
+    "group": "carpet_dye",
+    "category": "misc",
     "result": {
       "id": "minecraft:yellow_carpet",
       "count": 1
@@ -6671,6 +7196,35 @@
         "minecraft:purple_carpet",
         "minecraft:red_carpet",
         "minecraft:white_carpet"
+      ]
+    ],
+    "type": "minecraft:crafting_shapeless"
+  },
+  {
+    "group": "harness_dye",
+    "category": "equipment",
+    "result": {
+      "id": "minecraft:yellow_harness",
+      "count": 1
+    },
+    "ingredients": [
+      "minecraft:yellow_dye",
+      [
+        "minecraft:black_harness",
+        "minecraft:blue_harness",
+        "minecraft:brown_harness",
+        "minecraft:cyan_harness",
+        "minecraft:gray_harness",
+        "minecraft:green_harness",
+        "minecraft:light_blue_harness",
+        "minecraft:light_gray_harness",
+        "minecraft:lime_harness",
+        "minecraft:magenta_harness",
+        "minecraft:orange_harness",
+        "minecraft:pink_harness",
+        "minecraft:purple_harness",
+        "minecraft:red_harness",
+        "minecraft:white_harness"
       ]
     ],
     "type": "minecraft:crafting_shapeless"
@@ -8007,6 +8561,24 @@
     "type": "minecraft:smelting"
   },
   {
+    "key": {
+      "#": "minecraft:gray_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:gray_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
+  },
+  {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:gray_dye",
     "result": {
@@ -8198,6 +8770,24 @@
     "category": "blocks",
     "ingredient": "minecraft:green_terracotta",
     "type": "minecraft:smelting"
+  },
+  {
+    "key": {
+      "#": "minecraft:green_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:green_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
   },
   {
     "input": "#minecraft:shulker_boxes",
@@ -9168,12 +9758,11 @@
   },
   {
     "key": {
-      "O": "minecraft:slime_ball",
       "~": "minecraft:string"
     },
     "pattern": [
       "~~ ",
-      "~O ",
+      "~~ ",
       "  ~"
     ],
     "result": {
@@ -9448,6 +10037,24 @@
     "type": "minecraft:smelting"
   },
   {
+    "key": {
+      "#": "minecraft:light_blue_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:light_blue_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
+  },
+  {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:light_blue_dye",
     "result": {
@@ -9694,6 +10301,24 @@
     "type": "minecraft:smelting"
   },
   {
+    "key": {
+      "#": "minecraft:light_gray_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:light_gray_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
+  },
+  {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:light_gray_dye",
     "result": {
@@ -9927,6 +10552,24 @@
     "category": "blocks",
     "ingredient": "minecraft:lime_terracotta",
     "type": "minecraft:smelting"
+  },
+  {
+    "key": {
+      "#": "minecraft:lime_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:lime_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
   },
   {
     "input": "#minecraft:shulker_boxes",
@@ -10225,6 +10868,24 @@
     "category": "blocks",
     "ingredient": "minecraft:magenta_terracotta",
     "type": "minecraft:smelting"
+  },
+  {
+    "key": {
+      "#": "minecraft:magenta_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:magenta_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
   },
   {
     "input": "#minecraft:shulker_boxes",
@@ -11669,6 +12330,24 @@
     "type": "minecraft:smelting"
   },
   {
+    "key": {
+      "#": "minecraft:orange_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:orange_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
+  },
+  {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:orange_dye",
     "result": {
@@ -12365,6 +13044,24 @@
     "category": "blocks",
     "ingredient": "minecraft:pink_terracotta",
     "type": "minecraft:smelting"
+  },
+  {
+    "key": {
+      "#": "minecraft:pink_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:pink_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
   },
   {
     "input": "#minecraft:shulker_boxes",
@@ -13581,6 +14278,24 @@
     "type": "minecraft:smelting"
   },
   {
+    "key": {
+      "#": "minecraft:purple_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:purple_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
+  },
+  {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:purple_dye",
     "result": {
@@ -14210,6 +14925,24 @@
   },
   {
     "key": {
+      "#": "minecraft:red_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:red_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
+  },
+  {
+    "key": {
       "#": "minecraft:red_nether_bricks"
     },
     "pattern": [
@@ -14751,6 +15484,22 @@
     "addition": "#minecraft:trim_materials",
     "pattern": "minecraft:rib",
     "type": "minecraft:smithing_trim"
+  },
+  {
+    "key": {
+      "#": "minecraft:iron_ingot",
+      "X": "minecraft:leather"
+    },
+    "pattern": [
+      " X ",
+      "X#X"
+    ],
+    "result": {
+      "id": "minecraft:saddle",
+      "count": 1
+    },
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
   },
   {
     "key": {
@@ -18680,6 +19429,24 @@
     "type": "minecraft:smelting"
   },
   {
+    "key": {
+      "#": "minecraft:white_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:white_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
+  },
+  {
     "input": "#minecraft:shulker_boxes",
     "material": "minecraft:white_dye",
     "result": {
@@ -19062,6 +19829,24 @@
     "category": "blocks",
     "ingredient": "minecraft:yellow_terracotta",
     "type": "minecraft:smelting"
+  },
+  {
+    "key": {
+      "#": "minecraft:yellow_wool",
+      "G": "minecraft:glass",
+      "L": "minecraft:leather"
+    },
+    "pattern": [
+      "LLL",
+      "G#G"
+    ],
+    "result": {
+      "id": "minecraft:yellow_harness",
+      "count": 1
+    },
+    "group": "harness",
+    "category": "equipment",
+    "type": "minecraft:crafting_shaped"
   },
   {
     "input": "#minecraft:shulker_boxes",

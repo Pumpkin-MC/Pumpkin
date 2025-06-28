@@ -8,7 +8,11 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "acacia_chest_boat": {
     "id": 1,
@@ -19,7 +23,11 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "allay": {
     "id": 2,
@@ -35,6 +43,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/allay"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "area_effect_cloud": {
@@ -46,7 +58,11 @@
       6.0,
       0.5
     ],
-    "eye_height": 0.425
+    "eye_height": 0.425,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "armadillo": {
     "id": 4,
@@ -62,6 +78,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/armadillo"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "armor_stand": {
@@ -78,6 +98,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/armor_stand"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "arrow": {
@@ -89,7 +113,11 @@
       0.5,
       0.5
     ],
-    "eye_height": 0.13
+    "eye_height": 0.13,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "axolotl": {
     "id": 7,
@@ -105,6 +133,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/axolotl"
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "bamboo_chest_raft": {
@@ -116,7 +148,11 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "bamboo_raft": {
     "id": 9,
@@ -127,7 +163,11 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "bat": {
     "id": 10,
@@ -143,6 +183,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/bat"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "bee": {
@@ -159,6 +203,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/bee"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "birch_boat": {
@@ -170,7 +218,11 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "birch_chest_boat": {
     "id": 13,
@@ -181,7 +233,11 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "blaze": {
     "id": 14,
@@ -234,6 +290,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "block_display": {
@@ -245,7 +305,11 @@
       0.0,
       0.0
     ],
-    "eye_height": 0.0
+    "eye_height": 0.0,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "bogged": {
     "id": 16,
@@ -363,6 +427,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "breeze": {
@@ -416,6 +484,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "breeze_wind_charge": {
@@ -427,7 +499,11 @@
       0.3125,
       0.3125
     ],
-    "eye_height": 0.0
+    "eye_height": 0.0,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "camel": {
     "id": 19,
@@ -443,6 +519,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/camel"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "cat": {
@@ -482,6 +562,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "cave_spider": {
@@ -565,6 +649,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "cherry_boat": {
@@ -576,7 +664,11 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "cherry_chest_boat": {
     "id": 23,
@@ -587,7 +679,11 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "chest_minecart": {
     "id": 24,
@@ -598,7 +694,11 @@
       0.98,
       0.7
     ],
-    "eye_height": 0.595
+    "eye_height": 0.595,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "chicken": {
     "id": 25,
@@ -703,6 +803,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "cod": {
@@ -785,6 +889,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "command_block_minecart": {
@@ -796,7 +904,11 @@
       0.98,
       0.7
     ],
-    "eye_height": 0.595
+    "eye_height": 0.595,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "cow": {
     "id": 28,
@@ -910,6 +1022,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "creaking": {
@@ -926,6 +1042,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/creaking"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "creeper": {
@@ -994,6 +1114,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "dark_oak_boat": {
@@ -1005,7 +1129,11 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "dark_oak_chest_boat": {
     "id": 32,
@@ -1016,7 +1144,11 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "dolphin": {
     "id": 33,
@@ -1100,6 +1232,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "donkey": {
@@ -1148,6 +1284,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "dragon_fireball": {
@@ -1159,7 +1299,11 @@
       1.0,
       1.0
     ],
-    "eye_height": 0.85
+    "eye_height": 0.85,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "drowned": {
     "id": 36,
@@ -1232,6 +1376,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "egg": {
@@ -1243,7 +1391,11 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "elder_guardian": {
     "id": 38,
@@ -1460,6 +1612,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "enderman": {
@@ -1508,6 +1664,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "endermite": {
@@ -1524,6 +1684,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/endermite"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "ender_dragon": {
@@ -1540,6 +1704,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/ender_dragon"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "ender_pearl": {
@@ -1551,7 +1719,11 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "end_crystal": {
     "id": 43,
@@ -1562,7 +1734,11 @@
       2.0,
       2.0
     ],
-    "eye_height": 1.7
+    "eye_height": 1.7,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "evoker": {
     "id": 44,
@@ -1625,6 +1801,10 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "evoker_fangs": {
@@ -1636,7 +1816,11 @@
       0.5,
       0.8
     ],
-    "eye_height": 0.68
+    "eye_height": 0.68,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "experience_bottle": {
     "id": 46,
@@ -1647,7 +1831,11 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "experience_orb": {
     "id": 47,
@@ -1658,7 +1846,11 @@
       0.5,
       0.5
     ],
-    "eye_height": 0.425
+    "eye_height": 0.425,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "eye_of_ender": {
     "id": 48,
@@ -1669,7 +1861,11 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "falling_block": {
     "id": 49,
@@ -1680,7 +1876,11 @@
       0.98,
       0.98
     ],
-    "eye_height": 0.83300006
+    "eye_height": 0.83300006,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "fireball": {
     "id": 50,
@@ -1691,7 +1891,11 @@
       1.0,
       1.0
     ],
-    "eye_height": 0.85
+    "eye_height": 0.85,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "firework_rocket": {
     "id": 51,
@@ -1702,7 +1906,11 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "fox": {
     "id": 52,
@@ -1718,6 +1926,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/fox"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "frog": {
@@ -1734,6 +1946,10 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/frog"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "furnace_minecart": {
@@ -1745,7 +1961,11 @@
       0.98,
       0.7
     ],
-    "eye_height": 0.595
+    "eye_height": 0.595,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "ghast": {
     "id": 55,
@@ -1821,12 +2041,72 @@
               "type": "minecraft:item"
             }
           ]
+        },
+        {
+          "functions": [
+            {
+              "count": 1.0,
+              "add": false,
+              "function": "minecraft:set_count"
+            }
+          ],
+          "rolls": 1.0,
+          "bonus_rolls": 0.0,
+          "entries": [
+            {
+              "name": "minecraft:music_disc_tears",
+              "type": "minecraft:item"
+            }
+          ],
+          "conditions": [
+            {
+              "predicate": {
+                "tags": [
+                  {
+                    "id": "minecraft:is_projectile",
+                    "expected": true
+                  }
+                ],
+                "direct_entity": {
+                  "type": "minecraft:fireball"
+                }
+              },
+              "condition": "minecraft:damage_source_properties"
+            },
+            {
+              "condition": "minecraft:killed_by_player"
+            }
+          ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "happy_ghast": {
+    "id": 56,
+    "max_health": 20.0,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      4.0,
+      4.0
+    ],
+    "eye_height": 2.6,
+    "loot_table": {
+      "type": "minecraft:entity",
+      "random_sequence": "minecraft:entities/happy_ghast"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "giant": {
-    "id": 56,
+    "id": 57,
     "max_health": 100.0,
     "attackable": true,
     "summonable": true,
@@ -1839,10 +2119,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/giant"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "glow_item_frame": {
-    "id": 57,
+    "id": 58,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -1850,10 +2134,14 @@
       0.5,
       0.5
     ],
-    "eye_height": 0.0
+    "eye_height": 0.0,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "glow_squid": {
-    "id": 58,
+    "id": 59,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -1898,10 +2186,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "goat": {
-    "id": 59,
+    "id": 60,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -1914,10 +2206,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/goat"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "guardian": {
-    "id": 60,
+    "id": 61,
     "max_health": 30.0,
     "attackable": true,
     "summonable": true,
@@ -2102,10 +2398,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "hoglin": {
-    "id": 61,
+    "id": 62,
     "max_health": 40.0,
     "attackable": true,
     "summonable": true,
@@ -2216,10 +2516,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "hopper_minecart": {
-    "id": 62,
+    "id": 63,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2227,10 +2531,14 @@
       0.98,
       0.7
     ],
-    "eye_height": 0.595
+    "eye_height": 0.595,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "horse": {
-    "id": 63,
+    "id": 64,
     "max_health": 53.0,
     "attackable": true,
     "summonable": true,
@@ -2275,10 +2583,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "husk": {
-    "id": 64,
+    "id": 65,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -2394,10 +2706,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "illusioner": {
-    "id": 65,
+    "id": 66,
     "max_health": 32.0,
     "attackable": true,
     "summonable": true,
@@ -2410,10 +2726,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/illusioner"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "interaction": {
-    "id": 66,
+    "id": 67,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2421,10 +2741,14 @@
       0.0,
       0.0
     ],
-    "eye_height": 0.0
+    "eye_height": 0.0,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "iron_golem": {
-    "id": 67,
+    "id": 68,
     "max_health": 100.0,
     "attackable": true,
     "summonable": true,
@@ -2481,10 +2805,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "item": {
-    "id": 68,
+    "id": 69,
     "attackable": false,
     "summonable": true,
     "fire_immune": false,
@@ -2492,10 +2820,14 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "item_display": {
-    "id": 69,
+    "id": 70,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2503,10 +2835,14 @@
       0.0,
       0.0
     ],
-    "eye_height": 0.0
+    "eye_height": 0.0,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "item_frame": {
-    "id": 70,
+    "id": 71,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2514,20 +2850,13 @@
       0.5,
       0.5
     ],
-    "eye_height": 0.0
+    "eye_height": 0.0,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "jungle_boat": {
-    "id": 71,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625
-  },
-  "jungle_chest_boat": {
     "id": 72,
     "attackable": true,
     "summonable": true,
@@ -2536,10 +2865,29 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "jungle_chest_boat": {
+    "id": 73,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "leash_knot": {
-    "id": 73,
+    "id": 74,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2547,10 +2895,14 @@
       0.375,
       0.5
     ],
-    "eye_height": 0.0625
+    "eye_height": 0.0625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "lightning_bolt": {
-    "id": 74,
+    "id": 75,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2558,10 +2910,14 @@
       0.0,
       0.0
     ],
-    "eye_height": 0.0
+    "eye_height": 0.0,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "llama": {
-    "id": 75,
+    "id": 76,
     "max_health": 53.0,
     "attackable": true,
     "summonable": true,
@@ -2606,10 +2962,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "llama_spit": {
-    "id": 76,
+    "id": 77,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2617,10 +2977,14 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "magma_cube": {
-    "id": 77,
+    "id": 78,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -2762,20 +3126,13 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "mangrove_boat": {
-    "id": 78,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625
-  },
-  "mangrove_chest_boat": {
     "id": 79,
     "attackable": true,
     "summonable": true,
@@ -2784,10 +3141,29 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "mangrove_chest_boat": {
+    "id": 80,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "marker": {
-    "id": 80,
+    "id": 81,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2795,10 +3171,14 @@
       0.0,
       0.0
     ],
-    "eye_height": 0.0
+    "eye_height": 0.0,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "minecart": {
-    "id": 81,
+    "id": 82,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -2806,10 +3186,14 @@
       0.98,
       0.7
     ],
-    "eye_height": 0.595
+    "eye_height": 0.595,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "mooshroom": {
-    "id": 82,
+    "id": 83,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -2920,10 +3304,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "mule": {
-    "id": 83,
+    "id": 84,
     "max_health": 53.0,
     "attackable": true,
     "summonable": true,
@@ -2968,20 +3356,13 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "oak_boat": {
-    "id": 84,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625
-  },
-  "oak_chest_boat": {
     "id": 85,
     "attackable": true,
     "summonable": true,
@@ -2990,10 +3371,29 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "oak_chest_boat": {
+    "id": 86,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "ocelot": {
-    "id": 86,
+    "id": 87,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -3006,10 +3406,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/ocelot"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING"
     }
   },
   "ominous_item_spawner": {
-    "id": 87,
+    "id": 88,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -3017,10 +3421,14 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "painting": {
-    "id": 88,
+    "id": 89,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -3028,20 +3436,13 @@
       0.5,
       0.5
     ],
-    "eye_height": 0.425
+    "eye_height": 0.425,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "pale_oak_boat": {
-    "id": 89,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625
-  },
-  "pale_oak_chest_boat": {
     "id": 90,
     "attackable": true,
     "summonable": true,
@@ -3050,10 +3451,29 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "pale_oak_chest_boat": {
+    "id": 91,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "panda": {
-    "id": 91,
+    "id": 92,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -3085,10 +3505,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "parrot": {
-    "id": 92,
+    "id": 93,
     "max_health": 6.0,
     "attackable": true,
     "summonable": true,
@@ -3133,10 +3557,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING"
     }
   },
   "phantom": {
-    "id": 93,
+    "id": 94,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -3186,10 +3614,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "pig": {
-    "id": 94,
+    "id": 95,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -3270,10 +3702,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "piglin": {
-    "id": 95,
+    "id": 96,
     "max_health": 16.0,
     "attackable": true,
     "summonable": true,
@@ -3286,10 +3722,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/piglin"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "piglin_brute": {
-    "id": 96,
+    "id": 97,
     "max_health": 50.0,
     "attackable": true,
     "summonable": true,
@@ -3302,10 +3742,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/piglin_brute"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "pillager": {
-    "id": 97,
+    "id": 98,
     "max_health": 24.0,
     "attackable": true,
     "summonable": true,
@@ -3357,10 +3801,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "polar_bear": {
-    "id": 98,
+    "id": 99,
     "max_health": 30.0,
     "attackable": true,
     "summonable": true,
@@ -3502,20 +3950,13 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "splash_potion": {
-    "id": 99,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      0.25,
-      0.25
-    ],
-    "eye_height": 0.2125
-  },
-  "lingering_potion": {
     "id": 100,
     "attackable": true,
     "summonable": true,
@@ -3524,10 +3965,29 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "lingering_potion": {
+    "id": 101,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      0.25,
+      0.25
+    ],
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "pufferfish": {
-    "id": 101,
+    "id": 102,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -3575,10 +4035,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "rabbit": {
-    "id": 102,
+    "id": 103,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -3710,10 +4174,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "ravager": {
-    "id": 103,
+    "id": 104,
     "max_health": 100.0,
     "attackable": true,
     "summonable": true,
@@ -3745,10 +4213,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "salmon": {
-    "id": 104,
+    "id": 105,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -3827,10 +4299,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "sheep": {
-    "id": 105,
+    "id": 106,
     "max_health": 8.0,
     "attackable": true,
     "summonable": true,
@@ -4226,10 +4702,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "shulker": {
-    "id": 106,
+    "id": 107,
     "max_health": 30.0,
     "attackable": true,
     "summonable": true,
@@ -4266,10 +4746,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "shulker_bullet": {
-    "id": 107,
+    "id": 108,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4277,10 +4761,14 @@
       0.3125,
       0.3125
     ],
-    "eye_height": 0.265625
+    "eye_height": 0.265625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "silverfish": {
-    "id": 108,
+    "id": 109,
     "max_health": 8.0,
     "attackable": true,
     "summonable": true,
@@ -4293,10 +4781,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/silverfish"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "skeleton": {
-    "id": 109,
+    "id": 110,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -4371,10 +4863,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "skeleton_horse": {
-    "id": 110,
+    "id": 111,
     "max_health": 15.0,
     "attackable": true,
     "summonable": true,
@@ -4419,10 +4915,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "slime": {
-    "id": 111,
+    "id": 112,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -4513,10 +5013,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "small_fireball": {
-    "id": 112,
+    "id": 113,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4524,10 +5028,14 @@
       0.3125,
       0.3125
     ],
-    "eye_height": 0.265625
+    "eye_height": 0.265625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "sniffer": {
-    "id": 113,
+    "id": 114,
     "max_health": 14.0,
     "attackable": true,
     "summonable": true,
@@ -4540,10 +5048,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/sniffer"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "snowball": {
-    "id": 114,
+    "id": 115,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4551,10 +5063,14 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "snow_golem": {
-    "id": 115,
+    "id": 116,
     "max_health": 4.0,
     "attackable": true,
     "summonable": true,
@@ -4590,10 +5106,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "spawner_minecart": {
-    "id": 116,
+    "id": 117,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4601,10 +5121,14 @@
       0.98,
       0.7
     ],
-    "eye_height": 0.595
+    "eye_height": 0.595,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "spectral_arrow": {
-    "id": 117,
+    "id": 118,
     "attackable": false,
     "summonable": true,
     "fire_immune": false,
@@ -4612,10 +5136,14 @@
       0.5,
       0.5
     ],
-    "eye_height": 0.13
+    "eye_height": 0.13,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "spider": {
-    "id": 118,
+    "id": 119,
     "max_health": 16.0,
     "attackable": true,
     "summonable": true,
@@ -4695,20 +5223,13 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "spruce_boat": {
-    "id": 119,
-    "attackable": true,
-    "summonable": true,
-    "fire_immune": false,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625
-  },
-  "spruce_chest_boat": {
     "id": 120,
     "attackable": true,
     "summonable": true,
@@ -4717,10 +5238,29 @@
       1.375,
       0.5625
     ],
-    "eye_height": 0.5625
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "spruce_chest_boat": {
+    "id": 121,
+    "attackable": true,
+    "summonable": true,
+    "fire_immune": false,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "squid": {
-    "id": 121,
+    "id": 122,
     "max_health": 10.0,
     "attackable": true,
     "summonable": true,
@@ -4765,10 +5305,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "stray": {
-    "id": 122,
+    "id": 123,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -4883,10 +5427,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "strider": {
-    "id": 123,
+    "id": 124,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -4931,10 +5479,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_LAVA",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "tadpole": {
-    "id": 124,
+    "id": 125,
     "max_health": 6.0,
     "attackable": true,
     "summonable": true,
@@ -4947,10 +5499,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/tadpole"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "text_display": {
-    "id": 125,
+    "id": 126,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4958,10 +5514,14 @@
       0.0,
       0.0
     ],
-    "eye_height": 0.0
+    "eye_height": 0.0,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "tnt": {
-    "id": 126,
+    "id": 127,
     "attackable": true,
     "summonable": true,
     "fire_immune": true,
@@ -4969,10 +5529,14 @@
       0.98,
       0.98
     ],
-    "eye_height": 0.15
+    "eye_height": 0.15,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "tnt_minecart": {
-    "id": 127,
+    "id": 128,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -4980,10 +5544,14 @@
       0.98,
       0.7
     ],
-    "eye_height": 0.595
+    "eye_height": 0.595,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "trader_llama": {
-    "id": 128,
+    "id": 129,
     "max_health": 53.0,
     "attackable": true,
     "summonable": true,
@@ -5028,10 +5596,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "trident": {
-    "id": 129,
+    "id": 130,
     "attackable": false,
     "summonable": true,
     "fire_immune": false,
@@ -5039,10 +5611,14 @@
       0.5,
       0.5
     ],
-    "eye_height": 0.13
+    "eye_height": 0.13,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "tropical_fish": {
-    "id": 130,
+    "id": 131,
     "max_health": 3.0,
     "attackable": true,
     "summonable": true,
@@ -5090,10 +5666,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "IN_WATER",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "turtle": {
-    "id": 131,
+    "id": 132,
     "max_health": 30.0,
     "attackable": true,
     "summonable": true,
@@ -5162,10 +5742,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "vex": {
-    "id": 132,
+    "id": 133,
     "max_health": 14.0,
     "attackable": true,
     "summonable": true,
@@ -5178,10 +5762,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/vex"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "villager": {
-    "id": 133,
+    "id": 134,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5194,10 +5782,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/villager"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "vindicator": {
-    "id": 134,
+    "id": 135,
     "max_health": 24.0,
     "attackable": true,
     "summonable": true,
@@ -5247,10 +5839,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "wandering_trader": {
-    "id": 135,
+    "id": 136,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5263,10 +5859,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/wandering_trader"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "warden": {
-    "id": 136,
+    "id": 137,
     "max_health": 500.0,
     "attackable": true,
     "summonable": true,
@@ -5291,10 +5891,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "wind_charge": {
-    "id": 137,
+    "id": 138,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -5302,10 +5906,14 @@
       0.3125,
       0.3125
     ],
-    "eye_height": 0.0
+    "eye_height": 0.0,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "witch": {
-    "id": 138,
+    "id": 139,
     "max_health": 26.0,
     "attackable": true,
     "summonable": true,
@@ -5505,10 +6113,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "wither": {
-    "id": 139,
+    "id": 140,
     "max_health": 300.0,
     "attackable": true,
     "summonable": true,
@@ -5521,10 +6133,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/wither"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "wither_skeleton": {
-    "id": 140,
+    "id": 141,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5624,10 +6240,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "wither_skull": {
-    "id": 141,
+    "id": 142,
     "attackable": true,
     "summonable": true,
     "fire_immune": false,
@@ -5635,10 +6255,14 @@
       0.3125,
       0.3125
     ],
-    "eye_height": 0.265625
+    "eye_height": 0.265625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   },
   "wolf": {
-    "id": 142,
+    "id": 143,
     "max_health": 8.0,
     "attackable": true,
     "summonable": true,
@@ -5651,10 +6275,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/wolf"
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "zoglin": {
-    "id": 143,
+    "id": 144,
     "max_health": 40.0,
     "attackable": true,
     "summonable": true,
@@ -5699,10 +6327,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "zombie": {
-    "id": 144,
+    "id": 145,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5818,10 +6450,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "zombie_horse": {
-    "id": 145,
+    "id": 146,
     "max_health": 15.0,
     "attackable": true,
     "summonable": true,
@@ -5866,10 +6502,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "zombie_villager": {
-    "id": 146,
+    "id": 147,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -5985,10 +6625,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "zombified_piglin": {
-    "id": 147,
+    "id": 148,
     "max_health": 20.0,
     "attackable": true,
     "summonable": true,
@@ -6088,10 +6732,14 @@
           ]
         }
       ]
+    },
+    "spawn_restriction": {
+      "location": "ON_GROUND",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "player": {
-    "id": 148,
+    "id": 149,
     "summonable": false,
     "fire_immune": false,
     "dimension": [
@@ -6102,10 +6750,14 @@
     "loot_table": {
       "type": "minecraft:entity",
       "random_sequence": "minecraft:entities/player"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
   "fishing_bobber": {
-    "id": 149,
+    "id": 150,
     "attackable": true,
     "summonable": false,
     "fire_immune": false,
@@ -6113,6 +6765,10 @@
       0.25,
       0.25
     ],
-    "eye_height": 0.2125
+    "eye_height": 0.2125,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
   }
 }

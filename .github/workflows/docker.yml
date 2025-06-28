@@ -20,10 +20,23 @@ jobs:
       id-token: write
 
     steps:
+      - name: Check Repository
+        id: repo_check
+        run: |
+          if [ "${{ github.repository }}" != "Pumpkin-MC/Pumpkin" ]; then
+            echo "Not the target repository. Skipping deployment."
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+          else
+            echo "Target repository confirmed. Proceeding with deployment."
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout
+        if: steps.repo_check.outputs.should_deploy == 'true'
         uses: actions/checkout@v4
 
       - name: Login to GitHub CR
+        if: steps.repo_check.outputs.should_deploy == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -31,6 +44,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Versions
+        if: steps.repo_check.outputs.should_deploy == 'true'
         id: versions
         run: |
           VERSION=$(awk -F '"' '/^version/ {print $2}' Cargo.toml)
@@ -38,6 +52,7 @@ jobs:
           echo "MC_VERSION=$(echo $VERSION | cut -d '+' -f 2)" >> $GITHUB_ENV
 
       - name: Extract Metadata
+        if: steps.repo_check.outputs.should_deploy == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -51,9 +66,11 @@ jobs:
             type=raw,value=mc${{ env.MC_VERSION }}-${{ env.PUMPKIN_VERSION }}
 
       - name: Docker Buildx
+        if: steps.repo_check.outputs.should_deploy == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Build and Push
+        if: steps.repo_check.outputs.should_deploy == 'true'
         uses: docker/build-push-action@v6
         with:
           push: true
