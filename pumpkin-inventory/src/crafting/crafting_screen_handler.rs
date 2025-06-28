@@ -40,8 +40,8 @@ impl ResultSlot {
         let inventory_width = self.inventory.get_width();
         let mut top_x = 9;
         let mut top_y = 9;
-        let mut bottom_x = -1;
-        let mut bottom_y = -1;
+        let mut bottom_x = 0;
+        let mut bottom_y = 0;
         for i in 0..self.inventory.size() {
             let x = i % inventory_width;
             let y = i / inventory_width;
@@ -237,22 +237,10 @@ impl Slot for ResultSlot {
             let stack = self.result.lock().await;
             // Vanilla: net.minecraft.world.inventory.ResultContainer#removeItem
             // Regardless of the amount, we always return the full stack
-            Self.stat_crafted(stack.item_count);
             *stack
         } else {
             ItemStack::EMPTY
         }
-    }
-
-    async fn on_quick_move(&self, _stack: ItemStack, amount: u8) {
-        // self.amount.fetch_add(amount, Ordering::Relaxed);
-
-        // if self.amount.load(Ordering::Relaxed) > 0 {
-        //     // stack.on_craft
-        // }
-
-        // self.amount.store(0, Ordering::Relaxed);
-        // TODO: Unlock recipes
     }
 
     async fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {

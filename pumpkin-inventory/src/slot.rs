@@ -108,7 +108,7 @@ pub trait Slot: Send + Sync + Debug {
         player: &dyn InventoryPlayer,
     ) -> Option<ItemStack> {
         // TODO: Check if the player can take items from this slot
-        if !self.can_take_items(player) {
+        if !self.can_take_items(player).await {
             return None;
         }
         let min = min.min(max);
