@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU8;
 
@@ -29,6 +30,22 @@ pub struct ResultSlot {
     pub id: AtomicU8,
     pub result: Arc<Mutex<ItemStack>>,
     recipe_cache: AtomicCell<Option<&'static CraftingRecipeTypes>>,
+}
+
+fn is_symmetrical_horizontally(pattern: &'static [&'static str]) -> bool {
+    let height = pattern.len();
+    let width = pattern.first().map_or(0, |s| s.len());
+    for i in 0..height {
+        if pattern[i].len() != width {
+            return false; // All rows must have the same length
+        }
+        for j in 0..width / 2 {
+            if pattern[i].chars().nth(j) != pattern[i].chars().nth(width - j - 1) {
+                return false; // Characters must match symmetrically
+            }
+        }
+    }
+    true
 }
 
 async fn recipe_matches<'a>(
@@ -62,10 +79,19 @@ async fn recipe_matches<'a>(
 
             let x_offset = top_x;
             let y_offset = top_y;
-            for y in 0..pattern.len() {
+
+            let mut matched = true;
+            'outer: for y in 0..pattern.len() {
                 for x in 0..pattern[y].len() {
                     let current_key = pattern[y].chars().nth(x).unwrap();
+                    let slot = inventory
+                        .get_stack((y + y_offset) * inventory.get_height() + (x + x_offset))
+                        .await;
                     if current_key == ' ' {
+                        if !slot.lock().await.is_empty() {
+                            matched = false;
+                            break 'outer;
+                        }
                         continue;
                     }
 
@@ -74,19 +100,53 @@ async fn recipe_matches<'a>(
                         .find_map(|(k, v)| (*k == current_key).then_some(v))
                         .expect("Crafting recipe used invalid key");
 
-                    let slot = inventory
-                        .get_stack((y + y_offset) * inventory.get_height() + (x + x_offset))
-                        .await;
                     let slot = slot.lock().await;
 
                     if !ingredient.match_item(slot.item) {
-                        return None;
+                        matched = false;
+                        break 'outer;
+                    }
+                }
+            }
+
+            // Check for asymmetrical recipes
+            if !matched && !is_symmetrical_horizontally(pattern) {
+                matched = true;
+                'outer: for y in 0..pattern.len() {
+                    for x in 0..pattern[y].len() {
+                        let current_key = pattern[y].chars().nth(x).unwrap();
+
+                        let slot = inventory
+                            .get_stack(
+                                (y + y_offset) * inventory.get_height()
+                                    + (x_offset + input_width - 1 - x),
+                            )
+                            .await;
+                        if current_key == ' ' {
+                            if !slot.lock().await.is_empty() {
+                                matched = false;
+                                break 'outer;
+                            }
+                            continue;
+                        }
+
+                        let ingredient = key
+                            .iter()
+                            .find_map(|(k, v)| (*k == current_key).then_some(v))
+                            .expect("Crafting recipe used invalid key");
+
+                        let slot = slot.lock().await;
+
+                        if !ingredient.match_item(slot.item) {
+                            matched = false;
+                            break 'outer;
+                        }
                     }
                 }
             }
 
             // TODO: Apply components
-            Some(result)
+            if matched { Some(result) } else { None }
         }
         CraftingRecipeTypes::CraftingShapeless {
             ingredients,
