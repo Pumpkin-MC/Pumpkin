@@ -478,8 +478,7 @@ pub trait ScreenHandler: Send + Sync {
                     break;
                 }
 
-                let stack_lock = slot.get_stack().await;
-                let item_stack = stack_lock.lock().await;
+                let item_stack = slot.get_cloned_stack().await;
                 if !item_stack.are_items_and_components_equal(&cursor_stack) {
                     continue;
                 }
@@ -488,19 +487,15 @@ pub trait ScreenHandler: Send + Sync {
                     continue;
                 }
 
-                let take = item_stack.item_count.min(to_pick_up);
-                to_pick_up -= take;
-
-                if item_stack.item_count == take {
-                    drop(item_stack);
-                    slot.set_stack(ItemStack::EMPTY).await;
-                } else {
-                    let mut stack_clone = *item_stack;
-                    drop(item_stack);
-                    stack_clone.decrement(take);
-                    slot.set_stack(stack_clone).await;
-                }
-                cursor_stack.increment(take);
+                let taken_stack = slot
+                    .safe_take(
+                        item_stack.item_count.min(to_pick_up),
+                        cursor_stack.get_max_stack_size() - cursor_stack.item_count,
+                        player,
+                    )
+                    .await;
+                to_pick_up -= taken_stack.item_count;
+                cursor_stack.increment(taken_stack.item_count);
             }
         } else if action_type == SlotActionType::QuickCraft {
             let drag_type = button & 3;
@@ -588,18 +583,23 @@ pub trait ScreenHandler: Send + Sync {
         } else if action_type == SlotActionType::Throw {
             if slot_index >= 0 && self.get_behaviour().cursor_stack.lock().await.is_empty() {
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
-                let stack_lock = slot.get_stack().await;
-                let mut target_stack = stack_lock.lock().await;
-                if !target_stack.is_empty() {
+                let prev_stack = slot.get_cloned_stack().await;
+                if !prev_stack.is_empty() {
                     if button == 1 {
-                        let stack_clone = *target_stack;
-                        player.drop_item(stack_clone, true).await;
-                        drop(target_stack);
-                        slot.set_stack(ItemStack::EMPTY).await;
-                        slot.on_take_item(player, &stack_clone).await;
-                    } else {
-                        let Some(drop_stack) = slot.try_take_stack_range(1,1,player).await
+                        // Throw all
+                        while slot
+                            .get_cloned_stack()
+                            .await
+                            .are_items_and_components_equal(&prev_stack)
                         {
+                            let drop_stack =
+                                slot.safe_take(prev_stack.item_count, u8::MAX, player).await;
+                            player.drop_item(drop_stack, true).await;
+                            // player.handleCreativeModeItemDrop(itemStack);
+                        }
+                    } else {
+                        let drop_stack = slot.safe_take(1, 1, player).await;
+                        if !drop_stack.is_empty() {
                             slot.on_take_item(player, &drop_stack).await;
                             player.drop_item(drop_stack, true).await;
                         }

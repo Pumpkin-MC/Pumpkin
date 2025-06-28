@@ -25,7 +25,7 @@ pub struct ResultSlot {
 }
 
 impl ResultSlot {
-    fn stat_crafted(&self, _crafted_amount: u8) {}
+    fn stat_crafted(&self, _crafted_amount: u8, _player: &dyn InventoryPlayer) {}
 
     pub fn new(inventory: Arc<dyn RecipeInputInventory>) -> Self {
         Self {
@@ -253,18 +253,20 @@ impl Slot for ResultSlot {
 
         // self.amount.store(0, Ordering::Relaxed);
         // TODO: Unlock recipes
-
-        for i in 0..self.inventory.size() {
-            let slot = self.inventory.get_stack(i).await;
-            let mut slot = slot.lock().await;
-            if !slot.is_empty() {
-                slot.item_count -= amount;
-            }
-        }
     }
 
-    async fn on_take_item(&self, _player: &dyn InventoryPlayer, stack: &ItemStack) {
-        self.on_quick_move(*stack, stack.item_count).await;
+    async fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
+        // Vanilla does not have this check, but it is a good idea to have it
+        debug_assert_eq!(stack.item_count, self.get_cloned_stack().await.item_count);
+        for i in 0..self.inventory.size() {
+            let slot = self.inventory.get_stack(i).await;
+            let mut stack = slot.lock().await;
+            if !stack.is_empty() {
+                //TODO: Handle remaining items.
+                stack.item_count -= 1;
+            }
+        }
+        self.stat_crafted(stack.item_count, player);
         self.mark_dirty().await;
     }
 

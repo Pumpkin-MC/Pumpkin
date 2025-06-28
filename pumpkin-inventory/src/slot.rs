@@ -24,6 +24,9 @@ pub trait Slot: Send + Sync + Debug {
 
     async fn on_quick_move(&self, _stack: ItemStack, _amount: u8) {}
 
+    /// Callback for when an item is taken from the slot.
+    ///
+    /// Also see: `safe_take`
     async fn on_take_item(&self, _player: &dyn InventoryPlayer, _stack: &ItemStack) {
         self.mark_dirty().await;
     }
@@ -97,20 +100,20 @@ pub trait Slot: Send + Sync + Debug {
         true
     }
 
-    /// Safely tries to take a stack of items from the slot, returning `None` if the stack is empty.
-    /// Considering such as result slots, as their stacks cannot split.
-    ///
-    /// Mojang name: `safeTake` and `tryRemove`
+    /// Mojang name: `tryRemove`
     async fn try_take_stack_range(
         &self,
         min: u8,
         max: u8,
-        _player: &dyn InventoryPlayer,
+        player: &dyn InventoryPlayer,
     ) -> Option<ItemStack> {
+        // TODO: Check if the player can take items from this slot
+        if !self.can_take_items(player) {
+            return None;
+        }
         let min = min.min(max);
         let stack = self.take_stack(min).await;
 
-        // TODO: Check if the player can take items from this slot
         if stack.is_empty() {
             None
         } else {
@@ -122,7 +125,11 @@ pub trait Slot: Send + Sync + Debug {
         }
     }
 
-    async fn take_stack_range(&self, min: u8, max: u8, player: &dyn InventoryPlayer) -> ItemStack {
+    /// Safely tries to take a stack of items from the slot, returning `None` if the stack is empty.
+    /// Considering such as result slots, as their stacks cannot split.
+    ///
+    /// Mojang name: `safeTake`
+    async fn safe_take(&self, min: u8, max: u8, player: &dyn InventoryPlayer) -> ItemStack {
         let stack = self.try_take_stack_range(min, max, player).await;
 
         if let Some(stack) = &stack {
