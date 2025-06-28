@@ -1,7 +1,7 @@
 use std::{num::NonZeroU8, sync::Arc};
 
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_protocol::client::play::{CCenterChunk, CUnloadChunk};
+use pumpkin_protocol::java::client::play::{CCenterChunk, CUnloadChunk};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::entity::player::Player;

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_protocol::client::play::{CCommands, ProtoNode, ProtoNodeType};
+use pumpkin_protocol::java::client::play::{CCommands, ProtoNode, ProtoNodeType};
 
 use crate::entity::player::Player;
 

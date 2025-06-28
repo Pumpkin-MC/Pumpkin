@@ -6,8 +6,8 @@ use std::sync::{
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
 use pumpkin_protocol::{
-    client::play::{CTakeItemEntity, MetaDataType, Metadata},
     codec::item_stack_seralizer::ItemStackSerializer,
+    java::client::play::{CTakeItemEntity, MetaDataType, Metadata},
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;

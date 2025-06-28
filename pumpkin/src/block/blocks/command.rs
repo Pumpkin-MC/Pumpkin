@@ -98,7 +98,7 @@ impl PumpkinBlock for CommandBlock {
         _block: &Block,
         _block_pos: &BlockPos,
         _face: pumpkin_data::BlockDirection,
-        _use_item_on: Option<&pumpkin_protocol::server::play::SUseItemOn>,
+        _use_item_on: Option<&pumpkin_protocol::java::server::play::SUseItemOn>,
     ) -> bool {
         if let Some(player) = player {
             if player.gamemode.load() == GameMode::Creative {

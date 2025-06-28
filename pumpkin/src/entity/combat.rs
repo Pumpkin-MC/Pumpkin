@@ -2,7 +2,7 @@ use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
-use pumpkin_protocol::{client::play::CEntityVelocity, codec::var_int::VarInt};
+use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::CEntityVelocity};
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
