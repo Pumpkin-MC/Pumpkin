@@ -5,10 +5,13 @@ use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use pumpkin_world::{
+    BlockStateId,
+    world::{BlockAccessor, BlockFlags},
+};
 
 use crate::{
-    block::pumpkin_block::PumpkinBlock,
+    block::{blocks::plant::PlantBlockBase, pumpkin_block::PumpkinBlock},
     entity::{EntityBase, player::Player},
     server::Server,
     world::World,
@@ -50,7 +53,29 @@ impl PumpkinBlock for LilyPadBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        let block_below = block_accessor.get_block(&block_pos.down()).await;
-        block_below == Block::WATER || block_below == Block::ICE
+        <Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await
+    }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &Arc<World>,
+        _block: &Block,
+        state: BlockStateId,
+        pos: &BlockPos,
+        _direction: BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(self, world.as_ref(), pos, state)
+            .await
+    }
+}
+
+impl PlantBlockBase for LilyPadBlock {
+    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let block = block_accessor.get_block(pos).await;
+        let above_fluid = block_accessor.get_block(&pos.up()).await;
+        (block == Block::WATER || block == Block::ICE)
+            && (above_fluid != Block::WATER && above_fluid != Block::LAVA)
     }
 }

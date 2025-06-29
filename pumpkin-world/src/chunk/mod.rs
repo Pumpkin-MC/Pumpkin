@@ -1,5 +1,6 @@
 use crate::block::entities::BlockEntity;
 use palette::{BiomePalette, BlockPalette};
+use pumpkin_data::block_properties::has_random_ticks;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
@@ -120,6 +121,9 @@ pub struct ChunkData {
     pub light_engine: ChunkLight,
 
     pub dirty: bool,
+
+    pub random_ticks: u16,
+    pub has_calculated_random_ticks: bool,
 }
 
 pub struct ChunkEntityData {
@@ -333,8 +337,19 @@ impl ChunkData {
         block_state_id: BlockStateId,
     ) {
         // TODO @LUK_ESC? update the heightmap
+        if !self.has_calculated_random_ticks {
+            self.has_calculated_random_ticks = true;
+        }
+        if let Some(block_state) = self.get_relative_block(relative_x, relative_y, relative_z) {
+            if has_random_ticks(block_state) {
+                self.random_ticks -= 1;
+            }
+        }
         self.section
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
+        if has_random_ticks(block_state_id) {
+            self.random_ticks += 1;
+        }
     }
 
     /// Sets the given block in the chunk, returning the old block
@@ -350,8 +365,19 @@ impl ChunkData {
         relative_z: usize,
         block_state_id: BlockStateId,
     ) {
+        if !self.has_calculated_random_ticks {
+            self.has_calculated_random_ticks = true;
+        }
+        if let Some(block_state) = self.get_relative_block(relative_x, relative_y, relative_z) {
+            if has_random_ticks(block_state) {
+                self.random_ticks -= 1;
+            }
+        }
         self.section
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
+        if has_random_ticks(block_state_id) {
+            self.random_ticks += 1;
+        }
     }
 
     #[expect(dead_code)]
@@ -359,6 +385,31 @@ impl ChunkData {
         // figure out how LongArray is formatted
         // figure out how to find out if block is motion blocking
         todo!()
+    }
+
+    fn calculate_random_ticks(&mut self) -> bool {
+        self.has_calculated_random_ticks = true;
+        for section in self.section.sections.iter() {
+            for x in 0..BlockPalette::SIZE {
+                for y in 0..BlockPalette::SIZE {
+                    for z in 0..BlockPalette::SIZE {
+                        let block_state = section.block_states.get(x, y, z);
+                        if has_random_ticks(block_state) {
+                            self.random_ticks += 1;
+                        }
+                    }
+                }
+            }
+        }
+        self.random_ticks > 0
+    }
+
+    pub fn has_random_ticks(&mut self) -> bool {
+        if self.has_calculated_random_ticks {
+            return self.random_ticks > 0;
+        }
+
+        self.calculate_random_ticks()
     }
 }
 

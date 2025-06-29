@@ -83,5 +83,7 @@ pub trait PumpkinFluid: Send + Sync {
 
     async fn on_scheduled_tick(&self, _world: &Arc<World>, _fluid: &Fluid, _block_pos: &BlockPos) {}
 
+    async fn random_tick(&self, _fluid: &Fluid, _world: &Arc<World>, _block_pos: &BlockPos) {}
+
     async fn create_legacy_block(&self, _world: &Arc<World>, _block_pos: &BlockPos) {}
 }

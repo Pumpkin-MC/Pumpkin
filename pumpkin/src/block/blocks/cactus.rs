@@ -37,13 +37,14 @@ impl PumpkinBlock for CactusBlock {
             let age = CactusLikeProperties::from_state_id(state_id, block).age;
             if age == Integer0To15::L15 {
                 world
-                    .set_block_state(&pos.up(), state_id, BlockFlags::empty())
+                    .set_block_state(
+                        &pos.up(),
+                        Block::CACTUS.default_state.id,
+                        BlockFlags::empty(),
+                    )
                     .await;
-                let props = CactusLikeProperties {
-                    age: Integer0To15::L0,
-                };
                 world
-                    .set_block_state(pos, props.to_state_id(block), BlockFlags::empty())
+                    .set_block_state(pos, Block::CACTUS.default_state.id, BlockFlags::empty())
                     .await;
             } else {
                 let props = CactusLikeProperties {
@@ -70,7 +71,7 @@ impl PumpkinBlock for CactusBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state: BlockStateId,
         pos: &BlockPos,
@@ -78,7 +79,7 @@ impl PumpkinBlock for CactusBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if !can_place_at(world, pos).await {
+        if !can_place_at(world.as_ref(), pos).await {
             world
                 .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
                 .await;

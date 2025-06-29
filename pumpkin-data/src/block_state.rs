@@ -14,6 +14,7 @@ pub struct BlockState {
     pub hardness: f32,
     pub collision_shapes: &'static [u16],
     pub outline_shapes: &'static [u16],
+    pub has_random_tick: bool,
     /// u8::MAX is used as None
     pub opacity: u8,
     /// u16::MAX is used as None

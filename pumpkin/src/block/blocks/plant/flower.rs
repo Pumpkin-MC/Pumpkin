@@ -1,10 +1,13 @@
 use async_trait::async_trait;
-use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
+use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
+use std::sync::Arc;
 
+use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -35,7 +38,22 @@ impl PumpkinBlock for FlowerBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        let block_below = block_accessor.get_block(&block_pos.down()).await;
-        block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == Block::FARMLAND
+        <Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await
+    }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        world: &Arc<World>,
+        _block: &Block,
+        state: BlockStateId,
+        pos: &BlockPos,
+        _direction: BlockDirection,
+        _neighbor_pos: &BlockPos,
+        _neighbor_state: BlockStateId,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(self, world.as_ref(), pos, state)
+            .await
     }
 }
+
+impl PlantBlockBase for FlowerBlock {}
