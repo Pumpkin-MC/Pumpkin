@@ -91,6 +91,8 @@ tokio-util = { version = "0.7.15", features = ["rt"] }
 # Memory profiling
 dhat = { version = "0.3.3", optional = true }
 
+flate2 = "1.1.2"
+
 [build-dependencies]
 git-version = "0.3"
 
