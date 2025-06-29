@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::CClearTitle;
+use pumpkin_protocol::java::client::play::CClearTitle;
 use pumpkin_util::text::TextComponent;
 
 use crate::{

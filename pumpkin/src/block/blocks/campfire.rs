@@ -7,7 +7,7 @@ use pumpkin_data::{
     damage::DamageType,
     fluid::Fluid,
 };
-use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 

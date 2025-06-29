@@ -1,4 +1,4 @@
-use pumpkin_protocol::client::play::CUpdateEntityPos;
+use pumpkin_protocol::java::client::play::CUpdateEntityPos;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::entity::living::LivingEntity;

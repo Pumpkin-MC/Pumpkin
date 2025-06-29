@@ -37,6 +37,7 @@
 compile_error!("Compiling for WASI targets is not supported!");
 
 use plugin::PluginManager;
+use pumpkin_config::BASIC_CONFIG;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use std::{
     io::{self},
@@ -156,8 +157,25 @@ async fn main() {
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());
     log::info!(
-        "You now can connect to the server; listening on {}",
-        pumpkin_server.server_addr
+        "Server is now running. Connect using: {}{}{}",
+        if BASIC_CONFIG.java_edition {
+            format!("Java Edition: {}", BASIC_CONFIG.java_edition_address)
+        } else {
+            String::new()
+        },
+        if BASIC_CONFIG.java_edition && BASIC_CONFIG.bedrock_edition {
+            " | " // Separator if both are enabled
+        } else {
+            ""
+        },
+        if BASIC_CONFIG.bedrock_edition {
+            format!(
+                "Bedrock/Pocket Edition: {}",
+                BASIC_CONFIG.bedrock_edition_address
+            )
+        } else {
+            String::new()
+        }
     );
 
     pumpkin_server.start().await;

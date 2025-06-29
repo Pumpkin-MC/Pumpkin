@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
+use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
@@ -18,12 +18,7 @@ use crate::{
     server::{CURRENT_MC_VERSION, Server},
 };
 
-pub async fn start_query_handler(server: Arc<Server>, bound_addr: SocketAddr) {
-    let mut query_addr = bound_addr;
-    if let Some(port) = advanced_config().networking.query.port {
-        query_addr.set_port(port);
-    }
-
+pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let socket = Arc::new(
         UdpSocket::bind(query_addr)
             .await
@@ -64,7 +59,7 @@ pub async fn start_query_handler(server: Arc<Server>, bound_addr: SocketAddr) {
                 server,
                 socket,
                 addr,
-                bound_addr,
+                query_addr,
             )
             .await
             {

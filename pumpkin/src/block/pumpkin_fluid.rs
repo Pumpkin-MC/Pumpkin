@@ -4,7 +4,7 @@ use crate::entity::{EntityBase, player::Player};
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::{fluid::Fluid, item::Item};
-use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 

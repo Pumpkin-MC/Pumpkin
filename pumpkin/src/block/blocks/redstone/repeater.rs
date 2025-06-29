@@ -9,7 +9,7 @@ use pumpkin_data::{
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use pumpkin_world::{BlockStateId, chunk::TickPriority};
