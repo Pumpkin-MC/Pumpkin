@@ -16,6 +16,7 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
+use simplelog::{CombinedLogger, SharedLogger};
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
 use std::str::FromStr;
@@ -73,9 +74,17 @@ pub struct ReadlineLogWrapper {
 }
 
 impl ReadlineLogWrapper {
-    fn new(log: impl Log + 'static, rl: Option<Readline>) -> Self {
+    fn new(
+        log: Box<dyn SharedLogger>,
+        file_logger: Option<Box<impl SharedLogger + 'static>>,
+        rl: Option<Readline>,
+    ) -> Self {
         Self {
-            internal: Box::new(log),
+            internal: if let Some(logger) = file_logger {
+                Box::new(CombinedLogger::new(vec![(log), logger]))
+            } else {
+                Box::new(log)
+            },
             readline: std::sync::Mutex::new(rl),
         }
     }
@@ -156,23 +165,40 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
+        let file_logger = advanced_config().logging.file.clone().map(|filename| {
+            simplelog::WriteLogger::new(
+                level,
+                {
+                    let mut config = config.clone();
+                    for level in Level::iter() {
+                        config.set_level_color(level, None);
+                    }
+                    config.build()
+                },
+                std::fs::File::create(filename).expect("Failed to create log file"),
+            )
+        });
+
         if advanced_config().commands.use_tty && stdin().is_terminal() {
             match Readline::new("$ ".to_owned()) {
                 Ok((rl, stdout)) => {
                     let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
-                    Some((ReadlineLogWrapper::new(logger, Some(rl)), level))
+                    Some((
+                        ReadlineLogWrapper::new(logger, file_logger, Some(rl)),
+                        level,
+                    ))
                 }
                 Err(e) => {
                     log::warn!(
                         "Failed to initialize console input ({e}); falling back to simple logger"
                     );
                     let logger = simplelog::SimpleLogger::new(level, config.build());
-                    Some((ReadlineLogWrapper::new(logger, None), level))
+                    Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
                 }
             }
         } else {
             let logger = simplelog::SimpleLogger::new(level, config.build());
-            Some((ReadlineLogWrapper::new(logger, None), level))
+            Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
         }
     } else {
         None
