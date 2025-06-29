@@ -70,12 +70,10 @@ async fn get_ignite_result(block: &Block, world: &Arc<World>, location: &BlockPo
 
     let props = original_props
         .iter()
-        .filter_map(|(key, _value)| {
-            match key.as_str() {
-                "extinguished" => Some(("extinguished", "true")),
-                "lit" => Some(("lit", "true")),
-                _ => None, // Discard other keys
-            }
+        .map(|(key, value)| match (key.as_str(), value.as_str()) {
+            ("extinguished", "true") => ("extinguished", "false"),
+            ("lit", "false") => ("lit", "true"),
+            _ => (key.as_str(), value.as_str()),
         })
         .collect();
 

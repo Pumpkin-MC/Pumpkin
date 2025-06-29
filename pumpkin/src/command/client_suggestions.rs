@@ -60,7 +60,7 @@ struct ProtoNodeBuilder<'a> {
 
 impl<'a> ProtoNodeBuilder<'a> {
     fn build(self, buffer: &mut Vec<ProtoNode<'a>>) -> usize {
-        let mut children = Vec::new();
+        let mut children = Vec::with_capacity(self.child_nodes.len());
         for node in self.child_nodes {
             let i = node.build(buffer);
             children.push(i.try_into().unwrap());

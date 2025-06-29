@@ -36,6 +36,7 @@ pub struct BedrockClientPlatform {
 }
 
 impl BedrockClientPlatform {
+    #[must_use]
     pub fn new(socket: Arc<UdpSocket>, addr: SocketAddr) -> Self {
         Self {
             socket,

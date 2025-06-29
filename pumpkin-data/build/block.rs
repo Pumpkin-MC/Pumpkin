@@ -1095,5 +1095,17 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
         }
+
+        impl RailShape {
+            pub fn is_ascending(&self) -> bool {
+                matches!(self, Self::AscendingEast | Self::AscendingWest | Self::AscendingNorth | Self::AscendingSouth)
+            }
+        }
+
+        impl StraightRailShape {
+            pub fn is_ascending(&self) -> bool {
+                matches!(self, Self::AscendingEast | Self::AscendingWest | Self::AscendingNorth | Self::AscendingSouth)
+            }
+        }
     }
 }

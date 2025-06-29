@@ -22,6 +22,7 @@ mod noise_parameter;
 mod noise_router;
 mod packet;
 mod particle;
+mod recipes;
 mod scoreboard_slot;
 mod screen;
 mod sound;
@@ -66,6 +67,7 @@ pub fn main() {
         composter_increase_chance::build(),
         "composter_increase_chance.rs",
     );
+    write_generated_file(recipes::build(), "recipes.rs");
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {

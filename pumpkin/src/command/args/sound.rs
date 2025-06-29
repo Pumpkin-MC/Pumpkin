@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::sound::Sound;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_util::text::TextComponent;
 
 use crate::{command::dispatcher::CommandError, server::Server};
 
@@ -60,9 +61,9 @@ impl<'a> FindArg<'a> for SoundArgumentConsumer {
             Some(Arg::Block(name)) => {
                 Sound::from_name(name.strip_prefix("minecraft:").unwrap_or(name)).map_or_else(
                     || {
-                        Err(CommandError::GeneralCommandIssue(format!(
-                            "Sound {name} does not exist."
-                        )))
+                        Err(CommandError::CommandFailed(Box::new(TextComponent::text(
+                            "Sound {name} does not exist.",
+                        ))))
                     },
                     Result::Ok,
                 )

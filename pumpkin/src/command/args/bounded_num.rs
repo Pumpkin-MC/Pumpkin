@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use async_trait::async_trait;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion};
+use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;
@@ -92,18 +93,22 @@ pub enum NotInBounds {
 impl From<NotInBounds> for CommandError {
     fn from(value: NotInBounds) -> Self {
         match value {
-            NotInBounds::LowerBound(val, min) => Self::GeneralCommandIssue(format!(
-                "{} must not be less than {}, found {}",
-                val.qualifier(),
-                min,
-                val
-            )),
-            NotInBounds::UpperBound(val, max) => Self::GeneralCommandIssue(format!(
-                "{} must not be more than {}, found {}",
-                val.qualifier(),
-                max,
-                val
-            )),
+            NotInBounds::LowerBound(val, min) => {
+                Self::CommandFailed(Box::new(TextComponent::text(format!(
+                    "{} must not be less than {}, found {}",
+                    val.qualifier(),
+                    min,
+                    val
+                ))))
+            }
+            NotInBounds::UpperBound(val, max) => {
+                Self::CommandFailed(Box::new(TextComponent::text(format!(
+                    "{} must not be more than {}, found {}",
+                    val.qualifier(),
+                    max,
+                    val
+                ))))
+            }
         }
     }
 }
