@@ -14,7 +14,7 @@ pub mod farmland;
 pub mod fence_gates;
 pub mod fences;
 pub mod fire;
-pub mod flower_pot;
+pub mod flower_pots;
 pub mod furnace;
 pub mod glass_panes;
 pub mod grindstone;

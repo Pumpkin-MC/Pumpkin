@@ -116,6 +116,10 @@ pub mod tag;
 #[path = "generated/noise_router.rs"]
 pub mod noise_router;
 
+#[rustfmt::skip]
+#[path = "generated/flower_pot_transformations.rs"]
+pub mod flower_pot_transformations;
+
 mod block_direction;
 pub mod block_state;
 mod blocks;

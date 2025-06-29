@@ -1,8 +1,7 @@
-use quote::{format_ident, quote};
-use std::{fs, io::Write, path::Path, process::Command};
-
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
+use quote::{format_ident, quote};
+use std::{fs, io::Write, path::Path, process::Command};
 
 mod biome;
 mod block;
@@ -11,6 +10,7 @@ mod damage_type;
 mod entity_pose;
 mod entity_status;
 mod entity_type;
+mod flower_pot_transformations;
 mod fluid;
 mod game_event;
 mod item;
@@ -59,6 +59,10 @@ pub fn main() {
     write_generated_file(block::build(), "block.rs");
     write_generated_file(tag::build(), "tag.rs");
     write_generated_file(noise_router::build(), "noise_router.rs");
+    write_generated_file(
+        flower_pot_transformations::build(),
+        "flower_pot_transformations.rs",
+    );
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {

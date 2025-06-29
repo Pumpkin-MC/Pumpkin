@@ -72,7 +72,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use pumpkin_world::BlockStateId;
 
-use crate::block::blocks::flower_pot::FlowerPotBlock;
+use crate::block::blocks::flower_pots::FlowerPotBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::loot::LootContextParameters;
 use crate::block::registry::BlockRegistry;
