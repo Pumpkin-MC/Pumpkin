@@ -45,7 +45,7 @@ struct Executor(Mode);
 fn not_in_filter(filter: &BlockPredicate, old_block: &Block) -> bool {
     match filter {
         // TODO it will be really really slow to check name str, we should make a tag list of ids
-        BlockPredicate::Tag(tag) => !tag.iter().any(|i| *i == old_block.name),
+        BlockPredicate::Tag(tag) => !tag.contains(&old_block.name),
         BlockPredicate::Block(block) => block.id != old_block.id,
     }
 }
@@ -254,8 +254,8 @@ impl CommandExecutor for Executor {
             }
         }
 
-        for i in to_update.iter() {
-            world.update_neighbors(i, None).await;
+        for i in to_update {
+            world.update_neighbors(&i, None).await;
         }
 
         sender

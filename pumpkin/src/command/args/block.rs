@@ -121,27 +121,30 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::BlockPredicate(name)) => {
-                if let Some(tag) = name.strip_prefix("#") {
-                    get_tag_values(RegistryKey::Block, tag).map_or_else(
-                        || {
-                            Err(CommandError::GeneralCommandIssue(format!(
-                                // TODO translate error message
-                                "Tag {tag} does not exist."
-                            )))
-                        },
-                        |tag| Result::Ok(Some(BlockPredicate::Tag(tag))),
-                    )
-                } else {
-                    get_block(name).map_or_else(
-                        || {
-                            Err(CommandError::GeneralCommandIssue(format!(
-                                // TODO translate error message
-                                "Block {name} does not exist."
-                            )))
-                        },
-                        |block| Result::Ok(Some(BlockPredicate::Block(block))),
-                    )
-                }
+                name.strip_prefix("#").map_or_else(
+                    || {
+                        get_block(name).map_or_else(
+                            || {
+                                Err(CommandError::GeneralCommandIssue(format!(
+                                    // TODO translate error message
+                                    "Block {name} does not exist."
+                                )))
+                            },
+                            |block| Result::Ok(Some(BlockPredicate::Block(block))),
+                        )
+                    },
+                    |tag| {
+                        get_tag_values(RegistryKey::Block, tag).map_or_else(
+                            || {
+                                Err(CommandError::GeneralCommandIssue(format!(
+                                    // TODO translate error message
+                                    "Tag {tag} does not exist."
+                                )))
+                            },
+                            |tag| Result::Ok(Some(BlockPredicate::Tag(tag))),
+                        )
+                    },
+                )
             }
             _ => Ok(None),
         }
