@@ -103,28 +103,11 @@ impl BlockState {
             .collect()
     }
 
-    pub fn get_block_outline_shapes(&self) -> Option<Vec<CollisionShape>> {
-        let mut shapes: Vec<CollisionShape> = self
-            .outline_shapes
+    pub fn get_block_outline_shapes(&self) -> Vec<CollisionShape> {
+        self.outline_shapes
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize])
-            .collect();
-        let block = get_block_by_state_id(self.id)?;
-        if block.properties(self.id).and_then(|properties| {
-            properties
-                .to_props()
-                .into_iter()
-                .find(|p| p.0 == "waterlogged")
-                .map(|(_, value)| value == true.to_string())
-        }) == Some(true)
-        {
-            // If the block is waterlogged, add a water shape
-            let shape =
-                &CollisionShape::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0));
-            shapes.push(*shape);
-        }
-
-        Some(shapes)
+            .collect()
     }
 }
 

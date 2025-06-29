@@ -262,11 +262,19 @@ impl BlockPos {
         })
     }
 
-    pub fn floored(x: f64, y: f64, z: f64) -> Self {
+    pub fn floored(pos: Vector3<f64>) -> Self {
         Self(Vector3::new(
-            x.floor() as i32,
-            y.floor() as i32,
-            z.floor() as i32,
+            pos.x.floor() as i32,
+            pos.y.floor() as i32,
+            pos.z.floor() as i32,
+        ))
+    }
+
+    pub fn ceiled(pos: Vector3<f64>) -> Self {
+        Self(Vector3::new(
+            pos.x.ceil() as i32,
+            pos.y.ceil() as i32,
+            pos.z.ceil() as i32,
         ))
     }
 

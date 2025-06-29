@@ -29,22 +29,16 @@ impl Explosion {
                         continue;
                     }
 
-                    let mut x = f64::from(x) / 15.0 * 2.0 - 1.0;
-                    let mut y = f64::from(y) / 15.0 * 2.0 - 1.0;
-                    let mut z = f64::from(z) / 15.0 * 2.0 - 1.0;
+                    let mut lv =
+                        (Vector3::new(x, y, z).to_f64() * (2.0 / 15.0)).sub_raw(1.0, 1.0, 1.0);
+                    lv = lv.normalize();
 
-                    let sqrt = (x * x + y * y + z * z).sqrt();
-                    x /= sqrt;
-                    y /= sqrt;
-                    z /= sqrt;
-
-                    let mut pos_x = self.pos.x;
-                    let mut pos_y = self.pos.y + 0.0625;
-                    let mut pos_z = self.pos.z;
+                    let mut pos = self.pos;
+                    pos.y += 0.0625;
 
                     let mut h = self.power * (0.7 + rand::random::<f32>() * 0.6);
                     while h > 0.0 {
-                        let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
+                        let block_pos = BlockPos::floored(pos);
                         let (block, state) = world.get_block_and_block_state(&block_pos).await;
 
                         // if !world.is_in_build_limit(&block_pos) {
@@ -59,9 +53,7 @@ impl Explosion {
                         if h > 0.0 {
                             set.insert(block_pos);
                         }
-                        pos_x += x * 0.3;
-                        pos_y += y * 0.3;
-                        pos_z += z * 0.3;
+                        pos += lv * 0.3;
                         h -= 0.225_000_01f32;
                     }
                 }

@@ -513,7 +513,7 @@ impl Player {
             return;
         }
 
-        if victim.get_living_entity().is_some() {
+        if let Some(live_victim) = victim.get_living_entity() {
             let mut knockback_strength = 1.0;
             player_attack_sound(&pos, &world, attack_type).await;
             match attack_type {
@@ -524,13 +524,7 @@ impl Player {
                 _ => {}
             }
             if config.knockback {
-                combat::handle_knockback(
-                    attacker_entity,
-                    &world,
-                    victim_entity,
-                    knockback_strength,
-                )
-                .await;
+                combat::handle_knockback(attacker_entity, live_victim, knockback_strength);
             }
         }
 
@@ -595,8 +589,7 @@ impl Player {
         // TODO: Stop riding
 
         self.get_entity().set_pose(EntityPose::Sleeping).await;
-        self.living_entity
-            .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
+        self.set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
         self.get_entity()
             .send_meta_data(&[Metadata::new(
                 SLEEPING_POS_ID,
@@ -800,7 +793,15 @@ impl Player {
 
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
+        let is_spectator = self.gamemode.load() == GameMode::Spectator;
+        self.get_entity()
+            .no_clip
+            .store(is_spectator, Ordering::Relaxed);
+        if is_spectator || self.get_entity().has_vehicle() {
+            self.get_entity().on_ground.store(false, Ordering::Relaxed);
+        }
         self.living_entity.tick(self.clone(), server).await;
+
         self.hunger_manager.tick(self.as_ref()).await;
 
         // experience handling
@@ -1068,7 +1069,7 @@ impl Player {
                 new_world.players.write().await.insert(uuid, self.clone());
                 self.unload_watched_chunks(&current_world).await;
 
-                let last_pos = self.living_entity.last_pos.load();
+                let last_pos = self.living_entity.entity.last_pos.load();
                 let death_dimension = self.world().await.dimension_type.resource_location();
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
@@ -1092,7 +1093,7 @@ impl Player {
                     ;
                 self.send_permission_lvl_update().await;
                 self.clone().request_teleport(position, yaw, pitch).await;
-                self.living_entity.last_pos.store(position);
+                self.living_entity.entity.last_pos.store(position);
                 self.send_abilities_update().await;
 
                 new_world.send_world_info(self, position, yaw, pitch).await;
@@ -1122,7 +1123,7 @@ impl Player {
                     .teleport_id_count
                     .fetch_add(1, Ordering::Relaxed);
                 let teleport_id = i + 1;
-                self.living_entity.set_pos(position);
+                self.set_pos(position);
                 let entity = &self.living_entity.entity;
                 entity.set_rotation(yaw, pitch);
                 *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
@@ -1471,7 +1472,6 @@ impl Player {
             yaw_cos * pitch_cos * 0.3 + horizontal_offset.sin() * l,
         );
 
-        // TODO: Merge stacks together
         let item_entity =
             Arc::new(ItemEntity::new_with_velocity(entity, item_stack, velocity, 40).await);
         self.world().await.spawn_entity(item_entity).await;
@@ -1864,6 +1864,25 @@ impl Player {
         }
     }
 
+    pub async fn get_off_ground_speed(&self) -> f64 {
+        let sprinting = self.get_entity().sprinting.load(Ordering::Relaxed);
+        if !self.get_entity().has_vehicle() {
+            let fly_speed = {
+                let abilities = self.abilities.lock().await;
+                abilities.flying.then_some(f64::from(abilities.fly_speed))
+            };
+            if let Some(flying) = fly_speed {
+                return if sprinting { flying * 2.0 } else { flying };
+            }
+        }
+        if sprinting { 0.025_999_999 } else { 0.02 }
+    }
+
+    pub async fn is_flying(&self) -> bool {
+        let abilities = self.abilities.lock().await;
+        abilities.flying
+    }
+
     /// Check if the player has a specific permission
     pub async fn has_permission(&self, node: &str) -> bool {
         let perm_manager = PERMISSION_MANAGER.read().await;
@@ -2035,6 +2054,18 @@ impl EntityBase for Player {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
     }
+
+    fn get_player(&self) -> Option<&Player> {
+        Some(self)
+    }
+
+    async fn is_pushed_by_fluids(&self) -> bool {
+        !self.is_flying().await
+    }
+
+    fn get_gravity(&self) -> f64 {
+        self.living_entity.get_gravity()
+    }
 }
 
 impl Player {
@@ -2200,6 +2231,12 @@ impl Player {
             }
         }
         Ok(())
+    }
+
+    pub fn set_pos(&self, new_pos: Vector3<f64>) {
+        let pos = self.living_entity.entity.pos.load();
+        self.living_entity.entity.last_pos.store(pos);
+        self.living_entity.entity.set_pos(new_pos);
     }
 }
 

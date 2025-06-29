@@ -442,14 +442,14 @@ pub trait FlowingFluid {
         block_id: BlockId,
         fluid: &Fluid,
     ) -> bool {
-        // let block_state_id = world.get_block_state_id(pos).await;
-        let block_state = world.get_block_state(pos).await;
+        let block_state_id = world.get_block_state_id(pos).await;
 
-        if let Some(other_fluid) = Fluid::from_state_id(block_state.id) {
+        if let Some(other_fluid) = Fluid::from_state_id(block_state_id) {
             if fluid.id != other_fluid.id {
                 return true;
             }
-            if other_fluid.is_source(block_state.id) && other_fluid.is_falling(block_state.id) {
+            let state = fluid.get_state(block_state_id);
+            if state.is_source && state.falling {
                 return true;
             }
         }
