@@ -2,7 +2,7 @@ use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
-use pumpkin_data::Block;
+use pumpkin_data::{block_properties::has_random_ticks, Block};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use std::{
     collections::{HashMap, VecDeque},
@@ -389,7 +389,7 @@ impl Level {
     }
 
     pub async fn get_random_ticks(&self) -> Vec<ScheduledTick> {
-        let mut ticks = Vec::new();
+        let mut ticks = Vec::with_capacity(self.loaded_chunks.len() * 3 * 16 * 16);
         for chunk in self.loaded_chunks.iter() {
             let mut chunk = chunk.write().await;
             if !chunk.has_random_ticks() {
@@ -399,23 +399,21 @@ impl Level {
                 //TODO use game rules to determine how many random ticks to perform
                 for _ in 0..3 {
                     let random_pos = BlockPos::new(
-                        chunk.position.x * 16 + rand::random::<u8>() as i32 % 16,
-                        i as i32 * 16 + rand::random::<u8>() as i32 % 16 - 32,
-                        chunk.position.z * 16 + rand::random::<u8>() as i32 % 16,
+                        chunk.position.x * 16 + (rand::random::<u8>() as i32 & 15),
+                        i as i32 * 16 + (rand::random::<u8>() as i32 & 15) - 32,
+                        chunk.position.z * 16 + (rand::random::<u8>() as i32 & 15),
                     );
-                    if RawBlockState(
+
+                    if has_random_ticks(
                         chunk
                             .section
                             .get_block_absolute_y(
-                                random_pos.0.x as usize % 16,
+                                random_pos.0.x as usize & 15,
                                 random_pos.0.y,
-                                random_pos.0.z as usize % 16,
+                                random_pos.0.z as usize & 15,
                             )
                             .unwrap_or(Block::AIR.default_state.id),
-                    )
-                    .to_state()
-                    .has_random_tick
-                    {
+                    ) {
                         ticks.push(ScheduledTick {
                             block_pos: random_pos,
                             delay: 0,

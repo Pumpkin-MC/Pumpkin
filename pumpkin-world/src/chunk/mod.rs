@@ -1,6 +1,6 @@
-use crate::block::RawBlockState;
 use crate::block::entities::BlockEntity;
 use palette::{BiomePalette, BlockPalette};
+use pumpkin_data::block_properties::has_random_ticks;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
@@ -341,13 +341,13 @@ impl ChunkData {
             self.has_calculated_random_ticks = true;
         }
         if let Some(block_state) = self.get_relative_block(relative_x, relative_y, relative_z) {
-            if RawBlockState(block_state).to_state().has_random_tick {
+            if has_random_ticks(block_state) {
                 self.random_ticks -= 1;
             }
         }
         self.section
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
-        if RawBlockState(block_state_id).to_state().has_random_tick {
+        if has_random_ticks(block_state_id) {
             self.random_ticks += 1;
         }
     }
@@ -369,13 +369,13 @@ impl ChunkData {
             self.has_calculated_random_ticks = true;
         }
         if let Some(block_state) = self.get_relative_block(relative_x, relative_y, relative_z) {
-            if RawBlockState(block_state).to_state().has_random_tick {
+            if has_random_ticks(block_state) {
                 self.random_ticks -= 1;
             }
         }
         self.section
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
-        if RawBlockState(block_state_id).to_state().has_random_tick {
+        if has_random_ticks(block_state_id) {
             self.random_ticks += 1;
         }
     }
@@ -394,7 +394,7 @@ impl ChunkData {
                 for y in 0..BlockPalette::SIZE {
                     for z in 0..BlockPalette::SIZE {
                         let block_state = section.block_states.get(x, y, z);
-                        if RawBlockState(block_state).to_state().has_random_tick {
+                        if has_random_ticks(block_state) {
                             self.random_ticks += 1;
                         }
                     }

@@ -672,6 +672,7 @@ pub(crate) fn build() -> TokenStream {
     let mut type_from_name = TokenStream::new();
     let mut block_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
+    let mut random_tick_states = Vec::new();
     let mut block_properties_from_state_and_block_id = TokenStream::new();
     let mut block_properties_from_props_and_name = TokenStream::new();
     let mut existing_item_ids: Vec<u16> = Vec::new();
@@ -740,6 +741,14 @@ pub(crate) fn build() -> TokenStream {
                 })
                 .collect(),
         };
+
+        // Collect state IDs that have random ticks.
+        for state in &block.states {
+            if state.has_random_ticks {
+                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                random_tick_states.push(state_id);
+            }
+        }
 
         optimized_blocks.push((block.name.clone(), optimized_block));
 
@@ -823,6 +832,10 @@ pub(crate) fn build() -> TokenStream {
         .shapes
         .iter()
         .map(|shape| shape.to_token_stream());
+
+    let random_tick_state_ids = quote! {
+        #(#random_tick_states)|*
+    };
 
     let unique_states_tokens = unique_states.iter().map(|state| state.to_tokens());
 
@@ -962,6 +975,13 @@ pub(crate) fn build() -> TokenStream {
 
         pub fn get_block_by_item(item_id: u16) -> Option<Block> {
             Block::from_item_id(item_id)
+        }
+
+        pub fn has_random_ticks(state_id: u16) -> bool {
+            match state_id {
+                #random_tick_state_ids => true,
+                _ => false,
+            }
         }
 
         pub fn blocks_movement(block_state: &BlockState) -> bool {
