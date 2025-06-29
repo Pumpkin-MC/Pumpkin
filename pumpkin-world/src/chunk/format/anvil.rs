@@ -1,16 +1,14 @@
 use async_trait::async_trait;
 use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
-use futures::future::join_all;
 use itertools::Itertools;
 use lz4_java_wrc::Context;
 use pumpkin_config::advanced_config;
-use pumpkin_data::{Block, chunk::ChunkStatus};
-use pumpkin_nbt::{compound::NbtCompound, serializer::to_bytes};
 use pumpkin_util::math::vector2::Vector2;
 use std::{
     collections::HashSet,
     io::{Read, SeekFrom, Write},
+    marker::PhantomData,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -19,16 +17,11 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::{
-    chunk::{
-        ChunkData, ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
-        CompressionError,
-        io::{ChunkSerializer, LoadedData},
-    },
-    generation::section_coords,
+use crate::chunk::{
+    ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
+    CompressionError,
+    io::{ChunkSerializer, Dirtiable, LoadedData},
 };
-
-use super::{ChunkNbt, ChunkSectionNBT, LightContainer, SerializedScheduledTick};
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
 pub const REGION_SIZE: usize = 32;
@@ -45,7 +38,7 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 const SECTOR_BYTES: usize = 4096;
 
 // 1.21.6
-const WORLD_DATA_VERSION: i32 = 4435;
+pub const WORLD_DATA_VERSION: i32 = 4435;
 
 #[derive(Clone, Default)]
 pub struct AnvilChunkFormat;
@@ -118,10 +111,12 @@ struct AnvilChunkMetadata {
     file_sector_offset: u32,
 }
 
-pub struct AnvilChunkFile {
+pub struct AnvilChunkFile<S: SingleChunkDataSerializer> {
     chunks_data: [Option<AnvilChunkMetadata>; CHUNK_COUNT],
     end_sector: u32,
     write_action: Mutex<WriteAction>,
+
+    _dummy: PhantomData<S>,
 }
 
 impl Compression {
@@ -303,26 +298,30 @@ impl AnvilChunkData {
         Ok(())
     }
 
-    fn to_chunk(&self, pos: Vector2<i32>) -> Result<ChunkData, ChunkReadingError> {
-        let chunk = if let Some(compression) = self.compression {
+    fn to_chunk<S>(&self, pos: Vector2<i32>) -> Result<S, ChunkReadingError>
+    where
+        S: SingleChunkDataSerializer,
+    {
+        if let Some(compression) = self.compression {
             let decompress_bytes = compression
                 .decompress_data(&self.compressed_data)
                 .map_err(ChunkReadingError::Compression)?;
 
-            ChunkData::from_bytes(&decompress_bytes, pos)
+            S::from_bytes(decompress_bytes.into(), pos)
         } else {
-            ChunkData::from_bytes(&self.compressed_data, pos)
+            S::from_bytes(self.compressed_data.clone(), pos)
         }
-        .map_err(ChunkReadingError::ParsingError)?;
-
-        Ok(chunk)
     }
 
-    async fn from_chunk(
-        chunk: &ChunkData,
+    async fn from_chunk<S>(
+        chunk: &S,
         compression: Option<Compression>,
-    ) -> Result<Self, ChunkWritingError> {
-        let raw_bytes = chunk_to_bytes(chunk)
+    ) -> Result<Self, ChunkWritingError>
+    where
+        S: SingleChunkDataSerializer,
+    {
+        let raw_bytes = chunk
+            .to_bytes()
             .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
@@ -341,7 +340,7 @@ impl AnvilChunkData {
     }
 }
 
-impl AnvilChunkFile {
+impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     pub const fn get_region_coords(at: &Vector2<i32>) -> (i32, i32) {
         // Divide by 32 for the region coordinates
         (at.x >> SUBREGION_BITS, at.z >> SUBREGION_BITS)
@@ -506,20 +505,28 @@ impl AnvilChunkFile {
     }
 }
 
-impl Default for AnvilChunkFile {
+impl<S: SingleChunkDataSerializer> Default for AnvilChunkFile<S> {
     fn default() -> Self {
         Self {
             chunks_data: [const { None }; CHUNK_COUNT],
             write_action: Mutex::new(WriteAction::Pass),
             // Two sectors for offset + timestamp
             end_sector: 2,
+            _dummy: Default::default(),
         }
     }
 }
 
 #[async_trait]
-impl ChunkSerializer for AnvilChunkFile {
-    type Data = ChunkData;
+pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable {
+    async fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError>;
+    fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
+    fn position(&self) -> &Vector2<i32>;
+}
+
+#[async_trait]
+impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
+    type Data = S;
     type WriteBackend = PathBuf;
 
     fn should_write(&self, is_watched: bool) -> bool {
@@ -611,13 +618,13 @@ impl ChunkSerializer for AnvilChunkFile {
         Ok(chunk_file)
     }
 
-    async fn update_chunk(&mut self, chunk: &ChunkData) -> Result<(), ChunkWritingError> {
+    async fn update_chunk(&mut self, chunk: &Self::Data) -> Result<(), ChunkWritingError> {
         let epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as u32;
 
-        let index = AnvilChunkFile::get_chunk_index(&chunk.position);
+        let index = AnvilChunkFile::<S>::get_chunk_index(chunk.position());
         // Default to the compression type read from the file
         let compression_type = self.chunks_data[index]
             .as_ref()
@@ -785,12 +792,12 @@ impl ChunkSerializer for AnvilChunkFile {
     async fn get_chunks(
         &self,
         chunks: &[Vector2<i32>],
-        stream: tokio::sync::mpsc::Sender<LoadedData<ChunkData, ChunkReadingError>>,
+        stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
         for chunk in chunks.iter().cloned() {
-            let index = AnvilChunkFile::get_chunk_index(&chunk);
+            let index = AnvilChunkFile::<S>::get_chunk_index(&chunk);
             let is_ok = match &self.chunks_data[index] {
                 None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
                 Some(chunk_metadata) => {
@@ -812,94 +819,6 @@ impl ChunkSerializer for AnvilChunkFile {
     }
 }
 
-pub async fn chunk_to_bytes(chunk_data: &ChunkData) -> Result<Vec<u8>, ChunkSerializingError> {
-    let sections: Vec<_> = (0..chunk_data.section.sections.len() + 2)
-        .map(|i| {
-            let has_blocks = i >= 1 && i - 1 < chunk_data.section.sections.len();
-            let section = has_blocks.then(|| &chunk_data.section.sections[i - 1]);
-
-            ChunkSectionNBT {
-                y: (i as i8) - 1i8
-                    + section_coords::block_to_section(chunk_data.section.min_y) as i8,
-                block_states: section.map(|section| section.block_states.to_disk_nbt()),
-                biomes: section.map(|section| section.biomes.to_disk_nbt()),
-                block_light: match chunk_data.light_engine.block_light[i].clone() {
-                    LightContainer::Empty(_) => None,
-                    LightContainer::Full(data) => Some(data),
-                },
-                sky_light: match chunk_data.light_engine.sky_light[i].clone() {
-                    LightContainer::Empty(_) => None,
-                    LightContainer::Full(data) => Some(data),
-                },
-            }
-        })
-        .filter(|nbt| {
-            nbt.block_states.is_some()
-                || nbt.biomes.is_some()
-                || nbt.block_light.is_some()
-                || nbt.sky_light.is_some()
-        })
-        .collect();
-
-    let nbt = ChunkNbt {
-        data_version: WORLD_DATA_VERSION,
-        x_pos: chunk_data.position.x,
-        z_pos: chunk_data.position.z,
-        min_y_section: section_coords::block_to_section(chunk_data.section.min_y),
-        status: ChunkStatus::Full,
-        heightmaps: chunk_data.heightmap.clone(),
-        sections,
-        block_ticks: {
-            chunk_data
-                .block_ticks
-                .iter()
-                .map(|tick| SerializedScheduledTick {
-                    x: tick.block_pos.0.x,
-                    y: tick.block_pos.0.y,
-                    z: tick.block_pos.0.z,
-                    delay: tick.delay as i32,
-                    priority: tick.priority as i32,
-                    target_block: format!(
-                        "minecraft:{}",
-                        Block::from_id(tick.target_block_id).unwrap().name
-                    ),
-                })
-                .collect()
-        },
-        fluid_ticks: {
-            chunk_data
-                .fluid_ticks
-                .iter()
-                .map(|tick| SerializedScheduledTick {
-                    x: tick.block_pos.0.x,
-                    y: tick.block_pos.0.y,
-                    z: tick.block_pos.0.z,
-                    delay: tick.delay as i32,
-                    priority: tick.priority as i32,
-                    target_block: format!(
-                        "minecraft:{}",
-                        Block::from_id(tick.target_block_id).unwrap().name
-                    ),
-                })
-                .collect()
-        },
-        block_entities: join_all(chunk_data.block_entities.values().map(
-            |block_entity| async move {
-                let mut nbt = NbtCompound::new();
-                block_entity.1.write_internal(&mut nbt).await;
-                nbt
-            },
-        ))
-        .await,
-        // we have not implemented light engine
-        light_correct: false,
-    };
-
-    let mut result = Vec::new();
-    to_bytes(&nbt, &mut result).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
-    Ok(result)
-}
-
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
@@ -913,9 +832,10 @@ mod tests {
     use temp_dir::TempDir;
     use tokio::sync::RwLock;
 
-    use crate::chunk::format::anvil::AnvilChunkFile;
-    use crate::chunk::io::chunk_file_manager::ChunkFileManager;
-    use crate::chunk::io::{ChunkIO, LoadedData};
+    use crate::chunk::ChunkData;
+    use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
+    use crate::chunk::io::file_manager::{ChunkFileManager, PathFromLevelFolder};
+    use crate::chunk::io::{FileIO, LoadedData};
     use crate::dimension::Dimension;
     use crate::generation::{Seed, get_world_gen};
     use crate::level::{Level, LevelFolder, SyncChunk};
@@ -936,11 +856,14 @@ mod tests {
         }
     }
 
-    async fn get_chunks(
-        saver: &ChunkFileManager<AnvilChunkFile>,
+    async fn get_chunks<S>(
+        saver: &ChunkFileManager<AnvilChunkFile<S>>,
         folder: &LevelFolder,
         chunks: &[(Vector2<i32>, SyncChunk)],
-    ) -> Box<[SyncChunk]> {
+    ) -> Box<[Arc<RwLock<S>>]>
+    where
+        S: SingleChunkDataSerializer + PathFromLevelFolder + 'static,
+    {
         let mut read_chunks = Vec::new();
         let (send, mut recv) = tokio::sync::mpsc::channel(1);
 
@@ -971,7 +894,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn not_existing() {
         let region_path = PathBuf::from("not_existing");
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
 
         let mut chunks = Vec::new();
         let (send, mut recv) = tokio::sync::mpsc::channel(1);
@@ -981,6 +904,7 @@ mod tests {
                 &LevelFolder {
                     root_folder: PathBuf::from(""),
                     region_folder: region_path,
+                    entities_folder: PathBuf::from(""),
                 },
                 &[Vector2::new(0, 0)],
                 send,
@@ -1009,9 +933,10 @@ mod tests {
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
             region_folder: temp_dir.path().join("region"),
+            entities_folder: PathBuf::from("entities"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
         let block_registry = Arc::new(BlockRegistry);
 
         // Generate chunks
@@ -1040,7 +965,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -1098,7 +1023,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -1171,7 +1096,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -1232,7 +1157,7 @@ mod tests {
             .expect("Failed to write chunk");
 
         // Create a new manager to ensure nothing is cached
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
         let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
         for (_, chunk) in &chunks {
@@ -1286,9 +1211,10 @@ mod tests {
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
             region_folder: temp_dir.path().join("region"),
+            entities_folder: PathBuf::from("entities"),
         };
         fs::create_dir(&level_folder.region_folder).expect("couldn't create region folder");
-        let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+        let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
         let block_registry = Arc::new(BlockRegistry);
 
         // Generate chunks
@@ -1322,7 +1248,7 @@ mod tests {
                 .expect("Failed to write chunk");
 
             // Create a new manager to ensure nothing is cached
-            let chunk_saver = ChunkFileManager::<AnvilChunkFile>::default();
+            let chunk_saver = ChunkFileManager::<AnvilChunkFile<ChunkData>>::default();
             let read_chunks = get_chunks(&chunk_saver, &level_folder, &chunks).await;
 
             for (_, chunk) in &chunks {

@@ -7,7 +7,7 @@ use pumpkin_util::math::vector2::Vector2;
 use super::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
 
-pub mod chunk_file_manager;
+pub mod file_manager;
 
 /// The result of loading a chunk data.
 ///
@@ -37,6 +37,11 @@ impl<D: Send, E: error::Error> LoadedData<D, E> {
     }
 }
 
+pub trait Dirtiable {
+    fn is_dirty(&self) -> bool;
+    fn mark_dirty(&mut self, flag: bool);
+}
+
 /// Trait to handle the IO of chunks
 /// for loading and saving chunks data
 /// can be implemented for different types of IO
@@ -45,7 +50,7 @@ impl<D: Send, E: error::Error> LoadedData<D, E> {
 /// The `R` type is the type of the data that will be loaded/saved
 /// like ChunkData or EntityData
 #[async_trait]
-pub trait ChunkIO
+pub trait FileIO
 where
     Self: Send + Sync,
 {
@@ -87,7 +92,7 @@ where
 /// like ChunkData or EntityData
 #[async_trait]
 pub trait ChunkSerializer: Send + Sync + Default {
-    type Data: Send + Sync + Sized;
+    type Data: Send + Sync + Sized + Dirtiable;
     type WriteBackend;
 
     /// Get the key for the chunk (like the file name)

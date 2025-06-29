@@ -322,8 +322,7 @@ mod tests {
             let value = provider.get(&mut random);
             assert!(
                 (1.0..5.0).contains(&value),
-                "Value {} is outside range [1.0, 5.0)",
-                value
+                "Value {value} is outside range [1.0, 5.0)"
             );
         }
     }
@@ -343,8 +342,7 @@ mod tests {
             let value = provider.get(&mut random);
             assert!(
                 (1.0..=5.0).contains(&value),
-                "Value {} is outside range [1.0, 5.0]",
-                value
+                "Value {value} is outside range [1.0, 5.0]"
             );
         }
     }
@@ -364,8 +362,7 @@ mod tests {
             let value = provider.get(&mut random);
             assert!(
                 (0.0..=10.0).contains(&value),
-                "Value {} is outside range [0.0, 10.0]",
-                value
+                "Value {value} is outside range [0.0, 10.0]"
             );
         }
     }
@@ -396,8 +393,7 @@ mod tests {
         let value = provider.get(&mut random);
         assert!(
             (2.0..8.0).contains(&value),
-            "Value {} is outside range [2.0, 8.0)",
-            value
+            "Value {value} is outside range [2.0, 8.0)"
         );
     }
 }

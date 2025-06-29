@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::CTransfer;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::CTransfer;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 

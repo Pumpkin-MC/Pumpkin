@@ -439,18 +439,7 @@ impl BlockPalette {
 
         BlockStateCodec {
             name: block.name.into(),
-            properties: {
-                if let Some(properties) = block.properties(registry_id) {
-                    let props = properties.to_props();
-                    let mut props_map = HashMap::new();
-                    for prop in props {
-                        props_map.insert(prop.0.clone(), prop.1.clone());
-                    }
-                    Some(props_map)
-                } else {
-                    None
-                }
-            },
+            properties: block.properties(registry_id).map(|p| p.to_props()),
         }
     }
 }

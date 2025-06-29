@@ -13,11 +13,11 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
-    client::play::{
+    codec::var_int::VarInt,
+    java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
         CUpdateEntityRot, MetaDataType, Metadata,
     },
-    codec::var_int::VarInt,
     ser::serializer::Serializer,
 };
 use pumpkin_registry::VanillaDimensionType;
@@ -51,6 +51,7 @@ pub mod mob;
 pub mod player;
 pub mod projectile;
 pub mod tnt;
+pub mod r#type;
 
 mod combat;
 
@@ -70,6 +71,22 @@ pub trait EntityBase: Send + Sync {
             living.tick(caller, server).await;
         } else {
             self.get_entity().tick(caller, server).await;
+        }
+    }
+
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        if let Some(living) = self.get_living_entity() {
+            living.write_nbt(nbt).await;
+        } else {
+            self.get_entity().write_nbt(nbt).await;
+        }
+    }
+
+    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
+        if let Some(living) = self.get_living_entity() {
+            living.read_nbt(nbt).await;
+        } else {
+            self.get_entity().read_nbt(nbt).await;
         }
     }
 
@@ -151,6 +168,8 @@ pub struct Entity {
     pub fire_ticks: AtomicI32,
     pub has_visual_fire: AtomicBool,
 
+    pub first_loaded_chunk_position: AtomicCell<Option<Vector3<i32>>>,
+
     pub portal_cooldown: AtomicU32,
 
     pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
@@ -191,6 +210,7 @@ impl Entity {
             velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             standing_eye_height: entity_type.eye_height,
             pose: AtomicCell::new(EntityPose::Standing),
+            first_loaded_chunk_position: AtomicCell::new(None),
             bounding_box: AtomicCell::new(BoundingBox::new_from_pos(
                 position.x,
                 position.y,
@@ -788,28 +808,43 @@ impl EntityBase for Entity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-}
 
-#[async_trait]
-impl NBTStorage for Entity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         let position = self.pos.load();
+        nbt.put_string(
+            "id",
+            format!("minecraft:{}", self.entity_type.resource_name),
+        );
+        let uuid = self.entity_uuid.as_u128();
+        nbt.put(
+            "UUID",
+            NbtTag::IntArray(vec![
+                (uuid >> 96) as i32,
+                ((uuid >> 64) & 0xFFFF_FFFF) as i32,
+                ((uuid >> 32) & 0xFFFF_FFFF) as i32,
+                (uuid & 0xFFFF_FFFF) as i32,
+            ]),
+        );
         nbt.put(
             "Pos",
-            NbtTag::List(
-                vec![position.x.into(), position.y.into(), position.z.into()].into_boxed_slice(),
-            ),
+            NbtTag::List(vec![
+                position.x.into(),
+                position.y.into(),
+                position.z.into(),
+            ]),
         );
         let velocity = self.velocity.load();
         nbt.put(
             "Motion",
-            NbtTag::List(
-                vec![velocity.x.into(), velocity.y.into(), velocity.z.into()].into_boxed_slice(),
-            ),
+            NbtTag::List(vec![
+                velocity.x.into(),
+                velocity.y.into(),
+                velocity.z.into(),
+            ]),
         );
         nbt.put(
             "Rotation",
-            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice()),
+            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
         );
         nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
         nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
@@ -822,12 +857,14 @@ impl NBTStorage for Entity {
         // todo more...
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
         let position = nbt.get_list("Pos").unwrap();
         let x = position[0].extract_double().unwrap_or(0.0);
         let y = position[1].extract_double().unwrap_or(0.0);
         let z = position[2].extract_double().unwrap_or(0.0);
-        self.set_pos(Vector3::new(x, y, z));
+        let pos = Vector3::new(x, y, z);
+        self.set_pos(pos);
+        self.first_loaded_chunk_position.store(Some(pos.to_i32()));
         let velocity = nbt.get_list("Motion").unwrap();
         let x = velocity[0].extract_double().unwrap_or(0.0);
         let y = velocity[1].extract_double().unwrap_or(0.0);
@@ -854,7 +891,7 @@ impl NBTStorage for Entity {
 
 #[async_trait]
 pub trait NBTStorage: Send + Sync + Sized {
-    async fn write_nbt(&self, nbt: &mut NbtCompound);
+    async fn write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     async fn read_nbt(&mut self, _nbt: &mut NbtCompound) {}
 

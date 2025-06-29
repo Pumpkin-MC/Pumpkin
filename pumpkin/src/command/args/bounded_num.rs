@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion};
+use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion};
 
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;
@@ -202,7 +202,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<f64> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
+    ) -> Option<pumpkin_protocol::java::client::play::SuggestionProviders> {
         None
     }
 }
@@ -230,7 +230,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<f32> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
+    ) -> Option<pumpkin_protocol::java::client::play::SuggestionProviders> {
         None
     }
 }
@@ -258,7 +258,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<i32> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
+    ) -> Option<pumpkin_protocol::java::client::play::SuggestionProviders> {
         None
     }
 }
@@ -286,7 +286,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<i64> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
+    ) -> Option<pumpkin_protocol::java::client::play::SuggestionProviders> {
         None
     }
 }

@@ -6,6 +6,7 @@ use std::{fs, io::Write, path::Path, process::Command};
 mod biome;
 mod block;
 mod chunk_status;
+mod composter_increase_chance;
 mod damage_type;
 mod entity_pose;
 mod entity_status;
@@ -13,6 +14,7 @@ mod entity_type;
 mod flower_pot_transformations;
 mod fluid;
 mod game_event;
+mod game_rules;
 mod item;
 pub mod loot;
 mod message_type;
@@ -42,6 +44,7 @@ pub fn main() {
     write_generated_file(sound::build(), "sound.rs");
     write_generated_file(chunk_status::build(), "chunk_status.rs");
     write_generated_file(game_event::build(), "game_event.rs");
+    write_generated_file(game_rules::build(), "game_rules.rs");
     write_generated_file(sound_category::build(), "sound_category.rs");
     write_generated_file(entity_pose::build(), "entity_pose.rs");
     write_generated_file(scoreboard_slot::build(), "scoreboard_slot.rs");
@@ -61,7 +64,10 @@ pub fn main() {
     write_generated_file(noise_router::build(), "noise_router.rs");
     write_generated_file(
         flower_pot_transformations::build(),
-        "flower_pot_transformations.rs",
+        "flower_pot_transformations.rs"),
+    write_generated_file(
+        composter_increase_chance::build(),
+        "composter_increase_chance.rs"
     );
 }
 

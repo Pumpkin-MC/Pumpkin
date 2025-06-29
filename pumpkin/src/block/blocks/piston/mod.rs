@@ -50,13 +50,7 @@ impl<'a> PistonHandler<'a> {
         self.moved_blocks.clear();
         self.broken_blocks.clear();
         let (block, block_state) = self.world.get_block_and_block_state(&self.pos_to).await;
-        dbg!(PistonBlock::is_movable(
-            &block,
-            &block_state,
-            self.motion_direction,
-            false,
-            self.piston_direction,
-        ));
+
         if !PistonBlock::is_movable(
             &block,
             &block_state,

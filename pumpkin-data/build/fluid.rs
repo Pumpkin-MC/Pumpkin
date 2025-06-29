@@ -111,7 +111,7 @@ impl ToTokens for PropertyStruct {
                 fn from_index(index: u16) -> Self {
                     match index {
                         #(#values_index => Self::#values_3,)*
-                        _ => panic!("Invalid index: {}", index),
+                        _ => panic!("Invalid index: {index}"),
                     }
                 }
 
@@ -124,7 +124,7 @@ impl ToTokens for PropertyStruct {
                 fn from_value(value: &str) -> Self {
                     match value {
                         #(#from_values),*,
-                        _ => panic!("Invalid value: {:?}", value),
+                        _ => panic!("Invalid value: {value:?}"),
                     }
                 }
             }
@@ -173,7 +173,7 @@ impl ToTokens for FluidPropertyStruct {
             let key2 = Ident::new_raw(&entry.original_name, Span::call_site());
 
             quote! {
-                props.push((#key.to_string(), self.#key2.to_value().to_string()));
+                (#key.to_string(), self.#key2.to_value().to_string()),
             }
         });
 
@@ -255,13 +255,8 @@ impl ToTokens for FluidPropertyStruct {
                     Self::from_state_id(fluid.default_state_index, fluid)
                 }
 
-                #[allow(clippy::vec_init_then_push)]
                 fn to_props(&self) -> Vec<(String, String)> {
-                    let mut props = vec![];
-
-                    #(#to_props_values)*
-
-                    props
+                   vec![#(#to_props_values)*]
                 }
 
                 fn from_props(props: Vec<(String, String)>, fluid: &Fluid) -> Self {
@@ -274,7 +269,7 @@ impl ToTokens for FluidPropertyStruct {
                     for (key, value) in props {
                         match key.as_str() {
                             #(#from_props_values),*,
-                            _ => panic!("Invalid key: {}", key),
+                            _ => panic!("Invalid key: {key}"),
                         }
                     }
 

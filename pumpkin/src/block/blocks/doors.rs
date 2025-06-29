@@ -24,14 +24,14 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use pumpkin_data::item::Item;
-use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_protocol::java::server::play::SUseItemOn;
 
 use crate::server::Server;
 use crate::world::World;
 
 type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 
-async fn toggle_door(world: &Arc<World>, block_pos: &BlockPos) {
+async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_block_state(block_pos).await;
     let mut door_props = DoorProperties::from_state_id(block_state.id, &block);
     door_props.open = !door_props.open;
@@ -45,6 +45,15 @@ async fn toggle_door(world: &Arc<World>, block_pos: &BlockPos) {
     let (other_block, other_state_id) = world.get_block_and_block_state(&other_pos).await;
     let mut other_door_props = DoorProperties::from_state_id(other_state_id.id, &other_block);
     other_door_props.open = door_props.open;
+
+    world
+        .play_block_sound_expect(
+            player,
+            get_sound(&block, door_props.open),
+            SoundCategory::Blocks,
+            *block_pos,
+        )
+        .await;
 
     world
         .set_block_state(
@@ -227,7 +236,7 @@ impl PumpkinBlock for DoorBlock {
     async fn use_with_item(
         &self,
         block: &Block,
-        _player: &Player,
+        player: &Player,
         location: BlockPos,
         _item: &Item,
         _server: &Server,
@@ -237,7 +246,7 @@ impl PumpkinBlock for DoorBlock {
             return BlockActionResult::Continue;
         }
 
-        toggle_door(world, &location).await;
+        toggle_door(player, world, &location).await;
 
         BlockActionResult::Consume
     }
@@ -245,13 +254,13 @@ impl PumpkinBlock for DoorBlock {
     async fn normal_use(
         &self,
         block: &Block,
-        _player: &Player,
+        player: &Player,
         location: BlockPos,
         _server: &Server,
         world: &Arc<World>,
     ) {
         if can_open_door(block) {
-            toggle_door(world, &location).await;
+            toggle_door(player, world, &location).await;
         }
     }
 

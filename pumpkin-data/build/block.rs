@@ -123,7 +123,7 @@ impl ToTokens for PropertyStruct {
                 fn from_index(index: u16) -> Self {
                     match index {
                         #(#values_index => Self::#values_3,)*
-                        _ => panic!("Invalid index: {}", index),
+                        _ => panic!("Invalid index: {index}"),
                     }
                 }
 
@@ -136,7 +136,7 @@ impl ToTokens for PropertyStruct {
                 fn from_value(value: &str) -> Self {
                     match value {
                         #(#from_values),*,
-                        _ => panic!("Invalid value: {:?}", value),
+                        _ => panic!("Invalid value: {value:?}"),
                     }
                 }
 
@@ -182,14 +182,12 @@ impl ToTokens for BlockPropertyStruct {
                 let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
                 match &entry.property_type {
                     PropertyType::Bool => quote! {
-                        index += !self.#field_name as u16 * multiplier;
-                        multiplier *= 2;
+                        (!self.#field_name as u16, 2)
                     },
                     PropertyType::Enum { name } => {
                         let enum_ident = Ident::new(name, Span::call_site());
                         quote! {
-                            index += self.#field_name.to_index() * multiplier;
-                            multiplier *= #enum_ident::variant_count();
+                            (self.#field_name.to_index(), #enum_ident::variant_count())
                         }
                     }
                 }
@@ -230,10 +228,10 @@ impl ToTokens for BlockPropertyStruct {
             let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! {
-                    props.push((#key.to_string(), self.#field_name.to_string()));
+                    (#key.to_string(), self.#field_name.to_string()),
                 },
                 PropertyType::Enum { name: _ } => quote! {
-                    props.push((#key.to_string(), self.#field_name.to_value().to_string()));
+                    (#key.to_string(), self.#field_name.to_value().to_string()),
                 },
             }
         });
@@ -265,11 +263,12 @@ impl ToTokens for BlockPropertyStruct {
             }
 
             impl BlockProperties for #name {
-                #[allow(unused_assignments)]
                 fn to_index(&self) -> u16 {
-                    let mut index = 0;
-                    let mut multiplier = 1;
-                    #(#to_index_body)*
+                    let (index, _) = [#(#to_index_body),*]
+                    .iter()
+                    .fold((0, 1), |(current_index, multiplier), &(value, count)| {
+                      (current_index + value * multiplier, multiplier * count)
+                    });
                     index
                 }
 
@@ -311,13 +310,10 @@ impl ToTokens for BlockPropertyStruct {
                     Self::from_state_id(block.default_state.id, block)
                 }
 
-                #[allow(clippy::vec_init_then_push)]
-                fn to_props(&self) -> Vec<(String, String)> {
-                    let mut props = vec![];
-                    #(#to_props_values)*
-                    props
+                fn to_props(&self) -> HashMap<String, String> {
+                   HashMap::from([#(#to_props_values)*])
                 }
-                fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self {
+                fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
@@ -325,11 +321,31 @@ impl ToTokens for BlockPropertyStruct {
                     for (key, value) in props {
                         match key {
                             #(#from_props_values),*,
-                            _ => panic!("Invalid key: {}", key),
+                            _ => panic!("Invalid key: {key}"),
                         }
                     }
                     block_props
                 }
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct FlammableStruct {
+    pub spread_chance: u8,
+    pub burn_chance: u8,
+}
+
+impl ToTokens for FlammableStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let spread_chance = &self.spread_chance;
+        let burn_chance = &self.burn_chance;
+
+        tokens.extend(quote! {
+            Flammable {
+                spread_chance: #spread_chance,
+                burn_chance: #burn_chance,
             }
         });
     }
@@ -479,6 +495,7 @@ pub struct Block {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
+    pub flammable: Option<FlammableStruct>,
     pub loot_table: Option<LootTableStruct>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
@@ -497,6 +514,7 @@ pub struct OptimizedBlock {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
+    pub flammable: Option<FlammableStruct>,
     pub loot_table: Option<LootTableStruct>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
@@ -542,6 +560,13 @@ impl OptimizedBlock {
         let mut default_state = all_states[default_state_ref.state_idx as usize].clone();
         default_state.id = default_state_ref.id;
         let default_state = default_state.to_tokens();
+        let flammable = match &self.flammable {
+            Some(flammable) => {
+                let flammable_tokens = flammable.to_token_stream();
+                quote! { Some(#flammable_tokens) }
+            }
+            None => quote! { None },
+        };
         tokens.extend(quote! {
             Block {
                 id: #id,
@@ -555,6 +580,7 @@ impl OptimizedBlock {
                 item_id: #item_id,
                 default_state: #default_state,
                 states: &[#(#states),*],
+                flammable: #flammable,
                 loot_table: #loot_table,
                 experience: #experience,
             }
@@ -686,6 +712,7 @@ pub(crate) fn build() -> TokenStream {
             slipperiness: block.slipperiness,
             velocity_multiplier: block.velocity_multiplier,
             jump_velocity_multiplier: block.jump_velocity_multiplier,
+            flammable: block.flammable,
             loot_table: block.loot_table,
             experience: block.experience,
             states: block
@@ -841,12 +868,14 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use crate::{BlockState, BlockStateRef, Block, CollisionShape};
+        use crate::{BlockState, BlockStateRef, Block, CollisionShape, blocks::Flammable};
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
+        use std::collections::HashMap;
+
 
         #[derive(Clone, Copy, Debug)]
         pub struct BlockProperty {
@@ -871,10 +900,10 @@ pub(crate) fn build() -> TokenStream {
             fn default(block: &Block) -> Self where Self: Sized;
 
             // Convert properties to a `Vec` of `(name, value)`
-            fn to_props(&self) -> Vec<(String, String)>;
+            fn to_props(&self) -> HashMap<String, String>;
 
             // Convert properties to a block state, and add them onto the default state.
-            fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self where Self: Sized;
+            fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
@@ -986,7 +1015,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Get the properties of the block."]
-            pub fn from_properties(&self, props: Vec<(&str, &str)>) -> Option<Box<dyn BlockProperties>> {
+            pub fn from_properties(&self, props: HashMap<&str, &str>) -> Option<Box<dyn BlockProperties>> {
                 match self.id {
                     #block_properties_from_props_and_name
                     _ => None

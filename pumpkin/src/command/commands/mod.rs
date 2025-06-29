@@ -20,6 +20,7 @@ mod effect;
 mod experience;
 mod fill;
 mod gamemode;
+mod gamerule;
 mod give;
 mod help;
 mod kick;
@@ -42,6 +43,8 @@ mod stop;
 mod stopsound;
 mod summon;
 mod teleport;
+mod tellraw;
+mod tick;
 mod time;
 mod title;
 mod transfer;
@@ -51,7 +54,6 @@ mod worldborder;
 
 #[cfg(feature = "dhat-heap")]
 mod profile;
-mod tellraw;
 
 #[must_use]
 pub async fn default_dispatcher() -> CommandDispatcher {
@@ -75,6 +77,7 @@ pub async fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(effect::init_command_tree(), "minecraft:command.effect");
     dispatcher.register(teleport::init_command_tree(), "minecraft:command.teleport");
     dispatcher.register(time::init_command_tree(), "minecraft:command.time");
+    dispatcher.register(tick::init_command_tree(), "minecraft:command.tick");
     dispatcher.register(give::init_command_tree(), "minecraft:command.give");
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
     dispatcher.register(setblock::init_command_tree(), "minecraft:command.setblock");
@@ -97,6 +100,7 @@ pub async fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(bossbar::init_command_tree(), "minecraft:command.bossbar");
     dispatcher.register(say::init_command_tree(), "minecraft:command.say");
     dispatcher.register(gamemode::init_command_tree(), "minecraft:command.gamemode");
+    dispatcher.register(gamerule::init_command_tree(), "minecraft:command.gamerule");
     dispatcher.register(
         difficulty::init_command_tree(),
         "minecraft:command.difficulty",
@@ -347,6 +351,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap();
     registry
         .register_permission(Permission::new(
+            "minecraft:command.gamerule",
+            "Sets a player's game mode",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
             "minecraft:command.stopsound",
             "Stops sounds from playing",
             PermissionDefault::Op(PermissionLvl::Two),
@@ -444,6 +455,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.whitelist",
             "Manages server whitelist",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.tick",
+            "Triggers the tick event",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();

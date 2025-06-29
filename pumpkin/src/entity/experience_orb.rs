@@ -3,6 +3,7 @@ use std::sync::{Arc, atomic::AtomicU32};
 use async_trait::async_trait;
 use pumpkin_data::{damage::DamageType, entity::EntityType};
 use pumpkin_util::math::vector3::Vector3;
+use uuid::Uuid;
 
 use crate::{server::Server, world::World};
 
@@ -29,7 +30,13 @@ impl ExperienceOrbEntity {
         while amount > 0 {
             let i = Self::round_to_orb_size(amount);
             amount -= i;
-            let entity = world.create_entity(position, EntityType::EXPERIENCE_ORB);
+            let entity = Entity::new(
+                Uuid::new_v4(),
+                world.clone(),
+                position,
+                EntityType::EXPERIENCE_ORB,
+                false,
+            );
             let orb = Arc::new(Self::new(entity, i));
             world.spawn_entity(orb).await;
         }

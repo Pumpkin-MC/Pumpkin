@@ -4,14 +4,14 @@ use std::{
     ops::Deref,
 };
 
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
-
 use bytes::BufMut;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{SeqAccess, Visitor},
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 
 pub type VarIntType = i32;
 

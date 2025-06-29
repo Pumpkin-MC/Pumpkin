@@ -21,7 +21,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 ## Goals
 
 - **Performance**: Leveraging multi-threading for maximum speed and efficiency.
-- **Compatibility**: Supports the latest Minecraft server version while adhering to Vanilla game mechanics.
+- **Compatibility**: Supports the latest Java & Bedrock/Pocket Minecraft server version while adhering to Vanilla game mechanics.
 - **Security**: Prioritizes security by preventing known security exploits.
 - **Flexibility**: Highly configurable, with the ability to disable unnecessary features.
 - **Extensibility**: Provides a foundation for plugin development.
@@ -83,10 +83,10 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Mobs (W.I.P)
   - [x] Animals (W.I.P)
   - [x] Entity AI (W.I.P)
-  - [ ] Entity Saving
   - [ ] Boss
   - [ ] Villagers
   - [ ] Mobs Inventory
+  - [X] Entity Saving
 - Server
   - [x] Plugins (W.I.P)
   - [x] Query

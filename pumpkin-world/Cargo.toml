@@ -38,12 +38,12 @@ zstd = "0.13.3"
 
 itertools = "0.14.0"
 file-guard = "0.2"
-indexmap = "2.9"
+indexmap = "2.10"
 enum_dispatch = "0.3"
 derive-getters = "0.5.0"
 
 thread_local = "1.1.9"
-lru = "0.14.0"
+lru = "0.15.0"
 
 tokio-util = { version = "0.7.15", features = ["rt"] }
 

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
+use crate::entity::Entity;
 use crate::entity::player::Player;
 use crate::entity::tnt::TNTEntity;
 use crate::server::Server;
@@ -17,6 +18,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 use rand::Rng;
+use uuid::Uuid;
 
 use super::redstone::block_receives_redstone_power;
 
@@ -25,7 +27,13 @@ pub struct TNTBlock;
 
 impl TNTBlock {
     pub async fn prime(world: &Arc<World>, location: &BlockPos) {
-        let entity = world.create_entity(location.to_f64(), EntityType::TNT);
+        let entity = Entity::new(
+            Uuid::new_v4(),
+            world.clone(),
+            location.to_f64(),
+            EntityType::TNT,
+            false,
+        );
         let pos = entity.pos.load();
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
         world.spawn_entity(tnt).await;
@@ -93,7 +101,13 @@ impl PumpkinBlock for TNTBlock {
     }
 
     async fn explode(&self, _block: &Block, world: &Arc<World>, location: BlockPos) {
-        let entity = world.create_entity(location.to_f64(), EntityType::TNT);
+        let entity = Entity::new(
+            Uuid::new_v4(),
+            world.clone(),
+            location.to_f64(),
+            EntityType::TNT,
+            false,
+        );
         let angle = rand::random::<f64>() * std::f64::consts::TAU;
         entity
             .set_velocity(Vector3::new(-angle.sin() * 0.02, 0.2, -angle.cos() * 0.02))
