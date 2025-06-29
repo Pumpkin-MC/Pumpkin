@@ -54,6 +54,7 @@ pub struct JavaClientPlatform {
 }
 
 impl JavaClientPlatform {
+    #[must_use]
     pub fn new(tcp_stream: TcpStream) -> Self {
         let (read, write) = tcp_stream.into_split();
         Self {

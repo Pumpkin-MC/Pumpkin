@@ -5,12 +5,10 @@ use super::args::ConsumedArgs;
 
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError::{
-    GeneralCommandIssue, InvalidConsumption, InvalidRequirement, OtherPumpkin, PermissionDenied,
+    CommandFailed, InvalidConsumption, InvalidRequirement, PermissionDenied,
 };
 use crate::command::tree::{Command, CommandTree, NodeType, RawArgs};
-use crate::error::PumpkinError;
 use crate::server::Server;
-use pumpkin_util::text::color::{Color, NamedColor};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
@@ -19,38 +17,39 @@ pub enum CommandError {
     /// That only happens when consumption is wrongly implemented, as it should ensure parsing may
     /// never fail.
     InvalidConsumption(Option<String>),
-
     /// Return this if a condition that a [`Node::Require`] should ensure is met is not met.
     InvalidRequirement,
-
+    /// The command could not be executed due to insufficient permissions.
+    /// The user attempting to run the command lacks the necessary authorization.
     PermissionDenied,
-
-    OtherPumpkin(Box<dyn PumpkinError>),
-
-    GeneralCommandIssue(String),
+    /// A general error occurred during command execution that doesn't fit into
+    /// more specific `CommandError` variants.
+    CommandFailed(Box<TextComponent>),
 }
 
 impl CommandError {
-    pub fn into_string_or_pumpkin_error(self, cmd: &str) -> Result<String, Box<dyn PumpkinError>> {
+    #[must_use]
+    pub fn into_component(self, cmd: &str) -> TextComponent {
         match self {
             InvalidConsumption(s) => {
                 log::error!(
                     "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
                 );
-                Ok("Internal error (See logs for details)".into())
+                TextComponent::text("Internal error (See logs for details)")
             }
             InvalidRequirement => {
                 log::error!(
                     "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
                 );
-                Ok("Internal error (See logs for details)".into())
+                TextComponent::text("Internal error (See logs for details)")
             }
             PermissionDenied => {
                 log::warn!("Permission denied for command \"{cmd}\"");
-                Ok("I'm sorry, but you do not have permission to perform this command. Please contact the server administrator if you believe this is an error.".into())
+                TextComponent::text(
+                    "I'm sorry, but you do not have permission to perform this command. Please contact the server administrator if you believe this is an error.",
+                )
             }
-            GeneralCommandIssue(s) => Ok(s),
-            OtherPumpkin(e) => Err(e),
+            CommandFailed(s) => *s,
         }
     }
 }
@@ -70,20 +69,10 @@ impl CommandDispatcher {
         cmd: &'a str,
     ) {
         if let Err(e) = self.dispatch(sender, server, cmd).await {
-            match e.into_string_or_pumpkin_error(cmd) {
-                Ok(err) => {
-                    sender
-                        .send_message(
-                            TextComponent::text(err)
-                                .color_named(pumpkin_util::text::color::NamedColor::Red),
-                        )
-                        .await;
-                }
-                Err(pumpkin_error) => {
-                    pumpkin_error.log();
-                    sender.send_message(TextComponent::text("Unknown internal error occurred while running command. Please see server log").color(Color::Named(NamedColor::Red))).await;
-                }
-            }
+            let text = e.into_component(cmd);
+            sender
+                .send_message(text.color_named(pumpkin_util::text::color::NamedColor::Red))
+                .await;
         }
     }
 
@@ -117,27 +106,22 @@ impl CommandDispatcher {
                 .await
             {
                 Err(InvalidConsumption(s)) => {
-                    log::error!(
+                    log::trace!(
                         "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
                     );
                     return Vec::new();
                 }
                 Err(InvalidRequirement) => {
-                    log::error!(
+                    log::trace!(
                         "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
                     );
                     return Vec::new();
                 }
                 Err(PermissionDenied) => {
-                    log::warn!("Permission denied for command \"{cmd}\"");
+                    log::trace!("Permission denied for command \"{cmd}\"");
                     return Vec::new();
                 }
-                Err(GeneralCommandIssue(issue)) => {
-                    log::error!("Error while parsing command \"{cmd}\": {issue}");
-                    return Vec::new();
-                }
-                Err(OtherPumpkin(e)) => {
-                    log::error!("Error while parsing command \"{cmd}\": {e}");
+                Err(CommandFailed(_)) => {
                     return Vec::new();
                 }
                 Ok(Some(new_suggestions)) => {
@@ -154,7 +138,9 @@ impl CommandDispatcher {
 
     pub(crate) fn split_parts(cmd: &str) -> Result<(&str, Vec<&str>), CommandError> {
         if cmd.is_empty() {
-            return Err(GeneralCommandIssue("Empty Command".to_string()));
+            return Err(CommandFailed(Box::new(TextComponent::text(
+                "Empty Command",
+            ))));
         }
         let mut args = Vec::new();
         let mut current_arg_start = 0usize;
@@ -181,7 +167,9 @@ impl CommandDispatcher {
                 '}' => {
                     if !in_single_quotes && !in_double_quotes {
                         if in_braces == 0 {
-                            return Err(GeneralCommandIssue("Unmatched braces".to_string()));
+                            return Err(CommandFailed(Box::new(TextComponent::text(
+                                "Unmatched braces",
+                            ))));
                         }
                         in_braces -= 1;
                     }
@@ -194,7 +182,9 @@ impl CommandDispatcher {
                 ']' => {
                     if !in_single_quotes && !in_double_quotes {
                         if in_brackets == 0 {
-                            return Err(GeneralCommandIssue("Unmatched brackets".to_string()));
+                            return Err(CommandFailed(Box::new(TextComponent::text(
+                                "Unmatched brackets",
+                            ))));
                         }
                         in_brackets -= 1;
                     }
@@ -226,22 +216,24 @@ impl CommandDispatcher {
             args.push(&cmd[current_arg_start..]);
         }
         if in_single_quotes || in_double_quotes {
-            return Err(GeneralCommandIssue(
-                "Unmatched quotes at the end".to_string(),
-            ));
+            return Err(CommandFailed(Box::new(TextComponent::text(
+                "Unmatched quotes at the end",
+            ))));
         }
         if in_braces != 0 {
-            return Err(GeneralCommandIssue(
-                "Unmatched braces at the end".to_string(),
-            ));
+            return Err(CommandFailed(Box::new(TextComponent::text(
+                "Unmatched braces at the end",
+            ))));
         }
         if in_brackets != 0 {
-            return Err(GeneralCommandIssue(
-                "Unmatched brackets at the end".to_string(),
-            ));
+            return Err(CommandFailed(Box::new(TextComponent::text(
+                "Unmatched brackets at the end",
+            ))));
         }
         if args.is_empty() {
-            return Err(GeneralCommandIssue("Empty Command".to_string()));
+            return Err(CommandFailed(Box::new(TextComponent::text(
+                "Empty Command",
+            ))));
         }
         let key = args.remove(0);
         Ok((key, args.into_iter().rev().collect()))
@@ -257,13 +249,15 @@ impl CommandDispatcher {
         let (key, raw_args) = Self::split_parts(cmd)?;
 
         if !self.commands.contains_key(key) {
-            return Err(GeneralCommandIssue(format!("Command {key} does not exist")));
+            return Err(CommandFailed(Box::new(TextComponent::text(format!(
+                "Command {key} does not exist"
+            )))));
         }
 
         let Some(permission) = self.permissions.get(key) else {
-            return Err(GeneralCommandIssue(
+            return Err(CommandFailed(Box::new(TextComponent::text(
                 "Permission for Command not found".to_string(),
-            ));
+            ))));
         };
 
         if !src.has_permission(permission.as_str()).await {
@@ -278,16 +272,18 @@ impl CommandDispatcher {
                 return Ok(());
             }
         }
-        Err(GeneralCommandIssue(format!(
+        Err(CommandFailed(Box::new(TextComponent::text(format!(
             "Invalid Syntax. Usage: {tree}"
-        )))
+        )))))
     }
 
     pub fn get_tree<'a>(&'a self, key: &str) -> Result<&'a CommandTree, CommandError> {
-        let command = self
-            .commands
-            .get(key)
-            .ok_or(GeneralCommandIssue("Command not found".to_string()))?;
+        let command =
+            self.commands
+                .get(key)
+                .ok_or(CommandFailed(Box::new(TextComponent::text(
+                    "Command not found",
+                ))))?;
 
         match command {
             Command::Tree(tree) => Ok(tree),
@@ -296,9 +292,9 @@ impl CommandDispatcher {
                     log::error!(
                         "Error while parsing command alias \"{key}\": pointing to \"{target}\" which is not a valid tree"
                     );
-                    return Err(GeneralCommandIssue(
-                        "Internal Error (See logs for details)".into(),
-                    ));
+                    return Err(CommandFailed(Box::new(TextComponent::text(
+                        "Internal Error (See logs for details)",
+                    ))));
                 };
                 Ok(tree)
             }
