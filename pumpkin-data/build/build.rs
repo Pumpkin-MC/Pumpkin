@@ -64,10 +64,11 @@ pub fn main() {
     write_generated_file(noise_router::build(), "noise_router.rs");
     write_generated_file(
         flower_pot_transformations::build(),
-        "flower_pot_transformations.rs"),
+        "flower_pot_transformations.rs",
+    );
     write_generated_file(
         composter_increase_chance::build(),
-        "composter_increase_chance.rs"
+        "composter_increase_chance.rs",
     );
 }
 

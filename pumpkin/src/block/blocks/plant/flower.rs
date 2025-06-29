@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_protocol::java::server::play::SUseItemOn;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use std::sync::Arc;
