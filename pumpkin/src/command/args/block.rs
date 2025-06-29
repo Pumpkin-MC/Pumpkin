@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_data::{Block, block_properties::get_block};
 use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
@@ -16,9 +17,7 @@ pub struct BlockArgumentConsumer;
 
 impl GetClientSideArgParser for BlockArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
-        ArgumentType::Resource {
-            identifier: "block",
-        }
+        ArgumentType::BlockState
     }
 
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
@@ -68,6 +67,83 @@ impl<'a> FindArg<'a> for BlockArgumentConsumer {
                 Result::Ok,
             ),
             _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+        }
+    }
+}
+
+pub struct BlockPredicateArgumentConsumer;
+pub enum BlockPredicate {
+    Tag(&'static [&'static str]),
+    Block(Block),
+}
+
+impl GetClientSideArgParser for BlockPredicateArgumentConsumer {
+    fn get_client_side_parser(&self) -> ArgumentType {
+        ArgumentType::BlockPredicate
+    }
+
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
+        None
+    }
+}
+
+#[async_trait]
+impl ArgumentConsumer for BlockPredicateArgumentConsumer {
+    async fn consume<'a>(
+        &'a self,
+        _sender: &CommandSender,
+        _server: &'a Server,
+        args: &mut RawArgs<'a>,
+    ) -> Option<Arg<'a>> {
+        let s = args.pop()?;
+        Some(Arg::BlockPredicate(s))
+    }
+
+    async fn suggest<'a>(
+        &'a self,
+        _sender: &CommandSender,
+        _server: &'a Server,
+        _input: &'a str,
+    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
+        Ok(None)
+    }
+}
+
+impl DefaultNameArgConsumer for BlockPredicateArgumentConsumer {
+    fn default_name(&self) -> &'static str {
+        "filter"
+    }
+}
+
+impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
+    type Data = Option<BlockPredicate>;
+
+    fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
+        match args.get(name) {
+            Some(Arg::BlockPredicate(name)) => {
+                if let Some(tag) = name.strip_prefix("#") {
+                    get_tag_values(RegistryKey::Block, tag).map_or_else(
+                        || {
+                            Err(CommandError::GeneralCommandIssue(format!(
+                                // TODO translate error message
+                                "Tag {tag} does not exist."
+                            )))
+                        },
+                        |tag| Result::Ok(Some(BlockPredicate::Tag(tag))),
+                    )
+                } else {
+                    get_block(name).map_or_else(
+                        || {
+                            Err(CommandError::GeneralCommandIssue(format!(
+                                // TODO translate error message
+                                "Block {name} does not exist."
+                            )))
+                        },
+                        |block| Result::Ok(Some(BlockPredicate::Block(block))),
+                    )
+                }
+            }
+            _ => Ok(None),
         }
     }
 }
