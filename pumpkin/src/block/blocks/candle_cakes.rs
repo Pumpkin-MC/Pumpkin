@@ -6,7 +6,7 @@ use pumpkin_data::{
     item::Item,
     tag::{RegistryKey, get_tag_values},
 };
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{item::ItemStack, world::BlockFlags};
 
 use crate::{
@@ -79,9 +79,16 @@ impl CandleCakeBlock {
         location: &BlockPos,
         world: &Arc<World>,
     ) {
-        if player.hunger_manager.level.load() >= 20 {
-            return;
+        match player.gamemode.load() {
+            GameMode::Survival | GameMode::Adventure => {
+                if player.hunger_manager.level.load() >= 20 {
+                    return;
+                }
+            }
+            GameMode::Creative => {}
+            GameMode::Spectator => return,
         }
+
         let candle_item = candle_from_cake(block);
 
         let item_stack = ItemStack::new(1, candle_item);

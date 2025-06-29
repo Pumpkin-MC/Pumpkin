@@ -8,7 +8,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
 
@@ -33,16 +33,23 @@ impl CakeBlock {
         location: &BlockPos,
         state_id: u16,
     ) {
-        let hunger_level = player.hunger_manager.level.load();
-        if hunger_level >= 20 {
-            return;
+        match player.gamemode.load() {
+            GameMode::Survival | GameMode::Adventure => {
+                let hunger_level = player.hunger_manager.level.load();
+                if hunger_level >= 20 {
+                    return;
+                }
+                player.hunger_manager.level.store(20.min(hunger_level + 2));
+                player
+                    .hunger_manager
+                    .saturation
+                    .store(player.hunger_manager.saturation.load() + 0.4);
+                player.send_health().await;
+            }
+            GameMode::Creative => {}
+            GameMode::Spectator => return,
         }
-        player.hunger_manager.level.store(20.min(hunger_level + 2));
-        player
-            .hunger_manager
-            .saturation
-            .store(player.hunger_manager.saturation.load() + 0.4);
-        player.send_health().await;
+
         let mut properties = CakeLikeProperties::from_state_id(state_id, block);
         match properties.bites.to_index() {
             0..=5 => {
@@ -65,7 +72,7 @@ impl CakeBlock {
                     .await;
             }
             _ => {
-                panic!("invalid hunger index");
+                panic!("invalid bite index");
             }
         }
     }
