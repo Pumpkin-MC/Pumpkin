@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{
     NumberFormat,
-    client::play::{CDisplayObjective, CUpdateObjectives, CUpdateScore, RenderType},
     codec::var_int::VarInt,
+    java::client::play::{CDisplayObjective, CUpdateObjectives, CUpdateScore, RenderType},
 };
 use pumpkin_util::text::TextComponent;
 
@@ -36,7 +36,7 @@ impl Scoreboard {
         world
             .broadcast_packet_all(&CUpdateObjectives::new(
                 objective.name.to_string(),
-                pumpkin_protocol::client::play::Mode::Add,
+                pumpkin_protocol::java::client::play::Mode::Add,
                 objective.display_name,
                 objective.render_type,
                 objective.number_format,

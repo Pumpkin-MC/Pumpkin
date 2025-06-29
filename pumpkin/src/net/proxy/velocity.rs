@@ -10,8 +10,8 @@ use bytes::{BufMut, BytesMut};
 use hmac::{Hmac, KeyInit, Mac};
 use pumpkin_config::networking::proxy::VelocityConfig;
 use pumpkin_protocol::{
-    Property, client::login::CLoginPluginRequest, ser::NetworkReadExt,
-    server::login::SLoginPluginResponse,
+    Property, java::client::login::CLoginPluginRequest, java::server::login::SLoginPluginResponse,
+    ser::NetworkReadExt,
 };
 use rand::Rng;
 use sha2::Sha256;

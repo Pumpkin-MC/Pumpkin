@@ -128,8 +128,11 @@ impl FoliagePlacer {
             .await;
     }
 
-    pub fn get_random_radius(&self, random: &mut RandomGenerator) -> i32 {
-        self.radius.get(random)
+    pub fn get_random_radius(&self, random: &mut RandomGenerator, base_height: i32) -> i32 {
+        match &self.r#type {
+            FoliageType::Pine(_) => PineFoliagePlacer::get_random_radius(self, random, base_height),
+            _ => self.radius.get(random),
+        }
     }
 
     pub async fn place_foliage_block(

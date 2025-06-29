@@ -6,7 +6,7 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::{

@@ -3,7 +3,8 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion};
+use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion};
+use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;
@@ -92,18 +93,22 @@ pub enum NotInBounds {
 impl From<NotInBounds> for CommandError {
     fn from(value: NotInBounds) -> Self {
         match value {
-            NotInBounds::LowerBound(val, min) => Self::GeneralCommandIssue(format!(
-                "{} must not be less than {}, found {}",
-                val.qualifier(),
-                min,
-                val
-            )),
-            NotInBounds::UpperBound(val, max) => Self::GeneralCommandIssue(format!(
-                "{} must not be more than {}, found {}",
-                val.qualifier(),
-                max,
-                val
-            )),
+            NotInBounds::LowerBound(val, min) => {
+                Self::CommandFailed(Box::new(TextComponent::text(format!(
+                    "{} must not be less than {}, found {}",
+                    val.qualifier(),
+                    min,
+                    val
+                ))))
+            }
+            NotInBounds::UpperBound(val, max) => {
+                Self::CommandFailed(Box::new(TextComponent::text(format!(
+                    "{} must not be more than {}, found {}",
+                    val.qualifier(),
+                    max,
+                    val
+                ))))
+            }
         }
     }
 }
@@ -202,7 +207,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<f64> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
+    ) -> Option<pumpkin_protocol::java::client::play::SuggestionProviders> {
         None
     }
 }
@@ -230,7 +235,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<f32> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
+    ) -> Option<pumpkin_protocol::java::client::play::SuggestionProviders> {
         None
     }
 }
@@ -258,7 +263,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<i32> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
+    ) -> Option<pumpkin_protocol::java::client::play::SuggestionProviders> {
         None
     }
 }
@@ -286,7 +291,7 @@ impl GetClientSideArgParser for BoundedNumArgumentConsumer<i64> {
 
     fn get_client_side_suggestion_type_override(
         &self,
-    ) -> Option<pumpkin_protocol::client::play::SuggestionProviders> {
+    ) -> Option<pumpkin_protocol::java::client::play::SuggestionProviders> {
         None
     }
 }

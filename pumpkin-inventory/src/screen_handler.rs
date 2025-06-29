@@ -2,12 +2,14 @@ use async_trait::async_trait;
 use log::warn;
 use pumpkin_data::screen::WindowType;
 use pumpkin_protocol::{
-    client::play::{
-        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-        CSetPlayerInventory, CSetSelectedSlot,
-    },
     codec::item_stack_seralizer::OptionalItemStackHash,
-    server::play::SlotActionType,
+    java::{
+        client::play::{
+            CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+            CSetPlayerInventory, CSetSelectedSlot,
+        },
+        server::play::SlotActionType,
+    },
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::inventory::{ComparableInventory, Inventory};

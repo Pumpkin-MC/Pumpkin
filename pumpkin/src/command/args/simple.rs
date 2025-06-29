@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{
+use pumpkin_protocol::java::client::play::{
     ArgumentType, CommandSuggestion, StringProtoArgBehavior, SuggestionProviders,
 };
 

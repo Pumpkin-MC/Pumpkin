@@ -3,10 +3,10 @@ use std::io::Write;
 
 use serde::{Serialize, Serializer};
 
+use crate::ReadingError;
+use crate::WritingError;
 use crate::ser::NetworkReadExt;
 use crate::ser::NetworkWriteExt;
-use crate::ser::ReadingError;
-use crate::ser::WritingError;
 
 pub struct BitSet(pub Box<[i64]>);
 

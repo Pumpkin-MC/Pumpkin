@@ -4,8 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [features]
-default = ["packets", "query"]
-packets = ["serverbound", "clientbound"]
+default = ["query"]
 serverbound = []
 clientbound = []
 query = []

@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_data::{Block, block_properties::get_block};
-use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_util::text::TextComponent;
 
 use crate::{command::dispatcher::CommandError, server::Server};
 
@@ -60,8 +61,11 @@ impl<'a> FindArg<'a> for BlockArgumentConsumer {
         match args.get(name) {
             Some(Arg::Block(name)) => get_block(name).map_or_else(
                 || {
-                    Err(CommandError::GeneralCommandIssue(format!(
-                        "Block {name} does not exist."
+                    Err(CommandError::CommandFailed(Box::new(
+                        TextComponent::translate(
+                            "argument.block.id.invalid",
+                            [TextComponent::text((*name).to_string())],
+                        ),
                     )))
                 },
                 Result::Ok,

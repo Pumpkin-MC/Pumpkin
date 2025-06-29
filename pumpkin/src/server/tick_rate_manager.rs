@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_protocol::client::play::{CSystemChatMessage, CTickingState, CTickingStep};
+use pumpkin_protocol::java::client::play::{CSystemChatMessage, CTickingState, CTickingStep};
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 
 use crate::entity::player::Player;

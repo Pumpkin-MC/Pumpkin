@@ -12,17 +12,16 @@ use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
     command::dispatcher::CommandDispatcher, entity::player::Player, net::Client, world::World,
 };
-use bytes::Bytes;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
-use pumpkin_protocol::client::login::CEncryptionRequest;
-use pumpkin_protocol::client::play::CChangeDifficulty;
-use pumpkin_protocol::client::play::CSetSelectedSlot;
-use pumpkin_protocol::{ClientPacket, client::config::CPluginMessage};
+use pumpkin_protocol::java::client::login::CEncryptionRequest;
+use pumpkin_protocol::java::client::play::CChangeDifficulty;
+use pumpkin_protocol::java::client::play::CSetSelectedSlot;
+use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_registry::{Registry, VanillaDimensionType};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::vector2::Vector2;
@@ -99,6 +98,8 @@ pub struct Server {
     pub aggregated_tick_times_nanos: AtomicI64,
     /// Total number of ticks processed by the server
     pub tick_count: AtomicI32,
+    /// Random unique Server ID used by Bedrock Edition
+    pub server_guid: u64,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
@@ -214,6 +215,7 @@ impl Server {
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
+            server_guid: rand::random(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info: Arc::new(RwLock::new(level_info)),
@@ -397,17 +399,10 @@ impl Server {
     where
         P: ClientPacket,
     {
-        let mut packet_buf = Vec::new();
-        if let Err(err) = packet.write(&mut packet_buf) {
-            log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
-            return;
-        }
-        let packet_data: Bytes = packet_buf.into();
-
         for world in self.worlds.read().await.iter() {
             let current_players = world.players.read().await;
             for player in current_players.values() {
-                player.client.enqueue_packet_data(packet_data.clone()).await;
+                player.client.enqueue_packet(packet).await;
             }
         }
     }

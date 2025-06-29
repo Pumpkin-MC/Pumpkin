@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::Difficulty;
 
 use crate::{
@@ -15,7 +15,9 @@ pub struct DifficultyArgumentConsumer;
 
 impl GetClientSideArgParser for DifficultyArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
-        ArgumentType::String(pumpkin_protocol::client::play::StringProtoArgBehavior::SingleWord)
+        ArgumentType::String(
+            pumpkin_protocol::java::client::play::StringProtoArgBehavior::SingleWord,
+        )
     }
 
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {

@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use pumpkin_protocol::{
-    client::play::{
-        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-    },
     codec::{
         item_stack_seralizer::{ItemStackSerializer, OptionalItemStackHash},
         var_int::VarInt,
+    },
+    java::client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
     },
 };
 use pumpkin_world::item::ItemStack;
