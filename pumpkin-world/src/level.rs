@@ -2,7 +2,7 @@ use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
-use pumpkin_data::{block_properties::has_random_ticks, Block};
+use pumpkin_data::{Block, block_properties::has_random_ticks};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use std::{
     collections::{HashMap, VecDeque},

@@ -978,10 +978,7 @@ pub(crate) fn build() -> TokenStream {
         }
 
         pub fn has_random_ticks(state_id: u16) -> bool {
-            match state_id {
-                #random_tick_state_ids => true,
-                _ => false,
-            }
+            matches!(state_id, #random_tick_state_ids)
         }
 
         pub fn blocks_movement(block_state: &BlockState) -> bool {
