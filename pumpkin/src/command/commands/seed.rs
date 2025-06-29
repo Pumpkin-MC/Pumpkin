@@ -29,9 +29,9 @@ impl CommandExecutor for Executor {
             _ => match server.worlds.read().await.first() {
                 Some(world) => world.level.seed.0,
                 None => {
-                    return Err(CommandError::GeneralCommandIssue(
-                        "Unable to get Seed".to_string(),
-                    ));
+                    return Err(CommandError::CommandFailed(Box::new(TextComponent::text(
+                        "Unable to get Seed",
+                    ))));
                 }
             },
         };

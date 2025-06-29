@@ -77,6 +77,7 @@ use pumpkin_world::BlockStateId;
 use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::flower_pots::FlowerPotBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
+use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::loot::LootContextParameters;
 use crate::block::registry::BlockRegistry;
 use crate::world::World;
@@ -147,6 +148,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(EndPortalBlock);
     manager.register(EndPortalFrameBlock);
     manager.register(SeaPickleBlock);
+    manager.register(SkullBlock);
 
     // Fire
     manager.register(SoulFireBlock);

@@ -5,10 +5,13 @@ mod ender_eye;
 mod hoe;
 mod honeycomb;
 mod ignite;
+mod minecart;
 mod shovel;
 mod snowball;
 mod sword;
 mod trident;
+
+use crate::item::items::minecart::MinecartItem;
 
 use super::registry::ItemRegistry;
 use axe::AxeItem;
@@ -39,6 +42,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(FilledBucketItem);
     manager.register(ShovelItem);
     manager.register(AxeItem);
+    manager.register(MinecartItem);
     manager.register(HoneyCombItem);
     manager.register(EnderEyeItem);
     manager.register(FireChargeItem);
