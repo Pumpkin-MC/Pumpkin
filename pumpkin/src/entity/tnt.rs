@@ -2,8 +2,8 @@ use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::{Block, damage::DamageType};
 use pumpkin_protocol::{
-    client::play::{MetaDataType, Metadata},
     codec::var_int::VarInt,
+    java::client::play::{MetaDataType, Metadata},
 };
 use pumpkin_util::math::vector3::Vector3;
 use std::{

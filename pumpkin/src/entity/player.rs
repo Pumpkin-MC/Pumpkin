@@ -35,7 +35,8 @@ use pumpkin_inventory::sync_handler::SyncHandler;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
     CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
@@ -45,9 +46,7 @@ use pumpkin_protocol::client::play::{
     CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
     GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::ser::packet::Packet;
-use pumpkin_protocol::server::play::{
+use pumpkin_protocol::java::server::play::{
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
@@ -55,6 +54,7 @@ use pumpkin_protocol::server::play::{
     SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
     SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
+use pumpkin_protocol::packet::Packet;
 use pumpkin_protocol::{IdOr, RawPacket, ServerPacket};
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
@@ -1328,7 +1328,7 @@ impl Player {
                     .await
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
                         PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
-                        &[pumpkin_protocol::client::play::Player {
+                        &[pumpkin_protocol::java::client::play::Player {
                             uuid: self.gameprofile.id,
                             actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
                         }],
@@ -1620,10 +1620,12 @@ impl Player {
     pub async fn remove_effect(&self, effect_type: EffectType) {
         let effect_id = VarInt(effect_type as i32);
         self.client
-            .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
-                self.entity_id().into(),
-                effect_id,
-            ))
+            .enqueue_packet(
+                &pumpkin_protocol::java::client::play::CRemoveMobEffect::new(
+                    self.entity_id().into(),
+                    effect_id,
+                ),
+            )
             .await;
         self.living_entity.remove_effect(effect_type).await;
 
@@ -1637,10 +1639,12 @@ impl Player {
             effect_list.push(*effect);
             let effect_id = VarInt(*effect as i32);
             self.client
-                .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
-                    self.entity_id().into(),
-                    effect_id,
-                ))
+                .enqueue_packet(
+                    &pumpkin_protocol::java::client::play::CRemoveMobEffect::new(
+                        self.entity_id().into(),
+                        effect_id,
+                    ),
+                )
                 .await;
             count += 1;
         }
@@ -2479,6 +2483,10 @@ impl MessageCache {
 impl InventoryPlayer for Player {
     async fn drop_item(&self, item: ItemStack, _retain_ownership: bool) {
         self.drop_item(item).await;
+    }
+
+    fn has_infinite_materials(&self) -> bool {
+        self.gamemode.load() == GameMode::Creative
     }
 
     fn get_inventory(&self) -> Arc<PlayerInventory> {

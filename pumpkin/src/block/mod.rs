@@ -4,6 +4,7 @@ use blocks::bed::BedBlock;
 use blocks::cactus::CactusBlock;
 use blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
 use blocks::command::CommandBlock;
+use blocks::composter::ComposterBlock;
 use blocks::dirt_path::DirtPathBlock;
 use blocks::doors::DoorBlock;
 use blocks::end_portal::EndPortalBlock;
@@ -35,6 +36,7 @@ use blocks::plant::tall_plant::TallPlantBlock;
 use blocks::pumpkin::PumpkinBlock;
 use blocks::redstone::buttons::ButtonBlock;
 use blocks::redstone::comparator::ComparatorBlock;
+use blocks::redstone::copper_bulb::CopperBulbBlock;
 use blocks::redstone::observer::ObserverBlock;
 use blocks::redstone::pressure_plate::plate::PressurePlateBlock;
 use blocks::redstone::pressure_plate::weighted::WeightedPressurePlateBlock;
@@ -72,6 +74,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use pumpkin_world::BlockStateId;
 
+use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::loot::LootContextParameters;
 use crate::block::registry::BlockRegistry;
@@ -96,6 +99,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SaplingBlock);
     manager.register(CactusBlock);
     manager.register(CarpetBlock);
+    manager.register(CampfireBlock);
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
@@ -135,6 +139,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NoteBlock);
     manager.register(PumpkinBlock);
     manager.register(CommandBlock);
+    manager.register(ComposterBlock);
     manager.register(PressurePlateBlock);
     manager.register(WeightedPressurePlateBlock);
     manager.register(EndPortalBlock);
@@ -159,6 +164,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     manager.register(RedstoneBlock);
     manager.register(RedstoneLamp);
+    manager.register(CopperBulbBlock);
     manager.register(RedstoneTorchBlock);
     manager.register(RedstoneWireBlock);
     manager.register(RepeaterBlock);

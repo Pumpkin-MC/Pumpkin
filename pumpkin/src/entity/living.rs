@@ -15,11 +15,11 @@ use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::{
-    client::play::{CDamageEvent, CSetEquipment, MetaDataType, Metadata},
     codec::item_stack_seralizer::ItemStackSerializer,
+    java::client::play::{CDamageEvent, CSetEquipment, MetaDataType, Metadata},
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;

@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use pumpkin_data::BlockState;
-use pumpkin_util::{math::int_provider::IntProvider, random::RandomGenerator};
+use pumpkin_util::{
+    math::int_provider::IntProvider,
+    random::{RandomGenerator, RandomImpl},
+};
 use serde::Deserialize;
 
 use crate::{ProtoChunk, generation::feature::features::tree::TreeNode, level::Level};
@@ -27,7 +30,7 @@ impl PineFoliagePlacer {
         foliage_provider: &BlockState,
     ) {
         let mut radius = 0;
-        for y in offset..offset - foliage_height {
+        for y in (offset - foliage_height)..offset {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
@@ -42,15 +45,20 @@ impl PineFoliagePlacer {
             .await;
             if radius >= 1 && y == offset - foliage_height + 1 {
                 radius -= 1;
-                continue;
+            } else if radius < iradius + node.foliage_radius {
+                radius += 1;
             }
-            if radius >= iradius + node.foliage_radius {
-                continue;
-            }
-            radius += 1;
         }
     }
-    // TODO: getRandomRadius
+
+    pub fn get_random_radius(
+        placer: &FoliagePlacer,
+        random: &mut RandomGenerator,
+        base_height: i32,
+    ) -> i32 {
+        placer.radius.get(random) + random.next_bounded_i32((base_height + 1).max(1))
+    }
+
     pub fn get_random_height(&self, random: &mut RandomGenerator, _trunk_height: i32) -> i32 {
         self.height.get(random)
     }

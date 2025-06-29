@@ -1,9 +1,19 @@
+use std::net::{Ipv4Addr, SocketAddr};
+
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize)]
 #[serde(default)]
 pub struct QueryConfig {
     pub enabled: bool,
-    /// Optional; if not specified, the port the server is running on will be used.
-    pub port: Option<u16>,
+    pub address: SocketAddr,
+}
+
+impl Default for QueryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 25565),
+        }
+    }
 }

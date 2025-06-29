@@ -4,11 +4,14 @@ use std::{
     ops::Deref,
 };
 
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
-
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{self, SeqAccess, Visitor},
+};
+
+use crate::{
+    WritingError,
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
 };
 
 pub type VarLongType = i64;

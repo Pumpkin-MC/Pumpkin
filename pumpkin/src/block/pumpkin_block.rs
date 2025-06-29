@@ -6,7 +6,7 @@ use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection, BlockState};
-use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};

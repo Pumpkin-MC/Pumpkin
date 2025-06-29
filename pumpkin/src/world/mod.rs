@@ -27,7 +27,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use border::Worldborder;
-use bytes::{BufMut, Bytes};
+use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::BlockDirection;
@@ -50,25 +50,25 @@ use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
-    client::play::{
+    java::client::play::{
         CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
         CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
         FilterType, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
     },
-    server::play::SChatMessage,
+    java::server::play::SChatMessage,
 };
 use pumpkin_protocol::{
-    client::play::{
+    codec::item_stack_seralizer::ItemStackSerializer,
+    java::client::play::{
         CBlockEvent, CRemoveMobEffect, CSetEntityMetadata, CSetEquipment, MetaDataType, Metadata,
     },
-    codec::item_stack_seralizer::ItemStackSerializer,
 };
 use pumpkin_protocol::{
-    client::play::{
+    codec::var_int::VarInt,
+    java::client::play::{
         CBlockUpdate, CDisguisedChatMessage, CExplosion, CRespawn, CSetBlockDestroyStage,
         CWorldEvent,
     },
-    codec::var_int::VarInt,
 };
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
@@ -399,15 +399,8 @@ impl World {
             return;
         }
 
-        let mut packet_buf = Vec::new();
-        if let Err(err) = packet.write(&mut packet_buf) {
-            log::error!("Failed to serialize packet {}: {}", P::PACKET_ID, err);
-            return;
-        }
-        let packet_data: Bytes = packet_buf.into();
-
         for (_, player) in players {
-            player.client.enqueue_packet_data(packet_data.clone()).await;
+            player.client.enqueue_packet(packet).await;
         }
     }
 
@@ -761,7 +754,7 @@ impl World {
                 | PlayerInfoFlags::UPDATE_GAME_MODE
                 | PlayerInfoFlags::UPDATE_LISTED)
                 .bits(),
-            &[pumpkin_protocol::client::play::Player {
+            &[pumpkin_protocol::java::client::play::Player {
                 uuid: gameprofile.id,
                 actions: &[
                     PlayerAction::AddPlayer {
@@ -814,10 +807,12 @@ impl World {
 
             let entries = current_player_data
                 .iter()
-                .map(|(id, actions)| pumpkin_protocol::client::play::Player {
-                    uuid: **id,
-                    actions,
-                })
+                .map(
+                    |(id, actions)| pumpkin_protocol::java::client::play::Player {
+                        uuid: **id,
+                        actions,
+                    },
+                )
                 .collect::<Vec<_>>();
 
             log::debug!("Sending player info to {}", player.gameprofile.name);
@@ -1792,12 +1787,21 @@ impl World {
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
 
-            let particles_packet = CWorldEvent::new(
-                WorldEvent::BlockBroken as i32,
-                *position,
-                broken_state_id.into(),
-                false,
-            );
+            if Block::from_state_id(broken_state_id) != Some(Block::FIRE) {
+                let particles_packet = CWorldEvent::new(
+                    WorldEvent::BlockBroken as i32,
+                    *position,
+                    broken_state_id.into(),
+                    false,
+                );
+                match cause {
+                    Some(player) => {
+                        self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
+                            .await;
+                    }
+                    None => self.broadcast_packet_all(&particles_packet).await,
+                }
+            }
 
             if !flags.contains(BlockFlags::SKIP_DROPS) {
                 let params = LootContextParameters {
@@ -1805,14 +1809,6 @@ impl World {
                     ..Default::default()
                 };
                 block::drop_loot(self, &broken_block, position, true, params).await;
-            }
-
-            match cause {
-                Some(player) => {
-                    self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
-                        .await;
-                }
-                None => self.broadcast_packet_all(&particles_packet).await,
             }
         }
     }

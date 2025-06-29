@@ -331,6 +331,26 @@ impl ToTokens for BlockPropertyStruct {
     }
 }
 
+#[derive(Deserialize, Clone, Debug)]
+pub struct FlammableStruct {
+    pub spread_chance: u8,
+    pub burn_chance: u8,
+}
+
+impl ToTokens for FlammableStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let spread_chance = &self.spread_chance;
+        let burn_chance = &self.burn_chance;
+
+        tokens.extend(quote! {
+            Flammable {
+                spread_chance: #spread_chance,
+                burn_chance: #burn_chance,
+            }
+        });
+    }
+}
+
 #[derive(Deserialize, Clone, Copy, Debug)]
 pub struct CollisionShape {
     pub min: Vector3<f64>,
@@ -475,6 +495,7 @@ pub struct Block {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
+    pub flammable: Option<FlammableStruct>,
     pub loot_table: Option<LootTableStruct>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
@@ -493,6 +514,7 @@ pub struct OptimizedBlock {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
+    pub flammable: Option<FlammableStruct>,
     pub loot_table: Option<LootTableStruct>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
@@ -538,6 +560,13 @@ impl OptimizedBlock {
         let mut default_state = all_states[default_state_ref.state_idx as usize].clone();
         default_state.id = default_state_ref.id;
         let default_state = default_state.to_tokens();
+        let flammable = match &self.flammable {
+            Some(flammable) => {
+                let flammable_tokens = flammable.to_token_stream();
+                quote! { Some(#flammable_tokens) }
+            }
+            None => quote! { None },
+        };
         tokens.extend(quote! {
             Block {
                 id: #id,
@@ -551,6 +580,7 @@ impl OptimizedBlock {
                 item_id: #item_id,
                 default_state: #default_state,
                 states: &[#(#states),*],
+                flammable: #flammable,
                 loot_table: #loot_table,
                 experience: #experience,
             }
@@ -682,6 +712,7 @@ pub(crate) fn build() -> TokenStream {
             slipperiness: block.slipperiness,
             velocity_multiplier: block.velocity_multiplier,
             jump_velocity_multiplier: block.jump_velocity_multiplier,
+            flammable: block.flammable,
             loot_table: block.loot_table,
             experience: block.experience,
             states: block
@@ -837,7 +868,7 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use crate::{BlockState, BlockStateRef, Block, CollisionShape};
+        use crate::{BlockState, BlockStateRef, Block, CollisionShape, blocks::Flammable};
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;

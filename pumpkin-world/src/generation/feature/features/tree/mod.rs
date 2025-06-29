@@ -113,7 +113,8 @@ impl TreeFeature {
             .foliage_placer
             .r#type
             .get_random_height(random, height as i32);
-        let foliage_radius = self.foliage_placer.get_random_radius(random);
+        let base_height = height as i32 - foliage_height;
+        let foliage_radius = self.foliage_placer.get_random_radius(random, base_height);
         let foliage_state = self.foliage_provider.get(random, pos);
         for node in nodes {
             self.foliage_placer
