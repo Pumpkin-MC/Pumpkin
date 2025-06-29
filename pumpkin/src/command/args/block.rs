@@ -72,9 +72,10 @@ impl<'a> FindArg<'a> for BlockArgumentConsumer {
 }
 
 pub struct BlockPredicateArgumentConsumer;
+#[derive(Debug)]
 pub enum BlockPredicate {
-    Tag(&'static [&'static str]),
-    Block(Block),
+    Tag(Vec<u16>),
+    Block(u16),
 }
 
 impl GetClientSideArgParser for BlockPredicateArgumentConsumer {
@@ -130,7 +131,7 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
                                     "Block {name} does not exist."
                                 )))
                             },
-                            |block| Result::Ok(Some(BlockPredicate::Block(block))),
+                            |block| Ok(Some(BlockPredicate::Block(block.id))),
                         )
                     },
                     |tag| {
@@ -141,7 +142,14 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
                                     "Tag {tag} does not exist."
                                 )))
                             },
-                            |tag| Result::Ok(Some(BlockPredicate::Tag(tag))),
+                            |blocks| {
+                                let mut block_ids = Vec::with_capacity(blocks.len());
+                                // TODO it will be slow to check name str, we should make a tag list of ids
+                                for block_name in blocks {
+                                    block_ids.push(get_block(block_name).unwrap().id);
+                                }
+                                Ok(Some(BlockPredicate::Tag(block_ids)))
+                            },
                         )
                     },
                 )
