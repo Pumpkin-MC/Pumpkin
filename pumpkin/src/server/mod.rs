@@ -112,6 +112,7 @@ pub struct Server {
 
 impl Server {
     #[allow(clippy::new_without_default)]
+    #[allow(clippy::too_many_lines)]
     #[must_use]
     pub async fn new() -> Arc<Self> {
         let auth_client = BASIC_CONFIG.online_mode.then(|| {

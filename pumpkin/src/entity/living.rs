@@ -373,15 +373,15 @@ impl EntityBase for LivingEntity {
         let world = self.entity.world.read().await;
 
         let last_damage = self.last_damage_taken.load();
-        let mut damage_amount = amount;
-        if self.hurt_cooldown.load(Relaxed) > 10 {
+        let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 {
             if amount <= last_damage {
                 return false;
             }
-            damage_amount = amount - self.last_damage_taken.load();
+            amount - self.last_damage_taken.load()
         } else {
             self.hurt_cooldown.store(20, Relaxed);
-        }
+            amount
+        };
         self.last_damage_taken.store(amount);
         damage_amount = damage_amount.max(0.0);
 

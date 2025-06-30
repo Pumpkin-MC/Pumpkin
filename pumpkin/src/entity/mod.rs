@@ -802,6 +802,7 @@ impl Entity {
         }
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn get_display_name(&self) -> TextComponent {
         // TODO
         TextComponent::text(format!(
