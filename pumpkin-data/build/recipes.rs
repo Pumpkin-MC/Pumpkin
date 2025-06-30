@@ -8,9 +8,9 @@ use serde::Deserialize;
 #[serde(tag = "type")]
 pub enum RecipeTypes {
     #[serde(rename = "minecraft:blasting")]
-    Blasting,
+    Blasting(CookingRecipeStruct),
     #[serde(rename = "minecraft:campfire_cooking")]
-    CampfireCooking,
+    CampfireCooking(CookingRecipeStruct),
     #[serde(rename = "minecraft:crafting_shaped")]
     CraftingShaped(CraftingShapedRecipeStruct),
     #[serde(rename = "minecraft:crafting_shapeless")]
@@ -20,18 +20,56 @@ pub enum RecipeTypes {
     #[serde(rename = "minecraft:crafting_decorated_pot")]
     CraftingDecoratedPot(CraftingDecoratedPotStruct),
     #[serde(rename = "minecraft:smelting")]
-    Smelting,
+    Smelting(CookingRecipeStruct),
     #[serde(rename = "minecraft:smithing_transform")]
     SmithingTransform,
     #[serde(rename = "minecraft:smithing_trim")]
     SmithingTrim,
     #[serde(rename = "minecraft:smoking")]
-    Smoking,
+    Smoking(CookingRecipeStruct),
     #[serde(rename = "minecraft:stonecutting")]
     Stonecutting,
     #[serde(other)]
     #[serde(rename = "minecraft:crafting_special_*")]
     CraftingSpecial,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct CookingRecipeStruct {
+    category: Option<RecipeCategoryTypes>,
+    group: Option<String>,
+    ingredient: RecipeIngredientTypes,
+    cookingtime: i32,
+    experience: f32,
+    result: RecipeResultStruct,
+}
+
+impl ToTokens for CookingRecipeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let category = match &self.category {
+            Some(category) => category.to_token_stream(),
+            None => RecipeCategoryTypes::Misc.to_token_stream(),
+        };
+        let group = match &self.group {
+            Some(group) => quote! { Some(#group) },
+            None => quote! { None },
+        };
+        let ingredient = self.ingredient.to_token_stream();
+        let cookingtime = self.cookingtime.to_token_stream();
+        let experience = self.experience.to_token_stream();
+        let result = self.result.to_token_stream();
+
+        tokens.extend(quote! {
+            //CookingRecipeType::Blasting,CampfireCooking,Smelting,Smoking{
+                category: #category,
+                group: #group,
+                ingredient: #ingredient,
+                cookingtime: #cookingtime,
+                experience: #experience,
+                result: #result,
+            //}
+        });
+    }
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -235,6 +273,10 @@ pub enum RecipeCategoryTypes {
     Restone,
     #[serde(rename = "misc")]
     Misc,
+    #[serde(rename = "food")]
+    Food,
+    #[serde(rename = "blocks")]
+    Blocks,
 }
 
 impl ToTokens for RecipeCategoryTypes {
@@ -252,6 +294,12 @@ impl ToTokens for RecipeCategoryTypes {
             RecipeCategoryTypes::Misc => {
                 quote! { RecipeCategoryTypes::Misc }
             }
+            RecipeCategoryTypes::Food => {
+                quote! { RecipeCategoryTypes::Food }
+            }
+            RecipeCategoryTypes::Blocks => {
+                quote! { RecipeCategoryTypes::Blocks }
+            }
         };
 
         tokens.extend(name);
@@ -266,11 +314,28 @@ pub(crate) fn build() -> TokenStream {
             .expect("Failed to parse recipes.json");
 
     let mut crafting_recipes = Vec::new();
+    let mut cooking_recipes = Vec::new();
 
     for recipe in recipes_assets {
         match recipe {
-            RecipeTypes::Blasting => {}
-            RecipeTypes::CampfireCooking => {}
+            RecipeTypes::Blasting(recipe) => {
+                let common_cooking_token = recipe.to_token_stream();
+                let blasting_token = quote! {
+                    CookingRecipeType::Blasting (CookingRecipe {
+                        #common_cooking_token
+                    })
+                };
+                cooking_recipes.push(blasting_token);
+            }
+            RecipeTypes::CampfireCooking(recipe) => {
+                let common_cooking_token = recipe.to_token_stream();
+                let campfire_token = quote! {
+                    CookingRecipeType::CampfireCooking (CookingRecipe {
+                        #common_cooking_token
+                    })
+                };
+                cooking_recipes.push(campfire_token);
+            }
             RecipeTypes::CraftingShaped(recipe) => {
                 crafting_recipes.push(recipe.to_token_stream());
             }
@@ -283,10 +348,26 @@ pub(crate) fn build() -> TokenStream {
             RecipeTypes::CraftingDecoratedPot(recipe) => {
                 crafting_recipes.push(recipe.to_token_stream());
             }
-            RecipeTypes::Smelting => {}
+            RecipeTypes::Smelting(recipe) => {
+                let common_cooking_token = recipe.to_token_stream();
+                let smelting_token = quote! {
+                    CookingRecipeType::Smelting(CookingRecipe {
+                        #common_cooking_token
+                    })
+                };
+                cooking_recipes.push(smelting_token);
+            }
             RecipeTypes::SmithingTransform => {}
             RecipeTypes::SmithingTrim => {}
-            RecipeTypes::Smoking => {}
+            RecipeTypes::Smoking(recipe) => {
+                let common_cooking_token = recipe.to_token_stream();
+                let smoking_token = quote! {
+                    CookingRecipeType::Smoking(CookingRecipe{
+                        #common_cooking_token
+                    })
+                };
+                cooking_recipes.push(smoking_token);
+            }
             RecipeTypes::Stonecutting => {}
             RecipeTypes::CraftingSpecial => {}
         }
@@ -323,6 +404,25 @@ pub(crate) fn build() -> TokenStream {
                 category: RecipeCategoryTypes,
             },
             CraftingSpecial,
+        }
+
+        #[allow(dead_code)]
+        #[derive(Clone, Debug)]
+        pub struct CookingRecipe {
+            category: RecipeCategoryTypes,
+            group: Option<&'static str>,
+            ingredient: RecipeIngredientTypes,
+            cookingtime: i32,
+            experience: f32,
+            result: RecipeResultStruct,
+        }
+
+        #[derive(Clone, Debug)]
+        pub enum CookingRecipeType {
+            Blasting(CookingRecipe),
+            Smelting(CookingRecipe),
+            Smoking(CookingRecipe),
+            CampfireCooking(CookingRecipe),
         }
 
         #[derive(Clone, Debug)]
@@ -362,10 +462,15 @@ pub(crate) fn build() -> TokenStream {
             Building,
             Restone,
             Misc,
+            Food,
+            Blocks,
         }
 
         pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             #(#crafting_recipes),*
+        ];
+        pub static RECIPES_COOKING: &[CookingRecipeType] = &[
+            #(#cooking_recipes ),*
         ];
     }
 }
