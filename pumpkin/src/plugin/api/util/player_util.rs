@@ -98,10 +98,6 @@ impl Player {
         self.gameprofile.name.clone()
     }
 
-    pub async fn send_message(&self, text: TextComponent) {
-        self.send_system_message(&text).await
-    }
-
     pub async fn get_location(&self) -> Option<Vector3<f64>> {
         Some(self.living_entity.entity.pos.load())
     }
