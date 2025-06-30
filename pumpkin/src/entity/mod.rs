@@ -108,6 +108,7 @@ pub trait EntityBase: Send + Sync {
     /// Returns if damage was successful or not
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
         self.damage_with_context(amount, damage_type, None, None, None)
+            .await
     }
 
     async fn damage_with_context(

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::EntityBase;
@@ -48,8 +48,11 @@ pub struct LivingEntity {
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
 }
 
+#[async_trait]
 pub trait LivingEntityTrait: EntityBase {
-    async fn on_actually_hurt(&self, amount: f32, damage_type: DamageType) {}
+    async fn on_actually_hurt(&self, _amount: f32, _damage_type: DamageType) {
+        //TODO: wolves, etc...
+    }
 }
 
 impl LivingEntity {
@@ -215,7 +218,11 @@ impl LivingEntity {
     }
 
     pub async fn on_death(&self) {
-        if self.dead.compare_exchange(false, true, Relaxed, Relaxed) {
+        if self
+            .dead
+            .compare_exchange(false, true, Relaxed, Relaxed)
+            .is_ok()
+        {
             // Plays the death sound
             self.entity
                 .world
@@ -267,7 +274,7 @@ impl LivingEntity {
                 - 64.0
         {
             // Tick out of world damage
-            self.damage(4.0, DamageType::OUT_OF_WORLD)
+            self.damage(4.0, DamageType::OUT_OF_WORLD).await;
         }
     }
 
@@ -390,14 +397,7 @@ impl EntityBase for LivingEntity {
             }
         }
     }
-    async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-        if !self
-            .damage_with_context(amount, damage_type, None, None, None)
-            .await
-        {
-            return false;
-        }
-    }
+
     fn get_entity(&self) -> &Entity {
         &self.entity
     }
