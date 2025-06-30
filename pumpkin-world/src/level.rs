@@ -39,6 +39,17 @@ use crate::{
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
 pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
 
+// Runtime Tokio single-thread, for world generation
+// Every rayon thread use is own runtime for best performance
+thread_local! {
+    static GEN_RT: Runtime = {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("failed to init tokio runtime for world_gen")
+    };
+}
+
 /// The `Level` module provides functionality for working with chunks within or outside a Minecraft world.
 ///
 /// Key features include:
@@ -764,29 +775,28 @@ impl Level {
                 let block_registry = block_registry.clone();
                 let self_clone = self_clone.clone();
 
-                tokio::spawn(async move {
+                rayon::spawn(move || {
                     // Rayon tasks are queued, so also check it here
                     if !cloned_continue_to_generate.load(Ordering::Relaxed) {
                         return;
                     }
 
-                    let result = {
-                        let entry = loaded_chunks.entry(pos); // Get the entry for the position
-
-                        // Check if the entry already exists.
-                        // If not, generate the chunk asynchronously and insert it.
-                        match entry {
-                            Entry::Occupied(entry) => entry.into_ref(),
-                            Entry::Vacant(entry) => {
-                                let generated_chunk = world_gen
-                                    .generate_chunk(&self_clone, block_registry.as_ref(), &pos)
-                                    .await;
-                                entry.insert(Arc::new(RwLock::new(generated_chunk)))
+                    let result = GEN_RT.with(|rt| {
+                        rt.block_on(async {
+                            let entry = loaded_chunks.entry(pos);
+                            match entry {
+                                Entry::Occupied(e) => e.into_ref(),
+                                Entry::Vacant(v) => {
+                                    let chunk = world_gen
+                                        .generate_chunk(&self_clone, block_registry.as_ref(), &pos)
+                                        .await;
+                                    v.insert(Arc::new(RwLock::new(chunk)))
+                                }
                             }
-                        }
-                        .value()
-                        .clone()
-                    };
+                            .value()
+                            .clone()
+                        })
+                    });
 
                     if !send_chunk(true, result, &channel) {
                         // Stop any additional queued generations
