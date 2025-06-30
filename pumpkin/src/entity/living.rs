@@ -263,14 +263,14 @@ impl LivingEntity {
             .store(velo.multiply(multiplier, 1.0, multiplier));
         Entity::check_block_collision(entity, server).await;
         if pos.y
-            < self
+            < f64::from(self
                 .entity
                 .world
                 .read()
                 .await
                 .generation_settings()
                 .shape
-                .min_y as f64
+                .min_y)
                 - 64.0
         {
             // Tick out of world damage
