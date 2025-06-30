@@ -347,8 +347,6 @@ impl EntityBase for LivingEntity {
         source: Option<&Entity>,
         cause: Option<&Entity>,
     ) -> bool {
-        dbg!(self.entity.entity_type);
-        dbg!(amount);
         // Check invulnerability before applying damage
         if self.entity.is_invulnerable_to(&damage_type) {
             return false;
