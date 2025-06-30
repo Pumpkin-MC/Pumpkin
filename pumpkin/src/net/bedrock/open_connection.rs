@@ -1,7 +1,7 @@
 use pumpkin_protocol::{
     bedrock::{
-        client::open_connection::{COpenConnectionReply1, COpenConnectionReply2},
-        server::open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
+        client::raknet::open_connection::{COpenConnectionReply1, COpenConnectionReply2},
+        server::raknet::open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
     },
     codec::socket_address::SocketAddress,
 };
