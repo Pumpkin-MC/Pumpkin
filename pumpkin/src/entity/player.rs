@@ -1894,7 +1894,7 @@ impl Player {
     }
 
     pub async fn get_food_level(&self) -> u8 {
-        self.hunger_manager.level.load()
+        self.hunger_manager.level.load().await
     }
 
     pub async fn set_food_level(&self, level: u8) {
@@ -1908,7 +1908,7 @@ impl Player {
     }
 
     pub async fn get_saturation_level(&self) -> f32 {
-        self.hunger_manager.saturation.load()
+        self.hunger_manager.saturation.load().await
     }
 
     // TODO: Find out the actual max, this makes no sense (using this will crash the server lol)
@@ -1918,7 +1918,7 @@ impl Player {
     } */
 
     pub async fn get_health(&self) -> f32 {
-        self.living_entity.health.load()
+        self.living_entity.health.load().await
     }
 
     // TODO: Maybe use a damage cause, so a damage tick happens?
@@ -1928,11 +1928,11 @@ impl Player {
     } */
 
     pub async fn get_uuid(&self) -> Uuid {
-        self.gameprofile.id
+        self.gameprofile.id.await
     }
 
     pub async fn get_name(&self) -> String {
-        self.gameprofile.name.clone()
+        self.gameprofile.name.clone().await
     }
 }
 
