@@ -96,9 +96,9 @@ impl EntityBase for ItemEntity {
             let delay = self.pickup_delay.lock().await;
             *delay == 0
         };
-        
-        if can_pickup &&
-            player.living_entity.health.load() > 0.0
+
+        if can_pickup
+            && player.living_entity.health.load() > 0.0
             && player
                 .inventory
                 .insert_stack_anywhere(&mut *self.item_stack.lock().await)
