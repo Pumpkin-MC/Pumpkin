@@ -63,6 +63,7 @@ impl LivingEntity {
             health: AtomicCell::new(20.0),
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
+            dead: AtomicBool::new(false),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
         }
@@ -254,6 +255,20 @@ impl LivingEntity {
             .velocity
             .store(velo.multiply(multiplier, 1.0, multiplier));
         Entity::check_block_collision(entity, server).await;
+        if pos.y
+            < self
+                .entity
+                .world
+                .read()
+                .await
+                .generation_settings()
+                .shape
+                .min_y as f64
+                - 64.0
+        {
+            // Tick out of world damage
+            self.damage(4.0, DamageType::OUT_OF_WORLD)
+        }
     }
 
     async fn tick_effects(&self) {
@@ -292,7 +307,7 @@ impl EntityBase for LivingEntity {
             return false;
         }
 
-        if self.health.load() <= 0.0 {
+        if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
             return false; // Dying or dead
         }
 
