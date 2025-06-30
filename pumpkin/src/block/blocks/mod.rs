@@ -18,6 +18,7 @@ pub mod fences;
 pub mod fire;
 pub mod furnace;
 pub mod glass_panes;
+pub mod glazed_terracotta;
 pub mod grindstone;
 pub mod iron_bars;
 pub mod jukebox;
