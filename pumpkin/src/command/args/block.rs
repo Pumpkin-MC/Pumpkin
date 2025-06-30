@@ -61,12 +61,21 @@ impl<'a> FindArg<'a> for BlockArgumentConsumer {
         match args.get(name) {
             Some(Arg::Block(name)) => get_block(name).map_or_else(
                 || {
-                    Err(CommandError::CommandFailed(Box::new(
-                        TextComponent::translate(
-                            "argument.block.id.invalid",
-                            [TextComponent::text((*name).to_string())],
-                        ),
-                    )))
+                    if name.starts_with("minecraft:") {
+                        Err(CommandError::CommandFailed(Box::new(
+                            TextComponent::translate(
+                                "argument.block.id.invalid",
+                                [TextComponent::text((*name).to_string())],
+                            ),
+                        )))
+                    } else {
+                        Err(CommandError::CommandFailed(Box::new(
+                            TextComponent::translate(
+                                "argument.block.id.invalid",
+                                [TextComponent::text("minecraft:".to_string() + *name)],
+                            ),
+                        )))
+                    }
                 },
                 Result::Ok,
             ),
@@ -130,10 +139,21 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
                     || {
                         get_block(name).map_or_else(
                             || {
-                                Err(CommandError::GeneralCommandIssue(format!(
-                                    // TODO translate error message
-                                    "Block {name} does not exist."
-                                )))
+                                if name.starts_with("minecraft:") {
+                                    Err(CommandError::CommandFailed(Box::new(
+                                        TextComponent::translate(
+                                            "argument.block.id.invalid",
+                                            [TextComponent::text((*name).to_string())],
+                                        ),
+                                    )))
+                                } else {
+                                    Err(CommandError::CommandFailed(Box::new(
+                                        TextComponent::translate(
+                                            "argument.block.id.invalid",
+                                            [TextComponent::text("minecraft:".to_string() + *name)],
+                                        ),
+                                    )))
+                                }
                             },
                             |block| Ok(Some(BlockPredicate::Block(block.id))),
                         )
@@ -141,9 +161,11 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
                     |tag| {
                         get_tag_values(RegistryKey::Block, tag).map_or_else(
                             || {
-                                Err(CommandError::GeneralCommandIssue(format!(
-                                    // TODO translate error message
-                                    "Tag {tag} does not exist."
+                                Err(CommandError::CommandFailed(Box::new(
+                                    TextComponent::translate(
+                                        "arguments.block.tag.unknown",
+                                        [TextComponent::text((*tag).to_string())],
+                                    ),
                                 )))
                             },
                             |blocks| {
