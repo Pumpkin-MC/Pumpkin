@@ -6,9 +6,9 @@ mod hoe;
 mod honeycomb;
 mod ignite;
 mod minecart;
+mod no_creative_mining_item;
 mod shovel;
 mod snowball;
-mod sword;
 mod trident;
 
 use crate::item::items::minecart::MinecartItem;
@@ -22,10 +22,10 @@ use hoe::HoeItem;
 use honeycomb::HoneyCombItem;
 use ignite::fire_charge::FireChargeItem;
 use ignite::flint_and_steel::FlintAndSteelItem;
+use no_creative_mining_item::NoCreativeMiningItem;
 use shovel::ShovelItem;
 use snowball::SnowBallItem;
 use std::sync::Arc;
-use sword::SwordItem;
 use trident::TridentItem;
 
 #[must_use]
@@ -36,7 +36,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(HoeItem);
     manager.register(EggItem);
     manager.register(FlintAndSteelItem);
-    manager.register(SwordItem);
+    manager.register(NoCreativeMiningItem);
     manager.register(TridentItem);
     manager.register(EmptyBucketItem);
     manager.register(FilledBucketItem);
