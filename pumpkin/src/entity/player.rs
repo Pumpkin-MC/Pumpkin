@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
-use pumpkin_world::inventory::Inventory;
+use pumpkin_world::inventory::{Clearable, Inventory};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -85,7 +85,7 @@ use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
-
+use crate::entity::experience_orb::ExperienceOrbEntity;
 use super::combat::{self, AttackType, player_attack_sound};
 use super::effect::Effect;
 use super::hunger::HungerManager;
@@ -1277,6 +1277,29 @@ impl Player {
 
     pub async fn kill(&self) {
         self.living_entity.kill().await;
+        
+        let world = self.world().await;
+        if !world.level_info.read().await.game_rules.keep_inventory {
+            let pos = self.living_entity.entity.block_pos.load();
+            for item in &self.inventory.main_inventory {
+                world.drop_stack(&pos, *item.lock().await).await;
+            }
+            for (_slot, item_arc) in &self.inventory.entity_equipment.lock().await.equipment {
+                world.drop_stack(&pos, *item_arc.lock().await).await;
+            }
+            self.inventory.clear().await;
+
+            if self.gamemode.load() != GameMode::Spectator {
+                ExperienceOrbEntity::spawn(&world, pos.to_f64(), (self.experience_level.load(Ordering::Relaxed) * 7).min(100) as u32).await;
+            }
+            self.set_experience(0, 0.0, 0).await;
+        }
+
+        self.hunger_manager.level.store(20);
+        self.hunger_manager.saturation.store(5.0);
+        self.hunger_manager.exhaustion.store(0.0);
+        self.hunger_manager.tick_timer.store(0);
+
         self.handle_killed().await;
     }
 
