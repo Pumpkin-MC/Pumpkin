@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_util::text::TextComponent;
 
 use crate::command::{
     CommandSender,
@@ -62,9 +63,9 @@ impl<'a> FindArg<'a> for ItemArgumentConsumer {
                 Item::from_registry_key(name.strip_prefix("minecraft:").unwrap_or(name))
                     .map_or_else(
                         || {
-                            Err(CommandError::GeneralCommandIssue(format!(
-                                "Item {name} does not exist."
-                            )))
+                            Err(CommandError::CommandFailed(Box::new(TextComponent::text(
+                                "Item {name} does not exist.",
+                            ))))
                         },
                         |item| Ok((*name, item)),
                     )
