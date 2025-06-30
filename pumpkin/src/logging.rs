@@ -118,16 +118,12 @@ impl Log for GzipRollingLogger {
 
         let now = time::OffsetDateTime::now_utc();
 
-        println!("{}", 111);
-
         if let Ok(data) = self.data.lock() {
             data.latest_logger.log(record);
-            println!("{}", 333);
             if data.current_day_of_month != now.day() {
                 drop(data);
                 if let Err(e) = self.rotate_log() {
                     eprintln!("Failed to rotate log: {e}");
-                    return;
                 }
             }
         }
