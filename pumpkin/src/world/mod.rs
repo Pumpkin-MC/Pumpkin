@@ -1083,8 +1083,14 @@ impl World {
 
         player.send_permission_lvl_update().await;
 
-        // Teleport
+        player.hunger_manager.restart();
+
         let info = &self.level_info.read().await;
+        if !info.game_rules.keep_inventory {
+            player.set_experience(0, 0.0, 0).await;
+        }
+
+        // Teleport
         let pitch = 0.0;
         let (position, yaw) = if let Some(respawn) = player.get_respawn_point().await {
             respawn

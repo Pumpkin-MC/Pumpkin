@@ -1304,13 +1304,7 @@ impl Player {
                 )
                 .await;
             }
-            self.set_experience(0, 0.0, 0).await;
         }
-
-        self.hunger_manager.level.store(20);
-        self.hunger_manager.saturation.store(5.0);
-        self.hunger_manager.exhaustion.store(0.0);
-        self.hunger_manager.tick_timer.store(0);
 
         self.handle_killed().await;
     }
