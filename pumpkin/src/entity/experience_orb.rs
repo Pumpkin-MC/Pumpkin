@@ -97,7 +97,14 @@ impl EntityBase for ExperienceOrbEntity {
         }
     }
 
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+    async fn damage_with_context(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&Entity>,
+        _cause: Option<&Entity>,
+    ) -> bool {
         false
     }
 

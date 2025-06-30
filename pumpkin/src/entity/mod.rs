@@ -107,12 +107,17 @@ pub trait EntityBase: Send + Sync {
 
     /// Returns if damage was successful or not
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-        if let Some(living) = self.get_living_entity() {
-            living.damage(amount, damage_type).await
-        } else {
-            self.get_entity().damage(amount, damage_type).await
-        }
+        self.damage_with_context(amount, damage_type, None, None, None)
     }
+
+    async fn damage_with_context(
+        &self,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&Entity>,
+        cause: Option<&Entity>,
+    ) -> bool;
 
     /// Called when a player collides with a entity
     async fn on_player_collision(&self, _player: &Arc<Player>) {}
@@ -790,7 +795,14 @@ impl Entity {
 
 #[async_trait]
 impl EntityBase for Entity {
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+    async fn damage_with_context(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&Entity>,
+        _cause: Option<&Entity>,
+    ) -> bool {
         false
     }
 

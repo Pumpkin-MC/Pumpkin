@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::EntityBase;
@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
-use pumpkin_data::entity::{EffectType, EntityStatus};
+use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
@@ -34,24 +34,31 @@ pub struct LivingEntity {
     /// The last known position of the entity.
     pub last_pos: AtomicCell<Vector3<f64>>,
     /// Tracks the remaining time until the entity can regenerate health.
-    pub time_until_regen: AtomicI32,
+    pub hurt_cooldown: AtomicI32,
     /// Stores the amount of damage the entity last received.
     pub last_damage_taken: AtomicCell<f32>,
     /// The current health level of the entity.
     pub health: AtomicCell<f32>,
     pub death_time: AtomicU8,
+    /// Indicates whether the entity is dead. (`on_death` called)
+    pub dead: AtomicBool,
     /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: Mutex<HashMap<EffectType, Effect>>,
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
 }
+
+pub trait LivingEntityTrait: EntityBase {
+    async fn on_actually_hurt(&self, amount: f32, damage_type: DamageType) {}
+}
+
 impl LivingEntity {
     pub fn new(entity: Entity) -> Self {
         let pos = entity.pos.load();
         Self {
             entity,
             last_pos: AtomicCell::new(pos),
-            time_until_regen: AtomicI32::new(0),
+            hurt_cooldown: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             health: AtomicCell::new(20.0),
             fall_distance: AtomicCell::new(0.0),
@@ -104,52 +111,18 @@ impl LivingEntity {
     }
 
     pub async fn set_health(&self, health: f32) {
-        self.health.store(health);
+        self.health.store(health.max(0.0));
         // tell everyone entities health changed
         self.entity
             .send_meta_data(&[Metadata::new(9, MetaDataType::Float, health)])
             .await;
+        if health <= 0.0 {
+            self.on_death().await;
+        }
     }
 
     pub const fn entity_id(&self) -> EntityId {
         self.entity.entity_id
-    }
-
-    pub async fn damage_with_context(
-        &self,
-        amount: f32,
-        damage_type: DamageType,
-        position: Option<Vector3<f64>>,
-        source: Option<&Entity>,
-        cause: Option<&Entity>,
-    ) -> bool {
-        // Check invulnerability before applying damage
-        if self.entity.is_invulnerable_to(&damage_type) {
-            return false;
-        }
-
-        self.entity
-            .world
-            .read()
-            .await
-            .broadcast_packet_all(&CDamageEvent::new(
-                self.entity.entity_id.into(),
-                damage_type.id.into(),
-                source.map(|e| e.entity_id.into()),
-                cause.map(|e| e.entity_id.into()),
-                position,
-            ))
-            .await;
-
-        let new_health = (self.health.load() - amount).max(0.0);
-
-        if new_health == 0.0 {
-            self.kill().await;
-        } else {
-            self.set_health(new_health).await;
-        }
-
-        true
     }
 
     pub async fn add_effect(&self, effect: Effect) {
@@ -177,24 +150,6 @@ impl LivingEntity {
     pub async fn get_effect(&self, effect: EffectType) -> Option<Effect> {
         let effects = self.active_effects.lock().await;
         effects.get(&effect).cloned()
-    }
-
-    /// Returns if the entity was damaged or not
-    pub fn check_damage(&self, amount: f32) -> bool {
-        let regen = self.time_until_regen.load(Relaxed);
-
-        let last_damage = self.last_damage_taken.load();
-        // TODO: check if bypasses iframe
-        if regen > 10 {
-            if amount <= last_damage {
-                return false;
-            }
-        } else {
-            self.time_until_regen.store(20, Relaxed);
-        }
-
-        self.last_damage_taken.store(amount);
-        amount > 0.0
     }
 
     // Check if the entity is in water
@@ -254,22 +209,25 @@ impl LivingEntity {
     }
 
     /// Kills the Entity
-    ///
-    /// This is similar to `kill` but Spawn Particles, Animation and plays death sound
     pub async fn kill(&self) {
         self.set_health(0.0).await;
+    }
 
-        // Plays the death sound
-        self.entity
-            .world
-            .read()
-            .await
-            .send_entity_status(
-                &self.entity,
-                EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
-            )
-            .await;
-        self.drop_loot().await;
+    pub async fn on_death(&self) {
+        if self.dead.compare_exchange(false, true, Relaxed, Relaxed) {
+            // Plays the death sound
+            self.entity
+                .world
+                .read()
+                .await
+                .send_entity_status(
+                    &self.entity,
+                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
+                )
+                .await;
+            self.drop_loot().await;
+            self.entity.pose.store(EntityPose::Dying);
+        }
     }
 
     async fn drop_loot(&self) {
@@ -317,14 +275,89 @@ impl LivingEntity {
     }
 }
 
+impl LivingEntityTrait for LivingEntity {}
+
 #[async_trait]
 impl EntityBase for LivingEntity {
+    async fn damage_with_context(
+        &self,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&Entity>,
+        cause: Option<&Entity>,
+    ) -> bool {
+        // Check invulnerability before applying damage
+        if self.entity.is_invulnerable_to(&damage_type) {
+            return false;
+        }
+
+        if self.health.load() <= 0.0 {
+            return false; // Dying or dead
+        }
+
+        if self
+            .active_effects
+            .lock()
+            .await
+            .contains_key(&EffectType::FireResistance)
+            && (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
+        {
+            return false; // Fire resistance
+        }
+
+        let world = self.entity.world.read().await;
+
+        let last_damage = self.last_damage_taken.load();
+        let mut damage_amount = amount;
+        if self.hurt_cooldown.load(Relaxed) > 10 {
+            if amount <= last_damage {
+                return false;
+            }
+            damage_amount = amount - self.last_damage_taken.load();
+        } else {
+            self.hurt_cooldown.store(20, Relaxed);
+        }
+        self.last_damage_taken.store(amount);
+        damage_amount = damage_amount.max(0.0);
+
+        let config = &advanced_config().pvp;
+
+        if config.hurt_animation {
+            let entity_id = VarInt(self.entity.entity_id);
+            world
+                .broadcast_packet_all(&CHurtAnimation::new(entity_id, self.entity.yaw.load()))
+                .await;
+        }
+
+        self.entity
+            .world
+            .read()
+            .await
+            .broadcast_packet_all(&CDamageEvent::new(
+                self.entity.entity_id.into(),
+                damage_type.id.into(),
+                source.map(|e| e.entity_id.into()),
+                cause.map(|e| e.entity_id.into()),
+                position,
+            ))
+            .await;
+
+        let new_health = (self.health.load() - damage_amount).max(0.0);
+        if damage_amount > 0.0 {
+            self.on_actually_hurt(damage_amount, damage_type).await;
+        }
+        self.set_health(new_health).await;
+
+        true
+    }
+
     async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
         self.entity.tick(caller.clone(), server).await;
         self.tick_move(caller.as_ref(), server).await;
         self.tick_effects().await;
-        if self.time_until_regen.load(Relaxed) > 0 {
-            self.time_until_regen.fetch_sub(1, Relaxed);
+        if self.hurt_cooldown.load(Relaxed) > 0 {
+            self.hurt_cooldown.fetch_sub(1, Relaxed);
         }
         if self.health.load() <= 0.0 {
             let time = self
@@ -343,26 +376,12 @@ impl EntityBase for LivingEntity {
         }
     }
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-        let world = self.entity.world.read().await;
-        if !self.check_damage(amount) {
-            return false;
-        }
-        let config = &advanced_config().pvp;
-
         if !self
             .damage_with_context(amount, damage_type, None, None, None)
             .await
         {
             return false;
         }
-
-        if config.hurt_animation {
-            let entity_id = VarInt(self.entity.entity_id);
-            world
-                .broadcast_packet_all(&CHurtAnimation::new(entity_id, self.entity.yaw.load()))
-                .await;
-        }
-        true
     }
     fn get_entity(&self) -> &Entity {
         &self.entity
