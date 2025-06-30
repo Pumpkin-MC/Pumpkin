@@ -1,6 +1,7 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
+use crate::logging::ReadlineLogWrapper;
 use crate::net::ClientPlatform;
 use crate::net::bedrock::BedrockClientPlatform;
 use crate::net::java::JavaClientPlatform;
@@ -36,6 +37,7 @@ pub mod data;
 pub mod entity;
 pub mod error;
 pub mod item;
+pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
@@ -65,69 +67,6 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
         PERMISSION_REGISTRY.clone(),
     )))
 });
-
-/// A wrapper for our logger to hold the terminal input while no input is expected in order to
-/// properly flush logs to the output while they happen instead of batched
-pub struct ReadlineLogWrapper {
-    internal: Box<CombinedLogger>,
-    readline: std::sync::Mutex<Option<Readline>>,
-}
-
-impl ReadlineLogWrapper {
-    fn new(
-        log: Box<dyn SharedLogger + 'static>,
-        file_logger: Option<Box<dyn SharedLogger + 'static>>,
-        gzip_logger: Option<Box<dyn SharedLogger + 'static>>,
-        rl: Option<Readline>,
-    ) -> Self {
-        let loggers: Vec<Option<Box<dyn SharedLogger + 'static>>> =
-            vec![Some(log), file_logger, gzip_logger];
-        Self {
-            internal: CombinedLogger::new(loggers.into_iter().flatten().collect()),
-            readline: std::sync::Mutex::new(rl),
-        }
-    }
-
-    fn take_readline(&self) -> Option<Readline> {
-        if let Ok(mut result) = self.readline.lock() {
-            result.take()
-        } else {
-            None
-        }
-    }
-
-    fn return_readline(&self, rl: Readline) {
-        if let Ok(mut result) = self.readline.lock() {
-            println!("Returned rl");
-            let _ = result.insert(rl);
-        }
-    }
-}
-
-// Writing to `stdout` is expensive anyway, so I don't think having a `Mutex` here is a big deal.
-impl Log for ReadlineLogWrapper {
-    fn log(&self, record: &log::Record) {
-        self.internal.log(record);
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
-        }
-    }
-
-    fn flush(&self) {
-        self.internal.flush();
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
-        }
-    }
-
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        self.internal.enabled(metadata)
-    }
-}
 
 pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = LazyLock::new(|| {
     if advanced_config().logging.enabled {
