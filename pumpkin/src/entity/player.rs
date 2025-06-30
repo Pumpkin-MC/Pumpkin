@@ -1902,8 +1902,8 @@ impl Player {
         self.send_health().await;
     }
 
-    // TODO: Get the actual saturation level and check for that
-    pub async fn is_hungry(&self) -> bool {
+    // TODO: Get the actual saturation level and check for that ??
+    pub fn is_hungry(&self) -> bool {
         self.get_food_level() < 20
     }
 
