@@ -32,12 +32,12 @@ impl CakeBlock {
         block: &Block,
         location: &BlockPos,
         state_id: u16,
-    ) {
+    ) -> BlockActionResult {
         match player.gamemode.load() {
             GameMode::Survival | GameMode::Adventure => {
                 let hunger_level = player.hunger_manager.level.load();
                 if hunger_level >= 20 {
-                    return;
+                    return BlockActionResult::Continue;
                 }
                 player.hunger_manager.level.store(20.min(hunger_level + 2));
                 player
@@ -46,8 +46,7 @@ impl CakeBlock {
                     .store(player.hunger_manager.saturation.load() + 0.4);
                 player.send_health().await;
             }
-            GameMode::Creative => {}
-            GameMode::Spectator => return,
+            GameMode::Creative | GameMode::Spectator => {}
         }
 
         let mut properties = CakeLikeProperties::from_state_id(state_id, block);
@@ -61,6 +60,7 @@ impl CakeBlock {
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
+                BlockActionResult::Consume
             }
             6 => {
                 world
@@ -70,6 +70,7 @@ impl CakeBlock {
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
+                BlockActionResult::Consume
             }
             _ => {
                 panic!("invalid bite index");
@@ -93,37 +94,40 @@ impl PumpkinBlock for CakeBlock {
         let properties = CakeLikeProperties::from_state_id(state_id, block);
         match item.id {
             id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id) => {
-                if properties.bites.to_index() == 0 {
-                    world
-                        .set_block_state(
-                            &location,
-                            cake_from_candle(item).default_state.id,
-                            BlockFlags::NOTIFY_ALL,
-                        )
+                if properties.bites.to_index() != 0 {
+                    return Self::consume_if_hungry(world, player, block, &location, state_id)
                         .await;
-                    let seed: f64 = rng().random();
-                    player
-                        .play_sound(
-                            Sound::BlockCakeAddCandle as u16,
-                            SoundCategory::Ambient,
-                            &location.to_f64(),
-                            1.0,
-                            1.0,
-                            seed,
-                        )
-                        .await;
+                }
+
+                if player.gamemode.load() != GameMode::Creative {
                     let held_item = &player.inventory.held_item();
                     let mut held_item_guard = held_item.lock().await;
                     held_item_guard.decrement(1);
-                } else {
-                    Self::consume_if_hungry(world, player, block, &location, state_id).await;
                 }
+                world
+                    .set_block_state(
+                        &location,
+                        cake_from_candle(item).default_state.id,
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+                let seed: f64 = rng().random();
+                player
+                    .play_sound(
+                        Sound::BlockCakeAddCandle as u16,
+                        SoundCategory::Blocks,
+                        &location.to_f64(),
+                        1.0,
+                        1.0,
+                        seed,
+                    )
+                    .await;
+                return BlockActionResult::Consume;
             }
             _ => {
-                Self::consume_if_hungry(world, player, block, &location, state_id).await;
+                return Self::consume_if_hungry(world, player, block, &location, state_id).await;
             }
         }
-        BlockActionResult::Consume
     }
 
     async fn normal_use(
