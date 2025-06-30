@@ -2,7 +2,6 @@ use crate::entity::player::Player;
 use crate::world::World;
 use futures::future::join_all;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -90,7 +89,7 @@ impl Player {
         self.send_health().await;
     }
 
-    async fn get_uuid(&self) -> Uuid {
+    fn get_uuid(&self) -> Uuid {
         self.gameprofile.id
     }
 
