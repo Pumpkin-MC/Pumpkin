@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use futures::future::join_all;
 use log::warn;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
@@ -18,7 +19,7 @@ use uuid::Uuid;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
-use pumpkin_data::item::Operation;
+use pumpkin_data::item::{Item, Operation};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Tagable;
@@ -1870,6 +1871,66 @@ impl Player {
         perm_manager
             .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
             .await
+    }
+
+    /// Clears a slot before adding a `ItemStack` to it
+    pub async fn set_item(&self, slot: i16, mut item: ItemStack) {
+        self.inventory().remove_stack(slot.try_into().unwrap()).await;
+        self.inventory().insert_stack(slot, &mut item).await;
+    }
+
+    // TODO: Consider clearing off-hand and armor slots.
+    pub async fn fill_inventory_with_item(&self, item: ItemStack) {
+        let futures = (0..36).map(|i| self.set_item(i, item));
+        join_all(futures).await;
+    }
+
+    // TODO: Also clear off-hand and armor slots.
+    pub async fn clear_inventory(&self) {
+        let futures = (0..36).map(|i| self.inventory().remove_stack(i));
+        join_all(futures).await;
+    }
+
+    pub async fn get_food_level(&self) -> u8 {
+        self.hunger_manager.level.load()
+    }
+
+    pub async fn set_food_level(&self, level: u8) {
+        self.hunger_manager.level.store(level.clamp(0, 20));
+        self.send_health().await;
+    }
+
+    // TODO: Get the actual saturation level and check for that
+    pub async fn is_hungry(&self) -> bool {
+        self.get_food_level().await < 20
+    }
+
+    pub async fn get_saturation_level(&self) -> f32 {
+        self.hunger_manager.saturation.load()
+    }
+
+    // TODO: Find out the actual max, this makes no sense (using this will crash the server lol)
+    /* async fn set_saturation_level(&self, level: f32) {
+        self.hunger_manager.saturation.store(level.clamp(0.0, 20.0));
+        self.send_health().await;
+    } */
+
+    pub async fn get_health(&self) -> f32 {
+        self.living_entity.health.load()
+    }
+
+    // TODO: Maybe use a damage cause, so a damage tick happens?
+    /* pub async fn damage(&self, damage: f32) {
+        self.set_health(self.get_health().await - damage).await;
+        self.send_health().await;
+    } */
+
+    pub async fn get_uuid(&self) -> Uuid {
+        self.gameprofile.id
+    }
+
+    pub async fn get_name(&self) -> String {
+        self.gameprofile.name.clone()
     }
 }
 
