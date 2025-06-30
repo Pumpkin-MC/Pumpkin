@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use futures::future::join_all;
-use uuid::Uuid;
+use crate::entity::player::Player;
 use crate::world::World;
+use futures::future::join_all;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
-use crate::entity::player::Player;
+use std::sync::Arc;
+use uuid::Uuid;
 
 #[allow(dead_code)]
 impl Player {
@@ -17,7 +17,7 @@ impl Player {
             None
         }
     }
-    
+
     async fn set_item(&self, slot: i16, mut item: ItemStack) {
         self.remove_stack(slot.try_into().unwrap()).await;
         self.inventory().insert_stack(slot, &mut item).await;
@@ -89,7 +89,7 @@ impl Player {
         self.set_health(self.get_health().await - damage).await;
         self.send_health().await;
     }
-    
+
     async fn get_uuid(&self) -> Uuid {
         self.gameprofile.id
     }
@@ -101,23 +101,23 @@ impl Player {
     pub async fn send_message(&self, text: TextComponent) {
         self.send_system_message(&text).await
     }
-    
+
     pub async fn get_location(&self) -> Option<Vector3<f64>> {
         Some(self.living_entity.entity.pos.load())
     }
-    
+
     pub async fn set_location(&self, pos: Vector3<f64>) {
         self.living_entity.entity.pos.store(pos);
     }
-    
+
     pub async fn get_world(&self) -> Option<Arc<World>> {
         Some(self.living_entity.entity.world.read().await.clone())
     }
-    
+
     // TODO
     // get_offhand
     // armor slots clearen
     // armor slots bei get_item bedenken oder get_armor_slot einführen
     // teleport
-    // 
+    //
 }
