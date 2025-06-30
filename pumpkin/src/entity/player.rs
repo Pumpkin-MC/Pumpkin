@@ -1904,7 +1904,7 @@ impl Player {
 
     // TODO: Get the actual saturation level and check for that
     pub async fn is_hungry(&self) -> bool {
-        self.get_food_level().await < 20
+        self.get_food_level() < 20
     }
 
     pub fn get_saturation_level(&self) -> f32 {
@@ -1920,12 +1920,6 @@ impl Player {
     pub fn get_health(&self) -> f32 {
         self.living_entity.health.load()
     }
-
-    // TODO: Maybe use a damage cause, so a damage tick happens?
-    /* pub async fn damage(&self, damage: f32) {
-        self.set_health(self.get_health().await - damage).await;
-        self.send_health().await;
-    } */
 
     pub fn get_uuid(&self) -> Uuid {
         self.gameprofile.id
