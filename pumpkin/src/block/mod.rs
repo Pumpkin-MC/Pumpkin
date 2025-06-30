@@ -154,7 +154,6 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CandleCakeBlock);
     manager.register(SkullBlock);
 
-
     // Fire
     manager.register(SoulFireBlock);
     manager.register(FireBlock);
