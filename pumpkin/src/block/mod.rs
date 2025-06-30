@@ -83,6 +83,7 @@ use crate::world::World;
 use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::Player};
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
 use std::sync::Arc;
+use crate::block::blocks::redstone::dropper::DropperBlock;
 
 pub mod blocks;
 mod fluid;
@@ -173,6 +174,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ComparatorBlock);
     manager.register(TargetBlock);
     manager.register(BarrelBlock);
+    manager.register(DropperBlock);
 
     // Rails
     manager.register(RailBlock);

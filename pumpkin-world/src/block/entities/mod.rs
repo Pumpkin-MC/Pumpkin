@@ -13,6 +13,7 @@ use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
 use crate::{inventory::Inventory, world::SimpleWorld};
+use crate::block::entities::dropper::DropperBlockEntity;
 
 pub mod barrel;
 pub mod bed;
@@ -22,6 +23,7 @@ pub mod comparator;
 pub mod end_portal;
 pub mod piston;
 pub mod sign;
+pub mod dropper;
 
 //TODO: We need a mark_dirty for chests
 #[async_trait]
@@ -78,6 +80,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             ComparatorBlockEntity,
         >(nbt))),
         BarrelBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<BarrelBlockEntity>(
+            nbt,
+        ))),
+        DropperBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<DropperBlockEntity>(
             nbt,
         ))),
         PistonBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<PistonBlockEntity>(
