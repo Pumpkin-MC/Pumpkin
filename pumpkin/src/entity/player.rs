@@ -1893,8 +1893,8 @@ impl Player {
         join_all(futures).await;
     }
 
-    pub async fn get_food_level(&self) -> u8 {
-        self.hunger_manager.level.load().await
+    pub fn get_food_level(&self) -> u8 {
+        self.hunger_manager.level.load()
     }
 
     pub async fn set_food_level(&self, level: u8) {
@@ -1907,8 +1907,8 @@ impl Player {
         self.get_food_level().await < 20
     }
 
-    pub async fn get_saturation_level(&self) -> f32 {
-        self.hunger_manager.saturation.load().await
+    pub fn get_saturation_level(&self) -> f32 {
+        self.hunger_manager.saturation.load()
     }
 
     // TODO: Find out the actual max, this makes no sense (using this will crash the server lol)
@@ -1917,8 +1917,8 @@ impl Player {
         self.send_health().await;
     } */
 
-    pub async fn get_health(&self) -> f32 {
-        self.living_entity.health.load().await
+    pub fn get_health(&self) -> f32 {
+        self.living_entity.health.load()
     }
 
     // TODO: Maybe use a damage cause, so a damage tick happens?
@@ -1927,12 +1927,16 @@ impl Player {
         self.send_health().await;
     } */
 
-    pub async fn get_uuid(&self) -> Uuid {
-        self.gameprofile.id.await
+    pub fn get_uuid(&self) -> Uuid {
+        self.gameprofile.id
     }
 
-    pub async fn get_name(&self) -> String {
-        self.gameprofile.name.clone().await
+    pub fn get_name(&self) -> String {
+        self.gameprofile.name.clone()
+    }
+
+    pub async fn damage_with_cause(&self, damage_amount: f32, damage_type: DamageType) {
+        self.damage(damage_amount, damage_type).await;
     }
 }
 
