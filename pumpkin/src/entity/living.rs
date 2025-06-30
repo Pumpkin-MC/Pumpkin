@@ -361,7 +361,7 @@ impl EntityBase for LivingEntity {
         }
 
         if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
-            && self.has_effect(EffectType::FireResistance)
+            && self.has_effect(EffectType::FireResistance).await
         {
             return false; // Fire resistance
         }
