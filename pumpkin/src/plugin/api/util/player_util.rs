@@ -116,8 +116,8 @@ impl Player {
 
     // TODO
     // get_offhand
-    // armor slots clearen
-    // armor slots bei get_item bedenken oder get_armor_slot einführen
+    // clear armor slots
+    // keep in mind to make armor slots available in get_item or add get_armor_slot
     // teleport
     //
 }
