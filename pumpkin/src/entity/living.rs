@@ -187,7 +187,7 @@ impl LivingEntity {
 
             let safe_fall_distance = 3.0;
             let mut damage = fall_distance - safe_fall_distance;
-            damage = (damage).ceil();
+            damage = damage.ceil();
 
             // TODO: Play block fall sound
             let check_damage = self.damage(damage, DamageType::FALL).await; // Fall
@@ -278,7 +278,7 @@ impl LivingEntity {
                 } else {
                     TextComponent::translate(
                         "death.attack.generic",
-                        [self.entity.get_display_name()],
+                        [self.entity.get_display_name().await],
                     )
                 };
                 if let Some(server) = self.entity.world.read().await.server.upgrade() {
@@ -347,6 +347,8 @@ impl EntityBase for LivingEntity {
         source: Option<&Entity>,
         cause: Option<&Entity>,
     ) -> bool {
+        dbg!(self.entity.entity_type);
+        dbg!(amount);
         // Check invulnerability before applying damage
         if self.entity.is_invulnerable_to(&damage_type) {
             return false;
@@ -354,6 +356,10 @@ impl EntityBase for LivingEntity {
 
         if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
             return false; // Dying or dead
+        }
+
+        if amount < 0.0 {
+            return false;
         }
 
         if self

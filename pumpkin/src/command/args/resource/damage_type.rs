@@ -36,6 +36,11 @@ impl ArgumentConsumer for DamageTypeArgumentConsumer {
         args: &mut RawArgs<'a>,
     ) -> Option<Arg<'a>> {
         let name = args.pop()?;
+        let name = if name.starts_with("minecraft:") {
+            &name[10..]
+        } else {
+            name
+        };
 
         // Create a static damage type first
         let damage_type = DamageType::from_name(name)?;
