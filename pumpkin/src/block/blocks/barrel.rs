@@ -23,8 +23,9 @@ use crate::{
 
 struct BarrelScreenFactory(Arc<dyn Inventory>);
 
+#[async_trait]
 impl ScreenHandlerFactory for BarrelScreenFactory {
-    fn create_screen_handler(
+    async fn create_screen_handler(
         &self,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,

@@ -29,6 +29,7 @@ pub mod plant;
 pub mod pumpkin;
 pub mod redstone;
 pub mod signs;
+pub mod skull_block;
 pub mod slabs;
 pub mod stairs;
 pub mod sugar_cane;
