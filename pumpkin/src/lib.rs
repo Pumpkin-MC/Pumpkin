@@ -1,14 +1,14 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
-use crate::logging::ReadlineLogWrapper;
+use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
 use crate::net::ClientPlatform;
 use crate::net::bedrock::BedrockClientPlatform;
 use crate::net::java::JavaClientPlatform;
 use crate::net::{Client, lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use bytes::Bytes;
-use log::{Level, LevelFilter, Log};
+use log::{Level, LevelFilter};
 use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
@@ -17,7 +17,7 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
-use simplelog::{CombinedLogger, SharedLogger};
+use simplelog::SharedLogger;
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
 use std::str::FromStr;
@@ -105,7 +105,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
 
         let file_logger: Option<Box<dyn SharedLogger + 'static>> =
             advanced_config().logging.file.clone().map(|filename| {
-                simplelog::WriteLogger::new(
+                GzipRollingLogger::new(
                     level,
                     {
                         let mut config = config.clone();
@@ -114,47 +114,18 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                         }
                         config.build()
                     },
-                    std::fs::File::create(filename).expect("Failed to create log file"),
-                ) as Box<dyn SharedLogger>
+                    filename,
+                )
+                .expect("Failed to initialize file logger.")
+                    as Box<dyn SharedLogger>
             });
-        let gzip_file_logger: Option<Box<dyn SharedLogger + 'static>> =
-            if advanced_config().logging.gzip {
-                // yyyy-MM-dd-{id}.log.gz , ignore advanced_config().logging.file
-                let now = time::OffsetDateTime::now_utc();
-                let filename = format!("{}-{:02}-{:02}", now.year(), now.month() as u8, now.day(),);
-                // find a unique filename
-                let mut id = 1;
-                while std::fs::File::open(format!("{filename}-{id}.log.gz")).is_ok() {
-                    id += 1;
-                }
-                let filename = format!("{filename}-{id}.log.gz");
-                // Create a gzipped logger
-                let gzip_writer = flate2::write::GzEncoder::new(
-                    std::fs::File::create(&filename).expect("Failed to create gzipped log file"),
-                    flate2::Compression::default(),
-                );
-
-                Some(simplelog::WriteLogger::new(
-                    level,
-                    {
-                        let mut config = config.clone();
-                        for level in Level::iter() {
-                            config.set_level_color(level, None);
-                        }
-                        config.build()
-                    },
-                    gzip_writer,
-                ))
-            } else {
-                None
-            };
 
         if advanced_config().commands.use_tty && stdin().is_terminal() {
             match Readline::new("$ ".to_owned()) {
                 Ok((rl, stdout)) => {
                     let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
                     Some((
-                        ReadlineLogWrapper::new(logger, file_logger, gzip_file_logger, Some(rl)),
+                        ReadlineLogWrapper::new(logger, file_logger, Some(rl)),
                         level,
                     ))
                 }
@@ -163,18 +134,12 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                         "Failed to initialize console input ({e}); falling back to simple logger"
                     );
                     let logger = simplelog::SimpleLogger::new(level, config.build());
-                    Some((
-                        ReadlineLogWrapper::new(logger, file_logger, gzip_file_logger, None),
-                        level,
-                    ))
+                    Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
                 }
             }
         } else {
             let logger = simplelog::SimpleLogger::new(level, config.build());
-            Some((
-                ReadlineLogWrapper::new(logger, file_logger, gzip_file_logger, None),
-                level,
-            ))
+            Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
         }
     } else {
         None

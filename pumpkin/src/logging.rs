@@ -3,7 +3,7 @@ use log::{LevelFilter, Log};
 use rustyline_async::Readline;
 use simplelog::{CombinedLogger, Config, SharedLogger, WriteLogger};
 use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::io::BufWriter;
 use std::path::Path;
 
 /// A wrapper for our logger to hold the terminal input while no input is expected in order to
@@ -16,7 +16,8 @@ pub struct ReadlineLogWrapper {
 struct GzipRollingLoggerData {
     pub current_day_of_month: u8,
     pub last_rotate_time: time::OffsetDateTime,
-    pub gz_logger: WriteLogger<GzEncoder<BufWriter<File>>>,
+    pub latest_logger: WriteLogger<BufWriter<File>>,
+    latest_filename: String,
 }
 
 pub struct GzipRollingLogger {
@@ -29,32 +30,46 @@ impl GzipRollingLogger {
     pub fn new(
         log_level: LevelFilter,
         config: Config,
+        filename: String,
     ) -> Result<Box<Self>, Box<dyn std::error::Error>> {
         let now = time::OffsetDateTime::now_utc();
+
+        // If latest.log exists, we will gzip it
+        if Path::new(&format!("logs/{filename}")).exists() {
+            let new_filename = Self::new_filename(false);
+            let mut file = File::open(format!("logs/{filename}"))?;
+            let mut encoder = GzEncoder::new(
+                BufWriter::new(File::create(format!("logs/{new_filename}"))?),
+                flate2::Compression::default(),
+            );
+            std::io::copy(&mut file, &mut encoder)?;
+            encoder.finish()?;
+        }
+        std::fs::create_dir_all("logs")?;
 
         Ok(Box::new(Self {
             log_level,
             data: std::sync::Mutex::new(GzipRollingLoggerData {
                 current_day_of_month: now.day(),
                 last_rotate_time: now,
-                gz_logger: *WriteLogger::new(
+                latest_filename: filename.clone(),
+                latest_logger: *WriteLogger::new(
                     log_level,
                     config.clone(),
-                    GzEncoder::new(
-                        BufWriter::new(File::create(Self::new_filename()).unwrap()),
-                        flate2::Compression::default(),
-                    ),
+                    BufWriter::new(File::create(format!("logs/{filename}")).unwrap()),
                 ),
             }),
             config,
         }))
     }
 
-    pub fn new_filename() -> String {
-        let now = time::OffsetDateTime::now_utc();
+    pub fn new_filename(yesterday: bool) -> String {
+        let mut now = time::OffsetDateTime::now_utc();
+        if yesterday {
+            now = now - time::Duration::days(1)
+        }
         let base_filename = format!("{}-{:02}-{:02}", now.year(), now.month() as u8, now.day());
 
-        // 查找唯一的文件名
         let mut id = 1;
         loop {
             let filename = format!("{}-{}.log.gz", base_filename, id);
@@ -69,30 +84,23 @@ impl GzipRollingLogger {
         let now = time::OffsetDateTime::now_utc();
         let mut data = self.data.lock().unwrap();
 
+        let new_filename = Self::new_filename(true);
+        let mut file = File::open(format!("logs/{}", data.latest_filename))?;
+        let mut encoder = GzEncoder::new(
+            BufWriter::new(File::create(format!("logs/{new_filename}"))?),
+            flate2::Compression::default(),
+        );
+        std::io::copy(&mut file, &mut encoder)?;
+        encoder.finish()?;
+
         data.current_day_of_month = now.day();
         data.last_rotate_time = now;
-        data.gz_logger = *WriteLogger::new(
+        data.latest_logger = *WriteLogger::new(
             self.log_level,
             self.config.clone(),
-            GzEncoder::new(
-                BufWriter::new(File::create(Self::new_filename()).unwrap()),
-                flate2::Compression::default(),
-            ),
+            BufWriter::new(File::create(format!("logs/{}", data.latest_filename)).unwrap()),
         );
         Ok(())
-    }
-
-    fn format_log_record(&self, record: &log::Record) -> String {
-        let now = time::OffsetDateTime::now_utc();
-        format!(
-            "[{} {} {}:{}] {}\n",
-            now.format(&time::format_description::well_known::Rfc3339)
-                .unwrap_or_else(|_| "UNKNOWN_TIME".to_string()),
-            record.level(),
-            record.file().unwrap_or("unknown"),
-            record.line().unwrap_or(0),
-            record.args()
-        )
     }
 }
 
@@ -119,27 +127,39 @@ impl Log for GzipRollingLogger {
             }
         }
 
-        if let Ok(mut data) = self.data.lock() {
-            data.gz_logger.log(record)
+        if let Ok(data) = self.data.lock() {
+            data.latest_logger.log(record)
         }
     }
 
     fn flush(&self) {
         if let Ok(data) = self.data.lock() {
-            data.gz_logger.flush();
+            data.latest_logger.flush();
         }
     }
 }
 
+impl SharedLogger for GzipRollingLogger {
+    fn level(&self) -> LevelFilter {
+        self.log_level
+    }
+
+    fn config(&self) -> Option<&Config> {
+        Some(&self.config)
+    }
+
+    fn as_log(self: Box<Self>) -> Box<dyn Log> {
+        Box::new(*self)
+    }
+}
+
 impl ReadlineLogWrapper {
-    fn new(
+    pub fn new(
         log: Box<dyn SharedLogger + 'static>,
         file_logger: Option<Box<dyn SharedLogger + 'static>>,
-        gzip_logger: Option<Box<dyn SharedLogger + 'static>>,
         rl: Option<Readline>,
     ) -> Self {
-        let loggers: Vec<Option<Box<dyn SharedLogger + 'static>>> =
-            vec![Some(log), file_logger, gzip_logger];
+        let loggers: Vec<Option<Box<dyn SharedLogger + 'static>>> = vec![Some(log), file_logger];
         Self {
             internal: CombinedLogger::new(loggers.into_iter().flatten().collect()),
             readline: std::sync::Mutex::new(rl),
@@ -154,7 +174,7 @@ impl ReadlineLogWrapper {
         }
     }
 
-    fn return_readline(&self, rl: Readline) {
+    pub(crate) fn return_readline(&self, rl: Readline) {
         if let Ok(mut result) = self.readline.lock() {
             println!("Returned rl");
             let _ = result.insert(rl);
