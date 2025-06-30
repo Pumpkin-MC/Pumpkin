@@ -360,12 +360,8 @@ impl EntityBase for LivingEntity {
             return false;
         }
 
-        if self
-            .active_effects
-            .lock()
-            .await
-            .contains_key(&EffectType::FireResistance)
-            && (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
+        if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
+            && self.has_effect(EffectType::FireResistance)
         {
             return false; // Fire resistance
         }
@@ -407,7 +403,7 @@ impl EntityBase for LivingEntity {
             ))
             .await;
 
-        let new_health = (self.health.load() - damage_amount).max(0.0);
+        let new_health = self.health.load() - damage_amount;
         if damage_amount > 0.0 {
             self.on_actually_hurt(damage_amount, damage_type).await;
         }
