@@ -16,7 +16,7 @@ pub struct ReadlineLogWrapper {
 struct GzipRollingLoggerData {
     pub current_day_of_month: u8,
     pub last_rotate_time: time::OffsetDateTime,
-    pub latest_logger: WriteLogger<BufWriter<File>>,
+    pub latest_logger: WriteLogger<File>,
     latest_filename: String,
 }
 
@@ -33,19 +33,20 @@ impl GzipRollingLogger {
         filename: String,
     ) -> Result<Box<Self>, Box<dyn std::error::Error>> {
         let now = time::OffsetDateTime::now_utc();
+        std::fs::create_dir_all("logs")?;
 
         // If latest.log exists, we will gzip it
         if Path::new(&format!("logs/{filename}")).exists() {
             let new_filename = Self::new_filename(false);
             let mut file = File::open(format!("logs/{filename}"))?;
             let mut encoder = GzEncoder::new(
-                BufWriter::new(File::create(format!("logs/{new_filename}"))?),
+                BufWriter::new(File::create(&new_filename)?),
                 flate2::Compression::default(),
             );
+            println!("logs/{filename}");
             std::io::copy(&mut file, &mut encoder)?;
             encoder.finish()?;
         }
-        std::fs::create_dir_all("logs")?;
 
         Ok(Box::new(Self {
             log_level,
@@ -56,7 +57,7 @@ impl GzipRollingLogger {
                 latest_logger: *WriteLogger::new(
                     log_level,
                     config.clone(),
-                    BufWriter::new(File::create(format!("logs/{filename}")).unwrap()),
+                    File::create(format!("logs/{filename}")).unwrap(),
                 ),
             }),
             config,
@@ -64,15 +65,16 @@ impl GzipRollingLogger {
     }
 
     pub fn new_filename(yesterday: bool) -> String {
-        let mut now = time::OffsetDateTime::now_utc();
+        let mut now = time::OffsetDateTime::now_utc()
+            .to_offset(time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC));
         if yesterday {
-            now = now - time::Duration::days(1)
+            now -= time::Duration::days(1)
         }
         let base_filename = format!("{}-{:02}-{:02}", now.year(), now.month() as u8, now.day());
 
         let mut id = 1;
         loop {
-            let filename = format!("{}-{}.log.gz", base_filename, id);
+            let filename = format!("logs/{}-{}.log.gz", base_filename, id);
             if !Path::new(&filename).exists() {
                 return filename;
             }
@@ -98,7 +100,7 @@ impl GzipRollingLogger {
         data.latest_logger = *WriteLogger::new(
             self.log_level,
             self.config.clone(),
-            BufWriter::new(File::create(format!("logs/{}", data.latest_filename)).unwrap()),
+            File::create(format!("logs/{}", data.latest_filename)).unwrap(),
         );
         Ok(())
     }
@@ -116,8 +118,11 @@ impl Log for GzipRollingLogger {
 
         let now = time::OffsetDateTime::now_utc();
 
-        {
-            let data = self.data.lock().unwrap();
+        println!("{}", 111);
+
+        if let Ok(data) = self.data.lock() {
+            data.latest_logger.log(record);
+            println!("{}", 333);
             if data.current_day_of_month != now.day() {
                 drop(data);
                 if let Err(e) = self.rotate_log() {
@@ -125,10 +130,6 @@ impl Log for GzipRollingLogger {
                     return;
                 }
             }
-        }
-
-        if let Ok(data) = self.data.lock() {
-            data.latest_logger.log(record)
         }
     }
 

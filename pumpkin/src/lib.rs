@@ -76,7 +76,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             config.set_time_format_custom(time::macros::format_description!(
                 "[year]-[month]-[day] [hour]:[minute]:[second]"
             ));
-            config.set_time_level(LevelFilter::Trace);
+            config.set_time_level(LevelFilter::Error);
         } else {
             config.set_time_level(LevelFilter::Off);
         }
