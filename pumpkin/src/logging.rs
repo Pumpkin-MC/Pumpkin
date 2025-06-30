@@ -74,7 +74,7 @@ impl GzipRollingLogger {
 
         let mut id = 1;
         loop {
-            let filename = format!("logs/{}-{}.log.gz", base_filename, id);
+            let filename = format!("logs/{base_filename}-{id}.log.gz");
             if !Path::new(&filename).exists() {
                 return filename;
             }
@@ -126,7 +126,7 @@ impl Log for GzipRollingLogger {
             if data.current_day_of_month != now.day() {
                 drop(data);
                 if let Err(e) = self.rotate_log() {
-                    eprintln!("Failed to rotate log: {}", e);
+                    eprintln!("Failed to rotate log: {e}");
                     return;
                 }
             }
