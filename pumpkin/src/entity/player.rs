@@ -1875,7 +1875,9 @@ impl Player {
 
     /// Clears a slot before adding a `ItemStack` to it
     pub async fn set_item(&self, slot: i16, mut item: ItemStack) {
-        self.inventory().remove_stack(slot.try_into().unwrap()).await;
+        self.inventory()
+            .remove_stack(slot.try_into().unwrap())
+            .await;
         self.inventory().insert_stack(slot, &mut item).await;
     }
 
