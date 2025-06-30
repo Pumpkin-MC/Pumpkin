@@ -113,7 +113,7 @@ pub struct Server {
 impl Server {
     #[allow(clippy::new_without_default)]
     #[must_use]
-    pub async fn new() -> Self {
+    pub async fn new() -> Arc<Self> {
         let auth_client = BASIC_CONFIG.online_mode.then(|| {
             reqwest::Client::builder()
                 .connect_timeout(Duration::from_millis(u64::from(
@@ -156,27 +156,6 @@ impl Server {
 
         let level_info = level_info.unwrap_or_default(); // TODO: Improve error handling
         let seed = level_info.world_gen_settings.seed;
-        log::info!("Loading Overworld: {seed}");
-        let overworld = World::load(
-            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
-            VanillaDimensionType::Overworld,
-            block_registry.clone(),
-        );
-        log::info!("Loading Nether: {seed}");
-        let nether = World::load(
-            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
-            VanillaDimensionType::TheNether,
-            block_registry.clone(),
-        );
-        log::info!("Loading End: {seed}");
-        let end = World::load(
-            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
-            VanillaDimensionType::TheEnd,
-            block_registry.clone(),
-        );
 
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
@@ -184,10 +163,10 @@ impl Server {
 
         let world_name = world_path.to_str().unwrap();
 
-        Self {
+        let server = Self {
             cached_registry: Registry::get_synced(),
             container_id: 0.into(),
-            worlds: RwLock::new(vec![Arc::new(overworld), Arc::new(nether), Arc::new(end)]),
+            worlds: RwLock::new(vec![]),
             dimensions: vec![
                 VanillaDimensionType::Overworld,
                 VanillaDimensionType::OverworldCaves,
@@ -195,7 +174,7 @@ impl Server {
                 VanillaDimensionType::TheEnd,
             ],
             command_dispatcher,
-            block_registry,
+            block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             auth_client,
             key_store: KeyStore::new(),
@@ -218,9 +197,41 @@ impl Server {
             server_guid: rand::random(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
-            level_info: Arc::new(RwLock::new(level_info)),
+            level_info: Arc::new(RwLock::new(level_info.clone())),
             _locker: Arc::new(locker),
-        }
+        };
+        let server = Arc::new(server);
+        let weak = Arc::downgrade(&server);
+        log::info!("Loading Overworld: {seed}");
+        let overworld = World::load(
+            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::Overworld,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        log::info!("Loading Nether: {seed}");
+        let nether = World::load(
+            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::TheNether,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        log::info!("Loading End: {seed}");
+        let end = World::load(
+            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::TheEnd,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        *server
+            .worlds
+            .try_write()
+            .expect("Nothing should hold a lock of worlds before server startup") =
+            vec![overworld.into(), nether.into(), end.into()];
+        server
     }
 
     const SPAWN_CHUNK_RADIUS: i32 = 1;

@@ -500,7 +500,13 @@ impl Player {
         }
 
         if !victim
-            .damage(damage as f32, DamageType::PLAYER_ATTACK)
+            .damage_with_context(
+                damage as f32,
+                DamageType::PLAYER_ATTACK,
+                None,
+                Some(&self.living_entity.entity),
+                Some(&self.living_entity.entity),
+            )
             .await
         {
             world

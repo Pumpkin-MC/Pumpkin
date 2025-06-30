@@ -1,3 +1,4 @@
+use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
@@ -30,6 +31,7 @@ use pumpkin_util::math::{
     vector3::Vector3,
     wrap_degrees,
 };
+use pumpkin_util::text::TextComponent;
 use serde::Serialize;
 use std::sync::{
     Arc,
@@ -39,8 +41,6 @@ use std::sync::{
     },
 };
 use tokio::sync::{Mutex, RwLock};
-
-use crate::world::World;
 
 pub mod ai;
 pub mod effect;
@@ -791,6 +791,23 @@ impl Entity {
                 self.on_ground.load(Ordering::SeqCst),
             ))
             .await;
+    }
+
+    pub async fn check_out_of_world(&self) {
+        if self.pos.load().y
+            < f64::from(self.world.read().await.generation_settings().shape.min_y) - 64.0
+        {
+            // Tick out of world damage
+            self.damage(4.0, DamageType::OUT_OF_WORLD).await;
+        }
+    }
+
+    pub async fn get_display_name(&self) -> TextComponent {
+        // TODO
+        TextComponent::text(format!(
+            "{} {}",
+            self.entity_type.resource_name, self.entity_id
+        ))
     }
 }
 

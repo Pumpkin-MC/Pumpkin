@@ -10,7 +10,8 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
-use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus};
+use pumpkin_data::damage::DeathMessageType;
+use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
@@ -22,6 +23,7 @@ use pumpkin_protocol::{
     java::client::play::{CDamageEvent, CSetEquipment, MetaDataType, Metadata},
 };
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::TextComponent;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
@@ -120,9 +122,6 @@ impl LivingEntity {
         self.entity
             .send_meta_data(&[Metadata::new(9, MetaDataType::Float, health)])
             .await;
-        if health <= 0.0 {
-            self.on_death().await;
-        }
     }
 
     pub const fn entity_id(&self) -> EntityId {
@@ -214,10 +213,15 @@ impl LivingEntity {
 
     /// Kills the Entity
     pub async fn kill(&self) {
-        self.set_health(0.0).await;
+        self.damage(f32::MAX, DamageType::OUT_OF_WORLD).await;
     }
 
-    pub async fn on_death(&self) {
+    pub async fn on_death(
+        &self,
+        damage_type: DamageType,
+        source: Option<&Entity>,
+        cause: Option<&Entity>,
+    ) {
         if self
             .dead
             .compare_exchange(false, true, Relaxed, Relaxed)
@@ -235,6 +239,54 @@ impl LivingEntity {
                 .await;
             self.drop_loot().await;
             self.entity.pose.store(EntityPose::Dying);
+
+            if self.entity.entity_type == EntityType::PLAYER {
+                //TODO: KillCredit
+                let death_message = if let Some(death_message_type) = damage_type.death_message_type
+                {
+                    match death_message_type {
+                        DeathMessageType::Default => {
+                            if cause.is_some() && source.is_some() {
+                                TextComponent::translate(
+                                    format!("death.attack.{}.player", damage_type.message_id),
+                                    [
+                                        self.entity.get_display_name().await,
+                                        cause.unwrap().get_display_name().await,
+                                    ],
+                                )
+                            } else {
+                                TextComponent::translate(
+                                    format!("death.attack.{}", damage_type.message_id),
+                                    [self.entity.get_display_name().await],
+                                )
+                            }
+                        }
+                        DeathMessageType::FallVariants => {
+                            //TODO
+                            TextComponent::translate(
+                                "death.fell.accident.generic",
+                                [self.entity.get_display_name().await],
+                            )
+                        }
+                        DeathMessageType::IntentionalGameDesign => TextComponent::text("[")
+                            .add_child(TextComponent::translate(
+                                format!("death.attack.{}.message", damage_type.message_id),
+                                [self.entity.get_display_name().await],
+                            ))
+                            .add_child(TextComponent::text("]")),
+                    }
+                } else {
+                    TextComponent::translate(
+                        "death.attack.generic",
+                        [self.entity.get_display_name()],
+                    )
+                };
+                if let Some(server) = self.entity.world.read().await.server.upgrade() {
+                    for player in server.get_all_players().await {
+                        player.send_system_message(&death_message).await;
+                    }
+                }
+            }
         }
     }
 
@@ -262,20 +314,6 @@ impl LivingEntity {
             .velocity
             .store(velo.multiply(multiplier, 1.0, multiplier));
         Entity::check_block_collision(entity, server).await;
-        if pos.y
-            < f64::from(self
-                .entity
-                .world
-                .read()
-                .await
-                .generation_settings()
-                .shape
-                .min_y)
-                - 64.0
-        {
-            // Tick out of world damage
-            self.damage(4.0, DamageType::OUT_OF_WORLD).await;
-        }
     }
 
     async fn tick_effects(&self) {
@@ -370,6 +408,10 @@ impl EntityBase for LivingEntity {
             self.on_actually_hurt(damage_amount, damage_type).await;
         }
         self.set_health(new_health).await;
+
+        if new_health <= 0.0 {
+            self.on_death(damage_type, source, cause).await;
+        }
 
         true
     }
