@@ -93,7 +93,7 @@ impl PumpkinBlock for FlowerPotBlock {
                 .eq(&VanillaDimensionType::OverworldCaves)
         {
             if block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM)
-                && world.level_time.blocking_lock().time_of_day > 14500
+                && world.level_time.lock().await.time_of_day > 14500
             {
                 world
                     .set_block_state(
@@ -104,7 +104,7 @@ impl PumpkinBlock for FlowerPotBlock {
                     .await;
             }
         } else if block.eq(&Block::POTTED_OPEN_EYEBLOSSOM)
-            && world.level_time.blocking_lock().time_of_day <= 14500
+            && world.level_time.lock().await.time_of_day <= 14500
         {
             world
                 .set_block_state(
