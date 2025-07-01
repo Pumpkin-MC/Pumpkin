@@ -6,7 +6,7 @@ use tokio::{io::AsyncWrite, net::UdpSocket};
 
 use crate::{
     Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, PacketEncodeError, StreamEncryptor,
-    bedrock::SubClient, codec::var_uint::VarUint, ser::NetworkWriteExt,
+    bedrock::SubClient, codec::var_uint::VarUInt, ser::NetworkWriteExt,
 };
 
 // raw -> compress -> encrypt
@@ -134,7 +134,7 @@ impl UDPNetworkEncoder {
         // 2. Calculate total packet_len
         // This is where `VarInt::encoded_len` is crucial.
         // We need to know the byte length of the header's VarInt *before* we write the packet_len.
-        let header_byte_len = VarUint(fourteen_bit_header).written_size();
+        let header_byte_len = VarUInt(fourteen_bit_header).written_size();
 
         let packet_payload_len = packet_payload.len() as u32;
         // total_content_length is the length of the header VarInt bytes + payload bytes.
@@ -145,12 +145,12 @@ impl UDPNetworkEncoder {
         // Ensure consistency in your actual `VarInt` definition.
         // For this example, I'll cast `total_content_length` to `i32`.
         writer
-            .write_var_uint(&VarUint(total_content_length))
+            .write_var_uint(&VarUInt(total_content_length))
             .unwrap();
 
         // 4. Write the combined 14-bit header_value as VarInt
         writer
-            .write_var_uint(&VarUint(fourteen_bit_header))
+            .write_var_uint(&VarUInt(fourteen_bit_header))
             .unwrap();
 
         // 5. Write the Packet ID + payload

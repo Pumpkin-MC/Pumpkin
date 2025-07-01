@@ -6,7 +6,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 
 use crate::{
     Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, RawPacket, StreamDecryptor,
-    codec::var_uint::VarUint,
+    codec::var_uint::VarUInt,
     ser::{NetworkReadExt, ReadingError},
 };
 
@@ -123,7 +123,7 @@ impl UDPNetworkDecoder {
         //dbg!(compression);
 
         // TODO: compression & encryption
-        let packet_len = VarUint::decode_async(&mut reader)
+        let packet_len = VarUInt::decode_async(&mut reader)
             .await
             .map_err(|err| match err {
                 ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
@@ -138,7 +138,7 @@ impl UDPNetworkDecoder {
             Err(PacketDecodeError::OutOfBounds)?
         }
 
-        let header = VarUint::decode_async(&mut reader).await?;
+        let header = VarUInt::decode_async(&mut reader).await?;
 
         let header_value = header.0;
 

@@ -12,19 +12,19 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 
-pub type VarIntType = u32;
+pub type VarUIntType = u32;
 
 /**
  * A variable-length integer type used by the Minecraft network protocol.
  */
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct VarUint(pub VarIntType);
+pub struct VarUInt(pub VarUIntType);
 
-impl VarUint {
-    /// The maximum number of bytes a `VarInt` can occupy.
+impl VarUInt {
+    /// The maximum number of bytes a `VarUInt` can occupy.
     const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
-    /// Returns the exact number of bytes this VarInt will write when
+    /// Returns the exact number of bytes this VarUInt will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
     pub fn written_size(&self) -> usize {
         (32 - self.0.leading_zeros() as usize).max(1).div_ceil(7)
@@ -53,14 +53,14 @@ impl VarUint {
             let byte = read.get_u8()?;
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarUint(val));
+                return Ok(VarUInt(val));
             }
         }
         Err(ReadingError::TooLarge("VarInt".to_string()))
     }
 }
 
-impl VarUint {
+impl VarUInt {
     pub async fn decode_async(read: &mut (impl AsyncRead + Unpin)) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
@@ -73,7 +73,7 @@ impl VarUint {
             })?;
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarUint(val));
+                return Ok(VarUInt(val));
             }
         }
         Err(ReadingError::TooLarge("VarInt".to_string()))
@@ -102,9 +102,9 @@ impl VarUint {
 // Macros are needed because traits over generics succccccccccck
 macro_rules! gen_from {
     ($ty: ty) => {
-        impl From<$ty> for VarUint {
+        impl From<$ty> for VarUInt {
             fn from(value: $ty) -> Self {
-                VarUint(value as u32)
+                VarUInt(value as u32)
             }
         }
     };
@@ -118,11 +118,11 @@ gen_from!(u32);
 
 macro_rules! gen_try_from {
     ($ty: ty) => {
-        impl TryFrom<$ty> for VarUint {
+        impl TryFrom<$ty> for VarUInt {
             type Error = <i32 as TryFrom<$ty>>::Error;
 
             fn try_from(value: $ty) -> Result<Self, Self::Error> {
-                Ok(VarUint(value as u32))
+                Ok(VarUInt(value as u32))
             }
         }
     };
@@ -134,7 +134,7 @@ gen_try_from!(u64);
 gen_try_from!(isize);
 gen_try_from!(usize);
 
-impl Serialize for VarUint {
+impl Serialize for VarUInt {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -153,7 +153,7 @@ impl Serialize for VarUint {
     }
 }
 
-impl<'de> Deserialize<'de> for VarUint {
+impl<'de> Deserialize<'de> for VarUInt {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -161,7 +161,7 @@ impl<'de> Deserialize<'de> for VarUint {
         struct VarIntVisitor;
 
         impl<'de> Visitor<'de> for VarIntVisitor {
-            type Value = VarUint;
+            type Value = VarUInt;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("a valid VarInt encoded in a byte sequence")
@@ -172,11 +172,11 @@ impl<'de> Deserialize<'de> for VarUint {
                 A: SeqAccess<'de>,
             {
                 let mut val = 0;
-                for i in 0..VarUint::MAX_SIZE.get() {
+                for i in 0..VarUInt::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
                         val |= (u32::from(byte) & 0b01111111) << (i * 7);
                         if byte & 0b10000000 == 0 {
-                            return Ok(VarUint(val));
+                            return Ok(VarUInt(val));
                         }
                     } else {
                         break;

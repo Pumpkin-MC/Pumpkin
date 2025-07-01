@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 
 use crate::{
     FixedBitSet,
-    codec::{bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong, var_uint::VarUint},
+    codec::{bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong, var_uint::VarUInt},
 };
 
 pub mod deserializer;
@@ -312,7 +312,7 @@ pub trait NetworkWriteExt {
         }
     }
     fn write_var_int(&mut self, data: &VarInt) -> Result<(), WritingError>;
-    fn write_var_uint(&mut self, data: &VarUint) -> Result<(), WritingError>;
+    fn write_var_uint(&mut self, data: &VarUInt) -> Result<(), WritingError>;
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
@@ -421,7 +421,7 @@ impl<W: Write> NetworkWriteExt for W {
         data.encode(self)
     }
 
-    fn write_var_uint(&mut self, data: &VarUint) -> Result<(), WritingError> {
+    fn write_var_uint(&mut self, data: &VarUInt) -> Result<(), WritingError> {
         data.encode(self)
     }
 
