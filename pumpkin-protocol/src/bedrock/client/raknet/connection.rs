@@ -1,9 +1,9 @@
 use pumpkin_macros::packet;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::codec::socket_address::SocketAddress;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[packet(0x10)]
 pub struct CConnectionRequestAccepted {
     client_address: SocketAddress,

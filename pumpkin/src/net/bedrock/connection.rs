@@ -4,9 +4,11 @@ use std::{
 };
 
 use pumpkin_protocol::{
+    ConnectionState,
     bedrock::{
-        RakReliability, client::raknet::connection::CConnectionRequestAccepted,
-        server::raknet::connection::SConnectionRequest,
+        RakReliability,
+        client::raknet::connection::CConnectionRequestAccepted,
+        server::raknet::connection::{SConnectionRequest, SNewIncomingConnection},
     },
     codec::socket_address::SocketAddress,
 };
@@ -36,5 +38,10 @@ impl Client {
                 RakReliability::Unreliable,
             )
             .await;
+    }
+
+    pub fn handle_new_incoming_connection(&self, packet: &SNewIncomingConnection) {
+        dbg!(packet.pong_time);
+        self.connection_state.store(ConnectionState::Login);
     }
 }
