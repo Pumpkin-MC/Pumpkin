@@ -1,3 +1,2 @@
-pub mod connection;
-pub mod open_connection;
-pub mod unconnected_pong;
+pub mod network_settings;
+pub mod raknet;

@@ -39,7 +39,7 @@ impl VarInt {
         for _ in 0..Self::MAX_SIZE.get() {
             let b: u8 = val as u8 & 0b01111111;
             val >>= 7;
-            write.write_u8_be(if val == 0 { b } else { b | 0b10000000 })?;
+            write.write_u8(if val == 0 { b } else { b | 0b10000000 })?;
             if val == 0 {
                 break;
             }

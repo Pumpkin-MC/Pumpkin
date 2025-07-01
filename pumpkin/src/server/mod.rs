@@ -53,7 +53,7 @@ pub mod seasonal_events;
 pub mod tick_rate_manager;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.6";
+pub const CURRENT_MC_VERSION: &str = "1.21.7";
 
 /// Represents a Minecraft server instance.
 pub struct Server {

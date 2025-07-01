@@ -158,14 +158,14 @@ impl ClientPlatform {
         }
     }
 
-    pub fn write_packet<P: ClientPacket>(
+    pub async fn write_packet<P: ClientPacket>(
         &self,
         packet: &P,
         write: impl Write,
     ) -> Result<(), WritingError> {
         match self {
             Self::Java(_) => JavaClientPlatform::write_packet(packet, write),
-            Self::Bedrock(_) => BedrockClientPlatform::write_packet(packet, write),
+            Self::Bedrock(bedrock) => bedrock.write_game_packet(packet, write).await,
         }
     }
 
@@ -362,7 +362,7 @@ impl Client {
     {
         let mut buf = Vec::new();
         let writer = &mut buf;
-        self.platform.write_packet(packet, writer).unwrap();
+        self.platform.write_packet(packet, writer).await.unwrap();
         self.enqueue_packet_data(buf.into()).await;
     }
 
@@ -397,7 +397,7 @@ impl Client {
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
-        self.platform.write_packet(packet, writer).unwrap();
+        self.platform.write_packet(packet, writer).await.unwrap();
         self.platform.send_packet_now(self, packet_buf).await;
     }
 

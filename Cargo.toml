@@ -14,12 +14,12 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 edition = "2024"
 
 
 [profile.dev]
-opt-level = 1
+opt-level = 0
 
 [profile.release]
 lto = true

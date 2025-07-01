@@ -80,6 +80,7 @@ use crate::block::blocks::plant::crop::potatoes::PotatoBlock;
 use crate::block::blocks::plant::crop::torch_flower::TorchFlowerBlock;
 use crate::block::blocks::plant::crop::wheat::WheatBlock;
 use crate::block::blocks::plant::nether_wart::NetherWartBlock;
+use crate::block::blocks::flower_pots::FlowerPotBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
@@ -117,6 +118,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FarmLandBlock);
     manager.register(FenceGateBlock);
     manager.register(FenceBlock);
+    manager.register(FlowerPotBlock);
     manager.register(FurnaceBlock);
     manager.register(GlassPaneBlock);
     manager.register(GrindstoneBlock);

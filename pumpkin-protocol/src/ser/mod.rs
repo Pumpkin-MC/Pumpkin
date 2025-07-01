@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 
 use crate::{
     FixedBitSet,
-    codec::{bit_set::BitSet, var_int::VarInt, var_long::VarLong},
+    codec::{bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong},
 };
 
 pub mod deserializer;
@@ -48,6 +48,8 @@ pub enum WritingError {
 pub trait NetworkReadExt {
     fn get_i8_be(&mut self) -> Result<i8, ReadingError>;
     fn get_u8_be(&mut self) -> Result<u8, ReadingError>;
+    fn get_u8_le(&mut self) -> Result<u8, ReadingError>;
+
     fn get_i16_be(&mut self) -> Result<i16, ReadingError>;
     fn get_u16_be(&mut self) -> Result<u16, ReadingError>;
     fn get_i32_be(&mut self) -> Result<i32, ReadingError>;
@@ -63,6 +65,7 @@ pub trait NetworkReadExt {
     fn read_remaining_to_boxed_slice(&mut self, bound: usize) -> Result<Box<[u8]>, ReadingError>;
 
     fn get_bool(&mut self) -> Result<bool, ReadingError>;
+    fn get_u24(&mut self) -> Result<U24, ReadingError>;
     fn get_var_int(&mut self) -> Result<VarInt, ReadingError>;
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
@@ -100,6 +103,14 @@ impl<R: Read> NetworkReadExt for R {
         Ok(u8::from_be_bytes(buf))
     }
 
+    fn get_u8_le(&mut self) -> Result<u8, ReadingError> {
+        let mut buf = [0u8];
+        self.read_exact(&mut buf)
+            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
+
+        Ok(u8::from_le_bytes(buf))
+    }
+
     fn get_i16_be(&mut self) -> Result<i16, ReadingError> {
         let mut buf = [0u8; 2];
         self.read_exact(&mut buf)
@@ -114,6 +125,10 @@ impl<R: Read> NetworkReadExt for R {
             .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
 
         Ok(u16::from_be_bytes(buf))
+    }
+
+    fn get_u24(&mut self) -> Result<U24, ReadingError> {
+        U24::decode(self)
     }
 
     fn get_i32_be(&mut self) -> Result<i32, ReadingError> {
@@ -285,10 +300,11 @@ impl<R: Read> NetworkReadExt for R {
 }
 
 pub trait NetworkWriteExt {
-    fn write_i8_be(&mut self, data: i8) -> Result<(), WritingError>;
-    fn write_u8_be(&mut self, data: u8) -> Result<(), WritingError>;
+    fn write_i8(&mut self, data: i8) -> Result<(), WritingError>;
+    fn write_u8(&mut self, data: u8) -> Result<(), WritingError>;
     fn write_i16_be(&mut self, data: i16) -> Result<(), WritingError>;
     fn write_u16_be(&mut self, data: u16) -> Result<(), WritingError>;
+    fn write_u24_be(&mut self, data: U24) -> Result<(), WritingError>;
     fn write_i32_be(&mut self, data: i32) -> Result<(), WritingError>;
     fn write_u32_be(&mut self, data: u32) -> Result<(), WritingError>;
     fn write_i64_be(&mut self, data: i64) -> Result<(), WritingError>;
@@ -299,9 +315,9 @@ pub trait NetworkWriteExt {
 
     fn write_bool(&mut self, data: bool) -> Result<(), WritingError> {
         if data {
-            self.write_u8_be(1)
+            self.write_u8(1)
         } else {
-            self.write_u8_be(0)
+            self.write_u8(0)
         }
     }
     fn write_var_int(&mut self, data: &VarInt) -> Result<(), WritingError>;
@@ -351,12 +367,12 @@ pub trait NetworkWriteExt {
 }
 
 impl<W: Write> NetworkWriteExt for W {
-    fn write_i8_be(&mut self, data: i8) -> Result<(), WritingError> {
+    fn write_i8(&mut self, data: i8) -> Result<(), WritingError> {
         self.write_all(&data.to_be_bytes())
             .map_err(WritingError::IoError)
     }
 
-    fn write_u8_be(&mut self, data: u8) -> Result<(), WritingError> {
+    fn write_u8(&mut self, data: u8) -> Result<(), WritingError> {
         self.write_all(&data.to_be_bytes())
             .map_err(WritingError::IoError)
     }
@@ -369,6 +385,10 @@ impl<W: Write> NetworkWriteExt for W {
     fn write_u16_be(&mut self, data: u16) -> Result<(), WritingError> {
         self.write_all(&data.to_be_bytes())
             .map_err(WritingError::IoError)
+    }
+
+    fn write_u24_be(&mut self, data: U24) -> Result<(), WritingError> {
+        data.encode(self)
     }
 
     fn write_i32_be(&mut self, data: i32) -> Result<(), WritingError> {
