@@ -21,11 +21,11 @@ use super::{
 #[derive(Clone)]
 pub struct FluidLevel {
     max_y: i32,
-    block: Block,
+    block: &'static Block,
 }
 
 impl FluidLevel {
-    pub fn new(max_y: i32, block: Block) -> Self {
+    pub fn new(max_y: i32, block: &'static Block) -> Self {
         Self { max_y, block }
     }
 
@@ -33,11 +33,11 @@ impl FluidLevel {
         self.max_y
     }
 
-    fn get_block(&self, y: i32) -> Block {
+    fn get_block(&self, y: i32) -> &'static Block {
         if y < self.max_y {
-            self.block.clone()
+            self.block
         } else {
-            Block::AIR
+            &Block::AIR
         }
     }
 }
@@ -59,18 +59,18 @@ impl FluidLevelSamplerImpl for FluidLevelSampler {
 
 pub struct StaticFluidLevelSampler {
     y: i32,
-    block: Block,
+    block: &'static Block,
 }
 
 impl StaticFluidLevelSampler {
-    pub fn new(y: i32, block: Block) -> Self {
+    pub fn new(y: i32, block: &'static Block) -> Self {
         Self { y, block }
     }
 }
 
 impl FluidLevelSamplerImpl for StaticFluidLevelSampler {
     fn get_fluid_level(&self, _x: i32, _y: i32, _z: i32) -> FluidLevel {
-        FluidLevel::new(self.y, self.block.clone())
+        FluidLevel::new(self.y, self.block)
     }
 }
 
@@ -206,8 +206,8 @@ impl WorldAquiferSampler {
         let block_state1 = level_1.get_block(y);
         let block_state2 = level_2.get_block(y);
 
-        if (block_state1 != LAVA_BLOCK || block_state2 != WATER_BLOCK)
-            && (block_state1 != WATER_BLOCK || block_state2 != LAVA_BLOCK)
+        if (block_state1 != &LAVA_BLOCK || block_state2 != &WATER_BLOCK)
+            && (block_state1 != &WATER_BLOCK || block_state2 != &LAVA_BLOCK)
         {
             let level_diff = (level_1.max_y - level_2.max_y).abs();
             if level_diff == 0 {
@@ -418,8 +418,8 @@ impl WorldAquiferSampler {
         level: i32,
         router: &mut ChunkNoiseRouter,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> Block {
-        if level <= -10 && level != MIN_HEIGHT_CELL && default_level.block != LAVA_BLOCK {
+    ) -> &'static Block {
+        if level <= -10 && level != MIN_HEIGHT_CELL && default_level.block != &LAVA_BLOCK {
             let x = floor_div(block_x, 64);
             let y = floor_div(block_y, 40);
             let z = floor_div(block_z, 64);
@@ -427,7 +427,7 @@ impl WorldAquiferSampler {
             let sample = router.lava_noise(&UnblendedNoisePos::new(x, y, z), sample_options);
 
             if sample.abs() > 0.3f64 {
-                return LAVA_BLOCK;
+                return &LAVA_BLOCK;
             }
         }
 
@@ -450,7 +450,7 @@ impl WorldAquiferSampler {
             let k = pos.z();
 
             let fluid_level = self.fluid_level.get_fluid_level(i, j, k);
-            if fluid_level.get_block(j) == LAVA_BLOCK {
+            if fluid_level.get_block(j) == &LAVA_BLOCK {
                 Some(LAVA_BLOCK.default_state)
             } else {
                 let scaled_x = floor_div(i - 5, 16);
@@ -511,12 +511,12 @@ impl WorldAquiferSampler {
                     // TODO: Handle fluid tick
 
                     Some(block_state.default_state)
-                } else if block_state == WATER_BLOCK
+                } else if block_state == &WATER_BLOCK
                     && self
                         .fluid_level
                         .get_fluid_level(i, j - 1, k)
                         .get_block(j - 1)
-                        == LAVA_BLOCK
+                        == &LAVA_BLOCK
                 {
                     Some(block_state.default_state)
                 } else {
@@ -701,8 +701,8 @@ mod test {
         let shape = &surface_config.shape;
         let chunk_pos = Vector2::new(7, 4);
         let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
-            FluidLevel::new(63, WATER_BLOCK),
-            FluidLevel::new(-54, LAVA_BLOCK),
+            FluidLevel::new(63, &WATER_BLOCK),
+            FluidLevel::new(-54, &LAVA_BLOCK),
         )));
         const CHUNK_WIDTH: usize = 16;
         let noise = ChunkNoiseGenerator::new(
@@ -762,7 +762,7 @@ mod test {
     #[test]
     fn test_get_fluid_block_state() {
         let (mut aquifer, mut router, _, options) = create_aquifer(&PROTO_ROUTER);
-        let level = FluidLevel::new(0, WATER_BLOCK);
+        let level = FluidLevel::new(0, &WATER_BLOCK);
 
         let values = [
             ((-100, -100, -100), WATER_BLOCK),
@@ -895,7 +895,7 @@ mod test {
         for ((x, y, z), result) in values {
             assert_eq!(
                 aquifer.get_fluid_block_state(x, y, z, level.clone(), -10, &mut router, &options),
-                result
+                &result
             );
         }
     }
@@ -1043,7 +1043,7 @@ mod test {
     #[test]
     fn test_get_fluid_block_y() {
         let (mut aquifer, mut router, _, env) = create_aquifer(&PROTO_ROUTER);
-        let level = FluidLevel::new(0, WATER_BLOCK);
+        let level = FluidLevel::new(0, &WATER_BLOCK);
         let values = [
             ((-100, -100, -100), -32512),
             ((-100, -100, -50), -32512),
@@ -1449,7 +1449,7 @@ mod test {
         for ((x, y, z), (y1, state)) in values {
             let level = aquifer.get_fluid_level(x, y, z, &mut router, &mut height_estimator, &env);
             assert_eq!(level.max_y, y1);
-            assert_eq!(level.block, state);
+            assert_eq!(level.block, &state);
         }
     }
 
@@ -1586,8 +1586,8 @@ mod test {
         ];
 
         for ((x, y, z, h1, h2), result) in values {
-            let level1 = FluidLevel::new(h1, WATER_BLOCK);
-            let level2 = FluidLevel::new(h2, WATER_BLOCK);
+            let level1 = FluidLevel::new(h1, &WATER_BLOCK);
+            let level2 = FluidLevel::new(h2, &WATER_BLOCK);
             let pos = UnblendedNoisePos::new(x, y, z);
             let sample = router.barrier_noise(&pos, &env);
             assert_eq!(

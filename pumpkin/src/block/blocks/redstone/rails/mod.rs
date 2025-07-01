@@ -19,7 +19,7 @@ pub mod powered_rail;
 pub mod rail;
 
 struct Rail {
-    block: Block,
+    block: &'static Block,
     position: BlockPos,
     properties: RailProperties,
     elevation: RailElevation,

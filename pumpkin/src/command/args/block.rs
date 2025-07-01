@@ -56,7 +56,7 @@ impl DefaultNameArgConsumer for BlockArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for BlockArgumentConsumer {
-    type Data = Block;
+    type Data = &'static Block;
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

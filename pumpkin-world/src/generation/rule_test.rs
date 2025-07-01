@@ -12,7 +12,7 @@ pub enum RuleTest {
 pub struct AlwaysTrueRuleTest;
 
 impl AlwaysTrueRuleTest {
-    pub fn test(&self, _block: Block) -> bool {
+    pub fn test(&self, _block: &'static  Block) -> bool {
         true
     }
 }
@@ -23,7 +23,7 @@ pub struct BlockMatchRuleTest {
 }
 
 impl BlockMatchRuleTest {
-    pub fn test(&self, block: Block) -> bool {
+    pub fn test(&self, block: &'static Block) -> bool {
         let test_block = Block::from_registry_key(&self.block).expect("Failed to find block");
         test_block == block
     }
@@ -35,7 +35,7 @@ pub struct TagMatchTest {
 }
 
 impl TagMatchTest {
-    pub fn test(&self, block: Block) -> bool {
+    pub fn test(&self, block: &'static  Block) -> bool {
         block.is_tagged_with(&self.tag).unwrap()
     }
 }

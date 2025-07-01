@@ -293,7 +293,7 @@ impl RedstoneWireTurbo {
 
         while !self.update_queue[0].is_empty() || !self.update_queue[1].is_empty() {
             for node_id in self.update_queue[0].clone() {
-                let block = &Block::from_state_id(self.nodes[node_id.index].state.id).unwrap();
+                let block = Block::from_state_id(self.nodes[node_id.index].state.id).unwrap();
                 if block == &Block::REDSTONE_WIRE {
                     self.update_node(world, node_id, self.current_walk_layer)
                         .await;
@@ -416,7 +416,7 @@ impl RedstoneWireTurbo {
 
     fn get_max_current_strength(&self, upd: NodeId, strength: u8) -> u8 {
         let node = &self.nodes[upd.index];
-        let block = &Block::from_state_id(node.state.id).unwrap();
+        let block = Block::from_state_id(node.state.id).unwrap();
         if block == &Block::REDSTONE_WIRE {
             (unwrap_wire(&node.state).power.to_index() as u8).max(strength)
         } else {

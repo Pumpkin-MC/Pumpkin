@@ -5,7 +5,7 @@ use crate::{
 };
 use pumpkin_util::{loot_table::LootTable, math::experience::Experience};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Block {
     pub id: u16,
     pub name: &'static str,

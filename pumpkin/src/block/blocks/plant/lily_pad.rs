@@ -24,7 +24,7 @@ impl PumpkinBlock for LilyPadBlock {
         world: &Arc<World>,
         entity: &dyn EntityBase,
         pos: BlockPos,
-        _block: Block,
+        _block: &'static  Block,
         _state: &'static BlockState,
         _server: &Server,
     ) {
@@ -51,6 +51,6 @@ impl PumpkinBlock for LilyPadBlock {
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         let block_below = block_accessor.get_block(&block_pos.down()).await;
-        block_below == Block::WATER || block_below == Block::ICE
+        block_below == &Block::WATER || block_below == &Block::ICE
     }
 }

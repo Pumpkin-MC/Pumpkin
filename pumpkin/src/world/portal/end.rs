@@ -25,7 +25,7 @@ impl EndPortal {
 
     async fn get_mid_pos(world: &World, pos: BlockPos) -> Option<BlockPos> {
         let (block, state) = world.get_block_and_block_state(&pos).await;
-        if block != Self::FRAME_BLOCK {
+        if block != &Self::FRAME_BLOCK {
             return None;
         }
 

@@ -141,7 +141,7 @@ impl TreeFeature {
                     let rstate = chunk.get_block_state(&pos.0);
                     let block = rstate.to_block();
                     if Self::can_replace_or_log(&rstate.to_state(), &block)
-                        && (self.ignore_vines || block != Block::VINE)
+                        && (self.ignore_vines || block != &Block::VINE)
                     {
                         continue;
                     }

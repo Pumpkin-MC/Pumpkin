@@ -145,13 +145,13 @@ impl NetherPortal {
             lower_corner = original_lower_corner.offset_dir(negative_dir.to_offset(), i as i32);
             let (block, block_state) = world.get_block_and_block_state(&lower_corner).await;
             if !Self::valid_state_inside_portal(&block, &block_state) {
-                if Self::FRAME_BLOCK != block {
+                if &Self::FRAME_BLOCK != block {
                     break;
                 }
                 return i;
             }
             let block = world.get_block(&lower_corner.down()).await;
-            if Self::FRAME_BLOCK != block {
+            if &Self::FRAME_BLOCK != block {
                 break;
             }
         }
@@ -193,14 +193,14 @@ impl NetherPortal {
             let mut pos = lower_corner
                 .offset_dir(BlockDirection::Up.to_offset(), i)
                 .offset_dir(negative_dir.to_offset(), -1);
-            if world.get_block(&pos).await != Self::FRAME_BLOCK {
+            if world.get_block(&pos).await != &Self::FRAME_BLOCK {
                 return i as u32;
             }
 
             pos = lower_corner
                 .offset_dir(BlockDirection::Up.to_offset(), i)
                 .offset_dir(negative_dir.to_offset(), width as i32);
-            if world.get_block(&pos).await != Self::FRAME_BLOCK {
+            if world.get_block(&pos).await != &Self::FRAME_BLOCK {
                 return i as u32;
             }
 
@@ -212,7 +212,7 @@ impl NetherPortal {
                 if !Self::valid_state_inside_portal(&block, &block_state) {
                     return i as u32;
                 }
-                if block == Block::NETHER_PORTAL {
+                if block == &Block::NETHER_PORTAL {
                     *found_portal_blocks += 1;
                 }
             }
@@ -232,7 +232,7 @@ impl NetherPortal {
             pos = lower_corner
                 .offset_dir(BlockDirection::Up.to_offset(), height as i32)
                 .offset_dir(dir.to_offset(), i as i32);
-            if Self::FRAME_BLOCK != world.get_block(&pos).await {
+            if &Self::FRAME_BLOCK != world.get_block(&pos).await {
                 return false;
             }
         }

@@ -1757,7 +1757,7 @@ impl World {
         flags: BlockFlags,
     ) {
         let (broken_block, broken_block_state) = self.get_block_and_block_state(position).await;
-        let event = BlockBreakEvent::new(cause.clone(), broken_block.clone(), *position, 0, false);
+        let event = BlockBreakEvent::new(cause.clone(), broken_block, *position, 0, false);
 
         let event = PLUGIN_MANAGER
             .read()
@@ -1787,7 +1787,7 @@ impl World {
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
 
-            if Block::from_state_id(broken_state_id) != Some(Block::FIRE) {
+            if Block::from_state_id(broken_state_id) != Some(&Block::FIRE) {
                 let particles_packet = CWorldEvent::new(
                     WorldEvent::BlockBroken as i32,
                     *position,
@@ -1832,9 +1832,9 @@ impl World {
     }
 
     /// Gets a `Block` from the block registry. Returns `Block::AIR` if the block was not found.
-    pub async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
+    pub async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
         let id = self.get_block_state_id(position).await;
-        get_block_by_state_id(id).unwrap_or(Block::AIR)
+        get_block_by_state_id(id).unwrap_or(&Block::AIR)
     }
 
     pub async fn get_fluid(&self, position: &BlockPos) -> pumpkin_data::fluid::Fluid {
@@ -1843,7 +1843,7 @@ impl World {
         if let Ok(fluid) = fluid {
             return fluid;
         }
-        let block = get_block_by_state_id(id).unwrap_or(Block::AIR);
+        let block = get_block_by_state_id(id).unwrap_or(&Block::AIR);
         block
             .properties(id)
             .and_then(|props| {
@@ -1876,9 +1876,9 @@ impl World {
     pub async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (pumpkin_data::Block, &'static pumpkin_data::BlockState) {
+    ) -> (&'static pumpkin_data::Block, &'static pumpkin_data::BlockState) {
         let id = self.get_block_state_id(position).await;
-        get_block_and_state_by_state_id(id).unwrap_or((Block::AIR, Block::AIR.default_state))
+        get_block_and_state_by_state_id(id).unwrap_or((&Block::AIR, &Block::AIR.default_state))
     }
 
     /// Updates neighboring blocks of a block
@@ -2256,7 +2256,7 @@ impl pumpkin_world::world::SimpleWorld for World {
 
 #[async_trait]
 impl BlockAccessor for World {
-    async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
+    async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
         Self::get_block(self, position).await
     }
     async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState {
@@ -2266,8 +2266,8 @@ impl BlockAccessor for World {
     async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (pumpkin_data::Block, &'static pumpkin_data::BlockState) {
+    ) -> (&'static pumpkin_data::Block, &'static pumpkin_data::BlockState) {
         let id = self.get_block_state(position).await.id;
-        get_block_and_state_by_state_id(id).unwrap_or((Block::AIR, Block::AIR.default_state))
+        get_block_and_state_by_state_id(id).unwrap_or((&Block::AIR, Block::AIR.default_state))
     }
 }

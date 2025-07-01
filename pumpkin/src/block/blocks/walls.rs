@@ -82,11 +82,11 @@ pub async fn compute_wall_state(
         let (other_block, other_block_state) =
             world.get_block_and_block_state(&other_block_pos).await;
 
-        let connected = other_block == *block
+        let connected = other_block == block
             || (other_block_state.is_solid() && other_block_state.is_full_cube())
             || other_block.is_tagged_with("minecraft:walls").unwrap()
             || other_block.is_tagged_with("minecraft:fence_gates").unwrap()
-            || other_block == Block::IRON_BARS
+            || other_block == &Block::IRON_BARS
             || other_block.is_tagged_with("c:glass_panes").unwrap();
 
         let shape = if connected {
@@ -102,7 +102,7 @@ pub async fn compute_wall_state(
                 }
             } else if block_above.is_tagged_with("c:glass_panes").unwrap()
                 || block_above.is_tagged_with("minecraft:fences").unwrap()
-                || block_above == Block::IRON_BARS
+                || block_above == &Block::IRON_BARS
             {
                 let other_props =
                     FenceLikeProperties::from_state_id(block_above_state.id, &block_above);

@@ -773,20 +773,20 @@ pub(crate) fn build() -> TokenStream {
         });
 
         type_from_raw_id_arms.extend(quote! {
-            #id_lit => Some(Self::#const_ident),
+            #id_lit => Some(&Self::#const_ident),
         });
 
         type_from_name.extend(quote! {
-            #name => Some(Self::#const_ident),
+            #name => Some(&Self::#const_ident),
         });
 
         block_from_state_id.extend(quote! {
-            #state_start..=#state_end => Some(Self::#const_ident),
+            #state_start..=#state_end => Some(&Self::#const_ident),
         });
 
         if !existing_item_ids.contains(&item_id) {
             block_from_item_id.extend(quote! {
-                #item_id => Some(Self::#const_ident),
+                #item_id => Some(&Self::#const_ident),
             });
             existing_item_ids.push(item_id);
         }
@@ -851,12 +851,12 @@ pub(crate) fn build() -> TokenStream {
             #(#block_entity_types),*
         ];
 
-        pub fn get_block(registry_id: &str) -> Option<Block> {
+        pub fn get_block(registry_id: &str) -> Option<&'static Block> {
            let key = registry_id.strip_prefix("minecraft:").unwrap_or(registry_id);
            Block::from_registry_key(key)
         }
 
-        pub fn get_block_by_id(id: u16) -> Option<Block> {
+        pub fn get_block_by_id(id: u16) -> Option<&'static Block> {
             Block::from_id(id)
         }
 
@@ -869,11 +869,11 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        pub fn get_block_by_state_id(id: u16) -> Option<Block> {
+        pub fn get_block_by_state_id(id: u16) -> Option<&'static Block> {
             Block::from_state_id(id)
         }
 
-        pub fn get_block_and_state_by_state_id(id: u16) -> Option<(Block, &'static BlockState)> {
+        pub fn get_block_and_state_by_state_id(id: u16) -> Option<(&'static Block, &'static BlockState)> {
             if let Some(block) = Block::from_state_id(id) {
                 let state: &BlockState = block.states.iter().find(|state| state.id == id)?;
                 Some((block, state))
@@ -882,14 +882,14 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        pub fn get_block_by_item(item_id: u16) -> Option<Block> {
+        pub fn get_block_by_item(item_id: u16) -> Option<&'static Block> {
             Block::from_item_id(item_id)
         }
 
         pub fn blocks_movement(block_state: &BlockState) -> bool {
             if block_state.is_solid() {
                 if let Some(block) = get_block_by_state_id(block_state.id) {
-                    return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
+                    return block != &Block::COBWEB && block != &Block::BAMBOO_SAPLING;
                 }
             }
             false
@@ -899,7 +899,7 @@ pub(crate) fn build() -> TokenStream {
             #constants
 
             #[doc = r" Try to parse a block from a resource location string."]
-            pub fn from_registry_key(name: &str) -> Option<Self> {
+            pub fn from_registry_key(name: &str) -> Option<&'static Self> {
                 match name {
                     #type_from_name
                     _ => None
@@ -907,7 +907,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Try to parse a block from a raw id."]
-            pub const fn from_id(id: u16) -> Option<Self> {
+            pub const fn from_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #type_from_raw_id_arms
                     _ => None
@@ -915,7 +915,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Try to parse a block from a state id."]
-            pub const fn from_state_id(id: u16) -> Option<Self> {
+            pub const fn from_state_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #block_from_state_id
                     _ => None
@@ -923,7 +923,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Try to parse a block from an item id."]
-            pub const fn from_item_id(id: u16) -> Option<Self> {
+            pub const fn from_item_id(id: u16) -> Option<&'static Self> {
                 #[allow(unreachable_patterns)]
                 match id {
                     #block_from_item_id

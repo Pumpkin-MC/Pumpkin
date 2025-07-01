@@ -44,7 +44,7 @@ impl PumpkinBlock for WeightedPressurePlateBlock {
         world: &Arc<World>,
         _entity: &dyn EntityBase,
         pos: BlockPos,
-        block: Block,
+        block: &'static  Block,
         state: &'static BlockState,
         _server: &Server,
     ) {

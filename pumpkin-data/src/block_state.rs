@@ -92,7 +92,7 @@ impl BlockState {
         }
     }
 
-    pub fn block(&self) -> Block {
+    pub fn block(&self) -> &'static Block {
         get_block_by_state_id(self.id).unwrap()
     }
 

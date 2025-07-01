@@ -57,8 +57,8 @@ impl TrunkPlacer {
         let block = chunk.get_block_state(&pos.0).to_block();
         if force_dirt
             || !(block.is_tagged_with("minecraft:dirt").unwrap()
-                && block != Block::GRASS_BLOCK
-                && block != Block::MYCELIUM)
+                && block != &Block::GRASS_BLOCK
+                && block != &Block::MYCELIUM)
         {
             chunk.set_block_state(&pos.0, dirt_state);
         }

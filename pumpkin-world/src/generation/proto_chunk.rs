@@ -140,7 +140,7 @@ impl<'a> ProtoChunk<'a> {
                 settings.sea_level,
                 settings.default_fluid.get_state().unwrap().block(),
             ),
-            FluidLevel::new(-54, LAVA_BLOCK), // this is always the same for every dimension
+            FluidLevel::new(-54, &LAVA_BLOCK), // this is always the same for every dimension
         )));
 
         let height = generation_shape.height;
@@ -649,7 +649,7 @@ impl<'a> ProtoChunk<'a> {
                                 .to_block();
 
                             // TODO: Is there a better way to check that its not a fluid?
-                            if !(state != AIR_BLOCK && state != WATER_BLOCK && state != LAVA_BLOCK)
+                            if !(state != &AIR_BLOCK && state != &WATER_BLOCK && state != &LAVA_BLOCK)
                             {
                                 min = search_y + 1;
                                 break;
@@ -761,7 +761,7 @@ impl<'a> ProtoChunk<'a> {
 
 #[async_trait]
 impl BlockAccessor for ProtoChunk<'_> {
-    async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
+    async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
         self.get_block_state(&position.0).to_block()
     }
 
@@ -772,9 +772,9 @@ impl BlockAccessor for ProtoChunk<'_> {
     async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (pumpkin_data::Block, &'static pumpkin_data::BlockState) {
+    ) -> (&'static pumpkin_data::Block, &'static pumpkin_data::BlockState) {
         let id = self.get_block_state(&position.0);
-        get_block_and_state_by_state_id(id.0).unwrap_or((Block::AIR, Block::AIR.default_state))
+        get_block_and_state_by_state_id(id.0).unwrap_or((&Block::AIR, &Block::AIR.default_state))
     }
 }
 

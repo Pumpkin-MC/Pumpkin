@@ -186,7 +186,7 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
         old_state_id: BlockStateId,
         moved: bool,
     ) {
-        if moved || Block::from_state_id(old_state_id).is_some_and(|old_block| old_block == *block)
+        if moved || Block::from_state_id(old_state_id).is_some_and(|old_block| old_block == block)
         {
             return;
         }
@@ -207,10 +207,10 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
         let (target_block, target_state) = world
             .get_block_and_block_state(&pos.offset(facing.to_offset()))
             .await;
-        if target_block == Block::COMPARATOR {
+        if target_block == &Block::COMPARATOR {
             let props = ComparatorLikeProperties::from_state_id(target_state.id, &target_block);
             props.facing != facing
-        } else if target_block == Block::REPEATER {
+        } else if target_block == &Block::REPEATER {
             let props = RepeaterLikeProperties::from_state_id(target_state.id, &target_block);
             props.facing != facing
         } else {
@@ -242,7 +242,7 @@ pub async fn get_power<T: BlockProperties + RedstoneGateBlockProperties + Send>(
     if source_level >= 15 {
         source_level
     } else {
-        source_level.max(if source_block == Block::REDSTONE_WIRE {
+        source_level.max(if source_block == &Block::REDSTONE_WIRE {
             let props = RedstoneWireLikeProperties::from_state_id(source_state.id, &source_block);
             props.power.to_index() as u8
         } else {

@@ -60,11 +60,11 @@ impl ReplaceBlobsFeature {
     fn move_down_to_target(
         mut pos: BlockPos,
         chunk: &mut ProtoChunk,
-        target: &Block,
+        target: &'static Block,
     ) -> Option<BlockPos> {
         while pos.0.y > chunk.bottom_y() as i32 + 1 {
             let state = chunk.get_block_state(&pos.0);
-            if &state.to_block() == target {
+            if state.to_block() == target {
                 return Some(pos);
             }
 

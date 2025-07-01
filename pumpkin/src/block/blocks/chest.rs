@@ -171,7 +171,7 @@ async fn compute_chest_props(
             .get_block_and_block_state(&block_pos.offset(face.to_offset()))
             .await;
 
-        if clicked_block == *block {
+        if clicked_block == block {
             let clicked_props =
                 ChestLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
 
@@ -230,7 +230,7 @@ async fn get_chest_properties_if_can_connect(
         .get_block_and_block_state(&block_pos.offset(direction.to_offset()))
         .await;
 
-    if neighbor_block != *block {
+    if neighbor_block != block {
         return None;
     }
 

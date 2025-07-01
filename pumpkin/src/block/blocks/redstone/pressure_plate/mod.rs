@@ -14,7 +14,7 @@ pub(crate) trait PressurePlate {
         &self,
         world: &Arc<World>,
         pos: BlockPos,
-        block: Block,
+        block: &'static  Block,
         state: &'static BlockState,
     ) {
         let output = self.get_redstone_output(&block, state.id);

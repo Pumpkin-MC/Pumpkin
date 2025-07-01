@@ -33,7 +33,7 @@ impl PumpkinBlock for TripwireBlock {
         world: &Arc<World>,
         _entity: &dyn EntityBase,
         pos: BlockPos,
-        block: Block,
+        block: &'static  Block,
         state: &'static BlockState,
         _server: &Server,
     ) {
@@ -191,7 +191,7 @@ impl PumpkinBlock for TripwireBlock {
         old_state_id: BlockStateId,
         moved: bool,
     ) {
-        if moved || Block::from_state_id(old_state_id).is_some_and(|old_block| old_block == *block)
+        if moved || Block::from_state_id(old_state_id).is_some_and(|old_block| old_block == block)
         {
             return;
         }
@@ -207,7 +207,7 @@ impl TripwireBlock {
                 let current_pos = pos.offset_dir(dir.to_offset(), i);
                 let (current_block, current_state) =
                     world.get_block_and_block_state(&current_pos).await;
-                if current_block == Block::TRIPWIRE_HOOK {
+                if current_block == &Block::TRIPWIRE_HOOK {
                     let current_props = TripwireHookProperties::from_state_id(
                         current_state.id,
                         &Block::TRIPWIRE_HOOK,
@@ -226,7 +226,7 @@ impl TripwireBlock {
                     }
                     break;
                 }
-                if current_block != Block::TRIPWIRE {
+                if current_block != &Block::TRIPWIRE {
                     break;
                 }
             }
@@ -236,11 +236,11 @@ impl TripwireBlock {
     #[must_use]
     pub fn should_connect_to(state_id: BlockStateId, facing: BlockDirection) -> bool {
         Block::from_state_id(state_id).is_some_and(|block| {
-            if block == Block::TRIPWIRE_HOOK {
+            if block == &Block::TRIPWIRE_HOOK {
                 let props = TripwireHookProperties::from_state_id(state_id, &block);
                 Some(props.facing) == facing.opposite().to_horizontal_facing()
             } else {
-                block == Block::TRIPWIRE
+                block == &Block::TRIPWIRE
             }
         })
     }

@@ -55,6 +55,7 @@ impl FireBlock {
         block_state
             .block()
             .flammable
+            .as_ref()
             .is_some_and(|f| f.burn_chance > 0)
     }
 
@@ -117,6 +118,7 @@ impl FireBlock {
             .get_block(pos)
             .await
             .flammable
+            .clone()
             .map_or(0, |f| f.spread_chance)
             .into();
         if rand::rng().random_range(0..spread_factor) < spread_chance {
@@ -140,7 +142,7 @@ impl FireBlock {
                     .await;
             }
 
-            if block == Block::TNT {
+            if block == &Block::TNT {
                 TNTBlock::prime(world, pos).await;
             }
         }
@@ -158,7 +160,7 @@ impl FireBlock {
             if world.get_fluid(&pos.offset(dir.to_offset())).await.name != Fluid::EMPTY.name {
                 continue; // Skip if there is a fluid
             }
-            if let Some(flammable) = neighbor_block.flammable {
+            if let Some(flammable) = neighbor_block.flammable.clone() {
                 total_burn_chance += i32::from(flammable.burn_chance);
             }
         }
@@ -210,7 +212,7 @@ impl PumpkinBlock for FireBlock {
         _world: &Arc<World>,
         entity: &dyn EntityBase,
         _pos: BlockPos,
-        _block: Block,
+        _block: &'static Block,
         _state: &'static BlockState,
         _server: &Server,
     ) {

@@ -225,7 +225,7 @@ impl PumpkinBlock for PistonBlock {
             let pos = pos.offset_dir(dir.to_offset(), 2);
             let (block, state) = world.get_block_and_block_state(&pos).await;
             let mut bl2 = false;
-            if block == Block::MOVING_PISTON {
+            if block == &Block::MOVING_PISTON {
                 if let Some(entity) = world.get_block_entity(&pos).await {
                     let piston = PistonBlockEntity::from_nbt(&entity.0, pos);
                     if piston.facing == dir && piston.extending {
@@ -239,8 +239,8 @@ impl PumpkinBlock for PistonBlock {
                     && !state.is_air()
                     && Self::is_movable(&block, &state, dir, false, dir)
                     && (state.piston_behavior == PistonBehavior::Normal
-                        || block == Block::PISTON
-                        || block == Block::STICKY_PISTON)
+                        || block == &Block::PISTON
+                        || block == &Block::STICKY_PISTON)
                 {
                     move_piston(world, dir, &pos, false, sticky).await;
                 } else {
@@ -318,7 +318,7 @@ async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
         let (new_block, new_state) = world.get_block_and_block_state(&new_pos).await;
         let mut r#type = 1;
 
-        if new_block == Block::MOVING_PISTON {
+        if new_block == &Block::MOVING_PISTON {
             let new_props = MovingPistonLikeProperties::from_state_id(new_state.id, &new_block);
             if new_props.facing == props.facing {
                 if let Some(entity) = world.get_block_entity(&new_pos).await {
@@ -347,7 +347,7 @@ async fn move_piston(
     sticky: bool,
 ) -> bool {
     let extended_pos = block_pos.offset(dir.to_offset());
-    if !extend && world.get_block(&extended_pos).await == Block::PISTON_HEAD {
+    if !extend && world.get_block(&extended_pos).await == &Block::PISTON_HEAD {
         world
             .set_block_state(
                 &extended_pos,

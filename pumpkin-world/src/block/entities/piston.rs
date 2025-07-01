@@ -27,7 +27,7 @@ impl PistonBlockEntity {
         if self.last_progress.load() < 1.0 {
             let pos = self.position;
             world.remove_block_entity(&pos).await;
-            if world.get_block(&pos).await == Block::MOVING_PISTON {
+            if world.get_block(&pos).await == &Block::MOVING_PISTON {
                 let state = if self.source {
                     Block::AIR.default_state.id
                 } else {
@@ -66,7 +66,7 @@ impl BlockEntity for PistonBlockEntity {
         if current_progress >= 1.0 {
             let pos = self.position;
             world.remove_block_entity(&pos).await;
-            if world.get_block(&pos).await == Block::MOVING_PISTON {
+            if world.get_block(&pos).await == &Block::MOVING_PISTON {
                 if self.pushed_block_state.is_air() {
                     world
                         .clone()

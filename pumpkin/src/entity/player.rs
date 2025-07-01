@@ -577,7 +577,7 @@ impl Player {
             // TODO: calculate respawn position
             Some((respawn_point.position.to_f64(), respawn_point.yaw))
         } else if respawn_point.dimension == VanillaDimensionType::TheNether
-            && block == Block::RESPAWN_ANCHOR
+            && block == &Block::RESPAWN_ANCHOR
         {
             // TODO: calculate respawn position
             // TODO: check if there is fuel for respawn

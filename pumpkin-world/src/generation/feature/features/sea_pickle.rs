@@ -34,7 +34,7 @@ impl SeaPickleFeature {
             let z = random.next_bounded_i32(8) - random.next_bounded_i32(8);
             let y =
                 chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x + x, pos.0.z + z)) as i32;
-            if chunk.get_block_state(&pos.0).to_block() != Block::WATER {
+            if chunk.get_block_state(&pos.0).to_block() != &Block::WATER {
                 continue;
             }
             let mut props = SeaPickleLikeProperties::default(&Block::SEA_PICKLE);

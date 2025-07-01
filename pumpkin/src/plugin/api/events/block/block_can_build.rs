@@ -14,7 +14,7 @@ use super::BlockEvent;
 #[derive(Event, Clone)]
 pub struct BlockCanBuildEvent {
     /// The block that the player is attempting to build.
-    pub block_to_build: Block,
+    pub block_to_build: &'static Block,
 
     /// A boolean indicating whether building is allowed.
     pub buildable: bool,
@@ -23,7 +23,7 @@ pub struct BlockCanBuildEvent {
     pub player: Arc<Player>,
 
     /// The block being built upon.
-    pub block: Block,
+    pub block: &'static  Block,
 }
 
 impl BlockEvent for BlockCanBuildEvent {

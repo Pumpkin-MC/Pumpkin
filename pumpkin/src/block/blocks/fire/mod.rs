@@ -32,13 +32,13 @@ impl FireBlockBase {
 
     #[must_use]
     pub fn can_place_on(block: &Block) -> bool {
-        let block = block.clone();
+        let block = block;
 
         // Make sure the block below is not a fire block or fluid block
-        block != Block::SOUL_FIRE
-            && block != Block::FIRE
-            && block != Block::WATER
-            && block != Block::LAVA
+        block != &Block::SOUL_FIRE
+            && block != &Block::FIRE
+            && block != &Block::WATER
+            && block != &Block::LAVA
     }
 
     pub async fn is_soul_fire(world: &Arc<World>, block_pos: &BlockPos) -> bool {
@@ -95,7 +95,7 @@ impl FireBlockBase {
         let mut found = false;
 
         for dir in BlockDirection::all() {
-            if world.get_block(&block_pos.offset(dir.to_offset())).await == Block::OBSIDIAN {
+            if world.get_block(&block_pos.offset(dir.to_offset())).await == &Block::OBSIDIAN {
                 found = true;
                 break;
             }

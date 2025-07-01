@@ -10,10 +10,10 @@ use super::BlockEvent;
 #[derive(Event, Clone)]
 pub struct BlockBurnEvent {
     /// The block that is igniting the fire.
-    pub igniting_block: Block,
+    pub igniting_block: &'static  Block,
 
     /// The block that is burning.
-    pub block: Block,
+    pub block: &'static  Block,
 }
 
 impl BlockEvent for BlockBurnEvent {

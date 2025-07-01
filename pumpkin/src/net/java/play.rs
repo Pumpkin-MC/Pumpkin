@@ -722,7 +722,7 @@ impl Player {
                     .add(&(Vector3::rotation_vector(f64::from(pitch), f64::from(yaw)) * 4.5)),
                 async |pos, world| {
                     let block = world.get_block(pos).await;
-                    block != Block::AIR && block != Block::WATER && block != Block::LAVA
+                    block != &Block::AIR && block != &Block::WATER && block != &Block::LAVA
                 },
             )
             .await;
@@ -736,7 +736,7 @@ impl Player {
                 Some(hit_pos),
             )
         } else {
-            PlayerInteractEvent::new(self, InteractAction::LeftClickAir, &item, Block::AIR, None)
+            PlayerInteractEvent::new(self, InteractAction::LeftClickAir, &item, &Block::AIR, None)
         };
 
         send_cancellable! {{
@@ -1492,7 +1492,7 @@ impl Player {
                 ),
                 async |pos, world| {
                     let block = world.get_block(pos).await;
-                    block != Block::AIR && block != Block::WATER && block != Block::LAVA
+                    block != &Block::AIR && block != &Block::WATER && block != &Block::LAVA
                 },
             )
             .await;
@@ -1510,7 +1510,7 @@ impl Player {
                 self,
                 InteractAction::RightClickAir,
                 &binding,
-                Block::AIR,
+                &Block::AIR,
                 None,
             )
         };
@@ -1655,7 +1655,7 @@ impl Player {
     #[allow(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
-        block: Block,
+        block: &'static Block,
         server: &Server,
         use_item_on: SUseItemOn,
         location: BlockPos,
@@ -1709,7 +1709,7 @@ impl Player {
                 .await
                 .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
         } else if clicked_block_state.replaceable() {
-            if clicked_block == Block::WATER {
+            if clicked_block == &Block::WATER {
                 let water_props =
                     WaterLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
                 Some(BlockIsReplacing::Water(water_props.level))
@@ -1744,7 +1744,7 @@ impl Player {
                         .then_some(BlockIsReplacing::Itself(previous_block_state.id))
                 } else {
                     previous_block_state.replaceable().then(|| {
-                        if previous_block == Block::WATER {
+                        if previous_block == &Block::WATER {
                             let water_props = WaterLikeProperties::from_state_id(
                                 previous_block_state.id,
                                 &previous_block,
