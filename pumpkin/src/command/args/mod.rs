@@ -95,6 +95,7 @@ pub enum Arg<'a> {
     Item(&'a str),
     ResourceLocation(&'a str),
     Block(&'a str),
+    BlockPredicate(&'a str),
     BossbarColor(BossbarColor),
     BossbarStyle(BossbarDivisions),
     Particle(Particle),
