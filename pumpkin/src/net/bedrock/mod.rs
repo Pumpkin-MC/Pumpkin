@@ -8,22 +8,13 @@ use std::{
 
 use bytes::Bytes;
 use pumpkin_protocol::{
-    ClientPacket, PacketDecodeError, PacketEncodeError, ServerPacket,
     bedrock::{
-        RAKNET_ACK, RAKNET_NACK, RAKNET_VALID, RakReliability,
-        ack::Ack,
-        frame_set::{Frame, FrameSet},
-        packet_decoder::UDPNetworkDecoder,
-        packet_encoder::UDPNetworkEncoder,
-        server::raknet::{
+        ack::Ack, frame_set::{Frame, FrameSet}, packet_decoder::UDPNetworkDecoder, packet_encoder::UDPNetworkEncoder, server::raknet::{
             connection::{SConnectionRequest, SDisconnect},
             open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
             unconnected_ping::SUnconnectedPing,
-        },
-    },
-    codec::u24::U24,
-    packet::Packet,
-    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
+        }, RakReliability, RAKNET_ACK, RAKNET_NACK, RAKNET_VALID
+    }, codec::u24::U24, packet::Packet, ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError}, ClientPacket, PacketDecodeError, PacketEncodeError, ServerPacket
 };
 use std::net::SocketAddr;
 use tokio::{net::UdpSocket, sync::Mutex};
@@ -44,8 +35,10 @@ pub struct BedrockClientPlatform {
     network_reader: Mutex<UDPNetworkDecoder>,
 
     use_frame_sets: AtomicBool,
-    output_sequence: AtomicU32,
-    output_reliable_index: AtomicU32,
+    output_sequence_number: AtomicU32,
+    output_reliable_number: AtomicU32,
+    output_sequenced_index: AtomicU32,
+    output_ordered_index: AtomicU32,
 }
 
 impl BedrockClientPlatform {
@@ -57,8 +50,10 @@ impl BedrockClientPlatform {
             network_writer: Arc::new(Mutex::new(UDPNetworkEncoder::new())),
             network_reader: Mutex::new(UDPNetworkDecoder::new()),
             use_frame_sets: AtomicBool::new(false),
-            output_sequence: AtomicU32::new(0),
-            output_reliable_index: AtomicU32::new(0),
+            output_sequence_number: AtomicU32::new(0),
+            output_reliable_number: AtomicU32::new(0),
+            output_sequenced_index: AtomicU32::new(0),
+            output_ordered_index: AtomicU32::new(0),
         }
     }
 
@@ -75,10 +70,10 @@ impl BedrockClientPlatform {
 
     pub fn write_packet<P: ClientPacket>(
         packet: &P,
-        write: impl Write,
+        mut write: impl Write,
     ) -> Result<(), WritingError> {
-        let mut write = write;
-        write.write_u8_be(P::PACKET_ID as u8)?;
+        write.write_u8(P::PACKET_ID as u8)?;
+        println!("Writing packet {}", P::PACKET_ID);
         packet.write_packet_data(write)
     }
 
@@ -96,23 +91,40 @@ impl BedrockClientPlatform {
         packet: &P,
         reliability: RakReliability,
     ) {
+        let mut frame_set = FrameSet {
+            sequence: U24(self.output_sequence_number.fetch_add(1, Ordering::Relaxed)),
+            frames: Vec::with_capacity(1),
+        };
+        // Todo! Calculate required capacity
         let mut packet_buf = Vec::new();
-        let writer = &mut packet_buf;
-        Self::write_packet(packet, writer).unwrap();
-        let frame = Frame {
+        Self::write_packet(packet, &mut packet_buf).unwrap();
+
+        let mut frame = Frame {
             payload: packet_buf.into(),
             reliability,
-            reliable_index: self.output_reliable_index.fetch_add(1, Ordering::Relaxed),
             ..Default::default()
         };
 
-        // TODO: this is really bad, batch this
-        let frame_set = FrameSet {
-            sequence: U24(self.output_sequence.fetch_add(1, Ordering::Relaxed)),
-            frames: vec![frame],
-        };
+        if reliability.is_reliable() {
+            frame.reliable_number = self.output_reliable_number.fetch_add(1, Ordering::Relaxed);
+            if matches!(reliability, RakReliability::ReliableOrdered)  {
+                //Todo! Check if Fragmenting is needed
+            }
+        }
+
+        if reliability.is_ordered() {
+            frame.order_index = self.output_ordered_index.fetch_add(1, Ordering::Relaxed);
+        }
+
+        if reliability.is_sequenced() {
+            frame.sequence_index = self.output_sequenced_index.fetch_add(1, Ordering::Relaxed);
+        }
+
+        frame_set.frames.push(frame);
+
         let mut packet_buf = Vec::new();
-        Self::write_packet(&frame_set, &mut packet_buf).unwrap();
+        frame_set.write_packet_data(&mut packet_buf).unwrap();
+
         if let Err(err) = self
             .network_writer
             .lock()
@@ -121,7 +133,7 @@ impl BedrockClientPlatform {
             .await
         {
             // It is expected that the packet will fail if we are closed
-            if !client.closed.load(std::sync::atomic::Ordering::Relaxed) {
+            if !client.closed.load(Ordering::Relaxed) {
                 log::warn!("Failed to send packet to client {}: {}", client.id, err);
                 // We now need to close the connection to the client since the stream is in an
                 // unknown state

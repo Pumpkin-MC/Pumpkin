@@ -24,10 +24,10 @@ impl Ack {
         mut write: impl std::io::Write,
     ) -> Result<(), crate::ser::WritingError> {
         if start == end {
-            write.write_u8_be(1)?;
+            write.write_u8(1)?;
             U24::encode(&U24(start), &mut write)?;
         } else {
-            write.write_u8_be(0)?;
+            write.write_u8(0)?;
             U24::encode(&U24(start), &mut write)?;
             U24::encode(&U24(end), &mut write)?;
         }

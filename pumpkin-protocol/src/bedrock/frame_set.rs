@@ -25,6 +25,7 @@ impl ServerPacket for FrameSet {
 
 impl ClientPacket for FrameSet {
     fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
+        write.write_u8(0x84)?;
         write.write_u24_be(self.sequence)?;
         for frame in &self.frames {
             frame.write(&mut write)?;
@@ -37,7 +38,7 @@ impl ClientPacket for FrameSet {
 pub struct Frame {
     pub reliability: RakReliability,
     pub payload: Bytes,
-    pub reliable_index: u32,
+    pub reliable_number: u32,
     pub sequence_index: u32,
     pub order_index: u32,
     pub order_channel: u8,
@@ -66,7 +67,7 @@ impl Frame {
             println!("lenght: {length}");
 
             if reliability.is_reliable() {
-                frame.reliable_index = read.get_u24()?.0
+                frame.reliable_number = read.get_u24()?.0
             }
 
             if reliability.is_sequenced() {
@@ -92,21 +93,21 @@ impl Frame {
         Ok(frames)
     }
 
-    fn write(&self, mut write: impl Write) -> Result<(), WritingError> {
+    pub fn write(&self, mut write: impl Write) -> Result<(), WritingError> {
         let is_split = self.split_size > 0;
-        write.write_u8_be(
-            (self.reliability.to_id() >> 5) & if is_split { RAKNET_SPLIT } else { 0 },
+        write.write_u8(
+            (self.reliability.to_id() << 5) & if is_split { RAKNET_SPLIT } else { 0 },
         )?;
-        write.write_u16_be((self.payload.len() >> 3) as u16)?;
+        write.write_u16_be((self.payload.len() << 3) as u16)?;
         if self.reliability.is_reliable() {
-            write.write_u24_be(U24(self.reliable_index))?;
+            write.write_u24_be(U24(self.reliable_number))?;
         }
         if self.reliability.is_sequenced() {
             write.write_u24_be(U24(self.sequence_index))?;
         }
         if self.reliability.is_ordered() {
             write.write_u24_be(U24(self.order_index))?;
-            write.write_u8_be(self.order_channel)?;
+            write.write_u8(self.order_channel)?;
         }
         if is_split {
             write.write_u32_be(self.split_size)?;

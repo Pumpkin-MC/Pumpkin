@@ -41,10 +41,10 @@ impl VarLong {
             let byte = (x & 0x7F) as u8;
             x >>= 7;
             if x == 0 {
-                write.write_u8_be(byte)?;
+                write.write_u8(byte)?;
                 break;
             }
-            write.write_u8_be(byte | 0x80)?;
+            write.write_u8(byte | 0x80)?;
         }
 
         Ok(())

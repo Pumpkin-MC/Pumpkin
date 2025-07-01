@@ -6,6 +6,7 @@ use serde::{
     de::{self, SeqAccess},
 };
 
+#[derive(Clone, Copy)]
 pub struct SocketAddress(pub SocketAddr);
 
 impl Serialize for SocketAddress {

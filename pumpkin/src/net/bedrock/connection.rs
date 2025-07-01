@@ -1,4 +1,4 @@
-use std::time::UNIX_EPOCH;
+use std::{net::{Ipv4Addr, SocketAddr, SocketAddrV4}, time::UNIX_EPOCH};
 
 use pumpkin_protocol::{
     bedrock::{
@@ -23,11 +23,11 @@ impl Client {
                 &CConnectionRequestAccepted::new(
                     SocketAddress(*self.address.lock().await),
                     0,
-                    vec![],
+                    [SocketAddress(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 19132))); 10],
                     packet.time,
                     UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
                 ),
-                RakReliability::Reliable,
+                RakReliability::Unreliable,
             )
             .await;
     }
