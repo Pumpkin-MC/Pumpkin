@@ -51,6 +51,7 @@ impl Frame {
         let mut frames = Vec::new();
 
         while let Ok(header) = read.get_u8_be() {
+            let mut frame = Self::default();
             let reliability_id = (header & 0xE0) >> 5;
             let reliability = match RakReliability::from_id(reliability_id) {
                 Some(reliability) => reliability,
@@ -61,42 +62,31 @@ impl Frame {
                 }
             };
             let split = (header & RAKNET_SPLIT) != 0;
-            let length = (read.get_u16_be()? as f32 / 8.0).ceil();
+            let length = read.get_u16_be()? >> 3;
+            println!("lenght: {length}");
 
-            let reliable_index = if reliability.is_reliable() {
-                read.get_u24()?.0
-            } else {
-                0
-            };
+            if reliability.is_reliable() {
+                frame.reliable_index = read.get_u24()?.0
+            }
 
-            let sequence_index = if reliability.is_sequenced() {
-                read.get_u24()?.0
-            } else {
-                0
-            };
+            if reliability.is_sequenced() {
+                frame.sequence_index = read.get_u24()?.0
+            }
 
-            let (order_index, order_channel) = if reliability.is_ordered() {
-                (read.get_u24()?.0, read.get_u8_be()?)
-            } else {
-                (0, 0)
-            };
-            let (split_size, split_id, split_index) = if split {
-                (read.get_u32_be()?, read.get_u16_be()?, read.get_u32_be()?)
-            } else {
-                (0, 0, 0)
-            };
-            let payload = read.read_boxed_slice(length as usize)?;
-            frames.push(Self {
-                reliability,
-                payload: payload.into(),
-                reliable_index,
-                sequence_index,
-                order_index,
-                order_channel,
-                split_size,
-                split_id,
-                split_index,
-            });
+            if reliability.is_ordered() {
+                frame.order_index = read.get_u24()?.0;
+                frame.order_channel = read.get_u8_be()?;
+            }
+
+            if split {
+                frame.split_size = read.get_u32_be()?;
+                frame.split_id = read.get_u16_be()?;
+                frame.split_index = read.get_u32_be()?;
+            }
+
+            frame.reliability = reliability;
+            frame.payload = read.read_boxed_slice(length as usize)?.into();
+            frames.push(frame);
         }
 
         Ok(frames)

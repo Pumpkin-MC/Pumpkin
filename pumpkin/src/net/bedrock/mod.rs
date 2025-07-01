@@ -141,7 +141,7 @@ impl BedrockClientPlatform {
                 .await
             {
                 // It is expected that the packet will fail if we are closed
-                if !client.closed.load(std::sync::atomic::Ordering::Relaxed) {
+                if !client.closed.load(Ordering::Relaxed) {
                     log::warn!("Failed to send packet to client {}: {}", client.id, err);
                     // We now need to close the connection to the client since the stream is in an
                     // unknown state
