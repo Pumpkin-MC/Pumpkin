@@ -40,22 +40,20 @@ pub(crate) fn build() -> TokenStream {
     .to_token_stream();
 
     // Generate tag arrays for each registry key
-    let mut tag_arrays = Vec::new();
+    let mut tag_dicts = Vec::new();
     let mut match_arms = Vec::new();
     let mut match_arms_tags_all = Vec::new();
     let mut tag_identifiers = Vec::new();
 
     for (key, tag_map) in &tags {
         let key_pascal = format_ident!("{}", key.to_pascal_case());
-        let array_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
+        let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
 
         // Create a HashMap to store tag name -> index mapping
-        let mut tag_indices = HashMap::new();
         let mut tag_values = Vec::new();
 
         // Collect all unique tags
         for (tag_name, values) in tag_map {
-            tag_indices.insert(tag_name.clone(), tag_values.len());
             tag_values.push((tag_name.clone(), values.clone()));
         }
 
@@ -65,35 +63,27 @@ pub(crate) fn build() -> TokenStream {
             .map(|(tag_name, values)| {
                 let tag_values_array = values.iter().map(|v| quote! { #v }).collect::<Vec<_>>();
                 quote! {
-                    (#tag_name, &[#(#tag_values_array),*])
+                    #tag_name => &[#(#tag_values_array),*]
                 }
             })
             .collect::<Vec<_>>();
-
-        let tag_array_len = tag_values.len();
-
         // Add the static array declaration
-        tag_arrays.push(quote! {
-            static #array_name: [(&str, &[&str]); #tag_array_len] = [
+        tag_dicts.push(quote! {
+            static #dict_name: phf::Map<&str, &[&str]> = phf::phf_map! {
                 #(#tag_array_entries),*
-            ];
+            };
         });
 
         // Add match arm for this registry key
         match_arms.push(quote! {
             RegistryKey::#key_pascal => {
-                for (tag_name, values) in &#array_name {
-                    if *tag_name == tag {
-                        return Some(*values);
-                    }
-                }
-                None
+                #dict_name.get(tag).map(|res| *res)
             }
         });
 
         match_arms_tags_all.push(quote! {
             RegistryKey::#key_pascal => {
-                &#array_name
+                &#dict_name
             }
         });
 
@@ -116,7 +106,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        #(#tag_arrays)*
+        #(#tag_dicts)*
 
         pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&'static [&'static str]> {
             match tag_category {
@@ -124,7 +114,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        pub fn get_registry_key_tags(tag_category: &RegistryKey) -> &'static [(&'static str, &'static [&'static str])] {
+        pub fn get_registry_key_tags(tag_category: &RegistryKey) -> &phf::Map<&'static str, &'static [&'static str]> {
             match tag_category {
                 #(#match_arms_tags_all),*
             }

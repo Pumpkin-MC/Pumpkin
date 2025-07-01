@@ -11,6 +11,19 @@ use syn::{Ident, LitInt, LitStr};
 
 use crate::loot::LootTableStruct;
 
+// Takes an array of tuples containing indices paired with values,Add commentMore actions
+// Outputs an array with the values in the appropiate index, gaps filled with None
+fn fill_array<T: Clone + quote::ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStream> {
+    let max_index = array.iter().map(|(index, _)| index).max().unwrap();
+    let mut raw_id_from_state_id_ordered = vec![quote! { None }; (max_index + 1) as usize];
+
+    for (state_id, id_lit) in array {
+        raw_id_from_state_id_ordered[state_id as usize] = quote! { Some(#id_lit) };
+    }
+
+    raw_id_from_state_id_ordered
+}
+
 fn const_block_name_from_block_name(block: &str) -> String {
     block.to_shouty_snake_case()
 }
@@ -627,9 +640,9 @@ pub(crate) fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../assets/properties.json").unwrap())
             .expect("Failed to parse properties.json");
 
-    let mut type_from_raw_id_arms = TokenStream::new();
-    let mut type_from_name = TokenStream::new();
-    let mut block_from_state_id = TokenStream::new();
+    let mut type_from_raw_id_items = TokenStream::new();
+    let mut block_from_name = TokenStream::new();
+    let mut raw_id_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
     let mut block_properties_from_state_and_block_id = TokenStream::new();
     let mut block_properties_from_props_and_name = TokenStream::new();
@@ -757,14 +770,16 @@ pub(crate) fn build() -> TokenStream {
         .iter()
         .map(|entity_type| LitStr::new(entity_type, Span::call_site()));
 
+    let mut raw_id_from_state_id_array = vec![];
+    let mut type_from_raw_id_array = vec![];
+
     // Generate constants and `match` arms for each block.
     for (name, block) in optimized_blocks {
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&name));
         let mut block_tokens = TokenStream::new();
         block.to_tokens(&mut block_tokens);
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
-        let state_start = block.states.iter().map(|state| state.id).min().unwrap();
-        let state_end = block.states.iter().map(|state| state.id).max().unwrap();
+
         let item_id = block.item_id;
 
         constants.extend(quote! {
@@ -772,17 +787,15 @@ pub(crate) fn build() -> TokenStream {
 
         });
 
-        type_from_raw_id_arms.extend(quote! {
-            #id_lit => Some(&Self::#const_ident),
+        type_from_raw_id_array.push((block.id, quote! { &Self::#const_ident }));
+
+        block_from_name.extend(quote! {
+            #name => Self::#const_ident,
         });
 
-        type_from_name.extend(quote! {
-            #name => Some(&Self::#const_ident),
-        });
-
-        block_from_state_id.extend(quote! {
-            #state_start..=#state_end => Some(&Self::#const_ident),
-        });
+        for state in &block.states {
+            raw_id_from_state_id_array.push((state.id, id_lit.clone()));
+        }
 
         if !existing_item_ids.contains(&item_id) {
             block_from_item_id.extend(quote! {
@@ -790,6 +803,21 @@ pub(crate) fn build() -> TokenStream {
             });
             existing_item_ids.push(item_id);
         }
+    }
+
+    let raw_id_from_state_id_ordered = fill_array(raw_id_from_state_id_array);
+    let max_state_id = raw_id_from_state_id_ordered.len();
+    for id_lit in raw_id_from_state_id_ordered {
+        raw_id_from_state_id.extend(quote! {
+            #id_lit,
+        });
+    }
+    let type_from_raw_id_array = fill_array(type_from_raw_id_array);
+    let max_type_id = type_from_raw_id_array.len();
+    for type_lit in type_from_raw_id_array {
+        type_from_raw_id_items.extend(quote! {
+            #type_lit,
+        });
     }
 
     quote! {
@@ -800,6 +828,7 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
         use std::collections::HashMap;
+        use phf;
 
 
         #[derive(Clone, Copy, Debug)]
@@ -898,27 +927,42 @@ pub(crate) fn build() -> TokenStream {
         impl Block {
             #constants
 
+            // String name to block struct
+            const BLOCK_FROM_NAME_MAP: phf::Map<&'static str, Block> = phf::phf_map!{
+                #block_from_name
+            };
+
+            // Many state ids map to single raw block id
+            const RAW_ID_FROM_STATE_ID: [Option<u16>; #max_state_id as usize] = [
+                #raw_id_from_state_id
+            ];
+
+            const TYPE_FROM_RAW_ID: [Option<&Block>; #max_type_id as usize] = [
+                #type_from_raw_id_items
+            ];
+
             #[doc = r" Try to parse a block from a resource location string."]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
-                match name {
-                    #type_from_name
-                    _ => None
-                }
+                Self::BLOCK_FROM_NAME_MAP.get(name)
             }
 
             #[doc = r" Try to parse a block from a raw id."]
             pub const fn from_id(id: u16) -> Option<&'static Self> {
-                match id {
-                    #type_from_raw_id_arms
-                    _ => None
+                if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+                    None
+                } else {
+                    Self::TYPE_FROM_RAW_ID[id as usize]
                 }
             }
 
             #[doc = r" Try to parse a block from a state id."]
             pub const fn from_state_id(id: u16) -> Option<&'static Self> {
-                match id {
-                    #block_from_state_id
-                    _ => None
+                if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+                    return None;
+                }
+                match Self::RAW_ID_FROM_STATE_ID[id as usize] {
+                    Some(id) => Self::from_id(id),
+                    None => None,
                 }
             }
 
