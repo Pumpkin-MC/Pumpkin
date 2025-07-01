@@ -34,9 +34,10 @@ impl OxygenManager {
     pub async fn tick(&self, player: &Player) {
         let max_oxygen = Self::get_max_oxygen(player);
         let current_oxygen = self.oxygen_level.load();
-        let mut damage_timer = self.damage_timer.load();
 
         if player.is_underwater().await {
+            let mut damage_timer = self.damage_timer.load();
+
             // Water breathing effect grants immunity
             if player
                 .living_entity

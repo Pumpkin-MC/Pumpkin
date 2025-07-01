@@ -812,6 +812,7 @@ impl Player {
 
         self.living_entity.tick(self.clone(), server).await;
         self.hunger_manager.tick(self.as_ref()).await;
+        self.oxygen_manager.tick(self.as_ref()).await;
 
         // experience handling
         self.tick_experience().await;
