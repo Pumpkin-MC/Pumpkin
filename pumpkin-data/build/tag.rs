@@ -77,7 +77,7 @@ pub(crate) fn build() -> TokenStream {
         // Add match arm for this registry key
         match_arms.push(quote! {
             RegistryKey::#key_pascal => {
-                #dict_name.get(tag).map(|res| res.copied())
+                #dict_name.get(tag).copied()
             }
         });
 
@@ -132,7 +132,8 @@ pub(crate) fn build() -> TokenStream {
             }
 
             fn get_tag_values(tag: &str) -> Option<&'static [&'static str]> {
-                let tag = tag.strip_prefix("#").unwrap_or(tag);
+              
+  let tag = tag.strip_prefix("#").unwrap_or(tag);
                 get_tag_values(Self::tag_key(), tag)
             }
         }
