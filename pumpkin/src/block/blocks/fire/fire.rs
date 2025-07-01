@@ -211,7 +211,7 @@ impl PumpkinBlock for FireBlock {
         entity: &dyn EntityBase,
         _pos: BlockPos,
         _block: Block,
-        _state: BlockState,
+        _state: &'static BlockState,
         _server: &Server,
     ) {
         let base_entity = entity.get_entity();
@@ -347,7 +347,7 @@ impl PumpkinBlock for FireBlock {
 
         if age == 15
             && rand::rng().random_range(0..4) == 0
-            && !Self::is_flammable(&world.get_block_state(&pos.down()).await)
+            && !Self::is_flammable(world.get_block_state(&pos.down()).await)
         {
             world
                 .set_block_state(
@@ -441,7 +441,7 @@ impl PumpkinBlock for FireBlock {
         block_pos: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        _state: BlockState,
+        _state: &'static BlockState,
     ) {
         FireBlockBase::broken(world, block_pos).await;
     }

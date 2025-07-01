@@ -272,7 +272,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         location: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        _state: BlockState,
+        _state: &'static BlockState,
     ) {
         update_wire_neighbors(&world, &location).await;
     }

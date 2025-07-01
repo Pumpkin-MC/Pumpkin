@@ -68,7 +68,7 @@ impl PumpkinBlock for SoulFireBlock {
         block_pos: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        _state: BlockState,
+        _state: &'static BlockState,
     ) {
         FireBlockBase::broken(world, block_pos).await;
     }

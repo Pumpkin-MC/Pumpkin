@@ -113,7 +113,7 @@ impl PumpkinBlock for JukeboxBlock {
         position: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        _state: BlockState,
+        _state: &'static BlockState,
     ) {
         // For now just stop the music at this position
         world

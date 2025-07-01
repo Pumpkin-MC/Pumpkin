@@ -15,7 +15,7 @@ pub(crate) trait PressurePlate {
         world: &Arc<World>,
         pos: BlockPos,
         block: Block,
-        state: BlockState,
+        state: &'static BlockState,
     ) {
         let output = self.get_redstone_output(&block, state.id);
         if output == 0 {
@@ -52,7 +52,7 @@ pub(crate) trait PressurePlate {
         world: &Arc<World>,
         pos: BlockPos,
         block: &Block,
-        state: BlockState,
+        state: &'static BlockState,
         output: u8,
     ) {
         let calc_output = self.calculate_redstone_output(world, block, &pos).await;

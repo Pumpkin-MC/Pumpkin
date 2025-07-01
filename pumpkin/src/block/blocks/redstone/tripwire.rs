@@ -34,7 +34,7 @@ impl PumpkinBlock for TripwireBlock {
         _entity: &dyn EntityBase,
         pos: BlockPos,
         block: Block,
-        state: BlockState,
+        state: &'static BlockState,
         _server: &Server,
     ) {
         let mut props = TripwireProperties::from_state_id(state.id, &block);
@@ -115,7 +115,7 @@ impl PumpkinBlock for TripwireBlock {
         location: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        state: BlockState,
+        state: &'static BlockState,
     ) {
         let has_shears = {
             let main_hand_item_stack = player.inventory().held_item();

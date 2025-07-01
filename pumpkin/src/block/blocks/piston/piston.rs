@@ -361,20 +361,20 @@ async fn move_piston(
         return false;
     }
 
-    let mut moved_blocks_map: HashMap<BlockPos, BlockState> = HashMap::new();
+    let mut moved_blocks_map: HashMap<BlockPos, &'static BlockState> = HashMap::new();
     let moved_blocks: Vec<BlockPos> = handler.moved_blocks;
     dbg!(&moved_blocks);
 
-    let mut moved_block_states: Vec<BlockState> = Vec::new();
+    let mut moved_block_states: Vec<&'static BlockState> = Vec::new();
 
     for &block_pos in &moved_blocks {
         let block_state = world.get_block_state(&block_pos).await;
-        moved_block_states.push(block_state.clone());
+        moved_block_states.push(block_state);
         moved_blocks_map.insert(block_pos, block_state);
     }
 
     let broken_blocks: Vec<BlockPos> = handler.broken_blocks;
-    let mut affected_block_states: Vec<BlockState> =
+    let mut affected_block_states: Vec<&'static BlockState> =
         Vec::with_capacity(moved_blocks.len() + broken_blocks.len());
     let move_direction = if extend { dir } else { dir.opposite() };
 
@@ -408,7 +408,7 @@ async fn move_piston(
                 .add_block_entity(Arc::new(PistonBlockEntity {
                     position: extended_pos,
                     facing: dir.to_facing().to_block_direction(),
-                    pushed_block_state: moved_state.clone(),
+                    pushed_block_state: moved_state,
                     current_progress: 0.0.into(),
                     last_progress: 0.0.into(),
                     extending: extend,
@@ -489,7 +489,7 @@ async fn move_piston(
     }
 
     for (i, &broken_block_pos) in broken_blocks.iter().rev().enumerate() {
-        if let Some(block_state) = affected_block_states.get(i).cloned() {
+        if let Some(block_state) = affected_block_states.get(i) {
             world
                 .block_registry
                 .on_state_replaced(

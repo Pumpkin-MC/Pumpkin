@@ -87,7 +87,7 @@ impl CoralFeature {
         true
     }
 
-    pub fn get_random_tag_entry(tag: &str, random: &mut RandomGenerator) -> BlockState {
+    pub fn get_random_tag_entry(tag: &str, random: &mut RandomGenerator) -> &'static BlockState {
         let block = Self::get_random_tag_entry_block(tag, random);
         block.default_state
     }

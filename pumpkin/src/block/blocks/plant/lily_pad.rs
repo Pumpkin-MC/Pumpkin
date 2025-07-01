@@ -25,7 +25,7 @@ impl PumpkinBlock for LilyPadBlock {
         entity: &dyn EntityBase,
         pos: BlockPos,
         _block: Block,
-        _state: BlockState,
+        _state: &'static BlockState,
         _server: &Server,
     ) {
         // Proberbly not the best solution, but works

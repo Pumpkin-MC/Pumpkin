@@ -174,7 +174,7 @@ impl SurfaceTerrainBuilder {
                     }
 
                     let default_block = &chunk.default_block;
-                    chunk.set_block_state(&pos, &default_block.clone());
+                    chunk.set_block_state(&pos, &default_block);
                 }
             }
         }
@@ -259,7 +259,7 @@ impl SurfaceTerrainBuilder {
         }
     }
 
-    pub fn get_terracotta_block(&self, pos: &Vector3<i32>) -> BlockState {
+    pub fn get_terracotta_block(&self, pos: &Vector3<i32>) -> &'static BlockState {
         let offset = (self
             .terracotta_bands_offset_noise
             .sample(pos.x as f64, 0.0, pos.z as f64)

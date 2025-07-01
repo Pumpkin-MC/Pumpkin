@@ -67,7 +67,7 @@ impl PumpkinBlock for NetherPortalBlock {
         entity: &dyn EntityBase,
         pos: BlockPos,
         _block: Block,
-        _state: BlockState,
+        _state: &'static BlockState,
         server: &Server,
     ) {
         let target_world = if world.dimension_type == VanillaDimensionType::TheNether {

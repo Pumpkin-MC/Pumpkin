@@ -32,7 +32,7 @@ struct NodeId {
 struct UpdateNode {
     pos: BlockPos,
     /// The cached state of the block
-    state: BlockState,
+    state: &'static BlockState,
     /// This will only be `Some` when all the neighbors are identified.
     neighbors: Option<Vec<NodeId>>,
     visited: bool,

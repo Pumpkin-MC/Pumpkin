@@ -1867,7 +1867,7 @@ impl World {
     }
 
     /// Gets the `BlockState` from the block registry. Returns Air if the block state was not found.
-    pub async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
+    pub async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState {
         let id = self.get_block_state_id(position).await;
         get_state_by_state_id(id).unwrap_or(Block::AIR.default_state)
     }
@@ -1876,7 +1876,7 @@ impl World {
     pub async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
+    ) -> (pumpkin_data::Block, &'static pumpkin_data::BlockState) {
         let id = self.get_block_state_id(position).await;
         get_block_and_state_by_state_id(id).unwrap_or((Block::AIR, Block::AIR.default_state))
     }
@@ -2259,14 +2259,14 @@ impl BlockAccessor for World {
     async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
         Self::get_block(self, position).await
     }
-    async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
+    async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState {
         Self::get_block_state(self, position).await
     }
 
     async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
+    ) -> (pumpkin_data::Block, &'static pumpkin_data::BlockState) {
         let id = self.get_block_state(position).await.id;
         get_block_and_state_by_state_id(id).unwrap_or((Block::AIR, Block::AIR.default_state))
     }

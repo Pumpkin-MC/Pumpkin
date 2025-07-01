@@ -213,7 +213,7 @@ impl OreFeature {
     fn should_place(
         &self,
         chunk: &mut ProtoChunk,
-        state: BlockState,
+        state: &'static BlockState,
         random: &mut RandomGenerator,
         target: &OreTarget,
         pos: &mut BlockPos,

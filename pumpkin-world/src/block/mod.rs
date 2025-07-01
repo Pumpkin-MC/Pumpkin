@@ -21,7 +21,7 @@ pub struct BlockStateCodec {
 }
 
 impl BlockStateCodec {
-    pub fn get_state(&self) -> Option<BlockState> {
+    pub fn get_state(&self) -> Option<&'static BlockState> {
         let block = get_block(self.name.as_str())?;
 
         let mut state_id = block.default_state.id;

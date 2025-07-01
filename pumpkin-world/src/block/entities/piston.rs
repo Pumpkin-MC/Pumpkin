@@ -12,7 +12,7 @@ use super::BlockEntity;
 
 pub struct PistonBlockEntity {
     pub position: BlockPos,
-    pub pushed_block_state: BlockState,
+    pub pushed_block_state: &'static BlockState,
     pub facing: BlockDirection,
     pub current_progress: AtomicCell<f32>,
     pub last_progress: AtomicCell<f32>,

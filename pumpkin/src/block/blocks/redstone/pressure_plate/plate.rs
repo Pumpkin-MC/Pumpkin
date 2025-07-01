@@ -48,7 +48,7 @@ impl PumpkinBlock for PressurePlateBlock {
         _entity: &dyn EntityBase,
         pos: BlockPos,
         block: Block,
-        state: BlockState,
+        state: &'static BlockState,
         _server: &Server,
     ) {
         self.on_entity_collision_pp(world, pos, block, state).await;

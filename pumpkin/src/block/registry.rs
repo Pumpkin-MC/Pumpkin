@@ -93,7 +93,7 @@ impl BlockRegistry {
         world: &Arc<World>,
         entity: &dyn EntityBase,
         pos: BlockPos,
-        state: BlockState,
+        state: &'static BlockState,
         server: &Server,
     ) {
         let pumpkin_block = self.get_pumpkin_block(&block);
@@ -308,7 +308,7 @@ impl BlockRegistry {
         player: &Arc<Player>,
         location: BlockPos,
         server: &Server,
-        state: BlockState,
+        state: &'static BlockState,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {

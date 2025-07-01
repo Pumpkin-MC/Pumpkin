@@ -14,7 +14,7 @@ use rand::Rng;
 #[derive(Default)]
 pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
-    pub block_state: Option<BlockState>,
+    pub block_state: Option<&'static BlockState>,
 }
 
 pub trait LootTableExt {

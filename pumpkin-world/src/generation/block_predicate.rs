@@ -263,7 +263,7 @@ impl OffsetBlocksBlockPredicate {
         let pos = self.get(pos);
         chunk.get_block_state(&pos.0).to_block()
     }
-    pub fn get_state(&self, chunk: &ProtoChunk, pos: &BlockPos) -> BlockState {
+    pub fn get_state(&self, chunk: &ProtoChunk, pos: &BlockPos) -> &'static BlockState {
         let pos = self.get(pos);
         chunk.get_block_state(&pos.0).to_state()
     }

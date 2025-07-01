@@ -121,7 +121,7 @@ impl PumpkinBlock for ChestBlock {
         block_pos: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        state: BlockState,
+        state: &'static BlockState,
     ) {
         let chest_props = ChestLikeProperties::from_state_id(state.id, block);
         let connected_towards = match chest_props.r#type {

@@ -22,7 +22,7 @@ impl PumpkinBlock for EndPortalBlock {
         entity: &dyn EntityBase,
         pos: BlockPos,
         _block: Block,
-        _state: BlockState,
+        _state: &'static BlockState,
         server: &Server,
     ) {
         let world = if world.dimension_type == VanillaDimensionType::TheEnd {

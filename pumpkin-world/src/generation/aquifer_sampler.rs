@@ -441,7 +441,7 @@ impl WorldAquiferSampler {
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         if density > 0f64 {
             None
         } else {
@@ -597,7 +597,7 @@ impl AquiferSamplerImpl for WorldAquiferSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         let density = router.final_density(pos, sample_options);
         self.apply_internal(router, pos, sample_options, height_estimator, density)
     }
@@ -620,7 +620,7 @@ impl AquiferSamplerImpl for SeaLevelAquiferSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         _height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         let sample = router.final_density(pos, sample_options);
         //log::debug!("Aquifer sample {:?}: {}", &pos, sample);
         if sample > 0f64 {
@@ -644,7 +644,7 @@ pub trait AquiferSamplerImpl {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<BlockState>;
+    ) -> Option<&'static BlockState>;
 }
 
 #[cfg(test)]

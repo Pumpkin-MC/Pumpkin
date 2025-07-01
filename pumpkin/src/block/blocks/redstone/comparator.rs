@@ -134,7 +134,7 @@ impl PumpkinBlock for ComparatorBlock {
         block_pos: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        _state: BlockState,
+        _state: &'static BlockState,
     ) {
         world.remove_block_entity(&block_pos).await;
     }

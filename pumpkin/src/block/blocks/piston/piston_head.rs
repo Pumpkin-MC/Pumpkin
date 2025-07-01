@@ -30,7 +30,7 @@ impl PumpkinBlock for PistonHeadBlock {
         location: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        state: BlockState,
+        state: &'static BlockState,
     ) {
         let props = PistonHeadProperties::from_state_id(state.id, &Block::PISTON_HEAD);
         let pos = location.offset(props.facing.opposite().to_block_direction().to_offset());

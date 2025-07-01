@@ -107,7 +107,7 @@ pub struct ProtoChunk<'a> {
     // TODO: These can technically go to an even higher level and we can reuse them across chunks
     pub multi_noise_sampler: MultiNoiseSampler<'a>,
     pub surface_height_estimate_sampler: SurfaceHeightEstimateSampler<'a>,
-    pub default_block: BlockState,
+    pub default_block: &'static BlockState,
     random_config: &'a GlobalRandomConfig,
     settings: &'a GenerationSettings,
     biome_mixer_seed: i64,
@@ -531,7 +531,7 @@ impl<'a> ProtoChunk<'a> {
                                         Vector3::new(cell_offset_x, cell_offset_y, cell_offset_z),
                                         &mut self.surface_height_estimate_sampler,
                                     )
-                                    .unwrap_or(self.default_block.clone());
+                                    .unwrap_or(self.default_block);
                                 self.set_block_state(
                                     &Vector3::new(block_x, block_y, block_z),
                                     &block_state,
@@ -765,14 +765,14 @@ impl BlockAccessor for ProtoChunk<'_> {
         self.get_block_state(&position.0).to_block()
     }
 
-    async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
+    async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState {
         self.get_block_state(&position.0).to_state()
     }
 
     async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
+    ) -> (pumpkin_data::Block, &'static pumpkin_data::BlockState) {
         let id = self.get_block_state(&position.0);
         get_block_and_state_by_state_id(id.0).unwrap_or((Block::AIR, Block::AIR.default_state))
     }

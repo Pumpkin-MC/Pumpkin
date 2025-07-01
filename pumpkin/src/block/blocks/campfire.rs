@@ -42,7 +42,7 @@ impl PumpkinBlock for CampfireBlock {
         entity: &dyn EntityBase,
         _pos: BlockPos,
         block: Block,
-        state: BlockState,
+        state: &'static BlockState,
         _server: &Server,
     ) {
         if CampfireLikeProperties::from_state_id(state.id, &block).lit

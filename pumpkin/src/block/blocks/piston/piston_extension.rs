@@ -30,7 +30,7 @@ impl PumpkinBlock for PistonExtensionBlock {
         location: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        state: BlockState,
+        state: &'static BlockState,
     ) {
         let props = MovingPistonProps::from_state_id(state.id, &Block::MOVING_PISTON);
         let pos = location.offset(props.facing.opposite().to_block_direction().to_offset());
