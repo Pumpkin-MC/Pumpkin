@@ -15,9 +15,9 @@ impl U24 {
 
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let data = self.0.to_le_bytes();
-        write.write_u8_le(data[0])?;
-        write.write_u8_le(data[1])?;
-        write.write_u8_le(data[2])?;
+        write.write_u8(data[0])?;
+        write.write_u8(data[1])?;
+        write.write_u8(data[2])?;
         Ok(())
     }
 }

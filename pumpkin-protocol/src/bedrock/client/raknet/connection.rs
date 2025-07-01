@@ -1,4 +1,3 @@
-use crate::ser::network_serialize_no_prefix;
 use pumpkin_macros::packet;
 use serde::Serialize;
 
@@ -9,8 +8,7 @@ use crate::codec::socket_address::SocketAddress;
 pub struct CConnectionRequestAccepted {
     client_address: SocketAddress,
     system_index: u16,
-    #[serde(serialize_with = "network_serialize_no_prefix")]
-    system_addresses: Vec<SocketAddress>,
+    system_addresses: [SocketAddress; 10],
     requested_timestamp: u64,
     timestamp: u64,
 }
@@ -19,7 +17,7 @@ impl CConnectionRequestAccepted {
     pub fn new(
         client_address: SocketAddress,
         system_index: u16,
-        system_addresses: Vec<SocketAddress>,
+        system_addresses: [SocketAddress; 10],
         requested_timestamp: u64,
         timestamp: u64,
     ) -> Self {

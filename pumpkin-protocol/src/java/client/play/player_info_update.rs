@@ -44,7 +44,7 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_u8_be(self.actions)?;
+        write.write_u8(self.actions)?;
         write.write_list::<Player>(self.players, |p, v| {
             p.write_uuid(&v.uuid)?;
             for action in v.actions {
