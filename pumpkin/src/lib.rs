@@ -248,7 +248,7 @@ impl PumpkinServer {
 
         if advanced_config().networking.query.enabled {
             log::info!("Query protocol is enabled. Starting...");
-            server.spawn_task(query::start_query_handler(
+            tokio::spawn(query::start_query_handler(
                 server.clone(),
                 advanced_config().networking.query.address,
             ));
