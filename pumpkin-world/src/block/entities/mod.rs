@@ -12,18 +12,18 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
-use crate::{inventory::Inventory, world::SimpleWorld};
 use crate::block::entities::dropper::DropperBlockEntity;
+use crate::{inventory::Inventory, world::SimpleWorld};
 
 pub mod barrel;
 pub mod bed;
 pub mod chest;
 pub mod command_block;
 pub mod comparator;
+pub mod dropper;
 pub mod end_portal;
 pub mod piston;
 pub mod sign;
-pub mod dropper;
 
 //TODO: We need a mark_dirty for chests
 #[async_trait]

@@ -1,12 +1,13 @@
+use crate::block::entities::BlockEntity;
+use crate::inventory::{Clearable, Inventory, split_stack};
+use crate::item::ItemStack;
+use async_trait::async_trait;
+use pumpkin_util::math::position::BlockPos;
+use rand::{Rng, rng};
 use std::array::from_fn;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use async_trait::async_trait;
-use tokio::sync::Mutex;
-use pumpkin_util::math::position::BlockPos;
-use crate::block::entities::BlockEntity;
-use crate::inventory::{split_stack, Clearable, Inventory};
-use crate::item::ItemStack;
+use tokio::sync::{Mutex, MutexGuard};
 
 #[derive(Debug)]
 pub struct DropperBlockEntity {
@@ -67,6 +68,17 @@ impl DropperBlockEntity {
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
             dirty: AtomicBool::new(false),
         }
+    }
+    pub async fn get_random_slot(&self) -> Option<MutexGuard<ItemStack>> {
+        // this.unpackLootTable(null);
+        let mut ret = None;
+        for i in 0..self.items.len() {
+            let item = self.items[i].lock().await;
+            if !item.is_empty() && rng().random_range(0..=i) == 0 {
+                ret = Some(item);
+            }
+        }
+        ret
     }
 }
 

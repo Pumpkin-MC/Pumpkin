@@ -76,6 +76,7 @@ use pumpkin_world::BlockStateId;
 
 use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
+use crate::block::blocks::redstone::dropper::DropperBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::loot::LootContextParameters;
 use crate::block::registry::BlockRegistry;
@@ -83,7 +84,6 @@ use crate::world::World;
 use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::Player};
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
 use std::sync::Arc;
-use crate::block::blocks::redstone::dropper::DropperBlock;
 
 pub mod blocks;
 mod fluid;

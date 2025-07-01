@@ -12,6 +12,7 @@ use crate::world::World;
 pub mod buttons;
 pub mod comparator;
 pub mod copper_bulb;
+pub mod dropper;
 pub mod lever;
 pub mod observer;
 pub mod pressure_plate;
@@ -25,7 +26,6 @@ pub mod target_block;
 pub mod tripwire;
 pub mod tripwire_hook;
 pub mod turbo;
-pub mod dropper;
 
 // abstruct
 pub mod abstruct_redstone_gate;
@@ -107,7 +107,7 @@ async fn get_max_strong_power(world: &World, pos: &BlockPos, dust_power: bool) -
                 side,
                 dust_power,
             )
-                .await,
+            .await,
         );
     }
     max_power
@@ -128,7 +128,7 @@ async fn get_max_weak_power(world: &World, pos: &BlockPos, dust_power: bool) -> 
                 side,
                 dust_power,
             )
-                .await,
+            .await,
         );
     }
     max_power
