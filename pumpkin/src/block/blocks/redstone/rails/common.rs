@@ -47,11 +47,14 @@ pub(super) async fn compute_placed_rail_shape(
 ) -> StraightRailShape {
     // Use the same sophisticated logic as normal rails, but adapted for straight rails
     // Check each direction for rail connections, similar to normal rail placement
-    
+
     // Check East first
-    if let Some(east_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::East).await {
+    if let Some(east_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::East).await
+    {
         // Check for opposite connection (West) to form a straight line
-        if let Some(west_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await {
+        if let Some(west_rail) =
+            Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await
+        {
             // We have connections in both East and West
             if east_rail.elevation == RailElevation::Up {
                 return StraightRailShape::AscendingEast;
@@ -59,19 +62,22 @@ pub(super) async fn compute_placed_rail_shape(
                 return StraightRailShape::AscendingWest;
             }
             return StraightRailShape::EastWest;
-        } else {
-            // Only East connection
-            if east_rail.elevation == RailElevation::Up {
-                return StraightRailShape::AscendingEast;
-            }
-            return StraightRailShape::EastWest;
         }
+        // Only East connection
+        if east_rail.elevation == RailElevation::Up {
+            return StraightRailShape::AscendingEast;
+        }
+        return StraightRailShape::EastWest;
     }
-    
+
     // Check South
-    if let Some(south_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::South).await {
+    if let Some(south_rail) =
+        Rail::find_if_unlocked(world, block_pos, HorizontalFacing::South).await
+    {
         // Check for opposite connection (North) to form a straight line
-        if let Some(north_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await {
+        if let Some(north_rail) =
+            Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await
+        {
             // We have connections in both South and North
             if south_rail.elevation == RailElevation::Up {
                 return StraightRailShape::AscendingSouth;
@@ -79,31 +85,33 @@ pub(super) async fn compute_placed_rail_shape(
                 return StraightRailShape::AscendingNorth;
             }
             return StraightRailShape::NorthSouth;
-        } else {
-            // Only South connection
-            if south_rail.elevation == RailElevation::Up {
-                return StraightRailShape::AscendingSouth;
-            }
-            return StraightRailShape::NorthSouth;
         }
+        // Only South connection
+        if south_rail.elevation == RailElevation::Up {
+            return StraightRailShape::AscendingSouth;
+        }
+        return StraightRailShape::NorthSouth;
     }
-    
+
     // Check West
-    if let Some(west_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await {
+    if let Some(west_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await
+    {
         if west_rail.elevation == RailElevation::Up {
             return StraightRailShape::AscendingWest;
         }
         return StraightRailShape::EastWest;
     }
-    
+
     // Check North
-    if let Some(north_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await {
+    if let Some(north_rail) =
+        Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await
+    {
         if north_rail.elevation == RailElevation::Up {
             return StraightRailShape::AscendingNorth;
         }
         return StraightRailShape::NorthSouth;
     }
-    
+
     // No connections found, use player facing direction
     player_facing.to_rail_shape_flat()
 }
