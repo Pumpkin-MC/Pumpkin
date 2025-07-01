@@ -774,7 +774,7 @@ impl Level {
                 tokio::spawn(async move {
                     // Acquire a permit from the semaphore to limit concurrent generation
                     let _permit = semaphore.acquire().await.expect("Semaphore closed");
-                    
+
                     // Rayon tasks are queued, so also check it here
                     if !cloned_continue_to_generate.load(Ordering::Relaxed) {
                         return;
@@ -920,7 +920,7 @@ impl Level {
                 tokio::spawn(async move {
                     // Acquire a permit from the semaphore to limit concurrent generation
                     let _permit = semaphore.acquire().await.expect("Semaphore closed");
-                    
+
                     // Rayon tasks are queued, so also check it here
                     if !cloned_continue_to_generate.load(Ordering::Relaxed) {
                         return;

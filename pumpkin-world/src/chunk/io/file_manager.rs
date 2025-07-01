@@ -293,7 +293,6 @@ where
                     }
                 }?;
 
-                
                 for chunk_lock in chunk_locks {
                     let mut chunk = chunk_lock.write().await;
                     let chunk_is_dirty = chunk.is_dirty();
