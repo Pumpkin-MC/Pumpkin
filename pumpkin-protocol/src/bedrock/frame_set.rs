@@ -64,7 +64,6 @@ impl Frame {
             };
             let split = (header & RAKNET_SPLIT) != 0;
             let length = read.get_u16_be()? >> 3;
-            println!("lenght: {length}");
 
             if reliability.is_reliable() {
                 frame.reliable_number = read.get_u24()?.0
@@ -95,9 +94,8 @@ impl Frame {
 
     pub fn write(&self, mut write: impl Write) -> Result<(), WritingError> {
         let is_split = self.split_size > 0;
-        write.write_u8(
-            (self.reliability.to_id() << 5) & if is_split { RAKNET_SPLIT } else { 0 },
-        )?;
+        write
+            .write_u8((self.reliability.to_id() << 5) & if is_split { RAKNET_SPLIT } else { 0 })?;
         write.write_u16_be((self.payload.len() << 3) as u16)?;
         if self.reliability.is_reliable() {
             write.write_u24_be(U24(self.reliable_number))?;

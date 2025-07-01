@@ -8,13 +8,22 @@ use std::{
 
 use bytes::Bytes;
 use pumpkin_protocol::{
+    ClientPacket, PacketDecodeError, PacketEncodeError, ServerPacket,
     bedrock::{
-        ack::Ack, frame_set::{Frame, FrameSet}, packet_decoder::UDPNetworkDecoder, packet_encoder::UDPNetworkEncoder, server::raknet::{
+        RAKNET_ACK, RAKNET_NACK, RAKNET_VALID, RakReliability,
+        ack::Ack,
+        frame_set::{Frame, FrameSet},
+        packet_decoder::UDPNetworkDecoder,
+        packet_encoder::UDPNetworkEncoder,
+        server::raknet::{
             connection::{SConnectionRequest, SDisconnect},
             open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
             unconnected_ping::SUnconnectedPing,
-        }, RakReliability, RAKNET_ACK, RAKNET_NACK, RAKNET_VALID
-    }, codec::u24::U24, packet::Packet, ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError}, ClientPacket, PacketDecodeError, PacketEncodeError, ServerPacket
+        },
+    },
+    codec::u24::U24,
+    packet::Packet,
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
 use std::net::SocketAddr;
 use tokio::{net::UdpSocket, sync::Mutex};
@@ -107,7 +116,7 @@ impl BedrockClientPlatform {
 
         if reliability.is_reliable() {
             frame.reliable_number = self.output_reliable_number.fetch_add(1, Ordering::Relaxed);
-            if matches!(reliability, RakReliability::ReliableOrdered)  {
+            if matches!(reliability, RakReliability::ReliableOrdered) {
                 //Todo! Check if Fragmenting is needed
             }
         }
