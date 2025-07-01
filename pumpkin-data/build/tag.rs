@@ -77,7 +77,7 @@ pub(crate) fn build() -> TokenStream {
         // Add match arm for this registry key
         match_arms.push(quote! {
             RegistryKey::#key_pascal => {
-                #dict_name.get(tag).map(|res| *res)
+                #dict_name.get(tag).map(|res| res.copied())
             }
         });
 

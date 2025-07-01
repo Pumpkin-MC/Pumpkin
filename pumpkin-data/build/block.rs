@@ -933,11 +933,11 @@ pub(crate) fn build() -> TokenStream {
             };
 
             // Many state ids map to single raw block id
-            const RAW_ID_FROM_STATE_ID: [Option<u16>; #max_state_id as usize] = [
+            const RAW_ID_FROM_STATE_ID: [Option<u16>; #max_state_id] = [
                 #raw_id_from_state_id
             ];
 
-            const TYPE_FROM_RAW_ID: [Option<&Block>; #max_type_id as usize] = [
+            const TYPE_FROM_RAW_ID: [Option<&Block>; #max_type_id] = [
                 #type_from_raw_id_items
             ];
 
