@@ -111,6 +111,22 @@ impl BlockRegistry {
         }
     }
 
+    pub async fn on_stepped_on(
+        &self,
+        world: &Arc<World>,
+        entity: &dyn EntityBase,
+        pos: BlockPos,
+        block: Block,
+        state: BlockState,
+    ) {
+        let pumpkin_block = self.get_pumpkin_block(&block);
+        if let Some(pumpkin_block) = pumpkin_block {
+            pumpkin_block
+                .on_stepped_on(world, entity, pos, block, state)
+                .await;
+        }
+    }
+
     pub async fn on_use(
         &self,
         block: &Block,

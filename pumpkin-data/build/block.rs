@@ -326,6 +326,10 @@ impl ToTokens for BlockPropertyStruct {
                     }
                     block_props
                 }
+
+                fn name(&self) -> &'static str {
+                    "#name"
+                }
             }
         });
     }
@@ -904,6 +908,8 @@ pub(crate) fn build() -> TokenStream {
 
             // Convert properties to a block state, and add them onto the default state.
             fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self where Self: Sized;
+
+            fn name(&self) -> &'static str;
         }
 
         pub trait EnumVariants {

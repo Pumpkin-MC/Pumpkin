@@ -225,12 +225,8 @@ impl ToTokens for FluidPropertyStruct {
                         panic!("{} is not a valid fluid for {}", &fluid.name, #struct_name);
                     }
 
-                    let prop_index = self.to_index();
-                    if prop_index < fluid.states.len() as u16 {
-                        fluid.states[prop_index as usize].block_state_id
-                    } else {
-                        fluid.states[fluid.default_state_index as usize].block_state_id
-                    }
+                    let prop_index = self.to_index() as usize;
+                    fluid.states[prop_index].block_state_id
                 }
 
                 fn from_state_id(state_id: u16, fluid: &Fluid) -> Self {
@@ -412,27 +408,19 @@ pub(crate) fn build() -> TokenStream {
 
         for (idx, state) in fluid.states.iter().enumerate() {
             // Check if this state is already in `unique_states` by comparing key fields
-            let already_exists = unique_states.iter().any(|s: &FluidState| {
+            let eq_state = |s: &FluidState| {
                 s.height == state.height
                     && s.level == state.level
                     && s.is_empty == state.is_empty
                     && s.blast_resistance == state.blast_resistance
                     && s.is_still == state.is_still
-            });
+            };
+            let already_exists = unique_states.iter().any(eq_state);
             if !already_exists {
                 unique_states.push(state.clone());
             }
             // Create a reference to the state
-            let state_idx = unique_states
-                .iter()
-                .position(|s| {
-                    s.height == state.height
-                        && s.level == state.level
-                        && s.is_empty == state.is_empty
-                        && s.blast_resistance == state.blast_resistance
-                        && s.is_still == state.is_still
-                })
-                .unwrap() as u16;
+            let state_idx = unique_states.iter().position(eq_state).unwrap() as u16;
             optimized_fluids.push((
                 fluid.name.clone(),
                 FluidStateRef {
@@ -453,7 +441,8 @@ pub(crate) fn build() -> TokenStream {
             #id_lit => Some(Self::#const_ident),
         });
 
-        let fluid_states = fluid.states.iter().map(|state| {
+        let states_len = fluid.states.len();
+        let fluid_states = fluid.states.iter().enumerate().map(|(index, state)| {
             let height = state.height;
             let level = state.level;
             let is_empty = state.is_empty;
@@ -461,8 +450,8 @@ pub(crate) fn build() -> TokenStream {
             let block_state_id = state.block_state_id;
             let is_still = state.is_still;
             // Derive these values based on existing fields
-            let is_source = level == 0 && is_still; // Level 0 and still means it's a source
-            let falling = false; // Default to false - we'll handle falling in the fluid behavior code
+            let is_source = level == 8 && is_still; // Level 8 and still means it's a source
+            let falling = index >= states_len / 2;
 
             quote! {
                 FluidState {
@@ -549,7 +538,7 @@ pub(crate) fn build() -> TokenStream {
         let blast_resistance = state.blast_resistance;
         let block_state_id = state.block_state_id;
         let is_still = state.is_still;
-        let is_source = level == 0 && is_still;
+        let is_source = level == 8 && is_still;
         let falling = false;
         quote! {
             PartialFluidState {
@@ -718,25 +707,27 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            // Added helper methods for fluid behavior
-            pub fn is_source(&self, state_id: u16) -> bool {
-                let idx = (state_id as usize) % self.states.len();
-                self.states[idx].is_source
+            // Improved helper methods for fluid behavior
+            pub fn get_state_from_index(&self, index: usize) -> FluidState {
+                // The states end up ordered backwards due to EnumVariants
+                let real_index = self.states.len() - index - 1;
+                self.states[real_index].clone()
             }
 
-            pub fn is_falling(&self, state_id: u16) -> bool {
-                let idx = (state_id as usize) % self.states.len();
-                self.states[idx].falling
+            pub fn default_state(&self) -> FluidState {
+                self.get_state_from_index(self.default_state_index as usize)
             }
 
-            pub fn get_level(&self, state_id: u16) -> i16 {
-                let idx = (state_id as usize) % self.states.len();
-                self.states[idx].level
-            }
-
-            pub fn get_height(&self, state_id: u16) -> f32 {
-                let idx = (state_id as usize) % self.states.len();
-                self.states[idx].height
+            pub fn get_state(&self, state_id: u16) -> FluidState {
+                if self.id == 0 {
+                    return self.states[0].clone();
+                }
+                let default_state_id = self.default_state().block_state_id;
+                if state_id < default_state_id || state_id >= default_state_id + self.states.len() as u16 {
+                    panic!("Invalid state id {} for fluid {}", state_id, self.name);
+                }
+                let idx = (state_id % default_state_id) as usize;
+                self.get_state_from_index(idx)
             }
         }
 

@@ -60,6 +60,16 @@ pub trait PumpkinBlock: Send + Sync {
     ) {
     }
 
+    async fn on_stepped_on(
+        &self,
+        _world: &Arc<World>,
+        _entity: &dyn EntityBase,
+        _pos: BlockPos,
+        _block: Block,
+        _state: BlockState,
+    ) {
+    }
+
     fn should_drop_items_on_explosion(&self) -> bool {
         true
     }

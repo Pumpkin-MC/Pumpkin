@@ -1,9 +1,28 @@
 use crate::block_properties::{Axis, Facing, HorizontalAxis, HorizontalFacing};
 use pumpkin_util::{
-    math::vector3::Vector3,
+    math::vector3::{Axis as MathAxis, Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
+
+impl From<MathAxis> for Axis {
+    fn from(a: MathAxis) -> Self {
+        match a {
+            MathAxis::X => Self::X,
+            MathAxis::Y => Self::Y,
+            MathAxis::Z => Self::Z,
+        }
+    }
+}
+impl From<Axis> for MathAxis {
+    fn from(a: Axis) -> MathAxis {
+        match a {
+            Axis::X => Self::X,
+            Axis::Y => Self::Y,
+            Axis::Z => Self::Z,
+        }
+    }
+}
 
 #[repr(u8)]
 #[derive(PartialEq, Clone, Copy, Debug, Hash, Eq, Deserialize)]
@@ -195,12 +214,16 @@ impl BlockDirection {
             HorizontalFacing::East => BlockDirection::East,
         }
     }
+
     pub fn to_axis(&self) -> Axis {
         match self {
             BlockDirection::North | BlockDirection::South => Axis::Z,
             BlockDirection::West | BlockDirection::East => Axis::X,
             BlockDirection::Up | BlockDirection::Down => Axis::Y,
         }
+    }
+    pub fn positive(&self) -> bool {
+        matches!(self, Self::South | Self::East | Self::Up)
     }
 
     pub fn to_facing(&self) -> Facing {
