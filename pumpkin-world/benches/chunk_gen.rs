@@ -4,8 +4,10 @@ use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_world::generation::implementation::WorldGenerator;
 use std::sync::Arc;
 use temp_dir::TempDir;
+use tokio_util::task::TaskTracker;
 
 use pumpkin_world::dimension::Dimension;
 use pumpkin_world::generation::{Seed, get_world_gen};
@@ -30,7 +32,8 @@ impl BlockRegistryExt for BlockRegistry {
 }
 
 async fn chunk_generation_seed(seed: i64) {
-    let generator = get_world_gen(Seed(seed as u64), Dimension::Overworld);
+    let generator: Arc<dyn WorldGenerator> =
+        get_world_gen(Seed(seed as u64), Dimension::Overworld).into();
     let temp_dir = TempDir::new().unwrap();
     let block_registry = Arc::new(BlockRegistry);
     let level = Arc::new(Level::from_root_folder(
@@ -39,16 +42,30 @@ async fn chunk_generation_seed(seed: i64) {
         seed,
         Dimension::Overworld,
     ));
-    let x = 0;
-    let y = 0;
-    let position = Vector2::new(x, y);
-    generator
-        .generate_chunk(&level, block_registry.as_ref(), &position)
-        .await;
+
+    let tasks = TaskTracker::new();
+
+    for x in 0..100 {
+        for y in 0..10 {
+            let position = Vector2::new(x, y);
+            let generator_clone = generator.clone();
+            let level_clone = level.clone();
+            let block_registry_clone = block_registry.clone();
+            tasks.spawn(async move {
+                generator_clone
+                    .generate_chunk(&level_clone, block_registry_clone.as_ref(), &position)
+                    .await;
+            });
+        }
+    }
+
+    tasks.close();
+
+    tasks.wait().await;
 }
 
 fn bench_chunk_generation(c: &mut Criterion) {
-    let seeds = [0, 42, 120, 200, 1000, 5000];
+    let seeds = [0];
     let runtime = Runtime::new().unwrap();
     for seed in seeds {
         let name = format!("chunk generation seed {seed}");
@@ -58,5 +75,9 @@ fn bench_chunk_generation(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, bench_chunk_generation);
+criterion_group! {
+    name = benches;
+    config = Criterion::default().sample_size(10).measurement_time(std::time::Duration::from_secs(180));
+    targets = bench_chunk_generation
+}
 criterion_main!(benches);
