@@ -45,7 +45,7 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_i8(self.inner.get_i8_be()?)
+        visitor.visit_i8(self.inner.get_i8()?)
     }
 
     fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -73,7 +73,7 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_u8(self.inner.get_u8_be()?)
+        visitor.visit_u8(self.inner.get_u8()?)
     }
 
     fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Self::Error>

@@ -10,7 +10,7 @@ use bytes::Bytes;
 use pumpkin_protocol::{
     ClientPacket, PacketDecodeError, PacketEncodeError, RawPacket, ServerPacket,
     bedrock::{
-        RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID, RakReliability,
+        RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID, RakReliability, SubClient,
         ack::Ack,
         frame_set::{Frame, FrameSet},
         packet_decoder::UDPNetworkDecoder,
@@ -101,7 +101,13 @@ impl BedrockClientPlatform {
         self.network_writer
             .lock()
             .await
-            .write_game_packet(P::PACKET_ID, 0, 0, packet_payload.into(), write)
+            .write_game_packet(
+                P::PACKET_ID as u16,
+                SubClient::Main,
+                SubClient::Main,
+                packet_payload.into(),
+                write,
+            )
             .await
             .unwrap();
         Ok(())
@@ -230,7 +236,7 @@ impl BedrockClientPlatform {
     ) -> Result<(), ReadingError> {
         let mut payload = &packet[..];
 
-        let Ok(id) = payload.get_u8_be() else {
+        let Ok(id) = payload.get_u8() else {
             return Err(ReadingError::CleanEOF(String::new()));
         };
 
@@ -290,7 +296,7 @@ impl BedrockClientPlatform {
         dbg!(frame.reliability);
 
         let mut payload = &frame.payload[..];
-        let id = payload.get_u8_be()?;
+        let id = payload.get_u8()?;
         self.handle_raknet_packet(client, server, i32::from(id), payload)
             .await
     }

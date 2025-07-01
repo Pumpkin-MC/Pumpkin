@@ -51,7 +51,7 @@ impl Frame {
     pub fn read(mut read: impl std::io::Read) -> Result<Vec<Self>, crate::ser::ReadingError> {
         let mut frames = Vec::new();
 
-        while let Ok(header) = read.get_u8_be() {
+        while let Ok(header) = read.get_u8() {
             let mut frame = Self::default();
             let reliability_id = (header & 0xE0) >> 5;
             let reliability = match RakReliability::from_id(reliability_id) {
@@ -75,7 +75,7 @@ impl Frame {
 
             if reliability.is_ordered() {
                 frame.order_index = read.get_u24()?.0;
-                frame.order_channel = read.get_u8_be()?;
+                frame.order_channel = read.get_u8()?;
             }
 
             if split {
