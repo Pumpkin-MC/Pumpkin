@@ -42,7 +42,9 @@ async fn chunk_generation_seed(seed: i64) {
     let x = 0;
     let y = 0;
     let position = Vector2::new(x, y);
-    generator.generate_chunk(&level, block_registry.as_ref(), &position).await;
+    generator
+        .generate_chunk(&level, block_registry.as_ref(), &position)
+        .await;
 }
 
 fn bench_chunk_generation(c: &mut Criterion) {
@@ -51,7 +53,7 @@ fn bench_chunk_generation(c: &mut Criterion) {
     for seed in seeds {
         let name = format!("chunk generation seed {seed}");
         c.bench_function(&name, |b| {
-            b.to_async(&runtime) .iter(|| chunk_generation_seed(seed))
+            b.to_async(&runtime).iter(|| chunk_generation_seed(seed))
         });
     }
 }

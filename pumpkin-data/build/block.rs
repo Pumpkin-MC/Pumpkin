@@ -12,7 +12,7 @@ use syn::{Ident, LitInt, LitStr};
 use crate::loot::LootTableStruct;
 
 // Takes an array of tuples containing indices paired with values,Add commentMore actions
-// Outputs an array with the values in the appropiate index, gaps filled with None
+// Outputs an array with the values in the appropriate index, gaps filled with None
 fn fill_array<T: Clone + quote::ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStream> {
     let max_index = array.iter().map(|(index, _)| index).max().unwrap();
     let mut raw_id_from_state_id_ordered = vec![quote! { None }; (max_index + 1) as usize];
