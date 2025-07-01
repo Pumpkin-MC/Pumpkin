@@ -6448,6 +6448,33 @@
               "condition": "minecraft:random_chance_with_enchanted_bonus"
             }
           ]
+        },
+        {
+          "rolls": 1.0,
+          "bonus_rolls": 0.0,
+          "entries": [
+            {
+              "name": "minecraft:music_disc_lava_chicken",
+              "type": "minecraft:item"
+            }
+          ],
+          "conditions": [
+            {
+              "condition": "minecraft:killed_by_player"
+            },
+            {
+              "predicate": {
+                "vehicle": {
+                  "type": "minecraft:chicken"
+                },
+                "flags": {
+                  "is_baby": true
+                }
+              },
+              "entity": "this",
+              "condition": "minecraft:entity_properties"
+            }
+          ]
         }
       ]
     },
