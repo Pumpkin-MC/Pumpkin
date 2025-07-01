@@ -22,9 +22,8 @@ use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_macros::send_cancellable;
-use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    Animation, CBlockUpdate, CCommandSuggestions, CEntityAnimation, CEntityPositionSync, CHeadRot,
+    Animation, CCommandSuggestions, CEntityAnimation, CEntityPositionSync, CHeadRot,
     COpenSignEditor, CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot,
     CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
     PlayerAction,
@@ -49,8 +48,8 @@ use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
 
+use crate::block::BlockIsReplacing;
 use crate::block::registry::BlockActionResult;
-use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
 use crate::entity::EntityBase;
 use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
@@ -1143,7 +1142,29 @@ impl Player {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
+    async fn handle_block_break_action(
+        self: &Arc<Self>,
+        player_action: &SPlayerAction,
+        status: Status,
+        server: &Server,
+    ) {
+        let location = player_action.location;
+        if !self.can_interact_with_block_at(&location, 1.0) {
+            log::warn!(
+                "Player {} tried to interact with block out of reach at {location}",
+                self.gameprofile.name,
+            );
+            return;
+        }
+
+        match status {
+            Status::StartedDigging => self.handle_started_digging(location, server).await,
+            Status::CancelledDigging => self.handle_cancelled_digging(location).await,
+            Status::FinishedDigging => self.handle_finished_digging(location, server).await,
+            _ => unreachable!(),
+        }
+    }
+
     pub async fn handle_player_action(
         self: &Arc<Self>,
         player_action: SPlayerAction,
@@ -1152,167 +1173,22 @@ impl Player {
         if !self.has_client_loaded() {
             return;
         }
-        match Status::try_from(player_action.status.0) {
-            Ok(status) => match status {
-                Status::StartedDigging => {
-                    if !self.can_interact_with_block_at(&player_action.location, 1.0) {
-                        log::warn!(
-                            "Player {0} tried to interact with block out of reach at {1}",
-                            self.gameprofile.name,
-                            player_action.location
-                        );
-                        return;
-                    }
-                    let location = player_action.location;
-                    let entity = &self.living_entity.entity;
-                    let world = &entity.world.read().await;
-                    let (block, state) = world.get_block_and_block_state(&location).await;
 
-                    let inventory = self.inventory();
-                    let held = inventory.held_item();
-                    if !server.item_registry.can_mine(held.lock().await.item, self) {
-                        self.client
-                            .enqueue_packet(&CBlockUpdate::new(
-                                location,
-                                VarInt(i32::from(state.id)),
-                            ))
-                            .await;
-                        self.update_sequence(player_action.sequence.0);
-                        return;
-                    }
+        let Ok(status) = Status::try_from(player_action.status.0) else {
+            self.kick(TextComponent::text("Invalid status")).await;
+            return;
+        };
 
-                    // TODO: do validation
-                    // TODO: Config
-                    if self.gamemode.load() == GameMode::Creative {
-                        // Block break & play sound
-                        world
-                            .break_block(
-                                &location,
-                                Some(self.clone()),
-                                BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
-                            )
-                            .await;
-                        server
-                            .block_registry
-                            .broken(Arc::clone(world), &block, self, location, server, state)
-                            .await;
-                        self.update_sequence(player_action.sequence.0);
-                        return;
-                    }
-                    self.start_mining_time.store(
-                        self.tick_counter.load(std::sync::atomic::Ordering::Relaxed),
-                        std::sync::atomic::Ordering::Relaxed,
-                    );
-                    if !state.is_air() {
-                        let speed = block::calc_block_breaking(self, &state, block.name).await;
-                        // Instant break
-                        if speed >= 1.0 {
-                            let broken_state = world.get_block_state(&location).await;
-                            world
-                                .break_block(
-                                    &location,
-                                    Some(self.clone()),
-                                    BlockFlags::NOTIFY_NEIGHBORS,
-                                )
-                                .await;
-                            server
-                                .block_registry
-                                .broken(
-                                    Arc::clone(world),
-                                    &block,
-                                    self,
-                                    location,
-                                    server,
-                                    broken_state,
-                                )
-                                .await;
-                        } else {
-                            self.mining
-                                .store(true, std::sync::atomic::Ordering::Relaxed);
-                            *self.mining_pos.lock().await = location;
-                            let progress = (speed * 10.0) as i32;
-                            world.set_block_breaking(entity, location, progress).await;
-                            self.current_block_destroy_stage
-                                .store(progress, std::sync::atomic::Ordering::Relaxed);
-                        }
-                    }
-                    self.update_sequence(player_action.sequence.0);
-                }
-                Status::CancelledDigging => {
-                    if !self.can_interact_with_block_at(&player_action.location, 1.0) {
-                        log::warn!(
-                            "Player {0} tried to interact with block out of reach at {1}",
-                            self.gameprofile.name,
-                            player_action.location
-                        );
-                        return;
-                    }
-                    self.mining
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
-                    let entity = &self.living_entity.entity;
-                    let world = &entity.world.read().await;
-                    world
-                        .set_block_breaking(entity, player_action.location, -1)
-                        .await;
-                    self.update_sequence(player_action.sequence.0);
-                }
-                Status::FinishedDigging => {
-                    // TODO: do validation
-                    let location = player_action.location;
-                    if !self.can_interact_with_block_at(&location, 1.0) {
-                        log::warn!(
-                            "Player {0} tried to interact with block out of reach at {1}",
-                            self.gameprofile.name,
-                            player_action.location
-                        );
-                        return;
-                    }
-
-                    // Block break & play sound
-                    let entity = &self.living_entity.entity;
-                    let world = &entity.world.read().await;
-
-                    self.mining
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
-                    world.set_block_breaking(entity, location, -1).await;
-
-                    let (block, state) = world.get_block_and_block_state(&location).await;
-                    let drop = self.gamemode.load() != GameMode::Creative
-                        && self.can_harvest(&state, block.name).await;
-
-                    world
-                        .break_block(
-                            &location,
-                            Some(self.clone()),
-                            if drop {
-                                BlockFlags::NOTIFY_NEIGHBORS
-                            } else {
-                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
-                            },
-                        )
-                        .await;
-
-                    server
-                        .block_registry
-                        .broken(Arc::clone(world), &block, self, location, server, state)
-                        .await;
-
-                    self.update_sequence(player_action.sequence.0);
-                }
-                Status::DropItem => {
-                    self.drop_held_item(false).await;
-                }
-                Status::DropItemStack => {
-                    self.drop_held_item(true).await;
-                }
-                Status::ShootArrowOrFinishEating => {
-                    log::debug!("todo");
-                }
-                Status::SwapItem => {
-                    self.swap_item().await;
-                }
-            },
-            Err(_) => self.kick(TextComponent::text("Invalid status")).await,
+        match status {
+            Status::StartedDigging | Status::CancelledDigging | Status::FinishedDigging => {
+                self.handle_block_break_action(&player_action, status, server)
+                    .await;
+                self.update_sequence(player_action.sequence.0);
+            }
+            Status::DropItem => self.drop_held_item(false).await,
+            Status::DropItemStack => self.drop_held_item(true).await,
+            Status::ShootArrowOrFinishEating => log::debug!("todo"),
+            Status::SwapItem => self.swap_item().await,
         }
     }
 
@@ -1335,13 +1211,10 @@ impl Player {
     pub fn update_sequence(&self, sequence: i32) {
         if sequence < 0 {
             log::error!("Expected packet sequence >= 0");
+            return;
         }
-        self.packet_sequence.store(
-            self.packet_sequence
-                .load(std::sync::atomic::Ordering::Relaxed)
-                .max(sequence),
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        self.packet_sequence
+            .fetch_max(sequence, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub async fn handle_player_abilities(&self, player_abilities: SPlayerAbilities) {
