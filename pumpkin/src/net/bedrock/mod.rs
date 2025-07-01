@@ -8,25 +8,16 @@ use std::{
 
 use bytes::Bytes;
 use pumpkin_protocol::{
-    ClientPacket, PacketDecodeError, PacketEncodeError, RawPacket, ServerPacket,
     bedrock::{
-        RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID, RakReliability,
-        ack::Ack,
-        frame_set::{Frame, FrameSet},
-        packet_decoder::UDPNetworkDecoder,
-        packet_encoder::UDPNetworkEncoder,
-        server::{
+        ack::Ack, frame_set::{Frame, FrameSet}, packet_decoder::UDPNetworkDecoder, packet_encoder::UDPNetworkEncoder, server::{
             raknet::{
                 connection::{SConnectionRequest, SDisconnect, SNewIncomingConnection},
                 open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
                 unconnected_ping::SUnconnectedPing,
             },
             request_network_settings::SRequestNetworkSettings,
-        },
-    },
-    codec::u24::U24,
-    packet::Packet,
-    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
+        }, RakReliability, SubClient, RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID
+    }, codec::u24::U24, packet::Packet, ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError}, ClientPacket, PacketDecodeError, PacketEncodeError, RawPacket, ServerPacket
 };
 use std::net::SocketAddr;
 use tokio::{net::UdpSocket, sync::Mutex};
@@ -101,7 +92,7 @@ impl BedrockClientPlatform {
         self.network_writer
             .lock()
             .await
-            .write_game_packet(P::PACKET_ID, 0, 0, packet_payload.into(), write)
+            .write_game_packet(P::PACKET_ID as u16, SubClient::Main, SubClient::Main, packet_payload.into(), write)
             .await
             .unwrap();
         Ok(())
@@ -230,7 +221,7 @@ impl BedrockClientPlatform {
     ) -> Result<(), ReadingError> {
         let mut payload = &packet[..];
 
-        let Ok(id) = payload.get_u8_be() else {
+        let Ok(id) = payload.get_u8() else {
             return Err(ReadingError::CleanEOF(String::new()));
         };
 
@@ -290,7 +281,7 @@ impl BedrockClientPlatform {
         dbg!(frame.reliability);
 
         let mut payload = &frame.payload[..];
-        let id = payload.get_u8_be()?;
+        let id = payload.get_u8()?;
         self.handle_raknet_packet(client, server, i32::from(id), payload)
             .await
     }

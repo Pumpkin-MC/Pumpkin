@@ -5,10 +5,7 @@ use bytes::Bytes;
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 
 use crate::{
-    Aes128Cfb8Dec, CompressionThreshold, MAX_PACKET_SIZE, PacketDecodeError, RawPacket,
-    StreamDecryptor,
-    codec::var_int::VarInt,
-    ser::{NetworkReadExt, ReadingError},
+    codec::var_uint::VarUint, ser::{NetworkReadExt, ReadingError}, Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, RawPacket, StreamDecryptor
 };
 
 // decrypt -> decompress -> raw
@@ -119,11 +116,13 @@ impl UDPNetworkDecoder {
         &mut self,
         mut reader: Cursor<Vec<u8>>,
     ) -> Result<RawPacket, PacketDecodeError> {
-        let compression = reader.get_u8_be()?;
-        dbg!(compression);
+
+        //compression is only included after the network settings packet is sent
+        //let compression = reader.get_u8()?;
+        //dbg!(compression);
 
         // TODO: compression & encryption
-        let packet_len = VarInt::decode_async(&mut reader)
+        let packet_len = VarUint::decode_async(&mut reader)
             .await
             .map_err(|err| match err {
                 ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
@@ -133,11 +132,12 @@ impl UDPNetworkDecoder {
         let packet_len = packet_len.0 as u64;
         dbg!(packet_len);
 
-        if !(0..=MAX_PACKET_SIZE).contains(&packet_len) {
+        // This is the default MTU size
+        if !(0..=1492).contains(&packet_len) {
             Err(PacketDecodeError::OutOfBounds)?
         }
 
-        let header = VarInt::decode_async(&mut reader).await?;
+        let header = VarUint::decode_async(&mut reader).await?;
 
         let header_value = header.0;
 
@@ -151,16 +151,16 @@ impl UDPNetworkDecoder {
         let fourteen_bit_header = header_value & 0x3FFF; // Mask to get the lower 14 bits (2^14 - 1)
 
         // SubClient Target ID: Lowest 2 bits
-        let _sub_client_target_id = (fourteen_bit_header & 0b11) as u8;
+        let _sub_client_target = (fourteen_bit_header & 0b11) as u8;
 
         // SubClient Sender ID: Next 2 bits (bits 2 and 3)
-        let _sub_client_sender_id = ((fourteen_bit_header >> 2) & 0b11) as u8;
+        let _sub_client_sender = ((fourteen_bit_header >> 2) & 0b11) as u8;
 
         // Gamepacket ID: Remaining 10 bits (bits 4 to 13)
         let gamepacket_id = ((fourteen_bit_header >> 4) & 0x3FF) as u16; // 0x3FF is 10 bits set to 1
 
         let payload = reader
-            .read_boxed_slice(packet_len as usize)
+            .read_boxed_slice(packet_len as usize - header.written_size())
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
         Ok(RawPacket {

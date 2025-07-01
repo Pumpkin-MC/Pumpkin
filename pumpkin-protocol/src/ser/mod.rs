@@ -2,8 +2,7 @@ use core::str;
 use std::io::{Read, Write};
 
 use crate::{
-    FixedBitSet,
-    codec::{bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong},
+    codec::{bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong, var_uint::VarUint}, FixedBitSet
 };
 
 pub mod deserializer;
@@ -46,9 +45,8 @@ pub enum WritingError {
 }
 
 pub trait NetworkReadExt {
-    fn get_i8_be(&mut self) -> Result<i8, ReadingError>;
-    fn get_u8_be(&mut self) -> Result<u8, ReadingError>;
-    fn get_u8_le(&mut self) -> Result<u8, ReadingError>;
+    fn get_i8(&mut self) -> Result<i8, ReadingError>;
+    fn get_u8(&mut self) -> Result<u8, ReadingError>;
 
     fn get_i16_be(&mut self) -> Result<i16, ReadingError>;
     fn get_u16_be(&mut self) -> Result<u16, ReadingError>;
@@ -87,28 +85,20 @@ pub trait NetworkReadExt {
 
 impl<R: Read> NetworkReadExt for R {
     //TODO: Macroize this
-    fn get_i8_be(&mut self) -> Result<i8, ReadingError> {
+    fn get_i8(&mut self) -> Result<i8, ReadingError> {
         let mut buf = [0u8];
         self.read_exact(&mut buf)
             .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
 
-        Ok(i8::from_be_bytes(buf))
+        Ok(buf[0] as i8)
     }
 
-    fn get_u8_be(&mut self) -> Result<u8, ReadingError> {
+    fn get_u8(&mut self) -> Result<u8, ReadingError> {
         let mut buf = [0u8];
         self.read_exact(&mut buf)
             .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
 
-        Ok(u8::from_be_bytes(buf))
-    }
-
-    fn get_u8_le(&mut self) -> Result<u8, ReadingError> {
-        let mut buf = [0u8];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(u8::from_le_bytes(buf))
+        Ok(buf[0])
     }
 
     fn get_i16_be(&mut self) -> Result<i16, ReadingError> {
@@ -226,7 +216,7 @@ impl<R: Read> NetworkReadExt for R {
     }
 
     fn get_bool(&mut self) -> Result<bool, ReadingError> {
-        let byte = self.get_u8_be()?;
+        let byte = self.get_u8()?;
         Ok(byte != 0)
     }
 
@@ -321,6 +311,7 @@ pub trait NetworkWriteExt {
         }
     }
     fn write_var_int(&mut self, data: &VarInt) -> Result<(), WritingError>;
+    fn write_var_uint(&mut self, data: &VarUint) -> Result<(), WritingError>;
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
     fn write_string_bounded(&mut self, data: &str, bound: usize) -> Result<(), WritingError>;
     fn write_string(&mut self, data: &str) -> Result<(), WritingError>;
@@ -426,6 +417,10 @@ impl<W: Write> NetworkWriteExt for W {
     }
 
     fn write_var_int(&mut self, data: &VarInt) -> Result<(), WritingError> {
+        data.encode(self)
+    }
+
+    fn write_var_uint(&mut self, data: &VarUint) -> Result<(), WritingError> {
         data.encode(self)
     }
 

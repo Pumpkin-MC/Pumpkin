@@ -1,7 +1,6 @@
 use std::{
     io::{ErrorKind, Read, Write},
     num::NonZeroUsize,
-    ops::Deref,
 };
 
 use bytes::BufMut;
@@ -13,33 +12,33 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 
-pub type VarIntType = i32;
+pub type VarIntType = u32;
 
 /**
  * A variable-length integer type used by the Minecraft network protocol.
  */
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct VarInt(pub VarIntType);
+pub struct VarUint(pub VarIntType);
 
-impl VarInt {
+impl VarUint {
     /// The maximum number of bytes a `VarInt` can occupy.
     const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
     /// Returns the exact number of bytes this VarInt will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
     pub fn written_size(&self) -> usize {
-        match self.0 {
-            0 => 1,
-            n => (31 - n.leading_zeros() as usize) / 7 + 1,
-        }
+        ((32 - self.0.leading_zeros() as usize).max(1) + 6) / 7
     }
 
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut val = self.0;
-        for _ in 0..Self::MAX_SIZE.get() {
-            let b: u8 = val as u8 & 0b01111111;
+        loop {
+            let mut byte = (val & 0x7F) as u8;
             val >>= 7;
-            write.write_u8(if val == 0 { b } else { b | 0b10000000 })?;
+            if val != 0 {
+                byte |= 0x80;
+            }
+            write.write_u8(byte)?;
             if val == 0 {
                 break;
             }
@@ -52,16 +51,16 @@ impl VarInt {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
-            val |= (i32::from(byte) & 0x7F) << (i * 7);
+            val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarInt(val));
+                return Ok(VarUint(val));
             }
         }
         Err(ReadingError::TooLarge("VarInt".to_string()))
     }
 }
 
-impl VarInt {
+impl VarUint {
     pub async fn decode_async(read: &mut (impl AsyncRead + Unpin)) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
@@ -72,9 +71,9 @@ impl VarInt {
                     ReadingError::Incomplete(err.to_string())
                 }
             })?;
-            val |= (i32::from(byte) & 0x7F) << (i * 7);
+            val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarInt(val));
+                return Ok(VarUint(val));
             }
         }
         Err(ReadingError::TooLarge("VarInt".to_string()))
@@ -103,9 +102,9 @@ impl VarInt {
 // Macros are needed because traits over generics succccccccccck
 macro_rules! gen_from {
     ($ty: ty) => {
-        impl From<$ty> for VarInt {
+        impl From<$ty> for VarUint {
             fn from(value: $ty) -> Self {
-                VarInt(value.into())
+                VarUint(value as u32)
             }
         }
     };
@@ -115,47 +114,33 @@ gen_from!(i8);
 gen_from!(u8);
 gen_from!(i16);
 gen_from!(u16);
-gen_from!(i32);
+gen_from!(u32);
 
 macro_rules! gen_try_from {
     ($ty: ty) => {
-        impl TryFrom<$ty> for VarInt {
+        impl TryFrom<$ty> for VarUint {
             type Error = <i32 as TryFrom<$ty>>::Error;
 
             fn try_from(value: $ty) -> Result<Self, Self::Error> {
-                Ok(VarInt(value.try_into()?))
+                Ok(VarUint(value as u32))
             }
         }
     };
 }
 
-gen_try_from!(u32);
+gen_try_from!(i32);
 gen_try_from!(i64);
 gen_try_from!(u64);
 gen_try_from!(isize);
 gen_try_from!(usize);
 
-impl AsRef<i32> for VarInt {
-    fn as_ref(&self) -> &i32 {
-        &self.0
-    }
-}
-
-impl Deref for VarInt {
-    type Target = i32;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Serialize for VarInt {
+impl Serialize for VarUint {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let mut value = self.0 as u32;
-        let mut buf = Vec::new();
+        let mut buf = Vec::with_capacity(5);
 
         while value > 0x7F {
             buf.put_u8(value as u8 | 0x80);
@@ -168,7 +153,7 @@ impl Serialize for VarInt {
     }
 }
 
-impl<'de> Deserialize<'de> for VarInt {
+impl<'de> Deserialize<'de> for VarUint {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -176,7 +161,7 @@ impl<'de> Deserialize<'de> for VarInt {
         struct VarIntVisitor;
 
         impl<'de> Visitor<'de> for VarIntVisitor {
-            type Value = VarInt;
+            type Value = VarUint;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("a valid VarInt encoded in a byte sequence")
@@ -187,11 +172,11 @@ impl<'de> Deserialize<'de> for VarInt {
                 A: SeqAccess<'de>,
             {
                 let mut val = 0;
-                for i in 0..VarInt::MAX_SIZE.get() {
+                for i in 0..VarUint::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
-                        val |= (i32::from(byte) & 0b01111111) << (i * 7);
+                        val |= (u32::from(byte) & 0b01111111) << (i * 7);
                         if byte & 0b10000000 == 0 {
-                            return Ok(VarInt(val));
+                            return Ok(VarUint(val));
                         }
                     } else {
                         break;
