@@ -14,6 +14,9 @@ pub const RAKNET_MAGIC: [u8; 16] = [
 pub const RAKNET_VALID: u8 = 0x80;
 pub const RAKNET_ACK: u8 = 0xC0;
 pub const RAKNET_NACK: u8 = 0xA0;
+
+pub const RAKNET_GAME_PACKET: i32 = 0xfe;
+
 pub const RAKNET_SPLIT: u8 = 0x10;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Default)]
@@ -91,4 +94,12 @@ impl RakReliability {
             RakReliability::ReliableOrderedWithAckReceipt => 7,
         }
     }
+}
+
+#[repr(u16)]
+pub enum SubClient {
+    Main = 0,
+    SubClient0 = 1,
+    SubClient1 = 2,
+    SubClietn2 = 3,
 }

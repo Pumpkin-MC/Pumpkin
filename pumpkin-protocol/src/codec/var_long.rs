@@ -54,7 +54,7 @@ impl VarLong {
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
-            let byte = read.get_u8_be()?;
+            let byte = read.get_u8()?;
             val |= (i64::from(byte) & 0b01111111) << (i * 7);
             if byte & 0b10000000 == 0 {
                 return Ok(VarLong(val));

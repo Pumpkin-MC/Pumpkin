@@ -7,9 +7,9 @@ pub struct U24(pub u32);
 
 impl U24 {
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
-        let a = read.get_u8_le()?;
-        let b = read.get_u8_le()?;
-        let c = read.get_u8_le()?;
+        let a = read.get_u8()?;
+        let b = read.get_u8()?;
+        let c = read.get_u8()?;
         Ok(U24(u32::from_le_bytes([a, b, c, 0])))
     }
 

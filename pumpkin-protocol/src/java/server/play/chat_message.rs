@@ -32,7 +32,7 @@ impl ServerPacket for SChatMessage {
             signature: read.get_option(|v| v.read_boxed_slice(256))?,
             message_count: read.get_var_int()?,
             acknowledged: read.get_fixed_bitset(20)?,
-            checksum: read.get_u8_be()?,
+            checksum: read.get_u8()?,
         })
     }
 }
