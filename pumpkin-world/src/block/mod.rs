@@ -4,25 +4,45 @@ pub mod state;
 use std::collections::HashMap;
 
 use pumpkin_data::{
-    BlockState,
+    Block, BlockState,
     block_properties::{get_block, get_state_by_state_id},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub use state::RawBlockState;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct BlockStateCodec {
     /// Block name
-    pub name: String,
+    #[serde(
+        deserialize_with = "parse_block_name",
+        serialize_with = "block_to_string"
+    )]
+    pub name: &'static Block,
     /// Key-value pairs of properties
     #[serde(skip_serializing_if = "Option::is_none")]
     pub properties: Option<HashMap<String, String>>,
 }
 
+fn parse_block_name<'de, D>(deserializer: D) -> Result<&'static Block, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    let block = get_block(s.as_str()).ok_or(serde::de::Error::custom("Invalid block name"))?;
+    Ok(block)
+}
+
+fn block_to_string<S>(block: &'static Block, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(block.name)
+}
+
 impl BlockStateCodec {
     pub fn get_state(&self) -> Option<&'static BlockState> {
-        let block = get_block(self.name.as_str())?;
+        let block = self.name;
 
         let mut state_id = block.default_state.id;
 
