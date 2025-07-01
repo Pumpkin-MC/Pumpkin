@@ -788,12 +788,9 @@ impl Level {
                         match entry {
                             Entry::Occupied(entry) => entry.into_ref(),
                             Entry::Vacant(entry) => {
-                                let start = tokio::time::Instant::now();
-                                println!("Generating chunk at {:?}", pos);
                                 let generated_chunk = world_gen
                                     .generate_chunk(&self_clone, block_registry.as_ref(), &pos)
                                     .await;
-                                println!("Generated chunk at {:?} in {:?}", pos, start.elapsed());
                                 entry.insert(Arc::new(RwLock::new(generated_chunk)))
                             }
                         }
