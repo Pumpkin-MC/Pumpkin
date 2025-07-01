@@ -27,7 +27,7 @@ impl VarUint {
     /// Returns the exact number of bytes this VarInt will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
     pub fn written_size(&self) -> usize {
-        ((32 - self.0.leading_zeros() as usize).max(1) + 6) / 7
+        (32 - self.0.leading_zeros() as usize).max(1).div_ceil(7)
     }
 
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
@@ -139,7 +139,7 @@ impl Serialize for VarUint {
     where
         S: Serializer,
     {
-        let mut value = self.0 as u32;
+        let mut value = self.0;
         let mut buf = Vec::with_capacity(5);
 
         while value > 0x7F {
