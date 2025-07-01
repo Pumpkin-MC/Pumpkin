@@ -65,3 +65,7 @@ harness = false
 [[bench]]
 name = "chunk_io"
 harness = false
+
+[[bench]]
+name = "chunk_gen"
+harness = false

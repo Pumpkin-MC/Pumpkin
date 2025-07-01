@@ -19,7 +19,7 @@ edition = "2024"
 
 
 [profile.dev]
-opt-level = 0
+#opt-level = 0
 
 [profile.release]
 lto = true
