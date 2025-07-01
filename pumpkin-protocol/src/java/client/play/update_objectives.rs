@@ -38,7 +38,7 @@ impl ClientPacket for CUpdateObjectives {
         let mut write = write;
 
         write.write_string(&self.objective_name)?;
-        write.write_u8_be(self.mode)?;
+        write.write_u8(self.mode)?;
         if self.mode == 0 || self.mode == 2 {
             write.write_slice(&self.display_name.encode())?;
             write.write_var_int(&self.render_type)?;
