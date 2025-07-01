@@ -82,7 +82,6 @@ impl BedrockClientPlatform {
         mut write: impl Write,
     ) -> Result<(), WritingError> {
         write.write_u8(P::PACKET_ID as u8)?;
-        println!("Writing packet {}", P::PACKET_ID);
         packet.write_packet_data(write)
     }
 
