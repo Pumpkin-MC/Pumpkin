@@ -1,9 +1,8 @@
-use crate::block::blocks::fire::FireBlockBase;
 use crate::block::blocks::fire::fire::FireBlock;
+use crate::block::blocks::fire::FireBlockBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
@@ -27,7 +26,7 @@ impl Ignition {
         let world = player.world().await;
         let pos = location.offset(face.to_offset());
 
-        if world.get_fluid(&location).await.name != Fluid::EMPTY.name {
+        if world.is_fluid_at(&location).await {
             // if block is in fluid, do not ignite
             return;
         }

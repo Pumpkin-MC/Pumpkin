@@ -72,10 +72,17 @@ use pumpkin_world::entity::entity_data_flags::{
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
 
+use super::combat::{self, AttackType, player_attack_sound};
+use super::effect::Effect;
+use super::hunger::HungerManager;
+use super::item::ItemEntity;
+use super::living::LivingEntity;
+use super::{Entity, EntityBase, EntityId, NBTStorage};
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
 use crate::data::op_data::OPERATOR_CONFIG;
+use crate::entity::oxygen::OxygenManager;
 use crate::error::PumpkinError;
 use crate::net::GameProfile;
 use crate::net::{Client, PlayerConfig};
@@ -85,13 +92,6 @@ use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
-
-use super::combat::{self, AttackType, player_attack_sound};
-use super::effect::Effect;
-use super::hunger::HungerManager;
-use super::item::ItemEntity;
-use super::living::LivingEntity;
-use super::{Entity, EntityBase, EntityId, NBTStorage};
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -216,6 +216,8 @@ pub struct Player {
     pub sleeping_since: AtomicCell<Option<u8>>,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
+    /// Manages the player's oxygen level.
+    pub oxygen_manager: OxygenManager,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
     /// The item currently being held by the player.
@@ -278,6 +280,13 @@ pub struct Player {
 }
 
 impl Player {
+    pub async fn is_underwater(&self) -> bool {
+        let eye_pos = self.eye_position().to_block_pos();
+        self.world().await.is_fluid_at(&eye_pos).await
+    }
+}
+
+impl Player {
     pub async fn new(client: Client, world: Arc<World>, gamemode: GameMode) -> Self {
         struct ScreenListener;
 
@@ -331,6 +340,7 @@ impl Player {
             awaiting_teleport: Mutex::new(None),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
+            oxygen_manager: OxygenManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
             open_container: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
@@ -1410,6 +1420,10 @@ impl Player {
             speed /= 5.0;
         }
         speed
+    }
+
+    pub fn get_respiration_level(&self) -> u8 {
+        0
     }
 
     async fn get_haste_amplifier(&self) -> u32 {

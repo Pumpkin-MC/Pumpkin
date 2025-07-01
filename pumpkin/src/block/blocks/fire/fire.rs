@@ -1,28 +1,27 @@
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalAxis};
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::Rng;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::BlockStateId;
 
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::pumpkin_block::PumpkinBlock;
-use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::entity::EntityBase;
 use crate::server::Server;
-use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
+use crate::world::World;
 
 type FireProperties = pumpkin_data::block_properties::FireLikeProperties;
 
@@ -110,7 +109,7 @@ impl FireBlock {
         spread_factor: i32,
         current_age: u16,
     ) {
-        if world.get_fluid(pos).await.name != Fluid::EMPTY.name {
+        if world.is_fluid_at(pos).await {
             return; // Skip if there is a fluid
         }
         let spread_chance: i32 = world
@@ -155,7 +154,7 @@ impl FireBlock {
 
         for dir in BlockDirection::all() {
             let neighbor_block = world.get_block(&pos.offset(dir.to_offset())).await;
-            if world.get_fluid(&pos.offset(dir.to_offset())).await.name != Fluid::EMPTY.name {
+            if world.is_fluid_at(&pos.offset(dir.to_offset())).await {
                 continue; // Skip if there is a fluid
             }
             if let Some(flammable) = neighbor_block.flammable {

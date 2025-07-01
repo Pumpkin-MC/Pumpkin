@@ -49,13 +49,13 @@ pub mod hunger;
 pub mod item;
 pub mod living;
 pub mod mob;
+pub mod oxygen;
 pub mod player;
 pub mod projectile;
 pub mod tnt;
 pub mod r#type;
 
 mod combat;
-
 pub type EntityId = i32;
 
 #[async_trait]

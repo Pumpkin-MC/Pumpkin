@@ -1,0 +1,92 @@
+use super::{EntityBase, NBTStorage, player::Player};
+use async_trait::async_trait;
+use crossbeam::atomic::AtomicCell;
+use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EffectType;
+use pumpkin_nbt::compound::NbtCompound;
+
+// Oxygen management system similar to Minecraft's air mechanics
+pub struct OxygenManager {
+    /// Current oxygen level in ticks (0 = depleted)
+    pub oxygen_level: AtomicCell<u16>,
+    /// Timer for drowning damage ticks
+    pub damage_timer: AtomicCell<u16>,
+}
+
+impl Default for OxygenManager {
+    fn default() -> Self {
+        Self {
+            oxygen_level: AtomicCell::new(300), // Default full oxygen (15 seconds)
+            damage_timer: AtomicCell::new(0),
+        }
+    }
+}
+
+impl OxygenManager {
+    /// Maximum oxygen capacity (base + respiration bonus)
+    fn get_max_oxygen(player: &Player) -> u16 {
+        let base_oxygen = 300; // 15 seconds * 20 ticks/sec
+        let respiration_level = player.get_respiration_level(); // Implement on Player
+        base_oxygen + (respiration_level as u16 * 300) // +15 sec per level
+    }
+
+    /// Main processing each tick
+    pub async fn tick(&self, player: &Player) {
+        let max_oxygen = Self::get_max_oxygen(player);
+        let current_oxygen = self.oxygen_level.load();
+        let mut damage_timer = self.damage_timer.load();
+
+        if player.is_underwater().await {
+            // Water breathing effect grants immunity
+            if player
+                .living_entity
+                .has_effect(EffectType::WaterBreathing)
+                .await
+            {
+                // Reset to full oxygen if not already
+                if current_oxygen < max_oxygen {
+                    self.oxygen_level.store(max_oxygen);
+                }
+                self.damage_timer.store(0);
+                return;
+            }
+
+            // Consume oxygen if available
+            if current_oxygen > 0 {
+                self.oxygen_level.store(current_oxygen - 1);
+                self.damage_timer.store(0);
+            }
+            // Handle oxygen depletion
+            else {
+                damage_timer += 1;
+                self.damage_timer.store(damage_timer);
+
+                // Apply damage every second (20 ticks)
+                if damage_timer >= 20 {
+                    player.damage(2.0, DamageType::DROWN).await;
+                    self.damage_timer.store(0);
+                }
+            }
+        }
+        // Replenish oxygen when not submerged
+        else if current_oxygen < max_oxygen {
+            self.oxygen_level.store(current_oxygen + 1);
+            self.damage_timer.store(0);
+        }
+    }
+}
+
+#[async_trait]
+impl NBTStorage for OxygenManager {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_short("Air", self.oxygen_level.load() as i16);
+        nbt.put_short("DrownTimer", self.damage_timer.load() as i16);
+    }
+
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
+        self.oxygen_level
+            .store(nbt.get_short("Air").unwrap_or(300) as u16);
+        self.damage_timer
+            .store(nbt.get_short("DrownTimer").unwrap_or(0) as u16);
+    }
+}

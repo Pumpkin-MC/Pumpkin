@@ -1837,6 +1837,10 @@ impl World {
         get_block_by_state_id(id).unwrap_or(Block::AIR)
     }
 
+    pub async fn is_fluid_at(&self, position: &BlockPos) -> bool {
+        self.get_fluid(position).await.name != Fluid::EMPTY.name
+    }
+
     pub async fn get_fluid(&self, position: &BlockPos) -> pumpkin_data::fluid::Fluid {
         let id = self.get_block_state_id(position).await;
         let fluid = Fluid::from_state_id(id).ok_or(Fluid::EMPTY);
