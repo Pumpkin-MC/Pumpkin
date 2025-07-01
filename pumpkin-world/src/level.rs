@@ -4,7 +4,7 @@ use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_data::{Block, block_properties::has_random_ticks};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
-use rand::{rngs::SmallRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
@@ -418,16 +418,10 @@ impl Level {
 
                     let block_id = chunk
                         .section
-                        .get_block_absolute_y(
-                            x_offset as usize,
-                            random_pos.0.y,
-                            z_offset as usize,
-                        )
+                        .get_block_absolute_y(x_offset as usize, random_pos.0.y, z_offset as usize)
                         .unwrap_or(Block::AIR.default_state.id);
 
-                    if has_random_ticks(
-                        block_id,
-                    ) {
+                    if has_random_ticks(block_id) {
                         ticks.push(ScheduledTick {
                             block_pos: random_pos,
                             delay: 0,
