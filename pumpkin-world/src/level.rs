@@ -1,5 +1,6 @@
 use dashmap::{DashMap, Entry};
 use log::trace;
+use num_cpus;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_data::Block;
@@ -15,7 +16,7 @@ use std::{
 use tokio::{
     select,
     sync::{
-        Mutex, Notify, RwLock,
+        Mutex, Notify, RwLock, Semaphore,
         mpsc::{self, UnboundedReceiver},
     },
     task::JoinHandle,
@@ -71,6 +72,8 @@ pub struct Level {
     block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
     remaining_block_ticks_this_tick: Arc<Mutex<VecDeque<ScheduledTick>>>,
     fluid_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
+    /// Semaphore to limit concurrent chunk generation tasks
+    chunk_generation_semaphore: Arc<Semaphore>,
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
@@ -143,6 +146,8 @@ impl Level {
             block_ticks: Arc::new(Mutex::new(Vec::new())),
             remaining_block_ticks_this_tick: Arc::new(Mutex::new(VecDeque::new())),
             fluid_ticks: Arc::new(Mutex::new(Vec::new())),
+            // Limits concurrent chunk generation tasks to 2x the number of CPUs
+            chunk_generation_semaphore: Arc::new(Semaphore::new(num_cpus::get() * 2)),
         }
     }
 
@@ -750,6 +755,7 @@ impl Level {
         let world_gen = self.world_gen.clone();
         let block_registry = self.block_registry.clone();
         let self_clone = self.clone();
+        let chunk_generation_semaphore = self.chunk_generation_semaphore.clone();
         let handle_generate = async move {
             let continue_to_generate = Arc::new(AtomicBool::new(true));
             while let Some(pos) = generate_bridge_recv.recv().await {
@@ -763,8 +769,12 @@ impl Level {
                 let cloned_continue_to_generate = continue_to_generate.clone();
                 let block_registry = block_registry.clone();
                 let self_clone = self_clone.clone();
+                let semaphore = chunk_generation_semaphore.clone();
 
                 tokio::spawn(async move {
+                    // Acquire a permit from the semaphore to limit concurrent generation
+                    let _permit = semaphore.acquire().await.expect("Semaphore closed");
+                    
                     // Rayon tasks are queued, so also check it here
                     if !cloned_continue_to_generate.load(Ordering::Relaxed) {
                         return;
@@ -778,9 +788,12 @@ impl Level {
                         match entry {
                             Entry::Occupied(entry) => entry.into_ref(),
                             Entry::Vacant(entry) => {
+                                let start = tokio::time::Instant::now();
+                                println!("Generating chunk at {:?}", pos);
                                 let generated_chunk = world_gen
                                     .generate_chunk(&self_clone, block_registry.as_ref(), &pos)
                                     .await;
+                                println!("Generated chunk at {:?} in {:?}", pos, start.elapsed());
                                 entry.insert(Arc::new(RwLock::new(generated_chunk)))
                             }
                         }
@@ -894,6 +907,7 @@ impl Level {
         };
 
         let loaded_chunks = self.loaded_entity_chunks.clone();
+        let chunk_generation_semaphore = self.chunk_generation_semaphore.clone();
         let handle_generate = async move {
             let continue_to_generate = Arc::new(AtomicBool::new(true));
             while let Some(pos) = generate_bridge_recv.recv().await {
@@ -904,8 +918,12 @@ impl Level {
                 let loaded_chunks = loaded_chunks.clone();
                 let channel = channel.clone();
                 let cloned_continue_to_generate = continue_to_generate.clone();
+                let semaphore = chunk_generation_semaphore.clone();
 
                 tokio::spawn(async move {
+                    // Acquire a permit from the semaphore to limit concurrent generation
+                    let _permit = semaphore.acquire().await.expect("Semaphore closed");
+                    
                     // Rayon tasks are queued, so also check it here
                     if !cloned_continue_to_generate.load(Ordering::Relaxed) {
                         return;
