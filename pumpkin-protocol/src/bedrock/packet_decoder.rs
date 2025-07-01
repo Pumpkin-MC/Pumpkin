@@ -5,7 +5,9 @@ use bytes::Bytes;
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 
 use crate::{
-    codec::var_uint::VarUint, ser::{NetworkReadExt, ReadingError}, Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, RawPacket, StreamDecryptor
+    Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, RawPacket, StreamDecryptor,
+    codec::var_uint::VarUint,
+    ser::{NetworkReadExt, ReadingError},
 };
 
 // decrypt -> decompress -> raw
@@ -116,7 +118,6 @@ impl UDPNetworkDecoder {
         &mut self,
         mut reader: Cursor<Vec<u8>>,
     ) -> Result<RawPacket, PacketDecodeError> {
-
         //compression is only included after the network settings packet is sent
         //let compression = reader.get_u8()?;
         //dbg!(compression);

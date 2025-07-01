@@ -8,16 +8,25 @@ use std::{
 
 use bytes::Bytes;
 use pumpkin_protocol::{
+    ClientPacket, PacketDecodeError, PacketEncodeError, RawPacket, ServerPacket,
     bedrock::{
-        ack::Ack, frame_set::{Frame, FrameSet}, packet_decoder::UDPNetworkDecoder, packet_encoder::UDPNetworkEncoder, server::{
+        RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID, RakReliability, SubClient,
+        ack::Ack,
+        frame_set::{Frame, FrameSet},
+        packet_decoder::UDPNetworkDecoder,
+        packet_encoder::UDPNetworkEncoder,
+        server::{
             raknet::{
                 connection::{SConnectionRequest, SDisconnect, SNewIncomingConnection},
                 open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
                 unconnected_ping::SUnconnectedPing,
             },
             request_network_settings::SRequestNetworkSettings,
-        }, RakReliability, SubClient, RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID
-    }, codec::u24::U24, packet::Packet, ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError}, ClientPacket, PacketDecodeError, PacketEncodeError, RawPacket, ServerPacket
+        },
+    },
+    codec::u24::U24,
+    packet::Packet,
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
 use std::net::SocketAddr;
 use tokio::{net::UdpSocket, sync::Mutex};
@@ -92,7 +101,13 @@ impl BedrockClientPlatform {
         self.network_writer
             .lock()
             .await
-            .write_game_packet(P::PACKET_ID as u16, SubClient::Main, SubClient::Main, packet_payload.into(), write)
+            .write_game_packet(
+                P::PACKET_ID as u16,
+                SubClient::Main,
+                SubClient::Main,
+                packet_payload.into(),
+                write,
+            )
             .await
             .unwrap();
         Ok(())

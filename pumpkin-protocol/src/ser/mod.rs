@@ -2,7 +2,8 @@ use core::str;
 use std::io::{Read, Write};
 
 use crate::{
-    codec::{bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong, var_uint::VarUint}, FixedBitSet
+    FixedBitSet,
+    codec::{bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong, var_uint::VarUint},
 };
 
 pub mod deserializer;

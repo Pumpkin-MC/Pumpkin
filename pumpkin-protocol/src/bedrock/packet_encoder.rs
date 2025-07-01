@@ -5,7 +5,8 @@ use thiserror::Error;
 use tokio::{io::AsyncWrite, net::UdpSocket};
 
 use crate::{
-    bedrock::SubClient, codec::var_uint::VarUint, ser::NetworkWriteExt, Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, PacketEncodeError, StreamEncryptor
+    Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, PacketEncodeError, StreamEncryptor,
+    bedrock::SubClient, codec::var_uint::VarUint, ser::NetworkWriteExt,
 };
 
 // raw -> compress -> encrypt
