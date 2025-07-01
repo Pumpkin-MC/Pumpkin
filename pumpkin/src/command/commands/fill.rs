@@ -142,10 +142,8 @@ impl CommandExecutor for Executor {
                             let old_state = world.get_block_state(&block_position).await;
                             if old_state.is_air() {
                                 if let Some(filter) = &option_filter {
-                                    if not_in_filter(
-                                        filter,
-                                        world.get_block(&block_position).await,
-                                    ) {
+                                    if not_in_filter(filter, world.get_block(&block_position).await)
+                                    {
                                         continue;
                                     }
                                 }
