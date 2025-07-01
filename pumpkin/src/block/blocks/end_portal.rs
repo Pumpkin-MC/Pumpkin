@@ -21,7 +21,7 @@ impl PumpkinBlock for EndPortalBlock {
         world: &Arc<World>,
         entity: &dyn EntityBase,
         pos: BlockPos,
-        _block: &'static  Block,
+        _block: &'static Block,
         _state: &'static BlockState,
         server: &Server,
     ) {

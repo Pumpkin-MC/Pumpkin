@@ -95,7 +95,7 @@ pub(super) async fn update_flanking_rails_shape(
             world
                 .set_block_state(
                     &flanking_rail.position,
-                    flanking_rail.properties.to_state_id(&flanking_rail.block),
+                    flanking_rail.properties.to_state_id(flanking_rail.block),
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;

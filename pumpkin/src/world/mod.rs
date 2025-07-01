@@ -290,7 +290,7 @@ impl World {
             let block = self.get_block(&event.pos).await; // TODO
             if !self
                 .block_registry
-                .on_synced_block_event(&block, self, &event.pos, event.r#type, event.data)
+                .on_synced_block_event(block, self, &event.pos, event.r#type, event.data)
                 .await
             {
                 continue;
@@ -595,9 +595,9 @@ impl World {
             if scheduled_tick.target_block_id != block.id {
                 continue;
             }
-            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(&block) {
+            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
-                    .on_scheduled_tick(self, &block, &scheduled_tick.block_pos)
+                    .on_scheduled_tick(self, block, &scheduled_tick.block_pos)
                     .await;
             }
         }
@@ -1644,7 +1644,7 @@ impl World {
             self.block_registry
                 .on_state_replaced(
                     self,
-                    &old_block,
+                    old_block,
                     *position,
                     replaced_block_state_id,
                     block_moved,
@@ -1660,7 +1660,7 @@ impl World {
             self.block_registry
                 .on_placed(
                     self,
-                    &new_block,
+                    new_block,
                     block_state_id,
                     position,
                     replaced_block_state_id,
@@ -1698,7 +1698,7 @@ impl World {
                     .prepare(
                         self,
                         position,
-                        &Block::from_state_id(replaced_block_state_id).unwrap(),
+                        Block::from_state_id(replaced_block_state_id).unwrap(),
                         replaced_block_state_id,
                         new_flags,
                     )
@@ -1707,7 +1707,7 @@ impl World {
                     .update_neighbors(
                         self,
                         position,
-                        &Block::from_state_id(block_state_id).unwrap(),
+                        Block::from_state_id(block_state_id).unwrap(),
                         new_flags,
                     )
                     .await;
@@ -1715,7 +1715,7 @@ impl World {
                     .prepare(
                         self,
                         position,
-                        &Block::from_state_id(block_state_id).unwrap(),
+                        Block::from_state_id(block_state_id).unwrap(),
                         block_state_id,
                         new_flags,
                     )
@@ -1808,7 +1808,7 @@ impl World {
                     block_state: get_state_by_state_id(broken_state_id),
                     ..Default::default()
                 };
-                block::drop_loot(self, &broken_block, position, true, params).await;
+                block::drop_loot(self, broken_block, position, true, params).await;
             }
         }
     }
@@ -1876,9 +1876,12 @@ impl World {
     pub async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (&'static pumpkin_data::Block, &'static pumpkin_data::BlockState) {
+    ) -> (
+        &'static pumpkin_data::Block,
+        &'static pumpkin_data::BlockState,
+    ) {
         let id = self.get_block_state_id(position).await;
-        get_block_and_state_by_state_id(id).unwrap_or((&Block::AIR, &Block::AIR.default_state))
+        get_block_and_state_by_state_id(id).unwrap_or((&Block::AIR, Block::AIR.default_state))
     }
 
     /// Updates neighboring blocks of a block
@@ -1898,10 +1901,10 @@ impl World {
             let neighbor_fluid = self.get_fluid(&neighbor_pos).await;
 
             if let Some(neighbor_pumpkin_block) =
-                self.block_registry.get_pumpkin_block(&neighbor_block)
+                self.block_registry.get_pumpkin_block(neighbor_block)
             {
                 neighbor_pumpkin_block
-                    .on_neighbor_update(self, &neighbor_block, &neighbor_pos, &source_block, false)
+                    .on_neighbor_update(self, neighbor_block, &neighbor_pos, source_block, false)
                     .await;
             }
 
@@ -1922,12 +1925,12 @@ impl World {
     ) {
         let neighbor_block = self.get_block(neighbor_block_pos).await;
 
-        if let Some(neighbor_pumpkin_block) = self.block_registry.get_pumpkin_block(&neighbor_block)
+        if let Some(neighbor_pumpkin_block) = self.block_registry.get_pumpkin_block(neighbor_block)
         {
             neighbor_pumpkin_block
                 .on_neighbor_update(
                     self,
-                    &neighbor_block,
+                    neighbor_block,
                     neighbor_block_pos,
                     source_block,
                     false,
@@ -1957,7 +1960,7 @@ impl World {
             .block_registry
             .get_state_for_neighbor_update(
                 self,
-                &block,
+                block,
                 block_state.id,
                 block_pos,
                 direction,
@@ -1968,7 +1971,7 @@ impl World {
 
         if new_state_id != block_state.id {
             let flags = flags & !BlockFlags::SKIP_DROPS;
-            if get_state_by_state_id(new_state_id).is_some_and(|new_state| new_state.is_air()) {
+            if get_state_by_state_id(new_state_id).is_some_and(pumpkin_data::BlockState::is_air) {
                 self.break_block(block_pos, None, flags).await;
             } else {
                 self.set_block_state(block_pos, new_state_id, flags).await;
@@ -2266,7 +2269,10 @@ impl BlockAccessor for World {
     async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (&'static pumpkin_data::Block, &'static pumpkin_data::BlockState) {
+    ) -> (
+        &'static pumpkin_data::Block,
+        &'static pumpkin_data::BlockState,
+    ) {
         let id = self.get_block_state(position).await.id;
         get_block_and_state_by_state_id(id).unwrap_or((&Block::AIR, Block::AIR.default_state))
     }

@@ -122,7 +122,7 @@ impl NetherPortal {
         let mut pos = *pos;
         while pos.0.y > limit_y {
             let (block, state) = world.get_block_and_block_state(&pos.down()).await;
-            if !Self::valid_state_inside_portal(&block, &state) {
+            if !Self::valid_state_inside_portal(block, state) {
                 break;
             }
             pos = pos.down();
@@ -144,7 +144,7 @@ impl NetherPortal {
         for i in 0..=Self::MAX_WIDTH {
             lower_corner = original_lower_corner.offset_dir(negative_dir.to_offset(), i as i32);
             let (block, block_state) = world.get_block_and_block_state(&lower_corner).await;
-            if !Self::valid_state_inside_portal(&block, &block_state) {
+            if !Self::valid_state_inside_portal(block, block_state) {
                 if &Self::FRAME_BLOCK != block {
                     break;
                 }
@@ -209,7 +209,7 @@ impl NetherPortal {
                     .offset_dir(BlockDirection::Up.to_offset(), i)
                     .offset_dir(negative_dir.to_offset(), j as i32);
                 let (block, block_state) = world.get_block_and_block_state(&pos).await;
-                if !Self::valid_state_inside_portal(&block, &block_state) {
+                if !Self::valid_state_inside_portal(block, block_state) {
                     return i as u32;
                 }
                 if block == &Block::NETHER_PORTAL {

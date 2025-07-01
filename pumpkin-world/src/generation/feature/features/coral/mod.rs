@@ -38,14 +38,14 @@ impl CoralFeature {
         if random.next_f32() < 0.25 {
             chunk.set_block_state(
                 &pos.0,
-                &Self::get_random_tag_entry("minecraft:corals", random),
+                Self::get_random_tag_entry("minecraft:corals", random),
             );
         } else if random.next_f32() < 0.05 {
             let mut props = SeaPickleLikeProperties::default(&Block::SEA_PICKLE);
             props.pickles = Integer1To4::from_index(random.next_bounded_i32(4) as u16); // TODO: vanilla adds + 1, but this can crash
             chunk.set_block_state(
                 &pos.0,
-                &get_state_by_state_id(props.to_state_id(&Block::SEA_PICKLE)).unwrap(),
+                get_state_by_state_id(props.to_state_id(&Block::SEA_PICKLE)).unwrap(),
             );
         }
         for dir in BlockDirection::horizontal() {
@@ -74,11 +74,11 @@ impl CoralFeature {
                 .collect();
             chunk.set_block_state(
                 &dir_pos.0,
-                &get_state_by_state_id(
+                get_state_by_state_id(
                     wall_coral
                         .from_properties(props)
                         .unwrap()
-                        .to_state_id(&wall_coral),
+                        .to_state_id(wall_coral),
                 )
                 .unwrap(),
             );

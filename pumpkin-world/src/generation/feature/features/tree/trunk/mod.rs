@@ -71,7 +71,7 @@ impl TrunkPlacer {
         trunk_block: &BlockState,
     ) -> bool {
         let block = chunk.get_block_state(&pos.0);
-        if TreeFeature::can_replace(&block.to_state(), &block.to_block()) {
+        if TreeFeature::can_replace(block.to_state(), block.to_block()) {
             chunk.set_block_state(&pos.0, trunk_block);
             return true;
         }
@@ -85,7 +85,7 @@ impl TrunkPlacer {
         trunk_block: &BlockState,
     ) -> bool {
         let block = chunk.get_block_state(&pos.0);
-        if TreeFeature::can_replace_or_log(&block.to_state(), &block.to_block()) {
+        if TreeFeature::can_replace_or_log(block.to_state(), block.to_block()) {
             return self.place(chunk, pos, trunk_block);
         }
         false

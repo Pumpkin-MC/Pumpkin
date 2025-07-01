@@ -30,7 +30,7 @@ pub struct PlayerInteractEvent {
     pub item: Arc<Mutex<ItemStack>>,
 
     /// The block that was interacted with.
-    pub block: &'static  Block,
+    pub block: &'static Block,
 }
 
 impl PlayerInteractEvent {
@@ -51,7 +51,7 @@ impl PlayerInteractEvent {
         player: &Arc<Player>,
         action: InteractAction,
         item: &Arc<Mutex<ItemStack>>,
-        block: &'static  Block,
+        block: &'static Block,
         clicked_pos: Option<BlockPos>,
     ) -> Self {
         Self {

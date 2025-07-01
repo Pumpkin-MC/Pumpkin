@@ -18,7 +18,7 @@ pub struct BlockBreakEvent {
     pub player: Option<Arc<Player>>,
 
     /// The block that is being broken.
-    pub block: &'static  Block,
+    pub block: &'static Block,
 
     /// The position of the block that is being broken.
     pub block_position: BlockPos,
@@ -63,6 +63,6 @@ impl BlockBreakEvent {
 
 impl BlockEvent for BlockBreakEvent {
     fn get_block(&self) -> &Block {
-        &self.block
+        self.block
     }
 }

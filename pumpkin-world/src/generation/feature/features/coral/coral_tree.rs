@@ -27,7 +27,7 @@ impl CoralTreeFeature {
         let mut pos = pos;
         let i = random.next_bounded_i32(3) + 1;
         for _ in 0..i {
-            if !CoralFeature::generate_coral_piece(chunk, random, &block, pos) {
+            if !CoralFeature::generate_coral_piece(chunk, random, block, pos) {
                 return true;
             }
             pos = pos.up();
@@ -44,7 +44,7 @@ impl CoralTreeFeature {
             let times = random.next_bounded_i32(5) + 2;
             let mut m = 0;
             for n in 0..times {
-                if !CoralFeature::generate_coral_piece(chunk, random, &block, pos) {
+                if !CoralFeature::generate_coral_piece(chunk, random, block, pos) {
                     break;
                 }
                 pos = pos.up();

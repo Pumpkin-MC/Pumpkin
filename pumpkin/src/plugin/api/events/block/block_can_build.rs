@@ -23,11 +23,11 @@ pub struct BlockCanBuildEvent {
     pub player: Arc<Player>,
 
     /// The block being built upon.
-    pub block: &'static  Block,
+    pub block: &'static Block,
 }
 
 impl BlockEvent for BlockCanBuildEvent {
     fn get_block(&self) -> &Block {
-        &self.block
+        self.block
     }
 }

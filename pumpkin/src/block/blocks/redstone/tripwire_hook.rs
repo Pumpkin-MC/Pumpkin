@@ -116,8 +116,7 @@ impl PumpkinBlock for TripwireHookBlock {
         old_state_id: BlockStateId,
         moved: bool,
     ) {
-        if moved || Block::from_state_id(old_state_id).is_some_and(|old_block| old_block == block)
-        {
+        if moved || Block::from_state_id(old_state_id).is_some_and(|old_block| old_block == block) {
             return;
         }
         let props = TripwireHookProperties::from_state_id(old_state_id, block);

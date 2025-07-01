@@ -534,7 +534,7 @@ impl<'a> ProtoChunk<'a> {
                                     .unwrap_or(self.default_block);
                                 self.set_block_state(
                                     &Vector3::new(block_x, block_y, block_z),
-                                    &block_state,
+                                    block_state,
                                 );
                             }
                         }
@@ -649,7 +649,9 @@ impl<'a> ProtoChunk<'a> {
                                 .to_block();
 
                             // TODO: Is there a better way to check that its not a fluid?
-                            if !(state != &AIR_BLOCK && state != &WATER_BLOCK && state != &LAVA_BLOCK)
+                            if !(state != &AIR_BLOCK
+                                && state != &WATER_BLOCK
+                                && state != &LAVA_BLOCK)
                             {
                                 min = search_y + 1;
                                 break;
@@ -668,7 +670,7 @@ impl<'a> ProtoChunk<'a> {
                         let new_state = self.settings.surface_rule.try_apply(self, &mut context);
 
                         if let Some(state) = new_state {
-                            self.set_block_state(&pos, &state);
+                            self.set_block_state(&pos, state);
                         }
                     }
                 }
@@ -772,9 +774,12 @@ impl BlockAccessor for ProtoChunk<'_> {
     async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (&'static pumpkin_data::Block, &'static pumpkin_data::BlockState) {
+    ) -> (
+        &'static pumpkin_data::Block,
+        &'static pumpkin_data::BlockState,
+    ) {
         let id = self.get_block_state(&position.0);
-        get_block_and_state_by_state_id(id.0).unwrap_or((&Block::AIR, &Block::AIR.default_state))
+        get_block_and_state_by_state_id(id.0).unwrap_or((&Block::AIR, Block::AIR.default_state))
     }
 }
 

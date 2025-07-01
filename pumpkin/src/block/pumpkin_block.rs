@@ -54,7 +54,7 @@ pub trait PumpkinBlock: Send + Sync {
         _world: &Arc<World>,
         _entity: &dyn EntityBase,
         _pos: BlockPos,
-        _block: &'static  Block,
+        _block: &'static Block,
         _state: &'static BlockState,
         _server: &Server,
     ) {

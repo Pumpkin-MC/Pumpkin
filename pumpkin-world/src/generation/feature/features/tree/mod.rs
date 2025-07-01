@@ -104,8 +104,8 @@ impl TreeFeature {
                 level,
                 random,
                 self.force_dirt,
-                &dirt_state,
-                &trunk_state,
+                dirt_state,
+                trunk_state,
             )
             .await;
 
@@ -125,7 +125,7 @@ impl TreeFeature {
                     &node,
                     foliage_height,
                     foliage_radius,
-                    &foliage_state,
+                    foliage_state,
                 )
                 .await;
         }
@@ -140,7 +140,7 @@ impl TreeFeature {
                     let pos = BlockPos(init_pos.0.add_raw(x, y as i32, z));
                     let rstate = chunk.get_block_state(&pos.0);
                     let block = rstate.to_block();
-                    if Self::can_replace_or_log(&rstate.to_state(), &block)
+                    if Self::can_replace_or_log(rstate.to_state(), block)
                         && (self.ignore_vines || block != &Block::VINE)
                     {
                         continue;

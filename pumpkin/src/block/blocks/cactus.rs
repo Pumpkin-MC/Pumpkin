@@ -61,7 +61,7 @@ impl PumpkinBlock for CactusBlock {
         _world: &Arc<World>,
         entity: &dyn EntityBase,
         _pos: BlockPos,
-        _block: &'static  Block,
+        _block: &'static Block,
         _state: &'static BlockState,
         _server: &Server,
     ) {

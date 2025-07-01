@@ -38,7 +38,7 @@ impl PistonBlockEntity {
                     .set_block_state(&pos, state, BlockFlags::NOTIFY_ALL)
                     .await;
                 world
-                    .update_neighbor(&pos, &get_block_by_state_id(state).unwrap())
+                    .update_neighbor(&pos, get_block_by_state_id(state).unwrap())
                     .await;
             }
         }
@@ -89,7 +89,7 @@ impl BlockEntity for PistonBlockEntity {
                         .clone()
                         .update_neighbor(
                             &pos,
-                            &get_block_by_state_id(self.pushed_block_state.id).unwrap(),
+                            get_block_by_state_id(self.pushed_block_state.id).unwrap(),
                         )
                         .await;
                 }

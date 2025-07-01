@@ -41,11 +41,11 @@ impl PumpkinBlock for CampfireBlock {
         _world: &Arc<World>,
         entity: &dyn EntityBase,
         _pos: BlockPos,
-        block: &'static  Block,
+        block: &'static Block,
         state: &'static BlockState,
         _server: &Server,
     ) {
-        if CampfireLikeProperties::from_state_id(state.id, &block).lit
+        if CampfireLikeProperties::from_state_id(state.id, block).lit
             && entity.get_living_entity().is_some()
         {
             entity.damage(1.0, DamageType::CAMPFIRE).await;

@@ -225,7 +225,7 @@ impl WouldSurviveBlockPredicate {
         let pos = self.offset.get(pos);
         return block_registry
             .can_place_at(
-                &get_block_by_state_id(state.id).unwrap(),
+                get_block_by_state_id(state.id).unwrap(),
                 chunk,
                 &pos,
                 BlockDirection::Up,

@@ -77,7 +77,7 @@ impl PlaceOnGroundTreeDecorator {
         if (up_state.to_state().is_air() || up_state.to_block() == &Block::VINE)
             && state.to_state().is_full_cube()
         {
-            chunk.set_block_state(&pos.0, &self.block_state_provider.get(random, pos));
+            chunk.set_block_state(&pos.0, self.block_state_provider.get(random, pos));
         }
     }
 }

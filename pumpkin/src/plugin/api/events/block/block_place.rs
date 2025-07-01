@@ -28,6 +28,6 @@ pub struct BlockPlaceEvent {
 
 impl BlockEvent for BlockPlaceEvent {
     fn get_block(&self) -> &Block {
-        &self.block_placed
+        self.block_placed
     }
 }

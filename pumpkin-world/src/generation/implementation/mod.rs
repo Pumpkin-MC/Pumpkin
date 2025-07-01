@@ -99,10 +99,13 @@ impl WorldGenerator for VanillaGenerator {
         proto_chunk.generate_features(level, block_registry).await;
         let features_end = Instant::now();
 
-        log::info!("Biome: {:?}", biome_end.duration_since(biome_start));
-        log::info!("Noise: {:?}", noise_end.duration_since(noise_start));
-        log::info!("Surface: {:?}", surface_end.duration_since(surface_start));
-        log::info!("Features: {:?}", features_end.duration_since(features_start));
+        log::debug!("Biome: {:?}", biome_end.duration_since(biome_start));
+        log::debug!("Noise: {:?}", noise_end.duration_since(noise_start));
+        log::debug!("Surface: {:?}", surface_end.duration_since(surface_start));
+        log::debug!(
+            "Features: {:?}",
+            features_end.duration_since(features_start)
+        );
 
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
             for z in 0..BiomePalette::SIZE {

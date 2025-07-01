@@ -174,7 +174,7 @@ impl SurfaceTerrainBuilder {
                     }
 
                     let default_block = &chunk.default_block;
-                    chunk.set_block_state(&pos, &default_block);
+                    chunk.set_block_state(&pos, default_block);
                 }
             }
         }
@@ -249,10 +249,10 @@ impl SurfaceTerrainBuilder {
                         && rand.next_f64() > 0.15)
                 {
                     if snow_blocks <= snow_block_count && y > snow_bottom {
-                        chunk.set_block_state(&pos, &Self::SNOW_BLOCK.default_state);
+                        chunk.set_block_state(&pos, Self::SNOW_BLOCK.default_state);
                         snow_blocks += 1;
                     } else {
-                        chunk.set_block_state(&pos, &Self::PACKED_ICE.default_state);
+                        chunk.set_block_state(&pos, Self::PACKED_ICE.default_state);
                     }
                 }
             }

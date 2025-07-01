@@ -12,7 +12,7 @@ pub enum RuleTest {
 pub struct AlwaysTrueRuleTest;
 
 impl AlwaysTrueRuleTest {
-    pub fn test(&self, _block: &'static  Block) -> bool {
+    pub fn test(&self, _block: &'static Block) -> bool {
         true
     }
 }
@@ -35,7 +35,7 @@ pub struct TagMatchTest {
 }
 
 impl TagMatchTest {
-    pub fn test(&self, block: &'static  Block) -> bool {
+    pub fn test(&self, block: &'static Block) -> bool {
         block.is_tagged_with(&self.tag).unwrap()
     }
 }

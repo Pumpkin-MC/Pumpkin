@@ -324,13 +324,13 @@ impl RedstoneWireTurbo {
         let old_wire = {
             let node = &mut self.nodes[upd1.index];
             node.visited = true;
-            unwrap_wire(&node.state)
+            unwrap_wire(node.state)
         };
 
         let new_wire = self.calculate_current_changes(world, upd1).await;
         if old_wire.power != new_wire.power {
             let node = &mut self.nodes[upd1.index];
-            let mut wire = unwrap_wire(&node.state);
+            let mut wire = unwrap_wire(node.state);
             wire.power = new_wire.power;
             node.state = get_state_by_state_id(wire.to_state_id(&Block::REDSTONE_WIRE)).unwrap();
 
@@ -347,7 +347,7 @@ impl RedstoneWireTurbo {
         world: &Arc<World>,
         upd: NodeId,
     ) -> RedstoneWireProps {
-        let mut wire = unwrap_wire(&self.nodes[upd.index].state);
+        let mut wire = unwrap_wire(self.nodes[upd.index].state);
         let i = wire.power;
         let mut block_power = 0;
 
@@ -363,7 +363,7 @@ impl RedstoneWireTurbo {
             let neighbor = &self.nodes[self.node_cache[&neighbor_pos].index].state;
             wire_power = wire_power.max(
                 get_redstone_power_no_dust(
-                    &Block::from_state_id(neighbor.id).unwrap(),
+                    Block::from_state_id(neighbor.id).unwrap(),
                     neighbor,
                     world,
                     neighbor_pos,
@@ -418,7 +418,7 @@ impl RedstoneWireTurbo {
         let node = &self.nodes[upd.index];
         let block = Block::from_state_id(node.state.id).unwrap();
         if block == &Block::REDSTONE_WIRE {
-            (unwrap_wire(&node.state).power.to_index() as u8).max(strength)
+            (unwrap_wire(node.state).power.to_index() as u8).max(strength)
         } else {
             strength
         }
