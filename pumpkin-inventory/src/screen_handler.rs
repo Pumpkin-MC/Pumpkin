@@ -1,3 +1,9 @@
+use crate::{
+    container_click::MouseClick,
+    player::player_inventory::PlayerInventory,
+    slot::{NormalSlot, Slot},
+    sync_handler::{SyncHandler, TrackedStack},
+};
 use async_trait::async_trait;
 use log::warn;
 use pumpkin_data::screen::WindowType;
@@ -15,15 +21,9 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::inventory::{ComparableInventory, Inventory};
 use pumpkin_world::item::ItemStack;
 use std::cmp::max;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
-
-use crate::{
-    container_click::MouseClick,
-    player::player_inventory::PlayerInventory,
-    slot::{NormalSlot, Slot},
-    sync_handler::{SyncHandler, TrackedStack},
-};
 
 const SLOT_INDEX_OUTSIDE: i32 = -999;
 
@@ -273,7 +273,7 @@ pub trait ScreenHandler: Send + Sync {
             behaviour.tracked_stacks[slot] = stack;
 
             for listener in behaviour.listeners.iter() {
-                listener.on_slot_update(behaviour, slot as u8, stack);
+                listener.on_slot_update(behaviour, slot as u8, stack).await;
             }
         }
     }
@@ -338,7 +338,7 @@ pub trait ScreenHandler: Send + Sync {
 
     async fn get_slot_index(&self, inventory: &Arc<dyn Inventory>, slot: usize) -> Option<usize> {
         for i in 0..self.get_behaviour().slots.len() {
-            if Arc::ptr_eq(self.get_behaviour().slots[i].get_inventory(), inventory)
+            if Arc::ptr_eq(&self.get_behaviour().slots[i].get_inventory(), inventory)
                 && self.get_behaviour().slots[i].get_index() == slot
             {
                 return Some(i);
@@ -479,29 +479,24 @@ pub trait ScreenHandler: Send + Sync {
                     break;
                 }
 
-                let stack_lock = slot.get_stack().await;
-                let item_stack = stack_lock.lock().await;
+                let item_stack = slot.get_cloned_stack().await;
                 if !item_stack.are_items_and_components_equal(&cursor_stack) {
                     continue;
                 }
 
-                if !slot.can_take_items(player).await {
+                if !slot.allow_modification(player).await {
                     continue;
                 }
 
-                let take = item_stack.item_count.min(to_pick_up);
-                to_pick_up -= take;
-
-                if item_stack.item_count == take {
-                    drop(item_stack);
-                    slot.set_stack(ItemStack::EMPTY).await;
-                } else {
-                    let mut stack_clone = *item_stack;
-                    drop(item_stack);
-                    stack_clone.decrement(take);
-                    slot.set_stack(stack_clone).await;
-                }
-                cursor_stack.increment(take);
+                let taken_stack = slot
+                    .safe_take(
+                        item_stack.item_count.min(to_pick_up),
+                        cursor_stack.get_max_stack_size() - cursor_stack.item_count,
+                        player,
+                    )
+                    .await;
+                to_pick_up -= taken_stack.item_count;
+                cursor_stack.increment(taken_stack.item_count);
             }
         } else if action_type == SlotActionType::QuickCraft {
             let drag_type = button & 3;
@@ -589,16 +584,26 @@ pub trait ScreenHandler: Send + Sync {
         } else if action_type == SlotActionType::Throw {
             if slot_index >= 0 && self.get_behaviour().cursor_stack.lock().await.is_empty() {
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
-                let stack_lock = slot.get_stack().await;
-                let mut target_stack = stack_lock.lock().await;
-                if !target_stack.is_empty() {
+                let prev_stack = slot.get_cloned_stack().await;
+                if !prev_stack.is_empty() {
                     if button == 1 {
-                        let stack_clone = *target_stack;
-                        player.drop_item(stack_clone, true).await;
-                        drop(target_stack);
-                        slot.set_stack(ItemStack::EMPTY).await;
+                        // Throw all
+                        while slot
+                            .get_cloned_stack()
+                            .await
+                            .are_items_and_components_equal(&prev_stack)
+                        {
+                            let drop_stack =
+                                slot.safe_take(prev_stack.item_count, u8::MAX, player).await;
+                            player.drop_item(drop_stack, true).await;
+                            // player.handleCreativeModeItemDrop(itemStack);
+                        }
                     } else {
-                        player.drop_item(target_stack.split(1), true).await;
+                        let drop_stack = slot.safe_take(1, u8::MAX, player).await;
+                        if !drop_stack.is_empty() {
+                            slot.on_take_item(player, &drop_stack).await;
+                            player.drop_item(drop_stack, true).await;
+                        }
                     }
                 }
             }
@@ -758,7 +763,6 @@ pub trait ScreenHandler: Send + Sync {
                             .get_inventory()
                             .set_stack(button as usize, source_stack)
                             .await;
-                        source_slot.on_take(source_stack.item_count);
                         source_slot.set_stack(ItemStack::EMPTY).await;
                         source_slot.on_take_item(player, &source_stack).await;
                     }
@@ -818,8 +822,9 @@ pub trait ScreenHandler: Send + Sync {
     }
 }
 
+#[async_trait]
 pub trait ScreenHandlerListener: Send + Sync {
-    fn on_slot_update(
+    async fn on_slot_update(
         &self,
         _screen_handler: &ScreenHandlerBehaviour,
         _slot: u8,
@@ -835,8 +840,9 @@ pub trait ScreenHandlerListener: Send + Sync {
     }
 }
 
+#[async_trait]
 pub trait ScreenHandlerFactory: Send + Sync {
-    fn create_screen_handler(
+    async fn create_screen_handler(
         &self,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -855,7 +861,7 @@ pub struct ScreenHandlerBehaviour {
     pub cursor_stack: Arc<Mutex<ItemStack>>,
     pub previous_tracked_stacks: Vec<TrackedStack>,
     pub previous_cursor_stack: TrackedStack,
-    pub revision: u32,
+    pub revision: AtomicU32,
     pub disable_sync: bool,
     pub properties: Vec<ScreenProperty>,
     pub tracked_property_values: Vec<i32>,
@@ -874,7 +880,7 @@ impl ScreenHandlerBehaviour {
             cursor_stack: Arc::new(Mutex::new(ItemStack::EMPTY)),
             previous_tracked_stacks: Vec::new(),
             previous_cursor_stack: TrackedStack::EMPTY,
-            revision: 0,
+            revision: AtomicU32::new(0),
             disable_sync: false,
             properties: Vec::new(),
             tracked_property_values: Vec::new(),
@@ -883,8 +889,8 @@ impl ScreenHandlerBehaviour {
         }
     }
 
-    pub fn next_revision(&mut self) -> u32 {
-        self.revision = (self.revision + 1) & 32767;
-        self.revision
+    pub fn next_revision(&self) -> u32 {
+        self.revision.fetch_add(1, Ordering::Relaxed);
+        self.revision.fetch_and(32767, Ordering::Relaxed) & 32767
     }
 }

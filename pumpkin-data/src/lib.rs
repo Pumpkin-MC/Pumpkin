@@ -24,6 +24,10 @@ mod sound_category;
 #[path = "generated/sound.rs"]
 mod sound_enum;
 
+#[rustfmt::skip]
+#[path = "generated/recipes.rs"]
+pub mod recipes;
+
 pub mod sound {
     pub use crate::sound_category::*;
     pub use crate::sound_enum::*;
@@ -123,6 +127,10 @@ pub mod noise_router;
 #[rustfmt::skip]
 #[path = "generated/composter_increase_chance.rs"]
 pub mod composter_increase_chance;
+
+#[rustfmt::skip]
+#[path = "generated/flower_pot_transformations.rs"]
+pub mod flower_pot_transformations;
 
 mod block_direction;
 pub mod block_state;

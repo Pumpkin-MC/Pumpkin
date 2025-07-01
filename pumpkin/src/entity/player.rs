@@ -281,8 +281,9 @@ impl Player {
     pub async fn new(client: Client, world: Arc<World>, gamemode: GameMode) -> Self {
         struct ScreenListener;
 
+        #[async_trait]
         impl ScreenHandlerListener for ScreenListener {
-            fn on_slot_update(
+            async fn on_slot_update(
                 &self,
                 _screen_handler: &ScreenHandlerBehaviour,
                 _slot: u8,
@@ -1771,11 +1772,14 @@ impl Player {
 
         self.increment_screen_handler_sync_id();
 
-        if let Some(screen_handler) = screen_handler_factory.create_screen_handler(
-            self.screen_handler_sync_id.load(Ordering::Relaxed),
-            &self.inventory,
-            self,
-        ) {
+        if let Some(screen_handler) = screen_handler_factory
+            .create_screen_handler(
+                self.screen_handler_sync_id.load(Ordering::Relaxed),
+                &self.inventory,
+                self,
+            )
+            .await
+        {
             let screen_handler_temp = screen_handler.lock().await;
             self.client
                 .enqueue_packet(&COpenScreen::new(
@@ -1834,7 +1838,7 @@ impl Player {
             return;
         }
 
-        let not_in_sync = packet.revision.0 != (behaviour.revision as i32);
+        let not_in_sync = packet.revision.0 != (behaviour.revision.load(Ordering::Relaxed) as i32);
 
         screen_handler.disable_sync().await;
         screen_handler

@@ -6,6 +6,7 @@ use serde::{
     de::{self, SeqAccess},
 };
 
+#[derive(Clone, Copy)]
 pub struct SocketAddress(pub SocketAddr);
 
 impl Serialize for SocketAddress {
@@ -13,19 +14,17 @@ impl Serialize for SocketAddress {
     where
         S: Serializer,
     {
-        let mut buf = Vec::new();
-
-        let version = match self.0 {
-            SocketAddr::V4(_) => 4,
-            SocketAddr::V6(_) => 6,
+        let (version, mut buf) = match self.0 {
+            SocketAddr::V4(_) => (4, Vec::with_capacity(7)),
+            SocketAddr::V6(_) => (6, Vec::with_capacity(19)),
         };
-        let ip = match self.0 {
-            SocketAddr::V4(addr) => addr.ip().to_bits(),
-            SocketAddr::V6(addr) => addr.ip().to_bits() as u32,
-        };
-
         buf.put_u8(version);
-        buf.put_u32(ip);
+
+        match self.0 {
+            SocketAddr::V4(addr) => buf.extend(addr.ip().octets()),
+            SocketAddr::V6(addr) => buf.extend(addr.ip().octets()),
+        };
+
         buf.put_u16(self.0.port());
 
         serializer.serialize_bytes(&buf)

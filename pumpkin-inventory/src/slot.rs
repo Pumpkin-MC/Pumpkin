@@ -16,25 +16,22 @@ use crate::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 // This is a trait due to crafting slots being a thing
 #[async_trait]
 pub trait Slot: Send + Sync + Debug {
-    fn get_inventory(&self) -> &Arc<dyn Inventory>;
+    fn get_inventory(&self) -> Arc<dyn Inventory>;
 
     fn get_index(&self) -> usize;
 
     fn set_id(&self, index: usize);
 
-    fn on_quick_transfer(&self, new_item: ItemStack, original: ItemStack) {
-        let diff = new_item.item_count - original.item_count;
-        if diff > 0 {
-            self.on_crafted(original, diff);
-        }
-    }
+    /// Used to notify result slots that they need to update their contents. (e.g. refill)
+    /// Note that you **MUST** call this after changing the stack in the slot, and releasing any
+    /// locks to the stack to avoid deadlocks.
+    ///
+    /// Also see: `ScreenHandler::quick_move`
+    async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {}
 
-    fn on_crafted(&self, _stack: ItemStack, _amount: u8) {}
-
-    fn on_crafted_single(&self, _stack: ItemStack) {}
-
-    fn on_take(&self, _amount: u8) {}
-
+    /// Callback for when an item is taken from the slot.
+    ///
+    /// Also see: `safe_take`
     async fn on_take_item(&self, _player: &dyn InventoryPlayer, _stack: &ItemStack) {
         self.mark_dirty().await;
     }
@@ -51,7 +48,7 @@ pub trait Slot: Send + Sync + Debug {
     }
 
     async fn get_cloned_stack(&self) -> ItemStack {
-        let stack = self.get_inventory().get_stack(self.get_index()).await;
+        let stack = self.get_stack().await;
         let lock = timeout(Duration::from_secs(5), stack.lock())
             .await
             .expect("Timed out while trying to acquire lock");
@@ -73,6 +70,7 @@ pub trait Slot: Send + Sync + Debug {
         self.set_stack_no_callbacks(stack).await;
     }
 
+    /// Changes the stack in the slot with the given `stack`.
     async fn set_stack_prev(&self, stack: ItemStack, _previous_stack: ItemStack) {
         self.set_stack_no_callbacks(stack).await;
     }
@@ -95,36 +93,47 @@ pub trait Slot: Send + Sync + Debug {
             .min(stack.get_max_stack_size())
     }
 
+    /// Removes a specific amount of items from the slot.
+    ///
+    /// Mojang name: `remove`
     async fn take_stack(&self, amount: u8) -> ItemStack {
         let inv = self.get_inventory();
 
         inv.remove_stack_specific(self.get_index(), amount).await
     }
 
+    /// Mojang name: `mayPickup`
     async fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
         true
     }
 
+    /// Mojang name: `allowModification`
+    async fn allow_modification(&self, player: &dyn InventoryPlayer) -> bool {
+        self.can_insert(&self.get_cloned_stack().await).await && self.can_take_items(player).await
+    }
+
+    /// Mojang name: `tryRemove`
     async fn try_take_stack_range(
         &self,
         min: u8,
         max: u8,
-        _player: &dyn InventoryPlayer,
+        player: &dyn InventoryPlayer,
     ) -> Option<ItemStack> {
+        if !self.can_take_items(player).await {
+            return None;
+        }
+        if !self.allow_modification(player).await && self.get_cloned_stack().await.item_count > max
+        {
+            // If the slot is not allowed to be modified, we cannot take a partial stack from it.
+            return None;
+        }
         let min = min.min(max);
         let stack = self.take_stack(min).await;
 
         if stack.is_empty() {
             None
         } else {
-            if self
-                .get_inventory()
-                .get_stack(self.get_index())
-                .await
-                .lock()
-                .await
-                .is_empty()
-            {
+            if self.get_cloned_stack().await.is_empty() {
                 self.set_stack_prev(ItemStack::EMPTY, stack).await;
             }
 
@@ -132,7 +141,11 @@ pub trait Slot: Send + Sync + Debug {
         }
     }
 
-    async fn take_stack_range(&self, min: u8, max: u8, player: &dyn InventoryPlayer) -> ItemStack {
+    /// Safely tries to take a stack of items from the slot, returning `None` if the stack is empty.
+    /// Considering such as result slots, as their stacks cannot split.
+    ///
+    /// Mojang name: `safeTake`
+    async fn safe_take(&self, min: u8, max: u8, player: &dyn InventoryPlayer) -> ItemStack {
         let stack = self.try_take_stack_range(min, max, player).await;
 
         if let Some(stack) = &stack {
@@ -196,8 +209,8 @@ impl NormalSlot {
 }
 #[async_trait]
 impl Slot for NormalSlot {
-    fn get_inventory(&self) -> &Arc<dyn Inventory> {
-        &self.inventory
+    fn get_inventory(&self) -> Arc<dyn Inventory> {
+        self.inventory.clone()
     }
 
     fn get_index(&self) -> usize {
@@ -236,8 +249,8 @@ impl ArmorSlot {
 
 #[async_trait]
 impl Slot for ArmorSlot {
-    fn get_inventory(&self) -> &Arc<dyn Inventory> {
-        &self.inventory
+    fn get_inventory(&self) -> Arc<dyn Inventory> {
+        self.inventory.clone()
     }
 
     fn get_index(&self) -> usize {
