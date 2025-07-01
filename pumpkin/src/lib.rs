@@ -448,6 +448,7 @@ impl PumpkinServer {
 
                         let mut clients_guard = bedrock_clients.lock().await;
 
+                        // TODO: don't save clients for offline connections
                         let client = clients_guard.entry(client_addr).or_insert_with(|| {
                             let client_id = master_client_id_counter;
                             master_client_id_counter += 1;

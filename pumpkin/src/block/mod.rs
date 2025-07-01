@@ -75,6 +75,7 @@ use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use pumpkin_world::BlockStateId;
 
 use crate::block::blocks::campfire::CampfireBlock;
+use crate::block::blocks::flower_pots::FlowerPotBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::loot::LootContextParameters;
@@ -110,6 +111,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FarmLandBlock);
     manager.register(FenceGateBlock);
     manager.register(FenceBlock);
+    manager.register(FlowerPotBlock);
     manager.register(FurnaceBlock);
     manager.register(GlassPaneBlock);
     manager.register(GrindstoneBlock);

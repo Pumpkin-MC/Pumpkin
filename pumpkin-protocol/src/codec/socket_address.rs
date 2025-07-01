@@ -19,14 +19,15 @@ impl Serialize for SocketAddress {
             SocketAddr::V4(_) => 4,
             SocketAddr::V6(_) => 6,
         };
-        let ip = match self.0 {
-            SocketAddr::V4(addr) => addr.ip().to_bits(),
-            SocketAddr::V6(addr) => addr.ip().to_bits() as u32,
-        };
 
         buf.put_u8(version);
-        buf.put_u32(ip);
-        buf.put_u16(self.0.port());
+        match self.0 {
+            SocketAddr::V4(addr) => {
+                buf.put_u32(addr.ip().to_bits());
+                buf.put_u16(addr.port());
+            }
+            SocketAddr::V6(_) => todo!(),
+        }
 
         serializer.serialize_bytes(&buf)
     }

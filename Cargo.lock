@@ -224,9 +224,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.18.1"
+version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "793db76d6187cd04dff33004d8e6c9cc4e05cd330500379d2394209271b4aeee"
+checksum = "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43"
 
 [[package]]
 name = "bytes"
@@ -539,9 +539,9 @@ dependencies = [
 
 [[package]]
 name = "crunchy"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43da5946c66ffcc7745f48db692ffbb10a83bfe0afd96235c5c2a4fb23994929"
+checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-bigint"
@@ -991,9 +991,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.10"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9421a676d1b147b16b82c9225157dc629087ef8ec4d5e2960f9437a90dac0a5"
+checksum = "17da50a276f1e01e0ba6c029e47b7100754904ee8a278f886546e98575380785"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -1890,7 +1890,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "async-trait",
  "base64",
@@ -1938,7 +1938,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-api-macros"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -1948,7 +1948,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-config"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "log",
  "pumpkin-util",
@@ -1959,7 +1959,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-data"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1973,7 +1973,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-inventory"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "async-trait",
  "crossbeam-utils",
@@ -1990,7 +1990,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-macros"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "heck",
  "proc-macro-error2",
@@ -2001,7 +2001,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-nbt"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "bytes",
  "cesu8",
@@ -2013,7 +2013,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-protocol"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "aes",
  "async-compression",
@@ -2036,7 +2036,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-registry"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "indexmap",
  "pumpkin-data",
@@ -2049,7 +2049,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-util"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "bytes",
  "colored",
@@ -2069,7 +2069,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-world"
-version = "0.1.0-dev+1.21.6"
+version = "0.1.0-dev+1.21.7"
 dependencies = [
  "async-trait",
  "bitflags 2.9.1",
@@ -2267,9 +2267,9 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "reqwest"
-version = "0.12.20"
+version = "0.12.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eabf4c97d9130e2bf606614eb937e86edac8292eaa6f422f995d7e8de1eb1813"
+checksum = "4c8cea6b35bcceb099f30173754403d2eba0a5dc18cea3630fccd88251909288"
 dependencies = [
  "base64",
  "bytes",
@@ -3393,9 +3393,9 @@ checksum = "5e6ad25900d524eaabdbbb96d20b4311e1e7ae1699af4fb28c17ae66c80d798a"
 
 [[package]]
 name = "windows-registry"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3bab093bdd303a1240bb99b8aba8ea8a69ee19d34c9e2ef9594e708a4878820"
+checksum = "5b8a9ed28765efc97bbc954883f4e6796c33a06546ebafacbabee9696967499e"
 dependencies = [
  "windows-link",
  "windows-result",

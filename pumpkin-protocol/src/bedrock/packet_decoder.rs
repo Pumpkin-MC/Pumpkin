@@ -1,10 +1,10 @@
 use std::io::Cursor;
 
 use async_compression::tokio::bufread::ZlibDecoder;
-use bytes::Buf;
+use bytes::Bytes;
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 
-use crate::{Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, RawPacket, StreamDecryptor};
+use crate::{Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, StreamDecryptor};
 
 // decrypt -> decompress -> raw
 pub enum DecompressionReader<R: AsyncRead + Unpin> {
@@ -97,26 +97,16 @@ impl UDPNetworkDecoder {
         // take_mut::take(&mut self.reader, |decoder| decoder.upgrade(cipher));
     }
 
-    pub async fn get_raw_packet(
+    pub async fn get_packet_payload(
         &mut self,
         mut reader: Cursor<Vec<u8>>,
-    ) -> Result<RawPacket, PacketDecodeError> {
-        // TODO: Serde is sync so we need to write to a buffer here :(
-        // Is there a way to deserialize in an asynchronous manner?
-
-        let packet_id = reader
-            .try_get_u8()
-            .map_err(|_| PacketDecodeError::DecodeID)?;
-
+    ) -> Result<Bytes, PacketDecodeError> {
         let mut payload = Vec::new();
         reader
             .read_to_end(&mut payload)
             .await
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
-        Ok(RawPacket {
-            id: packet_id as i32,
-            payload: payload.into(),
-        })
+        Ok(payload.into())
     }
 }
