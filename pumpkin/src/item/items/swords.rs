@@ -5,9 +5,9 @@ use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
 use pumpkin_util::GameMode;
 
-pub struct NoCreativeMiningItem;
+pub struct SwordItem;
 
-impl ItemMetadata for NoCreativeMiningItem {
+impl ItemMetadata for SwordItem {
     fn ids() -> Box<[u16]> {
         Item::get_tag_values("#minecraft:swords")
             .expect("This is a valid vanilla tag")
@@ -17,14 +17,13 @@ impl ItemMetadata for NoCreativeMiningItem {
                     .expect("We just got this key from the registry")
                     .id
             })
-            .chain([Item::MACE.id, Item::TRIDENT.id])
             .collect::<Vec<_>>()
             .into_boxed_slice()
     }
 }
 
 #[async_trait]
-impl PumpkinItem for NoCreativeMiningItem {
+impl PumpkinItem for SwordItem {
     fn can_mine(&self, player: &Player) -> bool {
         player.gamemode.load() != GameMode::Creative
     }
