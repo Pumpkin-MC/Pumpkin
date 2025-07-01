@@ -173,7 +173,7 @@ impl BedrockClientPlatform {
 
         match header {
             RAKNET_ACK => {
-                dbg!("received ack");
+                Self::handle_ack(&Ack::read(payload)?);
             }
             RAKNET_NACK => {
                 dbg!("received non ack");
@@ -187,6 +187,10 @@ impl BedrockClientPlatform {
             }
         }
         Ok(())
+    }
+
+    fn handle_ack(_ack: &Ack) {
+        dbg!("received ack");
     }
 
     async fn handle_frame_set(&self, client: &Client, server: &Server, frame_set: FrameSet) {
@@ -209,6 +213,7 @@ impl BedrockClientPlatform {
         if frame.split_size > 0 {
             dbg!("oh no, frame is split, TODO");
         }
+
         dbg!(frame.reliability);
 
         let mut payload = &frame.payload[..];

@@ -302,6 +302,7 @@ impl<R: Read> NetworkReadExt for R {
 pub trait NetworkWriteExt {
     fn write_i8_be(&mut self, data: i8) -> Result<(), WritingError>;
     fn write_u8_be(&mut self, data: u8) -> Result<(), WritingError>;
+    fn write_u8_le(&mut self, data: u8) -> Result<(), WritingError>;
     fn write_i16_be(&mut self, data: i16) -> Result<(), WritingError>;
     fn write_u16_be(&mut self, data: u16) -> Result<(), WritingError>;
     fn write_u24_be(&mut self, data: U24) -> Result<(), WritingError>;
@@ -374,6 +375,11 @@ impl<W: Write> NetworkWriteExt for W {
 
     fn write_u8_be(&mut self, data: u8) -> Result<(), WritingError> {
         self.write_all(&data.to_be_bytes())
+            .map_err(WritingError::IoError)
+    }
+
+    fn write_u8_le(&mut self, data: u8) -> Result<(), WritingError> {
+        self.write_all(&data.to_le_bytes())
             .map_err(WritingError::IoError)
     }
 

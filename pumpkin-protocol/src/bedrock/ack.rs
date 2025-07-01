@@ -1,6 +1,10 @@
 use pumpkin_macros::packet;
 
-use crate::{ClientPacket, codec::u24::U24, ser::NetworkWriteExt};
+use crate::{
+    ClientPacket, ServerPacket,
+    codec::u24::U24,
+    ser::{NetworkReadExt, NetworkWriteExt},
+};
 
 #[packet(0xC0)]
 pub struct Ack {
@@ -28,6 +32,27 @@ impl Ack {
             U24::encode(&U24(end), &mut write)?;
         }
         Ok(())
+    }
+}
+
+impl ServerPacket for Ack {
+    fn read(mut read: impl std::io::Read) -> Result<Self, crate::ser::ReadingError> {
+        let size = read.get_u16_be()?;
+        // TODO: check size
+        let mut sequences = Vec::with_capacity(size as usize);
+        for _ in 0..size {
+            let single = read.get_bool()?;
+            if single {
+                sequences.push(U24::decode(&mut read)?.0);
+            } else {
+                let start = U24::decode(&mut read)?;
+                let end = U24::decode(&mut read)?;
+                for i in start.0..end.0 {
+                    sequences.push(i);
+                }
+            }
+        }
+        Ok(Self { sequences })
     }
 }
 

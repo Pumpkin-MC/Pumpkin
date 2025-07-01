@@ -27,7 +27,7 @@ impl Client {
                     packet.time,
                     UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
                 ),
-                RakReliability::Unreliable,
+                RakReliability::Reliable,
             )
             .await;
     }
