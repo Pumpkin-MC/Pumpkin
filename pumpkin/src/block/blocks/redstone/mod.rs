@@ -107,7 +107,7 @@ async fn get_max_strong_power(world: &World, pos: &BlockPos, dust_power: bool) -
                 side,
                 dust_power,
             )
-            .await,
+                .await,
         );
     }
     max_power
@@ -128,7 +128,7 @@ async fn get_max_weak_power(world: &World, pos: &BlockPos, dust_power: bool) -> 
                 side,
                 dust_power,
             )
-            .await,
+                .await,
         );
     }
     max_power
@@ -172,7 +172,7 @@ pub async fn block_receives_redstone_power(world: &World, pos: &BlockPos) -> boo
     for face in BlockDirection::all() {
         let neighbor_pos = pos.offset(face.to_offset());
         let (block, state) = world.get_block_and_block_state(&neighbor_pos).await;
-        if is_emitting_redstone_power(&block, &state, world, &neighbor_pos, face).await {
+        if is_emitting_redstone_power(block, state, world, &neighbor_pos, face).await {
             return true;
         }
     }
