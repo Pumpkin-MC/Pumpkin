@@ -24,7 +24,7 @@ pub mod wheat;
 trait CropBlockBase: PlantBlockBase {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos).await;
-        block == Block::FARMLAND
+        block == &Block::FARMLAND
     }
 
     fn max_age(&self) -> i32 {
@@ -44,7 +44,7 @@ trait CropBlockBase: PlantBlockBase {
 
     async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
         let (block, state) = world.get_block_and_block_state(pos).await;
-        let age = self.get_age(&state, &block);
+        let age = self.get_age(state, block);
         if age < self.max_age() {
             //TODO add moisture check
             let f = 5;
@@ -52,7 +52,7 @@ trait CropBlockBase: PlantBlockBase {
                 world
                     .set_block_state(
                         pos,
-                        self.state_with_age(&block, &state, age + 1),
+                        self.state_with_age(block, state, age + 1),
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;

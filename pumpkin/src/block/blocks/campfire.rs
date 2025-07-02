@@ -41,11 +41,11 @@ impl PumpkinBlock for CampfireBlock {
         _world: &Arc<World>,
         entity: &dyn EntityBase,
         _pos: BlockPos,
-        block: Block,
-        state: BlockState,
+        block: &'static Block,
+        state: &'static BlockState,
         _server: &Server,
     ) {
-        if CampfireLikeProperties::from_state_id(state.id, &block).lit
+        if CampfireLikeProperties::from_state_id(state.id, block).lit
             && entity.get_living_entity().is_some()
         {
             entity.damage(1.0, DamageType::CAMPFIRE).await;
@@ -66,7 +66,7 @@ impl PumpkinBlock for CampfireBlock {
         let is_replacing_water = matches!(replacing, BlockIsReplacing::Water(_));
         let mut props = CampfireLikeProperties::from_state_id(block.default_state.id, block);
         props.waterlogged = is_replacing_water;
-        props.signal_fire = is_signal_fire_base_block(&world.get_block(&block_pos.down()).await);
+        props.signal_fire = is_signal_fire_base_block(world.get_block(&block_pos.down()).await);
         props.lit = !is_replacing_water;
         props.facing = player.get_entity().get_horizontal_facing();
         props.to_state_id(block)
@@ -92,7 +92,7 @@ impl PumpkinBlock for CampfireBlock {
         }
 
         if direction == BlockDirection::Down {
-            props.signal_fire = is_signal_fire_base_block(&world.get_block(neighbor_pos).await);
+            props.signal_fire = is_signal_fire_base_block(world.get_block(neighbor_pos).await);
         }
 
         props.to_state_id(block)

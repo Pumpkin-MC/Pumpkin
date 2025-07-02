@@ -91,7 +91,7 @@ impl PumpkinBlock for SugarCaneBlock {
 async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     let block_below = block_accessor.get_block(&block_pos.down()).await;
 
-    if block_below == Block::SUGAR_CANE {
+    if block_below == &Block::SUGAR_CANE {
         return true;
     }
 
@@ -103,7 +103,7 @@ async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) 
                 .get_block(&block_pos.down().offset(direction.to_offset()))
                 .await;
 
-            if block == Block::WATER || block == Block::FROSTED_ICE {
+            if block == &Block::WATER || block == &Block::FROSTED_ICE {
                 return true;
             }
         }

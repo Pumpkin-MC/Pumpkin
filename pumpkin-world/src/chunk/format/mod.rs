@@ -198,7 +198,7 @@ impl ChunkData {
                             .strip_prefix("minecraft:")
                             .unwrap_or(&tick.target_block),
                     )
-                    .unwrap_or(Block::AIR)
+                    .unwrap_or(&Block::AIR)
                     .id,
                 })
                 .collect(),
@@ -214,7 +214,7 @@ impl ChunkData {
                             .strip_prefix("minecraft:")
                             .unwrap_or(&tick.target_block),
                     )
-                    .unwrap_or(Block::AIR)
+                    .unwrap_or(&Block::AIR)
                     .id,
                 })
                 .collect(),

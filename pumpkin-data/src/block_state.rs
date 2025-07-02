@@ -3,7 +3,7 @@ use pumpkin_util::math::vector3::Vector3;
 use crate::block_properties::{COLLISION_SHAPES, Instrument, get_block_by_state_id};
 use crate::{Block, BlockDirection, CollisionShape};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct BlockState {
     pub id: u16,
     pub state_flags: u8,
@@ -93,7 +93,7 @@ impl BlockState {
         }
     }
 
-    pub fn block(&self) -> Block {
+    pub fn block(&self) -> &'static Block {
         get_block_by_state_id(self.id).unwrap()
     }
 

@@ -32,7 +32,7 @@ impl ReplaceBlobsFeature {
         let target = self.target.get_state().unwrap();
         let target = get_block_by_state_id(target.id).unwrap();
         let state = self.state.get_state().unwrap();
-        let Some(pos) = Self::move_down_to_target(pos, chunk, &target) else {
+        let Some(pos) = Self::move_down_to_target(pos, chunk, target) else {
             return false;
         };
         let x = self.radius.get(random);
@@ -50,7 +50,7 @@ impl ReplaceBlobsFeature {
             if current_state.to_block() != target {
                 continue;
             }
-            chunk.set_block_state(&iter_pos.0, &state);
+            chunk.set_block_state(&iter_pos.0, state);
             result = true;
         }
 
@@ -60,11 +60,11 @@ impl ReplaceBlobsFeature {
     fn move_down_to_target(
         mut pos: BlockPos,
         chunk: &mut ProtoChunk,
-        target: &Block,
+        target: &'static Block,
     ) -> Option<BlockPos> {
         while pos.0.y > chunk.bottom_y() as i32 + 1 {
             let state = chunk.get_block_state(&pos.0);
-            if &state.to_block() == target {
+            if state.to_block() == target {
                 return Some(pos);
             }
 

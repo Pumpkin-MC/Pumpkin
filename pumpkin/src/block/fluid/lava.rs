@@ -29,12 +29,12 @@ impl FlowingLava {
         let below_is_soul_soil = world
             .get_block(&block_pos.offset(BlockDirection::Down.to_offset()))
             .await
-            == Block::SOUL_SOIL;
+            == &Block::SOUL_SOIL;
         let is_still = world.get_block_state_id(block_pos).await == Block::LAVA.default_state.id;
 
         for dir in BlockDirection::flow_directions() {
             let neighbor_pos = block_pos.offset(dir.opposite().to_offset());
-            if world.get_block(&neighbor_pos).await == Block::WATER {
+            if world.get_block(&neighbor_pos).await == &Block::WATER {
                 let block = if is_still {
                     Block::OBSIDIAN
                 } else {
@@ -52,7 +52,7 @@ impl FlowingLava {
                     .await;
                 return false;
             }
-            if below_is_soul_soil && world.get_block(&neighbor_pos).await == Block::BLUE_ICE {
+            if below_is_soul_soil && world.get_block(&neighbor_pos).await == &Block::BLUE_ICE {
                 world
                     .set_block_state(
                         block_pos,
@@ -144,7 +144,7 @@ impl FlowingFluid for FlowingLava {
         new_props.falling = Falling::True;
         if state_id == new_props.to_state_id(fluid) {
             // STONE creation
-            if world.get_block(pos).await == Block::WATER {
+            if world.get_block(pos).await == &Block::WATER {
                 world
                     .set_block_state(pos, Block::STONE.default_state.id, BlockFlags::NOTIFY_ALL)
                     .await;

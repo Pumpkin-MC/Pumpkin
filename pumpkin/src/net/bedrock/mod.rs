@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::{Cursor, Write},
     sync::{
         Arc,
@@ -52,6 +53,10 @@ pub struct BedrockClientPlatform {
     output_reliable_number: AtomicU32,
     output_sequenced_index: AtomicU32,
     output_ordered_index: AtomicU32,
+
+    /// Store Fragments until the packet is complete
+    compounds: Arc<Mutex<HashMap<u16, Vec<Option<Frame>>>>>,
+    //input_sequence_number: AtomicU32,
 }
 
 impl BedrockClientPlatform {
@@ -67,6 +72,8 @@ impl BedrockClientPlatform {
             output_reliable_number: AtomicU32::new(0),
             output_sequenced_index: AtomicU32::new(0),
             output_ordered_index: AtomicU32::new(0),
+            compounds: Arc::new(Mutex::new(HashMap::new())),
+            //input_sequence_number: AtomicU32::new(0),
         }
     }
 
@@ -248,9 +255,8 @@ impl BedrockClientPlatform {
                 .await;
         }
         self.use_frame_sets.store(true, Ordering::Relaxed);
-        let header = id;
 
-        match header {
+        match id {
             RAKNET_ACK => {
                 Self::handle_ack(&Ack::read(payload)?);
             }
@@ -262,7 +268,7 @@ impl BedrockClientPlatform {
                     .await;
             }
             _ => {
-                log::warn!("Bedrock: Received unknown packet header {header}");
+                log::warn!("Bedrock: Received unknown packet header {id}");
             }
         }
         Ok(())
@@ -273,13 +279,14 @@ impl BedrockClientPlatform {
     }
 
     async fn handle_frame_set(&self, client: &Client, server: &Server, frame_set: FrameSet) {
+        dbg!("set", frame_set.sequence.0);
         // TODO: this is bad
         client
             .send_packet_now(&Ack::new(vec![frame_set.sequence.0]))
             .await;
         // TODO
         for frame in frame_set.frames {
-            self.handle_frame(client, server, &frame).await.unwrap();
+            self.handle_frame(client, server, frame).await.unwrap();
         }
     }
 
@@ -287,10 +294,46 @@ impl BedrockClientPlatform {
         &self,
         client: &Client,
         server: &Server,
-        frame: &Frame,
+        mut frame: Frame,
     ) -> Result<(), ReadingError> {
         if frame.split_size > 0 {
-            dbg!("oh no, frame is split, TODO");
+            dbg!("oh yes, frame is split, not TODO");
+            let fragment_index = frame.split_index as usize;
+            let compound_id = frame.split_id;
+            let mut compounds = self.compounds.lock().await;
+
+            let entry = compounds.entry(compound_id).or_insert_with(|| {
+                let mut vec = Vec::with_capacity(frame.split_size as usize);
+                vec.resize_with(frame.split_size as usize, || None);
+                vec
+            });
+
+            entry[fragment_index] = Some(frame);
+
+            // Check if all fragments are received
+            if entry.iter().any(Option::is_none) {
+                return Ok(());
+            }
+
+            dbg!("compound complete! size", entry.len());
+            let mut frames = compounds.remove(&compound_id).unwrap();
+
+            // Safety: We already checked that all frames are Some at this point
+            let len = frames
+                .iter()
+                .map(|frame| unsafe { frame.as_ref().unwrap_unchecked().payload.len() })
+                .sum();
+
+            let mut merged = Vec::with_capacity(len);
+
+            for frame in &frames {
+                merged.extend_from_slice(unsafe { &frame.as_ref().unwrap_unchecked().payload });
+            }
+
+            frame = unsafe { frames[0].take().unwrap_unchecked() };
+
+            frame.payload = merged.into();
+            frame.split_size = 0;
         }
 
         dbg!(frame.reliability);
@@ -308,6 +351,7 @@ impl BedrockClientPlatform {
         packet: RawPacket,
     ) -> Result<(), ReadingError> {
         let payload = &packet.payload[..];
+        dbg!("payload", payload);
         match packet.id {
             SRequestNetworkSettings::PACKET_ID => {
                 client

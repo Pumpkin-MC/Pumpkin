@@ -14,7 +14,7 @@
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
 <div align="center">
     
-![gif](https://github.com/user-attachments/assets/eb50fd34-8fd4-4ded-8a86-6ab13804f99a)
+![chunk loading](/assets/pumpkin_chunk_loading.GIF)
 
 </div>
 

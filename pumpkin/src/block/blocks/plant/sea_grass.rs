@@ -55,6 +55,6 @@ impl PlantBlockBase for SeaGrassBlock {
     ) -> bool {
         let block = block_accessor.get_block(pos).await;
         let block_state = block_accessor.get_block_state(pos).await;
-        block_state.is_side_solid(BlockDirection::Up) && block != Block::MAGMA_BLOCK
+        block_state.is_side_solid(BlockDirection::Up) && block != &Block::MAGMA_BLOCK
     }
 }

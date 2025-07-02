@@ -76,7 +76,7 @@ pub async fn compute_fence_state(
         let (other_block, other_block_state) =
             world.get_block_and_block_state(&other_block_pos).await;
 
-        let connected = connects_to(block, &other_block, &other_block_state, direction);
+        let connected = connects_to(block, other_block, other_block_state, direction);
         match direction {
             BlockDirection::North => fence_props.north = connected,
             BlockDirection::South => fence_props.south = connected,

@@ -24,7 +24,7 @@ impl CoralClawFeature {
     ) -> bool {
         // First lets get a random coral
         let block = CoralFeature::get_random_tag_entry("minecraft:coral_blocks", random);
-        if !CoralFeature::generate_coral_piece(chunk, random, &block, pos) {
+        if !CoralFeature::generate_coral_piece(chunk, random, block, pos) {
             return false;
         }
         let i = random.next_bounded_i32(2) + 2;
@@ -54,7 +54,7 @@ impl CoralClawFeature {
             }
 
             for _ in 0..j {
-                if !CoralFeature::generate_coral_piece(chunk, random, &block, pos) {
+                if !CoralFeature::generate_coral_piece(chunk, random, block, pos) {
                     break;
                 }
                 pos = pos.offset(direction3.to_offset());
@@ -65,7 +65,7 @@ impl CoralClawFeature {
 
             for _l in 0..k {
                 pos = pos.offset(direction.opposite().to_offset());
-                if !CoralFeature::generate_coral_piece(chunk, random, &block, pos) {
+                if !CoralFeature::generate_coral_piece(chunk, random, block, pos) {
                     continue 'block0;
                 }
                 if random.next_f32() < 0.25 {

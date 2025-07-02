@@ -27,8 +27,8 @@ impl PumpkinBlock for LilyPadBlock {
         world: &Arc<World>,
         entity: &dyn EntityBase,
         pos: BlockPos,
-        _block: Block,
-        _state: BlockState,
+        _block: &'static Block,
+        _state: &'static BlockState,
         _server: &Server,
     ) {
         // Proberbly not the best solution, but works
@@ -75,7 +75,7 @@ impl PlantBlockBase for LilyPadBlock {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos).await;
         let above_fluid = block_accessor.get_block(&pos.up()).await;
-        (block == Block::WATER || block == Block::ICE)
-            && (above_fluid != Block::WATER && above_fluid != Block::LAVA)
+        (block == &Block::WATER || block == &Block::ICE)
+            && (above_fluid != &Block::WATER && above_fluid != &Block::LAVA)
     }
 }

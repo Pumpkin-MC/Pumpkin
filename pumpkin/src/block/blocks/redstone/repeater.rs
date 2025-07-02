@@ -68,7 +68,7 @@ impl PumpkinBlock for RepeaterBlock {
         let mut props = RepeaterProperties::from_state_id(state.id, block);
 
         let now_powered = props.powered;
-        let should_be_powered = self.has_power(world, *block_pos, &state, block).await;
+        let should_be_powered = self.has_power(world, *block_pos, state, block).await;
 
         if now_powered && !should_be_powered {
             props.powered = false;
@@ -230,7 +230,7 @@ impl PumpkinBlock for RepeaterBlock {
                     self,
                     world.as_ref(),
                     *neighbor_pos,
-                    &neighbor_state,
+                    neighbor_state,
                 )
                 .await
                 {

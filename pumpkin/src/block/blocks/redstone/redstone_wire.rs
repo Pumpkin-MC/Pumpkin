@@ -134,10 +134,10 @@ impl PumpkinBlock for RedstoneWireBlock {
             let other_block_pos = block_pos.offset(direction.to_offset());
             let other_block = world.get_block(&other_block_pos).await;
 
-            if wire_props.is_side_connected(direction) && other_block != Block::REDSTONE_WIRE {
+            if wire_props.is_side_connected(direction) && other_block != &Block::REDSTONE_WIRE {
                 let up_block_pos = other_block_pos.up();
                 let up_block = world.get_block(&up_block_pos).await;
-                if up_block == Block::REDSTONE_WIRE {
+                if up_block == &Block::REDSTONE_WIRE {
                     world
                         .replace_with_state_for_neighbor_update(
                             &up_block_pos,
@@ -149,7 +149,7 @@ impl PumpkinBlock for RedstoneWireBlock {
 
                 let down_block_pos = other_block_pos.down();
                 let down_block = world.get_block(&down_block_pos).await;
-                if down_block == Block::REDSTONE_WIRE {
+                if down_block == &Block::REDSTONE_WIRE {
                     world
                         .replace_with_state_for_neighbor_update(
                             &down_block_pos,
@@ -272,7 +272,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         location: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        _state: BlockState,
+        _state: &'static BlockState,
     ) {
         update_wire_neighbors(&world, &location).await;
     }
@@ -353,7 +353,7 @@ pub async fn get_side(world: &World, pos: &BlockPos, side: BlockDirection) -> Wi
     let neighbor_pos: BlockPos = pos.offset(side.to_offset());
     let (neighbor, state) = world.get_block_and_block_state(&neighbor_pos).await;
 
-    if can_connect_to(world, &neighbor, side, &state).await {
+    if can_connect_to(world, neighbor, side, state).await {
         return WireConnection::Side;
     }
 
@@ -362,7 +362,7 @@ pub async fn get_side(world: &World, pos: &BlockPos, side: BlockDirection) -> Wi
 
     if !up_state.is_solid()
         && can_connect_diagonal_to(
-            &world
+            world
                 .get_block(&neighbor_pos.offset(BlockDirection::Up.to_offset()))
                 .await,
         )
@@ -370,7 +370,7 @@ pub async fn get_side(world: &World, pos: &BlockPos, side: BlockDirection) -> Wi
         WireConnection::Up
     } else if !state.is_solid()
         && can_connect_diagonal_to(
-            &world
+            world
                 .get_block(&neighbor_pos.offset(BlockDirection::Down.to_offset()))
                 .await,
         )
@@ -579,8 +579,8 @@ impl CardinalWireConnectionExt for WestWireConnection {
 
 async fn max_wire_power(wire_power: u8, world: &World, pos: BlockPos) -> u8 {
     let (block, block_state) = world.get_block_and_block_state(&pos).await;
-    if block == Block::REDSTONE_WIRE {
-        let wire = RedstoneWireProperties::from_state_id(block_state.id, &block);
+    if block == &Block::REDSTONE_WIRE {
+        let wire = RedstoneWireProperties::from_state_id(block_state.id, block);
         wire_power.max(wire.power.to_index() as u8)
     } else {
         wire_power
@@ -599,7 +599,7 @@ async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
         wire_power = max_wire_power(wire_power, world, neighbor_pos).await;
         let (neighbor, neighbor_state) = world.get_block_and_block_state(&neighbor_pos).await;
         block_power = block_power.max(
-            get_redstone_power_no_dust(&neighbor, &neighbor_state, world, neighbor_pos, side).await,
+            get_redstone_power_no_dust(neighbor, neighbor_state, world, neighbor_pos, side).await,
         );
         if side.is_horizontal() {
             if !up_state.is_solid()

@@ -389,7 +389,7 @@ impl CountOnEveryLayerPlacementModifier {
 
             if !Self::blocks_spawn(&next_block_state)
                 && Self::blocks_spawn(&current_block_state)
-                && next_block_state.to_block() != Block::BEDROCK
+                && next_block_state.to_block() != &Block::BEDROCK
             {
                 if found_count == target_y {
                     return mutable_pos.0.y + 1;
@@ -403,7 +403,7 @@ impl CountOnEveryLayerPlacementModifier {
 
     fn blocks_spawn(state: &RawBlockState) -> bool {
         let block = state.to_block();
-        state.to_state().is_air() || block == Block::WATER || block == Block::LAVA
+        state.to_state().is_air() || block == &Block::WATER || block == &Block::LAVA
     }
 }
 

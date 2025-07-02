@@ -98,13 +98,13 @@ impl EndSpikeFeature {
                 <= (radius * radius + 1)
                 && pos.0.y < spike.height
             {
-                chunk.set_block_state(&pos.0, &Block::OBSIDIAN.default_state);
+                chunk.set_block_state(&pos.0, Block::OBSIDIAN.default_state);
                 continue;
             }
             if pos.0.y <= 65 {
                 continue;
             }
-            chunk.set_block_state(&pos.0, &Block::AIR.default_state);
+            chunk.set_block_state(&pos.0, Block::AIR.default_state);
         }
         // TODO
     }

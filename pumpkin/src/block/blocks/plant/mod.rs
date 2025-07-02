@@ -22,7 +22,7 @@ pub mod tall_plant;
 trait PlantBlockBase {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos).await;
-        block.is_tagged_with("minecraft:dirt").unwrap() || block == Block::FARMLAND
+        block.is_tagged_with("minecraft:dirt").unwrap() || block == &Block::FARMLAND
     }
 
     async fn get_state_for_neighbor_update(
