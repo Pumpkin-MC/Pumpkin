@@ -1,6 +1,7 @@
 use super::{player::Player, EntityBase, NBTStorage};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use rand::Rng;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EffectType;
 use pumpkin_nbt::compound::NbtCompound;
@@ -26,41 +27,44 @@ impl Default for OxygenManager {
 }
 
 impl OxygenManager {
-    /// Maximum oxygen capacity (base + respiration bonus)
-    fn get_max_oxygen(player: &Player) -> u16 {
-        let base_oxygen = 300; // 15 seconds * 20 ticks/sec
-        let respiration_level = player.get_respiration_level();
-        base_oxygen + (respiration_level as u16 * 300) // +15 sec per level
-    }
+    /// Maximum oxygen capacity (constant in vanilla)
+    const MAX_OXYGEN: u16 = 300; // 15 seconds * 20 ticks/sec
 
-    /// Main processing each tick
     pub async fn tick(&self, player: &Player) {
-        let max_oxygen = Self::get_max_oxygen(player);
         let current_oxygen = self.oxygen_level.load();
 
-        if matches!(player.gamemode.load(), GameMode::Survival | GameMode::Adventure) && player.living_entity.is_in_water().await {
+        // Check if we are in a mode that consumes oxygen and in water
+        if matches!(player.gamemode.load(), GameMode::Survival | GameMode::Adventure)
+            && player.living_entity.is_in_water().await
+        {
             let mut damage_timer = self.damage_timer.load();
 
             // Water breathing effect grants immunity
-            if player
-                .living_entity
-                .has_effect(EffectType::WaterBreathing)
-                .await
-            {
-                // Reset to full oxygen if not already
-                if current_oxygen < max_oxygen {
-                    self.update_oxygen(player, max_oxygen).await;
+            if player.living_entity.has_effect(EffectType::WaterBreathing).await {
+                if current_oxygen < Self::MAX_OXYGEN {
+                    self.update_oxygen(player, Self::MAX_OXYGEN).await;
                 }
                 self.damage_timer.store(0);
                 return;
             }
 
-            // Consume oxygen if available
+            // Consume oxygen with respiration chance
             if current_oxygen > 0 {
-                self.update_oxygen(player, current_oxygen - 1).await;
+                let respiration_level = player.get_respiration_level();
+                let should_consume = if respiration_level > 0 {
+                    // 1/(level+1) chance to preserve oxygen each tick
+                    !rand::rng().random_bool(1.0 / (respiration_level as f64 + 1.0))
+                } else {
+                    true
+                };
+
+                if should_consume {
+                    self.update_oxygen(player, current_oxygen - 1).await;
+                }
+                // Reset damage timer because we are not drowning (we have oxygen left)
                 self.damage_timer.store(0);
             }
-            // Handle oxygen depletion
+            // Handle oxygen depletion (drowning)
             else {
                 damage_timer += 1;
                 self.damage_timer.store(damage_timer);
@@ -72,20 +76,23 @@ impl OxygenManager {
                 }
             }
         }
-        // Replenish oxygen when not submerged
-        else if current_oxygen < max_oxygen {
-            self.update_oxygen(player, current_oxygen + 1).await;
+        // Replenish oxygen when not submerged (vanilla: 15x faster replenish)
+        else if current_oxygen < Self::MAX_OXYGEN {
+            // Vanilla replenishes 15 per tick when out of water
+            self.update_oxygen(player, current_oxygen + 15).await;
             self.damage_timer.store(0);
         }
     }
 
     pub fn reset(&self) {
-        self.oxygen_level.store(300);
+        self.oxygen_level.store(Self::MAX_OXYGEN);
         self.damage_timer.store(0);
     }
 
-    async fn update_oxygen(&self, player: &Player, current_oxygen: u16) {
-        self.oxygen_level.store(current_oxygen);
+    async fn update_oxygen(&self, player: &Player, new_oxygen: u16) {
+        // Clamp to valid range [0, MAX_OXYGEN]
+        let clamped = new_oxygen.min(Self::MAX_OXYGEN);
+        self.oxygen_level.store(clamped);
 
         player
             .living_entity
@@ -93,7 +100,7 @@ impl OxygenManager {
             .send_meta_data(&[Metadata::new(
                 DATA_AIR_SUPPLY_ID,
                 MetaDataType::Integer,
-                VarInt(i32::from(current_oxygen)),
+                VarInt(i32::from(clamped)),
             )])
             .await;
     }
@@ -108,7 +115,7 @@ impl NBTStorage for OxygenManager {
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.oxygen_level
-            .store(nbt.get_short("Air").unwrap_or(300) as u16);
+            .store(nbt.get_short("Air").unwrap_or(Self::MAX_OXYGEN as i16) as u16);
         self.damage_timer
             .store(nbt.get_short("DrownTimer").unwrap_or(0) as u16);
     }
