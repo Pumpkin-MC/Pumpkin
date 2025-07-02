@@ -8,6 +8,7 @@ use std::{
 };
 
 use bytes::Bytes;
+use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
     ClientPacket, PacketDecodeError, PacketEncodeError, RawPacket, ServerPacket,
     bedrock::{
@@ -89,6 +90,18 @@ impl BedrockClientPlatform {
                 //self.kick(TextComponent::text(text)).await;
             }
         }
+    }
+
+    pub async fn set_compression(&self, compression: CompressionInfo) {
+        self.network_reader
+            .lock()
+            .await
+            .set_compression(compression.threshold as usize);
+
+        self.network_writer
+            .lock()
+            .await
+            .set_compression((compression.threshold as usize, compression.level));
     }
 
     pub fn write_raw_packet<P: ClientPacket>(
@@ -280,7 +293,6 @@ impl BedrockClientPlatform {
     fn handle_ack(_ack: &Ack) {}
 
     async fn handle_frame_set(&self, client: &Client, server: &Server, frame_set: FrameSet) {
-        dbg!("set", frame_set.sequence.0);
         // TODO: this is bad
         client
             .send_packet_now(&Ack::new(vec![frame_set.sequence.0]))

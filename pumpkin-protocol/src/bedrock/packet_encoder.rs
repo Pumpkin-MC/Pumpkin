@@ -119,6 +119,10 @@ impl UDPNetworkEncoder {
         // Game Packet ID
         writer.write_u8(0xfe).unwrap();
 
+        // if let Some(compression) = self.compression {
+        //     writer.write_u8(u8::MAX).unwrap();
+        // }
+
         // TODO: compression & encryption
 
         // Gamepacket ID (10 bits) << 4 (offset by 2 bits for target + 2 bits for sender)
@@ -153,8 +157,7 @@ impl UDPNetworkEncoder {
             .write_var_uint(&VarUInt(fourteen_bit_header))
             .unwrap();
 
-        // 5. Write the Packet ID + payload
-        writer.write_u8(packet_id as u8).unwrap();
+        // 5. Write the payload
         writer.write_all(&packet_payload).unwrap();
         Ok(())
     }

@@ -1,3 +1,4 @@
+use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
     bedrock::{
         RakReliability,
@@ -28,10 +29,11 @@ impl Client {
         bedrock
             .send_game_packet(
                 self,
-                &CNetworkSettings::new(0, 0xFF, false, 0, 0.0),
+                &CNetworkSettings::new(1, 0xffff, false, 0, 0.0),
                 RakReliability::Unreliable,
             )
             .await;
+        bedrock.set_compression(CompressionInfo::default()).await;
     }
     pub async fn handle_login(&self, bedrock: &BedrockClientPlatform, _packet: SLogin) {
         dbg!("received login");

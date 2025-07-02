@@ -40,8 +40,7 @@ impl Client {
             .await;
     }
 
-    pub fn handle_new_incoming_connection(&self, packet: &SNewIncomingConnection) {
-        dbg!(packet.pong_time);
+    pub fn handle_new_incoming_connection(&self, _packet: &SNewIncomingConnection) {
         self.connection_state.store(ConnectionState::Login);
     }
 

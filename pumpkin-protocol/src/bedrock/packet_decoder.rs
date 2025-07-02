@@ -118,10 +118,13 @@ impl UDPNetworkDecoder {
         &mut self,
         mut reader: Cursor<Vec<u8>>,
     ) -> Result<RawPacket, PacketDecodeError> {
-        //compression is only included after the network settings packet is sent
-        //let compression = reader.get_u8()?;
-        //dbg!(compression);
+        // if let Some(compression) = self.compression {
+        //     let method = reader.get_u8().unwrap();
+        //     dbg!(method);
+        //     // None Compression
+        // }
 
+        //compression is only included after the network settings packet is sent
         // TODO: compression & encryption
         let packet_len = VarUInt::decode_async(&mut reader)
             .await
