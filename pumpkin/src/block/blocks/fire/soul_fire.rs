@@ -21,7 +21,7 @@ pub struct SoulFireBlock;
 
 impl SoulFireBlock {
     #[must_use]
-    pub fn is_soul_base(block: &Block) -> bool {
+    pub fn is_soul_base(block: &'static Block) -> bool {
         block
             .is_tagged_with("minecraft:soul_fire_base_blocks")
             .unwrap()
@@ -40,7 +40,7 @@ impl PumpkinBlock for SoulFireBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        if !Self::is_soul_base(&world.get_block(&block_pos.down()).await) {
+        if !Self::is_soul_base(world.get_block(&block_pos.down()).await) {
             return Block::AIR.default_state.id;
         }
 
@@ -58,7 +58,7 @@ impl PumpkinBlock for SoulFireBlock {
         _face: BlockDirection,
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
-        Self::is_soul_base(&block_accessor.get_block(&block_pos.down()).await)
+        Self::is_soul_base(block_accessor.get_block(&block_pos.down()).await)
     }
 
     async fn broken(
@@ -68,7 +68,7 @@ impl PumpkinBlock for SoulFireBlock {
         block_pos: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        _state: BlockState,
+        _state: &'static BlockState,
     ) {
         FireBlockBase::broken(world, block_pos).await;
     }

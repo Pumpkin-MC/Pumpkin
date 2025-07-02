@@ -22,6 +22,6 @@ impl FallenTreeFeature {
     }
 
     fn gen_stump(&self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, pos: BlockPos) {
-        chunk.set_block_state(&pos.0, &self.trunk_provider.get(random, pos));
+        chunk.set_block_state(&pos.0, self.trunk_provider.get(random, pos));
     }
 }

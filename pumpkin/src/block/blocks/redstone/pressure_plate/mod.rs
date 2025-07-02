@@ -14,12 +14,12 @@ pub(crate) trait PressurePlate {
         &self,
         world: &Arc<World>,
         pos: BlockPos,
-        block: Block,
-        state: BlockState,
+        block: &'static Block,
+        state: &'static BlockState,
     ) {
-        let output = self.get_redstone_output(&block, state.id);
+        let output = self.get_redstone_output(block, state.id);
         if output == 0 {
-            self.update_plate_state(world, pos, &block, state, output)
+            self.update_plate_state(world, pos, block, state, output)
                 .await;
         }
     }
@@ -52,13 +52,13 @@ pub(crate) trait PressurePlate {
         world: &Arc<World>,
         pos: BlockPos,
         block: &Block,
-        state: BlockState,
+        state: &'static BlockState,
         output: u8,
     ) {
         let calc_output = self.calculate_redstone_output(world, block, &pos).await;
         let has_output = calc_output > 0;
         if calc_output != output {
-            let state = self.set_redstone_output(block, &state, calc_output);
+            let state = self.set_redstone_output(block, state, calc_output);
             world
                 .set_block_state(&pos, state, BlockFlags::NOTIFY_LISTENERS)
                 .await;

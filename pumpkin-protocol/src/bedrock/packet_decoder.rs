@@ -1,10 +1,14 @@
 use std::io::Cursor;
 
 use async_compression::tokio::bufread::ZlibDecoder;
-use bytes::Buf;
+use bytes::Bytes;
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 
-use crate::{Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, RawPacket, StreamDecryptor};
+use crate::{
+    Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, RawPacket, StreamDecryptor,
+    codec::var_uint::VarUInt,
+    ser::{NetworkReadExt, ReadingError},
+};
 
 // decrypt -> decompress -> raw
 pub enum DecompressionReader<R: AsyncRead + Unpin> {
@@ -97,25 +101,68 @@ impl UDPNetworkDecoder {
         // take_mut::take(&mut self.reader, |decoder| decoder.upgrade(cipher));
     }
 
-    pub async fn get_raw_packet(
+    pub async fn get_packet_payload(
         &mut self,
         mut reader: Cursor<Vec<u8>>,
-    ) -> Result<RawPacket, PacketDecodeError> {
-        // TODO: Serde is sync so we need to write to a buffer here :(
-        // Is there a way to deserialize in an asynchronous manner?
-
-        let packet_id = reader
-            .try_get_u8()
-            .map_err(|_| PacketDecodeError::DecodeID)?;
-
+    ) -> Result<Bytes, PacketDecodeError> {
         let mut payload = Vec::new();
         reader
             .read_to_end(&mut payload)
             .await
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
+        Ok(payload.into())
+    }
+
+    pub async fn get_game_packet(
+        &mut self,
+        mut reader: Cursor<Vec<u8>>,
+    ) -> Result<RawPacket, PacketDecodeError> {
+        //compression is only included after the network settings packet is sent
+        //let compression = reader.get_u8()?;
+        //dbg!(compression);
+
+        // TODO: compression & encryption
+        let packet_len = VarUInt::decode_async(&mut reader)
+            .await
+            .map_err(|err| match err {
+                ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
+                err => PacketDecodeError::MalformedLength(err.to_string()),
+            })?;
+
+        let packet_len = packet_len.0 as u64;
+
+        // This is the default MTU size
+        if !(0..=1492).contains(&packet_len) {
+            Err(PacketDecodeError::OutOfBounds)?
+        }
+
+        let var_header = VarUInt::decode_async(&mut reader).await?;
+
+        // The header is 14 bits. Ensure we only consider these bits.
+        // A varint u32 could be larger, so we mask to the relevant bits.
+        let header = var_header.0 & 0x3FFF; // Mask to get the lower 14 bits (2^14 - 1)
+
+        // Extract components from GamePacket Header (14 bits)
+        // Gamepacket ID (10 bits)
+        // SubClient Sender ID (2 bits)
+        // SubClient Target ID (2 bits)
+
+        // SubClient Target ID: Lowest 2 bits
+        let _sub_client_target = (header >> 10 & 0b11) as u8;
+
+        // SubClient Sender ID: Next 2 bits (bits 2 and 3)
+        let _sub_client_sender = (header >> 12 & 0b11) as u8;
+
+        // Gamepacket ID: Remaining 10 bits (bits 4 to 13)
+        let gamepacket_id = (header & 0x3FF) as u16; // 0x3FF is 10 bits set to 1
+
+        let payload = reader
+            .read_boxed_slice(packet_len as usize - var_header.written_size())
+            .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
+
         Ok(RawPacket {
-            id: packet_id as i32,
+            id: gamepacket_id as i32,
             payload: payload.into(),
         })
     }

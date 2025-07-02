@@ -201,14 +201,14 @@ impl LivingEntity {
     pub async fn is_in_water(&self) -> bool {
         let world = self.entity.world.read().await;
         let block_pos = self.entity.block_pos.load();
-        world.get_block(&block_pos).await == Block::WATER
+        world.get_block(&block_pos).await == &Block::WATER
     }
 
     // Check if the entity is in powder snow
     pub async fn is_in_powder_snow(&self) -> bool {
         let world = self.entity.world.read().await;
         let block_pos = self.entity.block_pos.load();
-        world.get_block(&block_pos).await == Block::POWDER_SNOW
+        world.get_block(&block_pos).await == &Block::POWDER_SNOW
     }
 
     pub async fn update_fall_distance(

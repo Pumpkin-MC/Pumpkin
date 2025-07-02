@@ -2315,6 +2315,19 @@
       "width": 2,
       "height": 1
     },
+    "dennis": {
+      "asset_id": "minecraft:dennis",
+      "title": {
+        "translate": "painting.minecraft.dennis.title",
+        "color": "yellow"
+      },
+      "author": {
+        "translate": "painting.minecraft.dennis.author",
+        "color": "gray"
+      },
+      "width": 3,
+      "height": 3
+    },
     "donkey_kong": {
       "asset_id": "minecraft:donkey_kong",
       "title": {
@@ -5474,6 +5487,14 @@
       },
       "length_in_seconds": 174.0,
       "comparator_output": 5
+    },
+    "lava_chicken": {
+      "sound_event": "minecraft:music_disc.lava_chicken",
+      "description": {
+        "translate": "jukebox_song.minecraft.lava_chicken"
+      },
+      "length_in_seconds": 134.0,
+      "comparator_output": 9
     },
     "mall": {
       "sound_event": "minecraft:music_disc.mall",

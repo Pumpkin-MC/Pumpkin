@@ -64,7 +64,7 @@ pub async fn compute_bars_state(
         let (other_block, other_block_state) =
             world.get_block_and_block_state(&other_block_pos).await;
 
-        let connected = other_block == *block
+        let connected = other_block == block
             || other_block_state.is_side_solid(direction.opposite())
             || other_block.is_tagged_with("c:glass_panes").unwrap()
             || other_block.is_tagged_with("minecraft:walls").unwrap();

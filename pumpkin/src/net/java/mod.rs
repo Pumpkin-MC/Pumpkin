@@ -163,10 +163,7 @@ impl JavaClientPlatform {
             }
             // This way players get kicked when players using client functions (e.g. poll, send_packet)
             ConnectionState::Play => client.send_packet_now(&CPlayDisconnect::new(&reason)).await,
-            _ => {
-                log::warn!("Can't kick in {:?} State", client.connection_state);
-                return;
-            }
+            _ => {}
         }
         log::debug!("Closing connection for {}", client.id);
         client.close();

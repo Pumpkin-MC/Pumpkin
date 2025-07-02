@@ -14,7 +14,7 @@ use rand::Rng;
 #[derive(Default)]
 pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
-    pub block_state: Option<BlockState>,
+    pub block_state: Option<&'static BlockState>,
 }
 
 pub trait LootTableExt {
@@ -171,15 +171,14 @@ impl LootConditionExt for LootCondition {
                 properties,
             } => {
                 if let Some(state) = &params.block_state {
-                    let block_actual_properties: HashMap<String, String> = match Block::properties(
-                        &get_block_by_state_id(state.id).unwrap(),
-                        state.id,
-                    ) {
-                        Some(props_data) => props_data.to_props(), // Assuming to_props() returns HashMap<String, String>
-                        None => {
-                            return properties.is_empty();
-                        }
-                    };
+                    let block_actual_properties: HashMap<String, String> =
+                        match Block::properties(get_block_by_state_id(state.id).unwrap(), state.id)
+                        {
+                            Some(props_data) => props_data.to_props(), // Assuming to_props() returns HashMap<String, String>
+                            None => {
+                                return properties.is_empty();
+                            }
+                        };
 
                     return properties.iter().all(|&(expected_key, expected_value)| {
                         block_actual_properties.get(expected_key).is_some_and(

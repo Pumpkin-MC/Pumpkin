@@ -56,28 +56,28 @@ impl DesertWellFeature {
                 for k in -2..=2 {
                     chunk.set_block_state(
                         &block_pos.0.add(&Vector3::new(j2, i, k)),
-                        &Self::WALL.default_state,
+                        Self::WALL.default_state,
                     );
                 }
             }
         }
 
-        chunk.set_block_state(&block_pos.0, &WATER_BLOCK.default_state);
+        chunk.set_block_state(&block_pos.0, WATER_BLOCK.default_state);
 
         for direction in BlockDirection::horizontal().iter() {
             chunk.set_block_state(
                 &block_pos.0.add(&direction.to_offset()),
-                &WATER_BLOCK.default_state,
+                WATER_BLOCK.default_state,
             );
         }
 
         let block_pos2 = &block_pos.0.add(&Vector3::new(0, -1, 0));
-        chunk.set_block_state(block_pos2, &Self::SAND.default_state);
+        chunk.set_block_state(block_pos2, Self::SAND.default_state);
 
         for direction2 in BlockDirection::horizontal().iter() {
             chunk.set_block_state(
                 &block_pos2.add(&direction2.to_offset()),
-                &Self::SAND.default_state,
+                Self::SAND.default_state,
             );
         }
 
@@ -88,26 +88,26 @@ impl DesertWellFeature {
                 }
                 chunk.set_block_state(
                     &block_pos.0.add(&Vector3::new(j, 1, k)),
-                    &Self::WALL.default_state,
+                    Self::WALL.default_state,
                 );
             }
         }
 
         chunk.set_block_state(
             &block_pos.0.add(&Vector3::new(2, 1, 0)),
-            &Self::SLAB.default_state,
+            Self::SLAB.default_state,
         );
         chunk.set_block_state(
             &block_pos.0.add(&Vector3::new(-2, 1, 0)),
-            &Self::SLAB.default_state,
+            Self::SLAB.default_state,
         );
         chunk.set_block_state(
             &block_pos.0.add(&Vector3::new(0, 1, 2)),
-            &Self::SLAB.default_state,
+            Self::SLAB.default_state,
         );
         chunk.set_block_state(
             &block_pos.0.add(&Vector3::new(0, 1, -2)),
-            &Self::SLAB.default_state,
+            Self::SLAB.default_state,
         );
 
         for j in -1..=1 {
@@ -115,13 +115,13 @@ impl DesertWellFeature {
                 if j == 0 && k == 0 {
                     chunk.set_block_state(
                         &block_pos.0.add(&Vector3::new(j, 4, k)),
-                        &Self::WALL.default_state,
+                        Self::WALL.default_state,
                     );
                     continue;
                 }
                 chunk.set_block_state(
                     &block_pos.0.add(&Vector3::new(j, 4, k)),
-                    &Self::SLAB.default_state,
+                    Self::SLAB.default_state,
                 );
             }
         }
@@ -129,19 +129,19 @@ impl DesertWellFeature {
         for j in 1..=3 {
             chunk.set_block_state(
                 &block_pos.0.add(&Vector3::new(-1, j, -1)),
-                &Self::WALL.default_state,
+                Self::WALL.default_state,
             );
             chunk.set_block_state(
                 &block_pos.0.add(&Vector3::new(-1, j, 1)),
-                &Self::WALL.default_state,
+                Self::WALL.default_state,
             );
             chunk.set_block_state(
                 &block_pos.0.add(&Vector3::new(1, j, -1)),
-                &Self::WALL.default_state,
+                Self::WALL.default_state,
             );
             chunk.set_block_state(
                 &block_pos.0.add(&Vector3::new(1, j, 1)),
-                &Self::WALL.default_state,
+                Self::WALL.default_state,
             );
         }
 

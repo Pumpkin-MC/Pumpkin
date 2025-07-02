@@ -37,9 +37,9 @@ impl ClientPacket for CSetEquipment {
             let equipment = &self.equipment[i];
             let slot = &equipment.0;
             if i != self.equipment.len() - 1 {
-                write.write_i8_be(-128)?;
+                write.write_i8(-128)?;
             } else {
-                write.write_i8_be(*slot)?;
+                write.write_i8(*slot)?;
             }
             let mut serializer = Serializer::new(&mut write);
             equipment
