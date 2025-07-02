@@ -313,27 +313,27 @@ impl BedrockClientPlatform {
             // Check if all fragments are received
             if entry.iter().any(Option::is_none) {
                 return Ok(());
-            } else {
-                dbg!("compound complete! size", entry.len());
-                let mut frames = compounds.remove(&compound_id).unwrap();
-
-                // Safety: We already checked that all frames are Some at this point
-                let len = frames
-                    .iter()
-                    .map(|frame| unsafe { frame.as_ref().unwrap_unchecked().payload.len() })
-                    .sum();
-
-                let mut merged = Vec::with_capacity(len);
-
-                for frame in &frames {
-                    merged.extend_from_slice(unsafe { &frame.as_ref().unwrap_unchecked().payload });
-                }
-
-                frame = unsafe { frames[0].take().unwrap_unchecked() };
-
-                frame.payload = merged.into();
-                frame.split_size = 0;
             }
+
+            dbg!("compound complete! size", entry.len());
+            let mut frames = compounds.remove(&compound_id).unwrap();
+    
+            // Safety: We already checked that all frames are Some at this point
+            let len = frames
+                .iter()
+                .map(|frame| unsafe { frame.as_ref().unwrap_unchecked().payload.len() })
+                .sum();
+    
+            let mut merged = Vec::with_capacity(len);
+    
+            for frame in &frames {
+                merged.extend_from_slice(unsafe { &frame.as_ref().unwrap_unchecked().payload });
+            }
+    
+            frame = unsafe { frames[0].take().unwrap_unchecked() };
+    
+            frame.payload = merged.into();
+            frame.split_size = 0;
         }
 
         dbg!(frame.reliability);
