@@ -5,10 +5,7 @@ use pumpkin_data::{
     tag::{RegistryKey, get_tag_values},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{
-    BlockStateId,
-    world::BlockFlags,
-};
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::pumpkin_block::{
@@ -16,7 +13,6 @@ use crate::{
         OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs, OnStateReplacedArgs,
         PumpkinBlock,
     },
-    entity::{EntityBase, player::Player},
     world::World,
 };
 
@@ -74,7 +70,7 @@ impl PumpkinBlock for PressurePlateBlock {
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if !PressurePlateBlock::can_pressure_plate_place_at(args.world, args.location).await {
+        if !Self::can_pressure_plate_place_at(args.world, args.location).await {
             args.world
                 .break_block(args.location, None, BlockFlags::NOTIFY_ALL)
                 .await;
@@ -83,7 +79,7 @@ impl PumpkinBlock for PressurePlateBlock {
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        PressurePlateBlock::can_pressure_plate_place_at(args.world.unwrap(), args.location).await
+        Self::can_pressure_plate_place_at(args.world.unwrap(), args.location).await
     }
 }
 
