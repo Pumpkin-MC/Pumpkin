@@ -70,13 +70,7 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
                 .await;
             return;
         }
-        args.world
-            .set_block_state(
-                args.location,
-                Block::AIR.default_state.id,
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
+        world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
         for dir in BlockDirection::all() {
             args.world
                 .update_neighbor(&args.location.offset(dir.to_offset()), args.source_block)
