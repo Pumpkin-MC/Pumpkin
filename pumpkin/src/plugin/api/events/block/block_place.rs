@@ -17,10 +17,10 @@ pub struct BlockPlaceEvent {
     pub player: Arc<Player>,
 
     /// The block that is being placed.
-    pub block_placed: Block,
+    pub block_placed: &'static Block,
 
     /// The block that the new block is being placed against.
-    pub block_placed_against: Block,
+    pub block_placed_against: &'static Block,
 
     /// A boolean indicating whether the player can build.
     pub can_build: bool,
@@ -28,6 +28,6 @@ pub struct BlockPlaceEvent {
 
 impl BlockEvent for BlockPlaceEvent {
     fn get_block(&self) -> &Block {
-        &self.block_placed
+        self.block_placed
     }
 }

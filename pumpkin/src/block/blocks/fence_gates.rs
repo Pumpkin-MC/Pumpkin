@@ -28,7 +28,7 @@ pub async fn toggle_fence_gate(
 ) -> BlockStateId {
     let (block, state) = world.get_block_and_block_state(block_pos).await;
 
-    let mut fence_gate_props = FenceGateProperties::from_state_id(state.id, &block);
+    let mut fence_gate_props = FenceGateProperties::from_state_id(state.id, block);
     if fence_gate_props.open {
         fence_gate_props.open = false;
     } else {
@@ -46,12 +46,12 @@ pub async fn toggle_fence_gate(
     world
         .set_block_state(
             block_pos,
-            fence_gate_props.to_state_id(&block),
+            fence_gate_props.to_state_id(block),
             BlockFlags::NOTIFY_LISTENERS,
         )
         .await;
     // TODO playSound depend on WoodType
-    fence_gate_props.to_state_id(&block)
+    fence_gate_props.to_state_id(block)
 }
 
 pub struct FenceGateBlock;

@@ -5,6 +5,7 @@ edition.workspace = true
 build = "build/build.rs"
 
 [dependencies]
+phf = { version = "0.12.1", features = ["macros"] }
 pumpkin-util = { path = "../pumpkin-util" }
 
 serde.workspace = true

@@ -5,3 +5,4 @@ pub mod socket_address;
 pub mod u24;
 pub mod var_int;
 pub mod var_long;
+pub mod var_uint;

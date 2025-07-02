@@ -14,7 +14,7 @@ use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
 use crate::{
-    SHOULD_STOP,
+    SHOULD_STOP, STOP_INTERRUPT,
     server::{CURRENT_MC_VERSION, Server},
 };
 
@@ -50,7 +50,15 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
         let valid_challenge_tokens = valid_challenge_tokens.clone();
         let server = server.clone();
         let mut buf = vec![0; 1024];
-        let (_, addr) = socket.recv_from(&mut buf).await.unwrap();
+
+        let recv_result = tokio::select! {
+            result = socket.recv_from(&mut buf) => Some(result),
+            () = STOP_INTERRUPT.notified() => None,
+        };
+
+        let Some(Ok((_, addr))) = recv_result else {
+            break;
+        };
 
         tokio::spawn(async move {
             if let Err(err) = handle_packet(

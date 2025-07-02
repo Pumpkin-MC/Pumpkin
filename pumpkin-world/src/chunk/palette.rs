@@ -404,7 +404,7 @@ impl BlockPalette {
                 } else {
                     log::warn!(
                         "Could not find valid block state for {}. Defaulting...",
-                        entry.name
+                        entry.name.name
                     );
                     0
                 }
@@ -438,7 +438,7 @@ impl BlockPalette {
         let block = Block::from_state_id(registry_id).unwrap();
 
         BlockStateCodec {
-            name: block.name.into(),
+            name: block,
             properties: block.properties(registry_id).map(|p| p.to_props()),
         }
     }

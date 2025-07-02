@@ -12,7 +12,7 @@ use super::BlockEntity;
 
 pub struct PistonBlockEntity {
     pub position: BlockPos,
-    pub pushed_block_state: BlockState,
+    pub pushed_block_state: &'static BlockState,
     pub facing: BlockDirection,
     pub current_progress: AtomicCell<f32>,
     pub last_progress: AtomicCell<f32>,
@@ -27,7 +27,7 @@ impl PistonBlockEntity {
         if self.last_progress.load() < 1.0 {
             let pos = self.position;
             world.remove_block_entity(&pos).await;
-            if world.get_block(&pos).await == Block::MOVING_PISTON {
+            if world.get_block(&pos).await == &Block::MOVING_PISTON {
                 let state = if self.source {
                     Block::AIR.default_state.id
                 } else {
@@ -38,7 +38,7 @@ impl PistonBlockEntity {
                     .set_block_state(&pos, state, BlockFlags::NOTIFY_ALL)
                     .await;
                 world
-                    .update_neighbor(&pos, &get_block_by_state_id(state).unwrap())
+                    .update_neighbor(&pos, get_block_by_state_id(state).unwrap())
                     .await;
             }
         }
@@ -66,7 +66,7 @@ impl BlockEntity for PistonBlockEntity {
         if current_progress >= 1.0 {
             let pos = self.position;
             world.remove_block_entity(&pos).await;
-            if world.get_block(&pos).await == Block::MOVING_PISTON {
+            if world.get_block(&pos).await == &Block::MOVING_PISTON {
                 if self.pushed_block_state.is_air() {
                     world
                         .clone()
@@ -89,7 +89,7 @@ impl BlockEntity for PistonBlockEntity {
                         .clone()
                         .update_neighbor(
                             &pos,
-                            &get_block_by_state_id(self.pushed_block_state.id).unwrap(),
+                            get_block_by_state_id(self.pushed_block_state.id).unwrap(),
                         )
                         .await;
                 }

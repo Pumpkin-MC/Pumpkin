@@ -22,13 +22,13 @@ type TrapDoorProperties = pumpkin_data::block_properties::OakTrapdoorLikePropert
 
 async fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_block_state(block_pos).await;
-    let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id, &block);
+    let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id, block);
     trapdoor_props.open = !trapdoor_props.open;
 
     world
         .play_block_sound_expect(
             player,
-            get_sound(&block, trapdoor_props.open),
+            get_sound(block, trapdoor_props.open),
             SoundCategory::Blocks,
             *block_pos,
         )
@@ -37,7 +37,7 @@ async fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockP
     world
         .set_block_state(
             block_pos,
-            trapdoor_props.to_state_id(&block),
+            trapdoor_props.to_state_id(block),
             BlockFlags::NOTIFY_LISTENERS,
         )
         .await;

@@ -20,7 +20,7 @@ pub(super) fn gen_dripstone(chunk: &mut ProtoChunk, pos: BlockPos) -> bool {
         .is_tagged_with("minecraft:dripstone_replaceable_blocks")
         .unwrap()
     {
-        chunk.set_block_state(&pos.0, &Block::DRIPSTONE_BLOCK.default_state);
+        chunk.set_block_state(&pos.0, Block::DRIPSTONE_BLOCK.default_state);
         return true;
     }
     false

@@ -33,7 +33,7 @@ type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 
 async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_block_state(block_pos).await;
-    let mut door_props = DoorProperties::from_state_id(block_state.id, &block);
+    let mut door_props = DoorProperties::from_state_id(block_state.id, block);
     door_props.open = !door_props.open;
 
     let other_half = match door_props.half {
@@ -43,13 +43,13 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
     let other_pos = block_pos.offset(other_half.to_offset());
 
     let (other_block, other_state_id) = world.get_block_and_block_state(&other_pos).await;
-    let mut other_door_props = DoorProperties::from_state_id(other_state_id.id, &other_block);
+    let mut other_door_props = DoorProperties::from_state_id(other_state_id.id, other_block);
     other_door_props.open = door_props.open;
 
     world
         .play_block_sound_expect(
             player,
-            get_sound(&block, door_props.open),
+            get_sound(block, door_props.open),
             SoundCategory::Blocks,
             *block_pos,
         )
@@ -58,14 +58,14 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
     world
         .set_block_state(
             block_pos,
-            door_props.to_state_id(&block),
+            door_props.to_state_id(block),
             BlockFlags::NOTIFY_LISTENERS,
         )
         .await;
     world
         .set_block_state(
             &other_pos,
-            other_door_props.to_state_id(&other_block),
+            other_door_props.to_state_id(other_block),
             BlockFlags::NOTIFY_LISTENERS,
         )
         .await;
@@ -123,14 +123,14 @@ async fn get_hinge(
         .await
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(left_state.id, &left_block).half == DoubleBlockHalf::Lower;
+        && DoorProperties::from_state_id(left_state.id, left_block).half == DoubleBlockHalf::Lower;
 
     let has_right_door = world
         .get_block(&right_pos)
         .await
         .is_tagged_with("minecraft:doors")
         .unwrap()
-        && DoorProperties::from_state_id(right_state.id, &right_block).half
+        && DoorProperties::from_state_id(right_state.id, right_block).half
             == DoubleBlockHalf::Lower;
 
     let score = -(left_state.is_full_cube() as i32) - (top_state.is_full_cube() as i32)
@@ -287,7 +287,7 @@ impl PumpkinBlock for DoorBlock {
 
         if block.id == other_block.id && powered != door_props.powered {
             let mut other_door_props =
-                DoorProperties::from_state_id(other_state_id.id, &other_block);
+                DoorProperties::from_state_id(other_state_id.id, other_block);
             door_props.powered = !door_props.powered;
             other_door_props.powered = door_props.powered;
 
@@ -310,7 +310,7 @@ impl PumpkinBlock for DoorBlock {
             world
                 .set_block_state(
                     &other_pos,
-                    other_door_props.to_state_id(&other_block),
+                    other_door_props.to_state_id(other_block),
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
