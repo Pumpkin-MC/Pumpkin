@@ -577,7 +577,7 @@ impl Player {
             // TODO: calculate respawn position
             Some((respawn_point.position.to_f64(), respawn_point.yaw))
         } else if respawn_point.dimension == VanillaDimensionType::TheNether
-            && block == Block::RESPAWN_ANCHOR
+            && block == &Block::RESPAWN_ANCHOR
         {
             // TODO: calculate respawn position
             // TODO: check if there is fuel for respawn
@@ -625,7 +625,7 @@ impl Player {
         let (bed, bed_state) = world
             .get_block_and_block_state(&respawn_point.position)
             .await;
-        BedBlock::set_occupied(false, &world, &bed, &respawn_point.position, bed_state.id).await;
+        BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state.id).await;
 
         self.living_entity
             .entity
@@ -790,7 +790,7 @@ impl Player {
                 self.continue_mining(
                     *pos,
                     &world,
-                    &state,
+                    state,
                     block.name,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )

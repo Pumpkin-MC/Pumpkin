@@ -89,14 +89,14 @@ impl BlockRegistry {
 
     pub async fn on_entity_collision(
         &self,
-        block: Block,
+        block: &'static Block,
         world: &Arc<World>,
         entity: &dyn EntityBase,
         pos: BlockPos,
-        state: BlockState,
+        state: &'static BlockState,
         server: &Server,
     ) {
-        let pumpkin_block = self.get_pumpkin_block(&block);
+        let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .on_entity_collision(world, entity, pos, block, state, server)
@@ -308,7 +308,7 @@ impl BlockRegistry {
         player: &Arc<Player>,
         location: BlockPos,
         server: &Server,
-        state: BlockState,
+        state: &'static BlockState,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {

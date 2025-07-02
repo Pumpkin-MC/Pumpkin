@@ -130,7 +130,7 @@ impl PumpkinItem for EmptyBucketItem {
             })
             .unwrap_or(false)
         {
-            let state_id = set_waterlogged(&block, &state, false);
+            let state_id = set_waterlogged(block, state, false);
             world
                 .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
@@ -152,8 +152,8 @@ impl PumpkinItem for EmptyBucketItem {
             let (block, state) = world
                 .get_block_and_block_state(&block_pos.offset(direction.to_offset()))
                 .await;
-            if waterlogged_check(&block, &state).is_some() {
-                let state_id = set_waterlogged(&block, &state, false);
+            if waterlogged_check(block, state).is_some() {
+                let state_id = set_waterlogged(block, state, false);
                 world
                     .set_block_state(
                         &block_pos.offset(direction.to_offset()),
@@ -230,8 +230,8 @@ impl PumpkinItem for FilledBucketItem {
             return;
         }
         let (block, state) = world.get_block_and_block_state(&pos).await;
-        if waterlogged_check(&block, &state).is_some() && item.id == Item::WATER_BUCKET.id {
-            let state_id = set_waterlogged(&block, &state, true);
+        if waterlogged_check(block, state).is_some() && item.id == Item::WATER_BUCKET.id {
+            let state_id = set_waterlogged(block, state, true);
             world
                 .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
@@ -241,11 +241,11 @@ impl PumpkinItem for FilledBucketItem {
                 .get_block_and_block_state(&pos.offset(direction.to_offset()))
                 .await;
 
-            if waterlogged_check(&block, &state).is_some() {
+            if waterlogged_check(block, state).is_some() {
                 if item.id == Item::LAVA_BUCKET.id {
                     return;
                 }
-                let state_id = set_waterlogged(&block, &state, true);
+                let state_id = set_waterlogged(block, state, true);
 
                 world
                     .set_block_state(

@@ -257,7 +257,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         self.write.write_i64_be(v)
     }
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-        self.write.write_i8_be(v)
+        self.write.write_i8(v)
     }
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         let Some(len) = len else {
@@ -394,7 +394,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         self.write.write_u64_be(v)
     }
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-        self.write.write_u8_be(v)
+        self.write.write_u8(v)
     }
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
         Ok(())

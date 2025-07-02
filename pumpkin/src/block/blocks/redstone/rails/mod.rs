@@ -19,7 +19,7 @@ pub mod powered_rail;
 pub mod rail;
 
 struct Rail {
-    block: Block,
+    block: &'static Block,
     position: BlockPos,
     properties: RailProperties,
     elevation: RailElevation,
@@ -29,7 +29,7 @@ impl Rail {
     async fn find_with_elevation(world: &World, position: BlockPos) -> Option<Self> {
         let (block, block_state) = world.get_block_and_block_state(&position).await;
         if block.is_tagged_with("#minecraft:rails").unwrap() {
-            let properties = RailProperties::new(block_state.id, &block);
+            let properties = RailProperties::new(block_state.id, block);
             return Some(Self {
                 block,
                 position,
@@ -41,7 +41,7 @@ impl Rail {
         let pos = position.up();
         let (block, block_state) = world.get_block_and_block_state(&pos).await;
         if block.is_tagged_with("#minecraft:rails").unwrap() {
-            let properties = RailProperties::new(block_state.id, &block);
+            let properties = RailProperties::new(block_state.id, block);
             return Some(Self {
                 block,
                 position: pos,
@@ -53,7 +53,7 @@ impl Rail {
         let pos = position.down();
         let (block, block_state) = world.get_block_and_block_state(&pos).await;
         if block.is_tagged_with("#minecraft:rails").unwrap() {
-            let properties = RailProperties::new(block_state.id, &block);
+            let properties = RailProperties::new(block_state.id, block);
             return Some(Self {
                 block,
                 position: pos,

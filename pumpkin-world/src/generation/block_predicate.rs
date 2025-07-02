@@ -225,7 +225,7 @@ impl WouldSurviveBlockPredicate {
         let pos = self.offset.get(pos);
         return block_registry
             .can_place_at(
-                &get_block_by_state_id(state.id).unwrap(),
+                get_block_by_state_id(state.id).unwrap(),
                 chunk,
                 &pos,
                 BlockDirection::Up,
@@ -259,11 +259,11 @@ impl OffsetBlocksBlockPredicate {
         }
         *pos
     }
-    pub fn get_block(&self, chunk: &ProtoChunk, pos: &BlockPos) -> Block {
+    pub fn get_block(&self, chunk: &ProtoChunk, pos: &BlockPos) -> &'static Block {
         let pos = self.get(pos);
         chunk.get_block_state(&pos.0).to_block()
     }
-    pub fn get_state(&self, chunk: &ProtoChunk, pos: &BlockPos) -> BlockState {
+    pub fn get_state(&self, chunk: &ProtoChunk, pos: &BlockPos) -> &'static BlockState {
         let pos = self.get(pos);
         chunk.get_block_state(&pos.0).to_state()
     }

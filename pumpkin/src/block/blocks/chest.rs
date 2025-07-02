@@ -121,7 +121,7 @@ impl PumpkinBlock for ChestBlock {
         block_pos: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        state: BlockState,
+        state: &'static BlockState,
     ) {
         let chest_props = ChestLikeProperties::from_state_id(state.id, block);
         let connected_towards = match chest_props.r#type {
@@ -171,9 +171,9 @@ async fn compute_chest_props(
             .get_block_and_block_state(&block_pos.offset(face.to_offset()))
             .await;
 
-        if clicked_block == *block {
+        if clicked_block == block {
             let clicked_props =
-                ChestLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
+                ChestLikeProperties::from_state_id(clicked_block_state.id, clicked_block);
 
             if clicked_props.r#type != ChestType::Single {
                 return (ChestType::Single, chest_facing);
@@ -230,12 +230,12 @@ async fn get_chest_properties_if_can_connect(
         .get_block_and_block_state(&block_pos.offset(direction.to_offset()))
         .await;
 
-    if neighbor_block != *block {
+    if neighbor_block != block {
         return None;
     }
 
     let neighbor_props =
-        ChestLikeProperties::from_state_id(neighbor_block_state.id, &neighbor_block);
+        ChestLikeProperties::from_state_id(neighbor_block_state.id, neighbor_block);
     if neighbor_props.facing == facing && neighbor_props.r#type == wanted_type {
         return Some(neighbor_props);
     }
