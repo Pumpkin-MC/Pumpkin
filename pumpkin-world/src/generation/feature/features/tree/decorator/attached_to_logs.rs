@@ -31,7 +31,7 @@ impl AttachedToLogsTreeDecorator {
             {
                 continue;
             }
-            chunk.set_block_state(&pos.0, &self.block_provider.get(random, pos));
+            chunk.set_block_state(&pos.0, self.block_provider.get(random, pos));
         }
     }
 }

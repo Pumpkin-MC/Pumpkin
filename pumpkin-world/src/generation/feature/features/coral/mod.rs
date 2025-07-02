@@ -29,8 +29,8 @@ impl CoralFeature {
         let block = chunk.get_block_state(&pos.0).to_block();
         let above_block = chunk.get_block_state(&pos.up().0).to_block();
 
-        if block != Block::WATER && !block.is_tagged_with("minecraft:corals").unwrap()
-            || above_block != Block::WATER
+        if block != &Block::WATER && !block.is_tagged_with("minecraft:corals").unwrap()
+            || above_block != &Block::WATER
         {
             return false;
         }
@@ -38,20 +38,20 @@ impl CoralFeature {
         if random.next_f32() < 0.25 {
             chunk.set_block_state(
                 &pos.0,
-                &Self::get_random_tag_entry("minecraft:corals", random),
+                Self::get_random_tag_entry("minecraft:corals", random),
             );
         } else if random.next_f32() < 0.05 {
             let mut props = SeaPickleLikeProperties::default(&Block::SEA_PICKLE);
             props.pickles = Integer1To4::from_index(random.next_bounded_i32(4) as u16); // TODO: vanilla adds + 1, but this can crash
             chunk.set_block_state(
                 &pos.0,
-                &get_state_by_state_id(props.to_state_id(&Block::SEA_PICKLE)).unwrap(),
+                get_state_by_state_id(props.to_state_id(&Block::SEA_PICKLE)).unwrap(),
             );
         }
         for dir in BlockDirection::horizontal() {
             let dir_pos = pos.offset(dir.to_offset());
             if random.next_f32() >= 0.2
-                || chunk.get_block_state(&dir_pos.0).to_block() != Block::WATER
+                || chunk.get_block_state(&dir_pos.0).to_block() != &Block::WATER
             {
                 continue;
             }
@@ -74,11 +74,11 @@ impl CoralFeature {
                 .collect();
             chunk.set_block_state(
                 &dir_pos.0,
-                &get_state_by_state_id(
+                get_state_by_state_id(
                     wall_coral
                         .from_properties(props)
                         .unwrap()
-                        .to_state_id(&wall_coral),
+                        .to_state_id(wall_coral),
                 )
                 .unwrap(),
             );
@@ -87,12 +87,12 @@ impl CoralFeature {
         true
     }
 
-    pub fn get_random_tag_entry(tag: &str, random: &mut RandomGenerator) -> BlockState {
+    pub fn get_random_tag_entry(tag: &str, random: &mut RandomGenerator) -> &'static BlockState {
         let block = Self::get_random_tag_entry_block(tag, random);
         block.default_state
     }
 
-    pub fn get_random_tag_entry_block(tag: &str, random: &mut RandomGenerator) -> Block {
+    pub fn get_random_tag_entry_block(tag: &str, random: &mut RandomGenerator) -> &'static Block {
         let values = get_tag_values(RegistryKey::Block, tag).unwrap();
         let value = values[random.next_bounded_i32(values.len() as i32) as usize];
         get_block(value).unwrap()

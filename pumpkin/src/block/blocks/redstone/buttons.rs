@@ -31,19 +31,23 @@ use crate::world::World;
 async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, state) = world.get_block_and_block_state(block_pos).await;
 
-    let mut button_props = ButtonLikeProperties::from_state_id(state.id, &block);
+    let mut button_props = ButtonLikeProperties::from_state_id(state.id, block);
     if !button_props.powered {
         button_props.powered = true;
         world
             .set_block_state(
                 block_pos,
-                button_props.to_state_id(&block),
+                button_props.to_state_id(block),
                 BlockFlags::NOTIFY_ALL,
             )
             .await;
-        let delay = if block == Block::STONE_BUTTON { 20 } else { 30 };
+        let delay = if block == &Block::STONE_BUTTON {
+            20
+        } else {
+            30
+        };
         world
-            .schedule_block_tick(&block, *block_pos, delay, TickPriority::Normal)
+            .schedule_block_tick(block, *block_pos, delay, TickPriority::Normal)
             .await;
         ButtonBlock::update_neighbors(world, block_pos, &button_props).await;
     }

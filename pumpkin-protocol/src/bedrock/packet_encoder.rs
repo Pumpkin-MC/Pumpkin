@@ -124,9 +124,9 @@ impl UDPNetworkEncoder {
         // Gamepacket ID (10 bits) << 4 (offset by 2 bits for target + 2 bits for sender)
         // SubClient Sender ID (2 bits) << 2 (offset by 2 bits for target)
         // SubClient Target ID (2 bits)
-        let header_value: u32 = ((packet_id as u32) << 4)
-            | ((sub_client_sender as u32) << 2)
-            | (sub_client_target as u32);
+        let header_value: u32 = packet_id as u32
+            | ((sub_client_sender as u32) << 10)
+            | ((sub_client_target as u32) << 12);
 
         // Ensure the combined header doesn't exceed 14 bits (just a sanity check, should be handled by above shifts)
         let fourteen_bit_header = header_value & 0x3FFF; // Mask to ensure it fits in 14 bits

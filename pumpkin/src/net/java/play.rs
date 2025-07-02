@@ -722,7 +722,7 @@ impl Player {
                     .add(&(Vector3::rotation_vector(f64::from(pitch), f64::from(yaw)) * 4.5)),
                 async |pos, world| {
                     let block = world.get_block(pos).await;
-                    block != Block::AIR && block != Block::WATER && block != Block::LAVA
+                    block != &Block::AIR && block != &Block::WATER && block != &Block::LAVA
                 },
             )
             .await;
@@ -736,7 +736,7 @@ impl Player {
                 Some(hit_pos),
             )
         } else {
-            PlayerInteractEvent::new(self, InteractAction::LeftClickAir, &item, Block::AIR, None)
+            PlayerInteractEvent::new(self, InteractAction::LeftClickAir, &item, &Block::AIR, None)
         };
 
         send_cancellable! {{
@@ -1194,7 +1194,7 @@ impl Player {
                             .await;
                         server
                             .block_registry
-                            .broken(Arc::clone(world), &block, self, location, server, state)
+                            .broken(Arc::clone(world), block, self, location, server, state)
                             .await;
                         self.update_sequence(player_action.sequence.0);
                         return;
@@ -1204,7 +1204,7 @@ impl Player {
                         std::sync::atomic::Ordering::Relaxed,
                     );
                     if !state.is_air() {
-                        let speed = block::calc_block_breaking(self, &state, block.name).await;
+                        let speed = block::calc_block_breaking(self, state, block.name).await;
                         // Instant break
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&location).await;
@@ -1219,7 +1219,7 @@ impl Player {
                                 .block_registry
                                 .broken(
                                     Arc::clone(world),
-                                    &block,
+                                    block,
                                     self,
                                     location,
                                     server,
@@ -1278,7 +1278,7 @@ impl Player {
 
                     let (block, state) = world.get_block_and_block_state(&location).await;
                     let drop = self.gamemode.load() != GameMode::Creative
-                        && self.can_harvest(&state, block.name).await;
+                        && self.can_harvest(state, block.name).await;
 
                     world
                         .break_block(
@@ -1294,7 +1294,7 @@ impl Player {
 
                     server
                         .block_registry
-                        .broken(Arc::clone(world), &block, self, location, server, state)
+                        .broken(Arc::clone(world), block, self, location, server, state)
                         .await;
 
                     self.update_sequence(player_action.sequence.0);
@@ -1400,7 +1400,7 @@ impl Player {
                 // Using block with empty hand
                 server
                     .block_registry
-                    .on_use(&block, self, location, server, world)
+                    .on_use(block, self, location, server, world)
                     .await;
             }
             return Ok(());
@@ -1411,7 +1411,7 @@ impl Player {
             drop(item_stack);
             let action_result = server
                 .block_registry
-                .use_with_item(&block, self, location, item, server, world)
+                .use_with_item(block, self, location, item, server, world)
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}
@@ -1426,7 +1426,7 @@ impl Player {
                     self,
                     location,
                     face,
-                    &block,
+                    block,
                     server,
                 )
                 .await;
@@ -1492,7 +1492,7 @@ impl Player {
                 ),
                 async |pos, world| {
                     let block = world.get_block(pos).await;
-                    block != Block::AIR && block != Block::WATER && block != Block::LAVA
+                    block != &Block::AIR && block != &Block::WATER && block != &Block::LAVA
                 },
             )
             .await;
@@ -1510,7 +1510,7 @@ impl Player {
                 self,
                 InteractAction::RightClickAir,
                 &binding,
-                Block::AIR,
+                &Block::AIR,
                 None,
             )
         };
@@ -1655,7 +1655,7 @@ impl Player {
     #[allow(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
-        block: Block,
+        block: &'static Block,
         server: &Server,
         use_item_on: SUseItemOn,
         location: BlockPos,
@@ -1699,7 +1699,7 @@ impl Player {
                 .block_registry
                 .can_update_at(
                     world,
-                    &clicked_block,
+                    clicked_block,
                     clicked_block_state.id,
                     &clicked_block_pos,
                     face,
@@ -1709,9 +1709,9 @@ impl Player {
                 .await
                 .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
         } else if clicked_block_state.replaceable() {
-            if clicked_block == Block::WATER {
+            if clicked_block == &Block::WATER {
                 let water_props =
-                    WaterLikeProperties::from_state_id(clicked_block_state.id, &clicked_block);
+                    WaterLikeProperties::from_state_id(clicked_block_state.id, clicked_block);
                 Some(BlockIsReplacing::Water(water_props.level))
             } else {
                 Some(BlockIsReplacing::Other)
@@ -1733,7 +1733,7 @@ impl Player {
                         .block_registry
                         .can_update_at(
                             world,
-                            &previous_block,
+                            previous_block,
                             previous_block_state.id,
                             &block_pos,
                             face.opposite(),
@@ -1744,10 +1744,10 @@ impl Player {
                         .then_some(BlockIsReplacing::Itself(previous_block_state.id))
                 } else {
                     previous_block_state.replaceable().then(|| {
-                        if previous_block == Block::WATER {
+                        if previous_block == &Block::WATER {
                             let water_props = WaterLikeProperties::from_state_id(
                                 previous_block_state.id,
-                                &previous_block,
+                                previous_block,
                             );
                             BlockIsReplacing::Water(water_props.level)
                         } else {
@@ -1772,7 +1772,7 @@ impl Player {
                 Some(world),
                 world.as_ref(),
                 Some(self),
-                &block,
+                block,
                 &final_block_pos,
                 final_face,
                 Some(&use_item_on),
@@ -1788,7 +1788,7 @@ impl Player {
                 server,
                 world,
                 self,
-                &block,
+                block,
                 &final_block_pos,
                 final_face,
                 replacing,
@@ -1815,7 +1815,7 @@ impl Player {
 
         server
             .block_registry
-            .player_placed(world, &block, new_state, &final_block_pos, face, self)
+            .player_placed(world, block, new_state, &final_block_pos, face, self)
             .await;
 
         // The block was placed successfully, so decrement their inventory

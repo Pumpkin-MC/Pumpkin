@@ -36,7 +36,7 @@ pub enum BlockStateProvider {
 }
 
 impl BlockStateProvider {
-    pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> BlockState {
+    pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> &'static BlockState {
         match self {
             BlockStateProvider::NoiseThreshold(provider) => provider.get(random, pos),
             BlockStateProvider::NoiseProvider(provider) => provider.get(pos),
@@ -57,7 +57,7 @@ pub struct RandomizedIntBlockStateProvider {
 }
 
 impl RandomizedIntBlockStateProvider {
-    pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> BlockState {
+    pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> &'static BlockState {
         // TODO
         self.source.get(random, pos)
     }
@@ -69,7 +69,7 @@ pub struct PillarBlockStateProvider {
 }
 
 impl PillarBlockStateProvider {
-    pub fn get(&self, _pos: BlockPos) -> BlockState {
+    pub fn get(&self, _pos: BlockPos) -> &'static BlockState {
         // TODO: random axis
         self.state.get_state().unwrap()
     }
@@ -85,7 +85,7 @@ pub struct DualNoiseBlockStateProvider {
 }
 
 impl DualNoiseBlockStateProvider {
-    pub fn get(&self, pos: BlockPos) -> BlockState {
+    pub fn get(&self, pos: BlockPos) -> &'static BlockState {
         let noise = perlin_codec_to_static(self.slow_noise.clone());
         let sampler = DoublePerlinNoiseSampler::new(
             &mut RandomGenerator::Legacy(LegacyRand::from_seed(self.base.base.seed as u64)),
@@ -130,7 +130,7 @@ pub struct WeightedBlockStateProvider {
 }
 
 impl WeightedBlockStateProvider {
-    pub fn get(&self, random: &mut RandomGenerator) -> BlockState {
+    pub fn get(&self, random: &mut RandomGenerator) -> &'static BlockState {
         Pool::get(&self.entries, random)
             .unwrap()
             .get_state()
@@ -144,7 +144,7 @@ pub struct SimpleStateProvider {
 }
 
 impl SimpleStateProvider {
-    pub fn get(&self, _pos: BlockPos) -> BlockState {
+    pub fn get(&self, _pos: BlockPos) -> &'static BlockState {
         self.state.get_state().unwrap()
     }
 }
@@ -185,7 +185,7 @@ pub struct NoiseBlockStateProvider {
 }
 
 impl NoiseBlockStateProvider {
-    pub fn get(&self, pos: BlockPos) -> BlockState {
+    pub fn get(&self, pos: BlockPos) -> &'static BlockState {
         let value = self.base.get_noise(pos);
         self.get_state_by_value(&self.states, value)
             .get_state()
@@ -210,7 +210,7 @@ pub struct NoiseThresholdBlockStateProvider {
 }
 
 impl NoiseThresholdBlockStateProvider {
-    pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> BlockState {
+    pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> &'static BlockState {
         let value = self.base.get_noise(pos);
         if value < self.threshold as f64 {
             return self.low_states[random.next_bounded_i32(self.low_states.len() as i32) as usize]

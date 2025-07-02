@@ -161,7 +161,7 @@ impl SurfaceTerrainBuilder {
                         break;
                     }
 
-                    if block_state == WATER_BLOCK {
+                    if block_state == &WATER_BLOCK {
                         return;
                     }
                 }
@@ -174,7 +174,7 @@ impl SurfaceTerrainBuilder {
                     }
 
                     let default_block = &chunk.default_block;
-                    chunk.set_block_state(&pos, &default_block.clone());
+                    chunk.set_block_state(&pos, default_block);
                 }
             }
         }
@@ -242,24 +242,24 @@ impl SurfaceTerrainBuilder {
                 let pos = Vector3::new(x, y, z);
                 let block_state = chunk.get_block_state(&pos);
                 if (block_state.to_state().is_air() && y < top_block && rand.next_f64() > 0.01)
-                    || (block_state.to_block() == WATER_BLOCK
+                    || (block_state.to_block() == &WATER_BLOCK
                         && y > bottom_block
                         && y < sea_level
                         && bottom_block != 0
                         && rand.next_f64() > 0.15)
                 {
                     if snow_blocks <= snow_block_count && y > snow_bottom {
-                        chunk.set_block_state(&pos, &Self::SNOW_BLOCK.default_state);
+                        chunk.set_block_state(&pos, Self::SNOW_BLOCK.default_state);
                         snow_blocks += 1;
                     } else {
-                        chunk.set_block_state(&pos, &Self::PACKED_ICE.default_state);
+                        chunk.set_block_state(&pos, Self::PACKED_ICE.default_state);
                     }
                 }
             }
         }
     }
 
-    pub fn get_terracotta_block(&self, pos: &Vector3<i32>) -> BlockState {
+    pub fn get_terracotta_block(&self, pos: &Vector3<i32>) -> &'static BlockState {
         let offset = (self
             .terracotta_bands_offset_noise
             .sample(pos.x as f64, 0.0, pos.z as f64)

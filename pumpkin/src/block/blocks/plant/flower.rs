@@ -38,7 +38,7 @@ impl PumpkinBlock for FlowerBlock {
         _use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         let block_below = block_accessor.get_block(&block_pos.down()).await;
-        block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == Block::FARMLAND
+        block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == &Block::FARMLAND
     }
 
     async fn random_tick(&self, block: &Block, world: &Arc<World>, pos: &BlockPos) {

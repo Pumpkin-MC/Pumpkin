@@ -301,7 +301,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
 pub async fn should_be_lit(world: &World, pos: &BlockPos, face: BlockDirection) -> bool {
     let other_pos = pos.offset(face.to_offset());
     let (block, state) = world.get_block_and_block_state(&other_pos).await;
-    get_redstone_power(&block, &state, world, &other_pos, face).await == 0
+    get_redstone_power(block, state, world, &other_pos, face).await == 0
 }
 
 pub async fn update_neighbors(world: &Arc<World>, pos: &BlockPos) {
