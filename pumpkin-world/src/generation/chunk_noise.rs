@@ -42,7 +42,7 @@ impl BlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         match self {
             Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
             Self::Ore(ore) => ore.sample(router, pos, sample_options),
@@ -66,7 +66,7 @@ impl ChainedBlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         self.samplers
             .iter_mut()
             .map(|sampler| sampler.sample(router, pos, sample_options, height_estimator))
@@ -370,7 +370,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         start_pos: Vector3<i32>,
         cell_pos: Vector3<i32>,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         //TODO: Fix this when Blender is added
         let pos = UnblendedNoisePos::new(
             start_pos.x + cell_pos.x,

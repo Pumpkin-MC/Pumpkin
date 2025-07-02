@@ -37,7 +37,7 @@ impl ClientPacket for CBossEvent<'_> {
                 write.write_f32_be(*health)?;
                 write.write_var_int(color)?;
                 write.write_var_int(division)?;
-                write.write_u8_be(*flags)
+                write.write_u8(*flags)
             }
             BosseventAction::Remove => write.write_var_int(&1.into()),
             BosseventAction::UpdateHealth(health) => {
@@ -55,7 +55,7 @@ impl ClientPacket for CBossEvent<'_> {
             }
             BosseventAction::UpdateFlags(flags) => {
                 write.write_var_int(&5.into())?;
-                write.write_u8_be(*flags)
+                write.write_u8(*flags)
             }
         }
     }

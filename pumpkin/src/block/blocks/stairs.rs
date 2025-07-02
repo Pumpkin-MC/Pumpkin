@@ -162,5 +162,5 @@ async fn get_stair_properties_if_exists(
     block
         .is_tagged_with("#minecraft:stairs")
         .unwrap()
-        .then(|| StairsProperties::from_state_id(block_state.id, &block))
+        .then(|| StairsProperties::from_state_id(block_state.id, block))
 }

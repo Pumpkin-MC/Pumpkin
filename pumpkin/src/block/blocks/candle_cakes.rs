@@ -105,7 +105,7 @@ impl CandleCakeBlock {
 
         let (block, state) = world.get_block_and_block_state(location).await;
 
-        CakeBlock::consume_if_hungry(world, player, &block, location, state.id).await;
+        CakeBlock::consume_if_hungry(world, player, block, location, state.id).await;
     }
 }
 

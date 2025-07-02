@@ -19,7 +19,7 @@ edition = "2024"
 
 
 [profile.dev]
-opt-level = 1
+#opt-level = 0
 
 [profile.release]
 lto = true
@@ -34,7 +34,7 @@ debug = true
 
 [workspace.dependencies]
 log = "0.4"
-tokio = { version = "1.45", features = [
+tokio = { version = "1.46", features = [
     "macros",
     "net",
     "rt-multi-thread",

@@ -68,7 +68,7 @@ impl PumpkinBlock for RepeaterBlock {
         let mut props = RepeaterProperties::from_state_id(state.id, block);
 
         let now_powered = props.powered;
-        let should_be_powered = self.has_power(world, *block_pos, &state, block).await;
+        let should_be_powered = self.has_power(world, *block_pos, state, block).await;
 
         if now_powered && !should_be_powered {
             props.powered = false;
@@ -226,7 +226,7 @@ impl PumpkinBlock for RepeaterBlock {
     ) -> BlockStateId {
         if direction == BlockDirection::Down {
             if let Some(neighbor_state) = get_state_by_state_id(neighbor_state_id) {
-                if !RedstoneGateBlock::can_place_above(self, world, *neighbor_pos, &neighbor_state)
+                if !RedstoneGateBlock::can_place_above(self, world, *neighbor_pos, neighbor_state)
                     .await
                 {
                     return Block::AIR.default_state.id;

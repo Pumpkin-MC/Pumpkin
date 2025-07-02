@@ -7,7 +7,6 @@ use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
-use pumpkin_world::world::BlockAccessor;
 use rand::Rng;
 use soul_fire::SoulFireBlock;
 
@@ -25,21 +24,19 @@ pub struct FireBlockBase;
 impl FireBlockBase {
     pub async fn get_fire_type(world: &World, pos: &BlockPos) -> Block {
         let (block, _block_state) = world.get_block_and_block_state(&pos.down()).await;
-        if SoulFireBlock::is_soul_base(&block) {
+        if SoulFireBlock::is_soul_base(block) {
             return Block::SOUL_FIRE;
         }
         Block::FIRE
     }
 
     #[must_use]
-    pub async fn can_place_on(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    pub fn can_place_on(block: &Block) -> bool {
         // Make sure the block below is not a fire block or fluid block
-        let (support_block, state) = &block_accessor.get_block_and_block_state(block_pos).await;
-        support_block.id != Block::SOUL_FIRE.id
-            && support_block.id != Block::FIRE.id
-            && support_block.id != Block::WATER.id
-            && support_block.id != Block::LAVA.id
-            && !support_block.is_waterlogged(state.id)
+        block != &Block::SOUL_FIRE
+            && block != &Block::FIRE
+            && block != &Block::WATER
+            && block != &Block::LAVA
     }
 
     pub async fn is_soul_fire(world: &Arc<World>, block_pos: &BlockPos) -> bool {
@@ -96,7 +93,7 @@ impl FireBlockBase {
         let mut found = false;
 
         for dir in BlockDirection::all() {
-            if world.get_block(&block_pos.offset(dir.to_offset())).await == Block::OBSIDIAN {
+            if world.get_block(&block_pos.offset(dir.to_offset())).await == &Block::OBSIDIAN {
                 found = true;
                 break;
             }

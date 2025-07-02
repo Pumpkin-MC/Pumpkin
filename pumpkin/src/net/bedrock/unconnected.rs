@@ -7,10 +7,18 @@ use pumpkin_protocol::{
     codec::ascii_string::AsciiString,
 };
 
-use crate::{net::Client, server::Server};
+use crate::{
+    net::{Client, bedrock::BedrockClientPlatform},
+    server::Server,
+};
 
 impl Client {
-    pub async fn handle_unconnected_ping(&self, server: &Server, packet: SUnconnectedPing) {
+    pub async fn handle_unconnected_ping(
+        &self,
+        bedrock: &BedrockClientPlatform,
+        server: &Server,
+        packet: SUnconnectedPing,
+    ) {
         let motd_string = ServerInfo {
             edition: "MCPE",
             motd_line_1: &BASIC_CONFIG.motd,
@@ -25,12 +33,16 @@ impl Client {
             port_ipv4: 19132,
             port_ipv6: 19133,
         };
-        self.send_packet_now(&CUnconnectedPong::new(
-            packet.time,
-            server.server_guid,
-            packet.magic,
-            AsciiString(format!("{motd_string}")),
-        ))
-        .await;
+        bedrock
+            .send_raknet_packet_now(
+                self,
+                &CUnconnectedPong::new(
+                    packet.time,
+                    server.server_guid,
+                    packet.magic,
+                    AsciiString(format!("{motd_string}")),
+                ),
+            )
+            .await;
     }
 }

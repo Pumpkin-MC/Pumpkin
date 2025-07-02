@@ -25,6 +25,7 @@ impl ServerPacket for FrameSet {
 
 impl ClientPacket for FrameSet {
     fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
+        write.write_u8(0x84)?;
         write.write_u24_be(self.sequence)?;
         for frame in &self.frames {
             frame.write(&mut write)?;
@@ -37,7 +38,7 @@ impl ClientPacket for FrameSet {
 pub struct Frame {
     pub reliability: RakReliability,
     pub payload: Bytes,
-    pub reliable_index: u32,
+    pub reliable_number: u32,
     pub sequence_index: u32,
     pub order_index: u32,
     pub order_channel: u8,
@@ -50,7 +51,8 @@ impl Frame {
     pub fn read(mut read: impl std::io::Read) -> Result<Vec<Self>, crate::ser::ReadingError> {
         let mut frames = Vec::new();
 
-        while let Ok(header) = read.get_u8_be() {
+        while let Ok(header) = read.get_u8() {
+            let mut frame = Self::default();
             let reliability_id = (header & 0xE0) >> 5;
             let reliability = match RakReliability::from_id(reliability_id) {
                 Some(reliability) => reliability,
@@ -61,62 +63,49 @@ impl Frame {
                 }
             };
             let split = (header & RAKNET_SPLIT) != 0;
-            let length = (read.get_u16_be()? as f32 / 8.0).ceil();
+            let length = read.get_u16_be()? >> 3;
 
-            let reliable_index = if reliability.is_reliable() {
-                read.get_u24()?.0
-            } else {
-                0
-            };
+            if reliability.is_reliable() {
+                frame.reliable_number = read.get_u24()?.0
+            }
 
-            let sequence_index = if reliability.is_sequenced() {
-                read.get_u24()?.0
-            } else {
-                0
-            };
+            if reliability.is_sequenced() {
+                frame.sequence_index = read.get_u24()?.0
+            }
 
-            let (order_index, order_channel) = if reliability.is_ordered() {
-                (read.get_u24()?.0, read.get_u8_be()?)
-            } else {
-                (0, 0)
-            };
-            let (split_size, split_id, split_index) = if split {
-                (read.get_u32_be()?, read.get_u16_be()?, read.get_u32_be()?)
-            } else {
-                (0, 0, 0)
-            };
-            let payload = read.read_boxed_slice(length as usize)?;
-            frames.push(Self {
-                reliability,
-                payload: payload.into(),
-                reliable_index,
-                sequence_index,
-                order_index,
-                order_channel,
-                split_size,
-                split_id,
-                split_index,
-            });
+            if reliability.is_ordered() {
+                frame.order_index = read.get_u24()?.0;
+                frame.order_channel = read.get_u8()?;
+            }
+
+            if split {
+                frame.split_size = read.get_u32_be()?;
+                frame.split_id = read.get_u16_be()?;
+                frame.split_index = read.get_u32_be()?;
+            }
+
+            frame.reliability = reliability;
+            frame.payload = read.read_boxed_slice(length as usize)?.into();
+            frames.push(frame);
         }
 
         Ok(frames)
     }
 
-    fn write(&self, mut write: impl Write) -> Result<(), WritingError> {
+    pub fn write(&self, mut write: impl Write) -> Result<(), WritingError> {
         let is_split = self.split_size > 0;
-        write.write_u8_be(
-            (self.reliability.to_id() >> 5) & if is_split { RAKNET_SPLIT } else { 0 },
-        )?;
-        write.write_u16_be((self.payload.len() >> 3) as u16)?;
+        write
+            .write_u8((self.reliability.to_id() << 5) & if is_split { RAKNET_SPLIT } else { 0 })?;
+        write.write_u16_be((self.payload.len() << 3) as u16)?;
         if self.reliability.is_reliable() {
-            write.write_u24_be(U24(self.reliable_index))?;
+            write.write_u24_be(U24(self.reliable_number))?;
         }
         if self.reliability.is_sequenced() {
             write.write_u24_be(U24(self.sequence_index))?;
         }
         if self.reliability.is_ordered() {
             write.write_u24_be(U24(self.order_index))?;
-            write.write_u8_be(self.order_channel)?;
+            write.write_u8(self.order_channel)?;
         }
         if is_split {
             write.write_u32_be(self.split_size)?;

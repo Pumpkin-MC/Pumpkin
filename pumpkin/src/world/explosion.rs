@@ -82,7 +82,7 @@ impl Explosion {
             }
 
             let block = world.get_block(&pos).await;
-            let pumpkin_block = server.block_registry.get_pumpkin_block(&block);
+            let pumpkin_block = server.block_registry.get_pumpkin_block(block);
 
             world.set_block_state(&pos, 0, BlockFlags::NOTIFY_ALL).await;
 
@@ -91,10 +91,10 @@ impl Explosion {
                     block_state: get_state_by_state_id(block_state.id),
                     explosion_radius: Some(self.power),
                 };
-                drop_loot(world, &block, &pos, false, params).await;
+                drop_loot(world, block, &pos, false, params).await;
             }
             if let Some(pumpkin_block) = pumpkin_block {
-                pumpkin_block.explode(&block, world, pos).await;
+                pumpkin_block.explode(block, world, pos).await;
             }
         }
     }

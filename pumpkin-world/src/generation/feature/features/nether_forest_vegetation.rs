@@ -51,12 +51,12 @@ impl NetherForestVegetationFeature {
             if !chunk.is_air(&pos.0)
                 || pos.0.y <= chunk.bottom_y() as i32
                 || block_registry
-                    .can_place_at(&nether_block, chunk, &pos, BlockDirection::Up)
+                    .can_place_at(nether_block, chunk, &pos, BlockDirection::Up)
                     .await
             {
                 continue;
             }
-            chunk.set_block_state(&pos.0, &nether_state);
+            chunk.set_block_state(&pos.0, nether_state);
             result = true;
         }
 

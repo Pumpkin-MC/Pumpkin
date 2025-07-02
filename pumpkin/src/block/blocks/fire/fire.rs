@@ -55,6 +55,7 @@ impl FireBlock {
         block_state
             .block()
             .flammable
+            .as_ref()
             .is_some_and(|f| f.burn_chance > 0)
     }
 
@@ -66,7 +67,7 @@ impl FireBlock {
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
             let block_state = block_accessor.get_block_state(&neighbor_pos).await;
-            if Self::is_flammable(&block_state) {
+            if Self::is_flammable(block_state) {
                 return true;
             }
         }
@@ -81,14 +82,14 @@ impl FireBlock {
     ) -> BlockStateId {
         let down_pos = pos.down();
         let down_state = world.get_block_state(&down_pos).await;
-        if Self::is_flammable(&down_state) || down_state.is_side_solid(BlockDirection::Up) {
+        if Self::is_flammable(down_state) || down_state.is_side_solid(BlockDirection::Up) {
             return block.default_state.id;
         }
         let mut fire_props = FireProperties::from_state_id(block.default_state.id, block);
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
             let neighbor_state = world.get_block_state(&neighbor_pos).await;
-            if Self::is_flammable(&neighbor_state) {
+            if Self::is_flammable(neighbor_state) {
                 match direction {
                     BlockDirection::North => fire_props.north = true,
                     BlockDirection::South => fire_props.south = true,
@@ -116,6 +117,7 @@ impl FireBlock {
             .get_block(pos)
             .await
             .flammable
+            .as_ref()
             .map_or(0, |f| f.spread_chance)
             .into();
         if rand::rng().random_range(0..spread_factor) < spread_chance {
@@ -139,7 +141,7 @@ impl FireBlock {
                     .await;
             }
 
-            if block == Block::TNT {
+            if block == &Block::TNT {
                 TNTBlock::prime(world, pos).await;
             }
         }
@@ -157,7 +159,7 @@ impl FireBlock {
             if world.get_fluid(&pos.offset(dir.to_offset())).await.name != Fluid::EMPTY.name {
                 continue; // Skip if there is a fluid
             }
-            if let Some(flammable) = neighbor_block.flammable {
+            if let Some(flammable) = &neighbor_block.flammable {
                 total_burn_chance += i32::from(flammable.burn_chance);
             }
         }
@@ -209,8 +211,8 @@ impl PumpkinBlock for FireBlock {
         _world: &Arc<World>,
         entity: &dyn EntityBase,
         _pos: BlockPos,
-        _block: Block,
-        _state: BlockState,
+        _block: &'static Block,
+        _state: &'static BlockState,
         _server: &Server,
     ) {
         let base_entity = entity.get_entity();
@@ -346,7 +348,7 @@ impl PumpkinBlock for FireBlock {
 
         if age == 15
             && rand::rng().random_range(0..4) == 0
-            && !Self::is_flammable(&world.get_block_state(&pos.down()).await)
+            && !Self::is_flammable(world.get_block_state(&pos.down()).await)
         {
             world
                 .set_block_state(
@@ -440,7 +442,7 @@ impl PumpkinBlock for FireBlock {
         block_pos: BlockPos,
         _server: &Server,
         world: Arc<World>,
-        _state: BlockState,
+        _state: &'static BlockState,
     ) {
         FireBlockBase::broken(world, block_pos).await;
     }

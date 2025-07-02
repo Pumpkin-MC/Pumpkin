@@ -44,7 +44,7 @@ impl CoralMushroomFeature {
 
                     if !((condition_a && condition_b && condition_c && condition_d)
                         && !random_check
-                        && CoralFeature::generate_coral_piece(chunk, random, &block, pos))
+                        && CoralFeature::generate_coral_piece(chunk, random, block, pos))
                     {
                         continue;
                     }

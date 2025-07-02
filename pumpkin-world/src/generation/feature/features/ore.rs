@@ -197,7 +197,7 @@ impl OreFeature {
                             ) {
                                 chunk.set_block_state(
                                     &Vector3::new(ad, ae, af),
-                                    &target.state.get_state().unwrap(),
+                                    target.state.get_state().unwrap(),
                                 );
                                 placed_blocks_count += 1;
                                 break; // Equivalent to 'continue block11;'
@@ -213,12 +213,12 @@ impl OreFeature {
     fn should_place(
         &self,
         chunk: &mut ProtoChunk,
-        state: BlockState,
+        state: &'static BlockState,
         random: &mut RandomGenerator,
         target: &OreTarget,
         pos: &mut BlockPos,
     ) -> bool {
-        if !target.target.test(&state, random) {
+        if !target.target.test(state, random) {
             return false;
         }
         if Self::should_not_discard(random, self.discard_chance_on_air_exposure) {
