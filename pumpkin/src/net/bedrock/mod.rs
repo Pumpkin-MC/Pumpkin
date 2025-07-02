@@ -311,7 +311,9 @@ impl BedrockClientPlatform {
             entry[fragment_index] = Some(frame);
 
             // Check if all fragments are received
-            if !entry.iter().any(|opt| opt.is_none()) {
+            if entry.iter().any(Option::is_none) {
+                return Ok(());
+            } else {
                 dbg!("compound complete! size", entry.len());
                 let mut frames = compounds.remove(&compound_id).unwrap();
 
@@ -331,8 +333,6 @@ impl BedrockClientPlatform {
 
                 frame.payload = merged.into();
                 frame.split_size = 0;
-            } else {
-                return Ok(());
             }
         }
 
