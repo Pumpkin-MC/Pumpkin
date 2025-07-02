@@ -108,9 +108,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
-    // manager.register(ChippedAnvilBlock);
     manager.register(CraftingTableBlock);
-    // manager.register(DamagedAnvilBlock);
     manager.register(DirtPathBlock);
     manager.register(DoorBlock);
     manager.register(FarmLandBlock);
