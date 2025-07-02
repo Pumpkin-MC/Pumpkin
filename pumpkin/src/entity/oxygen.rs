@@ -1,11 +1,15 @@
+use std::sync::atomic::Ordering;
 use super::{EntityBase, NBTStorage, player::Player};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EffectType;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::{MetaDataType, Metadata};
+use pumpkin_util::GameMode;
+use pumpkin_world::entity::entity_data_flags::DATA_AIR_SUPPLY_ID;
 
-// Oxygen management system similar to Minecraft's air mechanics
 pub struct OxygenManager {
     /// Current oxygen level in ticks (0 = depleted)
     pub oxygen_level: AtomicCell<u16>,
@@ -26,7 +30,7 @@ impl OxygenManager {
     /// Maximum oxygen capacity (base + respiration bonus)
     fn get_max_oxygen(player: &Player) -> u16 {
         let base_oxygen = 300; // 15 seconds * 20 ticks/sec
-        let respiration_level = player.get_respiration_level(); // Implement on Player
+        let respiration_level = player.get_respiration_level();
         base_oxygen + (respiration_level as u16 * 300) // +15 sec per level
     }
 
@@ -35,7 +39,7 @@ impl OxygenManager {
         let max_oxygen = Self::get_max_oxygen(player);
         let current_oxygen = self.oxygen_level.load();
 
-        if player.is_underwater().await {
+        if player.gamemode.load() == GameMode::Survival && player.living_entity.entity.under_water.load(Ordering::Relaxed) {
             let mut damage_timer = self.damage_timer.load();
 
             // Water breathing effect grants immunity
@@ -46,7 +50,7 @@ impl OxygenManager {
             {
                 // Reset to full oxygen if not already
                 if current_oxygen < max_oxygen {
-                    self.oxygen_level.store(max_oxygen);
+                    self.update_oxygen(player, max_oxygen).await;
                 }
                 self.damage_timer.store(0);
                 return;
@@ -54,7 +58,7 @@ impl OxygenManager {
 
             // Consume oxygen if available
             if current_oxygen > 0 {
-                self.oxygen_level.store(current_oxygen - 1);
+                self.update_oxygen(player, current_oxygen - 1).await;
                 self.damage_timer.store(0);
             }
             // Handle oxygen depletion
@@ -71,9 +75,28 @@ impl OxygenManager {
         }
         // Replenish oxygen when not submerged
         else if current_oxygen < max_oxygen {
-            self.oxygen_level.store(current_oxygen + 1);
+            self.update_oxygen(player, current_oxygen + 1).await;
             self.damage_timer.store(0);
         }
+    }
+
+    pub fn reset(&self) {
+        self.oxygen_level.store(300);
+        self.damage_timer.store(0);
+    }
+
+    async fn update_oxygen(&self, player: &Player, current_oxygen: u16) {
+        self.oxygen_level.store(current_oxygen);
+
+        player
+            .living_entity
+            .entity
+            .send_meta_data(&[Metadata::new(
+                DATA_AIR_SUPPLY_ID,
+                MetaDataType::Integer,
+                VarInt(i32::from(current_oxygen)),
+            )])
+            .await;
     }
 }
 

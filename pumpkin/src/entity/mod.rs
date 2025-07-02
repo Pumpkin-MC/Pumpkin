@@ -148,6 +148,8 @@ pub struct Entity {
     pub velocity: AtomicCell<Vector3<f64>>,
     /// Indicates whether the entity is on the ground (may not always be accurate).
     pub on_ground: AtomicBool,
+    /// Indicates whether the entity is underwater (may not always be accurate)
+    pub under_water: AtomicBool,
     /// The entity's yaw rotation (horizontal rotation) ← →
     pub yaw: AtomicCell<f32>,
     /// The entity's head yaw rotation (horizontal rotation of the head)
@@ -198,6 +200,7 @@ impl Entity {
             entity_uuid,
             entity_type,
             on_ground: AtomicBool::new(false),
+            under_water: AtomicBool::new(false),
             pos: AtomicCell::new(position),
             block_pos: AtomicCell::new(BlockPos(Vector3::new(floor_x, floor_y, floor_z))),
             chunk_pos: AtomicCell::new(Vector2::new(floor_x, floor_z)),

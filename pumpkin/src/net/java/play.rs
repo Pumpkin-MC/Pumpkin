@@ -380,8 +380,12 @@ impl Player {
                 let last_pos = entity.pos.load();
                 self.living_entity.set_pos(pos);
 
+                let eye_pos = self.eye_position().to_block_pos();
+                self.world().await.is_fluid_at(&eye_pos).await;
+
+
                 let height_difference = pos.y - last_pos.y;
-                if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+                if entity.on_ground.load(Ordering::Relaxed)
                     && (packet.collision & FLAG_ON_GROUND) != 0
                     && height_difference > 0.0
                 {

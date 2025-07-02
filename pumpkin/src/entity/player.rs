@@ -66,9 +66,7 @@ use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
-use pumpkin_world::entity::entity_data_flags::{
-    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION, SLEEPING_POS_ID,
-};
+use pumpkin_world::entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION, SLEEPING_POS_ID};
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
 
@@ -277,13 +275,6 @@ pub struct Player {
     pub screen_handler_sync_id: AtomicU8,
     pub screen_handler_listener: Arc<dyn ScreenHandlerListener>,
     pub screen_handler_sync_handler: Arc<SyncHandler>,
-}
-
-impl Player {
-    pub async fn is_underwater(&self) -> bool {
-        let eye_pos = self.eye_position().to_block_pos();
-        self.world().await.is_fluid_at(&eye_pos).await
-    }
 }
 
 impl Player {
@@ -1299,6 +1290,7 @@ impl Player {
                 &TextComponent::text("noob"),
             ))
             .await;
+        self.oxygen_manager.reset();
     }
 
     pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) {
