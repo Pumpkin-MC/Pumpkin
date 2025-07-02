@@ -107,7 +107,7 @@ async fn get_max_strong_power(world: &World, pos: &BlockPos, dust_power: bool) -
                 side,
                 dust_power,
             )
-                .await,
+            .await,
         );
     }
     max_power
@@ -128,7 +128,7 @@ async fn get_max_weak_power(world: &World, pos: &BlockPos, dust_power: bool) -> 
                 side,
                 dust_power,
             )
-                .await,
+            .await,
         );
     }
     max_power
