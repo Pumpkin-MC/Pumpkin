@@ -1,5 +1,4 @@
-use std::sync::atomic::Ordering;
-use super::{EntityBase, NBTStorage, player::Player};
+use super::{player::Player, EntityBase, NBTStorage};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
@@ -39,7 +38,7 @@ impl OxygenManager {
         let max_oxygen = Self::get_max_oxygen(player);
         let current_oxygen = self.oxygen_level.load();
 
-        if player.gamemode.load() == GameMode::Survival && player.living_entity.is_in_water() {
+        if matches!(player.gamemode.load(), GameMode::Survival | GameMode::Adventure) && player.living_entity.is_in_water().await {
             let mut damage_timer = self.damage_timer.load();
 
             // Water breathing effect grants immunity
