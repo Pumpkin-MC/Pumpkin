@@ -138,30 +138,28 @@ impl UDPNetworkDecoder {
             Err(PacketDecodeError::OutOfBounds)?
         }
 
-        let header = VarUInt::decode_async(&mut reader).await?;
+        let var_header = VarUInt::decode_async(&mut reader).await?;
 
-        let header_value = header.0;
+        // The header is 14 bits. Ensure we only consider these bits.
+        // A varint u32 could be larger, so we mask to the relevant bits.
+        let header = var_header.0 & 0x3FFF; // Mask to get the lower 14 bits (2^14 - 1)
 
         // Extract components from GamePacket Header (14 bits)
         // Gamepacket ID (10 bits)
         // SubClient Sender ID (2 bits)
         // SubClient Target ID (2 bits)
 
-        // The header is 14 bits. Ensure we only consider these bits.
-        // A varint u32 could be larger, so we mask to the relevant bits.
-        let fourteen_bit_header = header_value & 0x3FFF; // Mask to get the lower 14 bits (2^14 - 1)
-
         // SubClient Target ID: Lowest 2 bits
-        let _sub_client_target = (fourteen_bit_header & 0b11) as u8;
+        let _sub_client_target = (header >> 10 & 0b11) as u8;
 
         // SubClient Sender ID: Next 2 bits (bits 2 and 3)
-        let _sub_client_sender = ((fourteen_bit_header >> 2) & 0b11) as u8;
+        let _sub_client_sender = (header >> 12 & 0b11) as u8;
 
         // Gamepacket ID: Remaining 10 bits (bits 4 to 13)
-        let gamepacket_id = ((fourteen_bit_header >> 4) & 0x3FF) as u16; // 0x3FF is 10 bits set to 1
+        let gamepacket_id = (header & 0x3FF) as u16; // 0x3FF is 10 bits set to 1
 
         let payload = reader
-            .read_boxed_slice(packet_len as usize - header.written_size())
+            .read_boxed_slice(packet_len as usize - var_header.written_size())
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
         Ok(RawPacket {
