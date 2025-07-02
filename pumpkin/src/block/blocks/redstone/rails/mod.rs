@@ -167,7 +167,7 @@ enum RailProperties {
 
 impl RailProperties {
     pub fn default(block: &Block) -> Self {
-        if *block == Block::RAIL {
+        if block == &Block::RAIL {
             Self::Rail(RailLikeProperties::default(block))
         } else {
             Self::StraightRail(PoweredRailLikeProperties::default(block))
@@ -175,7 +175,7 @@ impl RailProperties {
     }
 
     pub fn new(state_id: u16, block: &Block) -> Self {
-        if *block == Block::RAIL {
+        if block == &Block::RAIL {
             Self::Rail(RailLikeProperties::from_state_id(state_id, block))
         } else {
             Self::StraightRail(PoweredRailLikeProperties::from_state_id(state_id, block))

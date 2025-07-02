@@ -612,6 +612,17 @@ impl World {
         }
     }
 
+    pub async fn perform_random_ticks(self: &Arc<Self>) {
+        for scheduled_tick in self.level.get_random_ticks().await {
+            let block = self.get_block(&scheduled_tick.block_pos).await;
+            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
+                pumpkin_block
+                    .random_tick(block, self, &scheduled_tick.block_pos)
+                    .await;
+            }
+        }
+    }
+
     /// Gets the y position of the first non air block from the top down
     pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
         // TODO: this is bad

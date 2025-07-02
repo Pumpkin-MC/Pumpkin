@@ -127,7 +127,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state: u16,
         block_pos: &BlockPos,
@@ -135,7 +135,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: u16,
     ) -> u16 {
-        if *block == Block::REDSTONE_WALL_TORCH {
+        if block == &Block::REDSTONE_WALL_TORCH {
             let props = RWallTorchProps::from_state_id(state, block);
             if props.facing.to_block_direction().opposite() == direction
                 && !can_place_at(world, block_pos, props.facing.to_block_direction()).await

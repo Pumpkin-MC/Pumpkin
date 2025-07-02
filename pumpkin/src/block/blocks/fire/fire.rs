@@ -235,7 +235,7 @@ impl PumpkinBlock for FireBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         _block: &Block,
         state_id: BlockStateId,
         block_pos: &BlockPos,
@@ -247,7 +247,7 @@ impl PumpkinBlock for FireBlock {
             .can_place_at(
                 None,
                 Some(world),
-                world,
+                world.as_ref(),
                 None,
                 &Block::FIRE,
                 block_pos,

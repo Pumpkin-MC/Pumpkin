@@ -66,7 +66,7 @@ impl PumpkinBlock for RedstoneWireBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state: BlockStateId,
         block_pos: &BlockPos,

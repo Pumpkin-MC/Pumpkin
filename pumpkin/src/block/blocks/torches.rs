@@ -9,6 +9,7 @@ use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
+use std::sync::Arc;
 
 type WallTorchProps = pumpkin_data::block_properties::WallTorchLikeProperties;
 // Normal tourches don't have properties
@@ -78,7 +79,7 @@ impl PumpkinBlock for TorchBlock {
                 && dir != Facing::Down
                 && can_place_at(world, block_pos, dir.to_block_direction()).await
             {
-                let wall_block = if *block == Block::TORCH {
+                let wall_block = if block == &Block::TORCH {
                     Block::WALL_TORCH
                 } else {
                     Block::SOUL_WALL_TORCH
@@ -126,7 +127,7 @@ impl PumpkinBlock for TorchBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state: u16,
         block_pos: &BlockPos,
@@ -134,7 +135,7 @@ impl PumpkinBlock for TorchBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: u16,
     ) -> u16 {
-        if *block == Block::WALL_TORCH || *block == Block::SOUL_WALL_TORCH {
+        if block == &Block::WALL_TORCH || block == &Block::SOUL_WALL_TORCH {
             let props = WallTorchProps::from_state_id(state, block);
             if props.facing.to_block_direction().opposite() == direction
                 && !can_place_at(world, block_pos, props.facing.to_block_direction()).await

@@ -155,7 +155,7 @@ impl PumpkinBlock for LeverBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state: BlockStateId,
         pos: &BlockPos,
@@ -163,9 +163,16 @@ impl PumpkinBlock for LeverBlock {
         _neighbor_pos: &BlockPos,
         _neighbor_state: BlockStateId,
     ) -> BlockStateId {
-        WallMountedBlock::get_state_for_neighbor_update(self, state, block, direction, world, pos)
-            .await
-            .unwrap_or(state)
+        WallMountedBlock::get_state_for_neighbor_update(
+            self,
+            state,
+            block,
+            direction,
+            world.as_ref(),
+            pos,
+        )
+        .await
+        .unwrap_or(state)
     }
 }
 

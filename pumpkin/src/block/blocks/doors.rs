@@ -72,7 +72,7 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
 }
 
 fn can_open_door(block: &Block) -> bool {
-    if block.id == Block::IRON_DOOR.id {
+    if block == &Block::IRON_DOOR {
         return false;
     }
 
@@ -84,14 +84,14 @@ fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
         if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
             Sound::BlockWoodenDoorOpen
-        } else if block.id == Block::IRON_DOOR.id {
+        } else if block == &Block::IRON_DOOR {
             Sound::BlockIronDoorOpen
         } else {
             Sound::BlockCopperDoorOpen
         }
     } else if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
         Sound::BlockWoodenDoorClose
-    } else if block.id == Block::IRON_DOOR.id {
+    } else if block == &Block::IRON_DOOR {
         Sound::BlockIronDoorClose
     } else {
         Sound::BlockCopperDoorClose
@@ -319,7 +319,7 @@ impl PumpkinBlock for DoorBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
+        world: &Arc<World>,
         block: &Block,
         state: u16,
         block_pos: &BlockPos,
