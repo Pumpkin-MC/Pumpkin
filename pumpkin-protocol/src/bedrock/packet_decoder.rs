@@ -131,7 +131,6 @@ impl UDPNetworkDecoder {
             })?;
 
         let packet_len = packet_len.0 as u64;
-        dbg!(packet_len);
 
         // This is the default MTU size
         if !(0..=1492).contains(&packet_len) {

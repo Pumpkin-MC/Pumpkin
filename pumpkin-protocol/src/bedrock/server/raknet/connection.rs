@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 use crate::codec::socket_address::SocketAddress;
 
 #[derive(Serialize, Deserialize)]
+#[packet(0x00)]
+pub struct SConnectedPing {
+    /// Time since start
+    pub time: u64,
+}
+
+#[derive(Serialize, Deserialize)]
 #[packet(0x09)]
 pub struct SConnectionRequest {
     pub client_guid: u64,
