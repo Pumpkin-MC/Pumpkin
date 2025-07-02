@@ -2,6 +2,7 @@ use super::{player::Player, EntityBase, NBTStorage};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use rand::Rng;
+use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EffectType;
 use pumpkin_nbt::compound::NbtCompound;
@@ -20,7 +21,7 @@ pub struct OxygenManager {
 impl Default for OxygenManager {
     fn default() -> Self {
         Self {
-            oxygen_level: AtomicCell::new(300), // Default full oxygen (15 seconds)
+            oxygen_level: AtomicCell::new(300), // 15 seconds * 20 ticks/sec
             damage_timer: AtomicCell::new(0),
         }
     }
@@ -28,32 +29,36 @@ impl Default for OxygenManager {
 
 impl OxygenManager {
     /// Maximum oxygen capacity (constant in vanilla)
-    const MAX_OXYGEN: u16 = 300; // 15 seconds * 20 ticks/sec
+    const MAX_OXYGEN: u16 = 300;
 
     pub async fn tick(&self, player: &Player) {
-        let current_oxygen = self.oxygen_level.load();
+        if !matches!(player.gamemode.load(), GameMode::Survival | GameMode::Adventure) {
+            return;
+        }
 
-        // Check if we are in a mode that consumes oxygen and in water
-        if matches!(player.gamemode.load(), GameMode::Survival | GameMode::Adventure)
-            && player.living_entity.is_in_water().await
-        {
+        let current_oxygen = self.oxygen_level.load();
+        let is_eyes_in_water = self.are_eyes_in_water(player).await;
+        let has_water_breathing = player.living_entity.has_effect(EffectType::WaterBreathing).await;
+
+        // Water breathing effect grants immunity
+        if has_water_breathing {
+            if current_oxygen < Self::MAX_OXYGEN {
+                self.update_oxygen(player, Self::MAX_OXYGEN).await;
+            }
+            self.damage_timer.store(0);
+            return;
+        }
+
+        // Handle oxygen mechanics when eyes are in water
+        if is_eyes_in_water {
             let mut damage_timer = self.damage_timer.load();
 
-            // Water breathing effect grants immunity
-            if player.living_entity.has_effect(EffectType::WaterBreathing).await {
-                if current_oxygen < Self::MAX_OXYGEN {
-                    self.update_oxygen(player, Self::MAX_OXYGEN).await;
-                }
-                self.damage_timer.store(0);
-                return;
-            }
-
-            // Consume oxygen with respiration chance
+            // Consume oxygen if available (with respiration chance)
             if current_oxygen > 0 {
-                let respiration_level = player.get_respiration_level();
+                let respiration_level = player.get_respiration_level().await;
                 let should_consume = if respiration_level > 0 {
-                    // 1/(level+1) chance to preserve oxygen each tick
-                    !rand::rng().random_bool(1.0 / (respiration_level as f64 + 1.0))
+                    // Vanilla: 1/(level+1) chance to preserve oxygen
+                    rand::rng().random_ratio(1, respiration_level as u32 + 1)
                 } else {
                     true
                 };
@@ -61,10 +66,9 @@ impl OxygenManager {
                 if should_consume {
                     self.update_oxygen(player, current_oxygen - 1).await;
                 }
-                // Reset damage timer because we are not drowning (we have oxygen left)
                 self.damage_timer.store(0);
             }
-            // Handle oxygen depletion (drowning)
+            // Handle oxygen depletion
             else {
                 damage_timer += 1;
                 self.damage_timer.store(damage_timer);
@@ -76,10 +80,11 @@ impl OxygenManager {
                 }
             }
         }
-        // Replenish oxygen when not submerged (vanilla: 15x faster replenish)
+        // Replenish oxygen when eyes are not in water
         else if current_oxygen < Self::MAX_OXYGEN {
-            // Vanilla replenishes 15 per tick when out of water
-            self.update_oxygen(player, current_oxygen + 15).await;
+            // Vanilla: Oxygen replenishes at 4 per tick (1.5 seconds to fully recover)
+            let new_oxygen = (current_oxygen + 4).min(Self::MAX_OXYGEN);
+            self.update_oxygen(player, new_oxygen).await;
             self.damage_timer.store(0);
         }
     }
@@ -90,9 +95,7 @@ impl OxygenManager {
     }
 
     async fn update_oxygen(&self, player: &Player, new_oxygen: u16) {
-        // Clamp to valid range [0, MAX_OXYGEN]
-        let clamped = new_oxygen.min(Self::MAX_OXYGEN);
-        self.oxygen_level.store(clamped);
+        self.oxygen_level.store(new_oxygen);
 
         player
             .living_entity
@@ -100,9 +103,15 @@ impl OxygenManager {
             .send_meta_data(&[Metadata::new(
                 DATA_AIR_SUPPLY_ID,
                 MetaDataType::Integer,
-                VarInt(i32::from(clamped)),
+                VarInt(i32::from(new_oxygen)),
             )])
             .await;
+    }
+
+    async fn are_eyes_in_water(&self, player: &Player) -> bool {
+        let world = player.world().await;
+        let block_pos = player.eye_position().to_block_pos();
+        world.get_block(&block_pos).await == &Block::WATER
     }
 }
 

@@ -1415,7 +1415,9 @@ impl Player {
         speed
     }
 
-    pub fn get_respiration_level(&self) -> u8 {
+    pub async fn get_respiration_level(&self) -> u8 {
+        // todo: implement when we will have support of enchanted items
+
         0
     }
 
