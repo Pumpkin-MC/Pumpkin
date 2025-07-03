@@ -25,11 +25,14 @@ use super::pumpkin_block::{
 };
 use super::pumpkin_fluid::PumpkinFluid;
 
+// ActionResult.java
 pub enum BlockActionResult {
-    /// Allow other actions to be executed
+    /// Allow other actions to be executed | Same as PASS in vanilla
     Continue,
-    /// Block other actions
+    /// Block other actions from being executed | Same as FAIL in vanilla
     Consume,
+    /// Use default action for the block | Same as `PASS_TO_DEFAULT_BLOCK_ACTION` in vanilla
+    PassToDefault,
 }
 
 #[derive(Default)]
