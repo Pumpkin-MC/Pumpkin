@@ -1,3 +1,4 @@
+pub mod anvil;
 pub mod bamboo;
 pub mod barrel;
 pub mod bed;
