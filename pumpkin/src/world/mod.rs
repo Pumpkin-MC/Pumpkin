@@ -499,10 +499,12 @@ impl World {
     }
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
+        println!("Ticking world");
         self.flush_block_updates().await;
         // tick block entities
         // TODO: fix dead lock
-        // self.level.tick_block_entities(self.clone()).await;
+        log::info!("Ticking block entities");
+        //self.level.tick_block_entities(self.clone()).await;
         self.flush_synced_block_events().await;
 
         // world ticks
@@ -1999,10 +2001,7 @@ impl World {
         }
     }
 
-    pub async fn get_block_entity(
-        &self,
-        block_pos: &BlockPos,
-    ) -> Option<(NbtCompound, Arc<dyn BlockEntity>)> {
+    pub async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk = self
             .level
             .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
@@ -2032,10 +2031,7 @@ impl World {
             .await;
         }
 
-        chunk.block_entities.insert(
-            block_pos,
-            (block_entity_nbt.unwrap_or_default(), block_entity),
-        );
+        chunk.block_entities.insert(block_pos, block_entity);
         chunk.mark_dirty(true);
     }
 

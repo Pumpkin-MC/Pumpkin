@@ -606,10 +606,8 @@ impl Player {
     pub async fn handle_set_command_block(&self, command: SSetCommandBlock) {
         // TODO: check things
         let pos = command.pos;
-        if let Some((nbt, block_entity)) = self.world().await.get_block_entity(&pos).await {
-            let command_entity = CommandBlockEntity::from_nbt(&nbt, pos);
-
-            if block_entity.resource_location() != command_entity.resource_location() {
+        if let Some(block_entity) = self.world().await.get_block_entity(&pos).await {
+            if block_entity.resource_location() != CommandBlockEntity::ID {
                 log::warn!(
                     "Client tried to change Command block but not Command block entity found"
                 );

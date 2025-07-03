@@ -61,6 +61,15 @@ pub trait BlockEntity: Send + Sync {
     fn as_any(&self) -> &dyn Any;
 }
 
+pub fn transform_block_entity<T: BlockEntity + 'static>(
+    block_entity: Arc<dyn BlockEntity>,
+) -> Option<Arc<T>>
+where
+    T: 'static,
+{
+    block_entity.as_any().downcast_ref::<Arc<T>>().cloned()
+}
+
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
     let x = nbt.get_int("x").unwrap();
     let y = nbt.get_int("y").unwrap();

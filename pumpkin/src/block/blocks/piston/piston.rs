@@ -12,7 +12,7 @@ use pumpkin_data::{
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     BlockStateId,
-    block::entities::{BlockEntity, has_block_block_entity, piston::PistonBlockEntity},
+    block::entities::{has_block_block_entity, piston::PistonBlockEntity, transform_block_entity},
     world::BlockFlags,
 };
 
@@ -155,11 +155,9 @@ impl PumpkinBlock for PistonBlock {
 
         let extended_pos = pos.offset(dir.to_offset());
 
-        if let Some((block_entity_nbt, _block_entity)) = world.get_block_entity(&extended_pos).await
-        {
-            PistonBlockEntity::from_nbt(&block_entity_nbt, extended_pos)
-                .finish(world.clone())
-                .await;
+        if let Some(block_entity) = world.get_block_entity(&extended_pos).await {
+            let piston = transform_block_entity::<PistonBlockEntity>(block_entity).unwrap();
+            piston.finish(world.clone()).await;
         }
 
         let mut props = MovingPistonLikeProperties::default(&Block::MOVING_PISTON);
@@ -202,7 +200,7 @@ impl PumpkinBlock for PistonBlock {
             let mut bl2 = false;
             if block == &Block::MOVING_PISTON {
                 if let Some(entity) = world.get_block_entity(&pos).await {
-                    let piston = PistonBlockEntity::from_nbt(&entity.0, pos);
+                    let piston = transform_block_entity::<PistonBlockEntity>(entity).unwrap();
                     if piston.facing == dir && piston.extending {
                         piston.finish(world.clone()).await;
                         bl2 = true;
@@ -297,7 +295,7 @@ async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
             let new_props = MovingPistonLikeProperties::from_state_id(new_state.id, new_block);
             if new_props.facing == props.facing {
                 if let Some(entity) = world.get_block_entity(&new_pos).await {
-                    let piston = PistonBlockEntity::from_nbt(&entity.0, new_pos);
+                    let piston = transform_block_entity::<PistonBlockEntity>(entity).unwrap();
                     if piston.extending && piston.current_progress.load() < 0.5
                     // TODO: more stuff...
                     {

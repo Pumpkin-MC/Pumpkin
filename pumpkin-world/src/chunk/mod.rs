@@ -116,7 +116,7 @@ pub struct ChunkData {
     pub position: Vector2<i32>,
     pub block_ticks: Vec<ScheduledTick>,
     pub fluid_ticks: Vec<ScheduledTick>,
-    pub block_entities: HashMap<BlockPos, (NbtCompound, Arc<dyn BlockEntity>)>,
+    pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
     pub light_engine: ChunkLight,
 
     pub dirty: bool,

@@ -383,14 +383,16 @@ impl Level {
     }
 
     pub async fn tick_block_entities(&self, world: Arc<dyn SimpleWorld>) {
+        println!("Ticking block entities");
         for chunk in self.loaded_chunks.iter() {
             let chunk = chunk.read().await;
             let cloned_entities = chunk.block_entities.clone();
             drop(chunk);
             for block_entity in &cloned_entities {
-                block_entity.1.1.tick(&world).await;
+                block_entity.1.tick(&world).await;
             }
         }
+        println!("Done ticking block entities");
     }
 
     pub async fn clean_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {

@@ -46,7 +46,7 @@ pub struct BarrelBlock;
 impl PumpkinBlock for BarrelBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) {
         if let Some(block_entity) = args.world.get_block_entity(args.location).await {
-            if let Some(inventory) = block_entity.1.get_inventory() {
+            if let Some(inventory) = block_entity.get_inventory() {
                 args.player
                     .open_handled_screen(&BarrelScreenFactory(inventory))
                     .await;
@@ -56,7 +56,7 @@ impl PumpkinBlock for BarrelBlock {
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.location).await {
-            if let Some(inventory) = block_entity.1.get_inventory() {
+            if let Some(inventory) = block_entity.get_inventory() {
                 args.player
                     .open_handled_screen(&BarrelScreenFactory(inventory))
                     .await;

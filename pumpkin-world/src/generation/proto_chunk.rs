@@ -362,6 +362,7 @@ impl<'a> ProtoChunk<'a> {
     }
 
     pub fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {
+        //println!("Setting block state: {:?}", pos);
         let local_pos = Vector3::new(pos.x & 15, pos.y - self.bottom_y() as i32, pos.z & 15);
         if local_pos.y < 0 || local_pos.y >= self.height() as i32 {
             return;

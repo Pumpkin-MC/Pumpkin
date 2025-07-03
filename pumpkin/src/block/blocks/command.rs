@@ -1,10 +1,10 @@
-use std::sync::atomic::Ordering;
+use std::sync::{Arc, atomic::Ordering};
 
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{
-    block::entities::{BlockEntity, command_block::CommandBlockEntity},
+    block::entities::{BlockEntity, command_block::CommandBlockEntity, transform_block_entity},
     chunk::TickPriority,
 };
 
@@ -23,7 +23,7 @@ impl CommandBlock {
     pub async fn update(
         world: &World,
         block: &Block,
-        command_block: CommandBlockEntity,
+        command_block: Arc<CommandBlockEntity>,
         pos: &BlockPos,
         powered: bool,
     ) {
@@ -56,12 +56,13 @@ impl BlockMetadata for CommandBlock {
 #[async_trait]
 impl PumpkinBlock for CommandBlock {
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if let Some((nbt, block_entity)) = args.world.get_block_entity(args.location).await {
-            let command_entity = CommandBlockEntity::from_nbt(&nbt, *args.location);
-
-            if block_entity.resource_location() != command_entity.resource_location() {
+        if let Some(block_entity) = args.world.get_block_entity(args.location).await {
+            if block_entity.resource_location() != CommandBlockEntity::ID {
                 return;
             }
+            let command_entity =
+                transform_block_entity::<CommandBlockEntity>(block_entity).unwrap();
+
             Self::update(
                 args.world,
                 args.block,
@@ -74,10 +75,8 @@ impl PumpkinBlock for CommandBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if let Some((nbt, block_entity)) = args.world.get_block_entity(args.location).await {
-            let command_entity = CommandBlockEntity::from_nbt(&nbt, *args.location);
-
-            if block_entity.resource_location() != command_entity.resource_location() {
+        if let Some(block_entity) = args.world.get_block_entity(args.location).await {
+            if block_entity.resource_location() != CommandBlockEntity::ID {
                 return;
             }
             // TODO
