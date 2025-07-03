@@ -1391,7 +1391,8 @@ impl Player {
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
         if !sneaking || held_item.lock().await.is_empty() {
-            let action_result = server
+            // Code based on the java class ServerPlayerInteractionManager
+            match match server
                 .block_registry
                 .use_with_item(UseWithItemArgs {
                     server,
@@ -1405,12 +1406,8 @@ impl Player {
                     },
                     item_stack: &held_item,
                 })
-                .await;
-            match action_result {
-                BlockActionResult::Continue => {}
-                BlockActionResult::Consume => {
-                    return Ok(());
-                }
+                .await
+            {
                 BlockActionResult::PassToDefault => {
                     server
                         .block_registry
@@ -1425,9 +1422,19 @@ impl Player {
                             server,
                             world,
                         )
-                        .await;
+                        .await
                 }
+                BlockActionResult::Fail => BlockActionResult::Fail,
+                BlockActionResult::Consume => BlockActionResult::Consume,
+                BlockActionResult::Continue => BlockActionResult::Continue,
+                BlockActionResult::Success => BlockActionResult::Success,
+            } {
+                BlockActionResult::Success
+                | BlockActionResult::Consume
+                | BlockActionResult::Fail => return Ok(()), /* TODO: Swing hand */
+                BlockActionResult::Continue | BlockActionResult::PassToDefault => {} // Do nothing,
             }
+
             server
                 .item_registry
                 .use_on_block(

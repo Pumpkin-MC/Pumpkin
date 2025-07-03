@@ -42,7 +42,7 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
         properties.to_state_id(args.block)
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.location).await;
         let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
 
@@ -62,27 +62,31 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
                             slot,
                         )
                         .await;
+                        return BlockActionResult::Success;
                     }
                 }
+            } else {
+                return BlockActionResult::Consume;
             }
         }
+        BlockActionResult::Continue
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.location).await;
         let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
 
+        if !args
+            .item_stack
+            .lock()
+            .await
+            .get_item()
+            .is_tagged_with("minecraft:bookshelf_books")
+            .unwrap_or(false)
+        {
+            return BlockActionResult::PassToDefault;
+        }
         if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
-            if !args
-                .item_stack
-                .lock()
-                .await
-                .get_item()
-                .is_tagged_with("minecraft:bookshelf_books")
-                .unwrap_or(false)
-            {
-                return BlockActionResult::PassToDefault;
-            }
             if Self::is_slot_used(properties, slot) {
                 return BlockActionResult::PassToDefault;
             } else if let Some((_, block_entity)) = args.world.get_block_entity(args.location).await
@@ -100,7 +104,7 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
                         args.item_stack,
                     )
                     .await;
-                    return BlockActionResult::Consume;
+                    return BlockActionResult::Success;
                 }
             }
         }

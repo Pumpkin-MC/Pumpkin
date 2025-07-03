@@ -44,7 +44,7 @@ pub struct BarrelBlock;
 
 #[async_trait]
 impl PumpkinBlock for BarrelBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.location).await {
             if let Some(inventory) = block_entity.1.get_inventory() {
                 args.player
@@ -52,6 +52,8 @@ impl PumpkinBlock for BarrelBlock {
                     .await;
             }
         }
+
+        BlockActionResult::Continue
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {

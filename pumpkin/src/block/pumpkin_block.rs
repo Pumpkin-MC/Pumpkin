@@ -29,7 +29,9 @@ pub trait BlockMetadata {
 
 #[async_trait]
 pub trait PumpkinBlock: Send + Sync {
-    async fn normal_use(&self, _args: NormalUseArgs<'_>) {}
+    async fn normal_use(&self, _args: NormalUseArgs<'_>) -> BlockActionResult {
+        BlockActionResult::Continue
+    }
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
         BlockActionResult::PassToDefault

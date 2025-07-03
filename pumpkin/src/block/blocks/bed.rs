@@ -17,6 +17,7 @@ use pumpkin_world::world::BlockFlags;
 use crate::block::pumpkin_block::{
     BlockMetadata, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs, PumpkinBlock,
 };
+use crate::block::registry::BlockActionResult;
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
@@ -105,7 +106,7 @@ impl PumpkinBlock for BedBlock {
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.location).await;
         let bed_props = BedProperties::from_state_id(state_id, args.block);
 
@@ -135,7 +136,7 @@ impl PumpkinBlock for BedBlock {
                 .explode(args.server, bed_head_pos.to_centered_f64(), 5.0)
                 .await;
 
-            return;
+            return BlockActionResult::Continue;
         }
 
         // Make sure the bed is not obstructed
@@ -156,7 +157,7 @@ impl PumpkinBlock for BedBlock {
                     true,
                 )
                 .await;
-            return;
+            return BlockActionResult::Continue;
         }
 
         // Make sure the bed is not occupied
@@ -169,7 +170,7 @@ impl PumpkinBlock for BedBlock {
                     true,
                 )
                 .await;
-            return;
+            return BlockActionResult::Continue;
         }
 
         // Make sure player is close enough
@@ -188,7 +189,7 @@ impl PumpkinBlock for BedBlock {
                     true,
                 )
                 .await;
-            return;
+            return BlockActionResult::Continue;
         }
 
         // Set respawn point
@@ -214,7 +215,7 @@ impl PumpkinBlock for BedBlock {
                     true,
                 )
                 .await;
-            return;
+            return BlockActionResult::Continue;
         }
 
         // Make sure there are no monsters nearby
@@ -233,12 +234,14 @@ impl PumpkinBlock for BedBlock {
                         true,
                     )
                     .await;
-                return;
+                return BlockActionResult::Continue;
             }
         }
 
         args.player.sleep(bed_head_pos).await;
         Self::set_occupied(true, args.world, args.block, args.location, state_id).await;
+
+        BlockActionResult::Continue
     }
 }
 

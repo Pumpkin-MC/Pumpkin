@@ -23,7 +23,7 @@ impl BlockMetadata for FlowerPotBlock {
 
 #[async_trait]
 impl PumpkinBlock for FlowerPotBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !args.block.eq(&Block::FLOWER_POT) {
             args.world
                 .set_block_state(
@@ -33,6 +33,8 @@ impl PumpkinBlock for FlowerPotBlock {
                 )
                 .await;
         }
+
+        BlockActionResult::Continue
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {

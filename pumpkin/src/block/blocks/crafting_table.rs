@@ -14,10 +14,11 @@ pub struct CraftingTableBlock;
 
 #[async_trait]
 impl PumpkinBlock for CraftingTableBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         args.player
             .open_handled_screen(&CraftingTableScreenFactory)
             .await;
+        BlockActionResult::Continue
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {

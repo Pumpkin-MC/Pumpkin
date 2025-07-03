@@ -50,8 +50,10 @@ impl PumpkinBlock for LeverBlock {
         BlockActionResult::Consume
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         toggle_lever(args.world, args.location).await;
+
+        BlockActionResult::Continue
     }
 
     async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {

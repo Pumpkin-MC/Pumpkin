@@ -68,8 +68,10 @@ impl BlockMetadata for ButtonBlock {
 
 #[async_trait]
 impl PumpkinBlock for ButtonBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         click_button(args.world, args.location).await;
+
+        BlockActionResult::Continue
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
