@@ -49,6 +49,7 @@ use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
 
+use crate::block::pumpkin_block::{BlockHitResult, UseWithItemArgs};
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
@@ -1394,7 +1395,17 @@ impl Player {
                 // Using block with empty hand
                 server
                     .block_registry
-                    .on_use(block, self, &location, &face, &cursor_pos, server, world)
+                    .on_use(
+                        block,
+                        self,
+                        &location,
+                        &BlockHitResult {
+                            side: &face,
+                            cursor_pos: &cursor_pos,
+                        },
+                        server,
+                        world,
+                    )
                     .await;
             }
             return Ok(());
@@ -1402,16 +1413,18 @@ impl Player {
         if !sneaking {
             let action_result = server
                 .block_registry
-                .use_with_item(
-                    block,
-                    self,
-                    &location,
-                    &face,
-                    &cursor_pos,
-                    &held_item,
+                .use_with_item(UseWithItemArgs {
                     server,
                     world,
-                )
+                    block,
+                    player: self,
+                    location: &location,
+                    hit: &BlockHitResult {
+                        side: &face,
+                        cursor_pos: &cursor_pos,
+                    },
+                    item_stack: &held_item,
+                })
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}

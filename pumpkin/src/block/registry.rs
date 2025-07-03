@@ -11,13 +11,10 @@ use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use super::BlockIsReplacing;
 use super::pumpkin_block::{
@@ -140,8 +137,7 @@ impl BlockRegistry {
         block: &Block,
         player: &Player,
         location: &BlockPos,
-        side: &BlockDirection,
-        cursor_pos: &Vector3<f32>,
+        hit: &BlockHitResult<'_>,
         server: &Server,
         world: &Arc<World>,
     ) {
@@ -154,7 +150,7 @@ impl BlockRegistry {
                     block,
                     player,
                     location,
-                    hit: &BlockHitResult { side, cursor_pos },
+                    hit,
                 })
                 .await;
         }
@@ -173,30 +169,10 @@ impl BlockRegistry {
         }
     }
 
-    pub async fn use_with_item(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: &BlockPos,
-        side: &BlockDirection,
-        cursor_pos: &Vector3<f32>,
-        item_stack: &Arc<Mutex<ItemStack>>,
-        server: &Server,
-        world: &Arc<World>,
-    ) -> BlockActionResult {
-        let pumpkin_block = self.get_pumpkin_block(block);
+    pub async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let pumpkin_block = self.get_pumpkin_block(args.block);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block
-                .use_with_item(UseWithItemArgs {
-                    server,
-                    world,
-                    block,
-                    player,
-                    location,
-                    hit: &BlockHitResult { side, cursor_pos },
-                    item_stack,
-                })
-                .await;
+            return pumpkin_block.use_with_item(args).await;
         }
         BlockActionResult::Continue
     }
