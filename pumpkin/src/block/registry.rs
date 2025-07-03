@@ -39,11 +39,6 @@ pub enum BlockActionResult {
     PassToDefault,
 }
 
-pub enum SuccessResult {
-    Success,
-    Consume,
-}
-
 #[derive(Default)]
 pub struct BlockRegistry {
     blocks: HashMap<String, Arc<dyn PumpkinBlock>>,

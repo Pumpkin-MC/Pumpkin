@@ -1429,9 +1429,11 @@ impl Player {
                 BlockActionResult::Continue => BlockActionResult::Continue,
                 BlockActionResult::Success => BlockActionResult::Success,
             } {
-                BlockActionResult::Success
-                | BlockActionResult::Consume
-                | BlockActionResult::Fail => return Ok(()), /* TODO: Swing hand */
+                BlockActionResult::Fail => return Ok(()),
+                BlockActionResult::Success | BlockActionResult::Consume => {
+                    /* TODO: Swing hand */
+                    return Ok(());
+                }
                 BlockActionResult::Continue | BlockActionResult::PassToDefault => {} // Do nothing,
             }
 
