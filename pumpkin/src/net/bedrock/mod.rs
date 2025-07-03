@@ -251,6 +251,28 @@ impl BedrockClientPlatform {
         }
     }
 
+    pub async fn send_ack(&self, client: &Client, packet: &Ack) {
+        let mut packet_buf = Vec::new();
+        packet_buf.write_u8(0xC0).unwrap();
+        packet.write_packet_data(&mut packet_buf).unwrap();
+
+        if let Err(err) = self
+            .network_writer
+            .lock()
+            .await
+            .write_packet(packet_buf.into(), self.addr, &self.socket)
+            .await
+        {
+            // It is expected that the packet will fail if we are closed
+            if !client.closed.load(Ordering::Relaxed) {
+                log::warn!("Failed to send packet to client {}: {}", client.id, err);
+                // We now need to close the connection to the client since the stream is in an
+                // unknown state
+                client.close();
+            }
+        }
+    }
+
     pub async fn handle_packet_payload(
         &self,
         client: &Client,
@@ -293,9 +315,8 @@ impl BedrockClientPlatform {
     fn handle_ack(_ack: &Ack) {}
 
     async fn handle_frame_set(&self, client: &Client, server: &Server, frame_set: FrameSet) {
-        // TODO: this is bad
-        client
-            .send_packet_now(&Ack::new(vec![frame_set.sequence.0]))
+        // TODO: Send all ACKs in short intervals in batches
+        self.send_ack(client, &Ack::new(vec![frame_set.sequence.0]))
             .await;
         // TODO
         for frame in frame_set.frames {

@@ -29,7 +29,7 @@ impl Client {
         bedrock
             .send_game_packet(
                 self,
-                &CNetworkSettings::new(1, 0xffff, false, 0, 0.0),
+                &CNetworkSettings::new(0, 0, false, 0, 0.0),
                 RakReliability::Unreliable,
             )
             .await;

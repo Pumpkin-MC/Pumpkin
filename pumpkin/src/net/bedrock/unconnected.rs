@@ -23,7 +23,7 @@ impl Client {
             edition: "MCPE",
             motd_line_1: &BASIC_CONFIG.motd,
             protocol_version: 818,
-            version_name: "1.21.90",
+            version_name: "1.21.92",
             player_count: 1,
             max_player_count: BASIC_CONFIG.max_players,
             server_unique_id: server.server_guid,

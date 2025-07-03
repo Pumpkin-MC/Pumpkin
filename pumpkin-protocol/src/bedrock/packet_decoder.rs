@@ -118,29 +118,22 @@ impl UDPNetworkDecoder {
         &mut self,
         mut reader: Cursor<Vec<u8>>,
     ) -> Result<RawPacket, PacketDecodeError> {
-        // if let Some(compression) = self.compression {
-        //     let method = reader.get_u8().unwrap();
-        //     dbg!(method);
-        //     // None Compression
-        // }
+        if self.compression.is_some() {
+            let _method = reader.get_u8().unwrap();
+            dbg!(_method);
+            // None Compression
+        }
 
         //compression is only included after the network settings packet is sent
         // TODO: compression & encryption
-        let packet_len = VarUInt::decode_async(&mut reader)
-            .await
-            .map_err(|err| match err {
-                ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
-                err => PacketDecodeError::MalformedLength(err.to_string()),
-            })?;
+        let packet_len = VarUInt::decode(&mut reader).map_err(|err| match err {
+            ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
+            err => PacketDecodeError::MalformedLength(err.to_string()),
+        })?;
 
         let packet_len = packet_len.0 as u64;
 
-        // This is the default MTU size
-        if !(0..=1492).contains(&packet_len) {
-            Err(PacketDecodeError::OutOfBounds)?
-        }
-
-        let var_header = VarUInt::decode_async(&mut reader).await?;
+        let var_header = VarUInt::decode(&mut reader)?;
 
         // The header is 14 bits. Ensure we only consider these bits.
         // A varint u32 could be larger, so we mask to the relevant bits.
