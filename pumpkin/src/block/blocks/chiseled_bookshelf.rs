@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use log::info;
 use pumpkin_data::block_properties::{
@@ -5,12 +7,15 @@ use pumpkin_data::block_properties::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::vector2::Vector2;
-use pumpkin_world::BlockStateId;
+use pumpkin_world::{
+    BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
+};
 
 use crate::{
     block::{
         pumpkin_block::{
-            BlockHitResult, NormalUseArgs, OnPlaceArgs, PumpkinBlock, UseWithItemArgs,
+            BlockHitResult, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs,
+            PumpkinBlock, UseWithItemArgs,
         },
         registry::BlockActionResult,
     },
@@ -45,6 +50,15 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
         BlockActionResult::Continue
+    }
+
+    async fn placed(&self, args: PlacedArgs<'_>) {
+        let block_entity = ChiseledBookshelfBlockEntity::new(*args.location);
+        args.world.add_block_entity(Arc::new(block_entity)).await;
+    }
+
+    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        args.world.remove_block_entity(args.location).await;
     }
 }
 
