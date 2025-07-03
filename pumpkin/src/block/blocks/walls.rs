@@ -6,6 +6,7 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::EastWallShape;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::NorthWallShape;
+use pumpkin_data::block_properties::OakTrapdoorLikeProperties;
 use pumpkin_data::block_properties::SouthWallShape;
 use pumpkin_data::block_properties::WestWallShape;
 use pumpkin_data::tag::RegistryKey;
@@ -50,6 +51,7 @@ impl PumpkinBlock for WallBlock {
     }
 }
 
+// TODO: when a piston base is next to a wall with a solid block on top then EXTENDS or RETRACTS the STATE of the connected wall WILL change
 pub async fn compute_wall_state(
     mut wall_props: WallProperties,
     world: &World,
@@ -63,12 +65,29 @@ pub async fn compute_wall_state(
         let (other_block, other_block_state) =
             world.get_block_and_block_state(&other_block_pos).await;
 
-        let connected = other_block == block
+        let mut connected = other_block == block
             || (other_block_state.is_solid() && other_block_state.is_full_cube())
             || other_block.is_tagged_with("minecraft:walls").unwrap()
-            || other_block.is_tagged_with("minecraft:fence_gates").unwrap()
             || other_block == &Block::IRON_BARS
             || other_block.is_tagged_with("c:glass_panes").unwrap();
+
+        if !connected && other_block.is_tagged_with("minecraft:trapdoors").unwrap() {
+            let trapdoor_props =
+                OakTrapdoorLikeProperties::from_state_id(other_block_state.id, other_block);
+            if trapdoor_props.open && trapdoor_props.facing == direction {
+                log::info!("Connected = true");
+                connected = true;
+            }
+        }
+
+        if !connected && other_block.is_tagged_with("minecraft:fence_gates").unwrap() {
+            let fence_props = FenceGateProperties::from_state_id(other_block_state.id, other_block);
+            if fence_props.facing == direction.rotate_clockwise()
+                || fence_props.facing == direction.rotate_counter_clockwise()
+            {
+                connected = true
+            }
+        }
 
         let shape = if connected {
             let raise = if block_above_state.is_full_cube() {
@@ -81,7 +100,9 @@ pub async fn compute_wall_state(
                     HorizontalFacing::East => other_props.east != EastWallShape::None,
                     HorizontalFacing::West => other_props.west != WestWallShape::None,
                 }
-            } else if block_above.is_tagged_with("c:glass_panes").unwrap()
+            }
+            // Match FENCELIKE above and steal shape
+            else if block_above.is_tagged_with("c:glass_panes").unwrap()
                 || block_above.is_tagged_with("minecraft:fences").unwrap()
                 || block_above == &Block::IRON_BARS
             {
@@ -133,15 +154,39 @@ pub async fn compute_wall_state(
         && wall_props.east != EastWallShape::None
         && wall_props.west != WestWallShape::None;
 
-    wall_props.up =
-        if block_above_state.is_full_cube() || !(cross || line_north_south || line_east_west) {
-            true
-        } else if block_above.is_tagged_with("minecraft:walls").unwrap() {
-            let other_props = WallProperties::from_state_id(block_above_state.id, block_above);
-            other_props.up
-        } else {
-            false
-        };
+    wall_props.up = if !(cross || line_north_south || line_east_west) {
+        true
+    } else if block_above.is_tagged_with("minecraft:walls").unwrap() {
+        let other_props = WallProperties::from_state_id(block_above_state.id, block_above);
+        other_props.up
+    } else {
+        false
+    };
+
+    // some unique cases if the block above is a fence gate
+    if block_above.is_tagged_with("minecraft:fence_gates").unwrap() {
+        let above_fence_props =
+            FenceGateProperties::from_state_id(block_above_state.id, block_above);
+        if above_fence_props.open {
+            if line_east_west
+                && (above_fence_props.facing == HorizontalFacing::South
+                    || above_fence_props.facing == HorizontalFacing::North)
+            {
+                wall_props.up = false;
+                wall_props.east = EastWallShape::from(WallShape::Low);
+                wall_props.west = WestWallShape::from(WallShape::Low);
+            } else if line_north_south
+                && (above_fence_props.facing == HorizontalFacing::East
+                    || above_fence_props.facing == HorizontalFacing::West)
+            {
+                wall_props.up = false;
+                wall_props.south = SouthWallShape::from(WallShape::Low);
+                wall_props.north = NorthWallShape::from(WallShape::Low);
+            } else {
+                wall_props.up = false;
+            }
+        }
+    }
 
     wall_props.to_state_id(block)
 }
