@@ -1,15 +1,17 @@
 use super::{player::Player, EntityBase, NBTStorage};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use rand::Rng;
-use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EffectType;
+use pumpkin_data::Block;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{MetaDataType, Metadata};
 use pumpkin_util::GameMode;
 use pumpkin_world::entity::entity_data_flags::DATA_AIR_SUPPLY_ID;
+use rand::Rng;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 
 pub struct OxygenManager {
     /// Current oxygen level in ticks (0 = depleted)
@@ -58,7 +60,7 @@ impl OxygenManager {
                 let respiration_level = player.get_respiration_level().await;
                 let should_consume = if respiration_level > 0 {
                     // Vanilla: 1/(level+1) chance to preserve oxygen
-                    rand::rng().random_ratio(1, respiration_level as u32 + 1)
+                    !rand::rng().random_ratio(1, respiration_level as u32 + 1)
                 } else {
                     true
                 };
@@ -82,7 +84,7 @@ impl OxygenManager {
         }
         // Replenish oxygen when eyes are not in water
         else if current_oxygen < Self::MAX_OXYGEN {
-            // Vanilla: Oxygen replenishes at 4 per tick (1.5 seconds to fully recover)
+            // Vanilla: Oxygen replenishes at 4 per tick
             let new_oxygen = (current_oxygen + 4).min(Self::MAX_OXYGEN);
             self.update_oxygen(player, new_oxygen).await;
             self.damage_timer.store(0);
@@ -110,8 +112,29 @@ impl OxygenManager {
 
     async fn are_eyes_in_water(&self, player: &Player) -> bool {
         let world = player.world().await;
-        let block_pos = player.eye_position().to_block_pos();
-        world.get_block(&block_pos).await == &Block::WATER
+        let eye_pos = player.eye_position();
+
+        let block_pos = BlockPos(Vector3 {
+            x: eye_pos.x.floor() as i32,
+            y: eye_pos.y.floor() as i32,
+            z: eye_pos.z.floor() as i32,
+        });
+
+        let block = world.get_block(&block_pos).await;
+
+        if block == &Block::WATER || block == &Block::BUBBLE_COLUMN {
+            let block_y_min = block_pos.0.y as f64;
+            let eye_rel_y = eye_pos.y - block_y_min;
+            let water_height = self.get_fluid_height(&block_pos).await;
+            eye_rel_y < water_height
+        } else {
+            false
+        }
+    }
+
+    async fn get_fluid_height(&self, _block_pos: &BlockPos) -> f64 {
+        // todo: calculate for flowing water
+        1f64
     }
 }
 
