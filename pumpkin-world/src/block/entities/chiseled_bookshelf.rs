@@ -59,11 +59,11 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
     }
 
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_data(nbt, &self.items, true).await;
         nbt.put_int(
             LAST_INTERACTED_SLOT,
             self.last_interacted_slot.load(Ordering::Relaxed).into(),
         );
-        self.write_data(nbt, &self.items, true).await;
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -83,13 +83,16 @@ impl ChiseledBookshelfBlockEntity {
         }
     }
 
-    pub async fn update_state(&self, world: Arc<dyn SimpleWorld>, slot: i8) {
+    pub async fn update_state(
+        &self,
+        mut properties: ChiseledBookshelfLikeProperties,
+        world: Arc<dyn SimpleWorld>,
+        slot: i8,
+    ) {
         if slot >= 0 && slot < self.items.len() as i8 {
             self.last_interacted_slot.store(slot, Ordering::Relaxed);
 
             let block = world.get_block(&self.position).await;
-            let state = world.get_block_state(&self.position).await;
-            let mut properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, block);
 
             properties.slot_0_occupied = !self.items[0].lock().await.is_empty();
             properties.slot_1_occupied = !self.items[1].lock().await.is_empty();
