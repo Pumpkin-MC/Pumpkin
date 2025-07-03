@@ -83,7 +83,7 @@ impl PumpkinBlock for NoteBlock {
         }
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let block_state = args.world.get_block_state(args.location).await;
         let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
         let next_index = note_props.note.to_index() + 1;
@@ -101,6 +101,8 @@ impl PumpkinBlock for NoteBlock {
             )
             .await;
         Self::play_note(&note_props, args.world, args.location).await;
+
+        BlockActionResult::Continue
     }
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {

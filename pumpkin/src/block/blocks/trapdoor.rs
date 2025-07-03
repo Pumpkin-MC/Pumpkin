@@ -79,10 +79,12 @@ impl BlockMetadata for TrapDoorBlock {
 
 #[async_trait]
 impl PumpkinBlock for TrapDoorBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if can_open_trapdoor(args.block) {
             toggle_trapdoor(args.player, args.world, args.location).await;
         }
+
+        BlockActionResult::Continue
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {

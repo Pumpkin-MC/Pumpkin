@@ -115,11 +115,13 @@ impl PumpkinBlock for RepeaterBlock {
         }
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.location).await;
         let props = RepeaterProperties::from_state_id(state.id, args.block);
         self.on_use(props, args.world, *args.location, args.block)
             .await;
+
+        BlockActionResult::Continue
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {

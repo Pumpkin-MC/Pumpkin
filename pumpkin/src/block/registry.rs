@@ -27,12 +27,21 @@ use super::pumpkin_fluid::PumpkinFluid;
 
 // ActionResult.java
 pub enum BlockActionResult {
+    /// Action was successful and we should swing the hand | Same as SUCCESS in vanilla
+    Success,
+    /// Block other actions from being executed and we should swing the hand | Same as CONSUME in vanilla
+    Consume,
+    /// Block other actions from being executed | Same as FAIL in vanilla
+    Fail,
     /// Allow other actions to be executed | Same as PASS in vanilla
     Continue,
-    /// Block other actions from being executed | Same as FAIL in vanilla
-    Consume,
     /// Use default action for the block | Same as `PASS_TO_DEFAULT_BLOCK_ACTION` in vanilla
     PassToDefault,
+}
+
+pub enum SuccessResult {
+    Success,
+    Consume,
 }
 
 #[derive(Default)]
@@ -143,10 +152,10 @@ impl BlockRegistry {
         hit: &BlockHitResult<'_>,
         server: &Server,
         world: &Arc<World>,
-    ) {
+    ) -> BlockActionResult {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block
+            return pumpkin_block
                 .normal_use(NormalUseArgs {
                     server,
                     world,
@@ -157,6 +166,7 @@ impl BlockRegistry {
                 })
                 .await;
         }
+        BlockActionResult::Continue
     }
 
     pub async fn explode(&self, block: &Block, world: &Arc<World>, location: &BlockPos) {
