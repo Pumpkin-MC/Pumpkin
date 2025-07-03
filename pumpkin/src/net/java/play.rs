@@ -57,9 +57,11 @@ use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
 use crate::entity::r#type::from_type;
 use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
+use crate::plugin::block::block_place::BlockPlaceEvent;
+use crate::plugin::block::sign_change::{Side, SignChangeEvent};
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
-use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
+use crate::plugin::player::player_interact::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -1355,17 +1357,18 @@ impl Player {
     }
 
     pub async fn handle_use_item_on(
-        &self,
+        self: &Arc<Self>,
         use_item_on: SUseItemOn,
         server: &Arc<Server>,
     ) -> Result<(), Box<dyn PumpkinError>> {
         if !self.has_client_loaded() {
             return Ok(());
         }
+
         self.update_sequence(use_item_on.sequence.0);
 
         let location = use_item_on.location;
-        let mut should_try_decrement = false;
+        //let mut _should_try_decrement = false;
 
         if !self.can_interact_with_block_at(&location, 1.0) {
             // TODO: maybe log?
@@ -1388,6 +1391,7 @@ impl Player {
             .entity
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
+
         if held_item.lock().await.is_empty() {
             if !sneaking {
                 // Using block with empty hand
@@ -1398,6 +1402,7 @@ impl Player {
             }
             return Ok(());
         }
+
         if !sneaking {
             let action_result = server
                 .block_registry
@@ -1423,44 +1428,89 @@ impl Player {
             self.update_sequence(use_item_on.sequence.0);
         }
 
-        // Check if the item is a block, because not every item can be placed :D
-        if let Some(block) = get_block_by_item(held_item.lock().await.item.id) {
-            should_try_decrement = self
-                .run_is_block_place(block, server, use_item_on, location, face)
-                .await?;
-        }
+        let mut held_item_guard = held_item.lock().await;
+        let item_id = held_item_guard.item.id;
 
-        // Check if the item is a spawn egg
-        if let Some(entity) = entity_from_egg(held_item.lock().await.item.id) {
-            self.spawn_entity_from_egg(entity, location, face).await;
-            should_try_decrement = true;
-        }
+        let block_to_place = get_block_by_item(item_id);
+        let spawn_egg = entity_from_egg(item_id);
 
-        if should_try_decrement {
-            // TODO: Config
-            // Decrease block count
-            if self.gamemode.load() != GameMode::Creative {
-                held_item.lock().await.decrement(1);
-            }
+        if let Some(block) = block_to_place {
+            let block_against = world.get_block(&location).await;
+
+            let can_build = true;
+
+            send_cancellable! {{
+                BlockPlaceEvent {
+                    player: self.clone(),
+                    block_placed: block,
+                    block_placed_against: block_against,
+                    can_build,
+                    cancelled: false,
+                };
+
+                'after: {
+                    let mut should_try_decrement = false;
+
+                    if let Some(block) = block_to_place {
+                        should_try_decrement = self
+                            .run_is_block_place(block, server, use_item_on, location, face)
+                            .await?;
+                    }
+
+                    if let Some(entity) = spawn_egg {
+                        self.spawn_entity_from_egg(entity, location, face).await;
+                        should_try_decrement = true;
+                    }
+
+                    if should_try_decrement && self.gamemode.load() != GameMode::Creative {
+                        held_item_guard.decrement(1);
+                    }
+                }
+            }}
         }
 
         Ok(())
     }
 
-    pub async fn handle_sign_update(&self, sign_data: SUpdateSign) {
+    pub async fn handle_sign_update(self: &Arc<Self>, sign_data: SUpdateSign) {
         let world = &self.living_entity.entity.world.read().await;
-        let updated_sign = SignBlockEntity::new(
-            sign_data.location,
-            sign_data.is_front_text,
-            [
-                sign_data.line_1,
-                sign_data.line_2,
-                sign_data.line_3,
-                sign_data.line_4,
-            ],
-        );
 
-        world.add_block_entity(Arc::new(updated_sign)).await;
+        let content = vec![
+            sign_data.line_1.clone(),
+            sign_data.line_2.clone(),
+            sign_data.line_3.clone(),
+            sign_data.line_4.clone(),
+        ];
+
+        let side = if sign_data.is_front_text {
+            Side::Front
+        } else {
+            Side::Back
+        };
+
+        send_cancellable! {{
+            SignChangeEvent {
+                player: self.clone(),
+                content,
+                side,
+                cancelled: false,
+            };
+
+            'after: {
+                let updated_sign = SignBlockEntity::new(
+                    sign_data.location,
+                    sign_data.is_front_text,
+                    [
+                        sign_data.line_1,
+                        sign_data.line_2,
+                        sign_data.line_3,
+                        sign_data.line_4,
+                    ],
+                );
+
+                world.add_block_entity(Arc::new(updated_sign)).await;
+            }
+        }}
     }
 
     pub async fn handle_use_item(self: &Arc<Self>, use_item: &SUseItem, server: &Server) {

@@ -72,6 +72,7 @@ pub fn cancellable(args: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
+// Bro we need a macro that lets us use borrows -_-
 #[proc_macro_error]
 #[proc_macro]
 pub fn send_cancellable(input: TokenStream) -> TokenStream {

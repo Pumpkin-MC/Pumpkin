@@ -25,12 +25,10 @@ pub struct BarrelBlockEntity {
 
 #[async_trait]
 impl BlockEntity for BarrelBlockEntity {
-    fn resource_location(&self) -> &'static str {
-        Self::ID
-    }
-
-    fn get_position(&self) -> BlockPos {
-        self.position
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        self.write_data(nbt, &self.items, true).await;
+        // Safety precaution
+        //self.clear().await;
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
@@ -48,10 +46,12 @@ impl BlockEntity for BarrelBlockEntity {
         barrel
     }
 
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        self.write_data(nbt, &self.items, true).await;
-        // Safety precaution
-        //self.clear().await;
+    fn resource_location(&self) -> &'static str {
+        Self::ID
+    }
+
+    fn get_position(&self) -> BlockPos {
+        self.position
     }
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {

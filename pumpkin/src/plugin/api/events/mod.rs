@@ -1,6 +1,7 @@
 use std::any::Any;
 
 pub mod block;
+pub mod inventory;
 pub mod player;
 pub mod server;
 pub mod world;
