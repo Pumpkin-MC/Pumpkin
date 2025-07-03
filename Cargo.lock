@@ -2166,6 +2166,7 @@ dependencies = [
  "pumpkin-data",
  "pumpkin-nbt",
  "pumpkin-util",
+ "rand",
  "rayon",
  "serde",
  "serde_json",

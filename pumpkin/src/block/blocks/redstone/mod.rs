@@ -12,6 +12,7 @@ use crate::world::World;
 pub mod buttons;
 pub mod comparator;
 pub mod copper_bulb;
+pub mod dropper;
 pub mod lever;
 pub mod observer;
 pub mod pressure_plate;
@@ -171,7 +172,7 @@ pub async fn block_receives_redstone_power(world: &World, pos: &BlockPos) -> boo
     for face in BlockDirection::all() {
         let neighbor_pos = pos.offset(face.to_offset());
         let (block, state) = world.get_block_and_block_state(&neighbor_pos).await;
-        if is_emitting_redstone_power(block, state, world, pos, face).await {
+        if is_emitting_redstone_power(block, state, world, &neighbor_pos, face).await {
             return true;
         }
     }
