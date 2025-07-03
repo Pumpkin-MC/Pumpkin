@@ -6,18 +6,22 @@ use pumpkin_data::{
     block_properties::{
         BlockProperties, EnumVariants, HorizontalFacing, Integer1To4, get_state_by_state_id,
     },
-    item::Item,
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use pumpkin_world::{BlockStateId, chunk::TickPriority};
 
 use crate::{
-    block::{BlockIsReplacing, pumpkin_block::PumpkinBlock, registry::BlockActionResult},
-    entity::player::Player,
-    server::Server,
+    block::{
+        pumpkin_block::{
+            CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+            GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+            OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs, PlayerPlacedArgs, PumpkinBlock,
+            UseWithItemArgs,
+        },
+        registry::BlockActionResult,
+    },
     world::World,
 };
 
@@ -30,81 +34,71 @@ pub struct RepeaterBlock;
 
 #[async_trait]
 impl PumpkinBlock for RepeaterBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        world: &World,
-        player: &Player,
-        block: &Block,
-        block_pos: &BlockPos,
-        _face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        let state_id = RedstoneGateBlock::on_place(self, player, block).await;
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let state_id = RedstoneGateBlock::on_place(self, args.player, args.block).await;
 
-        let mut props = RepeaterProperties::from_state_id(state_id, block);
-        props.locked = self.is_locked(world, *block_pos, state_id, block).await;
+        let mut props = RepeaterProperties::from_state_id(state_id, args.block);
+        props.locked = self
+            .is_locked(args.world, *args.location, state_id, args.block)
+            .await;
 
-        props.to_state_id(block)
+        props.to_state_id(args.block)
     }
 
-    async fn on_neighbor_update(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        pos: &BlockPos,
-        source_block: &Block,
-        _notify: bool,
-    ) {
-        RedstoneGateBlock::on_neighbor_update(self, world, block, pos, source_block).await;
+    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        RedstoneGateBlock::on_neighbor_update(self, args).await;
     }
 
-    async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
-        let state = world.get_block_state(block_pos).await;
-        if self.is_locked(world, *block_pos, state.id, block).await {
+    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state = args.world.get_block_state(args.location).await;
+        if self
+            .is_locked(args.world, *args.location, state.id, args.block)
+            .await
+        {
             return;
         }
-        let mut props = RepeaterProperties::from_state_id(state.id, block);
+        let mut props = RepeaterProperties::from_state_id(state.id, args.block);
 
         let now_powered = props.powered;
-        let should_be_powered = self.has_power(world, *block_pos, state, block).await;
+        let should_be_powered = self
+            .has_power(args.world, *args.location, state, args.block)
+            .await;
 
         if now_powered && !should_be_powered {
             props.powered = false;
-            world
+            args.world
                 .set_block_state(
-                    block_pos,
-                    props.to_state_id(block),
+                    args.location,
+                    props.to_state_id(args.block),
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
             RedstoneGateBlock::update_target(
                 self,
-                world,
-                *block_pos,
-                props.to_state_id(block),
-                block,
+                args.world,
+                *args.location,
+                props.to_state_id(args.block),
+                args.block,
             )
             .await;
         } else if !now_powered {
             props.powered = true;
-            world
+            args.world
                 .set_block_state(
-                    block_pos,
-                    props.to_state_id(block),
+                    args.location,
+                    props.to_state_id(args.block),
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
             if !should_be_powered {
-                world
+                args.world
                     .schedule_block_tick(
-                        block,
-                        *block_pos,
+                        args.block,
+                        *args.location,
                         RedstoneGateBlock::get_update_delay_internal(
                             self,
-                            props.to_state_id(block),
-                            block,
+                            props.to_state_id(args.block),
+                            args.block,
                         ),
                         TickPriority::VeryHigh,
                     )
@@ -112,157 +106,95 @@ impl PumpkinBlock for RepeaterBlock {
             }
             RedstoneGateBlock::update_target(
                 self,
-                world,
-                *block_pos,
-                props.to_state_id(block),
-                block,
+                args.world,
+                *args.location,
+                props.to_state_id(args.block),
+                args.block,
             )
             .await;
         }
     }
 
-    async fn normal_use(
-        &self,
-        block: &Block,
-        _player: &Player,
-        location: BlockPos,
-        _server: &Server,
-        world: &Arc<World>,
-    ) {
-        let state = world.get_block_state(&location).await;
-        let props = RepeaterProperties::from_state_id(state.id, block);
-        self.on_use(props, world, location, block).await;
+    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+        let state = args.world.get_block_state(args.location).await;
+        let props = RepeaterProperties::from_state_id(state.id, args.block);
+        self.on_use(props, args.world, *args.location, args.block)
+            .await;
     }
 
-    async fn use_with_item(
-        &self,
-        block: &Block,
-        _player: &Player,
-        location: BlockPos,
-        _item: &Item,
-        _server: &Server,
-        world: &Arc<World>,
-    ) -> BlockActionResult {
-        let state = world.get_block_state(&location).await;
-        let props = RepeaterProperties::from_state_id(state.id, block);
-        self.on_use(props, world, location, block).await;
+    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.location).await;
+        let props = RepeaterProperties::from_state_id(state.id, args.block);
+        self.on_use(props, args.world, *args.location, args.block)
+            .await;
         BlockActionResult::Consume
     }
 
-    async fn get_weak_redstone_power(
-        &self,
-        block: &Block,
-        world: &World,
-        block_pos: &BlockPos,
-        state: &BlockState,
-        direction: BlockDirection,
-    ) -> u8 {
-        RedstoneGateBlock::get_weak_redstone_power(self, block, world, block_pos, state, direction)
-            .await
+    async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        RedstoneGateBlock::get_weak_redstone_power(self, args).await
     }
 
-    async fn get_strong_redstone_power(
-        &self,
-        block: &Block,
-        world: &World,
-        block_pos: &BlockPos,
-        state: &BlockState,
-        direction: BlockDirection,
-    ) -> u8 {
-        RedstoneGateBlock::get_strong_redstone_power(
-            self, block, world, block_pos, state, direction,
-        )
-        .await
+    async fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        RedstoneGateBlock::get_strong_redstone_power(self, args).await
     }
 
-    async fn emits_redstone_power(
-        &self,
-        block: &Block,
-        state: &BlockState,
-        direction: BlockDirection,
-    ) -> bool {
-        let repeater_props = RepeaterProperties::from_state_id(state.id, block);
-        repeater_props.facing.to_block_direction() == direction
-            || repeater_props.facing.to_block_direction() == direction.opposite()
+    async fn emits_redstone_power(&self, args: EmitsRedstonePowerArgs<'_>) -> bool {
+        let repeater_props = RepeaterProperties::from_state_id(args.state.id, args.block);
+        repeater_props.facing.to_block_direction() == args.direction
+            || repeater_props.facing.to_block_direction() == args.direction.opposite()
     }
 
-    async fn can_place_at(
-        &self,
-        _server: Option<&Server>,
-        _world: Option<&World>,
-        block_accessor: &dyn BlockAccessor,
-        _player: Option<&Player>,
-        _block: &Block,
-        block_pos: &BlockPos,
-        _face: BlockDirection,
-        _use_item_on: Option<&SUseItemOn>,
-    ) -> bool {
-        RedstoneGateBlock::can_place_at(self, block_accessor, *block_pos).await
+    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        RedstoneGateBlock::can_place_at(self, args.block_accessor, *args.location).await
     }
 
-    async fn placed(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        state_id: BlockStateId,
-        pos: &BlockPos,
-        _old_state_id: BlockStateId,
-        _notify: bool,
-    ) {
-        if let Some(state) = get_state_by_state_id(state_id) {
-            RedstoneGateBlock::update_target(self, world, *pos, state.id, block).await;
+    async fn placed(&self, args: PlacedArgs<'_>) {
+        if let Some(state) = get_state_by_state_id(args.state_id) {
+            RedstoneGateBlock::update_target(
+                self,
+                args.world,
+                *args.location,
+                state.id,
+                args.block,
+            )
+            .await;
         }
     }
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
-        block: &Block,
-        state: BlockStateId,
-        pos: &BlockPos,
-        direction: BlockDirection,
-        neighbor_pos: &BlockPos,
-        neighbor_state_id: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if direction == BlockDirection::Down {
-            if let Some(neighbor_state) = get_state_by_state_id(neighbor_state_id) {
-                if !RedstoneGateBlock::can_place_above(self, world, *neighbor_pos, neighbor_state)
-                    .await
+        if args.direction == BlockDirection::Down {
+            if let Some(neighbor_state) = get_state_by_state_id(args.neighbor_state_id) {
+                if !RedstoneGateBlock::can_place_above(
+                    self,
+                    args.world,
+                    *args.neighbor_location,
+                    neighbor_state,
+                )
+                .await
                 {
                     return Block::AIR.default_state.id;
                 }
             }
         }
-        let mut props = RepeaterProperties::from_state_id(state, block);
-        if direction.to_axis() != props.facing.to_block_direction().to_axis() {
-            props.locked = self.is_locked(world, *pos, state, block).await;
-            return props.to_state_id(block);
+        let mut props = RepeaterProperties::from_state_id(args.state_id, args.block);
+        if args.direction.to_axis() != props.facing.to_block_direction().to_axis() {
+            props.locked = self
+                .is_locked(args.world, *args.location, args.state_id, args.block)
+                .await;
+            return props.to_state_id(args.block);
         }
-        state
+        args.state_id
     }
 
-    async fn player_placed(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        state_id: u16,
-        pos: &BlockPos,
-        _face: BlockDirection,
-        _player: &Player,
-    ) {
-        RedstoneGateBlock::player_placed(self, world, block, state_id, pos).await;
+    async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        RedstoneGateBlock::player_placed(self, args).await;
     }
 
-    async fn on_state_replaced(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        location: BlockPos,
-        old_state_id: BlockStateId,
-        moved: bool,
-    ) {
-        RedstoneGateBlock::on_state_replaced(self, world, block, location, old_state_id, moved)
-            .await;
+    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        RedstoneGateBlock::on_state_replaced(self, args).await;
     }
 }
 

@@ -15,7 +15,13 @@ use pumpkin_world::{
     world::{BlockAccessor, BlockFlags},
 };
 
-use crate::{entity::player::Player, world::World};
+use crate::{
+    block::pumpkin_block::{
+        GetRedstonePowerArgs, OnNeighborUpdateArgs, OnStateReplacedArgs, PlayerPlacedArgs,
+    },
+    entity::player::Player,
+    world::World,
+};
 
 use super::{get_redstone_power, is_diode};
 
@@ -42,54 +48,38 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
         state.is_side_solid(BlockDirection::Up)
     }
 
-    async fn get_weak_redstone_power(
-        &self,
-        block: &Block,
-        world: &World,
-        block_pos: &BlockPos,
-        state: &BlockState,
-        direction: BlockDirection,
-    ) -> u8 {
-        let props = T::from_state_id(state.id, block);
-        if props.is_powered() && props.get_facing().to_block_direction() == direction {
-            self.get_output_level(world, *block_pos).await
+    async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        let props = T::from_state_id(args.state.id, args.block);
+        if props.is_powered() && props.get_facing().to_block_direction() == args.direction {
+            self.get_output_level(args.world, *args.location).await
         } else {
             0
         }
     }
 
-    async fn get_strong_redstone_power(
-        &self,
-        block: &Block,
-        world: &World,
-        block_pos: &BlockPos,
-        state: &BlockState,
-        direction: BlockDirection,
-    ) -> u8 {
-        self.get_weak_redstone_power(block, world, block_pos, state, direction)
-            .await
+    async fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        self.get_weak_redstone_power(args).await
     }
 
     async fn get_output_level(&self, world: &World, pos: BlockPos) -> u8;
 
-    async fn on_neighbor_update(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        pos: &BlockPos,
-        source_block: &Block,
-    ) {
-        let state = world.get_block_state(pos).await;
-        if RedstoneGateBlock::can_place_at(self, &**world, *pos).await {
-            self.update_powered(world, *pos, state, block).await;
+    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        let state = args.world.get_block_state(args.location).await;
+        if RedstoneGateBlock::can_place_at(self, args.world.as_ref(), *args.location).await {
+            self.update_powered(args.world, *args.location, state, args.block)
+                .await;
             return;
         }
-        world
-            .set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL)
+        args.world
+            .set_block_state(
+                args.location,
+                Block::AIR.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            )
             .await;
         for dir in BlockDirection::all() {
-            world
-                .update_neighbor(&pos.offset(dir.to_offset()), source_block)
+            args.world
+                .update_neighbor(&args.location.offset(dir.to_offset()), args.source_block)
                 .await;
         }
     }
@@ -162,35 +152,34 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
         props.to_state_id(block)
     }
 
-    async fn player_placed(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        state_id: u16,
-        pos: &BlockPos,
-    ) {
-        if let Some(state) = get_state_by_state_id(state_id) {
-            if RedstoneGateBlock::has_power(self, world, *pos, state, block).await {
-                world
-                    .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
+    async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        if let Some(state) = get_state_by_state_id(args.state_id) {
+            if RedstoneGateBlock::has_power(self, args.world, *args.location, state, args.block)
+                .await
+            {
+                args.world
+                    .schedule_block_tick(args.block, *args.location, 1, TickPriority::Normal)
                     .await;
             }
         }
     }
 
-    async fn on_state_replaced(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        location: BlockPos,
-        old_state_id: BlockStateId,
-        moved: bool,
-    ) {
-        if moved || Block::from_state_id(old_state_id).is_some_and(|old_block| old_block == block) {
+    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        if args.moved
+            || Block::from_state_id(args.old_state_id)
+                .is_some_and(|old_block| old_block == args.block)
+        {
             return;
         }
-        if let Some(old_state) = get_state_by_state_id(old_state_id) {
-            RedstoneGateBlock::update_target(self, world, location, old_state.id, block).await;
+        if let Some(old_state) = get_state_by_state_id(args.old_state_id) {
+            RedstoneGateBlock::update_target(
+                self,
+                args.world,
+                *args.location,
+                old_state.id,
+                args.block,
+            )
+            .await;
         }
     }
 

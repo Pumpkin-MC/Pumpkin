@@ -9,7 +9,6 @@ use pumpkin_data::{
     },
     block_state::PistonBehavior,
 };
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     BlockStateId,
@@ -19,12 +18,12 @@ use pumpkin_world::{
 
 use crate::{
     block::{
-        BlockIsReplacing,
         blocks::redstone::is_emitting_redstone_power,
-        pumpkin_block::{BlockMetadata, PumpkinBlock},
+        pumpkin_block::{
+            BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
+            PumpkinBlock,
+        },
     },
-    entity::player::Player,
-    server::Server,
     world::World,
 };
 
@@ -88,58 +87,34 @@ impl PistonBlock {
 
 #[async_trait]
 impl PumpkinBlock for PistonBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        player: &Player,
-        block: &Block,
-        _block_pos: &BlockPos,
-        _face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        let mut props = PistonProps::default(block);
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = PistonProps::default(args.block);
         props.extended = false;
-        props.facing = player.living_entity.entity.get_facing().opposite();
-        props.to_state_id(block)
+        props.facing = args.player.living_entity.entity.get_facing().opposite();
+        props.to_state_id(args.block)
     }
 
-    async fn placed(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        state_id: BlockStateId,
-        pos: &BlockPos,
-        old_state_id: BlockStateId,
-        _notify: bool,
-    ) {
-        if old_state_id == state_id {
+    async fn placed(&self, args: PlacedArgs<'_>) {
+        if args.old_state_id == args.state_id {
             return;
         }
-        try_move(world, block, pos).await;
+        try_move(args.world, args.block, args.location).await;
     }
 
-    async fn on_neighbor_update(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        block_pos: &BlockPos,
-        _source_block: &Block,
-        _notify: bool,
-    ) {
-        try_move(world, block, block_pos).await;
+    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        try_move(args.world, args.block, args.location).await;
     }
 
     #[expect(clippy::too_many_lines)]
-    async fn on_synced_block_event(
-        &self,
-        block: &Block,
-        world: &Arc<World>,
-        pos: &BlockPos,
-        r#type: u8,
-        data: u8,
-    ) -> bool {
+    async fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
+        let (block, world, pos, r#type, data) = (
+            args.block,
+            args.world,
+            args.location,
+            args.r#type,
+            args.data,
+        );
+
         let state = world.get_block_state(pos).await;
         let mut props = PistonProps::from_state_id(state.id, block);
         let dir = props.facing.to_block_direction();
@@ -361,10 +336,10 @@ async fn move_piston(
         return false;
     }
 
-    let mut moved_blocks_map: HashMap<BlockPos, &'static BlockState> = HashMap::new();
+    let mut moved_blocks_map: HashMap<BlockPos, &BlockState> = HashMap::new();
     let moved_blocks: Vec<BlockPos> = handler.moved_blocks;
 
-    let mut moved_block_states: Vec<&'static BlockState> = Vec::new();
+    let mut moved_block_states: Vec<&BlockState> = Vec::new();
 
     for &block_pos in &moved_blocks {
         let block_state = world.get_block_state(&block_pos).await;
@@ -373,7 +348,7 @@ async fn move_piston(
     }
 
     let broken_blocks: Vec<BlockPos> = handler.broken_blocks;
-    let mut affected_block_states: Vec<&'static BlockState> =
+    let mut affected_block_states: Vec<&BlockState> =
         Vec::with_capacity(moved_blocks.len() + broken_blocks.len());
     let move_direction = if extend { dir } else { dir.opposite() };
 
@@ -494,7 +469,7 @@ async fn move_piston(
                 .on_state_replaced(
                     world,
                     get_block_by_state_id(block_state.id).unwrap(),
-                    broken_block_pos,
+                    &broken_block_pos,
                     block_state.id, // ?
                     false,
                 )

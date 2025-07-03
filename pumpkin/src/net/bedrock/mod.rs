@@ -17,8 +17,11 @@ use pumpkin_protocol::{
         packet_decoder::UDPNetworkDecoder,
         packet_encoder::UDPNetworkEncoder,
         server::{
+            login::SLogin,
             raknet::{
-                connection::{SConnectionRequest, SDisconnect, SNewIncomingConnection},
+                connection::{
+                    SConnectedPing, SConnectionRequest, SDisconnect, SNewIncomingConnection,
+                },
                 open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
                 unconnected_ping::SUnconnectedPing,
             },
@@ -274,9 +277,7 @@ impl BedrockClientPlatform {
         Ok(())
     }
 
-    fn handle_ack(_ack: &Ack) {
-        dbg!("received ack");
-    }
+    fn handle_ack(_ack: &Ack) {}
 
     async fn handle_frame_set(&self, client: &Client, server: &Server, frame_set: FrameSet) {
         dbg!("set", frame_set.sequence.0);
@@ -297,7 +298,6 @@ impl BedrockClientPlatform {
         mut frame: Frame,
     ) -> Result<(), ReadingError> {
         if frame.split_size > 0 {
-            dbg!("oh yes, frame is split, not TODO");
             let fragment_index = frame.split_index as usize;
             let compound_id = frame.split_id;
             let mut compounds = self.compounds.lock().await;
@@ -336,8 +336,6 @@ impl BedrockClientPlatform {
             frame.split_size = 0;
         }
 
-        dbg!(frame.reliability);
-
         let mut payload = &frame.payload[..];
         let id = payload.get_u8()?;
         self.handle_raknet_packet(client, server, i32::from(id), payload)
@@ -351,12 +349,14 @@ impl BedrockClientPlatform {
         packet: RawPacket,
     ) -> Result<(), ReadingError> {
         let payload = &packet.payload[..];
-        dbg!("payload", payload);
         match packet.id {
             SRequestNetworkSettings::PACKET_ID => {
                 client
                     .handle_request_network_settings(self, SRequestNetworkSettings::read(payload)?)
                     .await;
+            }
+            SLogin::PACKET_ID => {
+                client.handle_login(self, SLogin::read(payload)?).await;
             }
             _ => {
                 log::warn!("Bedrock: Received Unknown Game packet: {}", packet.id);
@@ -381,14 +381,17 @@ impl BedrockClientPlatform {
             SNewIncomingConnection::PACKET_ID => {
                 client.handle_new_incoming_connection(&SNewIncomingConnection::read(payload)?);
             }
+            SConnectedPing::PACKET_ID => {
+                client
+                    .handle_connected_ping(self, SConnectedPing::read(payload)?)
+                    .await;
+            }
             SDisconnect::PACKET_ID => {
                 dbg!("Bedrock client disconnected");
                 client.close();
             }
 
             RAKNET_GAME_PACKET => {
-                dbg!("game packet");
-                dbg!(payload.len());
                 let game_packet = self
                     .network_reader
                     .lock()

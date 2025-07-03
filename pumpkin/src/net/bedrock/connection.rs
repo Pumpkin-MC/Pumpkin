@@ -7,8 +7,8 @@ use pumpkin_protocol::{
     ConnectionState,
     bedrock::{
         RakReliability,
-        client::raknet::connection::CConnectionRequestAccepted,
-        server::raknet::connection::{SConnectionRequest, SNewIncomingConnection},
+        client::raknet::connection::{CConnectedPong, CConnectionRequestAccepted},
+        server::raknet::connection::{SConnectedPing, SConnectionRequest, SNewIncomingConnection},
     },
     codec::socket_address::SocketAddress,
 };
@@ -43,5 +43,22 @@ impl Client {
     pub fn handle_new_incoming_connection(&self, packet: &SNewIncomingConnection) {
         dbg!(packet.pong_time);
         self.connection_state.store(ConnectionState::Login);
+    }
+
+    pub async fn handle_connected_ping(
+        &self,
+        bedrock: &BedrockClientPlatform,
+        packet: SConnectedPing,
+    ) {
+        bedrock
+            .send_framed_packet(
+                self,
+                &CConnectedPong::new(
+                    packet.time,
+                    UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+                ),
+                RakReliability::Unreliable,
+            )
+            .await;
     }
 }

@@ -1,25 +1,26 @@
-use std::sync::Arc;
-
-use crate::block::BlockIsReplacing;
-use crate::server::Server;
-use crate::{block::registry::BlockActionResult, entity::player::Player};
+use crate::block::pumpkin_block::{
+    GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+    UseWithItemArgs,
+};
+use crate::block::registry::BlockActionResult;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::Axis;
-use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block,
     block_properties::{
         BlockProperties, EnumVariants, Instrument, Integer0To24, NoteBlockLikeProperties,
     },
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
-use crate::{block::pumpkin_block::PumpkinBlock, world::World};
+use crate::{
+    block::pumpkin_block::{OnSyncedBlockEventArgs, PumpkinBlock},
+    world::World,
+};
 
 use super::redstone::block_receives_redstone_power;
 
@@ -62,39 +63,29 @@ impl NoteBlock {
 
 #[async_trait]
 impl PumpkinBlock for NoteBlock {
-    async fn on_neighbor_update(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        pos: &BlockPos,
-        _source_block: &Block,
-        _notify: bool,
-    ) {
-        let block_state = world.get_block_state(pos).await;
-        let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, block);
-        let powered = block_receives_redstone_power(world, pos).await;
+    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        let block_state = args.world.get_block_state(args.location).await;
+        let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
+        let powered = block_receives_redstone_power(args.world, args.location).await;
         // check if powered state changed
         if note_props.powered != powered {
             if powered {
-                Self::play_note(&note_props, world, pos).await;
+                Self::play_note(&note_props, args.world, args.location).await;
             }
             note_props.powered = powered;
-            world
-                .set_block_state(pos, note_props.to_state_id(block), BlockFlags::NOTIFY_ALL)
+            args.world
+                .set_block_state(
+                    args.location,
+                    note_props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                )
                 .await;
         }
     }
 
-    async fn normal_use(
-        &self,
-        block: &Block,
-        _player: &Player,
-        pos: BlockPos,
-        _server: &Server,
-        world: &Arc<World>,
-    ) {
-        let block_state = world.get_block_state(&pos).await;
-        let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, block);
+    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+        let block_state = args.world.get_block_state(args.location).await;
+        let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
         let next_index = note_props.note.to_index() + 1;
         // Increment and check if max
         note_props.note = if next_index >= Integer0To24::variant_count() {
@@ -102,35 +93,24 @@ impl PumpkinBlock for NoteBlock {
         } else {
             Integer0To24::from_index(next_index)
         };
-        world
-            .set_block_state(&pos, note_props.to_state_id(block), BlockFlags::NOTIFY_ALL)
+        args.world
+            .set_block_state(
+                args.location,
+                note_props.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            )
             .await;
-        Self::play_note(&note_props, world, &pos).await;
+        Self::play_note(&note_props, args.world, args.location).await;
     }
 
-    async fn use_with_item(
-        &self,
-        _block: &Block,
-        _player: &Player,
-        _location: BlockPos,
-        _item: &Item,
-        _server: &Server,
-        _world: &Arc<World>,
-    ) -> BlockActionResult {
+    async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
         // TODO
         BlockActionResult::Continue
     }
 
-    async fn on_synced_block_event(
-        &self,
-        block: &Block,
-        world: &Arc<World>,
-        pos: &BlockPos,
-        _type: u8,
-        _data: u8,
-    ) -> bool {
-        let block_state = world.get_block_state(pos).await;
-        let note_props = NoteBlockLikeProperties::from_state_id(block_state.id, block);
+    async fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
+        let block_state = args.world.get_block_state(args.location).await;
+        let note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
         let instrument = note_props.instrument;
         let pitch = if is_base_block(instrument) {
             // checks if can be pitched
@@ -139,11 +119,11 @@ impl PumpkinBlock for NoteBlock {
             1.0 // default pitch
         };
         // check hasCustomSound
-        world
+        args.world
             .play_sound_raw(
                 convert_instrument_to_sound(instrument) as u16,
                 SoundCategory::Records,
-                &pos.to_f64(),
+                &args.location.to_f64(),
                 3.0,
                 pitch,
             )
@@ -151,34 +131,30 @@ impl PumpkinBlock for NoteBlock {
         true
     }
 
-    async fn on_place(
-        &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
-        block: &Block,
-        pos: &BlockPos,
-        _face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        Self::get_state_with_instrument(world, pos, Block::NOTE_BLOCK.default_state.id, block).await
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        Self::get_state_with_instrument(
+            args.world,
+            args.location,
+            Block::NOTE_BLOCK.default_state.id,
+            args.block,
+        )
+        .await
     }
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
-        block: &Block,
-        state: BlockStateId,
-        pos: &BlockPos,
-        direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if direction.to_axis() == Axis::Y {
-            return Self::get_state_with_instrument(world, pos, state, block).await;
+        if args.direction.to_axis() == Axis::Y {
+            return Self::get_state_with_instrument(
+                args.world,
+                args.location,
+                args.state_id,
+                args.block,
+            )
+            .await;
         }
-        state
+        args.state_id
     }
 }
 

@@ -1,8 +1,7 @@
-use crate::block::BlockIsReplacing;
-use crate::entity::player::Player;
+use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
+use crate::block::pumpkin_block::OnPlaceArgs;
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::EastWallShape;
 use pumpkin_data::block_properties::HorizontalFacing;
@@ -12,7 +11,6 @@ use pumpkin_data::block_properties::WestWallShape;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
@@ -21,7 +19,6 @@ type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikePrope
 type FenceLikeProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
-use crate::server::Server;
 use crate::world::World;
 
 pub struct WallBlock;
@@ -37,35 +34,19 @@ impl BlockMetadata for WallBlock {
 
 #[async_trait]
 impl PumpkinBlock for WallBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
-        block: &Block,
-        block_pos: &BlockPos,
-        _face: BlockDirection,
-        replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> u16 {
-        let mut wall_props = WallProperties::default(block);
-        wall_props.waterlogged = replacing.water_source();
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut wall_props = WallProperties::default(args.block);
+        wall_props.waterlogged = args.replacing.water_source();
 
-        compute_wall_state(wall_props, world, block, block_pos).await
+        compute_wall_state(wall_props, args.world, args.block, args.location).await
     }
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
-        block: &Block,
-        state_id: BlockStateId,
-        block_pos: &BlockPos,
-        _direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let wall_props = WallProperties::from_state_id(state_id, block);
-        compute_wall_state(wall_props, world, block, block_pos).await
+        let wall_props = WallProperties::from_state_id(args.state_id, args.block);
+        compute_wall_state(wall_props, args.world, args.block, args.location).await
     }
 }
 

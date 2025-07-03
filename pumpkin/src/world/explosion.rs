@@ -5,7 +5,7 @@ use pumpkin_data::block_properties::get_state_by_state_id;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::{
-    block::{drop_loot, loot::LootContextParameters},
+    block::{drop_loot, loot::LootContextParameters, pumpkin_block::ExplodeArgs},
     server::Server,
 };
 
@@ -94,7 +94,13 @@ impl Explosion {
                 drop_loot(world, block, &pos, false, params).await;
             }
             if let Some(pumpkin_block) = pumpkin_block {
-                pumpkin_block.explode(block, world, pos).await;
+                pumpkin_block
+                    .explode(ExplodeArgs {
+                        world,
+                        block,
+                        location: &pos,
+                    })
+                    .await;
             }
         }
     }

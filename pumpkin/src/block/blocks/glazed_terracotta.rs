@@ -1,14 +1,7 @@
-use crate::block::BlockIsReplacing;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
-use crate::entity::player::Player;
-use crate::server::Server;
-use crate::world::World;
+use crate::block::pumpkin_block::{BlockMetadata, OnPlaceArgs, PumpkinBlock};
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
-use pumpkin_data::{Block, BlockDirection};
-use pumpkin_protocol::java::server::play::SUseItemOn;
-use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
 pub struct GlazedTerracottaBlock;
@@ -24,23 +17,14 @@ impl BlockMetadata for GlazedTerracottaBlock {
 
 #[async_trait]
 impl PumpkinBlock for GlazedTerracottaBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        player: &Player,
-        block: &Block,
-        _block_pos: &BlockPos,
-        _face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        let mut prop = WallTorchLikeProperties::default(block);
-        prop.facing = player
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut prop = WallTorchLikeProperties::default(args.block);
+        prop.facing = args
+            .player
             .living_entity
             .entity
             .get_horizontal_facing()
             .opposite();
-        prop.to_state_id(block)
+        prop.to_state_id(args.block)
     }
 }

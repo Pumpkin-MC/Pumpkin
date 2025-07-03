@@ -4,6 +4,22 @@ use serde::{Deserialize, Serialize};
 use crate::codec::socket_address::SocketAddress;
 
 #[derive(Serialize, Deserialize)]
+#[packet(0x03)]
+pub struct CConnectedPong {
+    ping_time: u64,
+    pong_time: u64,
+}
+
+impl CConnectedPong {
+    pub fn new(ping_time: u64, pong_time: u64) -> Self {
+        Self {
+            ping_time,
+            pong_time,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 #[packet(0x10)]
 pub struct CConnectionRequestAccepted {
     client_address: SocketAddress,
