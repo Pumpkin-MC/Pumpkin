@@ -1,4 +1,6 @@
-use crate::block::pumpkin_block::{BlockMetadata, OnEntityCollisionArgs, PumpkinBlock};
+use crate::block::pumpkin_block::{
+    BlockHitResult, BlockMetadata, OnEntityCollisionArgs, PumpkinBlock,
+};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -9,6 +11,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
@@ -137,6 +140,8 @@ impl BlockRegistry {
         block: &Block,
         player: &Player,
         location: &BlockPos,
+        side: &BlockDirection,
+        cursor_pos: &Vector3<f32>,
         server: &Server,
         world: &Arc<World>,
     ) {
@@ -147,8 +152,9 @@ impl BlockRegistry {
                     server,
                     world,
                     block,
-                    location,
                     player,
+                    location,
+                    hit: &BlockHitResult { side, cursor_pos },
                 })
                 .await;
         }
@@ -172,6 +178,8 @@ impl BlockRegistry {
         block: &Block,
         player: &Player,
         location: &BlockPos,
+        side: &BlockDirection,
+        cursor_pos: &Vector3<f32>,
         item_stack: &Arc<Mutex<ItemStack>>,
         server: &Server,
         world: &Arc<World>,
@@ -183,8 +191,9 @@ impl BlockRegistry {
                     server,
                     world,
                     block,
-                    location,
                     player,
+                    location,
+                    hit: &BlockHitResult { side, cursor_pos },
                     item_stack,
                 })
                 .await;

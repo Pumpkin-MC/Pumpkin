@@ -5,6 +5,7 @@ pub mod cactus;
 pub mod campfire;
 pub mod carpet;
 pub mod chest;
+pub mod chiseled_bookshelf;
 pub mod command;
 pub mod composter;
 pub mod crafting_table;
@@ -41,7 +42,6 @@ pub mod torches;
 pub mod trapdoor;
 pub mod vine;
 pub mod walls;
-pub mod chiseled_bookshelf;
 
 // abstruct
 pub mod abstruct_wall_mounting;

@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -111,17 +112,24 @@ pub struct NormalUseArgs<'a> {
     pub server: &'a Server,
     pub world: &'a Arc<World>,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
     pub player: &'a Player,
+    pub location: &'a BlockPos,
+    pub hit: &'a BlockHitResult<'a>,
 }
 
 pub struct UseWithItemArgs<'a> {
     pub server: &'a Server,
     pub world: &'a Arc<World>,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
     pub player: &'a Player,
+    pub location: &'a BlockPos,
+    pub hit: &'a BlockHitResult<'a>,
     pub item_stack: &'a Arc<Mutex<ItemStack>>,
+}
+
+pub struct BlockHitResult<'a> {
+    pub side: &'a BlockDirection,
+    pub cursor_pos: &'a Vector3<f32>,
 }
 
 pub struct OnEntityCollisionArgs<'a> {
