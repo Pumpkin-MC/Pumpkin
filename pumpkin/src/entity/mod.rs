@@ -1,3 +1,4 @@
+use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
@@ -30,6 +31,7 @@ use pumpkin_util::math::{
     vector3::Vector3,
     wrap_degrees,
 };
+use pumpkin_util::text::TextComponent;
 use serde::Serialize;
 use std::sync::{
     Arc,
@@ -39,8 +41,6 @@ use std::sync::{
     },
 };
 use tokio::sync::{Mutex, RwLock};
-
-use crate::world::World;
 
 pub mod ai;
 pub mod effect;
@@ -107,12 +107,18 @@ pub trait EntityBase: Send + Sync {
 
     /// Returns if damage was successful or not
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-        if let Some(living) = self.get_living_entity() {
-            living.damage(amount, damage_type).await
-        } else {
-            self.get_entity().damage(amount, damage_type).await
-        }
+        self.damage_with_context(amount, damage_type, None, None, None)
+            .await
     }
+
+    async fn damage_with_context(
+        &self,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&Entity>,
+        cause: Option<&Entity>,
+    ) -> bool;
 
     /// Called when a player collides with a entity
     async fn on_player_collision(&self, _player: &Arc<Player>) {}
@@ -786,11 +792,36 @@ impl Entity {
             ))
             .await;
     }
+
+    pub async fn check_out_of_world(&self) {
+        if self.pos.load().y
+            < f64::from(self.world.read().await.generation_settings().shape.min_y) - 64.0
+        {
+            // Tick out of world damage
+            self.damage(4.0, DamageType::OUT_OF_WORLD).await;
+        }
+    }
+
+    #[allow(clippy::unused_async)]
+    pub async fn get_display_name(&self) -> TextComponent {
+        // TODO
+        TextComponent::text(format!(
+            "{} {}",
+            self.entity_type.resource_name, self.entity_id
+        ))
+    }
 }
 
 #[async_trait]
 impl EntityBase for Entity {
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+    async fn damage_with_context(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&Entity>,
+        _cause: Option<&Entity>,
+    ) -> bool {
         false
     }
 

@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use async_trait::async_trait;
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -24,6 +25,7 @@ pub struct ItemEntity {
     // into the ABA problem
     item_stack: Mutex<ItemStack>,
     pickup_delay: Mutex<u8>,
+    health: AtomicCell<f32>,
 }
 
 impl ItemEntity {
@@ -41,6 +43,7 @@ impl ItemEntity {
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
             pickup_delay: Mutex::new(10), // Vanilla pickup delay is 10 ticks
+            health: AtomicCell::new(5.0),
         }
     }
 
@@ -57,6 +60,7 @@ impl ItemEntity {
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
             pickup_delay: Mutex::new(pickup_delay), // Vanilla pickup delay is 10 ticks
+            health: AtomicCell::new(5.0),
         }
     }
 }
@@ -85,6 +89,22 @@ impl EntityBase for ItemEntity {
                 &ItemStackSerializer::from(*self.item_stack.lock().await),
             )])
             .await;
+    }
+
+    async fn damage_with_context(
+        &self,
+        amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&Entity>,
+        _cause: Option<&Entity>,
+    ) -> bool {
+        //TODO: invulnerability, e.g. ancient debris
+        self.health.store(self.health.load() - amount);
+        if self.health.load() <= 0.0 {
+            self.entity.remove().await;
+        }
+        true
     }
 
     async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
