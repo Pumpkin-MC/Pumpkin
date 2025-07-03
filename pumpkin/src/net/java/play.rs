@@ -1390,27 +1390,7 @@ impl Player {
             .entity
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
-        if held_item.lock().await.is_empty() {
-            if !sneaking {
-                // Using block with empty hand
-                server
-                    .block_registry
-                    .on_use(
-                        block,
-                        self,
-                        &location,
-                        &BlockHitResult {
-                            side: &face,
-                            cursor_pos: &cursor_pos,
-                        },
-                        server,
-                        world,
-                    )
-                    .await;
-            }
-            return Ok(());
-        }
-        if !sneaking {
+        if !sneaking || held_item.lock().await.is_empty() {
             let action_result = server
                 .block_registry
                 .use_with_item(UseWithItemArgs {
@@ -1430,6 +1410,22 @@ impl Player {
                 BlockActionResult::Continue => {}
                 BlockActionResult::Consume => {
                     return Ok(());
+                }
+                BlockActionResult::PassToDefault => {
+                    server
+                        .block_registry
+                        .on_use(
+                            block,
+                            self,
+                            &location,
+                            &BlockHitResult {
+                                side: &face,
+                                cursor_pos: &cursor_pos,
+                            },
+                            server,
+                            world,
+                        )
+                        .await;
                 }
             }
             server

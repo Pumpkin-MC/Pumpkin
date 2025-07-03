@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use async_trait::async_trait;
 use pumpkin_data::{
     block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
     item::Item,
     sound::{Sound, SoundCategory},
+    tag::Tagable,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
@@ -18,8 +19,8 @@ use tokio::sync::Mutex;
 use crate::{
     block::{
         pumpkin_block::{
-            BlockHitResult, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs,
-            PumpkinBlock, UseWithItemArgs,
+            BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
+            OnStateReplacedArgs, PlacedArgs, PumpkinBlock, UseWithItemArgs,
         },
         registry::BlockActionResult,
     },
@@ -71,26 +72,35 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
         let state = args.world.get_block_state(args.location).await;
         let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
 
-        // TODO: Check if the item is a book / in tag BOOKSHELF_BOOKS
-
         if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
-            if !Self::is_slot_used(properties, slot) {
-                if let Some((_, block_entity)) = args.world.get_block_entity(args.location).await {
-                    if let Some(block_entity) = block_entity
-                        .as_any()
-                        .downcast_ref::<ChiseledBookshelfBlockEntity>()
-                    {
-                        Self::try_add_book(
-                            args.world,
-                            args.location,
-                            block_entity,
-                            properties,
-                            slot,
-                            args.item_stack,
-                        )
-                        .await;
-                        return BlockActionResult::Consume;
-                    }
+            if !args
+                .item_stack
+                .lock()
+                .await
+                .get_item()
+                .is_tagged_with("minecraft:bookshelf_books")
+                .unwrap_or(false)
+            {
+                return BlockActionResult::PassToDefault;
+            }
+            if Self::is_slot_used(properties, slot) {
+                return BlockActionResult::PassToDefault;
+            } else if let Some((_, block_entity)) = args.world.get_block_entity(args.location).await
+            {
+                if let Some(block_entity) = block_entity
+                    .as_any()
+                    .downcast_ref::<ChiseledBookshelfBlockEntity>()
+                {
+                    Self::try_add_book(
+                        args.world,
+                        args.location,
+                        block_entity,
+                        properties,
+                        slot,
+                        args.item_stack,
+                    )
+                    .await;
+                    return BlockActionResult::Consume;
                 }
             }
         }
@@ -105,6 +115,18 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
 
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
         args.world.remove_block_entity(args.location).await;
+    }
+
+    async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        if let Some((_, block_entity)) = args.world.get_block_entity(args.location).await {
+            if let Some(block_entity) = block_entity
+                .as_any()
+                .downcast_ref::<ChiseledBookshelfBlockEntity>()
+            {
+                return Some((block_entity.last_interacted_slot.load(Ordering::Relaxed) + 1) as u8);
+            }
+        }
+        None
     }
 }
 

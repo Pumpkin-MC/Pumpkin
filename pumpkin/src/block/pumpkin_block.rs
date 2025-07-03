@@ -32,7 +32,7 @@ pub trait PumpkinBlock: Send + Sync {
     async fn normal_use(&self, _args: NormalUseArgs<'_>) {}
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
-        BlockActionResult::Continue
+        BlockActionResult::PassToDefault
     }
 
     async fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {}
