@@ -41,6 +41,7 @@ pub mod torches;
 pub mod trapdoor;
 pub mod vine;
 pub mod walls;
+pub mod chiseled_bookshelf;
 
 // abstruct
 pub mod abstruct_wall_mounting;
