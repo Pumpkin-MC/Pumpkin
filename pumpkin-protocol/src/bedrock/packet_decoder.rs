@@ -127,9 +127,9 @@ impl UDPNetworkDecoder {
         //compression is only included after the network settings packet is sent
         // TODO: compression & encryption
         let packet_len = VarUInt::decode(&mut reader).map_err(|err| match err {
-                ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
-                err => PacketDecodeError::MalformedLength(err.to_string()),
-            })?;
+            ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
+            err => PacketDecodeError::MalformedLength(err.to_string()),
+        })?;
 
         let packet_len = packet_len.0 as u64;
 

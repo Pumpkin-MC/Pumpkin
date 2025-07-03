@@ -316,7 +316,8 @@ impl BedrockClientPlatform {
 
     async fn handle_frame_set(&self, client: &Client, server: &Server, frame_set: FrameSet) {
         // TODO: Send all ACKs in short intervals in batches
-        self.send_ack(client, &Ack::new(vec![frame_set.sequence.0])).await;
+        self.send_ack(client, &Ack::new(vec![frame_set.sequence.0]))
+            .await;
         // TODO
         for frame in frame_set.frames {
             self.handle_frame(client, server, frame).await.unwrap();
