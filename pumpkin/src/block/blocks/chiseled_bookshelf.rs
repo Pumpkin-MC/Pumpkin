@@ -1,15 +1,19 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::info;
-use pumpkin_data::block_properties::{
-    BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing,
+use pumpkin_data::{
+    block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
+    item::Item,
+    sound::{Sound, SoundCategory},
 };
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_world::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
+    inventory::Inventory, item::ItemStack,
 };
+use tokio::sync::Mutex;
 
 use crate::{
     block::{
@@ -19,7 +23,8 @@ use crate::{
         },
         registry::BlockActionResult,
     },
-    entity::EntityBase,
+    entity::{EntityBase, player::Player},
+    world::World,
 };
 
 #[pumpkin_block("minecraft:chiseled_bookshelf")]
@@ -37,18 +42,57 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
     }
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        info!("Position: {:?}", args.location);
-        info!("Cursor position: {:?}", args.hit.cursor_pos);
-
         let state = args.world.get_block_state(args.location).await;
-        let props = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
+        let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
 
-        let slot = self.get_slot_for_hit(&args.hit, &props.facing).await;
-
-        info!("Hit slot: {:?}", slot);
+        if let Some(slot) = Self::get_slot_for_hit(&args.hit, &properties.facing) {
+            if Self::is_slot_used(&properties, slot) {
+                if let Some((_, block_entity)) = args.world.get_block_entity(args.location).await {
+                    if let Some(block_entity) = block_entity
+                        .as_any()
+                        .downcast_ref::<ChiseledBookshelfBlockEntity>()
+                    {
+                        Self::try_remove_book(
+                            &args.world,
+                            &args.player,
+                            &args.location,
+                            block_entity,
+                            slot,
+                        )
+                        .await;
+                    }
+                }
+            }
+        }
     }
 
-    async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
+    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.location).await;
+        let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
+
+        // TODO: Check if the item is a book / in tag BOOKSHELF_BOOKS
+
+        if let Some(slot) = Self::get_slot_for_hit(&args.hit, &properties.facing) {
+            if !Self::is_slot_used(&properties, slot) {
+                if let Some((_, block_entity)) = args.world.get_block_entity(args.location).await {
+                    if let Some(block_entity) = block_entity
+                        .as_any()
+                        .downcast_ref::<ChiseledBookshelfBlockEntity>()
+                    {
+                        Self::try_add_book(
+                            &args.world,
+                            &args.location,
+                            block_entity,
+                            slot,
+                            &args.item_stack,
+                        )
+                        .await;
+                        return BlockActionResult::Consume;
+                    }
+                }
+            }
+        }
+
         BlockActionResult::Continue
     }
 
@@ -63,11 +107,61 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
 }
 
 impl ChiseledBookshelfBlock {
-    async fn get_slot_for_hit(
-        &self,
-        hit: &BlockHitResult<'_>,
-        facing: &HorizontalFacing,
-    ) -> Option<i32> {
+    async fn try_add_book(
+        world: &Arc<World>,
+        location: &BlockPos,
+        entity: &ChiseledBookshelfBlockEntity,
+        slot: i8,
+        item: &Arc<Mutex<ItemStack>>,
+    ) {
+        // TODO: Increment used stats for chiseled bookshelf on the player
+
+        let mut item = item.lock().await;
+        let sound = if *item.get_item() == Item::ENCHANTED_BOOK {
+            Sound::BlockChiseledBookshelfPickupEnchanted
+        } else {
+            Sound::BlockChiseledBookshelfPickup
+        };
+
+        entity.set_stack(slot as usize, item.split(1)).await;
+        entity.update_state(world.clone(), slot).await;
+
+        world
+            .play_sound(sound, SoundCategory::Blocks, &location.to_centered_f64())
+            .await;
+    }
+
+    async fn try_remove_book(
+        world: &Arc<World>,
+        player: &Player,
+        location: &BlockPos,
+        entity: &ChiseledBookshelfBlockEntity,
+        slot: i8,
+    ) {
+        let mut stack = entity.remove_stack_specific(slot as usize, 1).await;
+
+        let sound = if *stack.get_item() == Item::ENCHANTED_BOOK {
+            Sound::BlockChiseledBookshelfPickupEnchanted
+        } else {
+            Sound::BlockChiseledBookshelfPickup
+        };
+
+        if !player
+            .get_inventory()
+            .insert_stack_anywhere(&mut stack)
+            .await
+        {
+            // Drop the item on the ground if the player cannot hold it because of a full inventory
+            player.drop_item(stack).await;
+        }
+        entity.update_state(world.clone(), slot).await;
+
+        world
+            .play_sound(sound, SoundCategory::Blocks, &location.to_centered_f64())
+            .await;
+    }
+
+    fn get_slot_for_hit(hit: &BlockHitResult<'_>, facing: &HorizontalFacing) -> Option<i8> {
         if let Some(position) = Self::get_hit_pos(hit, facing) {
             let i = if position.z >= 0.5 { 0 } else { 1 };
             let j = Self::get_column(position.x);
@@ -101,13 +195,25 @@ impl ChiseledBookshelfBlock {
     const OFFSET_SLOT_0: f32 = 0.375;
     const OFFSET_SLOT_1: f32 = 0.6875;
 
-    fn get_column(x: f32) -> i32 {
+    fn get_column(x: f32) -> i8 {
         if x < Self::OFFSET_SLOT_0 {
             0
         } else if x < Self::OFFSET_SLOT_1 {
             1
         } else {
             2
+        }
+    }
+
+    fn is_slot_used(properties: &ChiseledBookshelfLikeProperties, slot: i8) -> bool {
+        match slot {
+            0 => properties.slot_0_occupied,
+            1 => properties.slot_1_occupied,
+            2 => properties.slot_2_occupied,
+            3 => properties.slot_3_occupied,
+            4 => properties.slot_4_occupied,
+            5 => properties.slot_5_occupied,
+            _ => false,
         }
     }
 }

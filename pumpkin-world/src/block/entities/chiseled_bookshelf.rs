@@ -2,11 +2,13 @@ use std::{
     array::from_fn,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicI8, Ordering},
     },
 };
 
 use async_trait::async_trait;
+use log::warn;
+use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
@@ -15,14 +17,18 @@ use crate::{
     block::entities::BlockEntity,
     inventory::{Clearable, Inventory, split_stack},
     item::ItemStack,
+    world::{BlockFlags, SimpleWorld},
 };
 
 #[derive(Debug)]
 pub struct ChiseledBookshelfBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; 6],
+    pub last_interacted_slot: AtomicI8,
     pub dirty: AtomicBool,
 }
+
+const LAST_INTERACTED_SLOT: &str = "last_interacted_slot";
 
 #[async_trait]
 impl BlockEntity for ChiseledBookshelfBlockEntity {
@@ -41,6 +47,9 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
         let chiseled_bookshelf = Self {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            last_interacted_slot: AtomicI8::new(
+                nbt.get_int(LAST_INTERACTED_SLOT).unwrap_or(-1) as i8
+            ),
             dirty: AtomicBool::new(false),
         };
 
@@ -50,6 +59,10 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
     }
 
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int(
+            LAST_INTERACTED_SLOT,
+            self.last_interacted_slot.load(Ordering::Relaxed).into(),
+        );
         self.write_data(nbt, &self.items, true).await;
     }
 
@@ -65,7 +78,38 @@ impl ChiseledBookshelfBlockEntity {
         Self {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            last_interacted_slot: AtomicI8::new(-1),
             dirty: AtomicBool::new(false),
+        }
+    }
+
+    pub async fn update_state(&self, world: Arc<dyn SimpleWorld>, slot: i8) {
+        if slot >= 0 && slot < self.items.len() as i8 {
+            self.last_interacted_slot.store(slot, Ordering::Relaxed);
+
+            let block = world.get_block(&self.position).await;
+            let state = world.get_block_state(&self.position).await;
+            let mut properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, block);
+
+            properties.slot_0_occupied = !self.items[0].lock().await.is_empty();
+            properties.slot_1_occupied = !self.items[1].lock().await.is_empty();
+            properties.slot_2_occupied = !self.items[2].lock().await.is_empty();
+            properties.slot_3_occupied = !self.items[3].lock().await.is_empty();
+            properties.slot_4_occupied = !self.items[4].lock().await.is_empty();
+            properties.slot_5_occupied = !self.items[5].lock().await.is_empty();
+
+            world
+                .set_block_state(
+                    &self.position,
+                    properties.to_state_id(block),
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
+        } else {
+            warn!(
+                "Invalid interacted slot: {} for chiseled bookshelf at position {:?}",
+                slot, self.position
+            );
         }
     }
 }
