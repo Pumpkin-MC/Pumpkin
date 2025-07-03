@@ -1194,7 +1194,7 @@ impl Player {
                             .await;
                         server
                             .block_registry
-                            .broken(Arc::clone(world), block, self, location, server, state)
+                            .broken(world, block, self, &location, server, state)
                             .await;
                         self.update_sequence(player_action.sequence.0);
                         return;
@@ -1217,14 +1217,7 @@ impl Player {
                                 .await;
                             server
                                 .block_registry
-                                .broken(
-                                    Arc::clone(world),
-                                    block,
-                                    self,
-                                    location,
-                                    server,
-                                    broken_state,
-                                )
+                                .broken(world, block, self, &location, server, broken_state)
                                 .await;
                         } else {
                             self.mining
@@ -1294,7 +1287,7 @@ impl Player {
 
                     server
                         .block_registry
-                        .broken(Arc::clone(world), block, self, location, server, state)
+                        .broken(world, block, self, &location, server, state)
                         .await;
 
                     self.update_sequence(player_action.sequence.0);
@@ -1400,18 +1393,15 @@ impl Player {
                 // Using block with empty hand
                 server
                     .block_registry
-                    .on_use(block, self, location, server, world)
+                    .on_use(block, self, &location, server, world)
                     .await;
             }
             return Ok(());
         }
         if !sneaking {
-            let item_stack = held_item.lock().await;
-            let item = item_stack.item;
-            drop(item_stack);
             let action_result = server
                 .block_registry
-                .use_with_item(block, self, location, item, server, world)
+                .use_with_item(block, self, &location, &held_item, server, world)
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}

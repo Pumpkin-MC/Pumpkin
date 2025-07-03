@@ -725,7 +725,7 @@ impl Entity {
                         if outlines.is_empty() {
                             world
                                 .block_registry
-                                .on_entity_collision(block, &world, entity, pos, state, server)
+                                .on_entity_collision(block, &world, entity, &pos, state, server)
                                 .await;
                             let fluid = world.get_fluid(&pos).await;
                             world
@@ -739,7 +739,7 @@ impl Entity {
                             if outline_aabb.intersects(&aabb) {
                                 world
                                     .block_registry
-                                    .on_entity_collision(block, &world, entity, pos, state, server)
+                                    .on_entity_collision(block, &world, entity, &pos, state, server)
                                     .await;
                                 let fluid = world.get_fluid(&pos).await;
                                 world
@@ -752,7 +752,7 @@ impl Entity {
                     } else {
                         world
                             .block_registry
-                            .on_entity_collision(block, &world, entity, pos, state, server)
+                            .on_entity_collision(block, &world, entity, &pos, state, server)
                             .await;
                         let fluid = world.get_fluid(&pos).await;
                         world

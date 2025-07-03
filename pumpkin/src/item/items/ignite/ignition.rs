@@ -1,5 +1,5 @@
-use crate::block::blocks::fire::fire::FireBlock;
 use crate::block::blocks::fire::FireBlockBase;
+use crate::block::blocks::fire::fire::FireBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;

@@ -4,13 +4,14 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use super::BlockIsReplacing;
 
@@ -27,228 +28,247 @@ pub trait BlockMetadata {
 
 #[async_trait]
 pub trait PumpkinBlock: Send + Sync {
-    async fn normal_use(
-        &self,
-        _block: &Block,
-        _player: &Player,
-        _location: BlockPos,
-        _server: &Server,
-        _world: &Arc<World>,
-    ) {
-    }
+    async fn normal_use(&self, _args: NormalUseArgs<'_>) {}
 
-    async fn use_with_item(
-        &self,
-        _block: &Block,
-        _player: &Player,
-        _location: BlockPos,
-        _item: &Item,
-        _server: &Server,
-        _world: &Arc<World>,
-    ) -> BlockActionResult {
+    async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
         BlockActionResult::Continue
     }
 
-    async fn on_entity_collision(
-        &self,
-        _world: &Arc<World>,
-        _entity: &dyn EntityBase,
-        _pos: BlockPos,
-        _block: &'static Block,
-        _state: &'static BlockState,
-        _server: &Server,
-    ) {
-    }
+    async fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {}
 
     fn should_drop_items_on_explosion(&self) -> bool {
         true
     }
 
-    async fn explode(&self, _block: &Block, _world: &Arc<World>, _location: BlockPos) {}
+    async fn explode(&self, _args: ExplodeArgs<'_>) {}
 
     /// Handles the block event, which is an event specific to a block with an integer ID and data.
     ///
     /// returns whether the event was handled successfully
-    async fn on_synced_block_event(
-        &self,
-        _block: &Block,
-        _world: &Arc<World>,
-        _pos: &BlockPos,
-        _type: u8,
-        _data: u8,
-    ) -> bool {
+    async fn on_synced_block_event(&self, _args: OnSyncedBlockEventArgs<'_>) -> bool {
         false
     }
 
-    #[allow(clippy::too_many_arguments)]
     /// getPlacementState in source code
-    async fn on_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        _player: &Player,
-        block: &Block,
-        _block_pos: &BlockPos,
-        _face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        block.default_state.id
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        args.block.default_state.id
     }
 
-    async fn random_tick(&self, _block: &Block, _world: &Arc<World>, _pos: &BlockPos) {}
+    async fn random_tick(&self, _args: RandomTickArgs<'_>) {}
 
-    #[allow(clippy::too_many_arguments)]
-    async fn can_place_at(
-        &self,
-        _server: Option<&Server>,
-        _world: Option<&World>,
-        _block_accessor: &dyn BlockAccessor,
-        _player: Option<&Player>,
-        _block: &Block,
-        _block_pos: &BlockPos,
-        _face: BlockDirection,
-        _use_item_on: Option<&SUseItemOn>,
-    ) -> bool {
+    async fn can_place_at(&self, _args: CanPlaceAtArgs<'_>) -> bool {
         true
     }
 
-    #[allow(clippy::too_many_arguments)]
-    async fn can_update_at(
-        &self,
-        _world: &World,
-        _block: &Block,
-        _state_id: BlockStateId,
-        _block_pos: &BlockPos,
-        _face: BlockDirection,
-        _use_item_on: &SUseItemOn,
-        _player: &Player,
-    ) -> bool {
+    async fn can_update_at(&self, _args: CanUpdateAtArgs<'_>) -> bool {
         false
     }
 
     /// onBlockAdded in source code
-    async fn placed(
-        &self,
-        _world: &Arc<World>,
-        _block: &Block,
-        _state_id: BlockStateId,
-        _pos: &BlockPos,
-        _old_state_id: BlockStateId,
-        _notify: bool,
-    ) {
-    }
+    async fn placed(&self, _args: PlacedArgs<'_>) {}
 
-    async fn player_placed(
-        &self,
-        _world: &Arc<World>,
-        _block: &Block,
-        _state_id: u16,
-        _pos: &BlockPos,
-        _face: BlockDirection,
-        _player: &Player,
-    ) {
-    }
+    async fn player_placed(&self, _args: PlayerPlacedArgs<'_>) {}
 
-    async fn broken(
-        &self,
-        _block: &Block,
-        _player: &Arc<Player>,
-        _location: BlockPos,
-        _server: &Server,
-        _world: Arc<World>,
-        _state: &'static BlockState,
-    ) {
-    }
+    async fn broken(&self, _args: BrokenArgs<'_>) {}
 
-    async fn on_neighbor_update(
-        &self,
-        _world: &Arc<World>,
-        _block: &Block,
-        _pos: &BlockPos,
-        _source_block: &Block,
-        _notify: bool,
-    ) {
-    }
+    async fn on_neighbor_update(&self, _args: OnNeighborUpdateArgs<'_>) {}
 
     /// Called if a block state is replaced or it replaces another state
-    async fn prepare(
-        &self,
-        _world: &Arc<World>,
-        _pos: &BlockPos,
-        _block: &Block,
-        _state_id: BlockStateId,
-        _flags: BlockFlags,
-    ) {
-    }
+    async fn prepare(&self, _args: PrepareArgs<'_>) {}
 
-    #[allow(clippy::too_many_arguments)]
     async fn get_state_for_neighbor_update(
         &self,
-        _world: &World,
-        _block: &Block,
-        state: BlockStateId,
-        _pos: &BlockPos,
-        _direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        state
+        args.state_id
     }
 
-    async fn on_scheduled_tick(&self, _world: &Arc<World>, _block: &Block, _pos: &BlockPos) {}
+    async fn on_scheduled_tick(&self, _args: OnScheduledTickArgs<'_>) {}
 
-    async fn on_state_replaced(
-        &self,
-        _world: &Arc<World>,
-        _block: &Block,
-        _location: BlockPos,
-        _old_state_id: BlockStateId,
-        _moved: bool,
-    ) {
-    }
+    async fn on_state_replaced(&self, _args: OnStateReplacedArgs<'_>) {}
 
     /// Sides where redstone connects to
-    async fn emits_redstone_power(
-        &self,
-        _block: &Block,
-        _state: &BlockState,
-        _direction: BlockDirection,
-    ) -> bool {
+    async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
         false
     }
 
     /// Weak redstone power, aka. block that should be powered needs to be directly next to the source block
-    async fn get_weak_redstone_power(
-        &self,
-        _block: &Block,
-        _world: &World,
-        _pos: &BlockPos,
-        _state: &BlockState,
-        _direction: BlockDirection,
-    ) -> u8 {
+    async fn get_weak_redstone_power(&self, _args: GetRedstonePowerArgs<'_>) -> u8 {
         0
     }
 
     /// Strong redstone power. this can power a block that then gives power
-    async fn get_strong_redstone_power(
-        &self,
-        _block: &Block,
-        _world: &World,
-        _pos: &BlockPos,
-        _state: &BlockState,
-        _direction: BlockDirection,
-    ) -> u8 {
+    async fn get_strong_redstone_power(&self, _args: GetRedstonePowerArgs<'_>) -> u8 {
         0
     }
 
-    async fn get_comparator_output(
-        &self,
-        _block: &Block,
-        _world: &World,
-        _pos: &BlockPos,
-        _state: &BlockState,
-    ) -> Option<u8> {
+    async fn get_comparator_output(&self, _args: GetComparatorOutputArgs<'_>) -> Option<u8> {
         None
     }
+}
+
+pub struct NormalUseArgs<'a> {
+    pub server: &'a Server,
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub location: &'a BlockPos,
+    pub player: &'a Player,
+}
+
+pub struct UseWithItemArgs<'a> {
+    pub server: &'a Server,
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub location: &'a BlockPos,
+    pub player: &'a Player,
+    pub item_stack: &'a Arc<Mutex<ItemStack>>,
+}
+
+pub struct OnEntityCollisionArgs<'a> {
+    pub server: &'a Server,
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub location: &'a BlockPos,
+    pub entity: &'a dyn EntityBase,
+}
+
+pub struct ExplodeArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub location: &'a BlockPos,
+}
+
+pub struct OnSyncedBlockEventArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub location: &'a BlockPos,
+    pub r#type: u8,
+    pub data: u8,
+}
+
+pub struct OnPlaceArgs<'a> {
+    pub server: &'a Server,
+    pub world: &'a World,
+    pub block: &'a Block,
+    pub location: &'a BlockPos,
+    pub direction: BlockDirection,
+    pub player: &'a Player,
+    pub replacing: BlockIsReplacing,
+    pub use_item_on: &'a SUseItemOn,
+}
+
+pub struct RandomTickArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub location: &'a BlockPos,
+}
+
+pub struct CanPlaceAtArgs<'a> {
+    pub server: Option<&'a Server>,
+    pub world: Option<&'a World>,
+    pub block_accessor: &'a dyn BlockAccessor,
+    pub block: &'a Block,
+    pub location: &'a BlockPos,
+    pub direction: BlockDirection,
+    pub player: Option<&'a Player>,
+    pub use_item_on: Option<&'a SUseItemOn>,
+}
+
+pub struct CanUpdateAtArgs<'a> {
+    pub world: &'a World,
+    pub block: &'a Block,
+    pub state_id: BlockStateId,
+    pub location: &'a BlockPos,
+    pub direction: BlockDirection,
+    pub player: &'a Player,
+    pub use_item_on: &'a SUseItemOn,
+}
+
+pub struct PlacedArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state_id: BlockStateId,
+    pub old_state_id: BlockStateId,
+    pub location: &'a BlockPos,
+    pub notify: bool,
+}
+
+pub struct PlayerPlacedArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state_id: BlockStateId,
+    pub location: &'a BlockPos,
+    pub direction: BlockDirection,
+    pub player: &'a Player,
+}
+
+pub struct BrokenArgs<'a> {
+    pub block: &'a Block,
+    pub player: &'a Arc<Player>,
+    pub location: &'a BlockPos,
+    pub server: &'a Server,
+    pub world: &'a Arc<World>,
+    pub state: &'a BlockState,
+}
+
+pub struct OnNeighborUpdateArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub location: &'a BlockPos,
+    pub source_block: &'a Block,
+    pub notify: bool,
+}
+
+pub struct PrepareArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state_id: BlockStateId,
+    pub location: &'a BlockPos,
+    pub flags: BlockFlags,
+}
+
+pub struct GetStateForNeighborUpdateArgs<'a> {
+    pub world: &'a World,
+    pub block: &'a Block,
+    pub state_id: BlockStateId,
+    pub location: &'a BlockPos,
+    pub direction: BlockDirection,
+    pub neighbor_location: &'a BlockPos,
+    pub neighbor_state_id: BlockStateId,
+}
+
+pub struct OnScheduledTickArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub location: &'a BlockPos,
+}
+
+pub struct OnStateReplacedArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub old_state_id: BlockStateId,
+    pub location: &'a BlockPos,
+    pub moved: bool,
+}
+
+pub struct EmitsRedstonePowerArgs<'a> {
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub direction: BlockDirection,
+}
+
+pub struct GetRedstonePowerArgs<'a> {
+    pub world: &'a World,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub location: &'a BlockPos,
+    pub direction: BlockDirection,
+}
+
+pub struct GetComparatorOutputArgs<'a> {
+    pub world: &'a World,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub location: &'a BlockPos,
 }

@@ -1,20 +1,16 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_data::Block;
-use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
-use pumpkin_protocol::java::server::play::SUseItemOn;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 
-use crate::block::BlockIsReplacing;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
-use crate::entity::player::Player;
-use crate::server::Server;
-use crate::world::World;
+use crate::block::pumpkin_block::OnStateReplacedArgs;
+use crate::block::pumpkin_block::PlacedArgs;
+use crate::block::pumpkin_block::PlayerPlacedArgs;
+use crate::block::pumpkin_block::{BlockMetadata, OnPlaceArgs, PumpkinBlock};
 
 type SignProperties = pumpkin_data::block_properties::OakSignLikeProperties;
 
@@ -32,57 +28,24 @@ impl BlockMetadata for SignBlock {
 
 #[async_trait]
 impl PumpkinBlock for SignBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        _player: &Player,
-        block: &Block,
-        _block_pos: &BlockPos,
-        _face: BlockDirection,
-        replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> u16 {
-        let mut sign_props = SignProperties::default(block);
-        sign_props.waterlogged = replacing.water_source();
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut sign_props = SignProperties::default(args.block);
+        sign_props.waterlogged = args.replacing.water_source();
 
-        sign_props.to_state_id(block)
+        sign_props.to_state_id(args.block)
     }
 
-    async fn placed(
-        &self,
-        world: &Arc<World>,
-        _block: &Block,
-        _state_id: u16,
-        pos: &BlockPos,
-        _old_state_id: u16,
-        _notify: bool,
-    ) {
-        world
-            .add_block_entity(Arc::new(SignBlockEntity::empty(*pos)))
+    async fn placed(&self, args: PlacedArgs<'_>) {
+        args.world
+            .add_block_entity(Arc::new(SignBlockEntity::empty(*args.location)))
             .await;
     }
 
-    async fn player_placed(
-        &self,
-        _world: &Arc<World>,
-        _block: &Block,
-        _state_id: u16,
-        pos: &BlockPos,
-        _face: BlockDirection,
-        player: &Player,
-    ) {
-        player.send_sign_packet(*pos).await;
+    async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        args.player.send_sign_packet(*args.location).await;
     }
 
-    async fn on_state_replaced(
-        &self,
-        world: &Arc<World>,
-        _block: &Block,
-        location: BlockPos,
-        _old_state_id: u16,
-        _moved: bool,
-    ) {
-        world.remove_block_entity(&location).await;
+    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        args.world.remove_block_entity(args.location).await;
     }
 }

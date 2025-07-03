@@ -8,22 +8,26 @@ use pumpkin_data::{
         get_state_by_state_id,
     },
     entity::EntityType,
-    item::Item,
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{
     BlockStateId,
     block::entities::{BlockEntity, comparator::ComparatorBlockEntity},
     chunk::TickPriority,
-    world::{BlockAccessor, BlockFlags},
+    world::BlockFlags,
 };
 
 use crate::{
-    block::{BlockIsReplacing, pumpkin_block::PumpkinBlock, registry::BlockActionResult},
-    entity::player::Player,
-    server::Server,
+    block::{
+        pumpkin_block::{
+            BrokenArgs, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
+            GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+            OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
+            PlacedArgs, PlayerPlacedArgs, PumpkinBlock, UseWithItemArgs,
+        },
+        registry::BlockActionResult,
+    },
     world::World,
 };
 
@@ -34,185 +38,97 @@ pub struct ComparatorBlock;
 
 #[async_trait]
 impl PumpkinBlock for ComparatorBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        player: &Player,
-        block: &Block,
-        _block_pos: &BlockPos,
-        _face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        RedstoneGateBlock::on_place(self, player, block).await
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        RedstoneGateBlock::on_place(self, args.player, args.block).await
     }
 
-    async fn normal_use(
-        &self,
-        block: &Block,
-        _player: &Player,
-        location: BlockPos,
-        _server: &Server,
-        world: &Arc<World>,
-    ) {
-        let state = world.get_block_state(&location).await;
-        let props = ComparatorLikeProperties::from_state_id(state.id, block);
-        self.on_use(props, world, location, block).await;
+    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+        let state = args.world.get_block_state(args.location).await;
+        let props = ComparatorLikeProperties::from_state_id(state.id, args.block);
+        self.on_use(props, args.world, *args.location, args.block)
+            .await;
     }
 
-    async fn use_with_item(
-        &self,
-        block: &Block,
-        _player: &Player,
-        location: BlockPos,
-        _item: &Item,
-        _server: &Server,
-        world: &Arc<World>,
-    ) -> BlockActionResult {
-        let state = world.get_block_state(&location).await;
-        let props = ComparatorLikeProperties::from_state_id(state.id, block);
-        self.on_use(props, world, location, block).await;
+    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.location).await;
+        let props = ComparatorLikeProperties::from_state_id(state.id, args.block);
+        self.on_use(props, args.world, *args.location, args.block)
+            .await;
         BlockActionResult::Consume
     }
 
-    async fn emits_redstone_power(
-        &self,
-        _block: &Block,
-        _state: &BlockState,
-        _direction: BlockDirection,
-    ) -> bool {
+    async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
         true
     }
 
-    async fn can_place_at(
-        &self,
-        _server: Option<&Server>,
-        _world: Option<&World>,
-        block_accessor: &dyn BlockAccessor,
-        _player: Option<&Player>,
-        _block: &Block,
-        block_pos: &BlockPos,
-        _face: BlockDirection,
-        _use_item_on: Option<&SUseItemOn>,
-    ) -> bool {
-        RedstoneGateBlock::can_place_at(self, block_accessor, *block_pos).await
+    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        RedstoneGateBlock::can_place_at(self, args.block_accessor, *args.location).await
     }
 
-    async fn placed(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        state_id: BlockStateId,
-        pos: &BlockPos,
-        _old_state_id: BlockStateId,
-        _notify: bool,
-    ) {
-        let comparator = ComparatorBlockEntity::new(*pos);
-        world.add_block_entity(Arc::new(comparator)).await;
-        if let Some(state) = get_state_by_state_id(state_id) {
-            RedstoneGateBlock::update_target(self, world, *pos, state.id, block).await;
+    async fn placed(&self, args: PlacedArgs<'_>) {
+        let comparator = ComparatorBlockEntity::new(*args.location);
+        args.world.add_block_entity(Arc::new(comparator)).await;
+        if let Some(state) = get_state_by_state_id(args.state_id) {
+            RedstoneGateBlock::update_target(
+                self,
+                args.world,
+                *args.location,
+                state.id,
+                args.block,
+            )
+            .await;
         }
     }
 
-    async fn player_placed(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        state_id: u16,
-        pos: &BlockPos,
-        _face: BlockDirection,
-        _player: &Player,
-    ) {
-        RedstoneGateBlock::player_placed(self, world, block, state_id, pos).await;
+    async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        RedstoneGateBlock::player_placed(self, args).await;
     }
 
-    async fn broken(
-        &self,
-        _block: &Block,
-        _player: &Arc<Player>,
-        block_pos: BlockPos,
-        _server: &Server,
-        world: Arc<World>,
-        _state: &'static BlockState,
-    ) {
-        world.remove_block_entity(&block_pos).await;
+    async fn broken(&self, args: BrokenArgs<'_>) {
+        args.world.remove_block_entity(args.location).await;
     }
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
-        _block: &Block,
-        state: BlockStateId,
-        _pos: &BlockPos,
-        direction: BlockDirection,
-        neighbor_pos: &BlockPos,
-        neighbor_state_id: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if direction == BlockDirection::Down {
-            if let Some(neighbor_state) = get_state_by_state_id(neighbor_state_id) {
-                if !RedstoneGateBlock::can_place_above(self, world, *neighbor_pos, neighbor_state)
-                    .await
+        if args.direction == BlockDirection::Down {
+            if let Some(neighbor_state) = get_state_by_state_id(args.neighbor_state_id) {
+                if !RedstoneGateBlock::can_place_above(
+                    self,
+                    args.world,
+                    *args.neighbor_location,
+                    neighbor_state,
+                )
+                .await
                 {
                     return Block::AIR.default_state.id;
                 }
             }
         }
-        state
+        args.state_id
     }
 
-    async fn get_weak_redstone_power(
-        &self,
-        block: &Block,
-        world: &World,
-        block_pos: &BlockPos,
-        state: &BlockState,
-        direction: BlockDirection,
-    ) -> u8 {
-        RedstoneGateBlock::get_weak_redstone_power(self, block, world, block_pos, state, direction)
-            .await
+    async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        RedstoneGateBlock::get_weak_redstone_power(self, args).await
     }
 
-    async fn get_strong_redstone_power(
-        &self,
-        block: &Block,
-        world: &World,
-        block_pos: &BlockPos,
-        state: &BlockState,
-        direction: BlockDirection,
-    ) -> u8 {
-        RedstoneGateBlock::get_strong_redstone_power(
-            self, block, world, block_pos, state, direction,
-        )
-        .await
+    async fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        RedstoneGateBlock::get_strong_redstone_power(self, args).await
     }
 
-    async fn on_neighbor_update(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        pos: &BlockPos,
-        source_block: &Block,
-        _notify: bool,
-    ) {
-        RedstoneGateBlock::on_neighbor_update(self, world, block, pos, source_block).await;
+    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        RedstoneGateBlock::on_neighbor_update(self, args).await;
     }
 
-    async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, pos: &BlockPos) {
-        let state = world.get_block_state(pos).await;
-        self.update(world, *pos, state, block).await;
-    }
-
-    async fn on_state_replaced(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        location: BlockPos,
-        old_state_id: BlockStateId,
-        moved: bool,
-    ) {
-        RedstoneGateBlock::on_state_replaced(self, world, block, location, old_state_id, moved)
+    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state = args.world.get_block_state(args.location).await;
+        self.update(args.world, *args.location, state, args.block)
             .await;
+    }
+
+    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        RedstoneGateBlock::on_state_replaced(self, args).await;
     }
 }
 
@@ -315,7 +231,12 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
 
         if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(source_block) {
             if let Some(level) = pumpkin_block
-                .get_comparator_output(source_block, world, &source_pos, source_state)
+                .get_comparator_output(GetComparatorOutputArgs {
+                    world,
+                    block: source_block,
+                    state: source_state,
+                    location: &source_pos,
+                })
                 .await
             {
                 return level;
@@ -332,7 +253,12 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
             let block_level =
                 if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(source_block) {
                     pumpkin_block
-                        .get_comparator_output(source_block, world, &source_pos, source_state)
+                        .get_comparator_output(GetComparatorOutputArgs {
+                            world,
+                            block: source_block,
+                            state: source_state,
+                            location: &source_pos,
+                        })
                         .await
                 } else {
                     None

@@ -1,23 +1,20 @@
 use std::sync::Arc;
 
-use crate::block::BlockIsReplacing;
+use crate::block::pumpkin_block::NormalUseArgs;
+use crate::block::pumpkin_block::OnPlaceArgs;
+use crate::block::pumpkin_block::UseWithItemArgs;
 use crate::entity::player::Player;
 use async_trait::async_trait;
-use pumpkin_data::Block;
-use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
-use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::item::Item;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 
@@ -67,43 +64,18 @@ impl BlockMetadata for FenceGateBlock {
 
 #[async_trait]
 impl PumpkinBlock for FenceGateBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        player: &Player,
-        block: &Block,
-        _block_pos: &BlockPos,
-        _face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        let mut fence_gate_props = FenceGateProperties::default(block);
-        fence_gate_props.facing = player.living_entity.entity.get_horizontal_facing();
-        fence_gate_props.to_state_id(block)
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut fence_gate_props = FenceGateProperties::default(args.block);
+        fence_gate_props.facing = args.player.living_entity.entity.get_horizontal_facing();
+        fence_gate_props.to_state_id(args.block)
     }
 
-    async fn use_with_item(
-        &self,
-        _block: &Block,
-        player: &Player,
-        location: BlockPos,
-        _item: &Item,
-        _server: &Server,
-        world: &Arc<World>,
-    ) -> BlockActionResult {
-        toggle_fence_gate(world, &location, player).await;
+    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        toggle_fence_gate(args.world, args.location, args.player).await;
         BlockActionResult::Consume
     }
 
-    async fn normal_use(
-        &self,
-        _block: &Block,
-        player: &Player,
-        location: BlockPos,
-        _server: &Server,
-        world: &Arc<World>,
-    ) {
-        toggle_fence_gate(world, &location, player).await;
+    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+        toggle_fence_gate(args.world, args.location, args.player).await;
     }
 }

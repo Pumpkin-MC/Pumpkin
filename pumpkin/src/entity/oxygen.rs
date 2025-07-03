@@ -1,17 +1,17 @@
-use super::{player::Player, EntityBase, NBTStorage};
+use super::{EntityBase, NBTStorage, player::Player};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EffectType;
-use pumpkin_data::Block;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{MetaDataType, Metadata};
 use pumpkin_util::GameMode;
-use pumpkin_world::entity::entity_data_flags::DATA_AIR_SUPPLY_ID;
-use rand::Rng;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::entity::entity_data_flags::DATA_AIR_SUPPLY_ID;
+use rand::Rng;
 
 pub struct OxygenManager {
     /// Current oxygen level in ticks (0 = depleted)
@@ -34,13 +34,19 @@ impl OxygenManager {
     const MAX_OXYGEN: u16 = 300;
 
     pub async fn tick(&self, player: &Player) {
-        if !matches!(player.gamemode.load(), GameMode::Survival | GameMode::Adventure) {
+        if !matches!(
+            player.gamemode.load(),
+            GameMode::Survival | GameMode::Adventure
+        ) {
             return;
         }
 
         let current_oxygen = self.oxygen_level.load();
         let is_eyes_in_water = self.are_eyes_in_water(player).await;
-        let has_water_breathing = player.living_entity.has_effect(EffectType::WaterBreathing).await;
+        let has_water_breathing = player
+            .living_entity
+            .has_effect(EffectType::WaterBreathing)
+            .await;
 
         // Water breathing effect grants immunity
         if has_water_breathing {
@@ -57,7 +63,7 @@ impl OxygenManager {
 
             // Consume oxygen if available (with respiration chance)
             if current_oxygen > 0 {
-                let respiration_level = player.get_respiration_level().await;
+                let respiration_level = self.get_respiration_level(player).await;
                 let should_consume = if respiration_level > 0 {
                     // Vanilla: 1/(level+1) chance to preserve oxygen
                     !rand::rng().random_ratio(1, respiration_level as u32 + 1)
@@ -135,6 +141,12 @@ impl OxygenManager {
     async fn get_fluid_height(&self, _block_pos: &BlockPos) -> f64 {
         // todo: calculate for flowing water
         1f64
+    }
+
+    pub async fn get_respiration_level(&self, _player: &Player) -> u8 {
+        // todo: implement when we will have support of enchanted items
+
+        0
     }
 }
 

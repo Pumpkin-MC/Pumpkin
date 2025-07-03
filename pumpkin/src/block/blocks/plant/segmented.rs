@@ -1,38 +1,9 @@
 use async_trait::async_trait;
-use pumpkin_data::{
-    Block, BlockDirection,
-    block_properties::{BlockProperties, HorizontalFacing, Integer1To4},
-};
-use pumpkin_protocol::java::server::play::SUseItemOn;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing, Integer1To4};
 use pumpkin_world::BlockStateId;
 
-use crate::block::BlockIsReplacing;
-use crate::block::pumpkin_block::PumpkinBlock;
-use crate::entity::player::Player;
-use crate::server::Server;
-use crate::world::World;
-
-pub struct UpdateContext<'a> {
-    pub world: &'a World,
-    pub block: &'a Block,
-    pub state_id: BlockStateId,
-    pub block_pos: &'a BlockPos,
-    pub face: BlockDirection,
-    pub use_item_on: &'a SUseItemOn,
-    pub player: &'a Player,
-}
-
-pub struct PlaceContext<'a> {
-    pub server: &'a Server,
-    pub world: &'a World,
-    pub player: &'a Player,
-    pub block: &'a Block,
-    pub block_pos: &'a BlockPos,
-    pub face: BlockDirection,
-    pub replacing: BlockIsReplacing,
-    pub use_item_on: &'a SUseItemOn,
-}
+use crate::block::pumpkin_block::{CanUpdateAtArgs, PumpkinBlock};
+use crate::block::{BlockIsReplacing, pumpkin_block::OnPlaceArgs};
 
 pub trait SegmentProperties {
     fn get_segment_amount(&self) -> Integer1To4;
@@ -109,12 +80,12 @@ pub trait Segmented: PumpkinBlock {
         }
     }
 
-    async fn can_update_at(&self, ctx: &UpdateContext<'_>) -> bool {
+    async fn can_update_at(&self, ctx: CanUpdateAtArgs<'_>) -> bool {
         let current_props = Self::Properties::from_state_id(ctx.state_id, ctx.block);
         self.can_add_segment(&current_props)
     }
 
-    async fn on_place(&self, ctx: &PlaceContext<'_>) -> BlockStateId {
+    async fn on_place(&self, ctx: OnPlaceArgs<'_>) -> BlockStateId {
         if let BlockIsReplacing::Itself(existing_state_id) = ctx.replacing {
             let mut props = Self::Properties::from_state_id(existing_state_id, ctx.block);
 

@@ -33,7 +33,9 @@
         devShells.default = pkgs.mkShell
         {
           nativeBuildInputs = with pkgs; [
-            rustToolchain
+            (rustToolchain.override {
+                extensions = ["rust-src"];
+            })
             pkg-config
           ];
         };

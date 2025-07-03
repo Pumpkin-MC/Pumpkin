@@ -1,4 +1,4 @@
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::pumpkin_block::{BlockMetadata, OnEntityCollisionArgs, PumpkinBlock};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -10,11 +10,19 @@ use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use super::BlockIsReplacing;
+use super::pumpkin_block::{
+    BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs, EmitsRedstonePowerArgs, ExplodeArgs,
+    GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
+    OnPlaceArgs, OnStateReplacedArgs, OnSyncedBlockEventArgs, PlacedArgs, PlayerPlacedArgs,
+    PrepareArgs, UseWithItemArgs,
+};
 use super::pumpkin_fluid::PumpkinFluid;
 
 pub enum BlockActionResult {
@@ -74,14 +82,20 @@ impl BlockRegistry {
         &self,
         block: &Block,
         world: &Arc<World>,
-        pos: &BlockPos,
+        location: &BlockPos,
         r#type: u8,
         data: u8,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .on_synced_block_event(block, world, pos, r#type, data)
+                .on_synced_block_event(OnSyncedBlockEventArgs {
+                    world,
+                    block,
+                    location,
+                    r#type,
+                    data,
+                })
                 .await;
         }
         false
@@ -89,17 +103,24 @@ impl BlockRegistry {
 
     pub async fn on_entity_collision(
         &self,
-        block: &'static Block,
+        block: &Block,
         world: &Arc<World>,
         entity: &dyn EntityBase,
-        pos: BlockPos,
-        state: &'static BlockState,
+        location: &BlockPos,
+        state: &BlockState,
         server: &Server,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .on_entity_collision(world, entity, pos, block, state, server)
+                .on_entity_collision(OnEntityCollisionArgs {
+                    server,
+                    world,
+                    block,
+                    state,
+                    location,
+                    entity,
+                })
                 .await;
         }
     }
@@ -115,22 +136,34 @@ impl BlockRegistry {
         &self,
         block: &Block,
         player: &Player,
-        location: BlockPos,
+        location: &BlockPos,
         server: &Server,
         world: &Arc<World>,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .normal_use(block, player, location, server, world)
+                .normal_use(NormalUseArgs {
+                    server,
+                    world,
+                    block,
+                    location,
+                    player,
+                })
                 .await;
         }
     }
 
-    pub async fn explode(&self, block: &Block, world: &Arc<World>, location: BlockPos) {
+    pub async fn explode(&self, block: &Block, world: &Arc<World>, location: &BlockPos) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.explode(block, world, location).await;
+            pumpkin_block
+                .explode(ExplodeArgs {
+                    world,
+                    block,
+                    location,
+                })
+                .await;
         }
     }
 
@@ -138,15 +171,22 @@ impl BlockRegistry {
         &self,
         block: &Block,
         player: &Player,
-        location: BlockPos,
-        item: &Item,
+        location: &BlockPos,
+        item_stack: &Arc<Mutex<ItemStack>>,
         server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .use_with_item(block, player, location, item, server, world)
+                .use_with_item(UseWithItemArgs {
+                    server,
+                    world,
+                    block,
+                    location,
+                    player,
+                    item_stack,
+                })
                 .await;
         }
         BlockActionResult::Continue
@@ -178,23 +218,23 @@ impl BlockRegistry {
         block_accessor: &dyn BlockAccessor,
         player: Option<&Player>,
         block: &Block,
-        block_pos: &BlockPos,
-        face: BlockDirection,
+        location: &BlockPos,
+        direction: BlockDirection,
         use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .can_place_at(
+                .can_place_at(CanPlaceAtArgs {
                     server,
                     world,
                     block_accessor,
-                    player,
                     block,
-                    block_pos,
-                    face,
+                    location,
+                    direction,
+                    player,
                     use_item_on,
-                )
+                })
                 .await;
         }
         true
@@ -206,15 +246,23 @@ impl BlockRegistry {
         world: &World,
         block: &Block,
         state_id: BlockStateId,
-        block_pos: &BlockPos,
-        face: BlockDirection,
+        location: &BlockPos,
+        direction: BlockDirection,
         use_item_on: &SUseItemOn,
         player: &Player,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .can_update_at(world, block, state_id, block_pos, face, use_item_on, player)
+                .can_update_at(CanUpdateAtArgs {
+                    world,
+                    block,
+                    state_id,
+                    location,
+                    direction,
+                    player,
+                    use_item_on,
+                })
                 .await;
         }
         false
@@ -227,24 +275,24 @@ impl BlockRegistry {
         world: &World,
         player: &Player,
         block: &Block,
-        block_pos: &BlockPos,
-        face: BlockDirection,
+        location: &BlockPos,
+        direction: BlockDirection,
         replacing: BlockIsReplacing,
         use_item_on: &SUseItemOn,
     ) -> BlockStateId {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .on_place(
+                .on_place(OnPlaceArgs {
                     server,
                     world,
-                    player,
                     block,
-                    block_pos,
-                    face,
+                    location,
+                    direction,
+                    player,
                     replacing,
                     use_item_on,
-                )
+                })
                 .await;
         }
         block.default_state.id
@@ -255,14 +303,21 @@ impl BlockRegistry {
         world: &Arc<World>,
         block: &Block,
         state_id: u16,
-        pos: &BlockPos,
-        face: BlockDirection,
+        location: &BlockPos,
+        direction: BlockDirection,
         player: &Player,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .player_placed(world, block, state_id, pos, face, player)
+                .player_placed(PlayerPlacedArgs {
+                    world,
+                    block,
+                    state_id,
+                    location,
+                    direction,
+                    player,
+                })
                 .await;
         }
     }
@@ -272,14 +327,21 @@ impl BlockRegistry {
         world: &Arc<World>,
         block: &Block,
         state_id: BlockStateId,
-        block_pos: &BlockPos,
+        location: &BlockPos,
         old_state_id: BlockStateId,
         notify: bool,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .placed(world, block, state_id, block_pos, old_state_id, notify)
+                .placed(PlacedArgs {
+                    world,
+                    block,
+                    state_id,
+                    old_state_id,
+                    location,
+                    notify,
+                })
                 .await;
         }
     }
@@ -303,17 +365,24 @@ impl BlockRegistry {
 
     pub async fn broken(
         &self,
-        world: Arc<World>,
+        world: &Arc<World>,
         block: &Block,
         player: &Arc<Player>,
-        location: BlockPos,
+        location: &BlockPos,
         server: &Server,
-        state: &'static BlockState,
+        state: &BlockState,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .broken(block, player, location, server, world.clone(), state)
+                .broken(BrokenArgs {
+                    block,
+                    player,
+                    location,
+                    server,
+                    world,
+                    state,
+                })
                 .await;
         }
     }
@@ -322,14 +391,20 @@ impl BlockRegistry {
         &self,
         world: &Arc<World>,
         block: &Block,
-        location: BlockPos,
+        location: &BlockPos,
         old_state_id: BlockStateId,
         moved: bool,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .on_state_replaced(world, block, location, old_state_id, moved)
+                .on_state_replaced(OnStateReplacedArgs {
+                    world,
+                    block,
+                    old_state_id,
+                    location,
+                    moved,
+                })
                 .await;
         }
     }
@@ -349,15 +424,15 @@ impl BlockRegistry {
             let pumpkin_block = self.get_pumpkin_block(block);
             if let Some(pumpkin_block) = pumpkin_block {
                 let new_state = pumpkin_block
-                    .get_state_for_neighbor_update(
+                    .get_state_for_neighbor_update(GetStateForNeighborUpdateArgs {
                         world,
                         block,
-                        state.id,
+                        state_id: state.id,
                         location,
-                        direction.opposite(),
-                        &neighbor_pos,
-                        neighbor_state.id,
-                    )
+                        direction: direction.opposite(),
+                        neighbor_location: &neighbor_pos,
+                        neighbor_state_id: neighbor_state.id,
+                    })
                     .await;
                 world.set_block_state(&neighbor_pos, new_state, flags).await;
             }
@@ -367,7 +442,7 @@ impl BlockRegistry {
     pub async fn prepare(
         &self,
         world: &Arc<World>,
-        block_pos: &BlockPos,
+        location: &BlockPos,
         block: &Block,
         state_id: BlockStateId,
         flags: BlockFlags,
@@ -375,7 +450,13 @@ impl BlockRegistry {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .prepare(world, block_pos, block, state_id, flags)
+                .prepare(PrepareArgs {
+                    world,
+                    block,
+                    state_id,
+                    location,
+                    flags,
+                })
                 .await;
         }
     }
@@ -385,27 +466,27 @@ impl BlockRegistry {
         &self,
         world: &World,
         block: &Block,
-        state: BlockStateId,
-        block_pos: &BlockPos,
+        state_id: BlockStateId,
+        location: &BlockPos,
         direction: BlockDirection,
-        neighbor_pos: &BlockPos,
-        neighbor_state: BlockStateId,
+        neighbor_location: &BlockPos,
+        neighbor_state_id: BlockStateId,
     ) -> BlockStateId {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .get_state_for_neighbor_update(
+                .get_state_for_neighbor_update(GetStateForNeighborUpdateArgs {
                     world,
                     block,
-                    state,
-                    block_pos,
+                    state_id,
+                    location,
                     direction,
-                    neighbor_pos,
-                    neighbor_state,
-                )
+                    neighbor_location,
+                    neighbor_state_id,
+                })
                 .await;
         }
-        state
+        state_id
     }
 
     pub async fn update_neighbors(
@@ -431,14 +512,20 @@ impl BlockRegistry {
         &self,
         world: &Arc<World>,
         block: &Block,
-        block_pos: &BlockPos,
+        location: &BlockPos,
         source_block: &Block,
         notify: bool,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
-                .on_neighbor_update(world, block, block_pos, source_block, notify)
+                .on_neighbor_update(OnNeighborUpdateArgs {
+                    world,
+                    block,
+                    location,
+                    source_block,
+                    notify,
+                })
                 .await;
         }
     }
@@ -462,7 +549,11 @@ impl BlockRegistry {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .emits_redstone_power(block, state, direction)
+                .emits_redstone_power(EmitsRedstonePowerArgs {
+                    block,
+                    state,
+                    direction,
+                })
                 .await;
         }
         false
@@ -472,14 +563,20 @@ impl BlockRegistry {
         &self,
         block: &Block,
         world: &World,
-        block_pos: &BlockPos,
+        location: &BlockPos,
         state: &BlockState,
         direction: BlockDirection,
     ) -> u8 {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .get_weak_redstone_power(block, world, block_pos, state, direction)
+                .get_weak_redstone_power(GetRedstonePowerArgs {
+                    world,
+                    block,
+                    state,
+                    location,
+                    direction,
+                })
                 .await;
         }
         0
@@ -489,14 +586,20 @@ impl BlockRegistry {
         &self,
         block: &Block,
         world: &World,
-        block_pos: &BlockPos,
+        location: &BlockPos,
         state: &BlockState,
         direction: BlockDirection,
     ) -> u8 {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block
-                .get_strong_redstone_power(block, world, block_pos, state, direction)
+                .get_strong_redstone_power(GetRedstonePowerArgs {
+                    world,
+                    block,
+                    state,
+                    location,
+                    direction,
+                })
                 .await;
         }
         0
