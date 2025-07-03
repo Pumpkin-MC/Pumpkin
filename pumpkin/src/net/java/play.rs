@@ -1365,6 +1365,7 @@ impl Player {
         self.update_sequence(use_item_on.sequence.0);
 
         let location = use_item_on.location;
+        let cursor_pos = use_item_on.cursor_pos;
         let mut should_try_decrement = false;
 
         if !self.can_interact_with_block_at(&location, 1.0) {
@@ -1393,7 +1394,7 @@ impl Player {
                 // Using block with empty hand
                 server
                     .block_registry
-                    .on_use(block, self, &location, server, world)
+                    .on_use(block, self, &location, &face, &cursor_pos, server, world)
                     .await;
             }
             return Ok(());
@@ -1401,7 +1402,16 @@ impl Player {
         if !sneaking {
             let action_result = server
                 .block_registry
-                .use_with_item(block, self, &location, &held_item, server, world)
+                .use_with_item(
+                    block,
+                    self,
+                    &location,
+                    &face,
+                    &cursor_pos,
+                    &held_item,
+                    server,
+                    world,
+                )
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}
