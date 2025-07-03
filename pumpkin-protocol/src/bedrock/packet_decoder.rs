@@ -118,7 +118,7 @@ impl UDPNetworkDecoder {
         &mut self,
         mut reader: Cursor<Vec<u8>>,
     ) -> Result<RawPacket, PacketDecodeError> {
-        if let Some(_) = self.compression {
+        if self.compression.is_some() {
             let _method = reader.get_u8().unwrap();
             dbg!(_method);
             // None Compression

@@ -119,7 +119,7 @@ impl UDPNetworkEncoder {
         // Game Packet ID
         writer.write_u8(0xfe).unwrap();
 
-        if let Some(_) = self.compression {
+        if self.compression.is_some() {
             // Todo compression
             writer.write_u8(u8::MAX).unwrap();
         }
