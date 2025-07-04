@@ -5,7 +5,6 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::DoorHinge;
 use pumpkin_data::block_properties::EastWallShape;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::NorthWallShape;

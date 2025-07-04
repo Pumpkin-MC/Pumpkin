@@ -19,7 +19,6 @@ use crate::block::registry::BlockActionResult;
 use crate::world::World;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
-type WallLikeProperties = pumpkin_data::block_properties::ResinBrickWallLikeProperties;
 
 pub async fn toggle_fence_gate(
     world: &Arc<World>,
