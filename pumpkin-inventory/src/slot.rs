@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::{sync::Mutex, time::timeout};
+use pumpkin_data::item::Item;
 
 use crate::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 
@@ -271,11 +272,16 @@ impl Slot for ArmorSlot {
         self.set_stack_no_callbacks(stack).await;
     }
 
-    async fn can_insert(&self, _stack: &ItemStack) -> bool {
-        // TODO: return this.entity.canEquip(stack, this.equipmentSlot);
-        true
+    async fn can_insert(&self, stack: &ItemStack) -> bool {
+        match self.equipment_slot {
+            EquipmentSlot::Head(_) => stack.is_helmet(),
+            EquipmentSlot::Chest(_) => stack.is_chestplate() || stack.item == &Item::ELYTRA,
+            EquipmentSlot::Legs(_) => stack.is_leggings(),
+            EquipmentSlot::Feet(_) => stack.is_boots(),
+            EquipmentSlot::MainHand(_) => true,
+            _ => true,
+        }
     }
-
     async fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
         // TODO: Check enchantments
         true
