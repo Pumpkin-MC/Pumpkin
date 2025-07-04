@@ -1381,7 +1381,7 @@ impl Player {
 
         let inventory = self.inventory();
         let held_item = inventory.held_item();
-        let off_hand_item = inventory.off_hand_item();
+        let off_hand_item = inventory.off_hand_item().await;
 
         let entity = &self.living_entity.entity;
         let world = &entity.world.read().await;

@@ -45,11 +45,12 @@ impl PlayerInventory {
     }
 
     /// getOffHandStack in source
-    pub fn off_hand_item(&self) -> Arc<Mutex<ItemStack>> {
-        self.main_inventory
-            .get(Self::OFF_HAND_SLOT)
-            .unwrap()
-            .clone()
+    pub async fn off_hand_item(&self) -> Arc<Mutex<ItemStack>> {
+        let slot = self
+            .equipment_slots
+            .get(&PlayerInventory::OFF_HAND_SLOT)
+            .unwrap();
+        self.entity_equipment.lock().await.get(slot)
     }
 
     pub async fn swap_item(&self) -> (ItemStack, ItemStack) {
