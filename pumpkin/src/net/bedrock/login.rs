@@ -1,4 +1,6 @@
-use pumpkin_config::networking::compression::CompressionInfo;
+use std::sync::Arc;
+
+use pumpkin_config::{BASIC_CONFIG, networking::compression::CompressionInfo};
 use pumpkin_protocol::{
     bedrock::{
         RakReliability,
@@ -13,7 +15,10 @@ use pumpkin_protocol::{
     codec::var_uint::VarUInt,
 };
 
-use crate::net::bedrock::BedrockClientPlatform;
+use crate::{
+    net::{ClientPlatform, GameProfile, bedrock::BedrockClientPlatform},
+    server::Server,
+};
 
 impl BedrockClientPlatform {
     pub async fn handle_request_network_settings(&self, packet: SRequestNetworkSettings) {
@@ -29,7 +34,7 @@ impl BedrockClientPlatform {
         .await;
         self.set_compression(CompressionInfo::default()).await;
     }
-    pub async fn handle_login(&self, _packet: SLogin) {
+    pub async fn handle_login(self: &Arc<Self>, _packet: SLogin, server: &Server) {
         dbg!("received login");
         // TODO: Enable encryption
         // bedrock
@@ -70,5 +75,27 @@ impl BedrockClientPlatform {
             RakReliability::Unreliable,
         )
         .await;
+
+        // TODO
+        let profile = GameProfile {
+            id: uuid::Uuid::new_v4(),
+            name: "Todo Name".to_string(),
+            properties: Vec::new(),
+            profile_actions: None,
+        };
+
+        if let Some((player, world)) = server
+            .add_player(
+                ClientPlatform::Bedrock(self.clone()),
+                profile,
+                None, // TODO
+            )
+            .await
+        {
+            world
+                .spawn_bedrock_player(&BASIC_CONFIG, player.clone(), server)
+                .await;
+            *self.player.lock().await = Some(player);
+        }
     }
 }

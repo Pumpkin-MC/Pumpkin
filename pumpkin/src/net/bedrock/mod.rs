@@ -36,15 +36,18 @@ use pumpkin_protocol::{
 use std::net::SocketAddr;
 use tokio::{
     net::UdpSocket,
+    sync::mpsc::{Receiver, Sender},
     sync::{Mutex, Notify},
+    task::JoinHandle,
 };
+use tokio_util::task::TaskTracker;
 
 pub mod connection;
 pub mod login;
 pub mod open_connection;
 pub mod unconnected;
 
-use crate::server::Server;
+use crate::{entity::player::Player, server::Server};
 
 pub struct BedrockClientPlatform {
     socket: Arc<UdpSocket>,
@@ -52,6 +55,12 @@ pub struct BedrockClientPlatform {
     pub address: SocketAddr,
     /// The minecraft protocol version used by the client.
     pub protocol_version: AtomicI32,
+    pub player: Mutex<Option<Arc<Player>>>,
+
+    tasks: TaskTracker,
+    outgoing_packet_queue_send: Sender<Bytes>,
+    /// A queue of serialized packets to send to the network
+    outgoing_packet_queue_recv: Option<Receiver<Bytes>>,
 
     /// The packet encoder for outgoing packets.
     network_writer: Arc<Mutex<UDPNetworkEncoder>>,
@@ -78,12 +87,17 @@ pub struct BedrockClientPlatform {
 impl BedrockClientPlatform {
     #[must_use]
     pub fn new(socket: Arc<UdpSocket>, address: SocketAddr) -> Self {
+        let (send, recv) = tokio::sync::mpsc::channel(128);
         Self {
             socket,
             protocol_version: AtomicI32::new(0),
+            player: Mutex::new(None),
             address,
             network_writer: Arc::new(Mutex::new(UDPNetworkEncoder::new())),
             network_reader: Mutex::new(UDPNetworkDecoder::new()),
+            tasks: TaskTracker::new(),
+            outgoing_packet_queue_send: send,
+            outgoing_packet_queue_recv: Some(recv),
             use_frame_sets: AtomicBool::new(false),
             output_sequence_number: AtomicU32::new(0),
             output_reliable_number: AtomicU32::new(0),
@@ -96,12 +110,62 @@ impl BedrockClientPlatform {
         }
     }
 
-    pub async fn process_packet(&self, server: &Server, packet: Cursor<Vec<u8>>) {
+    pub fn start_outgoing_packet_task(&mut self) {
+        let mut packet_receiver = self
+            .outgoing_packet_queue_recv
+            .take()
+            .expect("This was set in the new fn");
+        let close_interrupt = self.close_interrupt.clone();
+        let closed = self.closed.clone();
+        let writer = self.network_writer.clone();
+        let addr = self.address.clone();
+        let socket = self.socket.clone();
+        self.spawn_task(async move {
+            while !closed.load(std::sync::atomic::Ordering::Relaxed) {
+                let recv_result = tokio::select! {
+                    () = close_interrupt.notified() => {
+                        None
+                    },
+                    recv_result = packet_receiver.recv() => {
+                        recv_result
+                    }
+                };
+
+                let Some(packet_data) = recv_result else {
+                    break;
+                };
+
+                if let Err(err) = writer
+                    .lock()
+                    .await
+                    .write_packet(packet_data, addr, &socket)
+                    .await
+                {
+                    // It is expected that the packet will fail if we are closed
+                    if !closed.load(std::sync::atomic::Ordering::Relaxed) {
+                        log::warn!("Failed to send packet to client: {err}",);
+                        // We now need to close the connection to the client since the stream is in an
+                        // unknown state
+                        Self::thread_safe_close(&close_interrupt, &closed);
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    fn thread_safe_close(interrupt: &Arc<Notify>, closed: &Arc<AtomicBool>) {
+        interrupt.notify_waiters();
+        closed.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub async fn process_packet(self: &Arc<Self>, server: &Server, packet: Cursor<Vec<u8>>) {
         let packet = self.get_packet_payload(packet).await;
         if let Some(packet) = packet {
             if let Err(error) = self.handle_packet_payload(server, packet).await {
                 let _text = format!("Error while reading incoming packet {error}");
                 log::error!("Failed to read incoming packet with : {error}");
+                self.close();
                 //self.kick(TextComponent::text(text)).await;
             }
         }
@@ -117,6 +181,34 @@ impl BedrockClientPlatform {
             .lock()
             .await
             .set_compression((compression.threshold as usize, compression.level));
+    }
+
+    pub async fn enqueue_packet<P>(&self, packet: &P)
+    where
+        P: ClientPacket,
+    {
+        let mut buf = Vec::new();
+        let writer = &mut buf;
+        Self::write_raw_packet(packet, writer).unwrap();
+        self.enqueue_packet_data(buf.into()).await;
+    }
+
+    /// Queues a clientbound packet to be sent to the connected client. Queued chunks are sent
+    /// in-order to the client
+    ///
+    /// # Arguments
+    ///
+    /// * `packet`: A reference to a packet object implementing the `ClientPacket` trait.
+    pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
+        if let Err(err) = self.outgoing_packet_queue_send.send(packet_data).await {
+            // This is expected to fail if we are closed
+            if !self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+                log::error!(
+                    "Failed to add packet to the outgoing packet queue for client: {}",
+                    err
+                );
+            }
+        }
     }
 
     pub fn write_raw_packet<P: ClientPacket>(
@@ -253,6 +345,11 @@ impl BedrockClientPlatform {
         }
     }
 
+    pub async fn await_tasks(&self) {
+        self.tasks.close();
+        self.tasks.wait().await;
+    }
+
     pub fn close(&self) {
         self.close_interrupt.notify_waiters();
         self.closed
@@ -282,7 +379,7 @@ impl BedrockClientPlatform {
     }
 
     pub async fn handle_packet_payload(
-        &self,
+        self: &Arc<Self>,
         server: &Server,
         packet: Bytes,
     ) -> Result<(), ReadingError> {
@@ -321,7 +418,7 @@ impl BedrockClientPlatform {
 
     fn handle_ack(_ack: &Ack) {}
 
-    async fn handle_frame_set(&self, server: &Server, frame_set: FrameSet) {
+    async fn handle_frame_set(self: &Arc<Self>, server: &Server, frame_set: FrameSet) {
         // TODO: Send all ACKs in short intervals in batches
         self.send_ack(&Ack::new(vec![frame_set.sequence.0])).await;
         // TODO
@@ -330,7 +427,11 @@ impl BedrockClientPlatform {
         }
     }
 
-    async fn handle_frame(&self, server: &Server, mut frame: Frame) -> Result<(), ReadingError> {
+    async fn handle_frame(
+        self: &Arc<Self>,
+        server: &Server,
+        mut frame: Frame,
+    ) -> Result<(), ReadingError> {
         if frame.split_size > 0 {
             let fragment_index = frame.split_index as usize;
             let compound_id = frame.split_id;
@@ -377,8 +478,8 @@ impl BedrockClientPlatform {
     }
 
     async fn handle_game_packet(
-        &self,
-        _server: &Server,
+        self: &Arc<Self>,
+        server: &Server,
         packet: RawPacket,
     ) -> Result<(), ReadingError> {
         let payload = &packet.payload[..];
@@ -388,7 +489,7 @@ impl BedrockClientPlatform {
                     .await;
             }
             SLogin::PACKET_ID => {
-                self.handle_login(SLogin::read(payload)?).await;
+                self.handle_login(SLogin::read(payload)?, server).await;
             }
             _ => {
                 log::warn!("Bedrock: Received Unknown Game packet: {}", packet.id);
@@ -398,7 +499,7 @@ impl BedrockClientPlatform {
     }
 
     async fn handle_raknet_packet(
-        &self,
+        self: &Arc<Self>,
         server: &Server,
         packet_id: i32,
         payload: &[u8],
@@ -489,6 +590,18 @@ impl BedrockClientPlatform {
                     }
                 }
             }
+        }
+    }
+
+    pub fn spawn_task<F>(&self, task: F) -> Option<JoinHandle<F::Output>>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        if self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+            None
+        } else {
+            Some(self.tasks.spawn(task))
         }
     }
 }

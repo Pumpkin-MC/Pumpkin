@@ -47,16 +47,20 @@ use pumpkin_data::{
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
-use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
-    java::client::play::{
-        CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
-        CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
-        FilterType, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
+    codec::var_long::VarLong,
+    java::{
+        client::play::{
+            CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
+            CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
+            CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat, PlayerAction,
+            PlayerInfoFlags,
+        },
+        server::play::SChatMessage,
     },
-    java::server::play::SChatMessage,
 };
+use pumpkin_protocol::{bedrock::client::start_game::CStartGame, ser::serializer::Serializer};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{
@@ -642,12 +646,82 @@ impl World {
     }
 
     //#[expect(clippy::too_many_lines)]
-    pub fn spawn_bedrock_player(
+    pub async fn spawn_bedrock_player(
         &self,
         _base_config: &BasicConfiguration,
-        _player: Arc<Player>,
-        _server: &Server,
+        player: Arc<Player>,
+        server: &Server,
     ) {
+        player
+            .client
+            .send_packet_now(&CStartGame {
+                entity_id: VarLong(player.entity_id() as i64),
+                runtime_entity_id: VarLong(player.entity_id() as i64),
+                game_type_index: 0,
+                position: Vector3::new(0.0, 100.0, 0.0),
+                rotation: Vector2::new(0.0, 0.0),
+                seed: VarInt(0),
+                spawn_biome_type: 0,
+                custom_biome_name: "plains".to_string(),
+                dimension_id: VarInt(0),
+                generator_id: VarInt(0),
+                level_game_type: VarInt(0),
+                difficulty: VarInt(0),
+                default_spawn: Vector3::new(0, 100, 0),
+                achievements_disabled: false,
+                day_cycle_stop_time: VarInt(0),
+                education_world: false,
+                education_features_enabled: false,
+                rain_level: 0.0,
+                lightning_level: 0.0,
+                multiplayer_game: true,
+                broadcast_to_lan: false,
+                xbl_broadcasting_to_lan: false,
+                commands_enabled: true,
+                texture_packs_required: false,
+                game_rule_size: 0,
+                bonus_chest_enabled: false,
+                starting_with_map: false,
+                trusting_players: false,
+                default_player_permission: VarInt(0),
+                xbl_broadcast_mode: VarInt(0),
+                server_chunk_tick_range: 0,
+                behavior_pack_locked: false,
+                resource_pack_locked: false,
+                from_locked_world_template: false,
+                using_msa_gamertags_only: false,
+                from_world_template: false,
+                world_template_option_locked: false,
+                only_spawning_v1_villagers: false,
+                disabling_personas: false,
+                disabling_custom_skins: false,
+                emote_chat_muted: false,
+                vanilla_version: "1.21.93".to_string(),
+                limited_world_width: 0,
+                limited_world_height: 0,
+                is_nether_type: false,
+                edu_button_name: "todo".to_string(),
+                edu_link_uri: "todo".to_string(),
+                force_experimental_gameplay: None,
+                chat_restriction_level: 0,
+                disabling_player_interactions: false,
+                // ?
+                server_id: server.server_guid.to_string(),
+                world_id: "0".to_string(),
+                scenario_id: "0".to_string(),
+                owner_id: "0".to_string(),
+                level_id: "0".to_string(),
+                level_name: "level".to_string(),
+                premium_world_template_id: "level".to_string(),
+                is_trial: false,
+                rewind_history_size: 0,
+                server_authoritative_block_breaking: false,
+                current_tick: 0,
+                enchantment_seed: 0,
+                block_properties_size: 0,
+                multiplayer_correlation_id: "0".to_string(),
+            })
+            .await;
     }
 
     #[expect(clippy::too_many_lines)]

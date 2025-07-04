@@ -80,6 +80,7 @@ pub struct JavaClientPlatform {
     pub address: Mutex<SocketAddr>,
     /// The client's brand or modpack information, Optional.
     pub brand: Mutex<Option<String>>,
+    pub player: Mutex<Option<Arc<Player>>>,
     /// A collection of tasks associated with this client. The tasks await completion when removing the client.
     tasks: TaskTracker,
     /// An notifier that is triggered when this client is closed.
@@ -92,8 +93,6 @@ pub struct JavaClientPlatform {
     network_writer: Arc<Mutex<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
     network_reader: Mutex<TCPNetworkDecoder<BufReader<OwnedReadHalf>>>,
-
-    pub player: Mutex<Option<Arc<Player>>>,
 }
 
 impl JavaClientPlatform {

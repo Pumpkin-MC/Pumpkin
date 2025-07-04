@@ -1,5 +1,6 @@
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
+use bytes::BufMut;
 use num_traits::Float;
 
 use super::vector3::Vector3;
@@ -118,4 +119,16 @@ impl Math for i8 {}
 
 pub const fn to_chunk_pos(vec: &Vector2<i32>) -> Vector2<i32> {
     Vector2::new(vec.x >> 4, vec.z >> 4)
+}
+
+impl serde::Serialize for Vector2<f32> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut buf = Vec::new();
+        buf.put_f32(self.x);
+        buf.put_f32(self.z);
+        serializer.serialize_bytes(&buf)
+    }
 }

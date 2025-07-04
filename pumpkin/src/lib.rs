@@ -429,9 +429,10 @@ impl PumpkinServer {
                             let client_id = master_client_id_counter;
                             master_client_id_counter += 1;
                             log::info!("New Bedrock client detected from: {client_addr} (ID: {client_id})");
-                            // Use the prototype to create a new BedrockClientPlatform instance
-                          Arc::new(
-                                BedrockClientPlatform::new(self.udp_socket.clone(), client_addr)
+                            let mut platform = BedrockClientPlatform::new(self.udp_socket.clone(), client_addr);
+                            platform.start_outgoing_packet_task();
+                            Arc::new(
+                                platform
                             )
                         });
 
@@ -440,12 +441,7 @@ impl PumpkinServer {
                         let reader = Cursor::new(received_data.to_vec());
                         let client = client.clone();
                         tokio::spawn(async move {
-                                client.process_packet(&server_clone, reader).await;
-                            //      if client.make_player.load(Ordering::Relaxed) {
-                            //     if let Some((player, world)) = server_clone.add_player(client).await { // client needs to be cloned here if moved into add_player
-                            //         world.spawn_bedrock_player(&BASIC_CONFIG, player.clone(), &server_clone).await;
-                            //     }
-                            // }
+                            client.process_packet(&server_clone, reader).await;
                         });
                     }
                     Err(e) => {

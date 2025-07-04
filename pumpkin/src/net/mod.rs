@@ -94,7 +94,7 @@ pub enum PacketHandlerState {
 /// This is just a Wrapper for both Java & Bedrock connections
 pub enum ClientPlatform {
     Java(Arc<JavaClientPlatform>),
-    Bedrock(BedrockClientPlatform),
+    Bedrock(Arc<BedrockClientPlatform>),
 }
 
 impl ClientPlatform {
@@ -133,7 +133,7 @@ impl ClientPlatform {
     {
         match self {
             Self::Java(java) => java.spawn_task(task),
-            Self::Bedrock(_bedrock) => todo!(),
+            Self::Bedrock(bedrock) => bedrock.spawn_task(task),
         }
     }
 
@@ -143,7 +143,7 @@ impl ClientPlatform {
     {
         match self {
             Self::Java(java) => java.enqueue_packet(packet).await,
-            Self::Bedrock(_bedrock) => todo!(),
+            Self::Bedrock(bedrock) => bedrock.enqueue_packet(packet).await,
         }
     }
 
