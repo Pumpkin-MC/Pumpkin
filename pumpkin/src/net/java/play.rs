@@ -381,7 +381,7 @@ impl Player {
                 self.living_entity.set_pos(pos);
 
                 let height_difference = pos.y - last_pos.y;
-                if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+                if entity.on_ground.load(Ordering::Relaxed)
                     && (packet.collision & FLAG_ON_GROUND) != 0
                     && height_difference > 0.0
                 {

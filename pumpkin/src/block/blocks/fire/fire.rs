@@ -1,6 +1,5 @@
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalAxis};
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -110,7 +109,7 @@ impl FireBlock {
         spread_factor: i32,
         current_age: u16,
     ) {
-        if world.get_fluid(pos).await.name != Fluid::EMPTY.name {
+        if world.is_fluid_at(pos).await {
             return; // Skip if there is a fluid
         }
         let spread_chance: i32 = world
@@ -156,7 +155,7 @@ impl FireBlock {
 
         for dir in BlockDirection::all() {
             let neighbor_block = world.get_block(&pos.offset(dir.to_offset())).await;
-            if world.get_fluid(&pos.offset(dir.to_offset())).await.name != Fluid::EMPTY.name {
+            if world.is_fluid_at(&pos.offset(dir.to_offset())).await {
                 continue; // Skip if there is a fluid
             }
             if let Some(flammable) = &neighbor_block.flammable {
