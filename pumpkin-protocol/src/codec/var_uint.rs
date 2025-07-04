@@ -56,7 +56,7 @@ impl VarUInt {
                 return Ok(VarUInt(val));
             }
         }
-        Err(ReadingError::TooLarge("VarInt".to_string()))
+        Err(ReadingError::TooLarge("VarUInt".to_string()))
     }
 }
 
@@ -76,7 +76,7 @@ impl VarUInt {
                 return Ok(VarUInt(val));
             }
         }
-        Err(ReadingError::TooLarge("VarInt".to_string()))
+        Err(ReadingError::TooLarge("VarUInt".to_string()))
     }
 
     pub async fn encode_async(

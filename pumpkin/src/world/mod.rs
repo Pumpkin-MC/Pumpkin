@@ -641,8 +641,17 @@ impl World {
         i32::from(generation_settings.shape.height)
     }
 
+    //#[expect(clippy::too_many_lines)]
+    pub fn spawn_bedrock_player(
+        &self,
+        _base_config: &BasicConfiguration,
+        _player: Arc<Player>,
+        _server: &Server,
+    ) {
+    }
+
     #[expect(clippy::too_many_lines)]
-    pub async fn spawn_player(
+    pub async fn spawn_java_player(
         &self,
         base_config: &BasicConfiguration,
         player: Arc<Player>,
@@ -1136,11 +1145,7 @@ impl World {
         chunks: Vec<Vector2<i32>>,
         center_chunk: Vector2<i32>,
     ) {
-        if player
-            .client
-            .closed
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        if player.client.closed() {
             log::info!("The connection has closed before world chunks were spawned");
             return;
         }
@@ -1219,7 +1224,7 @@ impl World {
                     (world, chunk)
                 };
 
-                if !player.client.closed.load(Ordering::Relaxed) {
+                if !player.client.closed() {
                     send_cancellable! {{
                         ChunkSend {
                             world,

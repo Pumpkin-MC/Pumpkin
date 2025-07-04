@@ -28,9 +28,8 @@ pub async fn player_join(player: &Arc<Player>) {
         .await;
     let view_distance = get_view_distance(player).await;
     log::debug!(
-        "Player {} ({}) joined with view distance: {}",
+        "Player {} joined with view distance: {}",
         player.gameprofile.name,
-        player.client.id,
         view_distance
     );
 

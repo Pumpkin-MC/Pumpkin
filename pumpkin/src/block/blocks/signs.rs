@@ -72,7 +72,10 @@ impl PumpkinBlock for SignBlock {
         _face: BlockDirection,
         player: &Player,
     ) {
-        player.send_sign_packet(*pos).await;
+        match &player.client {
+            crate::net::ClientPlatform::Java(java) => java.send_sign_packet(*pos).await,
+            crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
+        }
     }
 
     async fn on_state_replaced(

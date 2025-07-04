@@ -13,29 +13,23 @@ use pumpkin_protocol::{
     codec::var_uint::VarUInt,
 };
 
-use crate::net::{Client, bedrock::BedrockClientPlatform};
+use crate::net::bedrock::BedrockClientPlatform;
 
-impl Client {
-    pub async fn handle_request_network_settings(
-        &self,
-        bedrock: &BedrockClientPlatform,
-        packet: SRequestNetworkSettings,
-    ) {
+impl BedrockClientPlatform {
+    pub async fn handle_request_network_settings(&self, packet: SRequestNetworkSettings) {
         dbg!("requested network settings");
         self.protocol_version.store(
             packet.protocol_version,
             std::sync::atomic::Ordering::Relaxed,
         );
-        bedrock
-            .send_game_packet(
-                self,
-                &CNetworkSettings::new(0, 0, false, 0, 0.0),
-                RakReliability::Unreliable,
-            )
-            .await;
-        bedrock.set_compression(CompressionInfo::default()).await;
+        self.send_game_packet(
+            &CNetworkSettings::new(0, 0, false, 0, 0.0),
+            RakReliability::Unreliable,
+        )
+        .await;
+        self.set_compression(CompressionInfo::default()).await;
     }
-    pub async fn handle_login(&self, bedrock: &BedrockClientPlatform, _packet: SLogin) {
+    pub async fn handle_login(&self, _packet: SLogin) {
         dbg!("received login");
         // TODO: Enable encryption
         // bedrock
@@ -46,26 +40,35 @@ impl Client {
         //     )
         //     .await;
         // TODO: Batch these
-        bedrock
-            .send_game_packet(
-                self,
-                &CPlayStatus::new(PlayStatus::LoginSuccess),
-                RakReliability::Unreliable,
-            )
-            .await;
-        bedrock
-            .send_game_packet(
-                self,
-                &CResourcePacksInfo::new(false, false, false),
-                RakReliability::Unreliable,
-            )
-            .await;
-        bedrock
-            .send_game_packet(
-                self,
-                &CResourcePackStackPacket::new(false, VarUInt(0)),
-                RakReliability::Unreliable,
-            )
-            .await;
+        self.send_game_packet(
+            &CPlayStatus::new(PlayStatus::LoginSuccess),
+            RakReliability::Unreliable,
+        )
+        .await;
+        self.send_game_packet(
+            &CResourcePacksInfo::new(
+                false,
+                false,
+                false,
+                false,
+                uuid::Uuid::new_v4(),
+                "1.21.93".to_string(),
+            ),
+            RakReliability::Unreliable,
+        )
+        .await;
+        self.send_game_packet(
+            &CResourcePackStackPacket::new(
+                false,
+                VarUInt(0),
+                VarUInt(0),
+                "1.21.92".to_string(),
+                0,
+                false,
+                false,
+            ),
+            RakReliability::Unreliable,
+        )
+        .await;
     }
 }

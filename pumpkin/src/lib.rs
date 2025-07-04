@@ -1,10 +1,9 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
-use crate::net::ClientPlatform;
 use crate::net::bedrock::BedrockClientPlatform;
 use crate::net::java::JavaClientPlatform;
-use crate::net::{Client, lan_broadcast, query, rcon::RCONServer};
+use crate::net::{lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use bytes::Bytes;
 use log::{Level, LevelFilter, Log};
@@ -19,11 +18,9 @@ use rustyline_async::{Readline, ReadlineEvent};
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::{
-    net::SocketAddr,
-    sync::{Arc, LazyLock},
-};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -358,7 +355,7 @@ impl PumpkinServer {
         &self,
         mut master_client_id_counter: u64,
         _tasks: &Arc<TaskTracker>,
-        bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<Client>>>>,
+        bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<BedrockClientPlatform>>>>,
     ) -> bool {
         let mut udp_buf = vec![0; 4096]; // Buffer for UDP receive
 
@@ -381,52 +378,31 @@ impl PumpkinServer {
                         };
                         log::debug!("Accepted connection from Java Edition: {formatted_address} (id {client_id})");
 
-                        // Create a new JavaClientPlatform instance for this specific connection
-                        let java_client_platform_instance = JavaClientPlatform::new(connection);
-
-                        let mut client = Client::new(
-                            ClientPlatform::Java(java_client_platform_instance),
-                            client_addr,
-                            client_id,
-                        );
-                        client.init();
+                        let mut java_client = JavaClientPlatform::new(connection, client_addr, client_id);
+                        java_client.start_outgoing_packet_task();
+                        let java_client = Arc::new(java_client);
 
                         let server_clone = self.server.clone();
 
                         tokio::spawn(async move {
-                            // Handles the lifecycle of a single Java client
-                            match client.platform.as_ref() {
-                                ClientPlatform::Java(java) => {
-                                    java.process_packets(&client, &server_clone).await;
-                                },
-                                ClientPlatform::Bedrock(_) => unreachable!("Java client handler received a Bedrock platform."),
-                            };
+                                    java_client.process_packets(&server_clone).await;
+                                    java_client.close();
+                                    java_client.await_tasks().await;
 
-                            if client.make_player.load(Ordering::Relaxed) {
-                                if let Some((player, world)) = server_clone.add_player(client).await { // client needs to be cloned here if moved into add_player
-                                    world.spawn_player(&BASIC_CONFIG, player.clone(), &server_clone).await;
+                                    let player = java_client.player.lock().await;
+                                    if let Some(player) = player.as_ref() {
+                                        log::debug!("Cleaning up player for id {client_id}");
 
-                                    player.process_packets(&server_clone).await; // Player's main packet loop
-                                    player.close().await; // Signal player to stop its packet processing loop
+                                        if let Err(e) = server_clone.player_data_storage
+                                            .handle_player_leave(player)
+                                            .await
+                                        {
+                                            log::error!("Failed to save player data on disconnect: {e}");
+                                        }
 
-                                    log::debug!("Cleaning up player for id {client_id}");
-
-                                    if let Err(e) = server_clone.player_data_storage
-                                        .handle_player_leave(&player)
-                                        .await
-                                    {
-                                        log::error!("Failed to save player data on disconnect: {e}");
+                                        player.remove().await;
+                                        server_clone.remove_player(player).await;
                                     }
-
-                                    player.remove().await;
-                                    server_clone.remove_player(&player).await;
-                                }
-                            } else {
-                                client.close();
-                                log::debug!("Awaiting tasks for client {}", client.id);
-                                client.await_tasks().await;
-                                log::debug!("Finished awaiting tasks for client {}", client.id);
-                            }
                         });
                     }
                     Err(e) => {
@@ -454,9 +430,9 @@ impl PumpkinServer {
                             master_client_id_counter += 1;
                             log::info!("New Bedrock client detected from: {client_addr} (ID: {client_id})");
                             // Use the prototype to create a new BedrockClientPlatform instance
-                          Arc::new(Client::new(ClientPlatform::Bedrock(
+                          Arc::new(
                                 BedrockClientPlatform::new(self.udp_socket.clone(), client_addr)
-                            ), client_addr, client_id))
+                            )
                         });
 
                         let server_clone = self.server.clone();
@@ -464,10 +440,12 @@ impl PumpkinServer {
                         let reader = Cursor::new(received_data.to_vec());
                         let client = client.clone();
                         tokio::spawn(async move {
-                            if let ClientPlatform::Bedrock(bedrock_plat) = client.platform.as_ref() {
-                                bedrock_plat.process_packet(&client, &server_clone, reader).await;
-                            }
-                            //tasks_clone.track_task_completion(client_clone_for_task.id);
+                                client.process_packet(&server_clone, reader).await;
+                            //      if client.make_player.load(Ordering::Relaxed) {
+                            //     if let Some((player, world)) = server_clone.add_player(client).await { // client needs to be cloned here if moved into add_player
+                            //         world.spawn_bedrock_player(&BASIC_CONFIG, player.clone(), &server_clone).await;
+                            //     }
+                            // }
                         });
                     }
                     Err(e) => {
