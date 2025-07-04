@@ -6,10 +6,10 @@ use std::{
 };
 
 use async_trait::async_trait;
+use pumpkin_data::item::Item;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::{sync::Mutex, time::timeout};
-use pumpkin_data::item::Item;
 
 use crate::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 
