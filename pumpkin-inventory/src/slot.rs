@@ -278,7 +278,6 @@ impl Slot for ArmorSlot {
             EquipmentSlot::Chest(_) => stack.is_chestplate() || stack.item == &Item::ELYTRA,
             EquipmentSlot::Legs(_) => stack.is_leggings(),
             EquipmentSlot::Feet(_) => stack.is_boots(),
-            EquipmentSlot::MainHand(_) => true,
             _ => true,
         }
     }
