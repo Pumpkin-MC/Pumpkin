@@ -78,15 +78,15 @@ impl CandleCakeBlock {
         player: &Player,
         location: &BlockPos,
         world: &Arc<World>,
-    ) {
+    ) -> BlockActionResult {
         match player.gamemode.load() {
             GameMode::Survival | GameMode::Adventure => {
                 if player.hunger_manager.level.load() >= 20 {
-                    return;
+                    return BlockActionResult::Continue;
                 }
             }
             GameMode::Creative => {}
-            GameMode::Spectator => return,
+            GameMode::Spectator => return BlockActionResult::Continue,
         }
 
         let candle_item = candle_from_cake(block);
@@ -105,7 +105,7 @@ impl CandleCakeBlock {
 
         let (block, state) = world.get_block_and_block_state(location).await;
 
-        CakeBlock::consume_if_hungry(world, player, block, location, state.id).await;
+        CakeBlock::consume_if_hungry(world, player, block, location, state.id).await
     }
 }
 
