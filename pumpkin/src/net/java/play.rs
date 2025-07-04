@@ -1355,6 +1355,7 @@ impl Player {
             .await;
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_use_item_on(
         &self,
         use_item_on: SUseItemOn,
@@ -1380,6 +1381,7 @@ impl Player {
 
         let inventory = self.inventory();
         let held_item = inventory.held_item();
+        let off_hand_item = inventory.off_hand_item();
 
         let entity = &self.living_entity.entity;
         let world = &entity.world.read().await;
@@ -1390,8 +1392,10 @@ impl Player {
             .entity
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
-        if !sneaking || held_item.lock().await.is_empty() {
-            // Code based on the java class ServerPlayerInteractionManager
+        // Code based on the java class ServerPlayerInteractionManager
+        if !(sneaking
+            && (!held_item.lock().await.is_empty() || !off_hand_item.lock().await.is_empty()))
+        {
             match match server
                 .block_registry
                 .use_with_item(UseWithItemArgs {
@@ -1436,20 +1440,25 @@ impl Player {
                 }
                 BlockActionResult::Continue | BlockActionResult::PassToDefault => {} // Do nothing,
             }
-
-            server
-                .item_registry
-                .use_on_block(
-                    held_item.lock().await.item,
-                    self,
-                    location,
-                    face,
-                    block,
-                    server,
-                )
-                .await;
-            self.update_sequence(use_item_on.sequence.0);
         }
+
+        if held_item.lock().await.is_empty() {
+            // If the hand is empty we stop here
+            return Ok(());
+        }
+
+        server
+            .item_registry
+            .use_on_block(
+                held_item.lock().await.item,
+                self,
+                location,
+                face,
+                block,
+                server,
+            )
+            .await;
+        self.update_sequence(use_item_on.sequence.0);
 
         // Check if the item is a block, because not every item can be placed :D
         if let Some(block) = get_block_by_item(held_item.lock().await.item.id) {
