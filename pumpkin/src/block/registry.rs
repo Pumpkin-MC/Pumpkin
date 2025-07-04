@@ -1,4 +1,6 @@
-use crate::block::pumpkin_block::{BlockMetadata, OnEntityCollisionArgs, PumpkinBlock};
+use crate::block::pumpkin_block::{
+    BlockHitResult, BlockMetadata, OnEntityCollisionArgs, PumpkinBlock,
+};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -10,11 +12,9 @@ use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use super::BlockIsReplacing;
 use super::pumpkin_block::{
@@ -25,11 +25,18 @@ use super::pumpkin_block::{
 };
 use super::pumpkin_fluid::PumpkinFluid;
 
+// ActionResult.java
 pub enum BlockActionResult {
-    /// Allow other actions to be executed
-    Continue,
-    /// Block other actions
+    /// Action was successful and we should swing the hand | Same as SUCCESS in vanilla
+    Success,
+    /// Block other actions from being executed and we should swing the hand | Same as CONSUME in vanilla
     Consume,
+    /// Block other actions from being executed | Same as FAIL in vanilla
+    Fail,
+    /// Allow other actions to be executed | Same as PASS in vanilla
+    Continue,
+    /// Use default action for the block | Same as `PASS_TO_DEFAULT_BLOCK_ACTION` in vanilla
+    PassToDefault,
 }
 
 #[derive(Default)]
@@ -137,21 +144,24 @@ impl BlockRegistry {
         block: &Block,
         player: &Player,
         location: &BlockPos,
+        hit: &BlockHitResult<'_>,
         server: &Server,
         world: &Arc<World>,
-    ) {
+    ) -> BlockActionResult {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block
+            return pumpkin_block
                 .normal_use(NormalUseArgs {
                     server,
                     world,
                     block,
-                    location,
                     player,
+                    location,
+                    hit,
                 })
                 .await;
         }
+        BlockActionResult::Continue
     }
 
     pub async fn explode(&self, block: &Block, world: &Arc<World>, location: &BlockPos) {
@@ -167,27 +177,10 @@ impl BlockRegistry {
         }
     }
 
-    pub async fn use_with_item(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: &BlockPos,
-        item_stack: &Arc<Mutex<ItemStack>>,
-        server: &Server,
-        world: &Arc<World>,
-    ) -> BlockActionResult {
-        let pumpkin_block = self.get_pumpkin_block(block);
+    pub async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let pumpkin_block = self.get_pumpkin_block(args.block);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block
-                .use_with_item(UseWithItemArgs {
-                    server,
-                    world,
-                    block,
-                    location,
-                    player,
-                    item_stack,
-                })
-                .await;
+            return pumpkin_block.use_with_item(args).await;
         }
         BlockActionResult::Continue
     }
