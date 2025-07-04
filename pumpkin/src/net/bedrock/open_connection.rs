@@ -1,6 +1,5 @@
 use pumpkin_protocol::{
     bedrock::{
-        UDP_HEADER_SIZE,
         client::raknet::open_connection::{COpenConnectionReply1, COpenConnectionReply2},
         server::raknet::open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
     },
@@ -17,17 +16,12 @@ impl Client {
         &self,
         bedrock: &BedrockClientPlatform,
         server: &Server,
-        packet: SOpenConnectionRequest1,
+        _packet: SOpenConnectionRequest1,
     ) {
         bedrock
             .send_raknet_packet_now(
                 self,
-                &COpenConnectionReply1::new(
-                    server.server_guid,
-                    false,
-                    0,
-                    packet.mtu + UDP_HEADER_SIZE,
-                ),
+                &COpenConnectionReply1::new(server.server_guid, false, 1400),
             )
             .await;
     }

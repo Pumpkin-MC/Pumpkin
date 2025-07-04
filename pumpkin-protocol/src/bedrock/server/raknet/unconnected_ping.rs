@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[packet(0x01)]
 /// Used to request Server information like MOTD
 pub struct SUnconnectedPing {
-    pub time: i64,
+    pub time: u64,
     pub magic: [u8; 16],
-    pub client_guid: i64,
+    pub client_guid: u64,
 }
