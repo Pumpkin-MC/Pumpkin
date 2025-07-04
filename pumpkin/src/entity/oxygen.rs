@@ -63,10 +63,10 @@ impl OxygenManager {
 
             // Consume oxygen if available (with respiration chance)
             if current_oxygen > 0 {
-                let respiration_level = self.get_respiration_level(player).await;
+                let respiration_level = Self::get_respiration_level(player);
                 let should_consume = if respiration_level > 0 {
                     // Vanilla: 1/(level+1) chance to preserve oxygen
-                    !rand::rng().random_ratio(1, respiration_level as u32 + 1)
+                    !rand::rng().random_ratio(1, u32::from(respiration_level) + 1)
                 } else {
                     true
                 };
@@ -129,23 +129,22 @@ impl OxygenManager {
         let block = world.get_block(&block_pos).await;
 
         if block == &Block::WATER || block == &Block::BUBBLE_COLUMN {
-            let block_y_min = block_pos.0.y as f64;
+            let block_y_min = f64::from(block_pos.0.y);
             let eye_rel_y = eye_pos.y - block_y_min;
-            let water_height = self.get_fluid_height(&block_pos).await;
+            let water_height = Self::get_fluid_height(&block_pos);
             eye_rel_y < water_height
         } else {
             false
         }
     }
 
-    async fn get_fluid_height(&self, _block_pos: &BlockPos) -> f64 {
+    fn get_fluid_height(_block_pos: &BlockPos) -> f64 {
         // todo: calculate for flowing water
         1f64
     }
 
-    pub async fn get_respiration_level(&self, _player: &Player) -> u8 {
+    fn get_respiration_level(_player: &Player) -> u8 {
         // todo: implement when we will have support of enchanted items
-
         0
     }
 }
