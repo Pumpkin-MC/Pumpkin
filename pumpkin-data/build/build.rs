@@ -14,6 +14,7 @@ mod entity_status;
 mod entity_type;
 mod flower_pot_transformations;
 mod fluid;
+mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
@@ -74,6 +75,7 @@ pub fn main() {
     );
     write_generated_file(recipes::build(), "recipes.rs");
     write_generated_file(enchantments::build(), "enchantment.rs");
+    write_generated_file(fuels::build(), "fuels.rs");
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {

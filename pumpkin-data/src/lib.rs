@@ -137,6 +137,10 @@ pub mod composter_increase_chance;
 #[path = "generated/flower_pot_transformations.rs"]
 pub mod flower_pot_transformations;
 
+#[rustfmt::skip]
+#[path = "generated/fuels.rs"]
+pub mod fuels;
+
 mod block_direction;
 pub mod block_state;
 mod blocks;
