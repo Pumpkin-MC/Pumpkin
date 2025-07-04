@@ -1,4 +1,4 @@
-use crate::block::pumpkin_block::{NormalUseArgs, PumpkinBlock, UseWithItemArgs};
+use crate::block::pumpkin_block::{NormalUseArgs, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use async_trait::async_trait;
 use pumpkin_inventory::crafting::crafting_screen_handler::CraftingTableScreenHandler;
@@ -18,14 +18,8 @@ impl PumpkinBlock for CraftingTableBlock {
         args.player
             .open_handled_screen(&CraftingTableScreenFactory)
             .await;
-        BlockActionResult::Continue
-    }
 
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        args.player
-            .open_handled_screen(&CraftingTableScreenFactory)
-            .await;
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 }
 

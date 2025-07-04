@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{BrokenArgs, NormalUseArgs, PumpkinBlock, UseWithItemArgs};
+use crate::block::pumpkin_block::{BrokenArgs, PumpkinBlock, UseWithItemArgs};
 use crate::block::registry::BlockActionResult;
 use crate::world::World;
 use async_trait::async_trait;
@@ -46,21 +46,13 @@ impl JukeboxBlock {
 
 #[async_trait]
 impl PumpkinBlock for JukeboxBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        // For now just stop the music at this position
-        let world = &args.player.living_entity.entity.world.read().await;
-        self.stop_music(args.block, args.location, world).await;
-
-        BlockActionResult::Continue
-    }
-
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let world = &args.player.living_entity.entity.world.read().await;
 
         // if the jukebox already has a record, stop playing
         if self.has_record(args.block, args.location, world).await {
             self.stop_music(args.block, args.location, world).await;
-            return BlockActionResult::Consume;
+            return BlockActionResult::Success;
         }
 
         let Some(jukebox_playable) = &args
@@ -95,7 +87,7 @@ impl PumpkinBlock for JukeboxBlock {
             )
             .await;
 
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {

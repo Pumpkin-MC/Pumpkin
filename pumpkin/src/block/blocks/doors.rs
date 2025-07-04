@@ -220,11 +220,13 @@ impl PumpkinBlock for DoorBlock {
     }
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if can_open_door(args.block) {
-            toggle_door(args.player, args.world, args.location).await;
+        if !can_open_door(args.block) {
+            return BlockActionResult::Continue;
         }
 
-        BlockActionResult::Continue
+        toggle_door(args.player, args.world, args.location).await;
+
+        BlockActionResult::Success
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
