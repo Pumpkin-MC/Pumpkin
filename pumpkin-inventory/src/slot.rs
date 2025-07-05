@@ -274,7 +274,9 @@ impl Slot for ArmorSlot {
 
     async fn can_insert(&self, stack: &ItemStack) -> bool {
         match self.equipment_slot {
-            EquipmentSlot::Head(_) => stack.is_helmet(),
+            EquipmentSlot::Head(_) => {
+                stack.is_helmet() || stack.is_skull() || stack.item == &Item::CARVED_PUMPKIN
+            }
             EquipmentSlot::Chest(_) => stack.is_chestplate() || stack.item == &Item::ELYTRA,
             EquipmentSlot::Legs(_) => stack.is_leggings(),
             EquipmentSlot::Feet(_) => stack.is_boots(),
