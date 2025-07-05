@@ -274,7 +274,11 @@ impl PluginManager {
             if loader.can_load(path) {
                 match self.load_with_loader(loader, path).await {
                     Ok(plugin) => {
-                        log::info!("Loaded {} ({})", plugin.metadata.name, plugin.metadata.version);
+                        log::info!(
+                            "Loaded {} ({})",
+                            plugin.metadata.name,
+                            plugin.metadata.version
+                        );
                         self.plugins.push(plugin);
                         // Remove from unloaded files if it was there
                         self.unloaded_files.remove(path);
