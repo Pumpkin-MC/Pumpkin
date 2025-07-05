@@ -104,21 +104,25 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .unwrap_or(LevelFilter::Info);
 
         let file_logger: Option<Box<dyn SharedLogger + 'static>> =
-            advanced_config().logging.file.clone().map(|filename| {
-                GzipRollingLogger::new(
-                    level,
-                    {
-                        let mut config = config.clone();
-                        for level in Level::iter() {
-                            config.set_level_color(level, None);
-                        }
-                        config.build()
-                    },
-                    filename,
+            if advanced_config().logging.file.is_empty() {
+                None
+            } else {
+                Some(
+                    GzipRollingLogger::new(
+                        level,
+                        {
+                            let mut config = config.clone();
+                            for level in Level::iter() {
+                                config.set_level_color(level, None);
+                            }
+                            config.build()
+                        },
+                        advanced_config().logging.file.clone(),
+                    )
+                    .expect("Failed to initialize file logger.")
+                        as Box<dyn SharedLogger>,
                 )
-                .expect("Failed to initialize file logger.")
-                    as Box<dyn SharedLogger>
-            });
+            };
 
         if advanced_config().commands.use_tty && stdin().is_terminal() {
             match Readline::new("$ ".to_owned()) {
