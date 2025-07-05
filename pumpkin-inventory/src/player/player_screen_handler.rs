@@ -75,6 +75,17 @@ impl PlayerScreenHandler {
 
         player_screen_handler
     }
+
+    async fn try_move_to_armor_slot(&mut self, stack: &ItemStack) -> bool {
+        for armor_slot_index in 5..9 {
+            let armor_slot = self.get_slot(armor_slot_index).await;
+            if !armor_slot.has_stack().await && armor_slot.can_insert(stack).await {
+                armor_slot.set_stack(stack.clone()).await;
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[async_trait]
@@ -127,9 +138,20 @@ impl ScreenHandler for PlayerScreenHandler {
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                     return ItemStack::EMPTY;
                 }
-            } else if (9..36).contains(&slot_index) {
-                if !self.insert_item(&mut slot_stack, 36, 45, false).await {
-                    return ItemStack::EMPTY;
+            } else if (9..36).contains(&slot_index) || (36..45).contains(&slot_index) {
+                let cloned_stack = slot_stack.clone();
+                if self.try_move_to_armor_slot(&cloned_stack).await {
+                    *slot_stack = ItemStack::EMPTY;
+                }
+                // Existing movement logic
+                else if (9..36).contains(&slot_index) {
+                    if !self.insert_item(&mut slot_stack, 36, 45, false).await {
+                        return ItemStack::EMPTY;
+                    }
+                } else if (36..45).contains(&slot_index) {
+                    if !self.insert_item(&mut slot_stack, 9, 36, false).await {
+                        return ItemStack::EMPTY;
+                    }
                 }
             } else if (36..45).contains(&slot_index) {
                 if !self.insert_item(&mut slot_stack, 9, 36, false).await {
