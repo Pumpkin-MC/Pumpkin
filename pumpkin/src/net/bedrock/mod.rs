@@ -33,6 +33,7 @@ use pumpkin_protocol::{
     packet::Packet,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
+use pumpkin_util::text::TextComponent;
 use std::net::SocketAddr;
 use tokio::{
     net::UdpSocket,
@@ -181,6 +182,10 @@ impl BedrockClientPlatform {
             .lock()
             .await
             .set_compression((compression.threshold as usize, compression.level));
+    }
+
+    pub async fn kick(&self, reason: TextComponent) {
+        // TODO
     }
 
     pub async fn enqueue_packet<P>(&self, packet: &P)

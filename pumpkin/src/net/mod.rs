@@ -151,9 +151,9 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.send_packet_now(packet).await,
             Self::Bedrock(bedrock) => {
-                bedrock
-                    .send_game_packet(packet, pumpkin_protocol::bedrock::RakReliability::Reliable)
-                    .await;
+                // bedrock
+                //     .send_game_packet(packet, pumpkin_protocol::bedrock::RakReliability::Reliable)
+                //     .await;
             }
         }
     }
@@ -161,7 +161,7 @@ impl ClientPlatform {
     pub async fn kick(&self, reason: TextComponent) {
         match self {
             Self::Java(java) => java.kick(reason).await,
-            Self::Bedrock(_bedrock) => todo!(),
+            Self::Bedrock(bedrock) => bedrock.kick(reason).await,
         }
     }
 }

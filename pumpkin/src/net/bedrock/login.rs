@@ -67,7 +67,7 @@ impl BedrockClientPlatform {
                 false,
                 VarUInt(0),
                 VarUInt(0),
-                "1.21.92".to_string(),
+                "1.21.93".to_string(),
                 0,
                 false,
                 false,

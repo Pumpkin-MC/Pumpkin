@@ -1,86 +1,111 @@
+use crate::{
+    codec::{bedrock_block_pos::BedrockPos, var_ulong::VarULong},
+    ser::network_serialize_no_prefix,
+};
 use pumpkin_macros::packet;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 use serde::Serialize;
+use uuid::Uuid;
 
-use crate::codec::{var_int::VarInt, var_long::VarLong};
+use crate::codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt};
+
+pub const GAME_PUBLISH_SETTING_NO_MULTI_PLAY: i32 = 0;
+pub const GAME_PUBLISH_SETTING_INVITE_ONLY: i32 = 1;
+pub const GAME_PUBLISH_SETTING_FRIENDS_ONLY: i32 = 2;
+pub const GAME_PUBLISH_SETTING_FRIENDS_OF_FRIENDS: i32 = 3;
+pub const GAME_PUBLISH_SETTING_PUBLIC: i32 = 4;
 
 #[derive(Serialize)]
 #[packet(11)]
 pub struct CStartGame {
     pub entity_id: VarLong,
-    pub runtime_entity_id: VarLong,
-    pub game_type_index: i32,
+    pub runtime_entity_id: VarULong,
+    pub player_gamemode: VarInt,
     pub position: Vector3<f32>,
-    pub rotation: Vector2<f32>,
+    pub yaw: f32,
+    pub pitch: f32,
 
     // Level Settings
-    pub seed: VarInt,
-    // TODO: LE
-    pub spawn_biome_type: u16,
+    // https://mojang.github.io/bedrock-protocol-docs/html/LevelSettings.html
+    pub seed: u64,
+    // Spawn Settings
+    // https://mojang.github.io/bedrock-protocol-docs/html/SpawnSettings.html
+    pub spawn_biome_type: i16,
     pub custom_biome_name: String,
-    pub dimension_id: VarInt,
-    pub generator_id: VarInt,
-    pub level_game_type: VarInt,
+    pub dimension: VarInt,
+
+    // Level Settings
+    pub generator_type: VarInt,
+    pub world_gamemode: VarInt,
+    pub hardcore: bool,
     pub difficulty: VarInt,
-    pub default_spawn: Vector3<i32>,
-    pub achievements_disabled: bool,
+    pub spawn_position: BedrockPos,
+    pub has_achievements_disabled: bool,
+    pub editor_world_type: VarInt,
+    pub is_created_in_editor: bool,
+    pub is_exported_from_editor: bool,
     pub day_cycle_stop_time: VarInt,
-    pub education_world: bool,
-    pub education_features_enabled: bool,
-    // TODO: LE
+    pub edu_edition_offer: VarInt,
+    pub has_edu_features_enabled: bool,
+    pub education_edition_product_id: String,
     pub rain_level: f32,
-    // TODO: LE
     pub lightning_level: f32,
+    pub has_confirmed_platform_locked_content: bool,
     pub multiplayer_game: bool,
     pub broadcast_to_lan: bool,
-    pub xbl_broadcasting_to_lan: bool,
+    pub xbl_broadcast_intent: VarInt,
+    pub platform_broadcast_intent: VarInt,
     pub commands_enabled: bool,
-    pub texture_packs_required: bool,
-    // Maybe VarInt ?
-    pub game_rule_size: i32,
-    pub bonus_chest_enabled: bool,
-    pub starting_with_map: bool,
-    pub trusting_players: bool,
-    pub default_player_permission: VarInt,
-    pub xbl_broadcast_mode: VarInt,
+    pub is_texture_packs_required: bool,
+    pub game_rule_len: VarUInt,
     // TODO: LE
+    pub experiments_len: u32,
+    pub exeriments_ever_toggeld: bool,
+    pub bonus_chest: bool,
+    pub has_start_with_map_enabled: bool,
+    pub permission_level: VarInt,
     pub server_chunk_tick_range: i32,
-    pub behavior_pack_locked: bool,
-    pub resource_pack_locked: bool,
-    pub from_locked_world_template: bool,
-    pub using_msa_gamertags_only: bool,
-    pub from_world_template: bool,
-    pub world_template_option_locked: bool,
-    pub only_spawning_v1_villagers: bool,
-    pub disabling_personas: bool,
-    pub disabling_custom_skins: bool,
+    pub has_locked_behavior_pack: bool,
+    pub has_locked_resource_pack: bool,
+    pub is_from_locked_world_template: bool,
+    pub is_using_msa_gamertags_only: bool,
+    pub is_from_world_template: bool,
+    pub is_world_template_option_locked: bool,
+    pub is_only_spawning_v1_villagers: bool,
+    pub is_disabling_personas: bool,
+    pub is_disabling_custom_skins: bool,
     pub emote_chat_muted: bool,
-    pub vanilla_version: String,
-    // TODO: LE
+    pub minecraft_version_network: String,
     pub limited_world_width: i32,
     pub limited_world_height: i32,
-    pub is_nether_type: bool,
-    pub edu_button_name: String,
-    pub edu_link_uri: String,
-    pub force_experimental_gameplay: Option<bool>,
+    pub nether_type: bool,
+    pub edu_shared_uri_button_name: String,
+    pub edu_shared_uri_link: String,
+    pub experimental_gameplay: bool,
     pub chat_restriction_level: i8,
-    pub disabling_player_interactions: bool,
+    pub disable_player_interactions: bool,
     pub server_id: String,
     pub world_id: String,
     pub scenario_id: String,
     pub owner_id: String,
 
     pub level_id: String,
-    pub level_name: String,
+    pub world_name: String,
     pub premium_world_template_id: String,
     pub is_trial: bool,
-
-    pub rewind_history_size: i32,
-    pub server_authoritative_block_breaking: bool,
-
-    pub current_tick: u16,
-    pub enchantment_seed: i32,
-    pub block_properties_size: u32,
-    // TODO
+    pub rewind_history_size: VarInt,
+    pub is_server_authoritative_block_breaking: bool,
+    pub current_tick: u64,
+    pub enchantment_seed: VarInt,
+    pub custom_blocks_size: VarUInt,
     pub multiplayer_correlation_id: String,
+    pub is_inventory_server_authoritative: bool,
+    pub server_engine: String,
+    #[serde(serialize_with = "network_serialize_no_prefix")]
+    pub player_property_data: Vec<u8>,
+    pub block_registry_checksum: u64,
+    pub world_template_id: Uuid,
+    pub client_side_generation_enabled: bool,
+    pub block_ids_are_hashed: bool,
+    pub is_server_auth_sounds: bool,
 }
