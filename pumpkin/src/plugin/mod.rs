@@ -260,7 +260,9 @@ impl PluginManager {
                 continue;
             }
 
-            self.try_load_plugin(&path).await?;
+            if let Err(err) = self.try_load_plugin(&path).await {
+                log::error!("{err}");
+            }
         }
 
         Ok(())
@@ -272,6 +274,7 @@ impl PluginManager {
             if loader.can_load(path) {
                 match self.load_with_loader(loader, path).await {
                     Ok(plugin) => {
+                        log::info!("Loaded {} ({})", plugin.metadata.name, plugin.metadata.version);
                         self.plugins.push(plugin);
                         // Remove from unloaded files if it was there
                         self.unloaded_files.remove(path);
