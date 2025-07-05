@@ -13,6 +13,20 @@ pub struct PVPConfig {
     pub knockback: bool,
     /// Whether players swing when attacking.
     pub swing: bool,
+    /// The type of combat mechanics that are used by default. Options: "Legacy" (MC 1.7.10), "Classic" (MC 1.8), "Modern" (Current)
+    pub combat_type: String,
+    /// 2.0 by default.
+    pub friction: f64,
+    /// 0.4 by default.
+    pub horizontal_kb: f64,
+    /// 0.4 by default.
+    pub vertical_kb: f64,
+    /// 0.4000000059604645 by default.
+    pub vertical_limit: f64,
+    /// 0.5 by default.
+    pub extra_horizontal_kb: f64,
+    /// 0.1 by default.
+    pub extra_vertical_kb: f64,
 }
 
 impl Default for PVPConfig {
@@ -23,6 +37,13 @@ impl Default for PVPConfig {
             protect_creative: true,
             knockback: true,
             swing: true,
+            combat_type: String::from("Modern"),
+            friction: 2.0,
+            horizontal_kb: 0.4,
+            vertical_kb: 0.4,
+            vertical_limit: 0.4000000059604645,
+            extra_horizontal_kb: 0.5,
+            extra_vertical_kb: 0.1,
         }
     }
 }

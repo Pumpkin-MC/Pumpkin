@@ -35,6 +35,8 @@ rayon.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+once_cell = "1.21.1"
+dashmap = "6.1.0"
 
 # config
 serde.workspace = true

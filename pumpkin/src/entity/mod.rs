@@ -54,7 +54,7 @@ pub mod projectile;
 pub mod tnt;
 pub mod r#type;
 
-mod combat;
+pub mod combat;
 
 pub type EntityId = i32;
 
