@@ -184,7 +184,7 @@ impl BedrockClientPlatform {
             .set_compression((compression.threshold as usize, compression.level));
     }
 
-    pub async fn kick(&self, reason: TextComponent) {
+    pub async fn kick(&self, _reason: TextComponent) {
         // TODO
     }
 

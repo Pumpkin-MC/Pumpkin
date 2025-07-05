@@ -150,7 +150,7 @@ impl ClientPlatform {
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         match self {
             Self::Java(java) => java.send_packet_now(packet).await,
-            Self::Bedrock(bedrock) => {
+            Self::Bedrock(_bedrock) => {
                 // bedrock
                 //     .send_game_packet(packet, pumpkin_protocol::bedrock::RakReliability::Reliable)
                 //     .await;

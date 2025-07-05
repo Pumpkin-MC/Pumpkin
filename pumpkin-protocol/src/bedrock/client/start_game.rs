@@ -1,17 +1,11 @@
 use crate::{
-    codec::{bedrock_block_pos::BedrockPos, var_ulong::VarULong},
-    ser::network_serialize_no_prefix,
+    bedrock::client::gamerules_changed::GameRules,
+    codec::{bedrock_block_pos::BedrockPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
 };
 use pumpkin_macros::packet;
-use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
-use serde::Serialize;
+use pumpkin_util::math::vector3::Vector3;
+use serde::{Serialize, Deserialize};
 use uuid::Uuid;
-
-use crate::{
-    bedrock::client::gamerules_changed::GameRules,
-    codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
-};
-use crate::codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt};
 
 pub const GAME_PUBLISH_SETTING_NO_MULTI_PLAY: i32 = 0;
 pub const GAME_PUBLISH_SETTING_INVITE_ONLY: i32 = 1;
@@ -26,7 +20,8 @@ pub struct CStartGame {
     pub runtime_entity_id: VarULong,
     pub player_gamemode: VarInt,
     pub position: Vector3<f32>,
-    pub rotation: Vector2<f32>,
+    pub yaw: f32,
+    pub pitch: f32,
     pub level_settings: LevelSettings,
 
     pub level_id: String,
@@ -41,13 +36,17 @@ pub struct CStartGame {
     pub enchantment_seed: VarInt,
     pub block_properties_size: VarUInt,
 
-    pub enable_itemstack_net_manager: bool,
     pub multiplayer_correlation_id: String,
+    pub enable_itemstack_net_manager: bool,
     pub server_version: String,
 
-    //pub player_property_data: nbt commpound
+    //pub player_property_data: NbtCompound
+    pub compound_id: i8,
+    pub compound_len: VarUInt,
+    pub compound_end: i8,
+
     pub block_registry_checksum: u64,
-    pub world_template_id: uuid::Uuid,
+    pub world_template_id: Uuid,
 
     pub enable_clientside_generation: bool,
     pub blocknetwork_ids_are_hashed: bool,
@@ -76,28 +75,22 @@ pub struct LevelSettings {
     pub is_created_in_editor: bool,
     pub is_exported_from_editor: bool,
     pub day_cycle_stop_time: VarInt,
-    pub edu_edition_offer: VarInt,
-    pub has_edu_features_enabled: bool,
-    pub education_edition_product_id: String,
+    pub education_edition_offer: VarInt,
+    pub has_education_features_enabled: bool,
+    pub education_product_id: String,
     pub rain_level: f32,
     pub lightning_level: f32,
     pub has_confirmed_platform_locked_content: bool,
-    pub multiplayer_game: bool,
-    pub broadcast_to_lan: bool,
-    pub xbl_broadcast_intent: VarInt,
-    pub platform_broadcast_intent: VarInt,
+    pub was_multiplayer_intended: bool,
+    pub was_lan_broadcasting_intended: bool,
+    pub xbox_live_broadcast_setting: VarInt,
+    pub platform_broadcast_setting: VarInt,
     pub commands_enabled: bool,
     pub is_texture_packs_required: bool,
 
     pub rule_data: GameRules,
     pub experiments: Experiments,
 
-    pub bonus_chest_enabled: bool,
-    pub start_with_map_enabled: bool,
-    pub player_permissions: VarInt,
-    // TODO: LE
-    pub experiments_len: u32,
-    pub exeriments_ever_toggeld: bool,
     pub bonus_chest: bool,
     pub has_start_with_map_enabled: bool,
     pub permission_level: VarInt,
@@ -122,7 +115,6 @@ pub struct LevelSettings {
     pub edu_shared_uri_link_uri: String,
     pub override_force_experimental_gameplay_has_value: bool,
     pub chat_restriction_level: i8,
-    pub disable_player_interactions: bool,
     pub disable_player_interactions: bool,
     pub server_id: String,
     pub world_id: String,
