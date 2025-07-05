@@ -26,7 +26,7 @@ impl VarULong {
     /// The maximum number of bytes a `VarULong` can occupy.
     const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
-    /// Returns the exact number of bytes this VarULong will write when
+    /// Returns the exact number of bytes this VarLong will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
     pub fn written_size(&self) -> usize {
         match self.0 {
@@ -50,7 +50,7 @@ impl VarULong {
         Ok(())
     }
 
-    // TODO: Validate that the first byte will not overflow a u64
+    // TODO: Validate that the first byte will not overflow a i64
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
@@ -60,7 +60,7 @@ impl VarULong {
                 return Ok(VarULong(val));
             }
         }
-        Err(ReadingError::TooLarge("VarULong".to_string()))
+        Err(ReadingError::TooLarge("VarLong".to_string()))
     }
 }
 
@@ -132,9 +132,9 @@ impl<'de> Deserialize<'de> for VarULong {
     where
         D: Deserializer<'de>,
     {
-        struct VarULongVisitor;
+        struct VarLongVisitor;
 
-        impl<'de> Visitor<'de> for VarULongVisitor {
+        impl<'de> Visitor<'de> for VarLongVisitor {
             type Value = VarULong;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -160,6 +160,6 @@ impl<'de> Deserialize<'de> for VarULong {
             }
         }
 
-        deserializer.deserialize_seq(VarULongVisitor)
+        deserializer.deserialize_seq(VarLongVisitor)
     }
 }

@@ -46,7 +46,9 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
-use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
+use pumpkin_nbt::{
+    Nbt, compound::NbtCompound, serializer::WriteAdaptor, tag::NbtTag, to_bytes_unnamed,
+};
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     bedrock::client::{
