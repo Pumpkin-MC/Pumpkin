@@ -119,10 +119,10 @@ impl BedrockClientPlatform {
         let close_interrupt = self.close_interrupt.clone();
         let closed = self.closed.clone();
         let writer = self.network_writer.clone();
-        let addr = self.address.clone();
+        let addr = self.address;
         let socket = self.socket.clone();
         self.spawn_task(async move {
-            while !closed.load(std::sync::atomic::Ordering::Relaxed) {
+            while !closed.load(Ordering::Relaxed) {
                 let recv_result = tokio::select! {
                     () = close_interrupt.notified() => {
                         None
@@ -143,7 +143,7 @@ impl BedrockClientPlatform {
                     .await
                 {
                     // It is expected that the packet will fail if we are closed
-                    if !closed.load(std::sync::atomic::Ordering::Relaxed) {
+                    if !closed.load(Ordering::Relaxed) {
                         log::warn!("Failed to send packet to client: {err}",);
                         // We now need to close the connection to the client since the stream is in an
                         // unknown state
@@ -157,7 +157,7 @@ impl BedrockClientPlatform {
 
     fn thread_safe_close(interrupt: &Arc<Notify>, closed: &Arc<AtomicBool>) {
         interrupt.notify_waiters();
-        closed.store(true, std::sync::atomic::Ordering::Relaxed);
+        closed.store(true, Ordering::Relaxed);
     }
 
     pub async fn process_packet(self: &Arc<Self>, server: &Server, packet: Cursor<Vec<u8>>) {
@@ -184,7 +184,8 @@ impl BedrockClientPlatform {
             .set_compression((compression.threshold as usize, compression.level));
     }
 
-    pub async fn kick(&self, reason: TextComponent) {
+    #[allow(clippy::unused_async)]
+    pub async fn kick(&self, _reason: TextComponent) {
         // TODO
     }
 
@@ -207,11 +208,8 @@ impl BedrockClientPlatform {
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
         if let Err(err) = self.outgoing_packet_queue_send.send(packet_data).await {
             // This is expected to fail if we are closed
-            if !self.closed.load(std::sync::atomic::Ordering::Relaxed) {
-                log::error!(
-                    "Failed to add packet to the outgoing packet queue for client: {}",
-                    err
-                );
+            if !self.closed.load(Ordering::Relaxed) {
+                log::error!("Failed to add packet to the outgoing packet queue for client: {err}");
             }
         }
     }
@@ -357,8 +355,7 @@ impl BedrockClientPlatform {
 
     pub fn close(&self) {
         self.close_interrupt.notify_waiters();
-        self.closed
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.closed.store(true, Ordering::Relaxed);
     }
 
     pub async fn send_ack(&self, packet: &Ack) {
@@ -408,7 +405,7 @@ impl BedrockClientPlatform {
                 Self::handle_ack(&Ack::read(payload)?);
             }
             RAKNET_NACK => {
-                dbg!("received non ack");
+                dbg!("received nack, client is missing packets");
             }
             0x80..0x8d => {
                 self.handle_frame_set(server, FrameSet::read(payload)?)
@@ -603,7 +600,7 @@ impl BedrockClientPlatform {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        if self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+        if self.closed.load(Ordering::Relaxed) {
             None
         } else {
             Some(self.tasks.spawn(task))

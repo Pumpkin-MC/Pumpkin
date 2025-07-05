@@ -17,7 +17,7 @@ pub type VarUIntType = u32;
 /**
  * A variable-length integer type used by the Minecraft network protocol.
  */
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct VarUInt(pub VarUIntType);
 
 impl VarUInt {

@@ -105,6 +105,7 @@ impl ClientPlatform {
         }
     }
 
+    #[must_use]
     pub fn closed(&self) -> bool {
         match self {
             Self::Java(java) => java.closed.load(Ordering::Relaxed),
@@ -112,6 +113,7 @@ impl ClientPlatform {
         }
     }
 
+    #[must_use]
     pub fn protocol_version(&self) -> i32 {
         match self {
             Self::Java(java) => java.protocol_version.load(Ordering::Relaxed),
@@ -150,7 +152,7 @@ impl ClientPlatform {
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         match self {
             Self::Java(java) => java.send_packet_now(packet).await,
-            Self::Bedrock(bedrock) => {
+            Self::Bedrock(_bedrock) => {
                 // bedrock
                 //     .send_game_packet(packet, pumpkin_protocol::bedrock::RakReliability::Reliable)
                 //     .await;

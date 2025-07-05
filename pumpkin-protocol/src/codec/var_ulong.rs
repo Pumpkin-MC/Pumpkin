@@ -113,7 +113,7 @@ impl Serialize for VarULong {
     where
         S: Serializer,
     {
-        let mut value = self.0 as u64;
+        let mut value = self.0;
         let mut buf = Vec::new();
 
         while value > 0x7F {

@@ -985,7 +985,7 @@ impl Player {
         level.clean_chunks(&chunks_to_clean).await;
         for chunk in chunks_to_clean {
             self.client
-                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.z))
+                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
         }
 

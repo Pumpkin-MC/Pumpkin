@@ -9,6 +9,7 @@ use pumpkin_protocol::{
             play_status::{CPlayStatus, PlayStatus},
             resource_pack_stack::CResourcePackStackPacket,
             resource_packs_info::CResourcePacksInfo,
+            start_game::Experiments,
         },
         server::{login::SLogin, request_network_settings::SRequestNetworkSettings},
     },
@@ -17,7 +18,7 @@ use pumpkin_protocol::{
 
 use crate::{
     net::{ClientPlatform, GameProfile, bedrock::BedrockClientPlatform},
-    server::Server,
+    server::{CURRENT_BEDROCK_MC_VERSION, Server},
 };
 
 impl BedrockClientPlatform {
@@ -56,8 +57,8 @@ impl BedrockClientPlatform {
                 false,
                 false,
                 false,
-                uuid::Uuid::new_v4(),
-                "1.21.93".to_string(),
+                uuid::Uuid::default(),
+                String::with_capacity(0),
             ),
             RakReliability::Unreliable,
         )
@@ -67,9 +68,11 @@ impl BedrockClientPlatform {
                 false,
                 VarUInt(0),
                 VarUInt(0),
-                "1.21.93".to_string(),
-                0,
-                false,
+                CURRENT_BEDROCK_MC_VERSION.to_string(),
+                Experiments {
+                    names_size: 0,
+                    experiments_ever_toggled: false,
+                },
                 false,
             ),
             RakReliability::Unreliable,

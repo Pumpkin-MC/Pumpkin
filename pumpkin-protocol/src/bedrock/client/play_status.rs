@@ -10,37 +10,21 @@ pub struct CPlayStatus {
 impl CPlayStatus {
     pub fn new(status: PlayStatus) -> Self {
         Self {
-            status: status.to_index(),
+            status: status as i32,
         }
     }
 }
 
+#[repr(i32)]
 pub enum PlayStatus {
-    LoginSuccess,
-    OutdatedClient,
-    OutdatedServer,
-    PlayerSpawn,
-    InvalidTenant,
-    EditionMismatchEduToVanilla,
-    EditionMismatchVanillaToEdu,
-    ServerFullSubClient,
-    EditorMismatchEditorToVanilla,
-    EditorMismatchVanillaToEditor,
-}
-
-impl PlayStatus {
-    pub fn to_index(&self) -> i32 {
-        match self {
-            PlayStatus::LoginSuccess => 0,
-            PlayStatus::OutdatedClient => 1,
-            PlayStatus::OutdatedServer => 2,
-            PlayStatus::PlayerSpawn => 3,
-            PlayStatus::InvalidTenant => 4,
-            PlayStatus::EditionMismatchEduToVanilla => 5,
-            PlayStatus::EditionMismatchVanillaToEdu => 6,
-            PlayStatus::ServerFullSubClient => 7,
-            PlayStatus::EditorMismatchEditorToVanilla => 8,
-            PlayStatus::EditorMismatchVanillaToEditor => 9,
-        }
-    }
+    LoginSuccess = 0,
+    OutdatedClient = 1,
+    OutdatedServer = 2,
+    PlayerSpawn = 3,
+    InvalidTenant = 4,
+    EditionMismatchEduToVanilla = 5,
+    EditionMismatchVanillaToEdu = 6,
+    ServerFullSubClient = 7,
+    EditorMismatchEditorToVanilla = 8,
+    EditorMismatchVanillaToEditor = 9,
 }

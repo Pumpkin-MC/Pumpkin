@@ -23,7 +23,7 @@ pub async fn player_join(player: &Arc<Player>) {
         .client
         .send_packet_now(&CCenterChunk {
             chunk_x: chunk_pos.x.into(),
-            chunk_z: chunk_pos.z.into(),
+            chunk_z: chunk_pos.y.into(),
         })
         .await;
     let view_distance = get_view_distance(player).await;
@@ -50,7 +50,7 @@ pub async fn update_position(player: &Arc<Player>) {
             .client
             .send_packet_now(&CCenterChunk {
                 chunk_x: new_chunk_center.x.into(),
-                chunk_z: new_chunk_center.z.into(),
+                chunk_z: new_chunk_center.y.into(),
             })
             .await;
 
@@ -87,7 +87,7 @@ pub async fn update_position(player: &Arc<Player>) {
             for chunk in unloading_chunks {
                 player
                     .client
-                    .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.z))
+                    .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                     .await;
             }
         }

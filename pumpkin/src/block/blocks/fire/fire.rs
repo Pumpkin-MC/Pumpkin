@@ -409,7 +409,7 @@ impl PumpkinBlock for FireBlock {
                             let o = 100 + if n > 1 { (n - 1) * 100 } else { 0 };
                             let p: i32 = burn_chance
                                 + 40
-                                + i32::from(world.level_info.read().await.difficulty.to_int()) * 7
+                                + (world.level_info.read().await.difficulty as i32) * 7
                                     / i32::from(age + 30);
 
                             if p > 0 && rand::rng().random_range(0..o) <= p {
