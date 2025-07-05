@@ -142,8 +142,7 @@ impl ScreenHandler for PlayerScreenHandler {
                 let cloned_stack = slot_stack.clone();
                 if self.try_move_to_armor_slot(&cloned_stack).await {
                     *slot_stack = ItemStack::EMPTY;
-                }
-                else if (9..36).contains(&slot_index) {
+                } else if (9..36).contains(&slot_index) {
                     if !self.insert_item(&mut slot_stack, 36, 45, false).await {
                         return ItemStack::EMPTY;
                     }
