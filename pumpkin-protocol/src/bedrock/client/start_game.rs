@@ -1,10 +1,13 @@
 use crate::{
     bedrock::client::gamerules_changed::GameRules,
-    codec::{bedrock_block_pos::BedrockPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
+    codec::{
+        bedrock_block_pos::BedrockPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt,
+        var_ulong::VarULong,
+    },
 };
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub const GAME_PUBLISH_SETTING_NO_MULTI_PLAY: i32 = 0;
