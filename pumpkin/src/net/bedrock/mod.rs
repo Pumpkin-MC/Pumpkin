@@ -119,7 +119,7 @@ impl BedrockClientPlatform {
         let close_interrupt = self.close_interrupt.clone();
         let closed = self.closed.clone();
         let writer = self.network_writer.clone();
-        let addr = self.address.clone();
+        let addr = self.address;
         let socket = self.socket.clone();
         self.spawn_task(async move {
             while !closed.load(Ordering::Relaxed) {
@@ -209,8 +209,7 @@ impl BedrockClientPlatform {
             // This is expected to fail if we are closed
             if !self.closed.load(Ordering::Relaxed) {
                 log::error!(
-                    "Failed to add packet to the outgoing packet queue for client: {}",
-                    err
+                    "Failed to add packet to the outgoing packet queue for client: {err}"
                 );
             }
         }
