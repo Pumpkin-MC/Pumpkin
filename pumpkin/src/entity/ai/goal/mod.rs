@@ -11,6 +11,10 @@ pub trait Goal: Send + Sync {
     async fn can_start(&self, mob: &MobEntity) -> bool;
     /// When it's started, how should it continue to run?
     async fn should_continue(&self, mob: &MobEntity) -> bool;
+    /// Call when goal start
+    async fn start(&self, mob: &MobEntity);
+    /// Call when goal stop
+    async fn stop(&self, mob: &MobEntity);
     /// If the `Goal` is running, this gets called every tick.
     async fn tick(&self, mob: &MobEntity);
 }

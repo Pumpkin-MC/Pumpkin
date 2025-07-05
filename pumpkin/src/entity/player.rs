@@ -1900,6 +1900,10 @@ impl Player {
             .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
             .await
     }
+    
+    pub fn is_creative(&self) -> bool {
+        self.gamemode.load() == GameMode::Creative
+    }
 }
 
 #[async_trait]
@@ -2063,6 +2067,14 @@ impl EntityBase for Player {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
+    }
+
+    fn get_player(&self) -> Option<&Player> {
+        Some(&self)
+    }
+
+    fn is_spectator(&self) -> bool {
+        self.gamemode.load() == GameMode::Spectator
     }
 }
 

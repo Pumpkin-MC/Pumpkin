@@ -13,7 +13,7 @@ use std::{
         atomic::{AtomicU32, Ordering::Relaxed},
     },
 };
-
+use crate::entity::player::Player;
 use super::{Entity, EntityBase, living::LivingEntity};
 
 pub struct TNTEntity {
@@ -80,6 +80,10 @@ impl EntityBase for TNTEntity {
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
+        None
+    }
+
+    fn get_player(&self) -> Option<&Player> {
         None
     }
 }

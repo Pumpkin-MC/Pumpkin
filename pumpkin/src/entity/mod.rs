@@ -55,6 +55,7 @@ pub mod tnt;
 pub mod r#type;
 
 mod combat;
+pub mod predicate;
 
 pub type EntityId = i32;
 
@@ -113,12 +114,58 @@ pub trait EntityBase: Send + Sync {
             self.get_entity().damage(amount, damage_type).await
         }
     }
+    
+    fn is_spectator(&self) -> bool {
+        false
+    }
+    
+    fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
+        false
+    }
+    
+    fn can_hit(&self) -> bool {
+        false
+    }
 
     /// Called when a player collides with a entity
     async fn on_player_collision(&self, _player: &Arc<Player>) {}
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+
+    fn get_player(&self) -> Option<&Player>;
 }
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum RemovalReason {
+    Killed,
+    Discarded,
+    UnloadedToChunk,
+    UnloadedWithPlayer,
+    ChangedDimension,
+}
+
+impl RemovalReason {
+    pub fn should_destroy(&self) -> bool {
+        match self {
+            RemovalReason::Killed => true,
+            RemovalReason::Discarded => true,
+            RemovalReason::UnloadedToChunk => false,
+            RemovalReason::UnloadedWithPlayer => false,
+            RemovalReason::ChangedDimension => false,
+        }
+    }
+
+    pub fn should_save(&self) -> bool {
+        match self {
+            RemovalReason::Killed => false,
+            RemovalReason::Discarded => false,
+            RemovalReason::UnloadedToChunk => true,
+            RemovalReason::UnloadedWithPlayer => false,
+            RemovalReason::ChangedDimension => false,
+        }
+    }
+}
+
 
 static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
 
@@ -168,6 +215,11 @@ pub struct Entity {
     pub damage_immunities: Vec<DamageType>,
     pub fire_ticks: AtomicI32,
     pub has_visual_fire: AtomicBool,
+    pub removal_reason: AtomicCell<Option<RemovalReason>>,
+    // The passengers that entity has
+    pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
+    /// The vehicle that entity is in
+    pub vehicle: Mutex<Option<Arc<dyn EntityBase>>>,
 
     pub first_loaded_chunk_position: AtomicCell<Option<Vector3<i32>>>,
 
@@ -223,6 +275,9 @@ impl Entity {
             damage_immunities: Vec::new(),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
+            removal_reason: AtomicCell::new(None),
+            passengers: Mutex::new(Vec::new()),
+            vehicle: Mutex::new(None),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
         }
@@ -786,6 +841,26 @@ impl Entity {
             ))
             .await;
     }
+    
+    pub fn get_eye_y(&self) -> f64 {
+        self.pos.load().y + self.standing_eye_height as f64
+    }
+    
+    pub fn is_removed(&self) -> bool {
+        self.removal_reason.load().is_some()
+    }
+
+    pub fn is_alive(&self) -> bool {
+        !self.is_removed()
+    }
+    
+    pub async fn has_passengers(&self) -> bool {
+        !self.passengers.lock().await.is_empty()
+    }
+    
+    pub fn has_vehicle(&self) -> bool {
+        self.vehicle.load().is_some()
+    }
 }
 
 #[async_trait]
@@ -832,6 +907,10 @@ impl EntityBase for Entity {
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
+        None
+    }
+
+    fn get_player(&self) -> Option<&Player> {
         None
     }
 

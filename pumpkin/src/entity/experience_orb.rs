@@ -106,4 +106,8 @@ impl EntityBase for ExperienceOrbEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
+
+    fn get_player(&self) -> Option<&Player> {
+        None
+    }
 }
