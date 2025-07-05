@@ -19,7 +19,7 @@ use crate::{
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
         world::{chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend},
     },
-    server::Server,
+    server::{CURRENT_BEDROCK_MC_VERSION, Server},
 };
 use crate::{
     block::{BlockEvent, loot::LootContextParameters},
@@ -49,7 +49,11 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
-    codec::var_long::VarLong,
+    bedrock::client::{
+        gamerules_changed::GameRules,
+        start_game::{Experiments, LevelSettings},
+    },
+    codec::{var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     java::{
         client::play::{
             CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
@@ -635,7 +639,7 @@ impl World {
             ..=i32::from(generation_settings.shape.height))
             .rev()
         {
-            let pos = BlockPos(Vector3::new(position.x, y, position.z));
+            let pos = BlockPos(Vector3::new(position.x, y, position.y));
             let block = self.get_block_state(&pos).await;
             if block.is_air() {
                 continue;
@@ -648,78 +652,107 @@ impl World {
     //#[expect(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
-        _base_config: &BasicConfiguration,
+        base_config: &BasicConfiguration,
         player: Arc<Player>,
         server: &Server,
     ) {
+        let level_info = server.level_info.read().await;
+        let weather = self.weather.lock().await;
+        let level_settings = LevelSettings {
+            seed: self.level.seed.0,
+            spawn_biome_type: 0,
+            custom_biome_name: String::with_capacity(0),
+            dimension_id: VarInt(0),
+            generator_type: VarInt(1),
+            game_type: VarInt(server.defaultgamemode.lock().await.gamemode as i32),
+            hardcore: base_config.hardcore,
+            difficulty: VarInt(level_info.difficulty as i32),
+            default_spawn_x: VarInt(level_info.spawn_x),
+            default_spawn_y: VarUInt(level_info.spawn_y as u32),
+            default_spawn_z: VarInt(level_info.spawn_z),
+            achievements_disabled: false,
+            editor_world_type: VarInt(0),
+            is_created_in_editor: false,
+            is_exported_from_editor: false,
+            day_cycle_stop_time: VarInt(-1),
+            education_edition_offer: VarInt(0),
+            education_features_enabled: false,
+            education_product_id: String::with_capacity(0),
+            rain_level: weather.rain_level,
+            lightning_level: weather.thunder_level,
+            has_platform_locked_content: false,
+            was_multiplayer_intended: true,
+            was_lan_broadcasting_intended: true,
+            xbox_live_broadcast_setting: VarInt(4),
+            platform_broadcast_setting: VarInt(4),
+            commands_enabled: level_info.allow_commands,
+            texture_packs_required: false,
+            rule_data: GameRules {
+                list_size: VarUInt(0),
+            },
+            experiments: Experiments {
+                names_size: 0,
+                experiments_ever_toggled: false,
+            },
+            bonus_chest_enabled: false,
+            start_with_map_enabled: false,
+            // TODO Bedrock permission level are different
+            player_permissions: VarInt(2),
+            server_chunk_tick_range: base_config.simulation_distance.get().into(),
+            behavior_pack_locked: false,
+            resource_pack_locked: false,
+            from_locked_template: false,
+            using_msa_gamertags_only: false,
+            from_world_template: false,
+            world_template_option_locked: false,
+            only_spawning_v1_villagers: false,
+            disabling_persona: false,
+            disabling_custom_skins: false,
+            emote_chat_muted: false,
+            game_version: CURRENT_BEDROCK_MC_VERSION.into(),
+            limited_world_width: 0,
+            limited_world_height: 0,
+            is_nether_type: base_config.allow_nether,
+            edu_button_name: String::with_capacity(0),
+            edu_link_uri: String::with_capacity(0),
+            override_force_experimental_gameplay_has_value: false,
+            chat_restriction_level: 0,
+            disable_player_interactions: false,
+            server_id: String::with_capacity(0),
+            world_id: String::with_capacity(0),
+            scenario_id: String::with_capacity(0),
+            owner_id: String::with_capacity(0),
+        };
         player
             .client
             .send_packet_now(&CStartGame {
                 entity_id: VarLong(player.entity_id() as i64),
-                runtime_entity_id: VarLong(player.entity_id() as i64),
-                game_type_index: 0,
+                runtime_entity_id: VarULong(player.entity_id() as u64),
+                game_type_index: VarInt(player.gamemode.load() as i32),
                 position: Vector3::new(0.0, 100.0, 0.0),
                 rotation: Vector2::new(0.0, 0.0),
-                seed: VarInt(0),
-                spawn_biome_type: 0,
-                custom_biome_name: "plains".to_string(),
-                dimension_id: VarInt(0),
-                generator_id: VarInt(0),
-                level_game_type: VarInt(0),
-                difficulty: VarInt(0),
-                default_spawn: Vector3::new(0, 100, 0),
-                achievements_disabled: false,
-                day_cycle_stop_time: VarInt(0),
-                education_world: false,
-                education_features_enabled: false,
-                rain_level: 0.0,
-                lightning_level: 0.0,
-                multiplayer_game: true,
-                broadcast_to_lan: false,
-                xbl_broadcasting_to_lan: false,
-                commands_enabled: true,
-                texture_packs_required: false,
-                game_rule_size: 0,
-                bonus_chest_enabled: false,
-                starting_with_map: false,
-                trusting_players: false,
-                default_player_permission: VarInt(0),
-                xbl_broadcast_mode: VarInt(0),
-                server_chunk_tick_range: 0,
-                behavior_pack_locked: false,
-                resource_pack_locked: false,
-                from_locked_world_template: false,
-                using_msa_gamertags_only: false,
-                from_world_template: false,
-                world_template_option_locked: false,
-                only_spawning_v1_villagers: false,
-                disabling_personas: false,
-                disabling_custom_skins: false,
-                emote_chat_muted: false,
-                vanilla_version: "1.21.93".to_string(),
-                limited_world_width: 0,
-                limited_world_height: 0,
-                is_nether_type: false,
-                edu_button_name: "todo".to_string(),
-                edu_link_uri: "todo".to_string(),
-                force_experimental_gameplay: None,
-                chat_restriction_level: 0,
-                disabling_player_interactions: false,
-                // ?
-                server_id: server.server_guid.to_string(),
-                world_id: "0".to_string(),
-                scenario_id: "0".to_string(),
-                owner_id: "0".to_string(),
-                level_id: "0".to_string(),
+                level_settings,
+                level_id: String::with_capacity(0),
                 level_name: "level".to_string(),
-                premium_world_template_id: "level".to_string(),
+                premium_world_template_id: String::with_capacity(0),
                 is_trial: false,
-                rewind_history_size: 0,
+                rewind_history_size: VarInt(40),
                 server_authoritative_block_breaking: false,
-                current_tick: 0,
-                enchantment_seed: 0,
-                block_properties_size: 0,
-                multiplayer_correlation_id: "0".to_string(),
+                current_level_time: 0,
+                enchantment_seed: VarInt(0),
+                block_properties_size: VarUInt(0),
+                // TODO Make this unique
+                multiplayer_correlation_id: Uuid::default().to_string(),
+                enable_itemstack_net_manager: false,
+                // TODO Make this description better!
+                // This gets send from the client to mojang server for telemetry
+                server_version: "Pumpkin Rust Server".to_string(),
+                block_registry_checksum: 0,
+                world_template_id: Uuid::default(),
+                // TODO The client needs extra biome data for this
+                enable_clientside_generation: false,
+                blocknetwork_ids_are_hashed: false,
+                server_auth_sounds: false,
             })
             .await;
     }
@@ -1230,7 +1263,7 @@ impl World {
         let mut chunks = chunks;
         chunks.sort_unstable_by_key(|pos| {
             let rel_x = pos.x - center_chunk.x;
-            let rel_z = pos.z - center_chunk.z;
+            let rel_z = pos.y - center_chunk.y;
             rel_x * rel_x + rel_z * rel_z
         });
 

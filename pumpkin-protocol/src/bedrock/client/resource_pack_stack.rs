@@ -1,7 +1,7 @@
 use pumpkin_macros::packet;
 use serde::{Deserialize, Serialize};
 
-use crate::codec::var_uint::VarUInt;
+use crate::{bedrock::client::start_game::Experiments, codec::var_uint::VarUInt};
 
 #[derive(Serialize, Deserialize)]
 #[packet(0x07)]
@@ -10,8 +10,7 @@ pub struct CResourcePackStackPacket {
     addons_list_size: VarUInt,
     texture_pack_list_size: VarUInt,
     game_version: String,
-    experiments_size: i32,
-    is_experiments_previously_toggled: bool,
+    experiments: Experiments,
     /// When connecting to an Editor world, include the vanilla editor packs in the stack
     include_editor_packs: bool,
 }
@@ -22,8 +21,7 @@ impl CResourcePackStackPacket {
         addons_list_size: VarUInt,
         texture_pack_list_size: VarUInt,
         game_version: String,
-        experiments_size: i32,
-        is_experiments_previously_toggled: bool,
+        experiments: Experiments,
         include_editor_packs: bool,
     ) -> Self {
         Self {
@@ -31,8 +29,7 @@ impl CResourcePackStackPacket {
             addons_list_size,
             texture_pack_list_size,
             game_version,
-            experiments_size,
-            is_experiments_previously_toggled,
+            experiments,
             include_editor_packs,
         }
     }

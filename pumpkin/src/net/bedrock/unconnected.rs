@@ -7,7 +7,10 @@ use pumpkin_protocol::{
     codec::ascii_string::AsciiString,
 };
 
-use crate::{net::bedrock::BedrockClientPlatform, server::Server};
+use crate::{
+    net::bedrock::BedrockClientPlatform,
+    server::{CURRENT_BEDROCK_MC_VERSION, Server},
+};
 
 impl BedrockClientPlatform {
     pub async fn handle_unconnected_ping(&self, server: &Server, packet: SUnconnectedPing) {
@@ -15,11 +18,11 @@ impl BedrockClientPlatform {
             edition: "MCPE",
             motd_line_1: &BASIC_CONFIG.motd,
             protocol_version: 818,
-            version_name: "1.21.93",
+            version_name: CURRENT_BEDROCK_MC_VERSION,
             player_count: 1,
             max_player_count: BASIC_CONFIG.max_players,
             server_unique_id: server.server_guid,
-            motd_line_2: &BASIC_CONFIG.motd,
+            motd_line_2: &BASIC_CONFIG.default_level_name,
             game_mode: "Survival",
             game_mode_numeric: 1,
             port_ipv4: 19132,

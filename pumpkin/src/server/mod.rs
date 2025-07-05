@@ -52,6 +52,7 @@ pub mod tick_rate_manager;
 pub mod ticker;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.7";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.93";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -357,7 +358,11 @@ impl Server {
                     )).await;
 
                     // Send tick rate information to the new player
-                    self.tick_rate_manager.update_joining_player(&player).await;
+                    if let ClientPlatform::Java(_) = &player.client {
+                        self.tick_rate_manager.update_joining_player(&player).await;
+                    } else {
+                        // Todo
+                    }
 
                     Some((player, world.clone()))
                 } else {

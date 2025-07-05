@@ -281,11 +281,11 @@ impl WorldAquiferSampler {
 
         for offset in Self::CHUNK_POS_OFFSETS {
             let x = block_x + section_coords::section_to_block(offset.x as i32);
-            let z = block_z + section_coords::section_to_block(offset.z as i32);
+            let z = block_z + section_coords::section_to_block(offset.y as i32);
 
             let n = height_estimator.estimate_height(x, z);
             let o = n + 8;
-            let bl2 = offset.x == 0 && offset.z == 0;
+            let bl2 = offset.x == 0 && offset.y == 0;
 
             if bl2 && k > o {
                 return fluid_level;
@@ -745,7 +745,7 @@ mod test {
 
         let surface_height_estimator_options = SurfaceHeightSamplerBuilderOptions::new(
             chunk_pos.x,
-            chunk_pos.z,
+            chunk_pos.y,
             horizontal_biome_end,
             shape.min_y as i32,
             shape.max_y() as i32,
