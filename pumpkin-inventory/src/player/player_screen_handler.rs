@@ -143,7 +143,6 @@ impl ScreenHandler for PlayerScreenHandler {
                 if self.try_move_to_armor_slot(&cloned_stack).await {
                     *slot_stack = ItemStack::EMPTY;
                 }
-                // Existing movement logic
                 else if (9..36).contains(&slot_index) {
                     if !self.insert_item(&mut slot_stack, 36, 45, false).await {
                         return ItemStack::EMPTY;
