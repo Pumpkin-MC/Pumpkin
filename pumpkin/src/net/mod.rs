@@ -105,6 +105,7 @@ impl ClientPlatform {
         }
     }
 
+    #[must_use]
     pub fn closed(&self) -> bool {
         match self {
             Self::Java(java) => java.closed.load(Ordering::Relaxed),
@@ -112,6 +113,7 @@ impl ClientPlatform {
         }
     }
 
+    #[must_use]
     pub fn protocol_version(&self) -> i32 {
         match self {
             Self::Java(java) => java.protocol_version.load(Ordering::Relaxed),

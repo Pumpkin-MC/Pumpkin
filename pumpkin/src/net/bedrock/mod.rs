@@ -184,6 +184,7 @@ impl BedrockClientPlatform {
             .set_compression((compression.threshold as usize, compression.level));
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn kick(&self, _reason: TextComponent) {
         // TODO
     }

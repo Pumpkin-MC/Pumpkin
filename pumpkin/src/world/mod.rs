@@ -655,7 +655,7 @@ impl World {
         i32::from(generation_settings.shape.height)
     }
 
-    //#[expect(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
         base_config: &BasicConfiguration,
@@ -735,7 +735,7 @@ impl World {
             client
                 .send_game_packet(
                     &CStartGame {
-                        entity_id: VarLong(player.entity_id() as i64),
+                        entity_id: VarLong(i64::from(player.entity_id())),
                         runtime_entity_id: VarULong(player.entity_id() as u64),
                         player_gamemode: VarInt(player.gamemode.load() as i32),
                         position: Vector3::new(0.0, 100.0, 0.0),
