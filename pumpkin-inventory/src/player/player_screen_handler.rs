@@ -75,6 +75,42 @@ impl PlayerScreenHandler {
 
         player_screen_handler
     }
+
+    async fn try_move_one_to_armor_slot(&mut self, stack: &ItemStack) -> bool {
+        if stack.item_count == 0 {
+            return false;
+        }
+
+        let one_item = stack.copy_with_count(1);
+
+        for armor_slot_index in 5..9 {
+            let armor_slot = self.get_slot(armor_slot_index).await;
+            if !armor_slot.has_stack().await && armor_slot.can_insert(&one_item).await {
+                armor_slot.set_stack(one_item).await;
+                return true;
+            }
+        }
+        false
+    }
+
+    async fn handle_inventory_move(&mut self, slot_index: i32, slot_stack: &mut ItemStack) -> bool {
+        if !slot_stack.is_empty() && self.try_move_one_to_armor_slot(slot_stack).await {
+            slot_stack.item_count -= 1;
+            if slot_stack.item_count == 0 {
+                *slot_stack = ItemStack::EMPTY;
+            }
+        }
+
+        if slot_stack.is_empty() {
+            true
+        } else {
+            match slot_index {
+                9..=35 => self.insert_item(slot_stack, 36, 45, false).await, // Main → Hotbar
+                36..=44 => self.insert_item(slot_stack, 9, 36, false).await, // Hotbar → Main
+                _ => false,
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -127,12 +163,11 @@ impl ScreenHandler for PlayerScreenHandler {
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                     return ItemStack::EMPTY;
                 }
-            } else if (9..36).contains(&slot_index) {
-                if !self.insert_item(&mut slot_stack, 36, 45, false).await {
-                    return ItemStack::EMPTY;
-                }
-            } else if (36..45).contains(&slot_index) {
-                if !self.insert_item(&mut slot_stack, 9, 36, false).await {
+            } else if (9..45).contains(&slot_index) {
+                if !self
+                    .handle_inventory_move(slot_index, &mut slot_stack)
+                    .await
+                {
                     return ItemStack::EMPTY;
                 }
             } else if !self.insert_item(&mut slot_stack, 9, 45, false).await {
