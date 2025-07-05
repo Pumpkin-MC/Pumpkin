@@ -3,13 +3,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 
-use crate::entity::{ai::path::NavigatorGoal, mob::MobEntity, player::Player};
+use crate::entity::{ai::path::NavigatorGoal, mob::MobEntity, player::Player, EntityBase};
 
 use super::Goal;
 
 pub struct TargetGoal {
-    // TODO: make this an entity
-    target: Mutex<Option<Arc<Player>>>,
+    target: Mutex<Option<Arc<dyn EntityBase>>>,
     range: f64,
 }
 
@@ -26,23 +25,22 @@ impl TargetGoal {
 #[async_trait]
 impl Goal for TargetGoal {
     async fn can_start(&self, mob: &MobEntity) -> bool {
-        // TODO: make this an entity
         let mut target = self.target.lock().await;
 
-        // gets the closest entity (currently player)
+        // gets the closest entity
         *target = mob
             .living_entity
             .entity
             .world
             .read()
             .await
-            .get_closest_player(mob.living_entity.entity.pos.load(), self.range)
+            .get_closest_entity(mob.living_entity.entity.pos.load(), self.range, None)
             .await;
         // we can't use filter because of async closures
-        if let Some(player) = target.as_ref() {
-            if player.abilities.lock().await.invulnerable {
+        if let Some(entity) = target.as_ref() {
+            //if player.abilities.lock().await.invulnerable {
                 *target = None;
-            }
+            //}
         }
 
         target.is_some()

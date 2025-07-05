@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::sync::Mutex;
-
+use crate::entity::player::Player;
 use crate::server::Server;
 
 use super::{
@@ -17,6 +17,13 @@ pub struct MobEntity {
     pub living_entity: LivingEntity,
     pub goals: Mutex<Vec<(Arc<dyn Goal>, bool)>>,
     pub navigator: Mutex<Navigator>,
+    pub target: Mutex<Option<Arc<LivingEntity>>>,
+}
+
+impl MobEntity {
+    pub fn get_random(&self) -> rand::rngs::ThreadRng {
+        rand::rng()
+    }
 }
 
 #[async_trait]
@@ -45,5 +52,9 @@ impl EntityBase for MobEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
+    }
+
+    fn get_player(&self) -> Option<&Player> {
+        None
     }
 }

@@ -24,6 +24,7 @@ use pumpkin_protocol::{
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
+use crate::entity::player::Player;
 
 /// Represents a living entity within the game world.
 ///
@@ -315,6 +316,10 @@ impl LivingEntity {
             self.remove_effect(effect_type).await;
         }
     }
+
+    pub async fn is_part_of_game(&self) -> bool {
+        self.is_spectator() && self.entity.is_alive()
+    }
 }
 
 #[async_trait]
@@ -370,6 +375,10 @@ impl EntityBase for LivingEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(self)
+    }
+
+    fn get_player(&self) -> Option<&Player> {
+        None
     }
 
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {

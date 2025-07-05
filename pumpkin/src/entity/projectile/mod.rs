@@ -3,7 +3,7 @@ use std::f32::{self};
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;
-
+use crate::entity::player::Player;
 use super::{Entity, EntityBase, living::LivingEntity};
 
 pub struct ThrownItemEntity {
@@ -86,6 +86,10 @@ impl EntityBase for ThrownItemEntity {
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
+        None
+    }
+
+    fn get_player(&self) -> Option<&Player> {
         None
     }
 }
