@@ -208,9 +208,7 @@ impl BedrockClientPlatform {
         if let Err(err) = self.outgoing_packet_queue_send.send(packet_data).await {
             // This is expected to fail if we are closed
             if !self.closed.load(Ordering::Relaxed) {
-                log::error!(
-                    "Failed to add packet to the outgoing packet queue for client: {err}"
-                );
+                log::error!("Failed to add packet to the outgoing packet queue for client: {err}");
             }
         }
     }
