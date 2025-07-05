@@ -167,7 +167,7 @@ impl ScreenHandler for PlayerScreenHandler {
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                     return ItemStack::EMPTY;
                 }
-            } else if (9..36).contains(&slot_index) || (36..45).contains(&slot_index) {
+            } else if (9..45).contains(&slot_index) {
                 if !self
                     .handle_inventory_move(slot_index, &mut slot_stack)
                     .await
