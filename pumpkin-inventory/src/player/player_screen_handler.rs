@@ -95,13 +95,9 @@ impl PlayerScreenHandler {
 
     async fn handle_inventory_move(&mut self, slot_index: i32, slot_stack: &mut ItemStack) -> bool {
         if !slot_stack.is_empty() && self.try_move_one_to_armor_slot(slot_stack).await {
-            if slot_stack.item_count == 1 {
+            slot_stack.item_count -= 1;
+            if slot_stack.item_count == 0 {
                 *slot_stack = ItemStack::EMPTY;
-            } else {
-                slot_stack.item_count -= 1;
-                if slot_stack.item_count == 0 {
-                    *slot_stack = ItemStack::EMPTY;
-                }
             }
         }
 
