@@ -125,18 +125,9 @@ pub struct LevelSettings {
     pub owner_id: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct Experiments {
     pub names_size: u32,
     //TODO! https://mojang.github.io/bedrock-protocol-docs/html/Experiments.html
     pub experiments_ever_toggled: bool,
-}
-
-impl Default for Experiments {
-    fn default() -> Self {
-        Self {
-            names_size: 0,
-            experiments_ever_toggled: false,
-        }
-    }
 }
