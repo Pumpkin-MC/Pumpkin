@@ -230,7 +230,7 @@ impl BlockPos {
         let (x_chunk, x_rem) = self.0.x.div_rem_euclid(&16);
         let chunk_coordinate = Vector2 {
             x: x_chunk,
-            z: z_chunk,
+            y: z_chunk,
         };
 
         // Since we divide by 16, remnant can never exceed u8

@@ -254,7 +254,7 @@ where
         let z: f64 = self.z.into();
         Vector2 {
             x: x.round() as i32,
-            z: z.round() as i32,
+            y: z.round() as i32,
         }
     }
 }

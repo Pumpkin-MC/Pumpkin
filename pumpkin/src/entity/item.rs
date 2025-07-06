@@ -98,6 +98,7 @@ impl EntityBase for ItemEntity {
         };
 
         if can_pickup
+            && player.living_entity.health.load() > 0.0
             && player
                 .inventory
                 .insert_stack_anywhere(&mut *self.item_stack.lock().await)
