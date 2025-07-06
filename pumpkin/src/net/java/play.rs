@@ -1448,11 +1448,19 @@ impl JavaClientPlatform {
             && (!held_item.lock().await.is_empty() || !off_hand_item.lock().await.is_empty()))
         {
             match match server
-                .block_registry.
-                use_with_item(block, player, &position, &BlockHitResult {
-                                side: &face,
-                                cursor_pos: &cursor_pos,
-                            }, &held_item, server, world)
+                .block_registry
+                .use_with_item(
+                    block,
+                    player,
+                    &position,
+                    &BlockHitResult {
+                        side: &face,
+                        cursor_pos: &cursor_pos,
+                    },
+                    &held_item,
+                    server,
+                    world,
+                )
                 .await
             {
                 BlockActionResult::PassToDefault => {
