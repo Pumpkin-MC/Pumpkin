@@ -266,7 +266,7 @@ impl Entity {
 
                 let chunk_pos = self.chunk_pos.load();
                 if get_section_cord(floor_x) != chunk_pos.x
-                    || get_section_cord(floor_z) != chunk_pos.z
+                    || get_section_cord(floor_z) != chunk_pos.y
                 {
                     self.chunk_pos.store(Vector2::new(
                         get_section_cord(new_block_pos.x),

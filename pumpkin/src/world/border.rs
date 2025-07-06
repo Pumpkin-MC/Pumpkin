@@ -3,7 +3,7 @@ use pumpkin_protocol::java::client::play::{
     CSetBorderWarningDelay, CSetBorderWarningDistance,
 };
 
-use crate::net::Client;
+use crate::net::ClientPlatform;
 
 use super::World;
 
@@ -44,7 +44,7 @@ impl Worldborder {
         }
     }
 
-    pub async fn init_client(&self, client: &Client) {
+    pub async fn init_client(&self, client: &ClientPlatform) {
         client
             .enqueue_packet(&CInitializeWorldBorder::new(
                 self.center_x,

@@ -14,7 +14,7 @@ impl PumpkinBlock for VineBlock {
         for dir in BlockDirection::all() {
             if !args
                 .block_accessor
-                .get_block_state(&args.location.offset(dir.to_offset()))
+                .get_block_state(&args.position.offset(dir.to_offset()))
                 .await
                 .is_air()
             {

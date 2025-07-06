@@ -22,7 +22,7 @@ impl PumpkinBlock for DirtPathBlock {
         // TODO: push up entities
         args.world
             .set_block_state(
-                args.location,
+                args.position,
                 Block::DIRT.default_state.id,
                 BlockFlags::NOTIFY_ALL,
             )
@@ -30,7 +30,7 @@ impl PumpkinBlock for DirtPathBlock {
     }
 
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        if !can_place_at(args.world, args.location).await {
+        if !can_place_at(args.world, args.position).await {
             return Block::DIRT.default_state.id;
         }
 
@@ -41,16 +41,16 @@ impl PumpkinBlock for DirtPathBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if args.direction == BlockDirection::Up && !can_place_at(args.world, args.location).await {
+        if args.direction == BlockDirection::Up && !can_place_at(args.world, args.position).await {
             args.world
-                .schedule_block_tick(args.block, *args.location, 1, TickPriority::Normal)
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                 .await;
         }
         args.state_id
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.location).await
+        can_place_at(args.block_accessor, args.position).await
     }
 }
 

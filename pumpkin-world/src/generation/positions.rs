@@ -40,7 +40,7 @@ pub mod chunk_pos {
     pub const MARKER: u64 = packed(&Vector2::new(1875066, 1875066));
 
     pub const fn packed(vec: &Vector2<i32>) -> u64 {
-        (vec.x as u64 & 4294967295u64) | ((vec.z as u64 & 4294967295u64) << 32)
+        (vec.x as u64 & 4294967295u64) | ((vec.y as u64 & 4294967295u64) << 32)
     }
 
     pub const fn unpack_x(packed: u64) -> i32 {
@@ -60,7 +60,7 @@ pub mod chunk_pos {
     }
 
     pub const fn start_block_z(vec: &Vector2<i32>) -> i32 {
-        vec.z << 4
+        vec.y << 4
     }
 
     pub const fn end_block_z(vec: &Vector2<i32>) -> i32 {
@@ -68,7 +68,7 @@ pub mod chunk_pos {
     }
 
     pub const fn to_chunk_pos(vec: &Vector2<i32>) -> Vector2<i32> {
-        Vector2::new(vec.x >> 4, vec.z >> 4)
+        Vector2::new(vec.x >> 4, vec.y >> 4)
     }
 }
 
@@ -99,7 +99,7 @@ mod test {
         let packed = chunk_pos::packed(&pos);
         assert_eq!(packed as i64, -5804706329542001121i64);
         assert_eq!(pos.x, chunk_pos::unpack_x(packed));
-        assert_eq!(pos.z, chunk_pos::unpack_z(packed));
+        assert_eq!(pos.y, chunk_pos::unpack_z(packed));
     }
 
     #[test]

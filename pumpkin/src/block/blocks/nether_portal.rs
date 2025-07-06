@@ -46,7 +46,7 @@ impl PumpkinBlock for NetherPortalBlock {
             NetherPortalLikeProperties::from_state_id(args.state_id, &Block::NETHER_PORTAL).axis;
         if is_horizontal
             || args.neighbor_state_id == args.state_id
-            || NetherPortal::get_on_axis(args.world, args.location, state_axis)
+            || NetherPortal::get_on_axis(args.world, args.position, state_axis)
                 .await
                 .is_some_and(|e| e.was_already_valid())
         {
@@ -70,7 +70,7 @@ impl PumpkinBlock for NetherPortalBlock {
 
         args.entity
             .get_entity()
-            .try_use_portal(portal_delay, target_world, *args.location)
+            .try_use_portal(portal_delay, target_world, *args.position)
             .await;
     }
 }
