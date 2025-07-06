@@ -24,25 +24,25 @@ impl BlockMetadata for CarpetBlock {
 #[async_trait]
 impl PumpkinBlock for CarpetBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.location).await
+        can_place_at(args.block_accessor, args.position).await
     }
 
     async fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !can_place_at(args.world, args.location).await {
+        if !can_place_at(args.world, args.position).await {
             args.world
-                .schedule_block_tick(args.block, *args.location, 1, TickPriority::Normal)
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                 .await;
         }
         args.state_id
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world.as_ref(), args.location).await {
+        if !can_place_at(args.world.as_ref(), args.position).await {
             args.world
-                .break_block(args.location, None, BlockFlags::empty())
+                .break_block(args.position, None, BlockFlags::empty())
                 .await;
         }
     }
@@ -54,25 +54,25 @@ pub struct MossCarpetBlock;
 #[async_trait]
 impl PumpkinBlock for MossCarpetBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.location).await
+        can_place_at(args.block_accessor, args.position).await
     }
 
     async fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !can_place_at(args.world, args.location).await {
+        if !can_place_at(args.world, args.position).await {
             args.world
-                .schedule_block_tick(args.block, *args.location, 1, TickPriority::Normal)
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                 .await;
         }
         args.state_id
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world.as_ref(), args.location).await {
+        if !can_place_at(args.world.as_ref(), args.position).await {
             args.world
-                .break_block(args.location, None, BlockFlags::empty())
+                .break_block(args.position, None, BlockFlags::empty())
                 .await;
         }
     }
@@ -84,25 +84,25 @@ pub struct PaleMossCarpetBlock;
 #[async_trait]
 impl PumpkinBlock for PaleMossCarpetBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.location).await
+        can_place_at(args.block_accessor, args.position).await
     }
 
     async fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !can_place_at(args.world, args.location).await {
+        if !can_place_at(args.world, args.position).await {
             args.world
-                .schedule_block_tick(args.block, *args.location, 1, TickPriority::Normal)
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                 .await;
         }
         args.state_id
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world.as_ref(), args.location).await {
+        if !can_place_at(args.world.as_ref(), args.position).await {
             args.world
-                .break_block(args.location, None, BlockFlags::empty())
+                .break_block(args.position, None, BlockFlags::empty())
                 .await;
         }
     }

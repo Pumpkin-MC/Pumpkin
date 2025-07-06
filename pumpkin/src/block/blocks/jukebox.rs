@@ -50,8 +50,8 @@ impl PumpkinBlock for JukeboxBlock {
         let world = &args.player.living_entity.entity.world.read().await;
 
         // if the jukebox already has a record, stop playing
-        if self.has_record(args.block, args.location, world).await {
-            self.stop_music(args.block, args.location, world).await;
+        if self.has_record(args.block, args.position, world).await {
+            self.stop_music(args.block, args.position, world).await;
             return BlockActionResult::Success;
         }
 
@@ -77,12 +77,12 @@ impl PumpkinBlock for JukeboxBlock {
 
         //TODO: Update block nbt
 
-        self.set_record(true, args.block, args.location, world)
+        self.set_record(true, args.block, args.position, world)
             .await;
         world
             .sync_world_event(
                 WorldEvent::JukeboxStartsPlaying,
-                *args.location,
+                *args.position,
                 jukebox_song as i32,
             )
             .await;
@@ -93,7 +93,7 @@ impl PumpkinBlock for JukeboxBlock {
     async fn broken(&self, args: BrokenArgs<'_>) {
         // For now just stop the music at this position
         args.world
-            .sync_world_event(WorldEvent::JukeboxStopsPlaying, *args.location, 0)
+            .sync_world_event(WorldEvent::JukeboxStopsPlaying, *args.position, 0)
             .await;
     }
 }

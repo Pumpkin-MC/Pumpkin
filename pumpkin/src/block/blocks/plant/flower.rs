@@ -21,7 +21,7 @@ impl BlockMetadata for FlowerBlock {
 #[async_trait]
 impl PumpkinBlock for FlowerBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let block_below = args.block_accessor.get_block(&args.location.down()).await;
+        let block_below = args.block_accessor.get_block(&args.position.down()).await;
         block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == &Block::FARMLAND
     }
 
@@ -41,7 +41,7 @@ impl PumpkinBlock for FlowerBlock {
             {
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         Block::OPEN_EYEBLOSSOM.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
@@ -51,7 +51,7 @@ impl PumpkinBlock for FlowerBlock {
             {
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         Block::CLOSED_EYEBLOSSOM.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )

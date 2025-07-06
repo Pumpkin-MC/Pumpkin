@@ -28,7 +28,7 @@ impl PumpkinBlock for FlowerPotBlock {
             if let Some(potted_block_id) = get_potted_item(item.id) {
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         Block::from_id(potted_block_id).unwrap().default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
@@ -45,7 +45,7 @@ impl PumpkinBlock for FlowerPotBlock {
         //get the flower + empty the pot
         args.world
             .set_block_state(
-                args.location,
+                args.position,
                 Block::FLOWER_POT.default_state.id,
                 BlockFlags::NOTIFY_ALL,
             )
@@ -68,7 +68,7 @@ impl PumpkinBlock for FlowerPotBlock {
             {
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         Block::POTTED_OPEN_EYEBLOSSOM.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
@@ -79,7 +79,7 @@ impl PumpkinBlock for FlowerPotBlock {
         {
             args.world
                 .set_block_state(
-                    args.location,
+                    args.position,
                     Block::POTTED_CLOSED_EYEBLOSSOM.default_state.id,
                     BlockFlags::NOTIFY_ALL,
                 )

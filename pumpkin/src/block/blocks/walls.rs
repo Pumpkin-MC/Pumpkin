@@ -38,7 +38,7 @@ impl PumpkinBlock for WallBlock {
         let mut wall_props = WallProperties::default(args.block);
         wall_props.waterlogged = args.replacing.water_source();
 
-        compute_wall_state(wall_props, args.world, args.block, args.location).await
+        compute_wall_state(wall_props, args.world, args.block, args.position).await
     }
 
     async fn get_state_for_neighbor_update(
@@ -46,7 +46,7 @@ impl PumpkinBlock for WallBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let wall_props = WallProperties::from_state_id(args.state_id, args.block);
-        compute_wall_state(wall_props, args.world, args.block, args.location).await
+        compute_wall_state(wall_props, args.world, args.block, args.position).await
     }
 }
 

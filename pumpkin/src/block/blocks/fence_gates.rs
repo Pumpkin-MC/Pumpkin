@@ -70,7 +70,7 @@ impl PumpkinBlock for FenceGateBlock {
     }
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        toggle_fence_gate(args.world, args.location, args.player).await;
+        toggle_fence_gate(args.world, args.position, args.player).await;
 
         BlockActionResult::Success
     }

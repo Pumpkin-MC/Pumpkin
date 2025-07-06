@@ -8,7 +8,7 @@ use crate::codec::ascii_string::AsciiString;
 #[derive(Serialize)]
 #[packet(0x1c)]
 pub struct CUnconnectedPong {
-    time: i64,
+    time: u64,
     server_guid: u64,
     magic: [u8; 16],
     server_id: AsciiString,
@@ -34,7 +34,7 @@ impl fmt::Display for ServerInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{};{};{};{};{};{};{};{};{};{};{};{}",
+            "{};{};{};{};{};{};{};{};{};{};{};{};0;",
             self.edition,
             self.motd_line_1,
             self.protocol_version,
@@ -52,7 +52,7 @@ impl fmt::Display for ServerInfo {
 }
 
 impl CUnconnectedPong {
-    pub fn new(time: i64, server_guid: u64, magic: [u8; 16], server_id: AsciiString) -> Self {
+    pub fn new(time: u64, server_guid: u64, magic: [u8; 16], server_id: AsciiString) -> Self {
         Self {
             time,
             server_guid,

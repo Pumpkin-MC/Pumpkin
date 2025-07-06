@@ -68,23 +68,23 @@ impl BlockMetadata for ButtonBlock {
 #[async_trait]
 impl PumpkinBlock for ButtonBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        click_button(args.world, args.location).await;
+        click_button(args.world, args.position).await;
 
         BlockActionResult::Success
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
+        let state = args.world.get_block_state(args.position).await;
         let mut props = ButtonLikeProperties::from_state_id(state.id, args.block);
         props.powered = false;
         args.world
             .set_block_state(
-                args.location,
+                args.position,
                 props.to_state_id(args.block),
                 BlockFlags::NOTIFY_ALL,
             )
             .await;
-        Self::update_neighbors(args.world, args.location, &props).await;
+        Self::update_neighbors(args.world, args.position, &props).await;
     }
 
     async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
@@ -109,7 +109,7 @@ impl PumpkinBlock for ButtonBlock {
         if !args.moved {
             let button_props = ButtonLikeProperties::from_state_id(args.old_state_id, args.block);
             if button_props.powered {
-                Self::update_neighbors(args.world, args.location, &button_props).await;
+                Self::update_neighbors(args.world, args.position, &button_props).await;
             }
         }
     }
@@ -124,7 +124,7 @@ impl PumpkinBlock for ButtonBlock {
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        WallMountedBlock::can_place_at(self, args.block_accessor, args.location, args.direction)
+        WallMountedBlock::can_place_at(self, args.block_accessor, args.position, args.direction)
             .await
     }
 

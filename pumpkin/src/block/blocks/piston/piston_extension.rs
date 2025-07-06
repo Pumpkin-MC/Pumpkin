@@ -19,7 +19,7 @@ impl PumpkinBlock for PistonExtensionBlock {
     async fn broken(&self, args: BrokenArgs<'_>) {
         let props = MovingPistonProps::from_state_id(args.state.id, &Block::MOVING_PISTON);
         let pos = args
-            .location
+            .position
             .offset(props.facing.opposite().to_block_direction().to_offset());
         let (new_block, new_state) = args.world.get_block_and_block_state(&pos).await;
         if PistonBlock::ids(&PistonBlock).contains(&new_block.name) {

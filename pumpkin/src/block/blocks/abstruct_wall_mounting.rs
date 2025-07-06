@@ -49,7 +49,7 @@ pub trait WallMountedBlock {
     ) -> BlockStateId {
         if self.get_direction(args.state_id, args.block).opposite() == args.direction
             && !self
-                .can_place_at(args.world, args.location, args.direction)
+                .can_place_at(args.world, args.position, args.direction)
                 .await
         {
             Block::AIR.default_state.id
