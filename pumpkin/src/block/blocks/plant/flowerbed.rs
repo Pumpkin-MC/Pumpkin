@@ -27,7 +27,7 @@ impl BlockMetadata for FlowerbedBlock {
 #[async_trait]
 impl PumpkinBlock for FlowerbedBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let block_below = args.block_accessor.get_block(&args.location.down()).await;
+        let block_below = args.block_accessor.get_block(&args.position.down()).await;
         block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == &Block::FARMLAND
     }
 
@@ -44,7 +44,7 @@ impl PumpkinBlock for FlowerbedBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         if args.direction == BlockDirection::Down {
-            let block_below = args.world.get_block(&args.location.down()).await;
+            let block_below = args.world.get_block(&args.position.down()).await;
             if !(block_below.is_tagged_with("minecraft:dirt").unwrap()
                 || block_below == &Block::FARMLAND)
             {

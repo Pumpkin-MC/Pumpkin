@@ -8,7 +8,7 @@ use crate::VarInt;
 #[packet(PLAY_PLAYER_ACTION)]
 pub struct SPlayerAction {
     pub status: VarInt,
-    pub location: BlockPos,
+    pub position: BlockPos,
     pub face: u8,
     pub sequence: VarInt,
 }

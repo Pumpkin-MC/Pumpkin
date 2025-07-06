@@ -7,10 +7,10 @@ pub struct ParseGameModeError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum GameMode {
-    Survival,
-    Creative,
-    Adventure,
-    Spectator,
+    Survival = 0,
+    Creative = 1,
+    Adventure = 2,
+    Spectator = 3,
 }
 
 impl TryFrom<i8> for GameMode {

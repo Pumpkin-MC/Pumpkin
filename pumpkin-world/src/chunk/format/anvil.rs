@@ -343,12 +343,12 @@ impl AnvilChunkData {
 impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     pub const fn get_region_coords(at: &Vector2<i32>) -> (i32, i32) {
         // Divide by 32 for the region coordinates
-        (at.x >> SUBREGION_BITS, at.z >> SUBREGION_BITS)
+        (at.x >> SUBREGION_BITS, at.y >> SUBREGION_BITS)
     }
 
     pub const fn get_chunk_index(pos: &Vector2<i32>) -> usize {
         let local_x = pos.x & SUBREGION_AND;
-        let local_z = pos.z & SUBREGION_AND;
+        let local_z = pos.y & SUBREGION_AND;
         let index = (local_z << SUBREGION_BITS) + local_x;
         index as usize
     }
