@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::EnumVariants;
+use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_world::BlockStateId;
@@ -31,7 +33,8 @@ impl PumpkinBlock for SignBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut sign_props = SignProperties::default(args.block);
         sign_props.waterlogged = args.replacing.water_source();
-
+        let rotation = (args.player.get_entity().get_rotation_16().to_index() + 8) % 16; // +8 to make it face the player
+        sign_props.rotation = Integer0To15::from_index(rotation);
         sign_props.to_state_id(args.block)
     }
 
