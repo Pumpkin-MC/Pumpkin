@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::EnumVariants;
+use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_world::block::entities::sign::SignBlockEntity;

@@ -5,7 +5,7 @@ use core::f32;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
-use pumpkin_data::block_properties::Integer0To15;
+use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
@@ -514,26 +514,9 @@ impl Entity {
     pub fn get_rotation_16(&self) -> Integer0To15 {
         let adjusted_yaw = self.yaw.load().rem_euclid(360.0);
 
-        let index = (adjusted_yaw / 22.5).round() as u8 % 16;
+        let index = (adjusted_yaw / 22.5).round() as u16 % 16;
 
-        match index {
-            0 => Integer0To15::L0,
-            1 => Integer0To15::L1,
-            2 => Integer0To15::L2,
-            3 => Integer0To15::L3,
-            4 => Integer0To15::L4,
-            5 => Integer0To15::L5,
-            6 => Integer0To15::L6,
-            7 => Integer0To15::L7,
-            8 => Integer0To15::L8,
-            9 => Integer0To15::L9,
-            10 => Integer0To15::L10,
-            11 => Integer0To15::L11,
-            12 => Integer0To15::L12,
-            13 => Integer0To15::L13,
-            14 => Integer0To15::L14,
-            _ => Integer0To15::L15,
-        }
+        Integer0To15::from_index(index)
     }
 
     pub fn get_flipped_rotation_16(&self) -> Integer0To15 {
