@@ -83,7 +83,7 @@ impl From<DyeColor> for NbtTag {
 pub struct SignBlockEntity {
     front_text: Text,
     back_text: Text,
-    is_waxed: bool,
+    pub is_waxed: bool,
     position: BlockPos,
 }
 
