@@ -1,17 +1,17 @@
 use async_trait::async_trait;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::text::TextComponent;
 
-use crate::command::CommandError;
-use crate::command::args::ConsumedArgs;
-use crate::command::args::FindArg;
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::entity::EntityArgumentConsumer;
 use crate::command::args::position_3d::Position3DArgumentConsumer;
 use crate::command::args::rotation::RotationArgumentConsumer;
-use crate::command::tree::CommandTree;
+use crate::command::args::ConsumedArgs;
+use crate::command::args::FindArg;
 use crate::command::tree::builder::{argument, literal};
+use crate::command::tree::CommandTree;
+use crate::command::CommandError;
 use crate::command::{CommandExecutor, CommandSender};
 
 const NAMES: [&str; 2] = ["teleport", "tp"];
@@ -77,12 +77,13 @@ impl CommandExecutor for EntitiesToEntityExecutor {
                         .color_named(NamedColor::Red),
                 )
                 .await;
-        } else {
-            for target in targets {
-                let yaw = target.living_entity.entity.yaw.load();
-                let pitch = target.living_entity.entity.pitch.load();
-                target.teleport(pos, yaw, pitch).await;
-            }
+
+            return Ok(());
+        }
+        for target in targets {
+            let yaw = target.living_entity.entity.yaw.load();
+            let pitch = target.living_entity.entity.pitch.load();
+            target.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -109,13 +110,13 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
                         .color_named(NamedColor::Red),
                 )
                 .await;
-        } else {
-            let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
-            let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
+            return Ok(());
+        }
+        let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
+        let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
 
-            for target in targets {
-                target.teleport(pos, yaw, pitch).await;
-            }
+        for target in targets {
+            target.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -142,16 +143,17 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
                         .color_named(NamedColor::Red),
                 )
                 .await;
-        } else {
-            let facing_entity = &EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?
-                .living_entity
-                .entity;
-            let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_entity.pos.load());
-
-            for target in targets {
-                target.teleport(pos, yaw, pitch).await;
-            }
+            return Ok(());
         }
+        let facing_entity = &EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?
+            .living_entity
+            .entity;
+        let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_entity.pos.load());
+
+        for target in targets {
+            target.teleport(pos, yaw, pitch).await;
+        }
+
         Ok(())
     }
 }
@@ -176,13 +178,14 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
                         .color_named(NamedColor::Red),
                 )
                 .await;
-        } else {
-            let (yaw, pitch) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
-
-            for target in targets {
-                target.teleport(pos, yaw, pitch).await;
-            }
+            return Ok(());
         }
+        let (yaw, pitch) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
+
+        for target in targets {
+            target.teleport(pos, yaw, pitch).await;
+        }
+
         Ok(())
     }
 }
@@ -207,12 +210,12 @@ impl CommandExecutor for EntitiesToPosExecutor {
                         .color_named(NamedColor::Red),
                 )
                 .await;
-        } else {
-            for target in targets {
-                let yaw = target.living_entity.entity.yaw.load();
-                let pitch = target.living_entity.entity.pitch.load();
-                target.teleport(pos, yaw, pitch).await;
-            }
+            return Ok(());
+        }
+        for target in targets {
+            let yaw = target.living_entity.entity.yaw.load();
+            let pitch = target.living_entity.entity.pitch.load();
+            target.teleport(pos, yaw, pitch).await;
         }
 
         Ok(())
@@ -243,9 +246,9 @@ impl CommandExecutor for SelfToEntityExecutor {
                                 .color_named(NamedColor::Red),
                         )
                         .await;
-                } else {
-                    player.teleport(pos, yaw, pitch).await;
+                    return Ok(());
                 }
+                player.teleport(pos, yaw, pitch).await;
             }
             _ => {
                 sender
@@ -279,9 +282,9 @@ impl CommandExecutor for SelfToPosExecutor {
                                 .color_named(NamedColor::Red),
                         )
                         .await;
-                } else {
-                    player.teleport(pos, yaw, pitch).await;
+                    return Ok(());
                 }
+                player.teleport(pos, yaw, pitch).await;
             }
             _ => {
                 sender
