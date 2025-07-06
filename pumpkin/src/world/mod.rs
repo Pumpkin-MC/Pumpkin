@@ -1980,13 +1980,11 @@ impl World {
         Self::is_valid_horizontally(dest) && Self::is_valid_vertically(dest.y)
     }
     pub fn is_valid_horizontally(dest: Vector3<f64>) -> bool {
-        dest.x <= 30_000_000.0
-            && dest.x >= -30_000_000.0
-            && dest.z <= 30_000_000.0
-            && dest.z >= -30_000_000.0
+        (-30_000_000.0..=30_000_000.0).contains(&dest.x)
+            && (-30_000_000.0..=30_000_000.0).contains(&dest.z)
     }
     pub fn is_valid_vertically(y: f64) -> bool {
-        y >= -20_000_000.0 && y <= 20_000_000.0
+        (-20_000_000.0..=20_000_000.0).contains(&y)
     }
     /// Gets a `Block` from the block registry. Returns `Block::AIR` if the block was not found.
     pub async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
