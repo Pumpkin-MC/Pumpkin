@@ -8,7 +8,6 @@ use pumpkin_data::tag::Tagable;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use std::sync::Arc;
 
 type IronBarsProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 

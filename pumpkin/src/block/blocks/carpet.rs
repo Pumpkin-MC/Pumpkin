@@ -89,25 +89,11 @@ impl PumpkinBlock for PaleMossCarpetBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-<<<<<<< HEAD
-        world: &Arc<World>,
-        block: &Block,
-        state: BlockStateId,
-        pos: &BlockPos,
-        _direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
-    ) -> BlockStateId {
-        if !can_place_at(world.as_ref(), pos).await {
-            world
-                .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
-=======
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         if !can_place_at(args.world, args.position).await {
             args.world
                 .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
->>>>>>> master
                 .await;
         }
         args.state_id

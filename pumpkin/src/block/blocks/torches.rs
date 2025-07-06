@@ -7,7 +7,6 @@ use pumpkin_data::{Block, FacingExt, HorizontalFacingExt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
-use std::sync::Arc;
 
 type WallTorchProps = pumpkin_data::block_properties::WallTorchLikeProperties;
 // Normal tourches don't have properties

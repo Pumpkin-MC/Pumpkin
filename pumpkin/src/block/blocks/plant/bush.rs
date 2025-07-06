@@ -1,17 +1,7 @@
 use async_trait::async_trait;
-use pumpkin_data::{Block, BlockDirection};
-use pumpkin_protocol::java::server::play::SUseItemOn;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::BlockAccessor;
+use pumpkin_data::Block;
 
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
-use crate::entity::player::Player;
-use crate::server::Server;
-use crate::world::World;
-use pumpkin_data::Block;
-use pumpkin_data::tag::Tagable;
-
 use crate::block::pumpkin_block::{BlockMetadata, CanPlaceAtArgs, PumpkinBlock};
 
 pub struct BushBlock;
@@ -28,18 +18,8 @@ impl BlockMetadata for BushBlock {
 
 #[async_trait]
 impl PumpkinBlock for BushBlock {
-    async fn can_place_at(
-        &self,
-        _server: Option<&Server>,
-        _world: Option<&World>,
-        block_accessor: &dyn BlockAccessor,
-        _player: Option<&Player>,
-        _block: &Block,
-        block_pos: &BlockPos,
-        _face: BlockDirection,
-        _use_item_on: Option<&SUseItemOn>,
-    ) -> bool {
-        <Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await
+    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }
 }
 

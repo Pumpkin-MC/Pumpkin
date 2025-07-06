@@ -6,7 +6,6 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
-use std::sync::Arc;
 
 use crate::block::pumpkin_block::CanPlaceAtArgs;
 use crate::block::pumpkin_block::PumpkinBlock;

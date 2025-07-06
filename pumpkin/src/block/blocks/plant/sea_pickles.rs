@@ -1,7 +1,8 @@
 use crate::block::BlockIsReplacing;
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, CanUpdateAtArgs, OnPlaceArgs, PumpkinBlock, UseWithItemArgs,
+    CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock,
+    UseWithItemArgs,
 };
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
@@ -143,16 +144,15 @@ impl PumpkinBlock for SeaPickleBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &Arc<World>,
-        _block: &Block,
-        state: BlockStateId,
-        pos: &BlockPos,
-        _direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        <Self as PlantBlockBase>::get_state_for_neighbor_update(self, world.as_ref(), pos, state)
-            .await
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
+        .await
     }
 }
 

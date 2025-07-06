@@ -1,18 +1,9 @@
 use async_trait::async_trait;
+use pumpkin_data::Block;
 use pumpkin_data::tag::Tagable;
-use pumpkin_data::{Block, BlockDirection};
-use pumpkin_protocol::java::server::play::SUseItemOn;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockAccessor};
-use std::sync::Arc;
-
-use crate::block::BlockIsReplacing;
-use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
-use crate::entity::player::Player;
-use crate::server::Server;
-use crate::world::World;
 use pumpkin_world::BlockStateId;
+
+use crate::block::blocks::plant::PlantBlockBase;
 
 use crate::block::pumpkin_block::{
     BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
@@ -54,8 +45,13 @@ impl PumpkinBlock for FlowerbedBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        <Self as PlantBlockBase>::get_state_for_neighbor_update(self, args.world, args.position, args.state_id)
-            .await
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
+        .await
     }
 }
 

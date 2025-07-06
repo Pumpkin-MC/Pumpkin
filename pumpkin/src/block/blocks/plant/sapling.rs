@@ -1,22 +1,16 @@
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, Integer0To1};
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
-use pumpkin_data::{Block, BlockDirection};
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
-use crate::entity::player::Player;
-use crate::server::Server;
+use crate::block::pumpkin_block::{
+    BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock, RandomTickArgs,
+};
 use crate::world::World;
-use pumpkin_data::Block;
-use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
-
-use crate::block::pumpkin_block::{BlockMetadata, CanPlaceAtArgs, PumpkinBlock};
 
 type SaplingProperties = pumpkin_data::block_properties::OakSaplingLikeProperties;
 
@@ -49,36 +43,25 @@ impl BlockMetadata for SaplingBlock {
 
 #[async_trait]
 impl PumpkinBlock for SaplingBlock {
-    async fn can_place_at(
-        &self,
-        _server: Option<&Server>,
-        _world: Option<&World>,
-        block_accessor: &dyn BlockAccessor,
-        _player: Option<&Player>,
-        _block: &Block,
-        block_pos: &BlockPos,
-        _face: BlockDirection,
-        _use_item_on: Option<&SUseItemOn>,
-    ) -> bool {
-        <Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await
+    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &Arc<World>,
-        _block: &Block,
-        state: BlockStateId,
-        pos: &BlockPos,
-        _direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        <Self as PlantBlockBase>::get_state_for_neighbor_update(self, world.as_ref(), pos, state)
-            .await
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
+        .await
     }
 
-    async fn random_tick(&self, _block: &Block, world: &Arc<World>, pos: &BlockPos) {
-        self.generate(world, pos).await;
+    async fn random_tick(&self, args: RandomTickArgs<'_>) {
+        self.generate(args.world, args.position).await;
     }
 }
 

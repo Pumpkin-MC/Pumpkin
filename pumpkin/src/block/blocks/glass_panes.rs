@@ -9,7 +9,6 @@ use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use std::sync::Arc;
 
 type GlassPaneProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 

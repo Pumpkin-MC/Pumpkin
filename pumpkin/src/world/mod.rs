@@ -12,7 +12,7 @@ use crate::{
     PLUGIN_MANAGER,
     block::{
         self,
-        pumpkin_block::{OnNeighborUpdateArgs, OnScheduledTickArgs},
+        pumpkin_block::{OnNeighborUpdateArgs, OnScheduledTickArgs, RandomTickArgs},
         registry::BlockRegistry,
     },
     command::client_suggestions,
@@ -639,7 +639,11 @@ impl World {
             let block = self.get_block(&scheduled_tick.block_pos).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
-                    .random_tick(block, self, &scheduled_tick.block_pos)
+                    .random_tick(RandomTickArgs {
+                        world: self,
+                        block,
+                        position: &scheduled_tick.block_pos,
+                    })
                     .await;
             }
         }

@@ -409,7 +409,7 @@ impl Level {
                 let chunk = chunk_arc.read().await;
 
                 let chunk_x_base = chunk.position.x * 16;
-                let chunk_z_base = chunk.position.z * 16;
+                let chunk_z_base = chunk.position.y * 16;
 
                 let mut section_blocks = Vec::new();
                 for i in 0..chunk.section.sections.len() {

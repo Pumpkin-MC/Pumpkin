@@ -78,17 +78,7 @@ pub trait PumpkinBlock: Send + Sync {
 
     async fn get_state_for_neighbor_update(
         &self,
-<<<<<<< HEAD
-        _world: &Arc<World>,
-        _block: &Block,
-        state: BlockStateId,
-        _pos: &BlockPos,
-        _direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
-=======
         args: GetStateForNeighborUpdateArgs<'_>,
->>>>>>> master
     ) -> BlockStateId {
         args.state_id
     }

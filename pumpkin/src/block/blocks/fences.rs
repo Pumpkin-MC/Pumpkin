@@ -10,7 +10,6 @@ use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use std::sync::Arc;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 type FenceProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
