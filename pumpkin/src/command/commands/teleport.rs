@@ -1,18 +1,19 @@
 use async_trait::async_trait;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
 
+use crate::command::CommandError;
+use crate::command::args::ConsumedArgs;
+use crate::command::args::FindArg;
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::entity::EntityArgumentConsumer;
 use crate::command::args::position_3d::Position3DArgumentConsumer;
 use crate::command::args::rotation::RotationArgumentConsumer;
-use crate::command::args::ConsumedArgs;
-use crate::command::args::FindArg;
-use crate::command::tree::builder::{argument, literal};
 use crate::command::tree::CommandTree;
-use crate::command::CommandError;
+use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
+use crate::world::World;
 
 const NAMES: [&str; 2] = ["teleport", "tp"];
 const DESCRIPTION: &str = "Teleports entities, including players."; // todo
@@ -50,12 +51,6 @@ fn yaw_pitch_facing_position(
     (yaw_degrees as f32, pitch_degrees as f32)
 }
 
-fn is_invalid_pos(pos: Vector3<f64>) -> bool {
-    pos.x >= 29_999_984.0
-        || pos.x <= -29_999_984.0
-        || pos.z >= 29_999_984.0
-        || pos.z <= -29_999_984.0
-}
 struct EntitiesToEntityExecutor;
 
 #[async_trait]
@@ -70,7 +65,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
 
         let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
         let pos = destination.living_entity.entity.pos.load();
-        if is_invalid_pos(pos) {
+        if World::is_valid(pos) {
             sender
                 .send_message(
                     TextComponent::text("Coordinates are out of bounds.".to_string())
@@ -103,7 +98,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-        if is_invalid_pos(pos) {
+        if World::is_valid(pos) {
             sender
                 .send_message(
                     TextComponent::text("Coordinates are out of bounds.".to_string())
@@ -136,7 +131,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-        if is_invalid_pos(pos) {
+        if World::is_valid(pos) {
             sender
                 .send_message(
                     TextComponent::text("Coordinates are out of bounds.".to_string())
@@ -171,7 +166,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-        if is_invalid_pos(pos) {
+        if World::is_valid(pos) {
             sender
                 .send_message(
                     TextComponent::text("Coordinates are out of bounds.".to_string())
@@ -203,7 +198,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-        if is_invalid_pos(pos) {
+        if World::is_valid(pos) {
             sender
                 .send_message(
                     TextComponent::text("Coordinates are out of bounds.".to_string())
@@ -239,7 +234,7 @@ impl CommandExecutor for SelfToEntityExecutor {
             CommandSender::Player(player) => {
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
-                if is_invalid_pos(pos) {
+                if World::is_valid(pos) {
                     sender
                         .send_message(
                             TextComponent::text("Coordinates are out of bounds.".to_string())
@@ -275,7 +270,7 @@ impl CommandExecutor for SelfToPosExecutor {
                 let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
-                if is_invalid_pos(pos) {
+                if World::is_valid(pos) {
                     sender
                         .send_message(
                             TextComponent::text("Coordinates are out of bounds.".to_string())
