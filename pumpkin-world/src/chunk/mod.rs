@@ -1,6 +1,5 @@
 use crate::block::entities::BlockEntity;
 use palette::{BiomePalette, BlockPalette};
-use pumpkin_data::block_properties::has_random_ticks;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
