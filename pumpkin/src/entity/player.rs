@@ -11,6 +11,7 @@ use crossbeam::atomic::AtomicCell;
 use log::warn;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
+use pumpkin_world::world::BlockFlags;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -38,16 +39,17 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
-    CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
-    CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
-    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
-    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    Animation, CAcknowledgeBlockChange, CActionBar, CBlockUpdate, CChangeDifficulty,
+    CChunkBatchEnd, CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath,
+    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive,
+    COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+    CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
+    CSetCursorItem, CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot,
+    CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk,
+    CUpdateMobEffect, CUpdateTime, GameEvent, MetaDataType, Metadata, PlayerAction,
+    PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::java::server::play::SClickSlot;
+use pumpkin_protocol::java::server::play::{SClickSlot, SPlayerAction, Status};
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::{
@@ -1170,6 +1172,144 @@ impl Player {
             y: entity_pos.y + f64::from(standing_eye_height),
             z: entity_pos.z,
         }) < d * d
+    }
+
+    pub async fn handle_started_digging(self: &Arc<Self>, location: BlockPos, server: &Server) {
+        let entity = self.get_entity();
+        let world = entity.world.read().await;
+        let (block, state) = world.get_block_and_block_state(&location).await;
+
+        let inventory = self.inventory();
+        let held = inventory.held_item();
+
+        if !server.item_registry.can_mine(held.lock().await.item, self) {
+            self.client
+                .enqueue_packet(&CBlockUpdate::new(location, VarInt(i32::from(state.id))))
+                .await;
+            return;
+        }
+
+        // TODO: do validation
+        // TODO: Config
+        if self.gamemode.load() == GameMode::Creative {
+            // Block break & play sound
+            world
+                .break_block(
+                    &location,
+                    Some(self.clone()),
+                    BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
+                )
+                .await;
+            server
+                .block_registry
+                .broken(&world, block, self, &location, server, state)
+                .await;
+            return;
+        }
+
+        self.start_mining_time.store(
+            self.tick_counter.load(std::sync::atomic::Ordering::Relaxed),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
+        if state.is_air() {
+            return;
+        }
+
+        let speed = block::calc_block_breaking(self, state, block.name).await;
+        if speed >= 1.0 {
+            // Instant break
+            let broken_state = world.get_block_state(&location).await;
+            world
+                .break_block(&location, Some(self.clone()), BlockFlags::NOTIFY_NEIGHBORS)
+                .await;
+            server
+                .block_registry
+                .broken(&world, block, self, &location, server, broken_state)
+                .await;
+        } else {
+            self.mining
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            *self.mining_pos.lock().await = location;
+
+            let progress = (speed * 10.0) as i32;
+            world.set_block_breaking(entity, location, progress).await;
+
+            self.current_block_destroy_stage
+                .store(progress, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    pub async fn handle_cancelled_digging(self: &Arc<Self>, location: BlockPos) {
+        self.mining
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+
+        let entity = self.get_entity();
+        let world = entity.world.read().await;
+        world.set_block_breaking(entity, location, -1).await;
+    }
+
+    pub async fn handle_finished_digging(self: &Arc<Self>, location: BlockPos, server: &Server) {
+        // Block break & play sound
+        self.mining
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+
+        let entity = self.get_entity();
+        let world = entity.world.read().await;
+        world.set_block_breaking(entity, location, -1).await;
+
+        let (block, state) = world.get_block_and_block_state(&location).await;
+        let drop =
+            self.gamemode.load() != GameMode::Creative && self.can_harvest(state, block.name).await;
+
+        world
+            .break_block(
+                &location,
+                Some(self.clone()),
+                if drop {
+                    BlockFlags::NOTIFY_NEIGHBORS
+                } else {
+                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                },
+            )
+            .await;
+
+        server
+            .block_registry
+            .broken(&world, block, self, &location, server, state)
+            .await;
+    }
+
+    pub(crate) async fn handle_block_break_action(
+        self: &Arc<Self>,
+        player_action: &SPlayerAction,
+        status: Status,
+        server: &Server,
+    ) {
+        let location = player_action.position;
+        if !self.can_interact_with_block_at(&location, 1.0) {
+            log::warn!(
+                "Player {} tried to interact with block out of reach at {location}",
+                self.gameprofile.name,
+            );
+            return;
+        }
+
+        match status {
+            Status::StartedDigging => self.handle_started_digging(location, server).await,
+            Status::CancelledDigging => self.handle_cancelled_digging(location).await,
+            Status::FinishedDigging => self.handle_finished_digging(location, server).await,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn update_sequence(&self, sequence: i32) {
+        if sequence < 0 {
+            log::error!("Expected packet sequence >= 0");
+            return;
+        }
+        self.packet_sequence
+            .fetch_max(sequence, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub async fn kick(&self, reason: TextComponent) {
