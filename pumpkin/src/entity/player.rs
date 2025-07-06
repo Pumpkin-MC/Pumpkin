@@ -35,27 +35,19 @@ use pumpkin_inventory::sync_handler::SyncHandler;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_protocol::IdOr;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
     CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
-    CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition,
-    CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
-    GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
+    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
+    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
+    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
+    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::java::server::play::{
-    SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
-    SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
-    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded,
-    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
-    SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
-};
-use pumpkin_protocol::packet::Packet;
-use pumpkin_protocol::{IdOr, RawPacket, ServerPacket};
+use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::{
@@ -76,9 +68,8 @@ use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
 use crate::data::op_data::OPERATOR_CONFIG;
-use crate::error::PumpkinError;
-use crate::net::GameProfile;
-use crate::net::{Client, PlayerConfig};
+use crate::net::PlayerConfig;
+use crate::net::{ClientPlatform, GameProfile};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
@@ -201,7 +192,7 @@ pub struct Player {
     /// The player's game profile information, including their username and UUID.
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
-    pub client: Client,
+    pub client: ClientPlatform,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
@@ -278,7 +269,13 @@ pub struct Player {
 }
 
 impl Player {
-    pub async fn new(client: Client, world: Arc<World>, gamemode: GameMode) -> Self {
+    pub async fn new(
+        client: ClientPlatform,
+        gameprofile: GameProfile,
+        config: PlayerConfig,
+        world: Arc<World>,
+        gamemode: GameMode,
+    ) -> Self {
         struct ScreenListener;
 
         #[async_trait]
@@ -293,21 +290,7 @@ impl Player {
             }
         }
 
-        let gameprofile = client.gameprofile.lock().await.clone().map_or_else(
-            || {
-                log::error!("Client {} has no game profile!", client.id);
-                GameProfile {
-                    id: uuid::Uuid::new_v4(),
-                    name: String::new(),
-                    properties: vec![],
-                    profile_actions: None,
-                }
-            },
-            |profile| profile,
-        );
         let player_uuid = gameprofile.id;
-
-        let config = client.config.lock().await.clone().unwrap_or_default();
 
         let living_entity = LivingEntity::new(Entity::new(
             player_uuid,
@@ -418,9 +401,8 @@ impl Player {
         let radial_chunks = cylindrical.all_chunks_within();
 
         log::debug!(
-            "Removing player {} ({}), unwatching {} chunks",
+            "Removing player {}, unwatching {} chunks",
             self.gameprofile.name,
-            self.client.id,
             radial_chunks.len()
         );
 
@@ -435,9 +417,8 @@ impl Player {
         level.clean_memory();
 
         log::debug!(
-            "Removed player id {} ({}) from world {} ({} chunks remain cached)",
+            "Removed player id {} from world {} ({} chunks remain cached)",
             self.gameprofile.name,
-            self.client.id,
             "world", // TODO: Add world names
             level.loaded_chunk_count(),
         );
@@ -727,9 +708,9 @@ impl Player {
             .send_content_updates()
             .await;
 
-        if self.client.closed.load(Ordering::Relaxed) {
-            return;
-        }
+        // if self.client.closed.load(Ordering::Relaxed) {
+        //     return;
+        // }
 
         if self.packet_sequence.load(Ordering::Relaxed) > -1 {
             self.client
@@ -1004,7 +985,7 @@ impl Player {
         level.clean_chunks(&chunks_to_clean).await;
         for chunk in chunks_to_clean {
             self.client
-                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.z))
+                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
         }
 
@@ -1179,9 +1160,9 @@ impl Player {
         }
     }
 
-    pub fn can_interact_with_block_at(&self, pos: &BlockPos, additional_range: f64) -> bool {
+    pub fn can_interact_with_block_at(&self, position: &BlockPos, additional_range: f64) -> bool {
         let d = self.block_interaction_range() + additional_range;
-        let box_pos = BoundingBox::from_block(pos);
+        let box_pos = BoundingBox::from_block(position);
         let entity_pos = self.living_entity.entity.pos.load();
         let standing_eye_height = self.living_entity.entity.standing_eye_height;
         box_pos.squared_magnitude(Vector3 {
@@ -1191,28 +1172,8 @@ impl Player {
         }) < d * d
     }
 
-    /// Kicks the player with a reason depending on the connection state.
     pub async fn kick(&self, reason: TextComponent) {
-        if self.client.closed.load(Ordering::Relaxed) {
-            log::debug!(
-                "Tried to kick client id {} but connection is closed!",
-                self.client.id
-            );
-            return;
-        }
-
-        self.client
-            .send_packet_now(&CPlayDisconnect::new(&reason))
-            .await;
-
-        log::info!(
-            "Kicked player {} (client {}) for {}",
-            self.gameprofile.name,
-            self.client.id,
-            reason.to_pretty_console()
-        );
-
-        self.client.close();
+        self.client.kick(reason).await;
     }
 
     pub fn can_food_heal(&self) -> bool {
@@ -2034,172 +1995,6 @@ impl EntityBase for Player {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
-    }
-}
-
-impl Player {
-    pub async fn close(&self) {
-        self.client.close();
-        log::debug!("Awaiting tasks for player {}", self.gameprofile.name);
-        self.client.await_tasks().await;
-        log::debug!(
-            "Finished awaiting tasks for client {}",
-            self.gameprofile.name
-        );
-    }
-
-    pub async fn process_packets(self: &Arc<Self>, server: &Arc<Server>) {
-        while let Some(packet) = self.client.get_packet().await {
-            let packet_result = self.handle_play_packet(server, &packet).await;
-            match packet_result {
-                Ok(()) => {}
-                Err(e) => {
-                    if e.is_kick() {
-                        if let Some(kick_reason) = e.client_kick_reason() {
-                            self.kick(TextComponent::text(kick_reason)).await;
-                        } else {
-                            self.kick(TextComponent::text(format!(
-                                "Error while handling incoming packet {e}"
-                            )))
-                            .await;
-                        }
-                    }
-                    e.log();
-                }
-            }
-        }
-    }
-
-    #[allow(clippy::too_many_lines)]
-    pub async fn handle_play_packet(
-        self: &Arc<Self>,
-        server: &Arc<Server>,
-        packet: &RawPacket,
-    ) -> Result<(), Box<dyn PumpkinError>> {
-        let payload = &packet.payload[..];
-        match packet.id {
-            SConfirmTeleport::PACKET_ID => {
-                self.handle_confirm_teleport(SConfirmTeleport::read(payload)?)
-                    .await;
-            }
-            SChangeGameMode::PACKET_ID => {
-                self.handle_change_game_mode(SChangeGameMode::read(payload)?)
-                    .await;
-            }
-            SChatCommand::PACKET_ID => {
-                self.handle_chat_command(server, &(SChatCommand::read(payload)?))
-                    .await;
-            }
-            SChatMessage::PACKET_ID => {
-                self.handle_chat_message(SChatMessage::read(payload)?).await;
-            }
-            SClientInformationPlay::PACKET_ID => {
-                self.handle_client_information(SClientInformationPlay::read(payload)?)
-                    .await;
-            }
-            SClientCommand::PACKET_ID => {
-                self.handle_client_status(SClientCommand::read(payload)?)
-                    .await;
-            }
-            SPlayerInput::PACKET_ID => self.handle_player_input(SPlayerInput::read(payload)?).await,
-            SInteract::PACKET_ID => {
-                self.handle_interact(SInteract::read(payload)?).await;
-            }
-            SKeepAlive::PACKET_ID => {
-                self.handle_keep_alive(SKeepAlive::read(payload)?).await;
-            }
-            SClientTickEnd::PACKET_ID => {
-                // TODO
-            }
-            SPlayerPosition::PACKET_ID => {
-                self.handle_position(SPlayerPosition::read(payload)?).await;
-            }
-            SPlayerPositionRotation::PACKET_ID => {
-                self.handle_position_rotation(SPlayerPositionRotation::read(payload)?)
-                    .await;
-            }
-            SPlayerRotation::PACKET_ID => {
-                self.handle_rotation(SPlayerRotation::read(payload)?).await;
-            }
-            SSetPlayerGround::PACKET_ID => {
-                self.handle_player_ground(&SSetPlayerGround::read(payload)?);
-            }
-            SPickItemFromBlock::PACKET_ID => {
-                self.handle_pick_item_from_block(SPickItemFromBlock::read(payload)?)
-                    .await;
-            }
-            SPlayerAbilities::PACKET_ID => {
-                self.handle_player_abilities(SPlayerAbilities::read(payload)?)
-                    .await;
-            }
-            SPlayerAction::PACKET_ID => {
-                self.clone()
-                    .handle_player_action(SPlayerAction::read(payload)?, server)
-                    .await;
-            }
-            SSetCommandBlock::PACKET_ID => {
-                self.handle_set_command_block(SSetCommandBlock::read(payload)?)
-                    .await;
-            }
-            SPlayerCommand::PACKET_ID => {
-                self.handle_player_command(SPlayerCommand::read(payload)?)
-                    .await;
-            }
-            SPlayerLoaded::PACKET_ID => self.handle_player_loaded(),
-            SPlayPingRequest::PACKET_ID => {
-                self.handle_play_ping_request(SPlayPingRequest::read(payload)?)
-                    .await;
-            }
-            SClickSlot::PACKET_ID => {
-                self.on_slot_click(SClickSlot::read(payload)?).await;
-            }
-            SSetHeldItem::PACKET_ID => {
-                self.handle_set_held_item(SSetHeldItem::read(payload)?)
-                    .await;
-            }
-            SSetCreativeSlot::PACKET_ID => {
-                self.handle_set_creative_slot(SSetCreativeSlot::read(payload)?)
-                    .await?;
-            }
-            SSwingArm::PACKET_ID => {
-                self.handle_swing_arm(SSwingArm::read(payload)?).await;
-            }
-            SUpdateSign::PACKET_ID => {
-                self.handle_sign_update(SUpdateSign::read(payload)?).await;
-            }
-            SUseItemOn::PACKET_ID => {
-                self.handle_use_item_on(SUseItemOn::read(payload)?, server)
-                    .await?;
-            }
-            SUseItem::PACKET_ID => {
-                self.handle_use_item(&SUseItem::read(payload)?, server)
-                    .await;
-            }
-            SCommandSuggestion::PACKET_ID => {
-                self.handle_command_suggestion(SCommandSuggestion::read(payload)?, server)
-                    .await;
-            }
-            SPCookieResponse::PACKET_ID => {
-                self.handle_cookie_response(&SPCookieResponse::read(payload)?);
-            }
-            SCloseContainer::PACKET_ID => {
-                self.handle_close_container(server, SCloseContainer::read(payload)?)
-                    .await;
-            }
-            SChunkBatch::PACKET_ID => {
-                self.handle_chunk_batch(SChunkBatch::read(payload)?).await;
-            }
-            SPlayerSession::PACKET_ID => {
-                self.handle_chat_session_update(server, SPlayerSession::read(payload)?)
-                    .await;
-            }
-            _ => {
-                log::warn!("Failed to handle player packet id {}", packet.id);
-                // TODO: We give an error if all play packets are implemented
-                //  return Err(Box::new(DeserializerError::UnknownPacket));
-            }
-        }
-        Ok(())
     }
 }
 

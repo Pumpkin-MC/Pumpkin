@@ -2,7 +2,7 @@ use pumpkin_macros::packet;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-#[packet(0x8F)]
+#[packet(143)]
 pub struct CNetworkSettings {
     compression_threshold: u16,
     compression_method: u16,

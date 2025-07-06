@@ -79,6 +79,11 @@ mod spawn_egg;
 #[path = "generated/status_effect.rs"]
 mod status_effect;
 
+#[rustfmt::skip]
+#[path = "generated/enchantment.rs"]
+mod enchantment;
+pub use enchantment::*;
+
 pub mod entity {
     pub use super::entity_pose::*;
     pub use super::entity_status::*;

@@ -127,10 +127,10 @@ impl ChunkData {
             }
         }
 
-        if chunk_data.x_pos != position.x || chunk_data.z_pos != position.z {
+        if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
             return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
                 "Expected data for chunk {},{} but got it for {},{}!",
-                position.x, position.z, chunk_data.x_pos, chunk_data.z_pos,
+                position.x, position.y, chunk_data.x_pos, chunk_data.z_pos,
             )));
         }
 
@@ -263,7 +263,7 @@ impl ChunkData {
         let nbt = ChunkNbt {
             data_version: WORLD_DATA_VERSION,
             x_pos: self.position.x,
-            z_pos: self.position.z,
+            z_pos: self.position.y,
             min_y_section: section_coords::block_to_section(self.section.min_y),
             status: ChunkStatus::Full,
             heightmaps: self.heightmap.clone(),
@@ -363,12 +363,12 @@ impl ChunkEntityData {
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_entity_data.position[0] != position.x
-            || chunk_entity_data.position[1] != position.z
+            || chunk_entity_data.position[1] != position.y
         {
             return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
                 "Expected data for entity chunk {},{} but got it for {},{}!",
                 position.x,
-                position.z,
+                position.y,
                 chunk_entity_data.position[0],
                 chunk_entity_data.position[1],
             )));
@@ -403,7 +403,7 @@ impl ChunkEntityData {
     fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
         let nbt = EntityNbt {
             data_version: WORLD_DATA_VERSION,
-            position: [self.chunk_position.x, self.chunk_position.z],
+            position: [self.chunk_position.x, self.chunk_position.y],
             entities: self.data.values().cloned().collect(),
         };
 
