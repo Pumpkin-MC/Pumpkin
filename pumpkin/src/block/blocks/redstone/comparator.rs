@@ -43,16 +43,16 @@ impl PumpkinBlock for ComparatorBlock {
     }
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
+        let state = args.world.get_block_state(args.position).await;
         let props = ComparatorLikeProperties::from_state_id(state.id, args.block);
-        self.on_use(props, args.world, *args.location, args.block)
+        self.on_use(props, args.world, *args.position, args.block)
             .await;
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let state = args.world.get_block_state(args.location).await;
+        let state = args.world.get_block_state(args.position).await;
         let props = ComparatorLikeProperties::from_state_id(state.id, args.block);
-        self.on_use(props, args.world, *args.location, args.block)
+        self.on_use(props, args.world, *args.position, args.block)
             .await;
         BlockActionResult::Consume
     }
@@ -62,17 +62,17 @@ impl PumpkinBlock for ComparatorBlock {
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        RedstoneGateBlock::can_place_at(self, args.block_accessor, *args.location).await
+        RedstoneGateBlock::can_place_at(self, args.block_accessor, *args.position).await
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
-        let comparator = ComparatorBlockEntity::new(*args.location);
+        let comparator = ComparatorBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(comparator)).await;
         if let Some(state) = get_state_by_state_id(args.state_id) {
             RedstoneGateBlock::update_target(
                 self,
                 args.world,
-                *args.location,
+                *args.position,
                 state.id,
                 args.block,
             )
@@ -85,7 +85,7 @@ impl PumpkinBlock for ComparatorBlock {
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {
-        args.world.remove_block_entity(args.location).await;
+        args.world.remove_block_entity(args.position).await;
     }
 
     async fn get_state_for_neighbor_update(
@@ -97,7 +97,7 @@ impl PumpkinBlock for ComparatorBlock {
                 if !RedstoneGateBlock::can_place_above(
                     self,
                     args.world,
-                    *args.neighbor_location,
+                    *args.neighbor_position,
                     neighbor_state,
                 )
                 .await
@@ -122,8 +122,8 @@ impl PumpkinBlock for ComparatorBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
-        self.update(args.world, *args.location, state, args.block)
+        let state = args.world.get_block_state(args.position).await;
+        self.update(args.world, *args.position, state, args.block)
             .await;
     }
 
@@ -235,7 +235,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                     world,
                     block: source_block,
                     state: source_state,
-                    location: &source_pos,
+                    position: &source_pos,
                 })
                 .await
             {
@@ -257,7 +257,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                             world,
                             block: source_block,
                             state: source_state,
-                            location: &source_pos,
+                            position: &source_pos,
                         })
                         .await
                 } else {

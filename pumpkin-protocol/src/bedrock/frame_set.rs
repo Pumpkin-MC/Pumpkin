@@ -94,8 +94,12 @@ impl Frame {
 
     pub fn write(&self, mut write: impl Write) -> Result<(), WritingError> {
         let is_split = self.split_size > 0;
-        write
-            .write_u8((self.reliability.to_id() << 5) & if is_split { RAKNET_SPLIT } else { 0 })?;
+        let mut flags = self.reliability.to_id() << 5;
+        if is_split {
+            flags |= RAKNET_SPLIT;
+        }
+        write.write_u8(flags)?;
+        // Size
         write.write_u16_be((self.payload.len() << 3) as u16)?;
         if self.reliability.is_reliable() {
             write.write_u24_be(U24(self.reliable_number))?;

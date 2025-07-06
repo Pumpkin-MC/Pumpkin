@@ -52,7 +52,7 @@ impl PumpkinBlock for StairBlock {
 
         stair_props.shape = compute_stair_shape(
             args.world,
-            args.location,
+            args.position,
             stair_props.facing,
             stair_props.half,
         )
@@ -62,12 +62,12 @@ impl PumpkinBlock for StairBlock {
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let state_id = args.world.get_block_state_id(args.location).await;
+        let state_id = args.world.get_block_state_id(args.position).await;
         let mut stair_props = StairsProperties::from_state_id(state_id, args.block);
 
         let new_shape = compute_stair_shape(
             args.world,
-            args.location,
+            args.position,
             stair_props.facing,
             stair_props.half,
         )
@@ -77,7 +77,7 @@ impl PumpkinBlock for StairBlock {
             stair_props.shape = new_shape;
             args.world
                 .set_block_state(
-                    args.location,
+                    args.position,
                     stair_props.to_state_id(args.block),
                     BlockFlags::NOTIFY_ALL,
                 )

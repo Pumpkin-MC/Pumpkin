@@ -2,9 +2,9 @@ use pumpkin_protocol::{
     java::client::status::CPingResponse, java::server::status::SStatusPingRequest,
 };
 
-use crate::{net::Client, server::Server};
+use crate::{net::java::JavaClientPlatform, server::Server};
 
-impl Client {
+impl JavaClientPlatform {
     pub async fn handle_status_request(&self, server: &Server) {
         log::debug!("Handling status request");
         let status = server.get_status();

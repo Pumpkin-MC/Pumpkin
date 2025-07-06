@@ -46,12 +46,12 @@ pub struct LeverBlock;
 #[async_trait]
 impl PumpkinBlock for LeverBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        toggle_lever(args.world, args.location).await;
+        toggle_lever(args.world, args.position).await;
         BlockActionResult::Consume
     }
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        toggle_lever(args.world, args.location).await;
+        toggle_lever(args.world, args.position).await;
     }
 
     async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
@@ -76,7 +76,7 @@ impl PumpkinBlock for LeverBlock {
         if !args.moved {
             let lever_props = LeverLikeProperties::from_state_id(args.old_state_id, args.block);
             if lever_props.powered {
-                Self::update_neighbors(args.world, args.location, &lever_props).await;
+                Self::update_neighbors(args.world, args.position, &lever_props).await;
             }
         }
     }
@@ -90,7 +90,7 @@ impl PumpkinBlock for LeverBlock {
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        WallMountedBlock::can_place_at(self, args.block_accessor, args.location, args.direction)
+        WallMountedBlock::can_place_at(self, args.block_accessor, args.position, args.direction)
             .await
     }
 
