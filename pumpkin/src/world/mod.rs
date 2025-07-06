@@ -1976,13 +1976,16 @@ impl World {
         self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, false))
             .await;
     }
+    #[must_use]
     pub fn is_valid(dest: Vector3<f64>) -> bool {
         Self::is_valid_horizontally(dest) && Self::is_valid_vertically(dest.y)
     }
+    #[must_use]
     pub fn is_valid_horizontally(dest: Vector3<f64>) -> bool {
         (-30_000_000.0..=30_000_000.0).contains(&dest.x)
             && (-30_000_000.0..=30_000_000.0).contains(&dest.z)
     }
+    #[must_use]
     pub fn is_valid_vertically(y: f64) -> bool {
         (-20_000_000.0..=20_000_000.0).contains(&y)
     }
