@@ -71,11 +71,11 @@ impl PumpkinBlock for FenceGateBlock {
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        toggle_fence_gate(args.world, args.location, args.player).await;
+        toggle_fence_gate(args.world, args.position, args.player).await;
         BlockActionResult::Consume
     }
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        toggle_fence_gate(args.world, args.location, args.player).await;
+        toggle_fence_gate(args.world, args.position, args.player).await;
     }
 }

@@ -32,7 +32,7 @@ impl PumpkinBlock for GlassPaneBlock {
         let mut pane_props = GlassPaneProperties::default(args.block);
         pane_props.waterlogged = args.replacing.water_source();
 
-        compute_pane_state(pane_props, args.world, args.block, args.location).await
+        compute_pane_state(pane_props, args.world, args.block, args.position).await
     }
 
     async fn get_state_for_neighbor_update(
@@ -40,7 +40,7 @@ impl PumpkinBlock for GlassPaneBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let pane_props = GlassPaneProperties::from_state_id(args.state_id, args.block);
-        compute_pane_state(pane_props, args.world, args.block, args.location).await
+        compute_pane_state(pane_props, args.world, args.block, args.position).await
     }
 }
 

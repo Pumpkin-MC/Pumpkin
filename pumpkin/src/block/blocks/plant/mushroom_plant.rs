@@ -20,7 +20,7 @@ impl PumpkinBlock for MushroomPlantBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let (block_below, state) = args
             .block_accessor
-            .get_block_and_block_state(&args.location.down())
+            .get_block_and_block_state(&args.position.down())
             .await;
         if block_below
             .is_tagged_with("minecraft:mushroom_grow_block")

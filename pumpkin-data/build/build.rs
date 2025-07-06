@@ -8,11 +8,13 @@ mod block;
 mod chunk_status;
 mod composter_increase_chance;
 mod damage_type;
+mod enchantments;
 mod entity_pose;
 mod entity_status;
 mod entity_type;
 mod flower_pot_transformations;
 mod fluid;
+mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
@@ -72,6 +74,8 @@ pub fn main() {
         "composter_increase_chance.rs",
     );
     write_generated_file(recipes::build(), "recipes.rs");
+    write_generated_file(enchantments::build(), "enchantment.rs");
+    write_generated_file(fuels::build(), "fuels.rs");
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
@@ -99,7 +103,6 @@ pub fn write_generated_file(content: TokenStream, out_file: &str) {
     // Doesn't matter if rustfmt is unavailable.
     let _ = Command::new("rustfmt").arg(&path).output();
     // Try to auto optimize using clippy.
-    // Doesn't matter if rustfmt is unavailable.
     let _ = Command::new("cargo clippy --fix --allow-dirty")
         .arg(&path)
         .output();

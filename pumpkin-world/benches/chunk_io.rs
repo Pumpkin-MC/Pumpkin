@@ -129,7 +129,7 @@ fn initialize_level(
 
     // Sort by distance from origin to ensure a fair selection
     // when using a subset of the total chunks for the benchmarks
-    chunks.sort_unstable_by_key(|chunk| (chunk.0.x * chunk.0.x) + (chunk.0.z * chunk.0.z));
+    chunks.sort_unstable_by_key(|chunk| (chunk.0.x * chunk.0.x) + (chunk.0.y * chunk.0.y));
     chunks
 }
 

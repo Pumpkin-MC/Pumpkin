@@ -82,7 +82,7 @@ impl BlockRegistry {
         &self,
         block: &Block,
         world: &Arc<World>,
-        location: &BlockPos,
+        position: &BlockPos,
         r#type: u8,
         data: u8,
     ) -> bool {
@@ -92,7 +92,7 @@ impl BlockRegistry {
                 .on_synced_block_event(OnSyncedBlockEventArgs {
                     world,
                     block,
-                    location,
+                    position,
                     r#type,
                     data,
                 })
@@ -106,7 +106,7 @@ impl BlockRegistry {
         block: &Block,
         world: &Arc<World>,
         entity: &dyn EntityBase,
-        location: &BlockPos,
+        position: &BlockPos,
         state: &BlockState,
         server: &Server,
     ) {
@@ -118,7 +118,7 @@ impl BlockRegistry {
                     world,
                     block,
                     state,
-                    location,
+                    position,
                     entity,
                 })
                 .await;
@@ -136,7 +136,7 @@ impl BlockRegistry {
         &self,
         block: &Block,
         player: &Player,
-        location: &BlockPos,
+        position: &BlockPos,
         server: &Server,
         world: &Arc<World>,
     ) {
@@ -147,21 +147,21 @@ impl BlockRegistry {
                     server,
                     world,
                     block,
-                    location,
+                    position,
                     player,
                 })
                 .await;
         }
     }
 
-    pub async fn explode(&self, block: &Block, world: &Arc<World>, location: &BlockPos) {
+    pub async fn explode(&self, block: &Block, world: &Arc<World>, position: &BlockPos) {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block
                 .explode(ExplodeArgs {
                     world,
                     block,
-                    location,
+                    position,
                 })
                 .await;
         }
@@ -171,7 +171,7 @@ impl BlockRegistry {
         &self,
         block: &Block,
         player: &Player,
-        location: &BlockPos,
+        position: &BlockPos,
         item_stack: &Arc<Mutex<ItemStack>>,
         server: &Server,
         world: &Arc<World>,
@@ -183,7 +183,7 @@ impl BlockRegistry {
                     server,
                     world,
                     block,
-                    location,
+                    position,
                     player,
                     item_stack,
                 })
@@ -196,7 +196,7 @@ impl BlockRegistry {
         &self,
         fluid: &Fluid,
         player: &Player,
-        location: BlockPos,
+        position: BlockPos,
         item: &Item,
         server: &Server,
         world: &Arc<World>,
@@ -204,7 +204,7 @@ impl BlockRegistry {
         let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
         if let Some(pumpkin_fluid) = pumpkin_fluid {
             return pumpkin_fluid
-                .use_with_item(fluid, player, location, item, server, world)
+                .use_with_item(fluid, player, position, item, server, world)
                 .await;
         }
         BlockActionResult::Continue
@@ -218,7 +218,7 @@ impl BlockRegistry {
         block_accessor: &dyn BlockAccessor,
         player: Option<&Player>,
         block: &Block,
-        location: &BlockPos,
+        position: &BlockPos,
         direction: BlockDirection,
         use_item_on: Option<&SUseItemOn>,
     ) -> bool {
@@ -230,7 +230,7 @@ impl BlockRegistry {
                     world,
                     block_accessor,
                     block,
-                    location,
+                    position,
                     direction,
                     player,
                     use_item_on,
@@ -246,7 +246,7 @@ impl BlockRegistry {
         world: &World,
         block: &Block,
         state_id: BlockStateId,
-        location: &BlockPos,
+        position: &BlockPos,
         direction: BlockDirection,
         use_item_on: &SUseItemOn,
         player: &Player,
@@ -258,7 +258,7 @@ impl BlockRegistry {
                     world,
                     block,
                     state_id,
-                    location,
+                    position,
                     direction,
                     player,
                     use_item_on,
@@ -275,7 +275,7 @@ impl BlockRegistry {
         world: &World,
         player: &Player,
         block: &Block,
-        location: &BlockPos,
+        position: &BlockPos,
         direction: BlockDirection,
         replacing: BlockIsReplacing,
         use_item_on: &SUseItemOn,
@@ -287,7 +287,7 @@ impl BlockRegistry {
                     server,
                     world,
                     block,
-                    location,
+                    position,
                     direction,
                     player,
                     replacing,
@@ -303,7 +303,7 @@ impl BlockRegistry {
         world: &Arc<World>,
         block: &Block,
         state_id: u16,
-        location: &BlockPos,
+        position: &BlockPos,
         direction: BlockDirection,
         player: &Player,
     ) {
@@ -314,7 +314,7 @@ impl BlockRegistry {
                     world,
                     block,
                     state_id,
-                    location,
+                    position,
                     direction,
                     player,
                 })
@@ -327,7 +327,7 @@ impl BlockRegistry {
         world: &Arc<World>,
         block: &Block,
         state_id: BlockStateId,
-        location: &BlockPos,
+        position: &BlockPos,
         old_state_id: BlockStateId,
         notify: bool,
     ) {
@@ -339,7 +339,7 @@ impl BlockRegistry {
                     block,
                     state_id,
                     old_state_id,
-                    location,
+                    position,
                     notify,
                 })
                 .await;
@@ -351,14 +351,14 @@ impl BlockRegistry {
         world: &Arc<World>,
         fluid: &Fluid,
         state_id: BlockStateId,
-        block_pos: &BlockPos,
+        position: &BlockPos,
         old_state_id: BlockStateId,
         notify: bool,
     ) {
         let pumpkin_fluid = self.get_pumpkin_fluid(fluid);
         if let Some(pumpkin_fluid) = pumpkin_fluid {
             pumpkin_fluid
-                .placed(world, fluid, state_id, block_pos, old_state_id, notify)
+                .placed(world, fluid, state_id, position, old_state_id, notify)
                 .await;
         }
     }
@@ -368,7 +368,7 @@ impl BlockRegistry {
         world: &Arc<World>,
         block: &Block,
         player: &Arc<Player>,
-        location: &BlockPos,
+        position: &BlockPos,
         server: &Server,
         state: &BlockState,
     ) {
@@ -378,7 +378,7 @@ impl BlockRegistry {
                 .broken(BrokenArgs {
                     block,
                     player,
-                    location,
+                    position,
                     server,
                     world,
                     state,
@@ -391,7 +391,7 @@ impl BlockRegistry {
         &self,
         world: &Arc<World>,
         block: &Block,
-        location: &BlockPos,
+        position: &BlockPos,
         old_state_id: BlockStateId,
         moved: bool,
     ) {
@@ -402,7 +402,7 @@ impl BlockRegistry {
                     world,
                     block,
                     old_state_id,
-                    location,
+                    position,
                     moved,
                 })
                 .await;
@@ -413,13 +413,13 @@ impl BlockRegistry {
     pub async fn post_process_state(
         &self,
         world: &Arc<World>,
-        location: &BlockPos,
+        position: &BlockPos,
         block: &Block,
         flags: BlockFlags,
     ) {
-        let state = world.get_block_state(location).await;
+        let state = world.get_block_state(position).await;
         for direction in BlockDirection::all() {
-            let neighbor_pos = location.offset(direction.to_offset());
+            let neighbor_pos = position.offset(direction.to_offset());
             let neighbor_state = world.get_block_state(&neighbor_pos).await;
             let pumpkin_block = self.get_pumpkin_block(block);
             if let Some(pumpkin_block) = pumpkin_block {
@@ -428,9 +428,9 @@ impl BlockRegistry {
                         world,
                         block,
                         state_id: state.id,
-                        location,
+                        position,
                         direction: direction.opposite(),
-                        neighbor_location: &neighbor_pos,
+                        neighbor_position: &neighbor_pos,
                         neighbor_state_id: neighbor_state.id,
                     })
                     .await;
@@ -442,7 +442,7 @@ impl BlockRegistry {
     pub async fn prepare(
         &self,
         world: &Arc<World>,
-        location: &BlockPos,
+        position: &BlockPos,
         block: &Block,
         state_id: BlockStateId,
         flags: BlockFlags,
@@ -454,7 +454,7 @@ impl BlockRegistry {
                     world,
                     block,
                     state_id,
-                    location,
+                    position,
                     flags,
                 })
                 .await;
@@ -467,7 +467,7 @@ impl BlockRegistry {
         world: &World,
         block: &Block,
         state_id: BlockStateId,
-        location: &BlockPos,
+        position: &BlockPos,
         direction: BlockDirection,
         neighbor_location: &BlockPos,
         neighbor_state_id: BlockStateId,
@@ -479,9 +479,9 @@ impl BlockRegistry {
                     world,
                     block,
                     state_id,
-                    location,
+                    position,
                     direction,
-                    neighbor_location,
+                    neighbor_position: neighbor_location,
                     neighbor_state_id,
                 })
                 .await;
@@ -492,12 +492,12 @@ impl BlockRegistry {
     pub async fn update_neighbors(
         &self,
         world: &Arc<World>,
-        block_pos: &BlockPos,
+        position: &BlockPos,
         _block: &Block,
         flags: BlockFlags,
     ) {
         for direction in BlockDirection::abstract_block_update_order() {
-            let pos = block_pos.offset(direction.to_offset());
+            let pos = position.offset(direction.to_offset());
 
             Box::pin(world.replace_with_state_for_neighbor_update(
                 &pos,
@@ -512,7 +512,7 @@ impl BlockRegistry {
         &self,
         world: &Arc<World>,
         block: &Block,
-        location: &BlockPos,
+        position: &BlockPos,
         source_block: &Block,
         notify: bool,
     ) {
@@ -522,7 +522,7 @@ impl BlockRegistry {
                 .on_neighbor_update(OnNeighborUpdateArgs {
                     world,
                     block,
-                    location,
+                    position,
                     source_block,
                     notify,
                 })
@@ -563,7 +563,7 @@ impl BlockRegistry {
         &self,
         block: &Block,
         world: &World,
-        location: &BlockPos,
+        position: &BlockPos,
         state: &BlockState,
         direction: BlockDirection,
     ) -> u8 {
@@ -574,7 +574,7 @@ impl BlockRegistry {
                     world,
                     block,
                     state,
-                    location,
+                    position,
                     direction,
                 })
                 .await;
@@ -586,7 +586,7 @@ impl BlockRegistry {
         &self,
         block: &Block,
         world: &World,
-        location: &BlockPos,
+        position: &BlockPos,
         state: &BlockState,
         direction: BlockDirection,
     ) -> u8 {
@@ -597,7 +597,7 @@ impl BlockRegistry {
                     world,
                     block,
                     state,
-                    location,
+                    position,
                     direction,
                 })
                 .await;

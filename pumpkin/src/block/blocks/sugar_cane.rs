@@ -22,9 +22,9 @@ pub struct SugarCaneBlock;
 #[async_trait]
 impl PumpkinBlock for SugarCaneBlock {
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world.as_ref(), args.location).await {
+        if !can_place_at(args.world.as_ref(), args.position).await {
             args.world
-                .break_block(args.location, None, BlockFlags::empty())
+                .break_block(args.position, None, BlockFlags::empty())
                 .await;
         }
     }
@@ -32,22 +32,22 @@ impl PumpkinBlock for SugarCaneBlock {
     async fn random_tick(&self, args: RandomTickArgs<'_>) {
         if args
             .world
-            .get_block_state(&args.location.up())
+            .get_block_state(&args.position.up())
             .await
             .is_air()
         {
-            let state_id = args.world.get_block_state(args.location).await.id;
+            let state_id = args.world.get_block_state(args.position).await.id;
             let age = CactusLikeProperties::from_state_id(state_id, args.block).age;
             if age == Integer0To15::L15 {
                 args.world
-                    .set_block_state(&args.location.up(), state_id, BlockFlags::empty())
+                    .set_block_state(&args.position.up(), state_id, BlockFlags::empty())
                     .await;
                 let props = CactusLikeProperties {
                     age: Integer0To15::L0,
                 };
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         props.to_state_id(args.block),
                         BlockFlags::empty(),
                     )
@@ -58,7 +58,7 @@ impl PumpkinBlock for SugarCaneBlock {
                 };
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         props.to_state_id(args.block),
                         BlockFlags::empty(),
                     )
@@ -71,16 +71,16 @@ impl PumpkinBlock for SugarCaneBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !can_place_at(args.world, args.location).await {
+        if !can_place_at(args.world, args.position).await {
             args.world
-                .schedule_block_tick(args.block, *args.location, 1, TickPriority::Normal)
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                 .await;
         }
         args.state_id
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.location).await
+        can_place_at(args.block_accessor, args.position).await
     }
 }
 

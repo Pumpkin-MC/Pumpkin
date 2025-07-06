@@ -45,7 +45,7 @@ pub struct BarrelBlock;
 #[async_trait]
 impl PumpkinBlock for BarrelBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.location).await {
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(inventory) = block_entity.1.get_inventory() {
                 args.player
                     .open_handled_screen(&BarrelScreenFactory(inventory))
@@ -55,7 +55,7 @@ impl PumpkinBlock for BarrelBlock {
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.location).await {
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(inventory) = block_entity.1.get_inventory() {
                 args.player
                     .open_handled_screen(&BarrelScreenFactory(inventory))
@@ -66,13 +66,13 @@ impl PumpkinBlock for BarrelBlock {
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
-        let barrel_block_entity = BarrelBlockEntity::new(*args.location);
+        let barrel_block_entity = BarrelBlockEntity::new(*args.position);
         args.world
             .add_block_entity(Arc::new(barrel_block_entity))
             .await;
     }
 
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.location).await;
+        args.world.remove_block_entity(args.position).await;
     }
 }
