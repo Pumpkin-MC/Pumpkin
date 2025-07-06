@@ -9,10 +9,12 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 
+use crate::block::pumpkin_block::NormalUseArgs;
 use crate::block::pumpkin_block::OnStateReplacedArgs;
 use crate::block::pumpkin_block::PlacedArgs;
 use crate::block::pumpkin_block::PlayerPlacedArgs;
 use crate::block::pumpkin_block::{BlockMetadata, OnPlaceArgs, PumpkinBlock};
+use crate::entity::EntityBase;
 
 type SignProperties = pumpkin_data::block_properties::OakSignLikeProperties;
 
@@ -50,5 +52,23 @@ impl PumpkinBlock for SignBlock {
 
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
         args.world.remove_block_entity(args.location).await;
+    }
+
+    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+        if let Some(block_entity) = args.world.get_block_entity(args.location).await {
+            if let Some(sign_entity) = block_entity.1.as_any().downcast_ref::<SignBlockEntity>() {
+                if sign_entity.is_waxed {
+                    args.world
+                        .play_block_sound(
+                            pumpkin_data::sound::Sound::BlockSignWaxedInteractFail,
+                            pumpkin_data::sound::SoundCategory::Blocks,
+                            *args.location,
+                        )
+                        .await;
+            } else {
+                args.player.send_sign_packet(*args.location).await;
+            }
+        }
+    }
     }
 }
