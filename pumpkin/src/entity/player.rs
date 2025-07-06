@@ -68,6 +68,7 @@ use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
 use crate::data::op_data::OPERATOR_CONFIG;
+use crate::entity::oxygen::OxygenManager;
 use crate::net::PlayerConfig;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
@@ -207,6 +208,8 @@ pub struct Player {
     pub sleeping_since: AtomicCell<Option<u8>>,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
+    /// Manages the player's oxygen level.
+    pub oxygen_manager: OxygenManager,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
     /// The item currently being held by the player.
@@ -314,6 +317,7 @@ impl Player {
             awaiting_teleport: Mutex::new(None),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
+            oxygen_manager: OxygenManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
             open_container: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
@@ -783,6 +787,7 @@ impl Player {
 
         self.living_entity.tick(self.clone(), server).await;
         self.hunger_manager.tick(self.as_ref()).await;
+        self.oxygen_manager.tick(self.as_ref()).await;
 
         // experience handling
         self.tick_experience().await;
@@ -1249,6 +1254,7 @@ impl Player {
                 &TextComponent::text("noob"),
             ))
             .await;
+        self.oxygen_manager.reset();
     }
 
     pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) {
