@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use pumpkin_config::{BASIC_CONFIG, networking::compression::CompressionInfo};
 use pumpkin_protocol::{
     bedrock::{
         RakReliability,
@@ -6,34 +9,33 @@ use pumpkin_protocol::{
             play_status::{CPlayStatus, PlayStatus},
             resource_pack_stack::CResourcePackStackPacket,
             resource_packs_info::CResourcePacksInfo,
+            start_game::Experiments,
         },
         server::{login::SLogin, request_network_settings::SRequestNetworkSettings},
     },
     codec::var_uint::VarUInt,
 };
 
-use crate::net::{Client, bedrock::BedrockClientPlatform};
+use crate::{
+    net::{ClientPlatform, GameProfile, bedrock::BedrockClientPlatform},
+    server::{CURRENT_BEDROCK_MC_VERSION, Server},
+};
 
-impl Client {
-    pub async fn handle_request_network_settings(
-        &self,
-        bedrock: &BedrockClientPlatform,
-        packet: SRequestNetworkSettings,
-    ) {
+impl BedrockClientPlatform {
+    pub async fn handle_request_network_settings(&self, packet: SRequestNetworkSettings) {
         dbg!("requested network settings");
         self.protocol_version.store(
             packet.protocol_version,
             std::sync::atomic::Ordering::Relaxed,
         );
-        bedrock
-            .send_game_packet(
-                self,
-                &CNetworkSettings::new(0, 0xFF, false, 0, 0.0),
-                RakReliability::Unreliable,
-            )
-            .await;
+        self.send_game_packet(
+            &CNetworkSettings::new(0, 0, false, 0, 0.0),
+            RakReliability::Unreliable,
+        )
+        .await;
+        self.set_compression(CompressionInfo::default()).await;
     }
-    pub async fn handle_login(&self, bedrock: &BedrockClientPlatform, _packet: SLogin) {
+    pub async fn handle_login(self: &Arc<Self>, _packet: SLogin, server: &Server) {
         dbg!("received login");
         // TODO: Enable encryption
         // bedrock
@@ -44,26 +46,59 @@ impl Client {
         //     )
         //     .await;
         // TODO: Batch these
-        bedrock
-            .send_game_packet(
-                self,
-                &CPlayStatus::new(PlayStatus::LoginSuccess),
-                RakReliability::Unreliable,
+        self.send_game_packet(
+            &CPlayStatus::new(PlayStatus::LoginSuccess),
+            RakReliability::Unreliable,
+        )
+        .await;
+        self.send_game_packet(
+            &CResourcePacksInfo::new(
+                false,
+                false,
+                false,
+                false,
+                uuid::Uuid::default(),
+                String::with_capacity(0),
+            ),
+            RakReliability::Unreliable,
+        )
+        .await;
+        self.send_game_packet(
+            &CResourcePackStackPacket::new(
+                false,
+                VarUInt(0),
+                VarUInt(0),
+                CURRENT_BEDROCK_MC_VERSION.to_string(),
+                Experiments {
+                    names_size: 0,
+                    experiments_ever_toggled: false,
+                },
+                false,
+            ),
+            RakReliability::Unreliable,
+        )
+        .await;
+
+        // TODO
+        let profile = GameProfile {
+            id: uuid::Uuid::new_v4(),
+            name: "Todo Name".to_string(),
+            properties: Vec::new(),
+            profile_actions: None,
+        };
+
+        if let Some((player, world)) = server
+            .add_player(
+                ClientPlatform::Bedrock(self.clone()),
+                profile,
+                None, // TODO
             )
-            .await;
-        bedrock
-            .send_game_packet(
-                self,
-                &CResourcePacksInfo::new(false, false, false),
-                RakReliability::Unreliable,
-            )
-            .await;
-        bedrock
-            .send_game_packet(
-                self,
-                &CResourcePackStackPacket::new(false, VarUInt(0)),
-                RakReliability::Unreliable,
-            )
-            .await;
+            .await
+        {
+            world
+                .spawn_bedrock_player(&BASIC_CONFIG, player.clone(), server)
+                .await;
+            *self.player.lock().await = Some(player);
+        }
     }
 }

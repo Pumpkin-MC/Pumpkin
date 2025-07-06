@@ -144,6 +144,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         if data_len > MAX_PACKET_DATA_SIZE {
             return Err(PacketEncodeError::TooLong(data_len));
         }
+
         let data_len_var_int: VarInt = data_len.try_into().map_err(|_| {
             PacketEncodeError::Message(format!(
                 "Packet data length is too large to fit in VarInt! ({data_len})"

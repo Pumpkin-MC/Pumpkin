@@ -371,18 +371,18 @@ impl CommandExecutor for CenterExecutor {
             .expect("There should always be at least one world");
         let mut border = world.worldborder.lock().await;
 
-        let Vector2 { x, z } = Position2DArgumentConsumer.find_arg_default_name(args)?;
+        let Vector2 { x, y } = Position2DArgumentConsumer.find_arg_default_name(args)?;
 
         sender
             .send_message(TextComponent::translate(
                 "commands.worldborder.center.success",
                 [
                     TextComponent::text(format!("{x:.2}")),
-                    TextComponent::text(format!("{z:.2}")),
+                    TextComponent::text(format!("{y:.2}")),
                 ],
             ))
             .await;
-        border.set_center(world, x, z).await;
+        border.set_center(world, x, y).await;
         Ok(())
     }
 }

@@ -98,7 +98,7 @@ impl Explosion {
                     .explode(ExplodeArgs {
                         world,
                         block,
-                        location: &pos,
+                        position: &pos,
                     })
                     .await;
             }

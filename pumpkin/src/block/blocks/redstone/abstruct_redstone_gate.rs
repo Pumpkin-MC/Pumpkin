@@ -51,7 +51,7 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
     async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
         let props = T::from_state_id(args.state.id, args.block);
         if props.is_powered() && props.get_facing().to_block_direction() == args.direction {
-            self.get_output_level(args.world, *args.location).await
+            self.get_output_level(args.world, *args.position).await
         } else {
             0
         }
@@ -64,18 +64,22 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
     async fn get_output_level(&self, world: &World, pos: BlockPos) -> u8;
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
-        if RedstoneGateBlock::can_place_at(self, args.world.as_ref(), *args.location).await {
-            self.update_powered(args.world, *args.location, state, args.block)
+        let state = args.world.get_block_state(args.position).await;
+        if RedstoneGateBlock::can_place_at(self, args.world.as_ref(), *args.position).await {
+            self.update_powered(args.world, *args.position, state, args.block)
                 .await;
             return;
         }
         args.world
-            .break_block(args.location, None, BlockFlags::NOTIFY_ALL)
+            .set_block_state(
+                args.position,
+                Block::AIR.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            )
             .await;
         for dir in BlockDirection::all() {
             args.world
-                .update_neighbor(&args.location.offset(dir.to_offset()), args.source_block)
+                .update_neighbor(&args.position.offset(dir.to_offset()), args.source_block)
                 .await;
         }
     }
@@ -150,11 +154,11 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
 
     async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
         if let Some(state) = get_state_by_state_id(args.state_id) {
-            if RedstoneGateBlock::has_power(self, args.world, *args.location, state, args.block)
+            if RedstoneGateBlock::has_power(self, args.world, *args.position, state, args.block)
                 .await
             {
                 args.world
-                    .schedule_block_tick(args.block, *args.location, 1, TickPriority::Normal)
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                     .await;
             }
         }
@@ -171,7 +175,7 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
             RedstoneGateBlock::update_target(
                 self,
                 args.world,
-                *args.location,
+                *args.position,
                 old_state.id,
                 args.block,
             )

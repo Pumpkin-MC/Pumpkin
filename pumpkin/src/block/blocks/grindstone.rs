@@ -28,7 +28,7 @@ impl PumpkinBlock for GrindstoneBlock {
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        WallMountedBlock::can_place_at(self, args.block_accessor, args.location, args.direction)
+        WallMountedBlock::can_place_at(self, args.block_accessor, args.position, args.direction)
             .await
     }
 
