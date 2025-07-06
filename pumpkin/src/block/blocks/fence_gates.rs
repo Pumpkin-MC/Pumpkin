@@ -94,15 +94,15 @@ async fn is_in_wall(args: &GetStateForNeighborUpdateArgs<'_>) -> FenceGateProper
     let mut fence_props = FenceGateProperties::from_state_id(args.state_id, args.block);
 
     let side_offset_left = args
-        .location
+        .position
         .offset(fence_props.facing.rotate_clockwise().to_offset());
 
     let side_offset_right = args
-        .location
+        .position
         .offset(fence_props.facing.rotate_counter_clockwise().to_offset());
 
     let neighbor_on_side =
-        args.neighbor_location == &side_offset_left || args.neighbor_location == &side_offset_right;
+        args.neighbor_position == &side_offset_left || args.neighbor_position == &side_offset_right;
 
     if neighbor_on_side {
         let neighbor_right = args.world.get_block(&side_offset_right).await;
