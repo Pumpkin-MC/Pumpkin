@@ -82,7 +82,7 @@ const fn to_data3d(facing: Facing) -> i32 {
 #[async_trait]
 impl PumpkinBlock for DropperBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.location).await {
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(inventory) = block_entity.1.get_inventory() {
                 args.player
                     .open_handled_screen(&DropperScreenFactory(inventory))
@@ -92,7 +92,7 @@ impl PumpkinBlock for DropperBlock {
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.location).await {
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(inventory) = block_entity.1.get_inventory() {
                 args.player
                     .open_handled_screen(&DropperScreenFactory(inventory))
@@ -109,31 +109,31 @@ impl PumpkinBlock for DropperBlock {
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
-        let dropper_block_entity = DropperBlockEntity::new(*args.location);
+        let dropper_block_entity = DropperBlockEntity::new(*args.position);
         args.world
             .add_block_entity(Arc::new(dropper_block_entity))
             .await;
     }
 
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.location).await;
+        args.world.remove_block_entity(args.position).await;
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let powered = block_receives_redstone_power(args.world, args.location).await
-            || block_receives_redstone_power(args.world, &args.location.up()).await;
+        let powered = block_receives_redstone_power(args.world, args.position).await
+            || block_receives_redstone_power(args.world, &args.position.up()).await;
         let mut props = DispenserLikeProperties::from_state_id(
-            args.world.get_block_state(args.location).await.id,
+            args.world.get_block_state(args.position).await.id,
             args.block,
         );
         if powered && !props.triggered {
             args.world
-                .schedule_block_tick(args.block, *args.location, 4, TickPriority::Normal)
+                .schedule_block_tick(args.block, *args.position, 4, TickPriority::Normal)
                 .await;
             props.triggered = true;
             args.world
                 .set_block_state(
-                    args.location,
+                    args.position,
                     props.to_state_id(args.block),
                     BlockFlags::NOTIFY_LISTENERS,
                 )
@@ -142,7 +142,7 @@ impl PumpkinBlock for DropperBlock {
             props.triggered = false;
             args.world
                 .set_block_state(
-                    args.location,
+                    args.position,
                     props.to_state_id(args.block),
                     BlockFlags::NOTIFY_LISTENERS,
                 )
@@ -151,7 +151,7 @@ impl PumpkinBlock for DropperBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.location).await {
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             let dropper = block_entity
                 .1
                 .as_any()
@@ -159,13 +159,13 @@ impl PumpkinBlock for DropperBlock {
                 .unwrap();
             if let Some(mut item) = dropper.get_random_slot().await {
                 let props = DispenserLikeProperties::from_state_id(
-                    args.world.get_block_state(args.location).await.id,
+                    args.world.get_block_state(args.position).await.id,
                     args.block,
                 );
                 // TODO add item to container
                 let drop_item = item.split(1);
                 let facing = to_normal(props.facing);
-                let mut position = args.location.to_centered_f64().add(&(facing * 0.7));
+                let mut position = args.position.to_centered_f64().add(&(facing * 0.7));
                 position.y -= match props.facing {
                     Facing::Up | Facing::Down => 0.125,
                     _ => 0.15625,
@@ -187,18 +187,18 @@ impl PumpkinBlock for DropperBlock {
                     Arc::new(ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await);
                 args.world.spawn_entity(item_entity).await;
                 args.world
-                    .sync_world_event(WorldEvent::DispenserDispenses, *args.location, 0)
+                    .sync_world_event(WorldEvent::DispenserDispenses, *args.position, 0)
                     .await;
                 args.world
                     .sync_world_event(
                         WorldEvent::DispenserActivated,
-                        *args.location,
+                        *args.position,
                         to_data3d(props.facing),
                     )
                     .await;
             } else {
                 args.world
-                    .sync_world_event(WorldEvent::DispenserFails, *args.location, 0)
+                    .sync_world_event(WorldEvent::DispenserFails, *args.position, 0)
                     .await;
             }
         }
