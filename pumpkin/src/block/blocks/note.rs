@@ -102,7 +102,7 @@ impl PumpkinBlock for NoteBlock {
             .await;
         Self::play_note(&note_props, args.world, args.position).await;
 
-        BlockActionResult::Continue
+        BlockActionResult::Success
     }
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
