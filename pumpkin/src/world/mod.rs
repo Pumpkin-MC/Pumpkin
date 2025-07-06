@@ -106,6 +106,7 @@ pub mod custom_bossbar;
 pub mod scoreboard;
 pub mod weather;
 
+use crate::plugin::player::player_respawn::PlayerRespawnEvent;
 use uuid::Uuid;
 use weather::Weather;
 
@@ -1112,6 +1113,14 @@ impl World {
                 info.spawn_angle,
             )
         };
+
+        let mut event = PlayerRespawnEvent::new(player.clone(), position, yaw, pitch);
+
+        event = PLUGIN_MANAGER.read().await.fire(event).await;
+
+        let position = event.respawn_position;
+        let yaw = event.yaw;
+        let pitch = event.pitch;
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
         player.request_teleport(position, yaw, pitch).await;

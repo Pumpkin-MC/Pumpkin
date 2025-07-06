@@ -14,10 +14,12 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::bed::BedBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
+use crate::PLUGIN_MANAGER;
 use crate::block::pumpkin_block::{
     BlockMetadata, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs, PumpkinBlock,
 };
 use crate::entity::{Entity, EntityBase};
+use crate::plugin::player::player_bed_enter::{BedEnterResult, PlayerBedEnterEvent};
 use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
@@ -35,75 +37,6 @@ impl BlockMetadata for BedBlock {
 
 #[async_trait]
 impl PumpkinBlock for BedBlock {
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        if let Some(player) = args.player {
-            let facing = player.living_entity.entity.get_horizontal_facing();
-            return args
-                .block_accessor
-                .get_block_state(args.location)
-                .await
-                .replaceable()
-                && args
-                    .block_accessor
-                    .get_block_state(&args.location.offset(facing.to_offset()))
-                    .await
-                    .replaceable();
-        }
-        false
-    }
-
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut bed_props = BedProperties::default(args.block);
-
-        bed_props.facing = args.player.living_entity.entity.get_horizontal_facing();
-        bed_props.part = BedPart::Foot;
-
-        bed_props.to_state_id(args.block)
-    }
-
-    async fn placed(&self, args: PlacedArgs<'_>) {
-        let bed_entity = BedBlockEntity::new(*args.location);
-        args.world.add_block_entity(Arc::new(bed_entity)).await;
-
-        let mut bed_head_props = BedProperties::default(args.block);
-        bed_head_props.facing = BedProperties::from_state_id(args.state_id, args.block).facing;
-        bed_head_props.part = BedPart::Head;
-
-        let bed_head_pos = args.location.offset(bed_head_props.facing.to_offset());
-        args.world
-            .set_block_state(
-                &bed_head_pos,
-                bed_head_props.to_state_id(args.block),
-                BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
-            )
-            .await;
-
-        let bed_head_entity = BedBlockEntity::new(bed_head_pos);
-        args.world.add_block_entity(Arc::new(bed_head_entity)).await;
-    }
-
-    async fn broken(&self, args: BrokenArgs<'_>) {
-        let bed_props = BedProperties::from_state_id(args.state.id, args.block);
-        let other_half_pos = if bed_props.part == BedPart::Head {
-            args.location
-                .offset(bed_props.facing.opposite().to_offset())
-        } else {
-            args.location.offset(bed_props.facing.to_offset())
-        };
-
-        args.world
-            .break_block(
-                &other_half_pos,
-                Some(args.player.clone()),
-                if args.player.gamemode.load() == GameMode::Creative {
-                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
-                } else {
-                    BlockFlags::NOTIFY_NEIGHBORS
-                },
-            )
-            .await;
-    }
-
     #[allow(clippy::too_many_lines)]
     async fn normal_use(&self, args: NormalUseArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.location).await;
@@ -150,25 +83,61 @@ impl PumpkinBlock for BedBlock {
                 .await
                 .is_solid()
         {
-            args.player
-                .send_system_message_raw(
-                    &TextComponent::translate("block.minecraft.bed.obstructed", []),
-                    true,
-                )
-                .await;
+            if let Some(player) = args
+                .player
+                .world()
+                .await
+                .get_player_by_uuid(args.player.gameprofile.id)
+                .await
+            {
+                let mut event = PlayerBedEnterEvent::new(
+                    player.clone(),
+                    args.block.clone(),
+                    BedEnterResult::Obstructed,
+                );
+
+                event = PLUGIN_MANAGER.read().await.fire(event).await;
+
+                if !event.cancelled {
+                    player
+                        .send_system_message_raw(
+                            &TextComponent::translate("block.minecraft.bed.obstructed", []),
+                            true,
+                        )
+                        .await;
+                }
+            }
             return;
         }
 
         // Make sure the bed is not occupied
         if bed_props.occupied {
             // TODO: Wake up villager
+            // TODO: Should there be a specific `BedEnterResult::Occupied`? Because Paper doesn't have that in the event itself
+            if let Some(player) = args
+                .player
+                .world()
+                .await
+                .get_player_by_uuid(args.player.gameprofile.id)
+                .await
+            {
+                let mut event = PlayerBedEnterEvent::new(
+                    player.clone(),
+                    args.block.clone(),
+                    BedEnterResult::NotPossibleHere,
+                );
 
-            args.player
-                .send_system_message_raw(
-                    &TextComponent::translate("block.minecraft.bed.occupied", []),
-                    true,
-                )
-                .await;
+                event = PLUGIN_MANAGER.read().await.fire(event).await;
+
+                if !event.cancelled {
+                    player
+                        .send_system_message_raw(
+                            &TextComponent::translate("block.minecraft.bed.occupied", []),
+                            true,
+                        )
+                        .await;
+                }
+            }
             return;
         }
 
@@ -182,12 +151,30 @@ impl PumpkinBlock for BedBlock {
                 .position()
                 .is_within_bounds(bed_foot_pos.to_f64(), 3.0, 3.0, 3.0)
         {
-            args.player
-                .send_system_message_raw(
-                    &TextComponent::translate("block.minecraft.bed.too_far_away", []),
-                    true,
-                )
-                .await;
+            if let Some(player) = args
+                .player
+                .world()
+                .await
+                .get_player_by_uuid(args.player.gameprofile.id)
+                .await
+            {
+                let mut event = PlayerBedEnterEvent::new(
+                    player.clone(),
+                    args.block.clone(),
+                    BedEnterResult::TooFarAway,
+                );
+
+                event = PLUGIN_MANAGER.read().await.fire(event).await;
+
+                if !event.cancelled {
+                    player
+                        .send_system_message_raw(
+                            &TextComponent::translate("block.minecraft.bed.too_far_away", []),
+                            true,
+                        )
+                        .await;
+                }
+            }
             return;
         }
 
@@ -208,12 +195,30 @@ impl PumpkinBlock for BedBlock {
 
         // Make sure the time and weather allows sleep
         if !can_sleep(args.world).await {
-            args.player
-                .send_system_message_raw(
-                    &TextComponent::translate("block.minecraft.bed.no_sleep", []),
-                    true,
-                )
-                .await;
+            if let Some(player) = args
+                .player
+                .world()
+                .await
+                .get_player_by_uuid(args.player.gameprofile.id)
+                .await
+            {
+                let mut event = PlayerBedEnterEvent::new(
+                    player.clone(),
+                    args.block.clone(),
+                    BedEnterResult::NotPossibleNow,
+                );
+
+                event = PLUGIN_MANAGER.read().await.fire(event).await;
+
+                if !event.cancelled {
+                    player
+                        .send_system_message_raw(
+                            &TextComponent::translate("block.minecraft.bed.no_sleep", []),
+                            true,
+                        )
+                        .await;
+                }
+            }
             return;
         }
 
@@ -227,18 +232,115 @@ impl PumpkinBlock for BedBlock {
             if pos.is_within_bounds(bed_head_pos.to_f64(), 8.0, 5.0, 8.0)
                 || pos.is_within_bounds(bed_foot_pos.to_f64(), 8.0, 5.0, 8.0)
             {
-                args.player
-                    .send_system_message_raw(
-                        &TextComponent::translate("block.minecraft.bed.not_safe", []),
-                        true,
-                    )
-                    .await;
+                if let Some(player) = args
+                    .player
+                    .world()
+                    .await
+                    .get_player_by_uuid(args.player.gameprofile.id)
+                    .await
+                {
+                    let mut event = PlayerBedEnterEvent::new(
+                        player.clone(),
+                        args.block.clone(),
+                        BedEnterResult::NotSafe,
+                    );
+
+                    event = PLUGIN_MANAGER.read().await.fire(event).await;
+
+                    if !event.cancelled {
+                        player
+                            .send_system_message_raw(
+                                &TextComponent::translate("block.minecraft.bed.not_safe", []),
+                                true,
+                            )
+                            .await;
+                    }
+                }
                 return;
             }
         }
 
-        args.player.sleep(bed_head_pos).await;
-        Self::set_occupied(true, args.world, args.block, args.location, state_id).await;
+        if let Some(player) = args
+            .player
+            .world()
+            .await
+            .get_player_by_uuid(args.player.gameprofile.id)
+            .await
+        {
+            let mut event =
+                PlayerBedEnterEvent::new(player.clone(), args.block.clone(), BedEnterResult::Ok);
+
+            event = PLUGIN_MANAGER.read().await.fire(event).await;
+
+            if !event.cancelled {
+                player.sleep(bed_head_pos).await;
+                Self::set_occupied(true, args.world, args.block, args.location, state_id).await;
+            }
+        }
+    }
+
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut bed_props = BedProperties::default(args.block);
+
+        bed_props.facing = args.player.living_entity.entity.get_horizontal_facing();
+        bed_props.part = BedPart::Foot;
+
+        bed_props.to_state_id(args.block)
+    }
+
+    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        if let Some(player) = args.player {
+            let facing = player.living_entity.entity.get_horizontal_facing();
+            return args
+                .block_accessor
+                .get_block_state(args.location)
+                .await
+                .replaceable()
+                && args
+                    .block_accessor
+                    .get_block_state(&args.location.offset(facing.to_offset()))
+                    .await
+                    .replaceable();
+        }
+        false
+    }
+
+    async fn placed(&self, args: PlacedArgs<'_>) {
+        let bed_entity = BedBlockEntity::new(*args.location);
+        args.world.add_block_entity(Arc::new(bed_entity)).await;
+
+        let mut bed_head_props = BedProperties::default(args.block);
+        bed_head_props.facing = BedProperties::from_state_id(args.state_id, args.block).facing;
+        bed_head_props.part = BedPart::Head;
+
+        let bed_head_pos = args.location.offset(bed_head_props.facing.to_offset());
+        args.world
+            .set_block_state(
+                &bed_head_pos,
+                bed_head_props.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+            )
+            .await;
+
+        let bed_head_entity = BedBlockEntity::new(bed_head_pos);
+        args.world.add_block_entity(Arc::new(bed_head_entity)).await;
+    }
+
+    async fn broken(&self, args: BrokenArgs<'_>) {
+        let bed_props = BedProperties::from_state_id(args.state.id, args.block);
+        let other_half_pos = get_other_half_pos(bed_props, args.location);
+
+        args.world
+            .break_block(
+                &other_half_pos,
+                Some(args.player.clone()),
+                if args.player.gamemode.load() == GameMode::Creative {
+                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                } else {
+                    BlockFlags::NOTIFY_NEIGHBORS
+                },
+            )
+            .await;
     }
 }
 
@@ -260,11 +362,8 @@ impl BedBlock {
             )
             .await;
 
-        let other_half_pos = if bed_props.part == BedPart::Head {
-            block_pos.offset(bed_props.facing.opposite().to_offset())
-        } else {
-            block_pos.offset(bed_props.facing.to_offset())
-        };
+        let other_half_pos = get_other_half_pos(bed_props, block_pos);
+
         bed_props.part = if bed_props.part == BedPart::Head {
             BedPart::Foot
         } else {
@@ -290,6 +389,14 @@ async fn can_sleep(world: &Arc<World>) -> bool {
         time.time_of_day > 12010 && time.time_of_day < 23991
     } else {
         time.time_of_day > 12542 && time.time_of_day < 23459
+    }
+}
+
+fn get_other_half_pos(bed_props: BedProperties, block_pos: &BlockPos) -> BlockPos {
+    if bed_props.part == BedPart::Head {
+        block_pos.offset(bed_props.facing.opposite().to_offset())
+    } else {
+        block_pos.offset(bed_props.facing.to_offset())
     }
 }
 
