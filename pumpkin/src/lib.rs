@@ -2,7 +2,6 @@
 #![allow(unused_labels)]
 
 use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
-use crate::net::ClientPlatform;
 use crate::net::bedrock::BedrockClientPlatform;
 use crate::net::java::JavaClientPlatform;
 use crate::net::{lan_broadcast, query, rcon::RCONServer};
