@@ -399,10 +399,7 @@ impl Level {
         let mut rng = SmallRng::from_os_rng();
 
         for chunk in self.loaded_chunks.iter() {
-            let mut chunk = chunk.write().await;
-            if !chunk.has_random_ticks() {
-                continue; // Skip chunks that do not have random ticks
-            }
+            let chunk = chunk.read().await;
 
             let chunk_x_base = chunk.position.x * 16;
             let chunk_z_base = chunk.position.z * 16;

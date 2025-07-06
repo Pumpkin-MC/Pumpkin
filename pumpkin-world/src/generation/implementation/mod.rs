@@ -128,8 +128,6 @@ impl WorldGenerator for VanillaGenerator {
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),
             block_entities: Default::default(),
-            has_calculated_random_ticks: false,
-            random_ticks: 0,
         }
     }
 }
