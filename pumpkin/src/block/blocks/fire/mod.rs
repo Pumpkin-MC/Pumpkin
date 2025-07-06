@@ -11,7 +11,7 @@ use rand::Rng;
 use soul_fire::SoulFireBlock;
 
 use crate::block::blocks::fire::fire::FireBlock;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::pumpkin_block::{CanPlaceAtArgs, PumpkinBlock};
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 
@@ -51,29 +51,29 @@ impl FireBlockBase {
         }
         if Self::is_soul_fire(world, block_pos).await {
             SoulFireBlock
-                .can_place_at(
-                    None,
-                    Some(world),
-                    world.as_ref(),
-                    None,
-                    &Block::SOUL_FIRE,
-                    block_pos,
-                    BlockDirection::Up,
-                    None,
-                )
+                .can_place_at(CanPlaceAtArgs {
+                    server: None,
+                    world: Some(world),
+                    block_accessor: world.as_ref(),
+                    block: &Block::SOUL_FIRE,
+                    location: block_pos,
+                    direction: BlockDirection::Up,
+                    player: None,
+                    use_item_on: None,
+                })
                 .await
         } else {
             FireBlock
-                .can_place_at(
-                    None,
-                    Some(world),
-                    world.as_ref(),
-                    None,
-                    &Block::FIRE,
-                    block_pos,
-                    BlockDirection::Up,
-                    None,
-                )
+                .can_place_at(CanPlaceAtArgs {
+                    server: None,
+                    world: Some(world),
+                    block_accessor: world.as_ref(),
+                    block: &Block::FIRE,
+                    location: block_pos,
+                    direction: BlockDirection::Up,
+                    player: None,
+                    use_item_on: None,
+                })
                 .await
                 || Self::should_light_portal_at(world, block_pos, BlockDirection::Up).await
         }

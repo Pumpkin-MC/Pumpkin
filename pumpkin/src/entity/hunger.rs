@@ -81,6 +81,13 @@ impl HungerManager {
         self.exhaustion
             .store((self.exhaustion.load() + exhaustion).min(40.0));
     }
+
+    pub fn restart(&self) {
+        self.level.store(20);
+        self.saturation.store(5.0);
+        self.exhaustion.store(0.0);
+        self.tick_timer.store(0);
+    }
 }
 
 #[async_trait]

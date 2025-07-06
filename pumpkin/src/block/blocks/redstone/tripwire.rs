@@ -2,19 +2,19 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockDirection,
     block_properties::{BlockProperties, HorizontalFacing},
     item::Item,
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{BlockStateId, chunk::TickPriority, world::BlockFlags};
 
 use crate::{
-    block::{BlockIsReplacing, pumpkin_block::PumpkinBlock},
-    entity::{EntityBase, player::Player},
-    server::Server,
+    block::pumpkin_block::{
+        BrokenArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnPlaceArgs,
+        OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs, PumpkinBlock,
+    },
     world::World,
 };
 
@@ -28,44 +28,26 @@ pub struct TripwireBlock;
 
 #[async_trait]
 impl PumpkinBlock for TripwireBlock {
-    async fn on_entity_collision(
-        &self,
-        world: &Arc<World>,
-        _entity: &dyn EntityBase,
-        pos: BlockPos,
-        block: &'static Block,
-        state: &'static BlockState,
-        _server: &Server,
-    ) {
-        let mut props = TripwireProperties::from_state_id(state.id, block);
+    async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        let mut props = TripwireProperties::from_state_id(args.state.id, args.block);
         if props.powered {
             return;
         }
         props.powered = true;
 
-        let state_id = props.to_state_id(block);
-        world
-            .set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL)
+        let state_id = props.to_state_id(args.block);
+        args.world
+            .set_block_state(args.location, state_id, BlockFlags::NOTIFY_ALL)
             .await;
 
-        Self::update(world, &pos, state_id).await;
+        Self::update(args.world, args.location, state_id).await;
 
-        world
-            .schedule_block_tick(block, pos, 10, TickPriority::Normal)
+        args.world
+            .schedule_block_tick(args.block, *args.location, 10, TickPriority::Normal)
             .await;
     }
 
-    async fn on_place(
-        &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
-        block: &Block,
-        block_pos: &BlockPos,
-        _face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let [connect_north, connect_east, connect_south, connect_west] = [
             BlockDirection::North,
             BlockDirection::East,
@@ -73,52 +55,36 @@ impl PumpkinBlock for TripwireBlock {
             BlockDirection::West,
         ]
         .map(async |dir| {
-            let current_pos = block_pos.offset(dir.to_offset());
-            let state_id = world.get_block_state_id(&current_pos).await;
+            let current_pos = args.location.offset(dir.to_offset());
+            let state_id = args.world.get_block_state_id(&current_pos).await;
             Self::should_connect_to(state_id, dir)
         });
 
-        let mut props = TripwireProperties::from_state_id(block.default_state.id, block);
+        let mut props = TripwireProperties::from_state_id(args.block.default_state.id, args.block);
 
         props.north = connect_north.await;
         props.south = connect_south.await;
         props.west = connect_west.await;
         props.east = connect_east.await;
 
-        props.to_state_id(block)
+        props.to_state_id(args.block)
     }
 
-    async fn placed(
-        &self,
-        world: &Arc<World>,
-        _block: &Block,
-        state_id: BlockStateId,
-        pos: &BlockPos,
-        old_state_id: BlockStateId,
-        _notify: bool,
-    ) {
+    async fn placed(&self, args: PlacedArgs<'_>) {
         if let (Some(old_block), Some(new_block)) = (
-            Block::from_state_id(old_state_id),
-            Block::from_state_id(state_id),
+            Block::from_state_id(args.old_state_id),
+            Block::from_state_id(args.state_id),
         ) {
             if old_block == new_block {
                 return;
             }
         }
-        Self::update(world, pos, state_id).await;
+        Self::update(args.world, args.location, args.state_id).await;
     }
 
-    async fn broken(
-        &self,
-        block: &Block,
-        player: &Arc<Player>,
-        location: BlockPos,
-        _server: &Server,
-        world: Arc<World>,
-        state: &'static BlockState,
-    ) {
+    async fn broken(&self, args: BrokenArgs<'_>) {
         let has_shears = {
-            let main_hand_item_stack = player.inventory().held_item();
+            let main_hand_item_stack = args.player.inventory().held_item();
             main_hand_item_stack
                 .lock()
                 .await
@@ -126,10 +92,14 @@ impl PumpkinBlock for TripwireBlock {
                 .eq(&Item::SHEARS)
         };
         if has_shears {
-            let mut props = TripwireProperties::from_state_id(state.id, block);
+            let mut props = TripwireProperties::from_state_id(args.state.id, args.block);
             props.disarmed = true;
-            world
-                .set_block_state(&location, props.to_state_id(block), BlockFlags::empty())
+            args.world
+                .set_block_state(
+                    args.location,
+                    props.to_state_id(args.block),
+                    BlockFlags::empty(),
+                )
                 .await;
             // TODO world.emitGameEvent(player, GameEvent.SHEAR, pos);
         }
@@ -137,65 +107,57 @@ impl PumpkinBlock for TripwireBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        _world: &World,
-        block: &Block,
-        state: BlockStateId,
-        _pos: &BlockPos,
-        direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        direction.to_horizontal_facing().map_or(state, |facing| {
-            let mut props = TripwireProperties::from_state_id(state, block);
-            *match facing {
-                HorizontalFacing::North => &mut props.north,
-                HorizontalFacing::South => &mut props.south,
-                HorizontalFacing::West => &mut props.west,
-                HorizontalFacing::East => &mut props.east,
-            } = Self::should_connect_to(neighbor_state, direction);
-            props.to_state_id(block)
-        })
+        args.direction
+            .to_horizontal_facing()
+            .map_or(args.state_id, |facing| {
+                let mut props = TripwireProperties::from_state_id(args.state_id, args.block);
+                *match facing {
+                    HorizontalFacing::North => &mut props.north,
+                    HorizontalFacing::South => &mut props.south,
+                    HorizontalFacing::West => &mut props.west,
+                    HorizontalFacing::East => &mut props.east,
+                } = Self::should_connect_to(args.neighbor_state_id, args.direction);
+                props.to_state_id(args.block)
+            })
     }
 
-    async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, pos: &BlockPos) {
-        let state_id = world.get_block_state_id(pos).await;
+    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state_id = args.world.get_block_state_id(args.location).await;
 
-        let mut props = TripwireProperties::from_state_id(state_id, block);
+        let mut props = TripwireProperties::from_state_id(state_id, args.block);
         if !props.powered {
             return;
         }
 
-        let aabb = BoundingBox::from_block(pos);
+        let aabb = BoundingBox::from_block(args.location);
         // TODO entity.canAvoidTraps()
-        if world.get_entities_at_box(&aabb).await.is_empty()
-            && world.get_players_at_box(&aabb).await.is_empty()
+        if args.world.get_entities_at_box(&aabb).await.is_empty()
+            && args.world.get_players_at_box(&aabb).await.is_empty()
         {
             props.powered = false;
-            let state_id = props.to_state_id(block);
-            world
-                .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
+            let state_id = props.to_state_id(args.block);
+            args.world
+                .set_block_state(args.location, state_id, BlockFlags::NOTIFY_ALL)
                 .await;
-            Self::update(world, pos, state_id).await;
+            Self::update(args.world, args.location, state_id).await;
         } else {
-            world
-                .schedule_block_tick(block, *pos, 10, TickPriority::Normal)
+            args.world
+                .schedule_block_tick(args.block, *args.location, 10, TickPriority::Normal)
                 .await;
         }
     }
 
-    async fn on_state_replaced(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        location: BlockPos,
-        old_state_id: BlockStateId,
-        moved: bool,
-    ) {
-        if moved || Block::from_state_id(old_state_id).is_some_and(|old_block| old_block == block) {
+    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        if args.moved
+            || Block::from_state_id(args.old_state_id)
+                .is_some_and(|old_block| old_block == args.block)
+        {
             return;
         }
-        let state_id = world.get_block_state_id(&location).await;
-        Self::update(world, &location, state_id).await;
+        let state_id = args.world.get_block_state_id(args.location).await;
+        Self::update(args.world, args.location, state_id).await;
     }
 }
 

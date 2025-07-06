@@ -10,7 +10,11 @@ pub mod time;
 
 use crate::{
     PLUGIN_MANAGER,
-    block::{self, registry::BlockRegistry},
+    block::{
+        self,
+        pumpkin_block::{OnNeighborUpdateArgs, OnScheduledTickArgs},
+        registry::BlockRegistry,
+    },
     command::client_suggestions,
     entity::{Entity, EntityBase, EntityId, player::Player, r#type::from_type},
     error::PumpkinError,
@@ -611,7 +615,11 @@ impl World {
             }
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
-                    .on_scheduled_tick(self, block, &scheduled_tick.block_pos)
+                    .on_scheduled_tick(OnScheduledTickArgs {
+                        world: self,
+                        block,
+                        location: &scheduled_tick.block_pos,
+                    })
                     .await;
             }
         }
@@ -1219,8 +1227,14 @@ impl World {
 
         player.send_permission_lvl_update().await;
 
-        // Teleport
+        player.hunger_manager.restart();
+
         let info = &self.level_info.read().await;
+        if !info.game_rules.keep_inventory {
+            player.set_experience(0, 0.0, 0).await;
+        }
+
+        // Teleport
         let pitch = 0.0;
         let (position, yaw) = if let Some(respawn) = player.get_respawn_point().await {
             respawn
@@ -1777,7 +1791,7 @@ impl World {
                 .on_state_replaced(
                     self,
                     old_block,
-                    *position,
+                    position,
                     replaced_block_state_id,
                     block_moved,
                 )
@@ -2036,7 +2050,13 @@ impl World {
                 self.block_registry.get_pumpkin_block(neighbor_block)
             {
                 neighbor_pumpkin_block
-                    .on_neighbor_update(self, neighbor_block, &neighbor_pos, source_block, false)
+                    .on_neighbor_update(OnNeighborUpdateArgs {
+                        world: self,
+                        block: neighbor_block,
+                        location: &neighbor_pos,
+                        source_block,
+                        notify: false,
+                    })
                     .await;
             }
 
@@ -2060,13 +2080,13 @@ impl World {
         if let Some(neighbor_pumpkin_block) = self.block_registry.get_pumpkin_block(neighbor_block)
         {
             neighbor_pumpkin_block
-                .on_neighbor_update(
-                    self,
-                    neighbor_block,
-                    neighbor_block_pos,
+                .on_neighbor_update(OnNeighborUpdateArgs {
+                    world: self,
+                    block: neighbor_block,
+                    location: neighbor_block_pos,
                     source_block,
-                    false,
-                )
+                    notify: false,
+                })
                 .await;
         }
     }

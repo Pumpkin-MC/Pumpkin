@@ -1,18 +1,18 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::pumpkin_block::{
+    GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, PumpkinBlock,
+};
 use crate::entity::EntityBase;
-use crate::server::Server;
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 use async_trait::async_trait;
+use pumpkin_data::Block;
 use pumpkin_data::block_properties::{Axis, BlockProperties, NetherPortalLikeProperties};
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
-use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
 #[pumpkin_block("minecraft:nether_portal")]
@@ -38,53 +38,39 @@ impl NetherPortalBlock {
 impl PumpkinBlock for NetherPortalBlock {
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
-        _block: &Block,
-        state: BlockStateId,
-        pos: &BlockPos,
-        direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let axis = direction.to_axis();
+        let axis = args.direction.to_axis();
         let is_horizontal = axis == Axis::X && axis == Axis::Z;
         let state_axis =
-            NetherPortalLikeProperties::from_state_id(state, &Block::NETHER_PORTAL).axis;
+            NetherPortalLikeProperties::from_state_id(args.state_id, &Block::NETHER_PORTAL).axis;
         if is_horizontal
-            || neighbor_state == state
-            || NetherPortal::get_on_axis(world, pos, state_axis)
+            || args.neighbor_state_id == args.state_id
+            || NetherPortal::get_on_axis(args.world, args.location, state_axis)
                 .await
                 .is_some_and(|e| e.was_already_valid())
         {
-            return state;
+            return args.state_id;
         }
         Block::AIR.default_state.id
     }
 
-    async fn on_entity_collision(
-        &self,
-        world: &Arc<World>,
-        entity: &dyn EntityBase,
-        pos: BlockPos,
-        _block: &'static Block,
-        _state: &'static BlockState,
-        server: &Server,
-    ) {
-        let target_world = if world.dimension_type == VanillaDimensionType::TheNether {
-            server
+    async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        let target_world = if args.world.dimension_type == VanillaDimensionType::TheNether {
+            args.server
                 .get_world_from_dimension(VanillaDimensionType::Overworld)
                 .await
         } else {
-            server
+            args.server
                 .get_world_from_dimension(VanillaDimensionType::TheNether)
                 .await
         };
 
-        let portal_delay = Self::get_portal_time(world, entity).await;
+        let portal_delay = Self::get_portal_time(args.world, args.entity).await;
 
-        entity
+        args.entity
             .get_entity()
-            .try_use_portal(portal_delay, target_world, pos)
+            .try_use_portal(portal_delay, target_world, *args.location)
             .await;
     }
 }

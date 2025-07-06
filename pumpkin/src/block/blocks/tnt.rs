@@ -1,21 +1,19 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::pumpkin_block::{
+    ExplodeArgs, OnNeighborUpdateArgs, PlacedArgs, PumpkinBlock, UseWithItemArgs,
+};
 use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
-use crate::entity::player::Player;
 use crate::entity::tnt::TNTEntity;
-use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 use rand::Rng;
 use uuid::Uuid;
@@ -55,56 +53,34 @@ const DEFAULT_POWER: f32 = 4.0;
 
 #[async_trait]
 impl PumpkinBlock for TNTBlock {
-    async fn use_with_item(
-        &self,
-        _block: &Block,
-        player: &Player,
-        location: BlockPos,
-        item: &Item,
-        _server: &Server,
-        _world: &Arc<World>,
-    ) -> BlockActionResult {
-        if *item != Item::FLINT_AND_STEEL || *item == Item::FIRE_CHARGE {
+    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let item = args.item_stack.lock().await.item;
+        if item != &Item::FLINT_AND_STEEL || item == &Item::FIRE_CHARGE {
             return BlockActionResult::Continue;
         }
-        let world = player.world().await;
-        Self::prime(&world, &location).await;
+        let world = args.player.world().await;
+        Self::prime(&world, args.location).await;
 
         BlockActionResult::Consume
     }
 
-    async fn placed(
-        &self,
-        world: &Arc<World>,
-        _block: &Block,
-        _state_id: BlockStateId,
-        pos: &BlockPos,
-        _old_state_id: BlockStateId,
-        _notify: bool,
-    ) {
-        if block_receives_redstone_power(world, pos).await {
-            Self::prime(world, pos).await;
+    async fn placed(&self, args: PlacedArgs<'_>) {
+        if block_receives_redstone_power(args.world, args.location).await {
+            Self::prime(args.world, args.location).await;
         }
     }
 
-    async fn on_neighbor_update(
-        &self,
-        world: &Arc<World>,
-        _block: &Block,
-        pos: &BlockPos,
-        _source_block: &Block,
-        _notify: bool,
-    ) {
-        if block_receives_redstone_power(world, pos).await {
-            Self::prime(world, pos).await;
+    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        if block_receives_redstone_power(args.world, args.location).await {
+            Self::prime(args.world, args.location).await;
         }
     }
 
-    async fn explode(&self, _block: &Block, world: &Arc<World>, location: BlockPos) {
+    async fn explode(&self, args: ExplodeArgs<'_>) {
         let entity = Entity::new(
             Uuid::new_v4(),
-            world.clone(),
-            location.to_f64(),
+            args.world.clone(),
+            args.location.to_f64(),
             EntityType::TNT,
             false,
         );
@@ -114,7 +90,7 @@ impl PumpkinBlock for TNTBlock {
             .await;
         let fuse = rand::rng().random_range(0..DEFAULT_FUSE / 4) + DEFAULT_FUSE / 8;
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, fuse));
-        world.spawn_entity(tnt).await;
+        args.world.spawn_entity(tnt).await;
     }
 
     fn should_drop_items_on_explosion(&self) -> bool {

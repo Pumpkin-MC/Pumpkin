@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockDirection,
     block_properties::BlockProperties,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     BlockStateId,
@@ -17,9 +16,11 @@ use pumpkin_world::{
 use rand::{Rng, rng};
 
 use crate::{
-    block::{BlockIsReplacing, pumpkin_block::PumpkinBlock},
-    entity::player::Player,
-    server::Server,
+    block::pumpkin_block::{
+        CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+        GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
+        PlayerPlacedArgs, PumpkinBlock,
+    },
     world::World,
 };
 
@@ -31,139 +32,100 @@ pub struct TripwireHookBlock;
 
 #[async_trait]
 impl PumpkinBlock for TripwireHookBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
-        block: &Block,
-        block_pos: &BlockPos,
-        face: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        let mut props = TripwireHookProperties::default(block);
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = TripwireHookProperties::default(args.block);
         props.powered = false;
         props.attached = false;
-        if Self::can_place_at(world, block_pos, face).await {
-            props.facing = face.opposite().to_cardinal_direction();
-            return props.to_state_id(block);
+        if Self::can_place_at(args.world, args.location, args.direction).await {
+            props.facing = args.direction.opposite().to_cardinal_direction();
+            return props.to_state_id(args.block);
         }
-        block.default_state.id
+        args.block.default_state.id
     }
 
-    async fn can_place_at(
-        &self,
-        _server: Option<&Server>,
-        world: Option<&World>,
-        _block_accessor: &dyn BlockAccessor,
-        _player: Option<&Player>,
-        _block: &Block,
-        block_pos: &BlockPos,
-        face: BlockDirection,
-        _use_item_on: Option<&SUseItemOn>,
-    ) -> bool {
-        if let Some(world) = world {
-            Self::can_place_at(world, block_pos, face).await
-        } else {
-            false
-        }
+    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        Self::can_place_at(args.block_accessor, args.location, args.direction).await
     }
 
-    async fn player_placed(
-        &self,
-        world: &Arc<World>,
-        _block: &Block,
-        state_id: u16,
-        pos: &BlockPos,
-        _face: BlockDirection,
-        _player: &Player,
-    ) {
-        Self::update(world, *pos, state_id, false, false, -1, None).await;
+    async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
+        Self::update(
+            args.world,
+            *args.location,
+            args.state_id,
+            false,
+            false,
+            -1,
+            None,
+        )
+        .await;
     }
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
-        block: &Block,
-        state: BlockStateId,
-        pos: &BlockPos,
-        direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if direction.to_horizontal_facing().is_some_and(|facing| {
-            let props = TripwireHookProperties::from_state_id(state, block);
+        if args.direction.to_horizontal_facing().is_some_and(|facing| {
+            let props = TripwireHookProperties::from_state_id(args.state_id, args.block);
             facing.opposite() == props.facing
-        }) && !Self::can_place_at(world, pos, direction).await
+        }) && !Self::can_place_at(args.world, args.location, args.direction).await
         {
             Block::AIR.default_state.id
         } else {
-            state
+            args.state_id
         }
     }
 
-    async fn on_scheduled_tick(&self, world: &Arc<World>, _block: &Block, pos: &BlockPos) {
-        let state_id = world.get_block_state_id(pos).await;
-        Self::update(world, *pos, state_id, false, true, -1, None).await;
+    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let state_id = args.world.get_block_state_id(args.location).await;
+        Self::update(args.world, *args.location, state_id, false, true, -1, None).await;
     }
 
-    async fn on_state_replaced(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        location: BlockPos,
-        old_state_id: BlockStateId,
-        moved: bool,
-    ) {
-        if moved || Block::from_state_id(old_state_id).is_some_and(|old_block| old_block == block) {
+    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        if args.moved
+            || Block::from_state_id(args.old_state_id)
+                .is_some_and(|old_block| old_block == args.block)
+        {
             return;
         }
-        let props = TripwireHookProperties::from_state_id(old_state_id, block);
+        let props = TripwireHookProperties::from_state_id(args.old_state_id, args.block);
         if props.powered || props.attached {
-            Self::update(world, location, old_state_id, true, false, -1, None).await;
+            Self::update(
+                args.world,
+                *args.location,
+                args.old_state_id,
+                true,
+                false,
+                -1,
+                None,
+            )
+            .await;
         }
         if props.powered {
-            world.update_neighbor(&location, block).await;
-            world
-                .update_neighbor(&location.offset(props.facing.opposite().to_offset()), block)
+            args.world.update_neighbor(args.location, args.block).await;
+            args.world
+                .update_neighbor(
+                    &args.location.offset(props.facing.opposite().to_offset()),
+                    args.block,
+                )
                 .await;
         }
     }
 
     #[inline]
-    async fn emits_redstone_power(
-        &self,
-        _block: &Block,
-        _state: &BlockState,
-        _direction: BlockDirection,
-    ) -> bool {
+    async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
         true
     }
 
-    async fn get_weak_redstone_power(
-        &self,
-        block: &Block,
-        _world: &World,
-        _pos: &BlockPos,
-        state: &BlockState,
-        _direction: BlockDirection,
-    ) -> u8 {
-        let props = TripwireHookProperties::from_state_id(state.id, block);
+    async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        let props = TripwireHookProperties::from_state_id(args.state.id, args.block);
         if props.powered { 15 } else { 0 }
     }
 
-    async fn get_strong_redstone_power(
-        &self,
-        block: &Block,
-        _world: &World,
-        _pos: &BlockPos,
-        state: &BlockState,
-        direction: BlockDirection,
-    ) -> u8 {
-        let props = TripwireHookProperties::from_state_id(state.id, block);
+    async fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        let props = TripwireHookProperties::from_state_id(args.state.id, args.block);
         if props.powered
-            && direction
+            && args
+                .direction
                 .to_horizontal_facing()
                 .is_some_and(|facing| props.facing == facing)
         {
@@ -175,7 +137,11 @@ impl PumpkinBlock for TripwireHookBlock {
 }
 
 impl TripwireHookBlock {
-    pub async fn can_place_at(world: &World, block_pos: &BlockPos, face: BlockDirection) -> bool {
+    pub async fn can_place_at(
+        world: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+        face: BlockDirection,
+    ) -> bool {
         if !face.is_horizontal() {
             return false;
         }

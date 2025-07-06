@@ -1,5 +1,5 @@
-use crate::block::BlockIsReplacing;
-use crate::entity::player::Player;
+use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
+use crate::block::pumpkin_block::OnPlaceArgs;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
@@ -7,14 +7,12 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
 type GlassPaneProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
-use crate::server::Server;
 use crate::world::World;
 
 pub struct GlassPaneBlock;
@@ -30,35 +28,19 @@ impl BlockMetadata for GlassPaneBlock {
 
 #[async_trait]
 impl PumpkinBlock for GlassPaneBlock {
-    async fn on_place(
-        &self,
-        _server: &Server,
-        world: &World,
-        _player: &Player,
-        block: &Block,
-        block_pos: &BlockPos,
-        _face: BlockDirection,
-        replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> u16 {
-        let mut pane_props = GlassPaneProperties::default(block);
-        pane_props.waterlogged = replacing.water_source();
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut pane_props = GlassPaneProperties::default(args.block);
+        pane_props.waterlogged = args.replacing.water_source();
 
-        compute_pane_state(pane_props, world, block, block_pos).await
+        compute_pane_state(pane_props, args.world, args.block, args.location).await
     }
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
-        block: &Block,
-        state_id: BlockStateId,
-        block_pos: &BlockPos,
-        _direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let pane_props = GlassPaneProperties::from_state_id(state_id, block);
-        compute_pane_state(pane_props, world, block, block_pos).await
+        let pane_props = GlassPaneProperties::from_state_id(args.state_id, args.block);
+        compute_pane_state(pane_props, args.world, args.block, args.location).await
     }
 }
 

@@ -1,26 +1,26 @@
 use std::sync::Arc;
 
-use crate::{
-    block::{BlockIsReplacing, blocks::abstruct_wall_mounting::WallMountedBlock},
-    entity::player::Player,
+use crate::block::{
+    blocks::abstruct_wall_mounting::WallMountedBlock,
+    pumpkin_block::{
+        CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+        GetStateForNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs, UseWithItemArgs,
+    },
 };
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockDirection, BlockState, HorizontalFacingExt,
+    Block, BlockDirection, HorizontalFacingExt,
     block_properties::{BlockFace, BlockProperties, LeverLikeProperties},
-    item::Item,
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
-    block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
-    server::Server,
+    block::{
+        pumpkin_block::{NormalUseArgs, PumpkinBlock},
+        registry::BlockActionResult,
+    },
     world::World,
 };
 
@@ -45,127 +45,60 @@ pub struct LeverBlock;
 
 #[async_trait]
 impl PumpkinBlock for LeverBlock {
-    async fn use_with_item(
-        &self,
-        _block: &Block,
-        _player: &Player,
-        location: BlockPos,
-        _item: &Item,
-        _server: &Server,
-        world: &Arc<World>,
-    ) -> BlockActionResult {
-        toggle_lever(world, &location).await;
+    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        toggle_lever(args.world, args.location).await;
         BlockActionResult::Consume
     }
 
-    async fn normal_use(
-        &self,
-        _block: &Block,
-        _player: &Player,
-        location: BlockPos,
-        _server: &Server,
-        world: &Arc<World>,
-    ) {
-        toggle_lever(world, &location).await;
+    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+        toggle_lever(args.world, args.location).await;
     }
 
-    async fn emits_redstone_power(
-        &self,
-        _block: &Block,
-        _state: &BlockState,
-        _direction: BlockDirection,
-    ) -> bool {
+    async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
         true
     }
 
-    async fn get_weak_redstone_power(
-        &self,
-        block: &Block,
-        _world: &World,
-        _block_pos: &BlockPos,
-        state: &BlockState,
-        _direction: BlockDirection,
-    ) -> u8 {
-        let lever_props = LeverLikeProperties::from_state_id(state.id, block);
+    async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        let lever_props = LeverLikeProperties::from_state_id(args.state.id, args.block);
         if lever_props.powered { 15 } else { 0 }
     }
 
-    async fn get_strong_redstone_power(
-        &self,
-        block: &Block,
-        _world: &World,
-        _block_pos: &BlockPos,
-        state: &BlockState,
-        direction: BlockDirection,
-    ) -> u8 {
-        let lever_props = LeverLikeProperties::from_state_id(state.id, block);
-        if lever_props.powered && lever_props.get_direction() == direction {
+    async fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
+        let lever_props = LeverLikeProperties::from_state_id(args.state.id, args.block);
+        if lever_props.powered && lever_props.get_direction() == args.direction {
             15
         } else {
             0
         }
     }
 
-    async fn on_state_replaced(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        location: BlockPos,
-        old_state_id: BlockStateId,
-        moved: bool,
-    ) {
-        if !moved {
-            let lever_props = LeverLikeProperties::from_state_id(old_state_id, block);
+    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        if !args.moved {
+            let lever_props = LeverLikeProperties::from_state_id(args.old_state_id, args.block);
             if lever_props.powered {
-                Self::update_neighbors(world, &location, &lever_props).await;
+                Self::update_neighbors(args.world, args.location, &lever_props).await;
             }
         }
     }
 
-    async fn on_place(
-        &self,
-        _server: &Server,
-        _world: &World,
-        player: &Player,
-        block: &Block,
-        _block_pos: &BlockPos,
-        direction: BlockDirection,
-        _replacing: BlockIsReplacing,
-        _use_item_on: &SUseItemOn,
-    ) -> BlockStateId {
-        let mut props = LeverLikeProperties::from_state_id(block.default_state.id, block);
-        (props.face, props.facing) = WallMountedBlock::get_placement_face(self, player, direction);
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = LeverLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        (props.face, props.facing) =
+            WallMountedBlock::get_placement_face(self, args.player, args.direction);
 
-        props.to_state_id(block)
+        props.to_state_id(args.block)
     }
 
-    async fn can_place_at(
-        &self,
-        _server: Option<&Server>,
-        _world: Option<&World>,
-        block_accessor: &dyn BlockAccessor,
-        _player: Option<&Player>,
-        _block: &Block,
-        pos: &BlockPos,
-        face: BlockDirection,
-        _use_item_on: Option<&SUseItemOn>,
-    ) -> bool {
-        WallMountedBlock::can_place_at(self, block_accessor, pos, face).await
+    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        WallMountedBlock::can_place_at(self, args.block_accessor, args.location, args.direction)
+            .await
     }
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
-        block: &Block,
-        state: BlockStateId,
-        pos: &BlockPos,
-        direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        WallMountedBlock::get_state_for_neighbor_update(self, state, block, direction, world, pos)
-            .await
-            .unwrap_or(state)
+        WallMountedBlock::get_state_for_neighbor_update(self, args).await
     }
 }
 

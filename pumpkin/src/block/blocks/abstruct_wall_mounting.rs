@@ -6,7 +6,7 @@ use pumpkin_data::{
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
-use crate::entity::player::Player;
+use crate::{block::pumpkin_block::GetStateForNeighborUpdateArgs, entity::player::Player};
 
 #[async_trait]
 pub trait WallMountedBlock {
@@ -45,14 +45,16 @@ pub trait WallMountedBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        state_id: BlockStateId,
-        block: &Block,
-        direction: BlockDirection,
-        world: &dyn BlockAccessor,
-        pos: &BlockPos,
-    ) -> Option<BlockStateId> {
-        (self.get_direction(state_id, block).opposite() == direction
-            && !self.can_place_at(world, pos, direction).await)
-            .then(|| Block::AIR.default_state.id)
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if self.get_direction(args.state_id, args.block).opposite() == args.direction
+            && !self
+                .can_place_at(args.world, args.location, args.direction)
+                .await
+        {
+            Block::AIR.default_state.id
+        } else {
+            args.state_id
+        }
     }
 }
