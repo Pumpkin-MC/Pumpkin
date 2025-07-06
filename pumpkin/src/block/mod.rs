@@ -1,3 +1,4 @@
+use blocks::anvil::AnvilBlock;
 use blocks::bamboo::BambooBlock;
 use blocks::barrel::BarrelBlock;
 use blocks::bed::BedBlock;
@@ -105,6 +106,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
 
     // Blocks
+    manager.register(AnvilBlock);
     manager.register(BedBlock);
     manager.register(SaplingBlock);
     manager.register(CactusBlock);

@@ -5,7 +5,10 @@ use pumpkin_data::{
     block_properties::{HorizontalFacing, RailShape, StraightRailShape},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::{
+    BlockStateId,
+    world::{BlockAccessor, BlockFlags},
+};
 
 use crate::world::World;
 
@@ -35,7 +38,7 @@ pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &
     true
 }
 
-pub(super) async fn can_place_rail_at(world: &World, pos: &BlockPos) -> bool {
+pub(super) async fn can_place_rail_at(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
     let state = world.get_block_state(&pos.down()).await;
     state.is_solid()
 }

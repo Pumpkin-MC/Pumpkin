@@ -10,16 +10,21 @@ pub mod time;
 
 use crate::{
     PLUGIN_MANAGER,
-    block::{self, registry::BlockRegistry},
+    block::{
+        self,
+        pumpkin_block::{OnNeighborUpdateArgs, OnScheduledTickArgs},
+        registry::BlockRegistry,
+    },
     command::client_suggestions,
     entity::{Entity, EntityBase, EntityId, player::Player, r#type::from_type},
     error::PumpkinError,
+    net::ClientPlatform,
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
         world::{chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend},
     },
-    server::Server,
+    server::{CURRENT_BEDROCK_MC_VERSION, Server},
 };
 use crate::{
     block::{BlockEvent, loot::LootContextParameters},
@@ -47,16 +52,29 @@ use pumpkin_data::{
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
-use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
-    java::client::play::{
-        CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate, CPlayerChatMessage,
-        CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSoundEffect, CSpawnEntity,
-        FilterType, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
+    bedrock::{
+        RakReliability,
+        client::{
+            gamerules_changed::GameRules,
+            start_game::{Experiments, GAME_PUBLISH_SETTING_PUBLIC, LevelSettings},
+        },
     },
-    java::server::play::SChatMessage,
+    codec::{
+        bedrock_block_pos::BedrockPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
+    },
+    java::{
+        client::play::{
+            CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
+            CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
+            CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat, PlayerAction,
+            PlayerInfoFlags,
+        },
+        server::play::SChatMessage,
+    },
 };
+use pumpkin_protocol::{bedrock::client::start_game::CStartGame, ser::serializer::Serializer};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{
@@ -597,7 +615,11 @@ impl World {
             }
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
-                    .on_scheduled_tick(self, block, &scheduled_tick.block_pos)
+                    .on_scheduled_tick(OnScheduledTickArgs {
+                        world: self,
+                        block,
+                        position: &scheduled_tick.block_pos,
+                    })
                     .await;
             }
         }
@@ -642,7 +664,7 @@ impl World {
             ..=i32::from(generation_settings.shape.height))
             .rev()
         {
-            let pos = BlockPos(Vector3::new(position.x, y, position.z));
+            let pos = BlockPos(Vector3::new(position.x, y, position.y));
             let block = self.get_block_state(&pos).await;
             if block.is_air() {
                 continue;
@@ -652,8 +674,130 @@ impl World {
         i32::from(generation_settings.shape.height)
     }
 
+    #[allow(clippy::too_many_lines)]
+    pub async fn spawn_bedrock_player(
+        &self,
+        base_config: &BasicConfiguration,
+        player: Arc<Player>,
+        server: &Server,
+    ) {
+        let level_info = server.level_info.read().await;
+        let weather = self.weather.lock().await;
+        let level_settings = LevelSettings {
+            seed: self.level.seed.0,
+            spawn_biome_type: 0,
+            custom_biome_name: String::with_capacity(0),
+            dimension: VarInt(0),
+            generator_type: VarInt(1),
+            world_gamemode: VarInt(server.defaultgamemode.lock().await.gamemode as i32),
+            hardcore: base_config.hardcore,
+            difficulty: VarInt(level_info.difficulty as i32),
+            spawn_position: BedrockPos(BlockPos(Vector3::new(
+                level_info.spawn_x,
+                level_info.spawn_y,
+                level_info.spawn_z,
+            ))),
+            has_achievements_disabled: false,
+            editor_world_type: VarInt(0),
+            is_created_in_editor: false,
+            is_exported_from_editor: false,
+            day_cycle_stop_time: VarInt(-1),
+            education_edition_offer: VarInt(0),
+            has_education_features_enabled: false,
+            education_product_id: String::with_capacity(0),
+            rain_level: weather.rain_level,
+            lightning_level: weather.thunder_level,
+            has_confirmed_platform_locked_content: false,
+            was_multiplayer_intended: true,
+            was_lan_broadcasting_intended: true,
+            xbox_live_broadcast_setting: VarInt(GAME_PUBLISH_SETTING_PUBLIC),
+            platform_broadcast_setting: VarInt(GAME_PUBLISH_SETTING_PUBLIC),
+            commands_enabled: level_info.allow_commands,
+            is_texture_packs_required: false,
+            rule_data: GameRules {
+                list_size: VarUInt(0),
+            },
+            experiments: Experiments {
+                names_size: 0,
+                experiments_ever_toggled: false,
+            },
+            bonus_chest: false,
+            has_start_with_map_enabled: false,
+            // TODO Bedrock permission level are different
+            permission_level: VarInt(2),
+            server_chunk_tick_range: base_config.simulation_distance.get().into(),
+            has_locked_behavior_pack: false,
+            has_locked_resource_pack: false,
+            is_from_locked_world_template: false,
+            is_using_msa_gamertags_only: false,
+            is_from_world_template: false,
+            is_world_template_option_locked: false,
+            is_only_spawning_v1_villagers: false,
+            is_disabling_personas: false,
+            is_disabling_custom_skins: false,
+            emote_chat_muted: false,
+            game_version: CURRENT_BEDROCK_MC_VERSION.into(),
+            limited_world_width: 0,
+            limited_world_height: 0,
+            is_nether_type: base_config.allow_nether,
+            edu_shared_uri_button_name: String::with_capacity(0),
+            edu_shared_uri_link_uri: String::with_capacity(0),
+            override_force_experimental_gameplay_has_value: false,
+            chat_restriction_level: 0,
+            disable_player_interactions: false,
+            server_id: String::with_capacity(0),
+            world_id: String::with_capacity(0),
+            scenario_id: String::with_capacity(0),
+            owner_id: String::with_capacity(0),
+        };
+        if let ClientPlatform::Bedrock(client) = &player.client {
+            client
+                .send_game_packet(
+                    &CStartGame {
+                        entity_id: VarLong(i64::from(player.entity_id())),
+                        runtime_entity_id: VarULong(player.entity_id() as u64),
+                        player_gamemode: VarInt(player.gamemode.load() as i32),
+                        position: Vector3::new(0.0, 100.0, 0.0),
+                        yaw: 0.0,
+                        pitch: 0.0,
+                        level_settings,
+                        level_id: String::with_capacity(0),
+                        level_name: "level".to_string(),
+                        premium_world_template_id: String::with_capacity(0),
+                        is_trial: false,
+                        rewind_history_size: VarInt(40),
+                        server_authoritative_block_breaking: false,
+                        current_level_time: 0,
+                        enchantment_seed: VarInt(0),
+                        block_properties_size: VarUInt(0),
+                        // TODO Make this unique
+                        multiplayer_correlation_id: Uuid::default().to_string(),
+                        enable_itemstack_net_manager: false,
+                        // TODO Make this description better!
+                        // This gets send from the client to mojang server for telemetry
+                        server_version: "Pumpkin Rust Server".to_string(),
+
+                        compound_id: 10,
+                        compound_len: VarUInt(0),
+                        compound_end: 0,
+
+                        block_registry_checksum: 0,
+                        world_template_id: Uuid::default(),
+                        // TODO The client needs extra biome data for this
+                        enable_clientside_generation: false,
+                        blocknetwork_ids_are_hashed: false,
+                        server_auth_sounds: false,
+                    },
+                    RakReliability::Unreliable,
+                )
+                .await;
+        } else {
+            panic!();
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
-    pub async fn spawn_player(
+    pub async fn spawn_java_player(
         &self,
         base_config: &BasicConfiguration,
         player: Arc<Player>,
@@ -1094,8 +1238,14 @@ impl World {
 
         player.send_permission_lvl_update().await;
 
-        // Teleport
+        player.hunger_manager.restart();
+
         let info = &self.level_info.read().await;
+        if !info.game_rules.keep_inventory {
+            player.set_experience(0, 0.0, 0).await;
+        }
+
+        // Teleport
         let pitch = 0.0;
         let (position, yaw) = if let Some(respawn) = player.get_respawn_point().await {
             respawn
@@ -1147,11 +1297,7 @@ impl World {
         chunks: Vec<Vector2<i32>>,
         center_chunk: Vector2<i32>,
     ) {
-        if player
-            .client
-            .closed
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        if player.client.closed() {
             log::info!("The connection has closed before world chunks were spawned");
             return;
         }
@@ -1162,7 +1308,7 @@ impl World {
         let mut chunks = chunks;
         chunks.sort_unstable_by_key(|pos| {
             let rel_x = pos.x - center_chunk.x;
-            let rel_z = pos.z - center_chunk.z;
+            let rel_z = pos.y - center_chunk.y;
             rel_x * rel_x + rel_z * rel_z
         });
 
@@ -1230,7 +1376,7 @@ impl World {
                     (world, chunk)
                 };
 
-                if !player.client.closed.load(Ordering::Relaxed) {
+                if !player.client.closed() {
                     send_cancellable! {{
                         ChunkSend {
                             world,
@@ -1656,7 +1802,7 @@ impl World {
                 .on_state_replaced(
                     self,
                     old_block,
-                    *position,
+                    position,
                     replaced_block_state_id,
                     block_moved,
                 )
@@ -1915,7 +2061,13 @@ impl World {
                 self.block_registry.get_pumpkin_block(neighbor_block)
             {
                 neighbor_pumpkin_block
-                    .on_neighbor_update(self, neighbor_block, &neighbor_pos, source_block, false)
+                    .on_neighbor_update(OnNeighborUpdateArgs {
+                        world: self,
+                        block: neighbor_block,
+                        position: &neighbor_pos,
+                        source_block,
+                        notify: false,
+                    })
                     .await;
             }
 
@@ -1939,13 +2091,13 @@ impl World {
         if let Some(neighbor_pumpkin_block) = self.block_registry.get_pumpkin_block(neighbor_block)
         {
             neighbor_pumpkin_block
-                .on_neighbor_update(
-                    self,
-                    neighbor_block,
-                    neighbor_block_pos,
+                .on_neighbor_update(OnNeighborUpdateArgs {
+                    world: self,
+                    block: neighbor_block,
+                    position: neighbor_block_pos,
                     source_block,
-                    false,
-                )
+                    notify: false,
+                })
                 .await;
         }
     }

@@ -13,6 +13,12 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_data::Block;
+use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
+use pumpkin_registry::VanillaDimensionType;
+use pumpkin_world::world::BlockFlags;
+
+use crate::block::pumpkin_block::{BlockMetadata, CanPlaceAtArgs, PumpkinBlock, RandomTickArgs};
 
 pub struct FlowerBlock;
 
@@ -56,29 +62,33 @@ impl PumpkinBlock for FlowerBlock {
             .await
     }
 
-    async fn random_tick(&self, block: &Block, world: &Arc<World>, pos: &BlockPos) {
+    async fn random_tick(&self, args: RandomTickArgs<'_>) {
         //TODO add trail particule
-        if world.dimension_type.eq(&VanillaDimensionType::Overworld)
-            || world
+        if args
+            .world
+            .dimension_type
+            .eq(&VanillaDimensionType::Overworld)
+            || args
+                .world
                 .dimension_type
                 .eq(&VanillaDimensionType::OverworldCaves)
         {
-            if block.eq(&Block::CLOSED_EYEBLOSSOM)
-                && world.level_time.lock().await.time_of_day > 14500
+            if args.block.eq(&Block::CLOSED_EYEBLOSSOM)
+                && args.world.level_time.lock().await.time_of_day > 14500
             {
-                world
+                args.world
                     .set_block_state(
-                        pos,
+                        args.position,
                         Block::OPEN_EYEBLOSSOM.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
-            } else if block.eq(&Block::OPEN_EYEBLOSSOM)
-                && world.level_time.lock().await.time_of_day <= 14500
+            } else if args.block.eq(&Block::OPEN_EYEBLOSSOM)
+                && args.world.level_time.lock().await.time_of_day <= 14500
             {
-                world
+                args.world
                     .set_block_state(
-                        pos,
+                        args.position,
                         Block::CLOSED_EYEBLOSSOM.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )

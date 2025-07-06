@@ -9,6 +9,10 @@ use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_data::Block;
+use pumpkin_data::tag::Tagable;
+
+use crate::block::pumpkin_block::{BlockMetadata, CanPlaceAtArgs, PumpkinBlock};
 
 pub struct BushBlock;
 
