@@ -49,7 +49,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let world = args.world;
         let block = args.block;
-        let location = args.location;
+        let location = args.position;
 
         if args.direction == BlockDirection::Down {
             let support_block = world.get_block_state(&location.down()).await;
@@ -103,13 +103,13 @@ impl PumpkinBlock for RedstoneTorchBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let support_block = args
             .block_accessor
-            .get_block_state(&args.location.down())
+            .get_block_state(&args.position.down())
             .await;
         if support_block.is_center_solid(BlockDirection::Up) {
             return true;
         }
         for dir in BlockDirection::horizontal() {
-            if can_place_at(args.block_accessor, args.location, dir).await {
+            if can_place_at(args.block_accessor, args.position, dir).await {
                 return true;
             }
         }
@@ -123,12 +123,12 @@ impl PumpkinBlock for RedstoneTorchBlock {
         if args.block == &Block::REDSTONE_WALL_TORCH {
             let props = RWallTorchProps::from_state_id(args.state_id, args.block);
             if props.facing.to_block_direction().opposite() == args.direction
-                && !can_place_at(args.world, args.location, props.facing.to_block_direction()).await
+                && !can_place_at(args.world, args.position, props.facing.to_block_direction()).await
             {
                 return 0;
             }
         } else if args.direction == BlockDirection::Down {
-            let support_block = args.world.get_block_state(&args.location.down()).await;
+            let support_block = args.world.get_block_state(&args.position.down()).await;
             if !support_block.is_center_solid(BlockDirection::Up) {
                 return 0;
             }
@@ -137,11 +137,11 @@ impl PumpkinBlock for RedstoneTorchBlock {
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
+        let state = args.world.get_block_state(args.position).await;
 
         if args
             .world
-            .is_block_tick_scheduled(args.location, args.block)
+            .is_block_tick_scheduled(args.position, args.block)
             .await
         {
             return;
@@ -152,20 +152,20 @@ impl PumpkinBlock for RedstoneTorchBlock {
             if props.lit
                 != should_be_lit(
                     args.world,
-                    args.location,
+                    args.position,
                     props.facing.to_block_direction().opposite(),
                 )
                 .await
             {
                 args.world
-                    .schedule_block_tick(args.block, *args.location, 2, TickPriority::Normal)
+                    .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
                     .await;
             }
         } else if args.block == &Block::REDSTONE_TORCH {
             let props = RTorchProps::from_state_id(state.id, args.block);
-            if props.lit != should_be_lit(args.world, args.location, BlockDirection::Down).await {
+            if props.lit != should_be_lit(args.world, args.position, BlockDirection::Down).await {
                 args.world
-                    .schedule_block_tick(args.block, *args.location, 2, TickPriority::Normal)
+                    .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
                     .await;
             }
         }
@@ -208,12 +208,12 @@ impl PumpkinBlock for RedstoneTorchBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
+        let state = args.world.get_block_state(args.position).await;
         if args.block == &Block::REDSTONE_WALL_TORCH {
             let mut props = RWallTorchProps::from_state_id(state.id, args.block);
             let should_be_lit_now = should_be_lit(
                 args.world,
-                args.location,
+                args.position,
                 props.facing.to_block_direction().opposite(),
             )
             .await;
@@ -221,37 +221,37 @@ impl PumpkinBlock for RedstoneTorchBlock {
                 props.lit = should_be_lit_now;
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         props.to_state_id(args.block),
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
-                update_neighbors(args.world, args.location).await;
+                update_neighbors(args.world, args.position).await;
             }
         } else if args.block == &Block::REDSTONE_TORCH {
             let mut props = RTorchProps::from_state_id(state.id, args.block);
             let should_be_lit_now =
-                should_be_lit(args.world, args.location, BlockDirection::Down).await;
+                should_be_lit(args.world, args.position, BlockDirection::Down).await;
             if props.lit != should_be_lit_now {
                 props.lit = should_be_lit_now;
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         props.to_state_id(args.block),
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
-                update_neighbors(args.world, args.location).await;
+                update_neighbors(args.world, args.position).await;
             }
         }
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
-        update_neighbors(args.world, args.location).await;
+        update_neighbors(args.world, args.position).await;
     }
 
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        update_neighbors(args.world, args.location).await;
+        update_neighbors(args.world, args.position).await;
     }
 }
 

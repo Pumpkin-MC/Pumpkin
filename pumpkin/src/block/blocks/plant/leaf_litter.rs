@@ -28,7 +28,7 @@ impl PumpkinBlock for LeafLitterBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let block_below = args
             .block_accessor
-            .get_block_state(&args.location.down())
+            .get_block_state(&args.position.down())
             .await;
         block_below.is_side_solid(BlockDirection::Up)
     }
@@ -46,7 +46,7 @@ impl PumpkinBlock for LeafLitterBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         if args.direction == BlockDirection::Down {
-            let block_below_state = args.world.get_block_state(&args.location.down()).await;
+            let block_below_state = args.world.get_block_state(&args.position.down()).await;
             if !block_below_state.is_side_solid(BlockDirection::Up) {
                 return Block::AIR.default_state.id;
             }

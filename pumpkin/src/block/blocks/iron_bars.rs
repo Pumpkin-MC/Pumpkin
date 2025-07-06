@@ -23,7 +23,7 @@ impl PumpkinBlock for IronBarsBlock {
         let mut bars_props = IronBarsProperties::default(args.block);
         bars_props.waterlogged = args.replacing.water_source();
 
-        compute_bars_state(bars_props, args.world, args.block, args.location).await
+        compute_bars_state(bars_props, args.world, args.block, args.position).await
     }
 
     async fn get_state_for_neighbor_update(
@@ -31,7 +31,7 @@ impl PumpkinBlock for IronBarsBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let bars_props = IronBarsProperties::from_state_id(args.state_id, args.block);
-        compute_bars_state(bars_props, args.world, args.block, args.location).await
+        compute_bars_state(bars_props, args.world, args.block, args.position).await
     }
 }
 

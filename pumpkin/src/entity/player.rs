@@ -1160,9 +1160,9 @@ impl Player {
         }
     }
 
-    pub fn can_interact_with_block_at(&self, pos: &BlockPos, additional_range: f64) -> bool {
+    pub fn can_interact_with_block_at(&self, position: &BlockPos, additional_range: f64) -> bool {
         let d = self.block_interaction_range() + additional_range;
-        let box_pos = BoundingBox::from_block(pos);
+        let box_pos = BoundingBox::from_block(position);
         let entity_pos = self.living_entity.entity.pos.load();
         let standing_eye_height = self.living_entity.entity.standing_eye_height;
         box_pos.squared_magnitude(Vector3 {

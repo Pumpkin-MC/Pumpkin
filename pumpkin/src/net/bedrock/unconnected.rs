@@ -17,7 +17,7 @@ impl BedrockClientPlatform {
         let motd_string = ServerInfo {
             edition: "MCPE",
             motd_line_1: &BASIC_CONFIG.motd,
-            protocol_version: 818,
+            protocol_version: 819,
             version_name: CURRENT_BEDROCK_MC_VERSION,
             player_count: 1,
             max_player_count: BASIC_CONFIG.max_players,

@@ -20,13 +20,13 @@ impl PumpkinBlock for LilyPadBlock {
             .ends_with("_boat")
         {
             args.world
-                .break_block(args.location, None, BlockFlags::empty())
+                .break_block(args.position, None, BlockFlags::empty())
                 .await;
         }
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let block_below = args.block_accessor.get_block(&args.location.down()).await;
+        let block_below = args.block_accessor.get_block(&args.position.down()).await;
         block_below == &Block::WATER || block_below == &Block::ICE
     }
 }

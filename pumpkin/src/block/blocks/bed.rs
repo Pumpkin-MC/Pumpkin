@@ -40,12 +40,12 @@ impl PumpkinBlock for BedBlock {
             let facing = player.living_entity.entity.get_horizontal_facing();
             return args
                 .block_accessor
-                .get_block_state(args.location)
+                .get_block_state(args.position)
                 .await
                 .replaceable()
                 && args
                     .block_accessor
-                    .get_block_state(&args.location.offset(facing.to_offset()))
+                    .get_block_state(&args.position.offset(facing.to_offset()))
                     .await
                     .replaceable();
         }
@@ -62,14 +62,14 @@ impl PumpkinBlock for BedBlock {
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
-        let bed_entity = BedBlockEntity::new(*args.location);
+        let bed_entity = BedBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(bed_entity)).await;
 
         let mut bed_head_props = BedProperties::default(args.block);
         bed_head_props.facing = BedProperties::from_state_id(args.state_id, args.block).facing;
         bed_head_props.part = BedPart::Head;
 
-        let bed_head_pos = args.location.offset(bed_head_props.facing.to_offset());
+        let bed_head_pos = args.position.offset(bed_head_props.facing.to_offset());
         args.world
             .set_block_state(
                 &bed_head_pos,
@@ -85,10 +85,10 @@ impl PumpkinBlock for BedBlock {
     async fn broken(&self, args: BrokenArgs<'_>) {
         let bed_props = BedProperties::from_state_id(args.state.id, args.block);
         let other_half_pos = if bed_props.part == BedPart::Head {
-            args.location
+            args.position
                 .offset(bed_props.facing.opposite().to_offset())
         } else {
-            args.location.offset(bed_props.facing.to_offset())
+            args.position.offset(bed_props.facing.to_offset())
         };
 
         args.world
@@ -106,19 +106,19 @@ impl PumpkinBlock for BedBlock {
 
     #[allow(clippy::too_many_lines)]
     async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        let state_id = args.world.get_block_state_id(args.location).await;
+        let state_id = args.world.get_block_state_id(args.position).await;
         let bed_props = BedProperties::from_state_id(state_id, args.block);
 
         let (bed_head_pos, bed_foot_pos) = if bed_props.part == BedPart::Head {
             (
-                *args.location,
-                args.location
+                *args.position,
+                args.position
                     .offset(bed_props.facing.opposite().to_offset()),
             )
         } else {
             (
-                args.location.offset(bed_props.facing.to_offset()),
-                *args.location,
+                args.position.offset(bed_props.facing.to_offset()),
+                *args.position,
             )
         };
 
@@ -238,7 +238,7 @@ impl PumpkinBlock for BedBlock {
         }
 
         args.player.sleep(bed_head_pos).await;
-        Self::set_occupied(true, args.world, args.block, args.location, state_id).await;
+        Self::set_occupied(true, args.world, args.block, args.position, state_id).await;
     }
 }
 

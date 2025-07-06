@@ -59,20 +59,20 @@ impl PumpkinBlock for TNTBlock {
             return BlockActionResult::Continue;
         }
         let world = args.player.world().await;
-        Self::prime(&world, args.location).await;
+        Self::prime(&world, args.position).await;
 
         BlockActionResult::Consume
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
-        if block_receives_redstone_power(args.world, args.location).await {
-            Self::prime(args.world, args.location).await;
+        if block_receives_redstone_power(args.world, args.position).await {
+            Self::prime(args.world, args.position).await;
         }
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if block_receives_redstone_power(args.world, args.location).await {
-            Self::prime(args.world, args.location).await;
+        if block_receives_redstone_power(args.world, args.position).await {
+            Self::prime(args.world, args.position).await;
         }
     }
 
@@ -80,7 +80,7 @@ impl PumpkinBlock for TNTBlock {
         let entity = Entity::new(
             Uuid::new_v4(),
             args.world.clone(),
-            args.location.to_f64(),
+            args.position.to_f64(),
             EntityType::TNT,
             false,
         );

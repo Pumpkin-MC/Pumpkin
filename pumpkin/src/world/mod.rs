@@ -618,7 +618,7 @@ impl World {
                     .on_scheduled_tick(OnScheduledTickArgs {
                         world: self,
                         block,
-                        location: &scheduled_tick.block_pos,
+                        position: &scheduled_tick.block_pos,
                     })
                     .await;
             }
@@ -2053,7 +2053,7 @@ impl World {
                     .on_neighbor_update(OnNeighborUpdateArgs {
                         world: self,
                         block: neighbor_block,
-                        location: &neighbor_pos,
+                        position: &neighbor_pos,
                         source_block,
                         notify: false,
                     })
@@ -2083,7 +2083,7 @@ impl World {
                 .on_neighbor_update(OnNeighborUpdateArgs {
                     world: self,
                     block: neighbor_block,
-                    location: neighbor_block_pos,
+                    position: neighbor_block_pos,
                     source_block,
                     notify: false,
                 })

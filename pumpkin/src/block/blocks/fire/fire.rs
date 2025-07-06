@@ -182,7 +182,7 @@ impl PumpkinBlock for FireBlock {
             || dimension == VanillaDimensionType::TheNether
         {
             if let Some(portal) =
-                NetherPortal::get_new_portal(args.world, args.location, HorizontalAxis::X).await
+                NetherPortal::get_new_portal(args.world, args.position, HorizontalAxis::X).await
             {
                 portal.create(args.world).await;
                 return;
@@ -192,7 +192,7 @@ impl PumpkinBlock for FireBlock {
         args.world
             .schedule_block_tick(
                 args.block,
-                *args.location,
+                *args.position,
                 Self::get_fire_tick_delay() as u16,
                 TickPriority::Normal,
             )
@@ -227,7 +227,7 @@ impl PumpkinBlock for FireBlock {
                 world: Some(args.world),
                 block_accessor: args.world,
                 block: &Block::FIRE,
-                location: args.location,
+                position: args.position,
                 direction: BlockDirection::Up,
                 player: None,
                 use_item_on: None,
@@ -236,7 +236,7 @@ impl PumpkinBlock for FireBlock {
         {
             let old_fire_props = FireProperties::from_state_id(args.state_id, &Block::FIRE);
             let fire_state_id = self
-                .get_state_for_position(args.world, &Block::FIRE, args.location)
+                .get_state_for_position(args.world, &Block::FIRE, args.position)
                 .await;
             let mut fire_props = FireProperties::from_state_id(fire_state_id, &Block::FIRE);
             fire_props.age = EnumVariants::from_index(old_fire_props.age.to_index());
@@ -248,18 +248,18 @@ impl PumpkinBlock for FireBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let state = args
             .block_accessor
-            .get_block_state(&args.location.down())
+            .get_block_state(&args.position.down())
             .await;
         if state.is_side_solid(BlockDirection::Up) {
             return true;
         }
-        self.are_blocks_around_flammable(args.block_accessor, args.location)
+        self.are_blocks_around_flammable(args.block_accessor, args.position)
             .await
     }
 
     #[allow(clippy::too_many_lines)]
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let (world, block, pos) = (args.world, args.block, args.location);
+        let (world, block, pos) = (args.world, args.block, args.position);
         world
             .schedule_block_tick(
                 block,
@@ -274,7 +274,7 @@ impl PumpkinBlock for FireBlock {
                 world: Some(world),
                 block_accessor: world.as_ref(),
                 block,
-                location: pos,
+                position: pos,
                 direction: BlockDirection::Up,
                 player: None,
                 use_item_on: None,
@@ -409,6 +409,6 @@ impl PumpkinBlock for FireBlock {
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {
-        FireBlockBase::broken(args.world.clone(), *args.location).await;
+        FireBlockBase::broken(args.world.clone(), *args.position).await;
     }
 }

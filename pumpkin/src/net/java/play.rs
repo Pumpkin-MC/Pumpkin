@@ -1191,18 +1191,18 @@ impl JavaClientPlatform {
         match Status::try_from(player_action.status.0) {
             Ok(status) => match status {
                 Status::StartedDigging => {
-                    if !player.can_interact_with_block_at(&player_action.location, 1.0) {
+                    if !player.can_interact_with_block_at(&player_action.position, 1.0) {
                         log::warn!(
                             "Player {0} tried to interact with block out of reach at {1}",
                             player.gameprofile.name,
-                            player_action.location
+                            player_action.position
                         );
                         return;
                     }
-                    let location = player_action.location;
+                    let position = player_action.position;
                     let entity = &player.living_entity.entity;
                     let world = &entity.world.read().await;
-                    let (block, state) = world.get_block_and_block_state(&location).await;
+                    let (block, state) = world.get_block_and_block_state(&position).await;
 
                     let inventory = player.inventory();
                     let held = inventory.held_item();
@@ -1211,7 +1211,7 @@ impl JavaClientPlatform {
                         .can_mine(held.lock().await.item, player)
                     {
                         self.enqueue_packet(&CBlockUpdate::new(
-                            location,
+                            position,
                             VarInt(i32::from(state.id)),
                         ))
                         .await;
@@ -1225,14 +1225,14 @@ impl JavaClientPlatform {
                         // Block break & play sound
                         world
                             .break_block(
-                                &location,
+                                &position,
                                 Some(player.clone()),
                                 BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
                             )
                             .await;
                         server
                             .block_registry
-                            .broken(Arc::clone(world), block, player, location, server, state)
+                            .broken(world, block, player, &position, server, state)
                             .await;
                         self.update_sequence(player, player_action.sequence.0);
                         return;
@@ -1247,32 +1247,25 @@ impl JavaClientPlatform {
                         let speed = block::calc_block_breaking(player, state, block.name).await;
                         // Instant break
                         if speed >= 1.0 {
-                            let broken_state = world.get_block_state(&location).await;
+                            let broken_state = world.get_block_state(&position).await;
                             world
                                 .break_block(
-                                    &location,
+                                    &position,
                                     Some(player.clone()),
                                     BlockFlags::NOTIFY_NEIGHBORS,
                                 )
                                 .await;
                             server
                                 .block_registry
-                                .broken(
-                                    Arc::clone(world),
-                                    block,
-                                    player,
-                                    location,
-                                    server,
-                                    broken_state,
-                                )
+                                .broken(world, block, player, &position, server, broken_state)
                                 .await;
                         } else {
                             player
                                 .mining
                                 .store(true, std::sync::atomic::Ordering::Relaxed);
-                            *player.mining_pos.lock().await = location;
+                            *player.mining_pos.lock().await = position;
                             let progress = (speed * 10.0) as i32;
-                            world.set_block_breaking(entity, location, progress).await;
+                            world.set_block_breaking(entity, position, progress).await;
                             player
                                 .current_block_destroy_stage
                                 .store(progress, std::sync::atomic::Ordering::Relaxed);
@@ -1281,11 +1274,11 @@ impl JavaClientPlatform {
                     self.update_sequence(player, player_action.sequence.0);
                 }
                 Status::CancelledDigging => {
-                    if !player.can_interact_with_block_at(&player_action.location, 1.0) {
+                    if !player.can_interact_with_block_at(&player_action.position, 1.0) {
                         log::warn!(
                             "Player {0} tried to interact with block out of reach at {1}",
                             player.gameprofile.name,
-                            player_action.location
+                            player_action.position
                         );
                         return;
                     }
@@ -1295,18 +1288,18 @@ impl JavaClientPlatform {
                     let entity = &player.living_entity.entity;
                     let world = &entity.world.read().await;
                     world
-                        .set_block_breaking(entity, player_action.location, -1)
+                        .set_block_breaking(entity, player_action.position, -1)
                         .await;
                     self.update_sequence(player, player_action.sequence.0);
                 }
                 Status::FinishedDigging => {
                     // TODO: do validation
-                    let location = player_action.location;
+                    let location = player_action.position;
                     if !player.can_interact_with_block_at(&location, 1.0) {
                         log::warn!(
                             "Player {0} tried to interact with block out of reach at {1}",
                             player.gameprofile.name,
-                            player_action.location
+                            player_action.position
                         );
                         return;
                     }
@@ -1338,7 +1331,7 @@ impl JavaClientPlatform {
 
                     server
                         .block_registry
-                        .broken(Arc::clone(world), block, player, location, server, state)
+                        .broken(world, block, player, &location, server, state)
                         .await;
 
                     self.update_sequence(player, player_action.sequence.0);
@@ -1421,10 +1414,10 @@ impl JavaClientPlatform {
         }
         self.update_sequence(player, use_item_on.sequence.0);
 
-        let location = use_item_on.location;
+        let position = use_item_on.position;
         let mut should_try_decrement = false;
 
-        if !player.can_interact_with_block_at(&location, 1.0) {
+        if !player.can_interact_with_block_at(&position, 1.0) {
             // TODO: maybe log?
             return Err(BlockPlacingError::BlockOutOfReach.into());
         }
@@ -1438,7 +1431,7 @@ impl JavaClientPlatform {
 
         let entity = &player.living_entity.entity;
         let world = &entity.world.read().await;
-        let block = world.get_block(&location).await;
+        let block = world.get_block(&position).await;
 
         let sneaking = player
             .living_entity
@@ -1450,18 +1443,15 @@ impl JavaClientPlatform {
                 // Using block with empty hand
                 server
                     .block_registry
-                    .on_use(block, player, location, server, world)
+                    .on_use(block, player, &position, server, world)
                     .await;
             }
             return Ok(());
         }
         if !sneaking {
-            let item_stack = held_item.lock().await;
-            let item = item_stack.item;
-            drop(item_stack);
             let action_result = server
                 .block_registry
-                .use_with_item(block, player, location, item, server, world)
+                .use_with_item(block, player, &position, &held_item, server, world)
                 .await;
             match action_result {
                 BlockActionResult::Continue => {}
@@ -1474,7 +1464,7 @@ impl JavaClientPlatform {
                 .use_on_block(
                     held_item.lock().await.item,
                     player,
-                    location,
+                    position,
                     face,
                     block,
                     server,
@@ -1486,13 +1476,13 @@ impl JavaClientPlatform {
         // Check if the item is a block, because not every item can be placed :D
         if let Some(block) = get_block_by_item(held_item.lock().await.item.id) {
             should_try_decrement = self
-                .run_is_block_place(player, block, server, use_item_on, location, face)
+                .run_is_block_place(player, block, server, use_item_on, position, face)
                 .await?;
         }
 
         // Check if the item is a spawn egg
         if let Some(entity) = entity_from_egg(held_item.lock().await.item.id) {
-            self.spawn_entity_from_egg(player, entity, location, face)
+            self.spawn_entity_from_egg(player, entity, position, face)
                 .await;
             should_try_decrement = true;
         }
