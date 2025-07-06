@@ -1969,6 +1969,7 @@ dependencies = [
  "chrono",
  "crossbeam",
  "dhat",
+ "flate2",
  "futures",
  "git-version",
  "hmac",
