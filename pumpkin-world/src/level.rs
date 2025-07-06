@@ -398,37 +398,61 @@ impl Level {
         let mut ticks = Vec::with_capacity(self.loaded_chunks.len() * 3 * 16 * 16);
         let mut rng = SmallRng::from_os_rng();
 
-        for chunk in self.loaded_chunks.iter() {
-            let chunk = chunk.read().await;
+        let chunk_refs: Vec<_> = self
+            .loaded_chunks
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
 
-            let chunk_x_base = chunk.position.x * 16;
-            let chunk_z_base = chunk.position.z * 16;
+        for chunk_arc in chunk_refs {
+            let section_data = {
+                let chunk = chunk_arc.read().await;
 
-            for i in 0..chunk.section.sections.len() {
-                //TODO use game rules to determine how many random ticks to perform
-                for _ in 0..3 {
-                    let r = rng.random::<u32>();
-                    let x_offset = (r & 0xF) as i32;
-                    let y_offset = ((r >> 4) & 0xF) as i32 - 32;
-                    let z_offset = (r >> 8 & 0xF) as i32;
+                let chunk_x_base = chunk.position.x * 16;
+                let chunk_z_base = chunk.position.z * 16;
 
-                    let random_pos = BlockPos::new(
-                        chunk_x_base + x_offset,
-                        i as i32 * 16 + y_offset,
-                        chunk_z_base + z_offset,
-                    );
+                let mut section_blocks = Vec::new();
+                for i in 0..chunk.section.sections.len() {
+                    let mut section_block_data = Vec::new();
 
-                    let block_id = chunk
-                        .section
-                        .get_block_absolute_y(x_offset as usize, random_pos.0.y, z_offset as usize)
-                        .unwrap_or(Block::AIR.default_state.id);
+                    //TODO use game rules to determine how many random ticks to perform
+                    for _ in 0..3 {
+                        let r = rng.random::<u32>();
+                        let x_offset = (r & 0xF) as i32;
+                        let y_offset = ((r >> 4) & 0xF) as i32 - 32;
+                        let z_offset = (r >> 8 & 0xF) as i32;
 
+                        let random_pos = BlockPos::new(
+                            chunk_x_base + x_offset,
+                            i as i32 * 16 + y_offset,
+                            chunk_z_base + z_offset,
+                        );
+
+                        let block_id = chunk
+                            .section
+                            .get_block_absolute_y(
+                                x_offset as usize,
+                                random_pos.0.y,
+                                z_offset as usize,
+                            )
+                            .unwrap_or(Block::AIR.default_state.id);
+
+                        section_block_data.push((random_pos, block_id));
+                    }
+                    section_blocks.push(section_block_data);
+                }
+
+                section_blocks
+            };
+
+            for section_data in section_data {
+                for (random_pos, block_id) in section_data {
                     if has_random_ticks(block_id) {
                         ticks.push(ScheduledTick {
                             block_pos: random_pos,
                             delay: 0,
-                            priority: TickPriority::Normal, // Random ticks are all the same priority
-                            target_block_id: 0,             // Does not matter for random ticks,
+                            priority: TickPriority::Normal,
+                            target_block_id: 0,
                         });
                     }
                 }
