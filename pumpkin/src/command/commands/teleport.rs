@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::color::NamedColor;
 
 use crate::command::CommandError;
 use crate::command::args::ConsumedArgs;
@@ -65,12 +64,9 @@ impl CommandExecutor for EntitiesToEntityExecutor {
 
         let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
         let pos = destination.living_entity.entity.pos.load();
-        if World::is_valid(pos) {
+        if !World::is_valid(pos) {
             sender
-                .send_message(
-                    TextComponent::text("Coordinates are out of bounds.".to_string())
-                        .color_named(NamedColor::Red),
-                )
+                .send_message(TextComponent::translate("argument.pos.outofbounds", []))
                 .await;
 
             return Ok(());
@@ -98,12 +94,9 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-        if World::is_valid(pos) {
+        if !World::is_valid(pos) {
             sender
-                .send_message(
-                    TextComponent::text("Coordinates are out of bounds.".to_string())
-                        .color_named(NamedColor::Red),
-                )
+                .send_message(TextComponent::translate("argument.pos.outofbounds", []))
                 .await;
             return Ok(());
         }
@@ -131,12 +124,9 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-        if World::is_valid(pos) {
+        if !World::is_valid(pos) {
             sender
-                .send_message(
-                    TextComponent::text("Coordinates are out of bounds.".to_string())
-                        .color_named(NamedColor::Red),
-                )
+                .send_message(TextComponent::translate("argument.pos.outofbounds", []))
                 .await;
             return Ok(());
         }
@@ -166,12 +156,9 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-        if World::is_valid(pos) {
+        if !World::is_valid(pos) {
             sender
-                .send_message(
-                    TextComponent::text("Coordinates are out of bounds.".to_string())
-                        .color_named(NamedColor::Red),
-                )
+                .send_message(TextComponent::translate("argument.pos.outofbounds", []))
                 .await;
             return Ok(());
         }
@@ -198,12 +185,9 @@ impl CommandExecutor for EntitiesToPosExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-        if World::is_valid(pos) {
+        if !World::is_valid(pos) {
             sender
-                .send_message(
-                    TextComponent::text("Coordinates are out of bounds.".to_string())
-                        .color_named(NamedColor::Red),
-                )
+                .send_message(TextComponent::translate("argument.pos.outofbounds", []))
                 .await;
             return Ok(());
         }
@@ -234,12 +218,9 @@ impl CommandExecutor for SelfToEntityExecutor {
             CommandSender::Player(player) => {
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
-                if World::is_valid(pos) {
+                if !World::is_valid(pos) {
                     sender
-                        .send_message(
-                            TextComponent::text("Coordinates are out of bounds.".to_string())
-                                .color_named(NamedColor::Red),
-                        )
+                        .send_message(TextComponent::translate("argument.pos.outofbounds", []))
                         .await;
                     return Ok(());
                 }
@@ -270,12 +251,9 @@ impl CommandExecutor for SelfToPosExecutor {
                 let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
-                if World::is_valid(pos) {
+                if !World::is_valid(pos) {
                     sender
-                        .send_message(
-                            TextComponent::text("Coordinates are out of bounds.".to_string())
-                                .color_named(NamedColor::Red),
-                        )
+                        .send_message(TextComponent::translate("argument.pos.outofbounds", []))
                         .await;
                     return Ok(());
                 }
