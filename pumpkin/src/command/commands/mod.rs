@@ -115,7 +115,9 @@ pub async fn default_dispatcher() -> CommandDispatcher {
         "minecraft:command.defaultgamemode",
     );
     dispatcher.register(
-        setworldspawn::init_command_tree(), "minecraft.command.setworldspawn");
+        setworldspawn::init_command_tree(),
+        "minecraft:command.setworldspawn",
+    );
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -384,6 +386,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
 
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Three
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.setworldspawn",
+            "Sets the world spawn point",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
     registry
         .register_permission(Permission::new(
             "minecraft:command.op",
