@@ -132,7 +132,7 @@ pub trait EntityBase: Send + Sync {
     }
     async fn get_display_name(&self) -> TextComponent {
         let entity = self.get_entity();
-        let mut name = entity.get_plain_name().await.clone();
+        let mut name = entity.get_plain_name().clone();
         let name_clone = name.clone();
         name = name.hover_event(HoverEvent::show_entity(
             entity.entity_uuid.to_string(),
@@ -827,8 +827,8 @@ impl Entity {
     }
 
     /// Should return the translatable name of the entity without click or hover events.
-    #[allow(clippy::unused_async)]
-    pub async fn get_plain_name(&self) -> TextComponent {
+    #[allow(clippy::option_if_let_else)]
+    pub fn get_plain_name(&self) -> TextComponent {
         // TODO: team color
         if let Some(custom_name) = &self.custom_name {
             custom_name.clone()
