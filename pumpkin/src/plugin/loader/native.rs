@@ -79,21 +79,22 @@ impl PluginLoader for NativePluginLoader {
 
 impl NativePluginLoader {
     fn validate_metadata(metadata: &PluginMetadata<'static>) -> Result<(), String> {
-        log::info!("{}, {}", metadata.pumpkin_commit, GIT_VERSION);
-        if metadata.pumpkin_commit != GIT_VERSION.chars().take(8).collect::<String>()
-            && metadata.pumpkin_commit != "ignored"
-        {
-            //return Err(format!("Plugin was compiled with `{}` but server was compiled with version `{GIT_VERSION}`", metadata.host_api_commit).to_string());
+        let pumpkin_commit = if metadata.pumpkin_commit.is_empty() {
+            "None"
+        } else {
+            metadata.pumpkin_commit
+        };
+        let server_commit = &GIT_VERSION[..=8];
+        if pumpkin_commit != GIT_VERSION && pumpkin_commit != "ignored" {
             log::warn!(
-                "Plugin was compiled with `{}` but server was compiled with version `{GIT_VERSION}`",
-                metadata.pumpkin_commit
+                "Plugin was compiled with pumpkin commit `{}` but server was compiled with version `{}`",
+                pumpkin_commit,
+                server_commit
             );
         }
 
-        log::info!("{}", metadata.build_profile);
-
         if metadata.windows && metadata.build_profile != "release" {
-            return Err("Plugin was compiled on windows but without release profile".to_string());
+            return Err("Windows builds must use the release profile.".to_string());
         }
 
         Ok(())
