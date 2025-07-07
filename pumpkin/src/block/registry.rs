@@ -1,4 +1,6 @@
-use crate::block::pumpkin_block::{BlockMetadata, OnEntityCollisionArgs, PumpkinBlock};
+use crate::block::pumpkin_block::{
+    BlockHitResult, BlockMetadata, OnEntityCollisionArgs, PumpkinBlock,
+};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -25,11 +27,18 @@ use super::pumpkin_block::{
 };
 use super::pumpkin_fluid::PumpkinFluid;
 
+// ActionResult.java
 pub enum BlockActionResult {
-    /// Allow other actions to be executed
-    Continue,
-    /// Block other actions
+    /// Action was successful and we should swing the hand | Same as SUCCESS in vanilla
+    Success,
+    /// Block other actions from being executed and we should swing the hand | Same as CONSUME in vanilla
     Consume,
+    /// Block other actions from being executed | Same as FAIL in vanilla
+    Fail,
+    /// Allow other actions to be executed | Same as PASS in vanilla
+    Continue,
+    /// Use default action for the block | Same as `PASS_TO_DEFAULT_BLOCK_ACTION` in vanilla
+    PassToDefault,
 }
 
 #[derive(Default)]
@@ -137,21 +146,24 @@ impl BlockRegistry {
         block: &Block,
         player: &Player,
         position: &BlockPos,
+        hit: &BlockHitResult<'_>,
         server: &Server,
         world: &Arc<World>,
-    ) {
+    ) -> BlockActionResult {
         let pumpkin_block = self.get_pumpkin_block(block);
         if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block
+            return pumpkin_block
                 .normal_use(NormalUseArgs {
                     server,
                     world,
                     block,
                     position,
                     player,
+                    hit,
                 })
                 .await;
         }
+        BlockActionResult::Continue
     }
 
     pub async fn explode(&self, block: &Block, world: &Arc<World>, position: &BlockPos) {
@@ -167,11 +179,13 @@ impl BlockRegistry {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn use_with_item(
         &self,
         block: &Block,
         player: &Player,
         position: &BlockPos,
+        hit: &BlockHitResult<'_>,
         item_stack: &Arc<Mutex<ItemStack>>,
         server: &Server,
         world: &Arc<World>,
@@ -185,6 +199,7 @@ impl BlockRegistry {
                     block,
                     position,
                     player,
+                    hit,
                     item_stack,
                 })
                 .await;

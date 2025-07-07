@@ -25,7 +25,6 @@ use crate::block::pumpkin_block::NormalUseArgs;
 use crate::block::pumpkin_block::OnNeighborUpdateArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
 use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::UseWithItemArgs;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
@@ -209,20 +208,14 @@ impl PumpkinBlock for DoorBlock {
             .await;
     }
 
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !can_open_door(args.block) {
             return BlockActionResult::Continue;
         }
 
         toggle_door(args.player, args.world, args.position).await;
 
-        BlockActionResult::Consume
-    }
-
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        if can_open_door(args.block) {
-            toggle_door(args.player, args.world, args.position).await;
-        }
+        BlockActionResult::Success
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {

@@ -49,7 +49,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
+use pumpkin_inventory::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::{
@@ -68,8 +68,8 @@ use pumpkin_protocol::{
         client::play::{
             CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
             CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-            CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat, PlayerAction,
-            PlayerInfoFlags,
+            CSetSelectedSlot, CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat,
+            PlayerAction, PlayerInfoFlags,
         },
         server::play::SChatMessage,
     },
@@ -1054,6 +1054,13 @@ impl World {
                 .await;
         }
         player.send_client_information().await;
+
+        // Sync selected slot
+        player
+            .enqueue_set_held_item_packet(&CSetSelectedSlot::new(
+                player.get_inventory().get_selected_slot() as i8,
+            ))
+            .await;
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);

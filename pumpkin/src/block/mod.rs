@@ -75,6 +75,7 @@ use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use pumpkin_world::BlockStateId;
 
 use crate::block::blocks::campfire::CampfireBlock;
+use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::flower_pots::FlowerPotBlock;
 use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
 use crate::block::blocks::plant::crop::beetroot::BeetrootBlock;
@@ -167,6 +168,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(EndPortalFrameBlock);
     manager.register(SeaPickleBlock);
     manager.register(SkullBlock);
+    manager.register(ChiseledBookshelfBlock);
 
     // Fire
     manager.register(SoulFireBlock);

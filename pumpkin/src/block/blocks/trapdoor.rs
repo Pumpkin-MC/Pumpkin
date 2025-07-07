@@ -1,6 +1,6 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::pumpkin_block::{
-    BlockMetadata, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock, UseWithItemArgs,
+    BlockMetadata, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock,
 };
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
@@ -79,20 +79,14 @@ impl BlockMetadata for TrapDoorBlock {
 
 #[async_trait]
 impl PumpkinBlock for TrapDoorBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        if can_open_trapdoor(args.block) {
-            toggle_trapdoor(args.player, args.world, args.position).await;
-        }
-    }
-
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !can_open_trapdoor(args.block) {
             return BlockActionResult::Continue;
         }
 
         toggle_trapdoor(args.player, args.world, args.position).await;
 
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
