@@ -8,7 +8,7 @@ use pumpkin_data::{
 };
 use pumpkin_world::{
     BlockStateId,
-    world::{BlockAccessor, BlockFlags},
+    world::BlockFlags,
 };
 
 use crate::{
