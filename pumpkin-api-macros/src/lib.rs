@@ -54,8 +54,6 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
-    //let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
-
     let metadata = MetadataCommand::new()
         .exec()
         .expect("Failed to run cargo metadata");
@@ -98,8 +96,8 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
             version: env!("CARGO_PKG_VERSION"),
             authors: env!("CARGO_PKG_AUTHORS"),
             description: env!("CARGO_PKG_DESCRIPTION"),
-            host_api_commit: #commit_lit,
-            plugin_build_profile: #profile_lit,
+            pumpkin_commit: #commit_lit,
+            build_profile: #profile_lit,
             windows: #windows,
         };
 

@@ -34,8 +34,7 @@ impl PluginLoader for NativePluginLoader {
                 .map_err(|_| LoaderError::MetadataMissing)?
         };
 
-        self.validate_metadata(metadata)
-            .map_err(LoaderError::LibraryLoad)?;
+        Self::validate_metadata(metadata).map_err(LoaderError::LibraryLoad)?;
 
         let plugin = unsafe {
             library
@@ -79,21 +78,21 @@ impl PluginLoader for NativePluginLoader {
 }
 
 impl NativePluginLoader {
-    fn validate_metadata(&self, metadata: &PluginMetadata<'static>) -> Result<(), String> {
-        log::info!("{}, {}", metadata.host_api_commit, GIT_VERSION);
-        if metadata.host_api_commit != GIT_VERSION.chars().take(8).collect::<String>()
-            && metadata.host_api_commit != "ignored"
+    fn validate_metadata(metadata: &PluginMetadata<'static>) -> Result<(), String> {
+        log::info!("{}, {}", metadata.pumpkin_commit, GIT_VERSION);
+        if metadata.pumpkin_commit != GIT_VERSION.chars().take(8).collect::<String>()
+            && metadata.pumpkin_commit != "ignored"
         {
             //return Err(format!("Plugin was compiled with `{}` but server was compiled with version `{GIT_VERSION}`", metadata.host_api_commit).to_string());
             log::warn!(
                 "Plugin was compiled with `{}` but server was compiled with version `{GIT_VERSION}`",
-                metadata.host_api_commit
+                metadata.pumpkin_commit
             );
         }
 
-        log::info!("{}", metadata.plugin_build_profile);
+        log::info!("{}", metadata.build_profile);
 
-        if metadata.windows && metadata.plugin_build_profile != "release" {
+        if metadata.windows && metadata.build_profile != "release" {
             return Err("Plugin was compiled on windows but without release profile".to_string());
         }
 

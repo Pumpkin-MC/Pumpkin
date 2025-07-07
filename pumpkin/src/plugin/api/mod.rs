@@ -20,8 +20,12 @@ pub struct PluginMetadata<'s> {
     pub authors: &'s str,
     /// A description of the plugin.
     pub description: &'s str,
-    pub host_api_commit: &'s str,
-    pub plugin_build_profile: &'s str,
+    /// The commit of pumpkin that was used to compile the plugin.
+    pub pumpkin_commit: &'s str,
+    /// The profile that was used to compile the plugin.
+    /// `release | debug`
+    pub build_profile: &'s str,
+    /// Whether the plugin was compiled on windows.
     pub windows: bool,
 }
 
