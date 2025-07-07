@@ -67,16 +67,16 @@ impl PumpkinBlock for WeightedPressurePlateBlock {
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if !Self::can_pressure_plate_place_at(args.world, args.location).await {
+        if !Self::can_pressure_plate_place_at(args.world, args.position).await {
             args.world
-                .break_block(args.location, None, BlockFlags::NOTIFY_ALL)
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
                 .await;
             return;
         }
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        Self::can_pressure_plate_place_at(args.world.unwrap(), args.location).await
+        Self::can_pressure_plate_place_at(args.world.unwrap(), args.position).await
     }
 }
 
