@@ -662,7 +662,7 @@ impl World {
             ..i32::from(generation_settings.shape.max_y()))
             .rev()
         {
-            let pos = BlockPos::new(position.x, y, position.z);
+            let pos = BlockPos::new(position.x, y, position.y);
             let block = self.get_block_state(&pos).await;
             if block.is_air() {
                 continue;
