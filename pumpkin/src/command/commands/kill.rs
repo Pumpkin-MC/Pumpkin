@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::entity;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::click::ClickEvent;
-use pumpkin_util::text::hover::HoverEvent;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};

@@ -32,10 +32,8 @@ use pumpkin_util::math::{
     wrap_degrees,
 };
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use serde::Serialize;
-use std::any::Any;
 use std::sync::{
     Arc,
     atomic::{

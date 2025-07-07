@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::world::{MSG_COMMAND_INCOMING, MSG_COMMAND_OUTGOING};
-use pumpkin_util::text::{TextComponent, click::ClickEvent, hover::HoverEvent};
+use pumpkin_util::text::TextComponent;
 
 use crate::command::{
     CommandError, CommandExecutor, CommandSender,
