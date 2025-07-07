@@ -2,6 +2,8 @@ use std::any::Any;
 
 use libloading::Library;
 
+use crate::GIT_VERSION;
+
 use super::{LoaderError, Path, Plugin, PluginLoader, PluginMetadata, async_trait};
 
 #[derive(Debug)]
@@ -31,6 +33,8 @@ impl PluginLoader for NativePluginLoader {
                 .get::<*const PluginMetadata>(b"METADATA")
                 .map_err(|_| LoaderError::MetadataMissing)?
         };
+        
+        self.validate_metadata(metadata).map_err(|it| LoaderError::LibraryLoad(it))?;
 
         let plugin = unsafe {
             library
@@ -70,5 +74,23 @@ impl PluginLoader for NativePluginLoader {
     /// Windows specific issue
     fn can_unload(&self) -> bool {
         !cfg!(target_os = "windows")
+    }
+}
+
+impl NativePluginLoader {
+    fn validate_metadata(&self, metadata: &PluginMetadata<'static>) -> Result<(), String> {
+        log::info!("{}, {}", metadata.host_api_commit, GIT_VERSION);
+        if metadata.host_api_commit != GIT_VERSION && metadata.host_api_commit != "ignored" {
+            //return Err(format!("Plugin was compiled with `{}` but server was compiled with version `{GIT_VERSION}`", metadata.host_api_commit).to_string());
+            log::warn!("Plugin was compiled with `{}` but server was compiled with version `{GIT_VERSION}`", metadata.host_api_commit);
+        }
+        
+        log::info!("{}", metadata.plugin_build_profile);
+        
+        if metadata.windows && metadata.plugin_build_profile != "release" {
+            return Err("Plugin was compiled on windows but without release profile".to_string());
+        }
+        
+        Ok(())
     }
 }

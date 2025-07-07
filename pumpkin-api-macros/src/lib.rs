@@ -61,14 +61,13 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let api_pkg = metadata.packages.iter().find(|it| *it.name == "pumpkin").expect("`pumpkin` not found in Cargo metadata");
     
     let host_commit = api_pkg.source.as_ref().and_then(|src| src.repr.split("#").nth(1).map(str::to_string))
-        .unwrap_or_else(|| api_pkg.version.to_string());
+        .unwrap_or_else(|| "ignore".to_string());
 
     let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
     
     let commit_lit = proc_macro2::Literal::string(&host_commit);
     let profile_lit = proc_macro2::Literal::string(profile);
     let windows = cfg!(target_os = "windows");
-    //let os_lit = proc_macro2::Literal::string();
     
     // Combine the original struct definition with the impl block and plugin() function
     let expanded = quote! {
@@ -82,8 +81,8 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
             authors: env!("CARGO_PKG_AUTHORS"),
             description: env!("CARGO_PKG_DESCRIPTION"),
             host_api_commit: #commit_lit,
-            plugin_build_profile: #profile_lit
-            windows: #windows
+            plugin_build_profile: #profile_lit,
+            windows: #windows,
         };
 
         #input_struct

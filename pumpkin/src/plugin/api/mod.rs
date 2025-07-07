@@ -22,6 +22,7 @@ pub struct PluginMetadata<'s> {
     pub description: &'s str,
     pub host_api_commit: &'s str,
     pub plugin_build_profile: &'s str,
+    pub windows: bool,
 }
 
 /// Trait representing a plugin with asynchronous lifecycle methods.
