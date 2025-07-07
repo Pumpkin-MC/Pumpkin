@@ -20,6 +20,8 @@ pub struct PluginMetadata<'s> {
     pub authors: &'s str,
     /// A description of the plugin.
     pub description: &'s str,
+    pub host_api_commit: &'s str,
+    pub plugin_build_profile: &'s str,
 }
 
 /// Trait representing a plugin with asynchronous lifecycle methods.
