@@ -132,7 +132,9 @@ pub trait EntityBase: Send + Sync {
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
 
-    fn get_player(&self) -> Option<&Player>;
+    fn get_player(&self) -> Option<&Player> {
+        None
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -907,10 +909,6 @@ impl EntityBase for Entity {
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
-        None
-    }
-
-    fn get_player(&self) -> Option<&Player> {
         None
     }
 

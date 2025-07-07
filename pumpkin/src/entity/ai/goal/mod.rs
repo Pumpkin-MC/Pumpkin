@@ -17,4 +17,16 @@ pub trait Goal: Send + Sync {
     async fn stop(&self, mob: &MobEntity);
     /// If the `Goal` is running, this gets called every tick.
     async fn tick(&self, mob: &MobEntity);
+
+    fn should_run_every_tick(&self) -> bool {
+        false
+    }
+
+    fn get_tick_count(&self, ticks: i32) -> i32 {
+        if self.should_run_every_tick() { ticks } else { self.to_goal_ticks(ticks) }
+    }
+
+    fn to_goal_ticks(&self, server_ticks: i32) -> i32 {
+        -(-server_ticks).div_euclid(2)
+    }
 }

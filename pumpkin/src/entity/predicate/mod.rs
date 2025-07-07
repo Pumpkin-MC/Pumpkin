@@ -1,5 +1,4 @@
 use std::pin::Pin;
-use std::sync::Arc;
 use crate::entity::{Entity, EntityBase};
 
 pub enum EntityPredicate<'a> {
@@ -48,26 +47,24 @@ impl<'a> EntityPredicate<'a> {
                     EntityPredicate::ExceptSpectator.test(entity).await && entity.can_hit()
                 }
                 EntityPredicate::Rides(target_entity) => {
-                    async fn check(entity: Arc<&Entity>) -> Option<Arc<&Entity>> {
-                        if !entity.has_vehicle() {
-                            return None;
-                        }
+                    let target: &Entity = *target_entity;
+
+                    let mut opt_vehicle_arc = {
                         let vehicle_lock = entity.vehicle.lock().await;
-                        if let Some(vehicle) = &*vehicle_lock {
-                            Some(Arc::new(vehicle.get_entity()))
-                        } else {
-                            None
+                        vehicle_lock.clone()
+                    };
+
+                    while let Some(vehicle_arc) = opt_vehicle_arc {
+                        let vehicle_entity_base: &dyn EntityBase = &*vehicle_arc;
+                        let target_base: &dyn EntityBase = target;
+
+                        if std::ptr::eq(vehicle_entity_base, target_base) {
+                            return false;
                         }
-                    }
-                    let mut next = check(Arc::new(entity)).await;
-                    loop {
-                        if let Some(next_entity) = &next {
-                            if std::ptr::eq(next_entity.get_entity(), *target_entity) {
-                                return false;
-                            }
-                            next = check(next_entity.clone()).await;
-                        } else {
-                            break;
+
+                        opt_vehicle_arc = {
+                            let vehicle_lock = vehicle_entity_base.get_entity().vehicle.lock().await;
+                            vehicle_lock.clone()
                         }
                     }
                     true

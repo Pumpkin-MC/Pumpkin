@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
 use async_trait::async_trait;
@@ -26,8 +26,8 @@ pub struct LookAtEntityGoal {
 
 impl LookAtEntityGoal {
     #[must_use]
-    pub fn new(entity: &Entity, target_type: EntityType, range: f64, chance: f64, look_forward: bool) -> Self {
-        let target_predicate = Self::create_target_predicate(entity, target_type, range);
+    pub fn new(mob_weak: Weak<MobEntity>, target_type: EntityType, range: f64, chance: f64, look_forward: bool) -> Self {
+        let target_predicate = Self::create_target_predicate(mob_weak.clone(), target_type, range);
         Self {
             target: Mutex::new(None),
             range,
@@ -39,8 +39,8 @@ impl LookAtEntityGoal {
         }
     }
     
-    pub fn default(entity: &Entity, target_type: EntityType, range: f64) -> Self {
-        let target_predicate = Self::create_target_predicate(entity, target_type, range);
+    pub fn with_default(mob_weak: Weak<MobEntity>, target_type: EntityType, range: f64) -> Self {
+        let target_predicate = Self::create_target_predicate(mob_weak.clone(), target_type, range);
         Self {
             target: Mutex::new(None),
             range,
@@ -52,21 +52,24 @@ impl LookAtEntityGoal {
         }
     }
     
-    fn create_target_predicate(entity: &Entity, target_type: EntityType, range: f64) -> TargetPredicate {
+    fn create_target_predicate(mob_weak: Weak<MobEntity>, target_type: EntityType, range: f64) -> TargetPredicate {
+        let mut target_predicate = TargetPredicate::non_attackable();
+        target_predicate.base_max_distance = range;
         if target_type == EntityType::PLAYER {
-            let mut target_predicate = TargetPredicate::non_attackable();
-            target_predicate.base_max_distance = range;
             target_predicate.predicate = Some(Arc::new(move |living_entity: Arc<LivingEntity>, world: Arc<World>| {
+                let mob_weak = mob_weak.clone();
                 Box::pin(async move {
-                    EntityPredicate::Rides(entity).test(&living_entity.entity).await
+                    if let Some(mob_arc) = mob_weak.upgrade() {
+                        let predicate = EntityPredicate::Rides(&mob_arc.living_entity.entity);
+                        predicate.test(&living_entity.entity).await
+                    } else {
+                        // MobEntity is destroyed
+                        false
+                    }
                 })
             }));
-            target_predicate
-        } else {
-            let mut target_predicate = TargetPredicate::non_attackable();
-            target_predicate.base_max_distance = range;
-            target_predicate
         }
+        target_predicate
     }
 }
 
@@ -86,24 +89,20 @@ impl Goal for LookAtEntityGoal {
                 .map(|living_entity: Arc<LivingEntity>| living_entity as Arc<dyn EntityBase>);
         }
         drop(mob_target);
-        
+
+        let world = mob
+            .living_entity
+            .entity
+            .world
+            .read()
+            .await;
         if self.target_type == EntityType::PLAYER {
-            *target = mob
-                .living_entity
-                .entity
-                .world
-                .read()
-                .await
+            *target = world
                 .get_closest_player(mob.living_entity.entity.pos.load(), self.range)
                 .await
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
         } else {
-            *target = mob
-                .living_entity
-                .entity
-                .world
-                .read()
-                .await
+            *target = world
                 .get_closest_entity(mob.living_entity.entity.pos.load(), self.range, Some(&[self.target_type]))
                 .await;
         }
@@ -127,7 +126,8 @@ impl Goal for LookAtEntityGoal {
     }
 
     async fn start(&self, mob: &MobEntity) {
-        
+        let tick_count = self.get_tick_count(40 + mob.get_random().random_range(1..40));
+        self.look_time.store(tick_count, Relaxed);
     }
 
     async fn stop(&self, mob: &MobEntity) {

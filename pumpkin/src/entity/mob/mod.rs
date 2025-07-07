@@ -53,8 +53,4 @@ impl EntityBase for MobEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
     }
-
-    fn get_player(&self) -> Option<&Player> {
-        None
-    }
 }

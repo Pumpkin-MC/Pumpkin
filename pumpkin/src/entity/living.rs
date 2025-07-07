@@ -377,10 +377,6 @@ impl EntityBase for LivingEntity {
         Some(self)
     }
 
-    fn get_player(&self) -> Option<&Player> {
-        None
-    }
-
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.entity.write_nbt(nbt).await;
         nbt.put("Health", NbtTag::Float(self.health.load()));

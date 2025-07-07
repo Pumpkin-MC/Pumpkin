@@ -27,11 +27,12 @@ pub fn from_type(
     let mob = match entity_type {
         EntityType::ZOMBIE => Zombie::make(entity),
         // TODO
-        _ => MobEntity {
+        _ => Arc::new(MobEntity {
             living_entity: LivingEntity::new(entity),
             goals: Mutex::new(vec![]),
             navigator: Mutex::new(Navigator::default()),
-        },
+            target: Mutex::new(None),
+        }),
     };
-    Arc::new(mob)
+    mob
 }
