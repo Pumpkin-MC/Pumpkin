@@ -1,9 +1,8 @@
 use super::{Goal, to_goal_ticks};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
-use crate::entity::{EntityBase, ai::path::NavigatorGoal, mob::MobEntity, player::Player};
+use crate::entity::{EntityBase,mob::MobEntity};
 use async_trait::async_trait;
-use pumpkin_data::entity::EntityType;
 use rand::Rng;
 use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
@@ -60,7 +59,7 @@ impl TrackTargetGoal {
         self.max_time_without_visibility.store(time, Relaxed);
     }
 
-    fn can_navigate_to_entity(&self, mob: &MobEntity, target: &LivingEntity) -> bool {
+    fn can_navigate_to_entity(&self, mob: &MobEntity, _target: &LivingEntity) -> bool {
         self.check_can_navigate_cooldown.store(
             to_goal_ticks(10 + mob.get_random().random_range(0..5)),
             Relaxed,
@@ -116,14 +115,14 @@ impl TrackTargetGoal {
 
 #[async_trait]
 impl Goal for TrackTargetGoal {
-    async fn can_start(&self, mob: &MobEntity) -> bool {
+    async fn can_start(&self, _mob: &MobEntity) -> bool {
         false
     }
 
     async fn should_continue(&self, mob: &MobEntity) -> bool {
         let mob_target = mob.target.lock().await;
         let target = if mob_target.is_some() {
-            mob_target.clone().map(|x| x as Arc<dyn EntityBase>)
+            mob_target.clone()
         } else {
             let lock = self.target.lock().await;
             lock.clone()
@@ -136,7 +135,7 @@ impl Goal for TrackTargetGoal {
         false
     }
 
-    async fn start(&self, mob: &MobEntity) {
+    async fn start(&self, _mob: &MobEntity) {
         self.can_navigate_flag.store(0, Relaxed);
         self.check_can_navigate_cooldown.store(0, Relaxed);
         self.time_without_visibility.store(0, Relaxed);
@@ -147,5 +146,5 @@ impl Goal for TrackTargetGoal {
         *self.target.lock().await = None;
     }
 
-    async fn tick(&self, mob: &MobEntity) {}
+    async fn tick(&self, _mob: &MobEntity) {}
 }

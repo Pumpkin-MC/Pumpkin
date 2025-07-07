@@ -1,7 +1,6 @@
 use std::f32::{self};
 
 use super::{Entity, EntityBase, living::LivingEntity};
-use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;

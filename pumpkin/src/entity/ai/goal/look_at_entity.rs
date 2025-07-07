@@ -1,7 +1,7 @@
 use super::Goal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::predicate::EntityPredicate;
-use crate::entity::{Entity, EntityBase, mob::MobEntity, player::Player};
+use crate::entity::{EntityBase, mob::MobEntity, player::Player};
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
@@ -56,7 +56,7 @@ impl LookAtEntityGoal {
         let mut target_predicate = TargetPredicate::non_attackable();
         target_predicate.base_max_distance = range;
         if target_type == EntityType::PLAYER {
-            target_predicate.set_predicate(move |living_entity, world| {
+            target_predicate.set_predicate(move |living_entity, _world| {
                 let mob_weak = mob_weak.clone();
                 async move {
                     if let Some(mob_arc) = mob_weak.upgrade() {
@@ -127,7 +127,7 @@ impl Goal for LookAtEntityGoal {
         self.look_time.store(tick_count, Relaxed);
     }
 
-    async fn stop(&self, mob: &MobEntity) {
+    async fn stop(&self, _mob: &MobEntity) {
         *self.target.lock().await = None;
     }
 

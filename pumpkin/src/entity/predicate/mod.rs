@@ -25,10 +25,10 @@ impl<'a> EntityPredicate<'a> {
                     entity.is_alive() && entity.get_living_entity().is_some()
                 }
                 EntityPredicate::NotMounted => {
-                    entity.is_alive() && !entity.has_passengers().await && !entity.has_vehicle()
+                    entity.is_alive() && !entity.has_passengers().await && !entity.has_vehicle().await
                 }
                 EntityPredicate::ValidInventories => {
-                    // TODO
+                    // TODO: implement
                     false
                 }
                 EntityPredicate::ExceptCreativeOrSpectator => {

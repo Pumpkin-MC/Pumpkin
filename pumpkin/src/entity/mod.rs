@@ -859,8 +859,9 @@ impl Entity {
         !self.passengers.lock().await.is_empty()
     }
 
-    pub fn has_vehicle(&self) -> bool {
-        self.vehicle.load().is_some()
+    pub async fn has_vehicle(&self) -> bool {
+        let vehicle = self.vehicle.lock().await;
+        vehicle.is_some()
     }
 }
 

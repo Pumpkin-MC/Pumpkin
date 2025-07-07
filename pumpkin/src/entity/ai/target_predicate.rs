@@ -68,7 +68,7 @@ impl TargetPredicate {
 
     pub async fn test(
         &self,
-        world: Arc<World>,
+        _world: Arc<World>,
         tester: Option<&LivingEntity>,
         target: &LivingEntity,
     ) -> bool {
