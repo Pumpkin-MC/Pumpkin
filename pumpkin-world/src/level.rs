@@ -881,13 +881,14 @@ impl Level {
                         match error {
                             // this is expected, and is not an error
                             ChunkReadingError::ChunkNotExist
+                            | ChunkReadingError::InvalidHeader
                             | ChunkReadingError::ParsingError(
                                 ChunkParsingError::ChunkNotGenerated,
                             ) => {}
                             // this is an error, and we should log it
                             error => {
                                 log::error!(
-                                    "Failed to load chunk at {pos:?}: {error} (regenerating)"
+                                    "Failed to load a Entity chunk at {pos:?}: {error} (regenerating)"
                                 );
                             }
                         };
