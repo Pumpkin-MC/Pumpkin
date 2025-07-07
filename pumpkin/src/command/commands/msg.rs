@@ -42,7 +42,7 @@ impl CommandExecutor for Executor {
                     &TextComponent::text(msg.clone()),
                     MSG_COMMAND_OUTGOING,
                     &TextComponent::text(player.gameprofile.name.clone()),
-                    Some(&target.get_display_name()),
+                    Some(&target.get_display_name().await),
                 )
                 .await;
         }
@@ -51,7 +51,7 @@ impl CommandExecutor for Executor {
                 .send_message(
                     &TextComponent::text(msg.clone()),
                     MSG_COMMAND_INCOMING,
-                    &player.get_display_name(),
+                    &player.get_display_name().await,
                     Some(&TextComponent::text(target.gameprofile.name.clone())),
                 )
                 .await;

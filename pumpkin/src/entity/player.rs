@@ -2016,11 +2016,11 @@ impl EntityBase for Player {
 
     fn get_name(&self) -> Option<TextComponent> {
         //TODO: team color
-        Some(TextComponent::text(&self.gameprofile.name))
+        Some(TextComponent::text(self.gameprofile.name.clone()))
     }
 
     async fn get_display_name(&self) -> TextComponent {
-        let mut name = self.living_entity.get_display_name().await;
+        let name = self.living_entity.get_display_name().await;
         name.click_event(ClickEvent::SuggestCommand {
             command: format!("/tell {} ", self.gameprofile.name.clone()).into(),
         })

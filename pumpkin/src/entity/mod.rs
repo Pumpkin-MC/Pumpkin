@@ -830,14 +830,14 @@ impl Entity {
 
     /// Should return the translatable name of the entity without click or hover events.
     #[allow(clippy::unused_async)]
-    pub async fn get_plain_name(&self) -> &TextComponent {
+    pub async fn get_plain_name(&self) -> TextComponent {
         // TODO: team color
         if let Some(custom_name) = &self.custom_name {
-            custom_name
+            custom_name.clone()
         } else if let Some(type_name) = self.get_name() {
-            &type_name
+            type_name
         } else {
-            &TextComponent::translate(
+            TextComponent::translate(
                 format!("entity.minecraft.{}", self.entity_type.resource_name),
                 [],
             )

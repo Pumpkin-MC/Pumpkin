@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_world::item::ItemStack;
@@ -87,7 +86,7 @@ impl CommandExecutor for Executor {
                             id: item_name.to_string().into(),
                             count: Some(item_count),
                         }),
-                    targets[0].get_display_name(),
+                    targets[0].get_display_name().await,
                 ],
             )
         } else {
