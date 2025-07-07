@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
 use crate::block::pumpkin_block::NormalUseArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::UseWithItemArgs;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
@@ -80,13 +79,10 @@ impl PumpkinBlock for FenceGateBlock {
         fence_props.to_state_id(args.block)
     }
 
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         toggle_fence_gate(args.world, args.position, args.player).await;
-        BlockActionResult::Consume
-    }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        toggle_fence_gate(args.world, args.position, args.player).await;
+        BlockActionResult::Success
     }
 }
 

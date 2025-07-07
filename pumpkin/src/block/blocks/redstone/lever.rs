@@ -4,7 +4,7 @@ use crate::block::{
     blocks::abstruct_wall_mounting::WallMountedBlock,
     pumpkin_block::{
         CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
-        GetStateForNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs, UseWithItemArgs,
+        GetStateForNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs,
     },
 };
 use async_trait::async_trait;
@@ -45,13 +45,10 @@ pub struct LeverBlock;
 
 #[async_trait]
 impl PumpkinBlock for LeverBlock {
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         toggle_lever(args.world, args.position).await;
-        BlockActionResult::Consume
-    }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        toggle_lever(args.world, args.position).await;
+        BlockActionResult::Success
     }
 
     async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {

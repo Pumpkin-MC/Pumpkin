@@ -2,6 +2,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::GameMode;
 use std::hash::Hash;
 
 mod categories;
@@ -70,6 +71,15 @@ impl ItemStack {
         let min = amount.min(self.item_count);
         let stack = self.copy_with_count(min);
         self.decrement(min);
+        stack
+    }
+
+    pub fn split_unless_creative(&mut self, gamemode: GameMode, amount: u8) -> Self {
+        let min = amount.min(self.item_count);
+        let stack = self.copy_with_count(min);
+        if gamemode != GameMode::Creative {
+            self.decrement(min);
+        }
         stack
     }
 
