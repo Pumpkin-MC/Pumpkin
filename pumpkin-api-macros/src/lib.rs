@@ -69,7 +69,12 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let host_commit = api_pkg
         .source
         .as_ref()
-        .and_then(|src| src.repr.split("#").nth(1).map(str::to_string))
+        .and_then(|src| {
+            src.repr
+                .split("#")
+                .nth(1)
+                .map(|it| it.chars().take(8).collect::<String>())
+        })
         .unwrap_or_else(|| "ignore".to_string());
 
     let profile = if cfg!(debug_assertions) {

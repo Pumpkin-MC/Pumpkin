@@ -235,6 +235,55 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
+name = "camino"
+version = "1.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0da45bc31171d8d6960122e222a67740df867c1dd53b4d51caa297084c185cab"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cargo-platform"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84982c6c0ae343635a3a4ee6dedef965513735c8b183caa7289fa6e27399ebd4"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cargo-util-schemas"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e63d2780ac94487eb9f1fea7b0d56300abc9eb488800854ca217f102f5caccca"
+dependencies = [
+ "semver",
+ "serde",
+ "serde-untagged",
+ "serde-value",
+ "thiserror 1.0.69",
+ "toml",
+ "unicode-xid",
+ "url",
+]
+
+[[package]]
+name = "cargo_metadata"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f7835cfc6135093070e95eb2b53e5d9b5c403dc3a6be6040ee026270aa82502"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "cargo-util-schemas",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "cast"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -770,6 +819,16 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "erased-serde"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e004d887f51fcb9fef17317a2f3525c887d8aa3f4f50fed920816a688284a5b7"
+dependencies = [
+ "serde",
+ "typeid",
+]
 
 [[package]]
 name = "errno"
@@ -1664,6 +1723,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
+name = "ordered-float"
+version = "2.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68f19d67e5a2795c94e73e0bb1cc1a7edeb2e28efd39e2e1c9b7a40c1108b11c"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1708,7 +1776,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1db05f56d34358a8b1066f67cbb203ee3e7ed2ba674a6263a1d5ec6db2204323"
 dependencies = [
  "memchr",
- "thiserror",
+ "thiserror 2.0.12",
  "ucd-trie",
 ]
 
@@ -2000,7 +2068,7 @@ dependencies = [
  "simplelog",
  "tauri-winres",
  "tempfile",
- "thiserror",
+ "thiserror 2.0.12",
  "time",
  "tokio",
  "tokio-util",
@@ -2011,6 +2079,7 @@ dependencies = [
 name = "pumpkin-api-macros"
 version = "0.1.0-dev+1.21.7"
 dependencies = [
+ "cargo_metadata",
  "proc-macro-error2",
  "proc-macro2",
  "quote",
@@ -2056,7 +2125,7 @@ dependencies = [
  "pumpkin-util",
  "pumpkin-world",
  "rayon",
- "thiserror",
+ "thiserror 2.0.12",
  "tokio",
 ]
 
@@ -2080,7 +2149,7 @@ dependencies = [
  "flate2",
  "serde",
  "tempfile",
- "thiserror",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -2101,7 +2170,7 @@ dependencies = [
  "pumpkin-world",
  "serde",
  "take_mut",
- "thiserror",
+ "thiserror 2.0.12",
  "tokio",
  "uuid",
 ]
@@ -2173,7 +2242,7 @@ dependencies = [
  "serde_json5",
  "sha2 0.10.9",
  "temp-dir",
- "thiserror",
+ "thiserror 2.0.12",
  "thread_local",
  "tokio",
  "tokio-util",
@@ -2195,7 +2264,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "rustls",
  "socket2",
- "thiserror",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
  "web-time",
@@ -2216,7 +2285,7 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "slab",
- "thiserror",
+ "thiserror 2.0.12",
  "tinyvec",
  "tracing",
  "web-time",
@@ -2511,7 +2580,7 @@ dependencies = [
  "futures-util",
  "pin-project",
  "thingbuf",
- "thiserror",
+ "thiserror 2.0.12",
  "unicode-segmentation",
  "unicode-width",
 ]
@@ -2542,6 +2611,9 @@ name = "semver"
 version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e6fa9c48d24d85fb3de5ad847117517440f6beceb7798af16b4a87d616b8d0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "serde"
@@ -2550,6 +2622,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-untagged"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "299d9c19d7d466db4ab10addd5703e4c615dec2a5a16dbbafe191045e87ee66e"
+dependencies = [
+ "erased-serde",
+ "serde",
+ "typeid",
+]
+
+[[package]]
+name = "serde-value"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3a1a3341211875ef120e117ea7fd5228530ae7e7036a779fdc9117be6b3282c"
+dependencies = [
+ "ordered-float",
+ "serde",
 ]
 
 [[package]]
@@ -2710,7 +2803,7 @@ checksum = "297f631f50729c8c99b84667867963997ec0b50f32b2a7dbcab828ef0541e8bb"
 dependencies = [
  "num-bigint",
  "num-traits",
- "thiserror",
+ "thiserror 2.0.12",
  "time",
 ]
 
@@ -2891,11 +2984,31 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+dependencies = [
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
 version = "2.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "567b8a2dae586314f7be2a752ec7474332959c6460e02bde30d702a66d488708"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 2.0.12",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -3169,6 +3282,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "typeid"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
+
+[[package]]
 name = "typenum"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3197,6 +3316,12 @@ name = "unicode-width"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c"
+
+[[package]]
+name = "unicode-xid"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "untrusted"

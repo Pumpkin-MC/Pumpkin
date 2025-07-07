@@ -81,7 +81,9 @@ impl PluginLoader for NativePluginLoader {
 impl NativePluginLoader {
     fn validate_metadata(&self, metadata: &PluginMetadata<'static>) -> Result<(), String> {
         log::info!("{}, {}", metadata.host_api_commit, GIT_VERSION);
-        if metadata.host_api_commit != GIT_VERSION && metadata.host_api_commit != "ignored" {
+        if metadata.host_api_commit != GIT_VERSION.chars().take(8).collect::<String>()
+            && metadata.host_api_commit != "ignored"
+        {
             //return Err(format!("Plugin was compiled with `{}` but server was compiled with version `{GIT_VERSION}`", metadata.host_api_commit).to_string());
             log::warn!(
                 "Plugin was compiled with `{}` but server was compiled with version `{GIT_VERSION}`",
