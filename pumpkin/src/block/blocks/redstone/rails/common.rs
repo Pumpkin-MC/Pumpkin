@@ -5,7 +5,10 @@ use pumpkin_data::{
     block_properties::{HorizontalFacing, RailShape, StraightRailShape},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::{
+    BlockStateId,
+    world::{BlockAccessor, BlockFlags},
+};
 
 use crate::world::World;
 
@@ -35,7 +38,7 @@ pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &
     true
 }
 
-pub(super) async fn can_place_rail_at(world: &World, pos: &BlockPos) -> bool {
+pub(super) async fn can_place_rail_at(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
     let state = world.get_block_state(&pos.down()).await;
     state.is_solid()
 }
@@ -45,31 +48,74 @@ pub(super) async fn compute_placed_rail_shape(
     block_pos: &BlockPos,
     player_facing: HorizontalFacing,
 ) -> StraightRailShape {
-    let preferred_directions = match player_facing {
-        HorizontalFacing::North | HorizontalFacing::South => [
-            HorizontalFacing::South,
-            HorizontalFacing::North,
-            HorizontalFacing::West,
-            HorizontalFacing::East,
-        ],
-        HorizontalFacing::East | HorizontalFacing::West => [
-            HorizontalFacing::West,
-            HorizontalFacing::East,
-            HorizontalFacing::South,
-            HorizontalFacing::North,
-        ],
-    };
+    // Use the same sophisticated logic as normal rails, but adapted for straight rails
+    // Check each direction for rail connections, similar to normal rail placement
 
-    for direction in preferred_directions {
-        if let Some(neighbor_rail) = Rail::find_if_unlocked(world, block_pos, direction).await {
-            if neighbor_rail.elevation == RailElevation::Up {
-                return direction.to_rail_shape_ascending_towards();
+    // Check East first
+    if let Some(east_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::East).await
+    {
+        // Check for opposite connection (West) to form a straight line
+        if let Some(west_rail) =
+            Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await
+        {
+            // We have connections in both East and West
+            if east_rail.elevation == RailElevation::Up {
+                return StraightRailShape::AscendingEast;
+            } else if west_rail.elevation == RailElevation::Up {
+                return StraightRailShape::AscendingWest;
             }
-
-            return direction.to_rail_shape_flat();
+            return StraightRailShape::EastWest;
         }
+        // Only East connection
+        if east_rail.elevation == RailElevation::Up {
+            return StraightRailShape::AscendingEast;
+        }
+        return StraightRailShape::EastWest;
     }
 
+    // Check South
+    if let Some(south_rail) =
+        Rail::find_if_unlocked(world, block_pos, HorizontalFacing::South).await
+    {
+        // Check for opposite connection (North) to form a straight line
+        if let Some(north_rail) =
+            Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await
+        {
+            // We have connections in both South and North
+            if south_rail.elevation == RailElevation::Up {
+                return StraightRailShape::AscendingSouth;
+            } else if north_rail.elevation == RailElevation::Up {
+                return StraightRailShape::AscendingNorth;
+            }
+            return StraightRailShape::NorthSouth;
+        }
+        // Only South connection
+        if south_rail.elevation == RailElevation::Up {
+            return StraightRailShape::AscendingSouth;
+        }
+        return StraightRailShape::NorthSouth;
+    }
+
+    // Check West
+    if let Some(west_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await
+    {
+        if west_rail.elevation == RailElevation::Up {
+            return StraightRailShape::AscendingWest;
+        }
+        return StraightRailShape::EastWest;
+    }
+
+    // Check North
+    if let Some(north_rail) =
+        Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await
+    {
+        if north_rail.elevation == RailElevation::Up {
+            return StraightRailShape::AscendingNorth;
+        }
+        return StraightRailShape::NorthSouth;
+    }
+
+    // No connections found, use player facing direction
     player_facing.to_rail_shape_flat()
 }
 
@@ -95,7 +141,7 @@ pub(super) async fn update_flanking_rails_shape(
             world
                 .set_block_state(
                     &flanking_rail.position,
-                    flanking_rail.properties.to_state_id(&flanking_rail.block),
+                    flanking_rail.properties.to_state_id(flanking_rail.block),
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;

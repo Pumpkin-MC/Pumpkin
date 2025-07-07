@@ -158,7 +158,7 @@ impl FancyTrunkPlacer {
             if make {
                 let axis = Self::get_log_axis(start_pos, block_pos_2.0);
 
-                if TreeFeature::can_replace(&block.to_state(), &block.to_block()) {
+                if TreeFeature::can_replace(block.to_state(), block.to_block()) {
                     let block = get_block_by_state_id(trunk_provider.id).unwrap();
                     let original_props = &block.properties(trunk_provider.id).unwrap().to_props();
                     let axis = axis.to_value();
@@ -173,12 +173,10 @@ impl FancyTrunkPlacer {
                             }
                         })
                         .collect();
-                    let state = block.from_properties(props).unwrap().to_state_id(&block);
+                    let state = block.from_properties(props).unwrap().to_state_id(block);
                     if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
-                        chunk.set_block_state(
-                            &block_pos_2.0,
-                            &get_state_by_state_id(state).unwrap(),
-                        );
+                        chunk
+                            .set_block_state(&block_pos_2.0, get_state_by_state_id(state).unwrap());
                     } else {
                         // level.set_block_state(&block_pos_2, state).await;
                     }
@@ -187,7 +185,7 @@ impl FancyTrunkPlacer {
                 }
             }
 
-            if TreeFeature::can_replace_or_log(&block.to_state(), &block.to_block()) {
+            if TreeFeature::can_replace_or_log(block.to_state(), block.to_block()) {
                 continue;
             }
             return (false, logs);

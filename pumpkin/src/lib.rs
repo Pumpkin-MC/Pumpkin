@@ -1,13 +1,13 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
-use crate::net::ClientPlatform;
+use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
 use crate::net::bedrock::BedrockClientPlatform;
 use crate::net::java::JavaClientPlatform;
-use crate::net::{Client, lan_broadcast, query, rcon::RCONServer};
+use crate::net::{lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use bytes::Bytes;
-use log::{Level, LevelFilter, Log};
+use log::{Level, LevelFilter};
 use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
@@ -16,14 +16,13 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
+use simplelog::SharedLogger;
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::{
-    net::SocketAddr,
-    sync::{Arc, LazyLock},
-};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -35,6 +34,7 @@ pub mod data;
 pub mod entity;
 pub mod error;
 pub mod item;
+pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
@@ -65,62 +65,6 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
-/// A wrapper for our logger to hold the terminal input while no input is expected in order to
-/// properly flush logs to the output while they happen instead of batched
-pub struct ReadlineLogWrapper {
-    internal: Box<dyn Log>,
-    readline: std::sync::Mutex<Option<Readline>>,
-}
-
-impl ReadlineLogWrapper {
-    fn new(log: impl Log + 'static, rl: Option<Readline>) -> Self {
-        Self {
-            internal: Box::new(log),
-            readline: std::sync::Mutex::new(rl),
-        }
-    }
-
-    fn take_readline(&self) -> Option<Readline> {
-        if let Ok(mut result) = self.readline.lock() {
-            result.take()
-        } else {
-            None
-        }
-    }
-
-    fn return_readline(&self, rl: Readline) {
-        if let Ok(mut result) = self.readline.lock() {
-            println!("Returned rl");
-            let _ = result.insert(rl);
-        }
-    }
-}
-
-// Writing to `stdout` is expensive anyway, so I don't think having a `Mutex` here is a big deal.
-impl Log for ReadlineLogWrapper {
-    fn log(&self, record: &log::Record) {
-        self.internal.log(record);
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
-        }
-    }
-
-    fn flush(&self) {
-        self.internal.flush();
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
-        }
-    }
-
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        self.internal.enabled(metadata)
-    }
-}
-
 pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = LazyLock::new(|| {
     if advanced_config().logging.enabled {
         let mut config = simplelog::ConfigBuilder::new();
@@ -129,7 +73,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             config.set_time_format_custom(time::macros::format_description!(
                 "[year]-[month]-[day] [hour]:[minute]:[second]"
             ));
-            config.set_time_level(LevelFilter::Trace);
+            config.set_time_level(LevelFilter::Error);
         } else {
             config.set_time_level(LevelFilter::Off);
         }
@@ -156,23 +100,47 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
+        let file_logger: Option<Box<dyn SharedLogger + 'static>> =
+            if advanced_config().logging.file.is_empty() {
+                None
+            } else {
+                Some(
+                    GzipRollingLogger::new(
+                        level,
+                        {
+                            let mut config = config.clone();
+                            for level in Level::iter() {
+                                config.set_level_color(level, None);
+                            }
+                            config.build()
+                        },
+                        advanced_config().logging.file.clone(),
+                    )
+                    .expect("Failed to initialize file logger.")
+                        as Box<dyn SharedLogger>,
+                )
+            };
+
         if advanced_config().commands.use_tty && stdin().is_terminal() {
             match Readline::new("$ ".to_owned()) {
                 Ok((rl, stdout)) => {
                     let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
-                    Some((ReadlineLogWrapper::new(logger, Some(rl)), level))
+                    Some((
+                        ReadlineLogWrapper::new(logger, file_logger, Some(rl)),
+                        level,
+                    ))
                 }
                 Err(e) => {
                     log::warn!(
                         "Failed to initialize console input ({e}); falling back to simple logger"
                     );
                     let logger = simplelog::SimpleLogger::new(level, config.build());
-                    Some((ReadlineLogWrapper::new(logger, None), level))
+                    Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
                 }
             }
         } else {
             let logger = simplelog::SimpleLogger::new(level, config.build());
-            Some((ReadlineLogWrapper::new(logger, None), level))
+            Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
         }
     } else {
         None
@@ -358,7 +326,7 @@ impl PumpkinServer {
         &self,
         mut master_client_id_counter: u64,
         _tasks: &Arc<TaskTracker>,
-        bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<Client>>>>,
+        bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<BedrockClientPlatform>>>>,
     ) -> bool {
         let mut udp_buf = vec![0; 4096]; // Buffer for UDP receive
 
@@ -381,52 +349,31 @@ impl PumpkinServer {
                         };
                         log::debug!("Accepted connection from Java Edition: {formatted_address} (id {client_id})");
 
-                        // Create a new JavaClientPlatform instance for this specific connection
-                        let java_client_platform_instance = JavaClientPlatform::new(connection);
-
-                        let mut client = Client::new(
-                            ClientPlatform::Java(java_client_platform_instance),
-                            client_addr,
-                            client_id,
-                        );
-                        client.init();
+                        let mut java_client = JavaClientPlatform::new(connection, client_addr, client_id);
+                        java_client.start_outgoing_packet_task();
+                        let java_client = Arc::new(java_client);
 
                         let server_clone = self.server.clone();
 
                         tokio::spawn(async move {
-                            // Handles the lifecycle of a single Java client
-                            match client.platform.as_ref() {
-                                ClientPlatform::Java(java) => {
-                                    java.process_packets(&client, &server_clone).await;
-                                },
-                                ClientPlatform::Bedrock(_) => unreachable!("Java client handler received a Bedrock platform."),
-                            };
+                                    java_client.process_packets(&server_clone).await;
+                                    java_client.close();
+                                    java_client.await_tasks().await;
 
-                            if client.make_player.load(Ordering::Relaxed) {
-                                if let Some((player, world)) = server_clone.add_player(client).await { // client needs to be cloned here if moved into add_player
-                                    world.spawn_player(&BASIC_CONFIG, player.clone(), &server_clone).await;
+                                    let player = java_client.player.lock().await;
+                                    if let Some(player) = player.as_ref() {
+                                        log::debug!("Cleaning up player for id {client_id}");
 
-                                    player.process_packets(&server_clone).await; // Player's main packet loop
-                                    player.close().await; // Signal player to stop its packet processing loop
+                                        if let Err(e) = server_clone.player_data_storage
+                                            .handle_player_leave(player)
+                                            .await
+                                        {
+                                            log::error!("Failed to save player data on disconnect: {e}");
+                                        }
 
-                                    log::debug!("Cleaning up player for id {client_id}");
-
-                                    if let Err(e) = server_clone.player_data_storage
-                                        .handle_player_leave(&player)
-                                        .await
-                                    {
-                                        log::error!("Failed to save player data on disconnect: {e}");
+                                        player.remove().await;
+                                        server_clone.remove_player(player).await;
                                     }
-
-                                    player.remove().await;
-                                    server_clone.remove_player(&player).await;
-                                }
-                            } else {
-                                client.close();
-                                log::debug!("Awaiting tasks for client {}", client.id);
-                                client.await_tasks().await;
-                                log::debug!("Finished awaiting tasks for client {}", client.id);
-                            }
                         });
                     }
                     Err(e) => {
@@ -448,14 +395,16 @@ impl PumpkinServer {
 
                         let mut clients_guard = bedrock_clients.lock().await;
 
+                        // TODO: don't save clients for offline connections
                         let client = clients_guard.entry(client_addr).or_insert_with(|| {
                             let client_id = master_client_id_counter;
                             master_client_id_counter += 1;
                             log::info!("New Bedrock client detected from: {client_addr} (ID: {client_id})");
-                            // Use the prototype to create a new BedrockClientPlatform instance
-                          Arc::new(Client::new(ClientPlatform::Bedrock(
-                                BedrockClientPlatform::new(self.udp_socket.clone(), client_addr)
-                            ), client_addr, client_id))
+                            let mut platform = BedrockClientPlatform::new(self.udp_socket.clone(), client_addr);
+                            platform.start_outgoing_packet_task();
+                            Arc::new(
+                                platform
+                            )
                         });
 
                         let server_clone = self.server.clone();
@@ -463,10 +412,7 @@ impl PumpkinServer {
                         let reader = Cursor::new(received_data.to_vec());
                         let client = client.clone();
                         tokio::spawn(async move {
-                            if let ClientPlatform::Bedrock(bedrock_plat) = client.platform.as_ref() {
-                                bedrock_plat.process_packet(&client, &server_clone, reader).await;
-                            }
-                            //tasks_clone.track_task_completion(client_clone_for_task.id);
+                            client.process_packet(&server_clone, reader).await;
                         });
                     }
                     Err(e) => {

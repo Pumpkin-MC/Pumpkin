@@ -159,14 +159,14 @@ impl LivingEntity {
     pub async fn is_in_water(&self) -> bool {
         let world = self.entity.world.read().await;
         let block_pos = self.entity.block_pos.load();
-        world.get_block(&block_pos).await == Block::WATER
+        world.get_block(&block_pos).await == &Block::WATER
     }
 
     // Check if the entity is in powder snow
     pub async fn is_in_powder_snow(&self) -> bool {
         let world = self.entity.world.read().await;
         let block_pos = self.entity.block_pos.load();
-        world.get_block(&block_pos).await == Block::POWDER_SNOW
+        world.get_block(&block_pos).await == &Block::POWDER_SNOW
     }
 
     pub async fn update_fall_distance(
@@ -197,9 +197,16 @@ impl LivingEntity {
                     .await;
             }
         } else if height_difference < 0.0 {
-            let distance = self.fall_distance.load();
-            self.fall_distance
-                .store(distance - (height_difference as f32));
+            let new_fall_distance = if !self.is_in_water().await && !self.is_in_powder_snow().await
+            {
+                let distance = self.fall_distance.load();
+                distance - (height_difference as f32)
+            } else {
+                0f32
+            };
+
+            // Reset fall distance if is in water or powder_snow
+            self.fall_distance.store(new_fall_distance);
         }
     }
 

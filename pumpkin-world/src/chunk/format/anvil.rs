@@ -37,8 +37,8 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The number of bytes in a sector (4 KiB)
 const SECTOR_BYTES: usize = 4096;
 
-// 1.21.6
-pub const WORLD_DATA_VERSION: i32 = 4435;
+// 1.21.7
+pub const WORLD_DATA_VERSION: i32 = 4438;
 
 #[derive(Clone, Default)]
 pub struct AnvilChunkFormat;
@@ -343,12 +343,12 @@ impl AnvilChunkData {
 impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     pub const fn get_region_coords(at: &Vector2<i32>) -> (i32, i32) {
         // Divide by 32 for the region coordinates
-        (at.x >> SUBREGION_BITS, at.z >> SUBREGION_BITS)
+        (at.x >> SUBREGION_BITS, at.y >> SUBREGION_BITS)
     }
 
     pub const fn get_chunk_index(pos: &Vector2<i32>) -> usize {
         let local_x = pos.x & SUBREGION_AND;
-        let local_z = pos.z & SUBREGION_AND;
+        let local_z = pos.y & SUBREGION_AND;
         let index = (local_z << SUBREGION_BITS) + local_x;
         index as usize
     }

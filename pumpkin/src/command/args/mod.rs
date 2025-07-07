@@ -2,6 +2,7 @@ use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use async_trait::async_trait;
 use bounded_num::{NotInBounds, Number};
+use pumpkin_data::Enchantment;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::particle::Particle;
@@ -95,6 +96,7 @@ pub enum Arg<'a> {
     Item(&'a str),
     ResourceLocation(&'a str),
     Block(&'a str),
+    BlockPredicate(&'a str),
     BossbarColor(BossbarColor),
     BossbarStyle(BossbarDivisions),
     Particle(Particle),
@@ -108,6 +110,7 @@ pub enum Arg<'a> {
     SoundCategory(SoundCategory),
     DamageType(DamageType),
     Effect(EffectType),
+    Enchantment(Enchantment),
 }
 
 /// see [`crate::commands::tree::builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree::builder::NonLeafNodeBuilder::execute`]

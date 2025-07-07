@@ -85,7 +85,7 @@ impl ProtoNode<'_> {
                 n
             }
         };
-        write.write_u8_be(flags)?;
+        write.write_u8(flags)?;
 
         // child count + children
         write.write_list(&self.children, |bytebuf, child| {
@@ -247,7 +247,7 @@ impl ArgumentType<'_> {
             flags |= 2
         }
 
-        write.write_u8_be(flags)?;
+        write.write_u8(flags)?;
         if let Some(min) = min {
             min.write(write)?;
         }
@@ -259,7 +259,7 @@ impl ArgumentType<'_> {
     }
 
     fn write_with_flags(flags: u8, write: &mut impl Write) -> Result<(), WritingError> {
-        write.write_u8_be(flags)
+        write.write_u8(flags)
     }
 
     fn write_with_identifier(

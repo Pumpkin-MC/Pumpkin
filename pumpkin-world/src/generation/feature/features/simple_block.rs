@@ -27,14 +27,14 @@ impl SimpleBlockFeature {
         let block_accessor: &dyn BlockAccessor = chunk;
         if !futures::executor::block_on(async move {
             block_registry
-                .can_place_at(&block, block_accessor, &pos, BlockDirection::Up)
+                .can_place_at(block, block_accessor, &pos, BlockDirection::Up)
                 .await
         }) {
             return false;
         }
 
         // TODO: check things..
-        chunk.set_block_state(&pos.0, &state);
+        chunk.set_block_state(&pos.0, state);
         // TODO: schedule tick when needed
         true
     }

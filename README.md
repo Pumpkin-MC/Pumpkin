@@ -5,7 +5,7 @@
 ![CI](https://github.com/Snowiiii/Pumpkin/actions/workflows/rust.yml/badge.svg)
 [![Discord](https://img.shields.io/discord/1268592337445978193.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/wT8XjrjKkf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Current version)](https://img.shields.io/badge/current_version-1.21.6-blue)
+![Current version)](https://img.shields.io/badge/current_version-1.21.7-blue)
 
 
 </div>
@@ -14,7 +14,7 @@
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
 <div align="center">
     
-![gif](https://github.com/user-attachments/assets/eb50fd34-8fd4-4ded-8a86-6ab13804f99a)
+![chunk loading](/assets/pumpkin_chunk_loading.GIF)
 
 </div>
 

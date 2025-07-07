@@ -142,7 +142,7 @@ impl FoliagePlacer {
         block_state: &BlockState,
     ) {
         let block = chunk.get_block_state(&pos.0);
-        if !TreeFeature::can_replace(&block.to_state(), &block.to_block()) {
+        if !TreeFeature::can_replace(block.to_state(), block.to_block()) {
             return;
         }
         if chunk.chunk_pos == pos.chunk_and_chunk_relative_position().0 {

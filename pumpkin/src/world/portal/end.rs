@@ -25,11 +25,11 @@ impl EndPortal {
 
     async fn get_mid_pos(world: &World, pos: BlockPos) -> Option<BlockPos> {
         let (block, state) = world.get_block_and_block_state(&pos).await;
-        if block != Self::FRAME_BLOCK {
+        if block != &Self::FRAME_BLOCK {
             return None;
         }
 
-        let properties = EndPortalFrameProperties::from_state_id(state.id, &block);
+        let properties = EndPortalFrameProperties::from_state_id(state.id, block);
         let facing_dir = properties.facing;
         let left_pos = pos.offset_dir(facing_dir.rotate_clockwise().to_offset(), 1);
         let right_pos = pos.offset_dir(facing_dir.rotate_counter_clockwise().to_offset(), 1);
@@ -68,11 +68,11 @@ impl EndPortal {
                 return false;
             }
 
-            let mid_properties = EndPortalFrameProperties::from_state_id(mid_state.id, &mid_block);
+            let mid_properties = EndPortalFrameProperties::from_state_id(mid_state.id, mid_block);
             let left_properties =
-                EndPortalFrameProperties::from_state_id(left_state.id, &left_block);
+                EndPortalFrameProperties::from_state_id(left_state.id, left_block);
             let right_properties =
-                EndPortalFrameProperties::from_state_id(right_state.id, &right_block);
+                EndPortalFrameProperties::from_state_id(right_state.id, right_block);
 
             if left_properties.facing != facing.opposite()
                 || mid_properties.facing != facing.opposite()

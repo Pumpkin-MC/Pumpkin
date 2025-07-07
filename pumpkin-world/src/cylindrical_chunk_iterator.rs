@@ -23,14 +23,14 @@ impl Cylindrical {
         mut just_removed: impl FnMut(Vector2<i32>),
     ) {
         for new_cylindrical_chunk in new_cylindrical.all_chunks_within() {
-            if !old_cylindrical.is_within_distance(new_cylindrical_chunk.x, new_cylindrical_chunk.z)
+            if !old_cylindrical.is_within_distance(new_cylindrical_chunk.x, new_cylindrical_chunk.y)
             {
                 newly_included(new_cylindrical_chunk);
             }
         }
 
         for old_cylindrical_chunk in old_cylindrical.all_chunks_within() {
-            if !new_cylindrical.is_within_distance(old_cylindrical_chunk.x, old_cylindrical_chunk.z)
+            if !new_cylindrical.is_within_distance(old_cylindrical_chunk.x, old_cylindrical_chunk.y)
             {
                 just_removed(old_cylindrical_chunk);
             }
@@ -42,7 +42,7 @@ impl Cylindrical {
     }
 
     fn bottom(&self) -> i32 {
-        self.center.z - self.view_distance.get() as i32 - 1
+        self.center.y - self.view_distance.get() as i32 - 1
     }
 
     fn right(&self) -> i32 {
@@ -50,12 +50,12 @@ impl Cylindrical {
     }
 
     fn top(&self) -> i32 {
-        self.center.z + self.view_distance.get() as i32 + 1
+        self.center.y + self.view_distance.get() as i32 + 1
     }
 
     pub fn is_within_distance(&self, x: i32, z: i32) -> bool {
         let rel_x = ((x - self.center.x).abs() as i64 - 2).max(0);
-        let rel_z = ((z - self.center.z).abs() as i64 - 2).max(0);
+        let rel_z = ((z - self.center.y).abs() as i64 - 2).max(0);
 
         let hyp_sqr = rel_x * rel_x + rel_z * rel_z;
         //The view distance should be converted to i64 first because u8 * u8 can overflow
@@ -104,7 +104,7 @@ mod test {
 
             for chunk in cylinder.all_chunks_within() {
                 assert!(chunk.x >= cylinder.left() && chunk.x <= cylinder.right());
-                assert!(chunk.z >= cylinder.bottom() && chunk.z <= cylinder.top());
+                assert!(chunk.y >= cylinder.bottom() && chunk.y <= cylinder.top());
             }
 
             for x in (cylinder.left() - 2)..=(cylinder.right() + 2) {

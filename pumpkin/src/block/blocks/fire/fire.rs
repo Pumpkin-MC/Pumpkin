@@ -11,16 +11,15 @@ use std::sync::atomic::Ordering;
 use async_trait::async_trait;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::chunk::TickPriority;
 
 use crate::block::blocks::tnt::TNTBlock;
-use crate::block::pumpkin_block::PumpkinBlock;
-use crate::entity::EntityBase;
-use crate::entity::player::Player;
-use crate::server::Server;
+use crate::block::pumpkin_block::{
+    BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+    OnScheduledTickArgs, PlacedArgs, PumpkinBlock,
+};
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 
@@ -55,6 +54,7 @@ impl FireBlock {
         block_state
             .block()
             .flammable
+            .as_ref()
             .is_some_and(|f| f.burn_chance > 0)
     }
 
@@ -66,7 +66,7 @@ impl FireBlock {
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
             let block_state = block_accessor.get_block_state(&neighbor_pos).await;
-            if Self::is_flammable(&block_state) {
+            if Self::is_flammable(block_state) {
                 return true;
             }
         }
@@ -81,7 +81,7 @@ impl FireBlock {
     ) -> BlockStateId {
         let down_pos = pos.down();
         let down_state = world.get_block_state(&down_pos).await;
-        if Self::is_flammable(&down_state) || down_state.is_side_solid(BlockDirection::Up) {
+        if Self::is_flammable(down_state) || down_state.is_side_solid(BlockDirection::Up) {
             return Block::FIRE.default_state.id;
         }
         let mut fire_props =
@@ -89,7 +89,7 @@ impl FireBlock {
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
             let neighbor_state = world.get_block_state(&neighbor_pos).await;
-            if Self::is_flammable(&neighbor_state) {
+            if Self::is_flammable(neighbor_state) {
                 match direction {
                     BlockDirection::North => fire_props.north = true,
                     BlockDirection::South => fire_props.south = true,
@@ -117,6 +117,7 @@ impl FireBlock {
             .get_block(pos)
             .await
             .flammable
+            .as_ref()
             .map_or(0, |f| f.spread_chance)
             .into();
         if rand::rng().random_range(0..spread_factor) < spread_chance {
@@ -140,7 +141,7 @@ impl FireBlock {
                     .await;
             }
 
-            if block == Block::TNT {
+            if block == &Block::TNT {
                 TNTBlock::prime(world, pos).await;
             }
         }
@@ -158,7 +159,7 @@ impl FireBlock {
             if world.get_fluid(&pos.offset(dir.to_offset())).await.name != Fluid::EMPTY.name {
                 continue; // Skip if there is a fluid
             }
-            if let Some(flammable) = neighbor_block.flammable {
+            if let Some(flammable) = &neighbor_block.flammable {
                 total_burn_chance += i32::from(flammable.burn_chance);
             }
         }
@@ -169,52 +170,37 @@ impl FireBlock {
 
 #[async_trait]
 impl PumpkinBlock for FireBlock {
-    async fn placed(
-        &self,
-        world: &Arc<World>,
-        block: &Block,
-        state_id: BlockStateId,
-        pos: &BlockPos,
-        old_state_id: BlockStateId,
-        _notify: bool,
-    ) {
-        if old_state_id == state_id {
+    async fn placed(&self, args: PlacedArgs<'_>) {
+        if args.old_state_id == args.state_id {
             // Already a fire
             return;
         }
 
-        let dimension = world.dimension_type;
+        let dimension = args.world.dimension_type;
         // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
         if dimension == VanillaDimensionType::Overworld
             || dimension == VanillaDimensionType::TheNether
         {
-            if let Some(portal) = NetherPortal::get_new_portal(world, pos, HorizontalAxis::X).await
+            if let Some(portal) =
+                NetherPortal::get_new_portal(args.world, args.position, HorizontalAxis::X).await
             {
-                portal.create(world).await;
+                portal.create(args.world).await;
                 return;
             }
         }
 
-        world
+        args.world
             .schedule_block_tick(
-                block,
-                *pos,
+                args.block,
+                *args.position,
                 Self::get_fire_tick_delay() as u16,
                 TickPriority::Normal,
             )
             .await;
     }
 
-    async fn on_entity_collision(
-        &self,
-        _world: &Arc<World>,
-        entity: &dyn EntityBase,
-        _pos: BlockPos,
-        _block: Block,
-        _state: BlockState,
-        _server: &Server,
-    ) {
-        let base_entity = entity.get_entity();
+    async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        let base_entity = args.entity.get_entity();
         if !base_entity.entity_type.fire_immune {
             let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
             if ticks < 0 {
@@ -233,30 +219,24 @@ impl PumpkinBlock for FireBlock {
 
     async fn get_state_for_neighbor_update(
         &self,
-        world: &World,
-        _block: &Block,
-        state_id: BlockStateId,
-        block_pos: &BlockPos,
-        _direction: BlockDirection,
-        _neighbor_pos: &BlockPos,
-        _neighbor_state: BlockStateId,
+        args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         if self
-            .can_place_at(
-                None,
-                Some(world),
-                world,
-                None,
-                &Block::FIRE,
-                block_pos,
-                BlockDirection::Up,
-                None,
-            )
+            .can_place_at(CanPlaceAtArgs {
+                server: None,
+                world: Some(args.world),
+                block_accessor: args.world,
+                block: &Block::FIRE,
+                position: args.position,
+                direction: BlockDirection::Up,
+                player: None,
+                use_item_on: None,
+            })
             .await
         {
-            let old_fire_props = FireProperties::from_state_id(state_id, &Block::FIRE);
+            let old_fire_props = FireProperties::from_state_id(args.state_id, &Block::FIRE);
             let fire_state_id = self
-                .get_state_for_position(world, &Block::FIRE, block_pos)
+                .get_state_for_position(args.world, &Block::FIRE, args.position)
                 .await;
             let mut fire_props = FireProperties::from_state_id(fire_state_id, &Block::FIRE);
             fire_props.age = EnumVariants::from_index(old_fire_props.age.to_index());
@@ -265,27 +245,21 @@ impl PumpkinBlock for FireBlock {
         Block::AIR.default_state.id
     }
 
-    async fn can_place_at(
-        &self,
-        _server: Option<&Server>,
-        _world: Option<&World>,
-        block_accessor: &dyn BlockAccessor,
-        _player: Option<&Player>,
-        _block: &Block,
-        block_pos: &BlockPos,
-        _face: BlockDirection,
-        _use_item_on: Option<&SUseItemOn>,
-    ) -> bool {
-        let state = block_accessor.get_block_state(&block_pos.down()).await;
+    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        let state = args
+            .block_accessor
+            .get_block_state(&args.position.down())
+            .await;
         if state.is_side_solid(BlockDirection::Up) {
             return true;
         }
-        self.are_blocks_around_flammable(block_accessor, block_pos)
+        self.are_blocks_around_flammable(args.block_accessor, args.position)
             .await
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn on_scheduled_tick(&self, world: &Arc<World>, block: &Block, pos: &BlockPos) {
+    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let (world, block, pos) = (args.world, args.block, args.position);
         world
             .schedule_block_tick(
                 block,
@@ -295,16 +269,16 @@ impl PumpkinBlock for FireBlock {
             )
             .await;
         if !Self
-            .can_place_at(
-                None,
-                Some(world),
-                world.as_ref(),
-                None,
+            .can_place_at(CanPlaceAtArgs {
+                server: None,
+                world: Some(world),
+                block_accessor: world.as_ref(),
                 block,
-                pos,
-                BlockDirection::Up,
-                None,
-            )
+                position: pos,
+                direction: BlockDirection::Up,
+                player: None,
+                use_item_on: None,
+            })
             .await
         {
             world
@@ -347,7 +321,7 @@ impl PumpkinBlock for FireBlock {
 
         if age == 15
             && rand::rng().random_range(0..4) == 0
-            && !Self::is_flammable(&world.get_block_state(&pos.down()).await)
+            && !Self::is_flammable(world.get_block_state(&pos.down()).await)
         {
             world
                 .set_block_state(
@@ -407,7 +381,7 @@ impl PumpkinBlock for FireBlock {
                             let o = 100 + if n > 1 { (n - 1) * 100 } else { 0 };
                             let p: i32 = burn_chance
                                 + 40
-                                + i32::from(world.level_info.read().await.difficulty.to_int()) * 7
+                                + (world.level_info.read().await.difficulty as i32) * 7
                                     / i32::from(age + 30);
 
                             if p > 0 && rand::rng().random_range(0..o) <= p {
@@ -434,15 +408,7 @@ impl PumpkinBlock for FireBlock {
         }
     }
 
-    async fn broken(
-        &self,
-        _block: &Block,
-        _player: &Arc<Player>,
-        block_pos: BlockPos,
-        _server: &Server,
-        world: Arc<World>,
-        _state: BlockState,
-    ) {
-        FireBlockBase::broken(world, block_pos).await;
+    async fn broken(&self, args: BrokenArgs<'_>) {
+        FireBlockBase::broken(args.world.clone(), *args.position).await;
     }
 }

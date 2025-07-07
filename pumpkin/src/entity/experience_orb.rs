@@ -87,13 +87,15 @@ impl EntityBase for ExperienceOrbEntity {
     }
 
     async fn on_player_collision(&self, player: &Arc<Player>) {
-        let mut delay = player.experience_pick_up_delay.lock().await;
-        if *delay == 0 {
-            *delay = 2;
-            player.living_entity.pickup(&self.entity, 1).await;
-            player.add_experience_points(self.amount as i32).await;
-            // TODO: pickingCount for merging
-            self.entity.remove().await;
+        if player.living_entity.health.load() > 0.0 {
+            let mut delay = player.experience_pick_up_delay.lock().await;
+            if *delay == 0 {
+                *delay = 2;
+                player.living_entity.pickup(&self.entity, 1).await;
+                player.add_experience_points(self.amount as i32).await;
+                // TODO: pickingCount for merging
+                self.entity.remove().await;
+            }
         }
     }
 

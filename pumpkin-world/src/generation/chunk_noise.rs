@@ -42,7 +42,7 @@ impl BlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         match self {
             Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
             Self::Ore(ore) => ore.sample(router, pos, sample_options),
@@ -66,7 +66,7 @@ impl ChainedBlockStateSampler {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         self.samplers
             .iter_mut()
             .map(|sampler| sampler.sample(router, pos, sample_options, height_estimator))
@@ -203,7 +203,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
             vertical_cell_count,
             horizontal_cell_count,
             biome_pos.x,
-            biome_pos.z,
+            biome_pos.y,
             horizontal_biome_end,
         );
 
@@ -263,7 +263,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         let x = current_x * self.horizontal_cell_block_count() as i32;
 
         for cell_z in 0..=(16 / self.horizontal_cell_block_count()) {
-            let current_cell_z_pos = self.start_cell_pos.z + cell_z as i32;
+            let current_cell_z_pos = self.start_cell_pos.y + cell_z as i32;
             let z = current_cell_z_pos * self.horizontal_cell_block_count() as i32;
             self.cache_fill_unique_id += 1;
 
@@ -337,7 +337,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         let start_y =
             (cell_y as i32 + self.minimum_cell_y) * self.vertical_cell_block_count() as i32;
         let start_z =
-            (self.start_cell_pos.z + cell_z as i32) * self.horizontal_cell_block_count() as i32;
+            (self.start_cell_pos.y + cell_z as i32) * self.horizontal_cell_block_count() as i32;
 
         let mapper = ChunkIndexMapper {
             start_x,
@@ -370,7 +370,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         start_pos: Vector3<i32>,
         cell_pos: Vector3<i32>,
         height_estimator: &mut SurfaceHeightEstimateSampler,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         //TODO: Fix this when Blender is added
         let pos = UnblendedNoisePos::new(
             start_pos.x + cell_pos.x,

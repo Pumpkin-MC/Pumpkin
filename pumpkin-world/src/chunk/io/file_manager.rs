@@ -293,7 +293,6 @@ where
                     }
                 }?;
 
-                let mut serializer = chunk_serializer.write().await;
                 for chunk_lock in chunk_locks {
                     let mut chunk = chunk_lock.write().await;
                     let chunk_is_dirty = chunk.is_dirty();
@@ -306,7 +305,7 @@ where
 
                     // We only need to update the chunk if it is dirty
                     if chunk_is_dirty {
-                        serializer.update_chunk(&*chunk).await?;
+                        chunk_serializer.write().await.update_chunk(&*chunk).await?;
                     }
                 }
                 log::trace!("Updated data for file {path:?}");
@@ -318,10 +317,10 @@ where
                     .get(&path)
                     .is_some_and(|count| !count.is_zero());
 
-                if serializer.should_write(is_watched) {
+                if !is_watched {
                     // With the modification done, we can drop the write lock but keep the read lock
                     // to avoid other threads to write/modify the data, but allow other threads to read it
-                    let serializer = serializer.downgrade();
+                    let serializer = chunk_serializer.read().await;
 
                     log::debug!("Writing file for {path:?}");
                     serializer

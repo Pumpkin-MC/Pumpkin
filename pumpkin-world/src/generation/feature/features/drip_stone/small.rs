@@ -36,8 +36,8 @@ impl SmallDripstoneFeature {
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) -> Option<BlockDirection> {
-        let up = super::can_replace(&chunk.get_block_state(&pos.up().0).to_block());
-        let down: bool = super::can_replace(&chunk.get_block_state(&pos.down().0).to_block());
+        let up = super::can_replace(chunk.get_block_state(&pos.up().0).to_block());
+        let down: bool = super::can_replace(chunk.get_block_state(&pos.down().0).to_block());
         if up && down {
             return if random.next_bool() {
                 Some(BlockDirection::Down)
