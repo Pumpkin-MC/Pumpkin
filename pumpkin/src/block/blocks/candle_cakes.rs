@@ -12,11 +12,10 @@ use pumpkin_world::{item::ItemStack, world::BlockFlags};
 use crate::{
     block::{
         blocks::cake::CakeBlock,
-        pumpkin_block::{BlockMetadata, PumpkinBlock},
+        pumpkin_block::{BlockMetadata, NormalUseArgs, PumpkinBlock, UseWithItemArgs},
         registry::BlockActionResult,
     },
     entity::player::Player,
-    server::Server,
     world::World,
 };
 
@@ -111,34 +110,20 @@ impl CandleCakeBlock {
 
 #[async_trait]
 impl PumpkinBlock for CandleCakeBlock {
-    async fn use_with_item(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: BlockPos,
-        item: &Item,
-        _server: &Server,
-        world: &Arc<World>,
-    ) -> BlockActionResult {
-        match item.id {
+    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        match args.item_stack.lock().await.item.id {
             id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
                 BlockActionResult::Continue
             } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
             _ => {
-                Self::consume_and_drop_candle(block, player, &location, world).await;
+                Self::consume_and_drop_candle(args.block, args.player, args.position, args.world)
+                    .await;
                 BlockActionResult::Consume
             }
         }
     }
 
-    async fn normal_use(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: BlockPos,
-        _server: &Server,
-        world: &Arc<World>,
-    ) {
-        Self::consume_and_drop_candle(block, player, &location, world).await;
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        Self::consume_and_drop_candle(args.block, args.player, args.position, args.world).await
     }
 }

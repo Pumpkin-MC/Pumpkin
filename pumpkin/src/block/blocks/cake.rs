@@ -14,11 +14,11 @@ use rand::{Rng, rng};
 
 use crate::{
     block::{
-        blocks::candle_cakes::cake_from_candle, pumpkin_block::PumpkinBlock,
+        blocks::candle_cakes::cake_from_candle,
+        pumpkin_block::{NormalUseArgs, PumpkinBlock, UseWithItemArgs},
         registry::BlockActionResult,
     },
     entity::player::Player,
-    server::Server,
     world::World,
 };
 
@@ -81,42 +81,43 @@ impl CakeBlock {
 
 #[async_trait]
 impl PumpkinBlock for CakeBlock {
-    async fn use_with_item(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: BlockPos,
-        item: &Item,
-        _server: &Server,
-        world: &Arc<World>,
-    ) -> BlockActionResult {
-        let state_id = world.get_block_state_id(&location).await;
-        let properties = CakeLikeProperties::from_state_id(state_id, block);
+    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let state_id = args.world.get_block_state_id(args.position).await;
+        let properties = CakeLikeProperties::from_state_id(state_id, args.block);
+        let item_lock = args.item_stack.lock().await;
+        let item = item_lock.item;
+        drop(item_lock);
         match item.id {
             id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id) => {
                 if properties.bites.to_index() != 0 {
-                    return Self::consume_if_hungry(world, player, block, &location, state_id)
-                        .await;
+                    return Self::consume_if_hungry(
+                        args.world,
+                        args.player,
+                        args.block,
+                        args.position,
+                        state_id,
+                    )
+                    .await;
                 }
 
-                if player.gamemode.load() != GameMode::Creative {
-                    let held_item = &player.inventory.held_item();
+                if args.player.gamemode.load() != GameMode::Creative {
+                    let held_item = args.player.inventory.held_item();
                     let mut held_item_guard = held_item.lock().await;
                     held_item_guard.decrement(1);
                 }
-                world
+                args.world
                     .set_block_state(
-                        &location,
+                        args.position,
                         cake_from_candle(item).default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
                 let seed: f64 = rng().random();
-                player
+                args.player
                     .play_sound(
                         Sound::BlockCakeAddCandle as u16,
                         SoundCategory::Blocks,
-                        &location.to_f64(),
+                        &args.position.to_f64(),
                         1.0,
                         1.0,
                         seed,
@@ -125,20 +126,20 @@ impl PumpkinBlock for CakeBlock {
                 return BlockActionResult::Consume;
             }
             _ => {
-                return Self::consume_if_hungry(world, player, block, &location, state_id).await;
+                return Self::consume_if_hungry(
+                    args.world,
+                    args.player,
+                    args.block,
+                    args.position,
+                    state_id,
+                )
+                .await;
             }
         }
     }
 
-    async fn normal_use(
-        &self,
-        block: &Block,
-        player: &Player,
-        location: BlockPos,
-        _server: &Server,
-        world: &Arc<World>,
-    ) {
-        let state_id = world.get_block_state_id(&location).await;
-        Self::consume_if_hungry(world, player, block, &location, state_id).await;
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let state_id = args.world.get_block_state_id(args.position).await;
+        Self::consume_if_hungry(args.world, args.player, args.block, args.position, state_id).await
     }
 }
