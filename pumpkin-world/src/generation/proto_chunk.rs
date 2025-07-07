@@ -107,7 +107,7 @@ pub struct ProtoChunk<'a> {
     // TODO: These can technically go to an even higher level and we can reuse them across chunks
     pub multi_noise_sampler: MultiNoiseSampler<'a>,
     pub surface_height_estimate_sampler: SurfaceHeightEstimateSampler<'a>,
-    pub default_block: BlockState,
+    pub default_block: &'static BlockState,
     random_config: &'a GlobalRandomConfig,
     settings: &'a GenerationSettings,
     biome_mixer_seed: i64,
@@ -135,13 +135,13 @@ impl<'a> ProtoChunk<'a> {
 
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
-        let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(
                 settings.sea_level,
                 settings.default_fluid.get_state().unwrap().block(),
             ),
-            FluidLevel::new(-54, LAVA_BLOCK), // this is always the same for every dimension
-        ));
+            FluidLevel::new(-54, &LAVA_BLOCK), // this is always the same for every dimension
+        )));
 
         let height = generation_shape.height;
         let start_x = chunk_pos::start_block_x(&chunk_pos);
@@ -168,7 +168,7 @@ impl<'a> ProtoChunk<'a> {
         );
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
             biome_pos.x,
-            biome_pos.z,
+            biome_pos.y,
             horizontal_biome_end as usize,
         );
         let multi_noise_sampler =
@@ -176,7 +176,7 @@ impl<'a> ProtoChunk<'a> {
 
         let surface_config = SurfaceHeightSamplerBuilderOptions::new(
             biome_pos.x,
-            biome_pos.z,
+            biome_pos.y,
             horizontal_biome_end as usize,
             generation_shape.min_y as i32,
             generation_shape.max_y() as i32,
@@ -274,28 +274,28 @@ impl<'a> ProtoChunk<'a> {
 
     pub fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
         let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_z = (pos.y & 15) as usize;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_surface_height_map[index] + 1
     }
 
     pub fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
         let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_z = (pos.y & 15) as usize;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_ocean_floor_height_map[index] + 1
     }
 
     pub fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
         let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_z = (pos.y & 15) as usize;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_motion_blocking_height_map[index] + 1
     }
 
     pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
         let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_z = (pos.y & 15) as usize;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_motion_blocking_no_leaves_height_map[index] + 1
     }
@@ -531,10 +531,10 @@ impl<'a> ProtoChunk<'a> {
                                         Vector3::new(cell_offset_x, cell_offset_y, cell_offset_z),
                                         &mut self.surface_height_estimate_sampler,
                                     )
-                                    .unwrap_or(self.default_block.clone());
+                                    .unwrap_or(self.default_block);
                                 self.set_block_state(
                                     &Vector3::new(block_x, block_y, block_z),
-                                    &block_state,
+                                    block_state,
                                 );
                             }
                         }
@@ -649,7 +649,9 @@ impl<'a> ProtoChunk<'a> {
                                 .to_block();
 
                             // TODO: Is there a better way to check that its not a fluid?
-                            if !(state != AIR_BLOCK && state != WATER_BLOCK && state != LAVA_BLOCK)
+                            if !(state != &AIR_BLOCK
+                                && state != &WATER_BLOCK
+                                && state != &LAVA_BLOCK)
                             {
                                 min = search_y + 1;
                                 break;
@@ -668,7 +670,7 @@ impl<'a> ProtoChunk<'a> {
                         let new_state = self.settings.surface_rule.try_apply(self, &mut context);
 
                         if let Some(state) = new_state {
-                            self.set_block_state(&pos, &state);
+                            self.set_block_state(&pos, state);
                         }
                     }
                 }
@@ -715,7 +717,7 @@ impl<'a> ProtoChunk<'a> {
         let block_pos = BlockPos(Vector3::new(
             section_coords::section_to_block(chunk_pos.x),
             bottom_section,
-            section_coords::section_to_block(chunk_pos.z),
+            section_coords::section_to_block(chunk_pos.y),
         ));
 
         let population_seed =
@@ -761,20 +763,23 @@ impl<'a> ProtoChunk<'a> {
 
 #[async_trait]
 impl BlockAccessor for ProtoChunk<'_> {
-    async fn get_block(&self, position: &BlockPos) -> pumpkin_data::Block {
+    async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
         self.get_block_state(&position.0).to_block()
     }
 
-    async fn get_block_state(&self, position: &BlockPos) -> pumpkin_data::BlockState {
+    async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState {
         self.get_block_state(&position.0).to_state()
     }
 
     async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (pumpkin_data::Block, pumpkin_data::BlockState) {
+    ) -> (
+        &'static pumpkin_data::Block,
+        &'static pumpkin_data::BlockState,
+    ) {
         let id = self.get_block_state(&position.0);
-        get_block_and_state_by_state_id(id.0).unwrap_or((Block::AIR, Block::AIR.default_state))
+        get_block_and_state_by_state_id(id.0).unwrap_or((&Block::AIR, Block::AIR.default_state))
     }
 }
 
@@ -863,7 +868,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("{} vs {} ({})", expected, actual, index);
+                    panic!("{expected} vs {actual} ({index})");
                 }
             });
     }
@@ -920,7 +925,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("{} vs {} ({})", expected, actual, index);
+                    panic!("{expected} vs {actual} ({index})");
                 }
             });
     }
@@ -977,7 +982,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("{} vs {} ({})", expected, actual, index);
+                    panic!("{expected} vs {actual} ({index})");
                 }
             });
     }
@@ -1034,7 +1039,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("{} vs {} ({})", expected, actual, index);
+                    panic!("{expected} vs {actual} ({index})");
                 }
             });
     }
@@ -1091,7 +1096,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("{} vs {} ({})", expected, actual, index);
+                    panic!("{expected} vs {actual} ({index})");
                 }
             });
     }
@@ -1159,7 +1164,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("expected {}, was {} (at {})", expected, actual, index);
+                    panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
@@ -1185,7 +1190,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("expected {}, was {} (at {})", expected, actual, index);
+                    panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
@@ -1211,7 +1216,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("expected {}, was {} (at {})", expected, actual, index);
+                    panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
@@ -1237,7 +1242,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("expected {}, was {} (at {})", expected, actual, index);
+                    panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
@@ -1266,7 +1271,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("expected {}, was {} (at {})", expected, actual, index);
+                    panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
@@ -1295,7 +1300,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("expected {}, was {} (at {})", expected, actual, index);
+                    panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
@@ -1324,7 +1329,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("expected {}, was {} (at {})", expected, actual, index);
+                    panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
@@ -1353,7 +1358,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("expected {}, was {} (at {})", expected, actual, index);
+                    panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
@@ -1382,7 +1387,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("expected {}, was {} (at {})", expected, actual, index);
+                    panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
@@ -1412,7 +1417,7 @@ mod test {
             .enumerate()
             .for_each(|(index, (expected, actual))| {
                 if expected != actual {
-                    panic!("expected {}, was {} (at {})", expected, actual, index);
+                    panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }

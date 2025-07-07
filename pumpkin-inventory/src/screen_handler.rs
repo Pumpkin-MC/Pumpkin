@@ -1,27 +1,29 @@
-use std::{any::Any, collections::HashMap, sync::Arc};
-
-use async_trait::async_trait;
-use log::warn;
-use pumpkin_data::screen::WindowType;
-use pumpkin_protocol::{
-    client::play::{
-        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-        CSetPlayerInventory, CSetSelectedSlot,
-    },
-    codec::item_stack_seralizer::OptionalItemStackHash,
-    server::play::SlotActionType,
-};
-use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::{ComparableInventory, Inventory};
-use pumpkin_world::item::ItemStack;
-use tokio::sync::Mutex;
-
 use crate::{
     container_click::MouseClick,
     player::player_inventory::PlayerInventory,
     slot::{NormalSlot, Slot},
     sync_handler::{SyncHandler, TrackedStack},
 };
+use async_trait::async_trait;
+use log::warn;
+use pumpkin_data::screen::WindowType;
+use pumpkin_protocol::{
+    codec::item_stack_seralizer::OptionalItemStackHash,
+    java::{
+        client::play::{
+            CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+            CSetPlayerInventory, CSetSelectedSlot,
+        },
+        server::play::SlotActionType,
+    },
+};
+use pumpkin_util::text::TextComponent;
+use pumpkin_world::inventory::{ComparableInventory, Inventory};
+use pumpkin_world::item::ItemStack;
+use std::cmp::max;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::{any::Any, collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 
 const SLOT_INDEX_OUTSIDE: i32 = -999;
 
@@ -45,6 +47,7 @@ impl ScreenProperty {
 pub trait InventoryPlayer: Send + Sync {
     async fn drop_item(&self, item: ItemStack, retain_ownership: bool);
     fn get_inventory(&self) -> Arc<PlayerInventory>;
+    fn has_infinite_materials(&self) -> bool;
     async fn enqueue_inventory_packet(&self, packet: &CSetContainerContent);
     async fn enqueue_slot_packet(&self, packet: &CSetContainerSlot);
     async fn enqueue_cursor_packet(&self, packet: &CSetCursorItem);
@@ -270,7 +273,7 @@ pub trait ScreenHandler: Send + Sync {
             behaviour.tracked_stacks[slot] = stack;
 
             for listener in behaviour.listeners.iter() {
-                listener.on_slot_update(behaviour, slot as u8, stack);
+                listener.on_slot_update(behaviour, slot as u8, stack).await;
             }
         }
     }
@@ -335,7 +338,7 @@ pub trait ScreenHandler: Send + Sync {
 
     async fn get_slot_index(&self, inventory: &Arc<dyn Inventory>, slot: usize) -> Option<usize> {
         for i in 0..self.get_behaviour().slots.len() {
-            if Arc::ptr_eq(self.get_behaviour().slots[i].get_inventory(), inventory)
+            if Arc::ptr_eq(&self.get_behaviour().slots[i].get_inventory(), inventory)
                 && self.get_behaviour().slots[i].get_index() == slot
             {
                 return Some(i);
@@ -466,8 +469,155 @@ pub trait ScreenHandler: Send + Sync {
         action_type: SlotActionType,
         player: &dyn InventoryPlayer,
     ) {
-        //TODO: Implement quickcraft, Clone, PickupAll, Throw
-        if (action_type == SlotActionType::Pickup || action_type == SlotActionType::QuickMove)
+        if action_type == SlotActionType::PickupAll && button == 0 {
+            let behavior = self.get_behaviour_mut();
+            let mut cursor_stack = behavior.cursor_stack.lock().await;
+            let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
+
+            for slot in behavior.slots.iter() {
+                if to_pick_up == 0 {
+                    break;
+                }
+
+                let item_stack = slot.get_cloned_stack().await;
+                if !item_stack.are_items_and_components_equal(&cursor_stack) {
+                    continue;
+                }
+
+                if !slot.allow_modification(player).await {
+                    continue;
+                }
+
+                let taken_stack = slot
+                    .safe_take(
+                        item_stack.item_count.min(to_pick_up),
+                        cursor_stack.get_max_stack_size() - cursor_stack.item_count,
+                        player,
+                    )
+                    .await;
+                to_pick_up -= taken_stack.item_count;
+                cursor_stack.increment(taken_stack.item_count);
+            }
+        } else if action_type == SlotActionType::QuickCraft {
+            let drag_type = button & 3;
+            let drag_button = (button >> 2) & 3;
+            let behaviour = self.get_behaviour_mut();
+            if drag_type == 0 {
+                behaviour.drag_slots.clear();
+            } else if drag_type == 1 {
+                if slot_index < 0 {
+                    warn!("Invalid slot index for drag action: {slot_index}. Must be >= 0");
+                    return;
+                }
+                let cursor_stack = behaviour.cursor_stack.lock().await;
+
+                let slot = &behaviour.slots[slot_index as usize];
+                let stack_lock = slot.get_stack().await;
+                let stack = stack_lock.lock().await;
+                if !cursor_stack.is_empty()
+                    && slot.can_insert(&cursor_stack).await
+                    && (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
+                    && slot.get_max_item_count_for_stack(&stack).await > stack.item_count
+                {
+                    behaviour.drag_slots.push(slot_index as u32);
+                }
+            } else if drag_type == 2 && !behaviour.drag_slots.is_empty() {
+                // process drag end
+                if behaviour.drag_slots.len() == 1 {
+                    let slot = behaviour.drag_slots[0] as i32;
+                    behaviour.drag_slots.clear();
+                    let _ = behaviour;
+                    self.internal_on_slot_click(slot, drag_button, SlotActionType::Pickup, player)
+                        .await;
+
+                    return;
+                }
+                if drag_button == 2 && !player.has_infinite_materials() {
+                    return; // Only creative
+                }
+
+                let mut cursor_stack = behaviour.cursor_stack.lock().await;
+                let initial_count = cursor_stack.item_count;
+                for slot_index in behaviour.drag_slots.iter() {
+                    let slot = behaviour.slots[*slot_index as usize].clone();
+                    let stack_lock = slot.get_stack().await;
+                    let stack = stack_lock.lock().await;
+
+                    if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
+                        && slot.can_insert(&cursor_stack).await
+                    {
+                        let mut inserting_count = if drag_button == 0 {
+                            initial_count / behaviour.drag_slots.len() as u8
+                        } else if drag_button == 1 {
+                            1
+                        } else if drag_button == 2 {
+                            cursor_stack.get_max_stack_size()
+                        } else {
+                            panic!("Invalid drag button: {drag_button}");
+                        };
+                        inserting_count = inserting_count
+                            .min(max(
+                                0,
+                                slot.get_max_item_count_for_stack(&stack).await - stack.item_count,
+                            ))
+                            .min(cursor_stack.item_count);
+                        if inserting_count > 0 {
+                            let mut stack_clone = *stack;
+                            drop(stack);
+                            if stack_clone.is_empty() {
+                                stack_clone = cursor_stack.copy_with_count(0);
+                            }
+                            stack_clone.increment(inserting_count);
+                            slot.set_stack(stack_clone).await;
+                            if drag_button != 2 {
+                                cursor_stack.decrement(inserting_count);
+                            }
+                            if cursor_stack.is_empty() {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                behaviour.drag_slots.clear();
+            }
+        } else if action_type == SlotActionType::Throw {
+            if slot_index >= 0 && self.get_behaviour().cursor_stack.lock().await.is_empty() {
+                let slot = self.get_behaviour().slots[slot_index as usize].clone();
+                let prev_stack = slot.get_cloned_stack().await;
+                if !prev_stack.is_empty() {
+                    if button == 1 {
+                        // Throw all
+                        while slot
+                            .get_cloned_stack()
+                            .await
+                            .are_items_and_components_equal(&prev_stack)
+                        {
+                            let drop_stack =
+                                slot.safe_take(prev_stack.item_count, u8::MAX, player).await;
+                            player.drop_item(drop_stack, true).await;
+                            // player.handleCreativeModeItemDrop(itemStack);
+                        }
+                    } else {
+                        let drop_stack = slot.safe_take(1, u8::MAX, player).await;
+                        if !drop_stack.is_empty() {
+                            slot.on_take_item(player, &drop_stack).await;
+                            player.drop_item(drop_stack, true).await;
+                        }
+                    }
+                }
+            }
+        } else if action_type == SlotActionType::Clone {
+            if player.has_infinite_materials() && slot_index >= 0 {
+                let behaviour = self.get_behaviour_mut();
+                let slot = behaviour.slots[slot_index as usize].clone();
+                let stack_lock = slot.get_stack().await;
+                let stack = stack_lock.lock().await;
+                let mut cursor_stack = behaviour.cursor_stack.lock().await;
+                *cursor_stack = stack.copy_with_count(stack.get_max_stack_size());
+            }
+        } else if (action_type == SlotActionType::Pickup
+            || action_type == SlotActionType::QuickMove)
             && (button == 0 || button == 1)
         {
             let click_type = if button == 0 {
@@ -538,7 +688,6 @@ pub trait ScreenHandler: Send + Sync {
 
                 if slot_stack.is_empty() {
                     if !cursor_stack.is_empty() {
-                        //println!("Cursor -> Slot");
                         let transfer_count = if click_type == MouseClick::Left {
                             cursor_stack.item_count
                         } else {
@@ -549,7 +698,6 @@ pub trait ScreenHandler: Send + Sync {
                     }
                 } else if slot.can_take_items(player).await {
                     if cursor_stack.is_empty() {
-                        //println!("Slot -> Cursor");
                         let take_count = if click_type == MouseClick::Left {
                             slot_stack.item_count
                         } else {
@@ -615,7 +763,6 @@ pub trait ScreenHandler: Send + Sync {
                             .get_inventory()
                             .set_stack(button as usize, source_stack)
                             .await;
-                        source_slot.on_take(source_stack.item_count);
                         source_slot.set_stack(ItemStack::EMPTY).await;
                         source_slot.on_take_item(player, &source_stack).await;
                     }
@@ -675,8 +822,9 @@ pub trait ScreenHandler: Send + Sync {
     }
 }
 
+#[async_trait]
 pub trait ScreenHandlerListener: Send + Sync {
-    fn on_slot_update(
+    async fn on_slot_update(
         &self,
         _screen_handler: &ScreenHandlerBehaviour,
         _slot: u8,
@@ -692,8 +840,9 @@ pub trait ScreenHandlerListener: Send + Sync {
     }
 }
 
+#[async_trait]
 pub trait ScreenHandlerFactory: Send + Sync {
-    fn create_screen_handler(
+    async fn create_screen_handler(
         &self,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -712,11 +861,12 @@ pub struct ScreenHandlerBehaviour {
     pub cursor_stack: Arc<Mutex<ItemStack>>,
     pub previous_tracked_stacks: Vec<TrackedStack>,
     pub previous_cursor_stack: TrackedStack,
-    pub revision: u32,
+    pub revision: AtomicU32,
     pub disable_sync: bool,
     pub properties: Vec<ScreenProperty>,
     pub tracked_property_values: Vec<i32>,
     pub window_type: Option<WindowType>,
+    pub drag_slots: Vec<u32>,
 }
 
 impl ScreenHandlerBehaviour {
@@ -730,16 +880,17 @@ impl ScreenHandlerBehaviour {
             cursor_stack: Arc::new(Mutex::new(ItemStack::EMPTY)),
             previous_tracked_stacks: Vec::new(),
             previous_cursor_stack: TrackedStack::EMPTY,
-            revision: 0,
+            revision: AtomicU32::new(0),
             disable_sync: false,
             properties: Vec::new(),
             tracked_property_values: Vec::new(),
             window_type,
+            drag_slots: Vec::new(),
         }
     }
 
-    pub fn next_revision(&mut self) -> u32 {
-        self.revision = (self.revision + 1) & 32767;
-        self.revision
+    pub fn next_revision(&self) -> u32 {
+        self.revision.fetch_add(1, Ordering::Relaxed);
+        self.revision.fetch_and(32767, Ordering::Relaxed) & 32767
     }
 }

@@ -7,7 +7,6 @@ edition.workspace = true
 pumpkin-nbt = { path = "../pumpkin-nbt" }
 pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-config = { path = "../pumpkin-config" }
-pumpkin-macros = { path = "../pumpkin-macros" }
 pumpkin-data = { path = "../pumpkin-data" }
 
 async-trait.workspace = true
@@ -39,14 +38,16 @@ zstd = "0.13.3"
 
 itertools = "0.14.0"
 file-guard = "0.2"
-indexmap = "2.9"
+indexmap = "2.10"
 enum_dispatch = "0.3"
 derive-getters = "0.5.0"
 
 thread_local = "1.1.9"
-lru = "0.14.0"
+lru = "0.16.0"
 
 tokio-util = { version = "0.7.15", features = ["rt"] }
+rand = "0.9.1"
+num_cpus = "1.17.0"
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports", "async_tokio"] }
@@ -64,4 +65,8 @@ harness = false
 
 [[bench]]
 name = "chunk_io"
+harness = false
+
+[[bench]]
+name = "chunk_gen"
 harness = false

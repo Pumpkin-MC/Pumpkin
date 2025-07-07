@@ -1,4 +1,4 @@
-use pumpkin_protocol::client::play::CUpdateTime;
+use pumpkin_protocol::java::client::play::CUpdateTime;
 
 use super::World;
 

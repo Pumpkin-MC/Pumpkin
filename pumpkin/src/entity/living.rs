@@ -15,11 +15,11 @@ use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::{
-    client::play::{CDamageEvent, CSetEquipment, MetaDataType, Metadata},
     codec::item_stack_seralizer::ItemStackSerializer,
+    java::client::play::{CDamageEvent, CSetEquipment, MetaDataType, Metadata},
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -201,14 +201,14 @@ impl LivingEntity {
     pub async fn is_in_water(&self) -> bool {
         let world = self.entity.world.read().await;
         let block_pos = self.entity.block_pos.load();
-        world.get_block(&block_pos).await == Block::WATER
+        world.get_block(&block_pos).await == &Block::WATER
     }
 
     // Check if the entity is in powder snow
     pub async fn is_in_powder_snow(&self) -> bool {
         let world = self.entity.world.read().await;
         let block_pos = self.entity.block_pos.load();
-        world.get_block(&block_pos).await == Block::POWDER_SNOW
+        world.get_block(&block_pos).await == &Block::POWDER_SNOW
     }
 
     pub async fn update_fall_distance(
@@ -239,9 +239,16 @@ impl LivingEntity {
                     .await;
             }
         } else if height_difference < 0.0 {
-            let distance = self.fall_distance.load();
-            self.fall_distance
-                .store(distance - (height_difference as f32));
+            let new_fall_distance = if !self.is_in_water().await && !self.is_in_powder_snow().await
+            {
+                let distance = self.fall_distance.load();
+                distance - (height_difference as f32)
+            } else {
+                0f32
+            };
+
+            // Reset fall distance if is in water or powder_snow
+            self.fall_distance.store(new_fall_distance);
         }
     }
 
@@ -371,10 +378,7 @@ impl EntityBase for LivingEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(self)
     }
-}
 
-#[async_trait]
-impl NBTStorage for LivingEntity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         self.entity.write_nbt(nbt).await;
         nbt.put("Health", NbtTag::Float(self.health.load()));
@@ -389,17 +393,14 @@ impl NBTStorage for LivingEntity {
                     effect.write_nbt(&mut effect_nbt).await;
                     effects_list.push(NbtTag::Compound(effect_nbt));
                 }
-                nbt.put(
-                    "active_effects",
-                    NbtTag::List(effects_list.into_boxed_slice()),
-                );
+                nbt.put("active_effects", NbtTag::List(effects_list));
             }
         }
         //TODO: write equipment
         // todo more...
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
         self.entity.read_nbt(nbt).await;
         self.health.store(nbt.get_float("Health").unwrap_or(0.0));
         self.fall_distance

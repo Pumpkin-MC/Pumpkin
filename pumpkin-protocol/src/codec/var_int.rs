@@ -4,14 +4,14 @@ use std::{
     ops::Deref,
 };
 
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
-
 use bytes::BufMut;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{SeqAccess, Visitor},
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 
 pub type VarIntType = i32;
 
@@ -39,7 +39,7 @@ impl VarInt {
         for _ in 0..Self::MAX_SIZE.get() {
             let b: u8 = val as u8 & 0b01111111;
             val >>= 7;
-            write.write_u8_be(if val == 0 { b } else { b | 0b10000000 })?;
+            write.write_u8(if val == 0 { b } else { b | 0b10000000 })?;
             if val == 0 {
                 break;
             }
@@ -51,7 +51,7 @@ impl VarInt {
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
-            let byte = read.get_u8_be()?;
+            let byte = read.get_u8()?;
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(VarInt(val));

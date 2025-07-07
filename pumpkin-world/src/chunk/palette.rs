@@ -404,7 +404,7 @@ impl BlockPalette {
                 } else {
                     log::warn!(
                         "Could not find valid block state for {}. Defaulting...",
-                        entry.name
+                        entry.name.name
                     );
                     0
                 }
@@ -438,19 +438,8 @@ impl BlockPalette {
         let block = Block::from_state_id(registry_id).unwrap();
 
         BlockStateCodec {
-            name: block.name.into(),
-            properties: {
-                if let Some(properties) = block.properties(registry_id) {
-                    let props = properties.to_props();
-                    let mut props_map = HashMap::new();
-                    for prop in props {
-                        props_map.insert(prop.0.clone(), prop.1.clone());
-                    }
-                    Some(props_map)
-                } else {
-                    None
-                }
-            },
+            name: block,
+            properties: block.properties(registry_id).map(|p| p.to_props()),
         }
     }
 }

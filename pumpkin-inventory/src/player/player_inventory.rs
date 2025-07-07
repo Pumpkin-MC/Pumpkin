@@ -2,7 +2,7 @@ use crate::entity_equipment::EntityEquipment;
 use crate::equipment_slot::EquipmentSlot;
 use crate::screen_handler::InventoryPlayer;
 use async_trait::async_trait;
-use pumpkin_protocol::client::play::CSetPlayerInventory;
+use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_world::inventory::split_stack;
 use pumpkin_world::inventory::{Clearable, Inventory};
 use pumpkin_world::item::ItemStack;
@@ -42,6 +42,15 @@ impl PlayerInventory {
             .get(self.get_selected_slot() as usize)
             .unwrap()
             .clone()
+    }
+
+    /// getOffHandStack in source
+    pub async fn off_hand_item(&self) -> Arc<Mutex<ItemStack>> {
+        let slot = self
+            .equipment_slots
+            .get(&PlayerInventory::OFF_HAND_SLOT)
+            .unwrap();
+        self.entity_equipment.lock().await.get(slot)
     }
 
     pub async fn swap_item(&self) -> (ItemStack, ItemStack) {

@@ -79,16 +79,18 @@ fn waterlogged_check(block: &Block, state: &BlockState) -> Option<bool> {
 
 fn set_waterlogged(block: &Block, state: &BlockState, waterlogged: bool) -> u16 {
     let original_props = &block.properties(state.id).unwrap().to_props();
-    let mut props_vec: Vec<(&str, &str)> = Vec::with_capacity(original_props.len());
     let waterlogged = waterlogged.to_string();
-    for (key, value) in original_props {
-        if key == "waterlogged" {
-            props_vec.push((key.as_str(), &waterlogged));
-        } else {
-            props_vec.push((key.as_str(), value.as_str()));
-        }
-    }
-    block.from_properties(props_vec).unwrap().to_state_id(block)
+    let props = original_props
+        .iter()
+        .map(|(key, value)| {
+            if key == "waterlogged" {
+                ("waterlogged", waterlogged.as_str())
+            } else {
+                (key.as_str(), value.as_str())
+            }
+        })
+        .collect();
+    block.from_properties(props).unwrap().to_state_id(block)
 }
 
 #[async_trait]
@@ -128,7 +130,7 @@ impl PumpkinItem for EmptyBucketItem {
             })
             .unwrap_or(false)
         {
-            let state_id = set_waterlogged(&block, &state, false);
+            let state_id = set_waterlogged(block, state, false);
             world
                 .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
@@ -150,8 +152,8 @@ impl PumpkinItem for EmptyBucketItem {
             let (block, state) = world
                 .get_block_and_block_state(&block_pos.offset(direction.to_offset()))
                 .await;
-            if waterlogged_check(&block, &state).is_some() {
-                let state_id = set_waterlogged(&block, &state, false);
+            if waterlogged_check(block, state).is_some() {
+                let state_id = set_waterlogged(block, state, false);
                 world
                     .set_block_state(
                         &block_pos.offset(direction.to_offset()),
@@ -228,8 +230,8 @@ impl PumpkinItem for FilledBucketItem {
             return;
         }
         let (block, state) = world.get_block_and_block_state(&pos).await;
-        if waterlogged_check(&block, &state).is_some() && item.id == Item::WATER_BUCKET.id {
-            let state_id = set_waterlogged(&block, &state, true);
+        if waterlogged_check(block, state).is_some() && item.id == Item::WATER_BUCKET.id {
+            let state_id = set_waterlogged(block, state, true);
             world
                 .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
@@ -239,11 +241,11 @@ impl PumpkinItem for FilledBucketItem {
                 .get_block_and_block_state(&pos.offset(direction.to_offset()))
                 .await;
 
-            if waterlogged_check(&block, &state).is_some() {
+            if waterlogged_check(block, state).is_some() {
                 if item.id == Item::LAVA_BUCKET.id {
                     return;
                 }
-                let state_id = set_waterlogged(&block, &state, true);
+                let state_id = set_waterlogged(block, state, true);
 
                 world
                     .set_block_state(

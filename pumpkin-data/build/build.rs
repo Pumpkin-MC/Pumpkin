@@ -1,18 +1,22 @@
-use quote::{format_ident, quote};
-use std::{fs, io::Write, path::Path, process::Command};
-
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
+use quote::{format_ident, quote};
+use std::{fs, io::Write, path::Path, process::Command};
 
 mod biome;
 mod block;
 mod chunk_status;
+mod composter_increase_chance;
 mod damage_type;
+mod enchantments;
 mod entity_pose;
 mod entity_status;
 mod entity_type;
+mod flower_pot_transformations;
 mod fluid;
+mod fuels;
 mod game_event;
+mod game_rules;
 mod item;
 pub mod loot;
 mod message_type;
@@ -20,6 +24,7 @@ mod noise_parameter;
 mod noise_router;
 mod packet;
 mod particle;
+mod recipes;
 mod scoreboard_slot;
 mod screen;
 mod sound;
@@ -42,6 +47,7 @@ pub fn main() {
     write_generated_file(sound::build(), "sound.rs");
     write_generated_file(chunk_status::build(), "chunk_status.rs");
     write_generated_file(game_event::build(), "game_event.rs");
+    write_generated_file(game_rules::build(), "game_rules.rs");
     write_generated_file(sound_category::build(), "sound_category.rs");
     write_generated_file(entity_pose::build(), "entity_pose.rs");
     write_generated_file(scoreboard_slot::build(), "scoreboard_slot.rs");
@@ -59,6 +65,17 @@ pub fn main() {
     write_generated_file(block::build(), "block.rs");
     write_generated_file(tag::build(), "tag.rs");
     write_generated_file(noise_router::build(), "noise_router.rs");
+    write_generated_file(
+        flower_pot_transformations::build(),
+        "flower_pot_transformations.rs",
+    );
+    write_generated_file(
+        composter_increase_chance::build(),
+        "composter_increase_chance.rs",
+    );
+    write_generated_file(recipes::build(), "recipes.rs");
+    write_generated_file(enchantments::build(), "enchantment.rs");
+    write_generated_file(fuels::build(), "fuels.rs");
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
@@ -86,7 +103,6 @@ pub fn write_generated_file(content: TokenStream, out_file: &str) {
     // Doesn't matter if rustfmt is unavailable.
     let _ = Command::new("rustfmt").arg(&path).output();
     // Try to auto optimize using clippy.
-    // Doesn't matter if rustfmt is unavailable.
     let _ = Command::new("cargo clippy --fix --allow-dirty")
         .arg(&path)
         .output();

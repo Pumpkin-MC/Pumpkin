@@ -5,6 +5,7 @@ use core::f32;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
+use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
@@ -13,11 +14,11 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
-    client::play::{
+    codec::var_int::VarInt,
+    java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
         CUpdateEntityRot, MetaDataType, Metadata,
     },
-    codec::var_int::VarInt,
     ser::serializer::Serializer,
 };
 use pumpkin_registry::VanillaDimensionType;
@@ -42,6 +43,7 @@ use tokio::sync::{Mutex, RwLock};
 use crate::world::World;
 
 pub mod ai;
+pub mod decoration;
 pub mod effect;
 pub mod experience_orb;
 pub mod hunger;
@@ -51,6 +53,7 @@ pub mod mob;
 pub mod player;
 pub mod projectile;
 pub mod tnt;
+pub mod r#type;
 
 mod combat;
 
@@ -70,6 +73,22 @@ pub trait EntityBase: Send + Sync {
             living.tick(caller, server).await;
         } else {
             self.get_entity().tick(caller, server).await;
+        }
+    }
+
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        if let Some(living) = self.get_living_entity() {
+            living.write_nbt(nbt).await;
+        } else {
+            self.get_entity().write_nbt(nbt).await;
+        }
+    }
+
+    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
+        if let Some(living) = self.get_living_entity() {
+            living.read_nbt(nbt).await;
+        } else {
+            self.get_entity().read_nbt(nbt).await;
         }
     }
 
@@ -151,9 +170,14 @@ pub struct Entity {
     pub fire_ticks: AtomicI32,
     pub has_visual_fire: AtomicBool,
 
+    pub first_loaded_chunk_position: AtomicCell<Option<Vector3<i32>>>,
+
     pub portal_cooldown: AtomicU32,
 
     pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
+
+    /// The data send in the Entity Spawn packet
+    pub data: AtomicI32,
 }
 
 impl Entity {
@@ -191,6 +215,7 @@ impl Entity {
             velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             standing_eye_height: entity_type.eye_height,
             pose: AtomicCell::new(EntityPose::Standing),
+            first_loaded_chunk_position: AtomicCell::new(None),
             bounding_box: AtomicCell::new(BoundingBox::new_from_pos(
                 position.x,
                 position.y,
@@ -200,6 +225,7 @@ impl Entity {
             bounding_box_size: AtomicCell::new(bounding_box_size),
             invulnerable: AtomicBool::new(invulnerable),
             damage_immunities: Vec::new(),
+            data: AtomicI32::new(0),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
             portal_cooldown: AtomicU32::new(0),
@@ -245,7 +271,7 @@ impl Entity {
 
                 let chunk_pos = self.chunk_pos.load();
                 if get_section_cord(floor_x) != chunk_pos.x
-                    || get_section_cord(floor_z) != chunk_pos.z
+                    || get_section_cord(floor_z) != chunk_pos.y
                 {
                     self.chunk_pos.store(Vector2::new(
                         get_section_cord(new_block_pos.x),
@@ -418,7 +444,7 @@ impl Entity {
             self.pitch.load(),
             self.yaw.load(),
             self.head_yaw.load(), // todo: head_yaw and yaw are swapped, find out why
-            0.into(),
+            self.data.load(Relaxed).into(),
             entity_vel,
         )
     }
@@ -482,6 +508,31 @@ impl Entity {
             135.0..=225.0 => HorizontalFacing::North,
             225.0..=315.0 => HorizontalFacing::East,
             _ => HorizontalFacing::South, // Default case, should not occur
+        }
+    }
+
+    pub fn get_rotation_16(&self) -> Integer0To15 {
+        let adjusted_yaw = self.yaw.load().rem_euclid(360.0);
+
+        let index = (adjusted_yaw / 22.5).round() as u8 % 16;
+
+        match index {
+            0 => Integer0To15::L0,
+            1 => Integer0To15::L1,
+            2 => Integer0To15::L2,
+            3 => Integer0To15::L3,
+            4 => Integer0To15::L4,
+            5 => Integer0To15::L5,
+            6 => Integer0To15::L6,
+            7 => Integer0To15::L7,
+            8 => Integer0To15::L8,
+            9 => Integer0To15::L9,
+            10 => Integer0To15::L10,
+            11 => Integer0To15::L11,
+            12 => Integer0To15::L12,
+            13 => Integer0To15::L13,
+            14 => Integer0To15::L14,
+            _ => Integer0To15::L15,
         }
     }
 
@@ -679,7 +730,7 @@ impl Entity {
                         if outlines.is_empty() {
                             world
                                 .block_registry
-                                .on_entity_collision(block, &world, entity, pos, state, server)
+                                .on_entity_collision(block, &world, entity, &pos, state, server)
                                 .await;
                             let fluid = world.get_fluid(&pos).await;
                             world
@@ -693,7 +744,7 @@ impl Entity {
                             if outline_aabb.intersects(&aabb) {
                                 world
                                     .block_registry
-                                    .on_entity_collision(block, &world, entity, pos, state, server)
+                                    .on_entity_collision(block, &world, entity, &pos, state, server)
                                     .await;
                                 let fluid = world.get_fluid(&pos).await;
                                 world
@@ -706,7 +757,7 @@ impl Entity {
                     } else {
                         world
                             .block_registry
-                            .on_entity_collision(block, &world, entity, pos, state, server)
+                            .on_entity_collision(block, &world, entity, &pos, state, server)
                             .await;
                         let fluid = world.get_fluid(&pos).await;
                         world
@@ -788,28 +839,43 @@ impl EntityBase for Entity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
-}
 
-#[async_trait]
-impl NBTStorage for Entity {
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         let position = self.pos.load();
+        nbt.put_string(
+            "id",
+            format!("minecraft:{}", self.entity_type.resource_name),
+        );
+        let uuid = self.entity_uuid.as_u128();
+        nbt.put(
+            "UUID",
+            NbtTag::IntArray(vec![
+                (uuid >> 96) as i32,
+                ((uuid >> 64) & 0xFFFF_FFFF) as i32,
+                ((uuid >> 32) & 0xFFFF_FFFF) as i32,
+                (uuid & 0xFFFF_FFFF) as i32,
+            ]),
+        );
         nbt.put(
             "Pos",
-            NbtTag::List(
-                vec![position.x.into(), position.y.into(), position.z.into()].into_boxed_slice(),
-            ),
+            NbtTag::List(vec![
+                position.x.into(),
+                position.y.into(),
+                position.z.into(),
+            ]),
         );
         let velocity = self.velocity.load();
         nbt.put(
             "Motion",
-            NbtTag::List(
-                vec![velocity.x.into(), velocity.y.into(), velocity.z.into()].into_boxed_slice(),
-            ),
+            NbtTag::List(vec![
+                velocity.x.into(),
+                velocity.y.into(),
+                velocity.z.into(),
+            ]),
         );
         nbt.put(
             "Rotation",
-            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()].into_boxed_slice()),
+            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
         );
         nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
         nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
@@ -822,12 +888,14 @@ impl NBTStorage for Entity {
         // todo more...
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
         let position = nbt.get_list("Pos").unwrap();
         let x = position[0].extract_double().unwrap_or(0.0);
         let y = position[1].extract_double().unwrap_or(0.0);
         let z = position[2].extract_double().unwrap_or(0.0);
-        self.set_pos(Vector3::new(x, y, z));
+        let pos = Vector3::new(x, y, z);
+        self.set_pos(pos);
+        self.first_loaded_chunk_position.store(Some(pos.to_i32()));
         let velocity = nbt.get_list("Motion").unwrap();
         let x = velocity[0].extract_double().unwrap_or(0.0);
         let y = velocity[1].extract_double().unwrap_or(0.0);
@@ -854,7 +922,7 @@ impl NBTStorage for Entity {
 
 #[async_trait]
 pub trait NBTStorage: Send + Sync + Sized {
-    async fn write_nbt(&self, nbt: &mut NbtCompound);
+    async fn write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     async fn read_nbt(&mut self, _nbt: &mut NbtCompound) {}
 

@@ -15,7 +15,7 @@ use instrument::Instrument;
 use jukebox_song::JukeboxSong;
 use paint::Painting;
 use pig::PigVariant;
-use pumpkin_protocol::client::config::RegistryEntry;
+use pumpkin_protocol::java::client::config::RegistryEntry;
 use pumpkin_util::resource_location::ResourceLocation;
 use serde::{Deserialize, Serialize};
 use trim_material::TrimMaterial;

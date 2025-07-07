@@ -10,23 +10,23 @@ use pumpkin_util::{
     resource_location::ResourceLocation,
     text::{TextComponent, style::Style},
 };
-use ser::{NetworkWriteExt, ReadingError, WritingError, packet::Packet};
+use ser::{ReadingError, WritingError};
 use serde::{
     Deserialize, Serialize, Serializer,
     de::{DeserializeSeed, Visitor},
 };
+use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-#[cfg(feature = "clientbound")]
-pub mod client;
+use crate::packet::Packet;
+
+pub mod bedrock;
 pub mod codec;
-pub mod packet_decoder;
-pub mod packet_encoder;
+pub mod java;
+pub mod packet;
 #[cfg(feature = "query")]
 pub mod query;
 pub mod ser;
-#[cfg(feature = "serverbound")]
-pub mod server;
 
 pub const MAX_PACKET_SIZE: u64 = 2097152;
 pub const MAX_PACKET_DATA_SIZE: usize = 8388608;
@@ -334,16 +334,45 @@ pub struct RawPacket {
 
 pub trait ClientPacket: Packet {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError>;
-
-    fn write(&self, write: impl Write) -> Result<(), WritingError> {
-        let mut write = write;
-        write.write_var_int(&VarInt(Self::PACKET_ID))?;
-        self.write_packet_data(write)
-    }
 }
 
 pub trait ServerPacket: Packet + Sized {
     fn read(read: impl Read) -> Result<Self, ReadingError>;
+}
+
+/// Errors that can occur during packet encoding.
+#[derive(Error, Debug)]
+pub enum PacketEncodeError {
+    #[error("Packet exceeds maximum length: {0}")]
+    TooLong(usize),
+    #[error("Compression failed {0}")]
+    CompressionFailed(String),
+    #[error("Writing packet failed: {0}")]
+    Message(String),
+}
+
+#[derive(Error, Debug)]
+pub enum PacketDecodeError {
+    #[error("failed to decode packet ID")]
+    DecodeID,
+    #[error("packet exceeds maximum length")]
+    TooLong,
+    #[error("packet length is out of bounds")]
+    OutOfBounds,
+    #[error("malformed packet length VarInt: {0}")]
+    MalformedLength(String),
+    #[error("failed to decompress packet: {0}")]
+    FailedDecompression(String), // Updated to include error details
+    #[error("packet is uncompressed but greater than the threshold")]
+    NotCompressed,
+    #[error("the connection has closed")]
+    ConnectionClosed,
+}
+
+impl From<ReadingError> for PacketDecodeError {
+    fn from(value: ReadingError) -> Self {
+        Self::FailedDecompression(value.to_string())
+    }
 }
 
 #[derive(Serialize)]
@@ -519,11 +548,13 @@ impl Serialize for LinkType {
 
 #[cfg(test)]
 mod test {
-    use crate::ser::{deserializer::Deserializer, serializer::Serializer};
     use pumpkin_util::resource_location::ResourceLocation;
     use serde::{Deserialize, Serialize};
 
-    use crate::{IdOr, SoundEvent};
+    use crate::{
+        IdOr, SoundEvent,
+        ser::{deserializer::Deserializer, serializer::Serializer},
+    };
 
     #[test]
     fn test_serde_id_or_id() {

@@ -5,7 +5,7 @@ use crate::{
 };
 use pumpkin_util::{loot_table::LootTable, math::experience::Experience};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Block {
     pub id: u16,
     pub name: &'static str,
@@ -16,8 +16,9 @@ pub struct Block {
     pub velocity_multiplier: f32,
     pub jump_velocity_multiplier: f32,
     pub item_id: u16,
-    pub default_state: BlockState,
-    pub states: &'static [BlockStateRef],
+    pub default_state: &'static BlockState,
+    pub states: &'static [BlockState],
+    pub flammable: Option<Flammable>,
     pub loot_table: Option<LootTable>,
     pub experience: Option<Experience>,
 }
@@ -38,4 +39,21 @@ impl Tagable for Block {
     fn registry_key(&self) -> &str {
         self.name
     }
+}
+
+impl Block {
+    pub fn is_waterlogged(&self, state_id: u16) -> bool {
+        self.properties(state_id).is_some_and(|properties| {
+            properties
+                .to_props()
+                .iter()
+                .any(|(key, value)| key == "waterlogged" && value == "true")
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Flammable {
+    pub spread_chance: u8,
+    pub burn_chance: u8,
 }

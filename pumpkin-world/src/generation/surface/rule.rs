@@ -22,7 +22,7 @@ impl MaterialRule {
         &self,
         chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         match self {
             MaterialRule::Badlands(badlands) => badlands.try_apply(context),
             MaterialRule::Block(block) => block.try_apply(),
@@ -36,7 +36,7 @@ impl MaterialRule {
 pub struct BadLandsMaterialRule;
 
 impl BadLandsMaterialRule {
-    pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<BlockState> {
+    pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<&'static BlockState> {
         Some(
             context
                 .terrain_builder
@@ -51,7 +51,7 @@ pub struct BlockMaterialRule {
 }
 
 impl BlockMaterialRule {
-    pub fn try_apply(&self) -> Option<BlockState> {
+    pub fn try_apply(&self) -> Option<&'static BlockState> {
         self.result_state.get_state()
     }
 }
@@ -66,7 +66,7 @@ impl SequenceMaterialRule {
         &self,
         chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         for seq in &self.sequence {
             if let Some(state) = seq.try_apply(chunk, context) {
                 return Some(state);
@@ -87,7 +87,7 @@ impl ConditionMaterialRule {
         &self,
         chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         if self.if_true.test(chunk, context) {
             return self.then_run.try_apply(chunk, context);
         }

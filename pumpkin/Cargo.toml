@@ -50,7 +50,7 @@ num-bigint = "0.4"
 rustyline-async = "0.4.6"
 
 # encryption
-rsa = { version = "=0.10.0-rc.0", features = ["sha1"] }
+rsa = { version = "=0.10.0-rc.1", features = ["sha1"] }
 rsa-der = "0.3"
 
 # authentication
@@ -90,6 +90,8 @@ tokio-util = { version = "0.7.15", features = ["rt"] }
 
 # Memory profiling
 dhat = { version = "0.3.3", optional = true }
+
+flate2 = "1.1.2"
 
 [build-dependencies]
 git-version = "0.3"

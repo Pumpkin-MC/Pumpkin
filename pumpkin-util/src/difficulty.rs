@@ -7,10 +7,10 @@ pub struct ParseDifficultyError;
 
 #[derive(Serialize, Deserialize, FromPrimitive, ToPrimitive, PartialEq, Clone, Copy, Debug)]
 pub enum Difficulty {
-    Peaceful,
-    Easy,
-    Normal,
-    Hard,
+    Peaceful = 0,
+    Easy = 1,
+    Normal = 2,
+    Hard = 3,
 }
 
 impl FromStr for Difficulty {

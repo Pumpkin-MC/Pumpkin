@@ -24,7 +24,7 @@ impl OreVeinSampler {
         router: &mut ChunkNoiseRouter,
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> Option<BlockState> {
+    ) -> Option<&'static BlockState> {
         let vein_toggle = router.vein_toggle(pos, sample_options);
         let vein_type: &VeinType = if vein_toggle > 0f64 {
             &vein_type::COPPER
@@ -57,12 +57,12 @@ impl OreVeinSampler {
                         && vein_gap > (-0.3f32 as f64)
                     {
                         Some(if random.next_f32() < 0.02f32 {
-                            vein_type.raw_ore.default_state.clone()
+                            vein_type.raw_ore.default_state
                         } else {
-                            vein_type.ore.default_state.clone()
+                            vein_type.ore.default_state
                         })
                     } else {
-                        Some(vein_type.stone.default_state.clone())
+                        Some(vein_type.stone.default_state)
                     };
                 }
             }

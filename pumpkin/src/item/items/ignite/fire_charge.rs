@@ -1,11 +1,13 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
-use std::sync::Arc;
 
 use crate::entity::player::Player;
 use crate::item::items::ignite::ignition::Ignition;
@@ -41,9 +43,6 @@ impl PumpkinItem for FireChargeItem {
                 world
                     .play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos)
                     .await;
-
-                Ignition::run_fire_spread(world, &pos);
-                // TODO
             },
             _item,
             player,

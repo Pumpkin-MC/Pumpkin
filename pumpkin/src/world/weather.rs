@@ -1,5 +1,5 @@
 use super::World;
-use pumpkin_protocol::client::play::{CGameEvent, GameEvent};
+use pumpkin_protocol::java::client::play::{CGameEvent, GameEvent};
 use rand::Rng;
 
 // Weather timing constants

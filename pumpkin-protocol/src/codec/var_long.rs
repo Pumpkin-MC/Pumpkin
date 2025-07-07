@@ -4,11 +4,14 @@ use std::{
     ops::Deref,
 };
 
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
-
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{self, SeqAccess, Visitor},
+};
+
+use crate::{
+    WritingError,
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
 };
 
 pub type VarLongType = i64;
@@ -38,10 +41,10 @@ impl VarLong {
             let byte = (x & 0x7F) as u8;
             x >>= 7;
             if x == 0 {
-                write.write_u8_be(byte)?;
+                write.write_u8(byte)?;
                 break;
             }
-            write.write_u8_be(byte | 0x80)?;
+            write.write_u8(byte | 0x80)?;
         }
 
         Ok(())
@@ -51,7 +54,7 @@ impl VarLong {
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
-            let byte = read.get_u8_be()?;
+            let byte = read.get_u8()?;
             val |= (i64::from(byte) & 0b01111111) << (i * 7);
             if byte & 0b10000000 == 0 {
                 return Ok(VarLong(val));

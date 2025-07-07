@@ -1,7 +1,7 @@
 use std::{num::NonZeroU8, sync::Arc};
 
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_protocol::client::play::{CCenterChunk, CUnloadChunk};
+use pumpkin_protocol::java::client::play::{CCenterChunk, CUnloadChunk};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::entity::player::Player;
@@ -23,14 +23,13 @@ pub async fn player_join(player: &Arc<Player>) {
         .client
         .send_packet_now(&CCenterChunk {
             chunk_x: chunk_pos.x.into(),
-            chunk_z: chunk_pos.z.into(),
+            chunk_z: chunk_pos.y.into(),
         })
         .await;
     let view_distance = get_view_distance(player).await;
     log::debug!(
-        "Player {} ({}) joined with view distance: {}",
+        "Player {} joined with view distance: {}",
         player.gameprofile.name,
-        player.client.id,
         view_distance
     );
 
@@ -51,7 +50,7 @@ pub async fn update_position(player: &Arc<Player>) {
             .client
             .send_packet_now(&CCenterChunk {
                 chunk_x: new_chunk_center.x.into(),
-                chunk_z: new_chunk_center.z.into(),
+                chunk_z: new_chunk_center.y.into(),
             })
             .await;
 
@@ -88,7 +87,7 @@ pub async fn update_position(player: &Arc<Player>) {
             for chunk in unloading_chunks {
                 player
                     .client
-                    .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.z))
+                    .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                     .await;
             }
         }

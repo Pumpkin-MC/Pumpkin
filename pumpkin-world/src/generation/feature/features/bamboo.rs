@@ -50,7 +50,7 @@ impl BambooFeature {
                             if !block.to_block().is_tagged_with("minecraft:dirt").unwrap() {
                                 continue;
                             }
-                            chunk.set_block_state(&block_below.0, &Block::PODZOL.default_state);
+                            chunk.set_block_state(&block_below.0, Block::PODZOL.default_state);
                         }
                     }
                 }
@@ -58,7 +58,7 @@ impl BambooFeature {
                 let bamboo = Block::BAMBOO.default_state;
                 for _ in 0..height {
                     if chunk.is_air(&bpos.0) {
-                        chunk.set_block_state(&bpos.0, &bamboo);
+                        chunk.set_block_state(&bpos.0, bamboo);
                         bpos = bpos.up();
                     } else {
                         break;
@@ -72,19 +72,19 @@ impl BambooFeature {
 
                     chunk.set_block_state(
                         &bpos.0,
-                        &get_state_by_state_id(props.to_state_id(&Block::BAMBOO)).unwrap(),
+                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)).unwrap(),
                     );
                     props.stage = Integer0To1::L0;
 
                     chunk.set_block_state(
                         &bpos.down().0,
-                        &get_state_by_state_id(props.to_state_id(&Block::BAMBOO)).unwrap(),
+                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)).unwrap(),
                     );
                     props.leaves = BambooLeaves::Small;
 
                     chunk.set_block_state(
                         &bpos.down().down().0,
-                        &get_state_by_state_id(props.to_state_id(&Block::BAMBOO)).unwrap(),
+                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)).unwrap(),
                     );
                 }
             }

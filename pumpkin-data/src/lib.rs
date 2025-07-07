@@ -24,6 +24,10 @@ mod sound_category;
 #[path = "generated/sound.rs"]
 mod sound_enum;
 
+#[rustfmt::skip]
+#[path = "generated/recipes.rs"]
+pub mod recipes;
+
 pub mod sound {
     pub use crate::sound_category::*;
     pub use crate::sound_enum::*;
@@ -52,6 +56,10 @@ pub mod chunk {
 pub mod game_event;
 
 #[rustfmt::skip]
+#[path ="generated/game_rules.rs"]
+pub mod game_rules;
+
+#[rustfmt::skip]
 #[path = "generated/entity_pose.rs"]
 mod entity_pose;
 
@@ -70,6 +78,11 @@ mod spawn_egg;
 #[rustfmt::skip]
 #[path = "generated/status_effect.rs"]
 mod status_effect;
+
+#[rustfmt::skip]
+#[path = "generated/enchantment.rs"]
+mod enchantment;
+pub use enchantment::*;
 
 pub mod entity {
     pub use super::entity_pose::*;
@@ -115,6 +128,18 @@ pub mod tag;
 #[rustfmt::skip]
 #[path = "generated/noise_router.rs"]
 pub mod noise_router;
+
+#[rustfmt::skip]
+#[path = "generated/composter_increase_chance.rs"]
+pub mod composter_increase_chance;
+
+#[rustfmt::skip]
+#[path = "generated/flower_pot_transformations.rs"]
+pub mod flower_pot_transformations;
+
+#[rustfmt::skip]
+#[path = "generated/fuels.rs"]
+pub mod fuels;
 
 mod block_direction;
 pub mod block_state;

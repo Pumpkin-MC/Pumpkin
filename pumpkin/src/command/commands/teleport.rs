@@ -12,6 +12,7 @@ use crate::command::args::rotation::RotationArgumentConsumer;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
+use crate::world::World;
 
 const NAMES: [&str; 2] = ["teleport", "tp"];
 const DESCRIPTION: &str = "Teleports entities, including players."; // todo
@@ -63,7 +64,11 @@ impl CommandExecutor for EntitiesToEntityExecutor {
 
         let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
         let pos = destination.living_entity.entity.pos.load();
-
+        if !World::is_valid(pos) {
+            return Err(CommandError::CommandFailed(Box::new(
+                TextComponent::translate("argument.pos.outofbounds", []),
+            )));
+        }
         for target in targets {
             let yaw = target.living_entity.entity.yaw.load();
             let pitch = target.living_entity.entity.pitch.load();
@@ -87,7 +92,11 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-
+        if !World::is_valid(pos) {
+            return Err(CommandError::CommandFailed(Box::new(
+                TextComponent::translate("argument.pos.outofbounds", []),
+            )));
+        }
         let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
         let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
 
@@ -112,7 +121,11 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-
+        if !World::is_valid(pos) {
+            return Err(CommandError::CommandFailed(Box::new(
+                TextComponent::translate("argument.pos.outofbounds", []),
+            )));
+        }
         let facing_entity = &EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?
             .living_entity
             .entity;
@@ -139,7 +152,11 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-
+        if !World::is_valid(pos) {
+            return Err(CommandError::CommandFailed(Box::new(
+                TextComponent::translate("argument.pos.outofbounds", []),
+            )));
+        }
         let (yaw, pitch) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
 
         for target in targets {
@@ -163,7 +180,11 @@ impl CommandExecutor for EntitiesToPosExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
-
+        if !World::is_valid(pos) {
+            return Err(CommandError::CommandFailed(Box::new(
+                TextComponent::translate("argument.pos.outofbounds", []),
+            )));
+        }
         for target in targets {
             let yaw = target.living_entity.entity.yaw.load();
             let pitch = target.living_entity.entity.pitch.load();
@@ -191,6 +212,11 @@ impl CommandExecutor for SelfToEntityExecutor {
             CommandSender::Player(player) => {
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
+                if !World::is_valid(pos) {
+                    return Err(CommandError::CommandFailed(Box::new(
+                        TextComponent::translate("argument.pos.outofbounds", []),
+                    )));
+                }
                 player.teleport(pos, yaw, pitch).await;
             }
             _ => {
@@ -203,7 +229,6 @@ impl CommandExecutor for SelfToEntityExecutor {
         Ok(())
     }
 }
-
 struct SelfToPosExecutor;
 
 #[async_trait]
@@ -219,6 +244,11 @@ impl CommandExecutor for SelfToPosExecutor {
                 let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
                 let yaw = player.living_entity.entity.yaw.load();
                 let pitch = player.living_entity.entity.pitch.load();
+                if !World::is_valid(pos) {
+                    return Err(CommandError::CommandFailed(Box::new(
+                        TextComponent::translate("argument.pos.outofbounds", []),
+                    )));
+                }
                 player.teleport(pos, yaw, pitch).await;
             }
             _ => {

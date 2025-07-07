@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
+use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
@@ -14,16 +14,11 @@ use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
 use crate::{
-    SHOULD_STOP,
+    SHOULD_STOP, STOP_INTERRUPT,
     server::{CURRENT_MC_VERSION, Server},
 };
 
-pub async fn start_query_handler(server: Arc<Server>, bound_addr: SocketAddr) {
-    let mut query_addr = bound_addr;
-    if let Some(port) = advanced_config().networking.query.port {
-        query_addr.set_port(port);
-    }
-
+pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let socket = Arc::new(
         UdpSocket::bind(query_addr)
             .await
@@ -55,7 +50,15 @@ pub async fn start_query_handler(server: Arc<Server>, bound_addr: SocketAddr) {
         let valid_challenge_tokens = valid_challenge_tokens.clone();
         let server = server.clone();
         let mut buf = vec![0; 1024];
-        let (_, addr) = socket.recv_from(&mut buf).await.unwrap();
+
+        let recv_result = tokio::select! {
+            result = socket.recv_from(&mut buf) => Some(result),
+            () = STOP_INTERRUPT.notified() => None,
+        };
+
+        let Some(Ok((_, addr))) = recv_result else {
+            break;
+        };
 
         tokio::spawn(async move {
             if let Err(err) = handle_packet(
@@ -64,7 +67,7 @@ pub async fn start_query_handler(server: Arc<Server>, bound_addr: SocketAddr) {
                 server,
                 socket,
                 addr,
-                bound_addr,
+                query_addr,
             )
             .await
             {

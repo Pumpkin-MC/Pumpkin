@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
+use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -34,27 +35,19 @@ use pumpkin_inventory::sync_handler::SyncHandler;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::client::play::{
+use pumpkin_protocol::IdOr;
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
     CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
-    CPlayDisconnect, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition,
-    CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
-    GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
+    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
+    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
+    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
+    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::ser::packet::Packet;
-use pumpkin_protocol::server::play::{
-    SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand, SClientInformationPlay,
-    SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
-    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded,
-    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
-    SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
-};
-use pumpkin_protocol::{IdOr, RawPacket, ServerPacket};
+use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::{
@@ -69,15 +62,14 @@ use pumpkin_world::entity::entity_data_flags::{
     DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION, SLEEPING_POS_ID,
 };
 use pumpkin_world::item::ItemStack;
-use pumpkin_world::level::SyncChunk;
+use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
 
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
 use crate::data::op_data::OPERATOR_CONFIG;
-use crate::error::PumpkinError;
-use crate::net::GameProfile;
-use crate::net::{Client, PlayerConfig};
+use crate::net::PlayerConfig;
+use crate::net::{ClientPlatform, GameProfile};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
@@ -104,6 +96,7 @@ enum BatchState {
 pub struct ChunkManager {
     chunks_per_tick: usize,
     chunk_queue: VecDeque<(Vector2<i32>, SyncChunk)>,
+    entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
 }
 
@@ -115,6 +108,7 @@ impl ChunkManager {
         Self {
             chunks_per_tick,
             chunk_queue: VecDeque::new(),
+            entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
         }
     }
@@ -126,6 +120,10 @@ impl ChunkManager {
 
     pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
         self.chunk_queue.push_back((position, chunk));
+    }
+
+    pub fn push_entity(&mut self, position: Vector2<i32>, chunk: SyncEntityChunk) {
+        self.entity_chunk_queue.push_back((position, chunk));
     }
 
     #[must_use]
@@ -141,12 +139,30 @@ impl ChunkManager {
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
         let chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
-        let mut chunks = Vec::with_capacity(chunk_size);
-        chunks.extend(
-            self.chunk_queue
-                .drain(0..chunk_size)
-                .map(|(_, chunk)| chunk),
-        );
+        let chunks: Vec<Arc<RwLock<ChunkData>>> = self
+            .chunk_queue
+            .drain(0..chunk_size)
+            .map(|(_, chunk)| chunk)
+            .collect();
+
+        match &mut self.batches_sent_since_ack {
+            BatchState::Count(count) => {
+                count.add_assign(1);
+            }
+            state @ BatchState::Initial => *state = BatchState::Waiting,
+            BatchState::Waiting => unreachable!(),
+        }
+
+        chunks.into_boxed_slice()
+    }
+
+    pub fn next_entity(&mut self) -> Box<[SyncEntityChunk]> {
+        let chunk_size = self.entity_chunk_queue.len().min(self.chunks_per_tick);
+        let chunks: Vec<Arc<RwLock<ChunkEntityData>>> = self
+            .entity_chunk_queue
+            .drain(0..chunk_size)
+            .map(|(_, chunk)| chunk)
+            .collect();
 
         match &mut self.batches_sent_since_ack {
             BatchState::Count(count) => {
@@ -176,7 +192,7 @@ pub struct Player {
     /// The player's game profile information, including their username and UUID.
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
-    pub client: Client,
+    pub client: ClientPlatform,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
@@ -253,11 +269,18 @@ pub struct Player {
 }
 
 impl Player {
-    pub async fn new(client: Client, world: Arc<World>, gamemode: GameMode) -> Self {
+    pub async fn new(
+        client: ClientPlatform,
+        gameprofile: GameProfile,
+        config: PlayerConfig,
+        world: Arc<World>,
+        gamemode: GameMode,
+    ) -> Self {
         struct ScreenListener;
 
+        #[async_trait]
         impl ScreenHandlerListener for ScreenListener {
-            fn on_slot_update(
+            async fn on_slot_update(
                 &self,
                 _screen_handler: &ScreenHandlerBehaviour,
                 _slot: u8,
@@ -267,21 +290,7 @@ impl Player {
             }
         }
 
-        let gameprofile = client.gameprofile.lock().await.clone().map_or_else(
-            || {
-                log::error!("Client {} has no game profile!", client.id);
-                GameProfile {
-                    id: uuid::Uuid::new_v4(),
-                    name: String::new(),
-                    properties: vec![],
-                    profile_actions: None,
-                }
-            },
-            |profile| profile,
-        );
         let player_uuid = gameprofile.id;
-
-        let config = client.config.lock().await.clone().unwrap_or_default();
 
         let living_entity = LivingEntity::new(Entity::new(
             player_uuid,
@@ -392,9 +401,8 @@ impl Player {
         let radial_chunks = cylindrical.all_chunks_within();
 
         log::debug!(
-            "Removing player {} ({}), unwatching {} chunks",
+            "Removing player {}, unwatching {} chunks",
             self.gameprofile.name,
-            self.client.id,
             radial_chunks.len()
         );
 
@@ -404,13 +412,13 @@ impl Player {
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
         level.clean_chunks(&chunks_to_clean).await;
+        level.clean_entity_chunks(&chunks_to_clean).await;
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
         log::debug!(
-            "Removed player id {} ({}) from world {} ({} chunks remain cached)",
+            "Removed player id {} from world {} ({} chunks remain cached)",
             self.gameprofile.name,
-            self.client.id,
             "world", // TODO: Add world names
             level.loaded_chunk_count(),
         );
@@ -550,7 +558,7 @@ impl Player {
             // TODO: calculate respawn position
             Some((respawn_point.position.to_f64(), respawn_point.yaw))
         } else if respawn_point.dimension == VanillaDimensionType::TheNether
-            && block == Block::RESPAWN_ANCHOR
+            && block == &Block::RESPAWN_ANCHOR
         {
             // TODO: calculate respawn position
             // TODO: check if there is fuel for respawn
@@ -598,7 +606,7 @@ impl Player {
         let (bed, bed_state) = world
             .get_block_and_block_state(&respawn_point.position)
             .await;
-        BedBlock::set_occupied(false, &world, &bed, &respawn_point.position, bed_state.id).await;
+        BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state.id).await;
 
         self.living_entity
             .entity
@@ -700,9 +708,9 @@ impl Player {
             .send_content_updates()
             .await;
 
-        if self.client.closed.load(Ordering::Relaxed) {
-            return;
-        }
+        // if self.client.closed.load(Ordering::Relaxed) {
+        //     return;
+        // }
 
         if self.packet_sequence.load(Ordering::Relaxed) > -1 {
             self.client
@@ -763,7 +771,7 @@ impl Player {
                 self.continue_mining(
                     *pos,
                     &world,
-                    &state,
+                    state,
                     block.name,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
@@ -970,17 +978,6 @@ impl Player {
             .await;
     }
 
-    /// Sends a world's mobs to only this player.
-    // TODO: This should be optimized for larger servers based on the player's current chunk.
-    pub async fn send_mobs(&self, world: &World) {
-        let entities = world.entities.read().await.clone();
-        for entity in entities.values() {
-            self.client
-                .enqueue_packet(&entity.get_entity().create_spawn_packet())
-                .await;
-        }
-    }
-
     async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
@@ -988,7 +985,7 @@ impl Player {
         level.clean_chunks(&chunks_to_clean).await;
         for chunk in chunks_to_clean {
             self.client
-                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.z))
+                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
         }
 
@@ -1163,9 +1160,9 @@ impl Player {
         }
     }
 
-    pub fn can_interact_with_block_at(&self, pos: &BlockPos, additional_range: f64) -> bool {
+    pub fn can_interact_with_block_at(&self, position: &BlockPos, additional_range: f64) -> bool {
         let d = self.block_interaction_range() + additional_range;
-        let box_pos = BoundingBox::from_block(pos);
+        let box_pos = BoundingBox::from_block(position);
         let entity_pos = self.living_entity.entity.pos.load();
         let standing_eye_height = self.living_entity.entity.standing_eye_height;
         box_pos.squared_magnitude(Vector3 {
@@ -1175,28 +1172,8 @@ impl Player {
         }) < d * d
     }
 
-    /// Kicks the player with a reason depending on the connection state.
     pub async fn kick(&self, reason: TextComponent) {
-        if self.client.closed.load(Ordering::Relaxed) {
-            log::debug!(
-                "Tried to kick client id {} but connection is closed!",
-                self.client.id
-            );
-            return;
-        }
-
-        self.client
-            .send_packet_now(&CPlayDisconnect::new(&reason))
-            .await;
-
-        log::info!(
-            "Kicked player {} (client {}) for {}",
-            self.gameprofile.name,
-            self.client.id,
-            reason.to_pretty_console()
-        );
-
-        self.client.close();
+        self.client.kick(reason).await;
     }
 
     pub fn can_food_heal(&self) -> bool {
@@ -1313,7 +1290,7 @@ impl Player {
                     .await
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
                         PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
-                        &[pumpkin_protocol::client::play::Player {
+                        &[pumpkin_protocol::java::client::play::Player {
                             uuid: self.gameprofile.id,
                             actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
                         }],
@@ -1430,10 +1407,14 @@ impl Player {
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
-        let entity = self.world().await.create_entity(
-            self.living_entity.entity.pos.load()
-                + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0),
+        let item_pos = self.living_entity.entity.pos.load()
+            + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
+        let entity = Entity::new(
+            Uuid::new_v4(),
+            self.world().await,
+            item_pos,
             EntityType::ITEM,
+            false,
         );
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
@@ -1601,10 +1582,12 @@ impl Player {
     pub async fn remove_effect(&self, effect_type: EffectType) {
         let effect_id = VarInt(effect_type as i32);
         self.client
-            .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
-                self.entity_id().into(),
-                effect_id,
-            ))
+            .enqueue_packet(
+                &pumpkin_protocol::java::client::play::CRemoveMobEffect::new(
+                    self.entity_id().into(),
+                    effect_id,
+                ),
+            )
             .await;
         self.living_entity.remove_effect(effect_type).await;
 
@@ -1618,10 +1601,12 @@ impl Player {
             effect_list.push(*effect);
             let effect_id = VarInt(*effect as i32);
             self.client
-                .enqueue_packet(&pumpkin_protocol::client::play::CRemoveMobEffect::new(
-                    self.entity_id().into(),
-                    effect_id,
-                ))
+                .enqueue_packet(
+                    &pumpkin_protocol::java::client::play::CRemoveMobEffect::new(
+                        self.entity_id().into(),
+                        effect_id,
+                    ),
+                )
                 .await;
             count += 1;
         }
@@ -1748,11 +1733,14 @@ impl Player {
 
         self.increment_screen_handler_sync_id();
 
-        if let Some(screen_handler) = screen_handler_factory.create_screen_handler(
-            self.screen_handler_sync_id.load(Ordering::Relaxed),
-            &self.inventory,
-            self,
-        ) {
+        if let Some(screen_handler) = screen_handler_factory
+            .create_screen_handler(
+                self.screen_handler_sync_id.load(Ordering::Relaxed),
+                &self.inventory,
+                self,
+            )
+            .await
+        {
             let screen_handler_temp = screen_handler.lock().await;
             self.client
                 .enqueue_packet(&COpenScreen::new(
@@ -1811,7 +1799,7 @@ impl Player {
             return;
         }
 
-        let not_in_sync = packet.revision.0 != (behaviour.revision as i32);
+        let not_in_sync = packet.revision.0 != (behaviour.revision.load(Ordering::Relaxed) as i32);
 
         screen_handler.disable_sync().await;
         screen_handler
@@ -1945,7 +1933,7 @@ impl NBTStorage for PlayerInventory {
         }
 
         // Save the inventory list
-        nbt.put("Inventory", NbtTag::List(vec.into_boxed_slice()));
+        nbt.put("Inventory", NbtTag::List(vec));
     }
 
     async fn read_nbt_non_mut(&self, nbt: &mut NbtCompound) {
@@ -2007,168 +1995,6 @@ impl EntityBase for Player {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
-    }
-}
-
-impl Player {
-    pub async fn close(&self) {
-        self.client.close();
-        log::debug!("Awaiting tasks for player {}", self.gameprofile.name);
-        self.client.await_tasks().await;
-        log::debug!(
-            "Finished awaiting tasks for client {}",
-            self.gameprofile.name
-        );
-    }
-
-    pub async fn process_packets(self: &Arc<Self>, server: &Arc<Server>) {
-        while let Some(packet) = self.client.get_packet().await {
-            let packet_result = self.handle_play_packet(server, &packet).await;
-            match packet_result {
-                Ok(()) => {}
-                Err(e) => {
-                    if e.is_kick() {
-                        if let Some(kick_reason) = e.client_kick_reason() {
-                            self.kick(TextComponent::text(kick_reason)).await;
-                        } else {
-                            self.kick(TextComponent::text(format!(
-                                "Error while handling incoming packet {e}"
-                            )))
-                            .await;
-                        }
-                    }
-                    e.log();
-                }
-            }
-        }
-    }
-
-    #[allow(clippy::too_many_lines)]
-    pub async fn handle_play_packet(
-        self: &Arc<Self>,
-        server: &Arc<Server>,
-        packet: &RawPacket,
-    ) -> Result<(), Box<dyn PumpkinError>> {
-        let payload = &packet.payload[..];
-        match packet.id {
-            SConfirmTeleport::PACKET_ID => {
-                self.handle_confirm_teleport(SConfirmTeleport::read(payload)?)
-                    .await;
-            }
-            SChatCommand::PACKET_ID => {
-                self.handle_chat_command(server, &(SChatCommand::read(payload)?))
-                    .await;
-            }
-            SChatMessage::PACKET_ID => {
-                self.handle_chat_message(SChatMessage::read(payload)?).await;
-            }
-            SClientInformationPlay::PACKET_ID => {
-                self.handle_client_information(SClientInformationPlay::read(payload)?)
-                    .await;
-            }
-            SClientCommand::PACKET_ID => {
-                self.handle_client_status(SClientCommand::read(payload)?)
-                    .await;
-            }
-            SPlayerInput::PACKET_ID => self.handle_player_input(SPlayerInput::read(payload)?).await,
-            SInteract::PACKET_ID => {
-                self.handle_interact(SInteract::read(payload)?).await;
-            }
-            SKeepAlive::PACKET_ID => {
-                self.handle_keep_alive(SKeepAlive::read(payload)?).await;
-            }
-            SClientTickEnd::PACKET_ID => {
-                // TODO
-            }
-            SPlayerPosition::PACKET_ID => {
-                self.handle_position(SPlayerPosition::read(payload)?).await;
-            }
-            SPlayerPositionRotation::PACKET_ID => {
-                self.handle_position_rotation(SPlayerPositionRotation::read(payload)?)
-                    .await;
-            }
-            SPlayerRotation::PACKET_ID => {
-                self.handle_rotation(SPlayerRotation::read(payload)?).await;
-            }
-            SSetPlayerGround::PACKET_ID => {
-                self.handle_player_ground(&SSetPlayerGround::read(payload)?);
-            }
-            SPickItemFromBlock::PACKET_ID => {
-                self.handle_pick_item_from_block(SPickItemFromBlock::read(payload)?)
-                    .await;
-            }
-            SPlayerAbilities::PACKET_ID => {
-                self.handle_player_abilities(SPlayerAbilities::read(payload)?)
-                    .await;
-            }
-            SPlayerAction::PACKET_ID => {
-                self.clone()
-                    .handle_player_action(SPlayerAction::read(payload)?, server)
-                    .await;
-            }
-            SSetCommandBlock::PACKET_ID => {
-                self.handle_set_command_block(SSetCommandBlock::read(payload)?)
-                    .await;
-            }
-            SPlayerCommand::PACKET_ID => {
-                self.handle_player_command(SPlayerCommand::read(payload)?)
-                    .await;
-            }
-            SPlayerLoaded::PACKET_ID => self.handle_player_loaded(),
-            SPlayPingRequest::PACKET_ID => {
-                self.handle_play_ping_request(SPlayPingRequest::read(payload)?)
-                    .await;
-            }
-            SClickSlot::PACKET_ID => {
-                self.on_slot_click(SClickSlot::read(payload)?).await;
-            }
-            SSetHeldItem::PACKET_ID => {
-                self.handle_set_held_item(SSetHeldItem::read(payload)?)
-                    .await;
-            }
-            SSetCreativeSlot::PACKET_ID => {
-                self.handle_set_creative_slot(SSetCreativeSlot::read(payload)?)
-                    .await?;
-            }
-            SSwingArm::PACKET_ID => {
-                self.handle_swing_arm(SSwingArm::read(payload)?).await;
-            }
-            SUpdateSign::PACKET_ID => {
-                self.handle_sign_update(SUpdateSign::read(payload)?).await;
-            }
-            SUseItemOn::PACKET_ID => {
-                self.handle_use_item_on(SUseItemOn::read(payload)?, server)
-                    .await?;
-            }
-            SUseItem::PACKET_ID => {
-                self.handle_use_item(&SUseItem::read(payload)?, server)
-                    .await;
-            }
-            SCommandSuggestion::PACKET_ID => {
-                self.handle_command_suggestion(SCommandSuggestion::read(payload)?, server)
-                    .await;
-            }
-            SPCookieResponse::PACKET_ID => {
-                self.handle_cookie_response(&SPCookieResponse::read(payload)?);
-            }
-            SCloseContainer::PACKET_ID => {
-                self.handle_close_container(server, SCloseContainer::read(payload)?)
-                    .await;
-            }
-            SChunkBatch::PACKET_ID => {
-                self.handle_chunk_batch(SChunkBatch::read(payload)?).await;
-            }
-            SPlayerSession::PACKET_ID => {
-                self.handle_chat_session_update(server, SPlayerSession::read(payload)?)
-                    .await;
-            }
-            _ => {
-                log::warn!("Failed to handle player packet id {}", packet.id);
-                // TODO: We give an error if all play packets are implemented
-                //  return Err(Box::new(DeserializerError::UnknownPacket));
-            }
-        }
-        Ok(())
     }
 }
 
@@ -2456,6 +2282,10 @@ impl MessageCache {
 impl InventoryPlayer for Player {
     async fn drop_item(&self, item: ItemStack, _retain_ownership: bool) {
         self.drop_item(item).await;
+    }
+
+    fn has_infinite_materials(&self) -> bool {
+        self.gamemode.load() == GameMode::Creative
     }
 
     fn get_inventory(&self) -> Arc<PlayerInventory> {

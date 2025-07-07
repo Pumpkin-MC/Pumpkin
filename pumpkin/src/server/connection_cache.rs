@@ -6,10 +6,9 @@ use pumpkin_config::{BASIC_CONFIG, BasicConfiguration};
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::{
     Players, StatusResponse, Version,
-    client::{config::CPluginMessage, status::CStatusResponse},
     codec::var_int::VarInt,
+    java::client::{config::CPluginMessage, status::CStatusResponse},
 };
-use std::sync::atomic::Ordering;
 use std::{
     fs::File,
     io::{Cursor, Read},
@@ -90,34 +89,36 @@ impl CachedStatus {
     }
 
     // TODO: Player samples
-    pub fn add_player(&mut self, player: &Player) {
+    pub fn add_player(&mut self, _player: &Player) {
         let status_response = &mut self.status_response;
         if let Some(players) = &mut status_response.players {
-            if player
-                .client
-                .added_to_server_listing
-                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-                .is_ok()
-            {
-                players.online += 1;
-            }
+            // TODO
+            // if player
+            //     .client
+            //     .added_to_server_listing
+            //     .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            //     .is_ok()
+            // {
+            players.online += 1;
+            // }
         }
 
         self.status_response_json = serde_json::to_string(&status_response)
             .expect("Failed to parse status response into JSON");
     }
 
-    pub fn remove_player(&mut self, player: &Player) {
+    pub fn remove_player(&mut self, _player: &Player) {
         let status_response = &mut self.status_response;
         if let Some(players) = &mut status_response.players {
-            if player
-                .client
-                .added_to_server_listing
-                .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
-                .is_ok()
-            {
-                players.online -= 1;
-            }
+            // TODO
+            // if player
+            //     .client
+            //     .added_to_server_listing
+            //     .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+            //     .is_ok()
+            // {
+            players.online -= 1;
+            // }
         }
 
         self.status_response_json = serde_json::to_string(&status_response)

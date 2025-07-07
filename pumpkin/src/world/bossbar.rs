@@ -1,5 +1,5 @@
 use crate::entity::player::Player;
-use pumpkin_protocol::client::play::{BosseventAction, CBossEvent};
+use pumpkin_protocol::java::client::play::{BosseventAction, CBossEvent};
 use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 

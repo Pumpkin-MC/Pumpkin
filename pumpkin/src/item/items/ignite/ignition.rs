@@ -1,10 +1,13 @@
 use crate::block::blocks::fire::FireBlockBase;
+use crate::block::blocks::fire::fire::FireBlock;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct Ignition;
@@ -25,60 +28,47 @@ impl Ignition {
         let world = player.world().await;
         let pos = location.offset(face.to_offset());
 
+        if world.get_fluid(&location).await.name != Fluid::EMPTY.name {
+            return;
+        }
         let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
 
-        let result_block_id = get_ignite_result(block, &world, &location)
-            .await
-            .unwrap_or(fire_block.default_state.id);
+        let state_id = world.get_block_state_id(&location).await;
 
-        let Some(result_block) = Block::from_state_id(result_block_id) else {
-            return;
-        };
-
-        // checking by item_id because it always is similar
-        let result_is_fire = fire_block.item_id == result_block.item_id;
-
-        // TODO: create state direction for fire_block
-        if result_is_fire {
-            // calling if result is fire block.
-            // will be contained fire direction logic
-            if FireBlockBase::can_place_at(world.as_ref(), &pos).await {
-                ignite_logic(world, pos, result_block_id).await;
-            }
+        if let Some(new_state_id) = can_be_lit(block, state_id) {
+            ignite_logic(world, location, new_state_id).await;
             return;
         }
 
-        // ignite candles, campfire
-        ignite_logic(world, location, result_block_id).await;
-    }
-
-    pub fn run_fire_spread(_world: Arc<World>, _start_pos: &BlockPos) {
-        tokio::spawn(async move {
-            // todo
-        });
+        let state_id = FireBlock
+            .get_state_for_position(&world, &fire_block, &pos)
+            .await;
+        if FireBlockBase::can_place_at(&world, &pos).await {
+            ignite_logic(world, pos, state_id).await;
+        }
     }
 }
 
-async fn get_ignite_result(block: &Block, world: &Arc<World>, location: &BlockPos) -> Option<u16> {
-    let state_id = world.get_block_state_id(location).await;
-
-    let original_props = match &block.properties(state_id) {
+fn can_be_lit(block: &Block, state_id: u16) -> Option<u16> {
+    let mut props = match &block.properties(state_id) {
         Some(props) => props.to_props(),
         None => return None,
     };
 
-    let mut props_vec: Vec<(&str, &str)> = Vec::with_capacity(original_props.len());
-    for (key, _value) in &original_props {
-        if key == "extinguished" {
-            // campfire
-            props_vec.push((key.as_str(), "true"));
-        } else if key == "lit" {
-            // candles
-            props_vec.push((key.as_str(), "true"));
-        }
+    if props.contains_key("extinguished") {
+        props.insert("extinguished".into(), "false".into());
+    } else if props.contains_key("lit") {
+        props.insert("lit".into(), "true".into());
+    } else {
+        return None;
     }
 
-    let new_state_id = block.from_properties(props_vec).unwrap().to_state_id(block);
+    let props: HashMap<&str, &str> = props
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+
+    let new_state_id = block.from_properties(props)?.to_state_id(block);
 
     (new_state_id != state_id).then_some(new_state_id)
 }

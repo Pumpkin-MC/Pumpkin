@@ -64,9 +64,9 @@ impl CommandExecutor for ListExecutor {
                 handle_banlist(entries, sender).await;
             }
             _ => {
-                return Err(CommandError::GeneralCommandIssue(
+                return Err(CommandError::CommandFailed(Box::new(TextComponent::text(
                     "Incorrect argument for command".to_string(),
-                ));
+                ))));
             }
         }
 

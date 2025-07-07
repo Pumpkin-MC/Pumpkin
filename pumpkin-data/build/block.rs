@@ -11,6 +11,19 @@ use syn::{Ident, LitInt, LitStr};
 
 use crate::loot::LootTableStruct;
 
+// Takes an array of tuples containing indices paired with values,Add commentMore actions
+// Outputs an array with the values in the appropriate index, gaps filled with None
+fn fill_array<T: Clone + quote::ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStream> {
+    let max_index = array.iter().map(|(index, _)| index).max().unwrap();
+    let mut raw_id_from_state_id_ordered = vec![quote! { None }; (max_index + 1) as usize];
+
+    for (state_id, id_lit) in array {
+        raw_id_from_state_id_ordered[state_id as usize] = quote! { Some(#id_lit) };
+    }
+
+    raw_id_from_state_id_ordered
+}
+
 fn const_block_name_from_block_name(block: &str) -> String {
     block.to_shouty_snake_case()
 }
@@ -123,7 +136,7 @@ impl ToTokens for PropertyStruct {
                 fn from_index(index: u16) -> Self {
                     match index {
                         #(#values_index => Self::#values_3,)*
-                        _ => panic!("Invalid index: {}", index),
+                        _ => panic!("Invalid index: {index}"),
                     }
                 }
 
@@ -136,7 +149,7 @@ impl ToTokens for PropertyStruct {
                 fn from_value(value: &str) -> Self {
                     match value {
                         #(#from_values),*,
-                        _ => panic!("Invalid value: {:?}", value),
+                        _ => panic!("Invalid value: {value:?}"),
                     }
                 }
 
@@ -182,14 +195,12 @@ impl ToTokens for BlockPropertyStruct {
                 let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
                 match &entry.property_type {
                     PropertyType::Bool => quote! {
-                        index += !self.#field_name as u16 * multiplier;
-                        multiplier *= 2;
+                        (!self.#field_name as u16, 2)
                     },
                     PropertyType::Enum { name } => {
                         let enum_ident = Ident::new(name, Span::call_site());
                         quote! {
-                            index += self.#field_name.to_index() * multiplier;
-                            multiplier *= #enum_ident::variant_count();
+                            (self.#field_name.to_index(), #enum_ident::variant_count())
                         }
                     }
                 }
@@ -230,10 +241,10 @@ impl ToTokens for BlockPropertyStruct {
             let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! {
-                    props.push((#key.to_string(), self.#field_name.to_string()));
+                    (#key.to_string(), self.#field_name.to_string()),
                 },
                 PropertyType::Enum { name: _ } => quote! {
-                    props.push((#key.to_string(), self.#field_name.to_value().to_string()));
+                    (#key.to_string(), self.#field_name.to_value().to_string()),
                 },
             }
         });
@@ -265,11 +276,12 @@ impl ToTokens for BlockPropertyStruct {
             }
 
             impl BlockProperties for #name {
-                #[allow(unused_assignments)]
                 fn to_index(&self) -> u16 {
-                    let mut index = 0;
-                    let mut multiplier = 1;
-                    #(#to_index_body)*
+                    let (index, _) = [#(#to_index_body),*]
+                    .iter()
+                    .fold((0, 1), |(current_index, multiplier), &(value, count)| {
+                      (current_index + value * multiplier, multiplier * count)
+                    });
                     index
                 }
 
@@ -311,13 +323,10 @@ impl ToTokens for BlockPropertyStruct {
                     Self::from_state_id(block.default_state.id, block)
                 }
 
-                #[allow(clippy::vec_init_then_push)]
-                fn to_props(&self) -> Vec<(String, String)> {
-                    let mut props = vec![];
-                    #(#to_props_values)*
-                    props
+                fn to_props(&self) -> HashMap<String, String> {
+                   HashMap::from([#(#to_props_values)*])
                 }
-                fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self {
+                fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
@@ -325,11 +334,31 @@ impl ToTokens for BlockPropertyStruct {
                     for (key, value) in props {
                         match key {
                             #(#from_props_values),*,
-                            _ => panic!("Invalid key: {}", key),
+                            _ => panic!("Invalid key: {key}"),
                         }
                     }
                     block_props
                 }
+            }
+        });
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct FlammableStruct {
+    pub spread_chance: u8,
+    pub burn_chance: u8,
+}
+
+impl ToTokens for FlammableStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let spread_chance = &self.spread_chance;
+        let burn_chance = &self.burn_chance;
+
+        tokens.extend(quote! {
+            Flammable {
+                spread_chance: #spread_chance,
+                burn_chance: #burn_chance,
             }
         });
     }
@@ -397,12 +426,6 @@ impl PistonBehavior {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub struct BlockStateRef {
-    pub id: u16,
-    pub state_idx: u16,
-}
-
 impl BlockState {
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
@@ -457,20 +480,6 @@ impl BlockState {
     }
 }
 
-impl ToTokens for BlockStateRef {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let id = LitInt::new(&self.id.to_string(), Span::call_site());
-        let state_idx = LitInt::new(&self.state_idx.to_string(), Span::call_site());
-
-        tokens.extend(quote! {
-            BlockStateRef {
-                id: #id,
-                state_idx: #state_idx,
-            }
-        });
-    }
-}
-
 #[derive(Deserialize, Clone, Debug)]
 pub struct Block {
     pub id: u16,
@@ -479,6 +488,7 @@ pub struct Block {
     pub hardness: f32,
     pub blast_resistance: f32,
     pub item_id: u16,
+    pub flammable: Option<FlammableStruct>,
     pub loot_table: Option<LootTableStruct>,
     pub slipperiness: f32,
     pub velocity_multiplier: f32,
@@ -489,25 +499,8 @@ pub struct Block {
     pub experience: Option<Experience>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub struct OptimizedBlock {
-    pub id: u16,
-    pub name: String,
-    pub translation_key: String,
-    pub hardness: f32,
-    pub blast_resistance: f32,
-    pub item_id: u16,
-    pub loot_table: Option<LootTableStruct>,
-    pub slipperiness: f32,
-    pub velocity_multiplier: f32,
-    pub jump_velocity_multiplier: f32,
-    pub default_state_id: u16,
-    pub states: Vec<BlockStateRef>,
-    pub experience: Option<Experience>,
-}
-
-impl OptimizedBlock {
-    fn to_tokens(&self, tokens: &mut TokenStream, all_states: &[BlockState]) {
+impl Block {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let name = LitStr::new(&self.name, Span::call_site());
         let translation_key = LitStr::new(&self.translation_key, Span::call_site());
@@ -525,7 +518,7 @@ impl OptimizedBlock {
             None => quote! { None },
         };
         // Generate state tokens
-        let states = self.states.iter().map(|state| state.to_token_stream());
+        let states = self.states.iter().map(|state| state.to_tokens());
         let loot_table = match &self.loot_table {
             Some(table) => {
                 let table_tokens = table.to_token_stream();
@@ -534,14 +527,21 @@ impl OptimizedBlock {
             None => quote! { None },
         };
 
-        let default_state_ref: &BlockStateRef = self
+        let default_state_ref: &BlockState = self
             .states
             .iter()
             .find(|state| state.id == self.default_state_id)
             .unwrap();
-        let mut default_state = all_states[default_state_ref.state_idx as usize].clone();
+        let mut default_state = default_state_ref.clone();
         default_state.id = default_state_ref.id;
         let default_state = default_state.to_tokens();
+        let flammable = match &self.flammable {
+            Some(flammable) => {
+                let flammable_tokens = flammable.to_token_stream();
+                quote! { Some(#flammable_tokens) }
+            }
+            None => quote! { None },
+        };
         tokens.extend(quote! {
             Block {
                 id: #id,
@@ -553,8 +553,9 @@ impl OptimizedBlock {
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,
                 item_id: #item_id,
-                default_state: #default_state,
+                default_state: &#default_state,
                 states: &[#(#states),*],
+                flammable: #flammable,
                 loot_table: #loot_table,
                 experience: #experience,
             }
@@ -639,9 +640,9 @@ pub(crate) fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../assets/properties.json").unwrap())
             .expect("Failed to parse properties.json");
 
-    let mut type_from_raw_id_arms = TokenStream::new();
-    let mut type_from_name = TokenStream::new();
-    let mut block_from_state_id = TokenStream::new();
+    let mut type_from_raw_id_items = TokenStream::new();
+    let mut block_from_name = TokenStream::new();
+    let mut raw_id_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
     let mut block_properties_from_state_and_block_id = TokenStream::new();
     let mut block_properties_from_props_and_name = TokenStream::new();
@@ -673,45 +674,9 @@ pub(crate) fn build() -> TokenStream {
     // Mapping of a collection of property hashes -> blocks that have these properties.
     let mut property_collection_map: HashMap<Vec<i32>, PropertyCollectionData> = HashMap::new();
     // Validator that we have no `enum` collisions.
-    let mut optimized_blocks: Vec<(String, OptimizedBlock)> = Vec::new();
+    let mut optimized_blocks: Vec<(String, Block)> = Vec::new();
     for block in blocks_assets.blocks.clone() {
-        let optimized_block = OptimizedBlock {
-            id: block.id,
-            name: block.name.clone(),
-            translation_key: block.translation_key.clone(),
-            hardness: block.hardness,
-            blast_resistance: block.blast_resistance,
-            item_id: block.item_id,
-            default_state_id: block.default_state_id,
-            slipperiness: block.slipperiness,
-            velocity_multiplier: block.velocity_multiplier,
-            jump_velocity_multiplier: block.jump_velocity_multiplier,
-            loot_table: block.loot_table,
-            experience: block.experience,
-            states: block
-                .states
-                .iter()
-                .map(|state| {
-                    // Find the index in `unique_states` by comparing all fields except `id`.
-                    let state_idx = unique_states
-                        .iter()
-                        .position(|s| {
-                            s.state_flags == state.state_flags
-                                && s.luminance == state.luminance
-                                && s.hardness == state.hardness
-                                && s.collision_shapes == state.collision_shapes
-                        })
-                        .unwrap() as u16;
-
-                    BlockStateRef {
-                        id: state.id,
-                        state_idx,
-                    }
-                })
-                .collect(),
-        };
-
-        optimized_blocks.push((block.name.clone(), optimized_block));
+        optimized_blocks.push((block.name.clone(), block.clone()));
 
         let mut property_collection = HashSet::new();
         let mut property_mapping = Vec::new();
@@ -758,7 +723,7 @@ pub(crate) fn build() -> TokenStream {
             property_collection_map
                 .entry(property_collection)
                 .or_insert_with(|| PropertyCollectionData::from_mappings(property_mapping))
-                .add_block(block.name, block.id);
+                .add_block(block.name.clone(), block.id);
         }
     }
 
@@ -794,7 +759,7 @@ pub(crate) fn build() -> TokenStream {
         .iter()
         .map(|shape| shape.to_token_stream());
 
-    let unique_states_tokens = unique_states.iter().map(|state| state.to_tokens());
+    //let unique_states_tokens = unique_states.iter().map(|state| state.to_tokens());
 
     let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
     let properties = property_enums.values().map(|prop| prop.to_token_stream());
@@ -805,14 +770,16 @@ pub(crate) fn build() -> TokenStream {
         .iter()
         .map(|entity_type| LitStr::new(entity_type, Span::call_site()));
 
+    let mut raw_id_from_state_id_array = vec![];
+    let mut type_from_raw_id_array = vec![];
+
     // Generate constants and `match` arms for each block.
     for (name, block) in optimized_blocks {
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&name));
         let mut block_tokens = TokenStream::new();
-        block.to_tokens(&mut block_tokens, &unique_states);
+        block.to_tokens(&mut block_tokens);
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
-        let state_start = block.states.iter().map(|state| state.id).min().unwrap();
-        let state_end = block.states.iter().map(|state| state.id).max().unwrap();
+
         let item_id = block.item_id;
 
         constants.extend(quote! {
@@ -820,33 +787,49 @@ pub(crate) fn build() -> TokenStream {
 
         });
 
-        type_from_raw_id_arms.extend(quote! {
-            #id_lit => Some(Self::#const_ident),
+        type_from_raw_id_array.push((block.id, quote! { &Self::#const_ident }));
+
+        block_from_name.extend(quote! {
+            #name => Self::#const_ident,
         });
 
-        type_from_name.extend(quote! {
-            #name => Some(Self::#const_ident),
-        });
-
-        block_from_state_id.extend(quote! {
-            #state_start..=#state_end => Some(Self::#const_ident),
-        });
+        for state in &block.states {
+            raw_id_from_state_id_array.push((state.id, id_lit.clone()));
+        }
 
         if !existing_item_ids.contains(&item_id) {
             block_from_item_id.extend(quote! {
-                #item_id => Some(Self::#const_ident),
+                #item_id => Some(&Self::#const_ident),
             });
             existing_item_ids.push(item_id);
         }
     }
 
+    let raw_id_from_state_id_ordered = fill_array(raw_id_from_state_id_array);
+    let max_state_id = raw_id_from_state_id_ordered.len();
+    for id_lit in raw_id_from_state_id_ordered {
+        raw_id_from_state_id.extend(quote! {
+            #id_lit,
+        });
+    }
+    let type_from_raw_id_array = fill_array(type_from_raw_id_array);
+    let max_type_id = type_from_raw_id_array.len();
+    for type_lit in type_from_raw_id_array {
+        type_from_raw_id_items.extend(quote! {
+            #type_lit,
+        });
+    }
+
     quote! {
-        use crate::{BlockState, BlockStateRef, Block, CollisionShape};
+        use crate::{BlockState, Block, CollisionShape, blocks::Flammable};
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
+        use std::collections::HashMap;
+        use phf;
+
 
         #[derive(Clone, Copy, Debug)]
         pub struct BlockProperty {
@@ -871,10 +854,10 @@ pub(crate) fn build() -> TokenStream {
             fn default(block: &Block) -> Self where Self: Sized;
 
             // Convert properties to a `Vec` of `(name, value)`
-            fn to_props(&self) -> Vec<(String, String)>;
+            fn to_props(&self) -> HashMap<String, String>;
 
             // Convert properties to a block state, and add them onto the default state.
-            fn from_props(props: Vec<(&str, &str)>, block: &Block) -> Self where Self: Sized;
+            fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
@@ -889,53 +872,53 @@ pub(crate) fn build() -> TokenStream {
             #(#shapes),*
         ];
 
-        pub static BLOCK_STATES: &[BlockState] = &[
-            #(#unique_states_tokens),*
-        ];
+        //pub static BLOCK_STATES: &[BlockState] = &[
+        //    #(#unique_states_tokens),*
+        //];
 
         pub static BLOCK_ENTITY_TYPES: &[&str] = &[
             #(#block_entity_types),*
         ];
 
-        pub fn get_block(registry_id: &str) -> Option<Block> {
+        pub fn get_block(registry_id: &str) -> Option<&'static Block> {
            let key = registry_id.strip_prefix("minecraft:").unwrap_or(registry_id);
            Block::from_registry_key(key)
         }
 
-        pub fn get_block_by_id(id: u16) -> Option<Block> {
+        pub fn get_block_by_id(id: u16) -> Option<&'static Block> {
             Block::from_id(id)
         }
 
-        pub fn get_state_by_state_id(id: u16) -> Option<BlockState> {
+        pub fn get_state_by_state_id(id: u16) -> Option<&'static BlockState> {
             if let Some(block) = Block::from_state_id(id) {
-                let state: &BlockStateRef = block.states.iter().find(|state| state.id == id)?;
-                Some(state.get_state())
+                let state: &BlockState = block.states.iter().find(|state| state.id == id)?;
+                Some(state)
             } else {
                 None
             }
         }
 
-        pub fn get_block_by_state_id(id: u16) -> Option<Block> {
+        pub fn get_block_by_state_id(id: u16) -> Option<&'static Block> {
             Block::from_state_id(id)
         }
 
-        pub fn get_block_and_state_by_state_id(id: u16) -> Option<(Block, BlockState)> {
+        pub fn get_block_and_state_by_state_id(id: u16) -> Option<(&'static Block, &'static BlockState)> {
             if let Some(block) = Block::from_state_id(id) {
-                let state: &BlockStateRef = block.states.iter().find(|state| state.id == id)?;
-                Some((block, state.get_state()))
+                let state: &BlockState = block.states.iter().find(|state| state.id == id)?;
+                Some((block, state))
             } else {
                 None
             }
         }
 
-        pub fn get_block_by_item(item_id: u16) -> Option<Block> {
+        pub fn get_block_by_item(item_id: u16) -> Option<&'static Block> {
             Block::from_item_id(item_id)
         }
 
         pub fn blocks_movement(block_state: &BlockState) -> bool {
             if block_state.is_solid() {
                 if let Some(block) = get_block_by_state_id(block_state.id) {
-                    return block != Block::COBWEB && block != Block::BAMBOO_SAPLING;
+                    return block != &Block::COBWEB && block != &Block::BAMBOO_SAPLING;
                 }
             }
             false
@@ -944,32 +927,47 @@ pub(crate) fn build() -> TokenStream {
         impl Block {
             #constants
 
+            // String name to block struct
+            const BLOCK_FROM_NAME_MAP: phf::Map<&'static str, Block> = phf::phf_map!{
+                #block_from_name
+            };
+
+            // Many state ids map to single raw block id
+            const RAW_ID_FROM_STATE_ID: [Option<u16>; #max_state_id] = [
+                #raw_id_from_state_id
+            ];
+
+            const TYPE_FROM_RAW_ID: [Option<&Block>; #max_type_id] = [
+                #type_from_raw_id_items
+            ];
+
             #[doc = r" Try to parse a block from a resource location string."]
-            pub fn from_registry_key(name: &str) -> Option<Self> {
-                match name {
-                    #type_from_name
-                    _ => None
-                }
+            pub fn from_registry_key(name: &str) -> Option<&'static Self> {
+                Self::BLOCK_FROM_NAME_MAP.get(name)
             }
 
             #[doc = r" Try to parse a block from a raw id."]
-            pub const fn from_id(id: u16) -> Option<Self> {
-                match id {
-                    #type_from_raw_id_arms
-                    _ => None
+            pub const fn from_id(id: u16) -> Option<&'static Self> {
+                if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+                    None
+                } else {
+                    Self::TYPE_FROM_RAW_ID[id as usize]
                 }
             }
 
             #[doc = r" Try to parse a block from a state id."]
-            pub const fn from_state_id(id: u16) -> Option<Self> {
-                match id {
-                    #block_from_state_id
-                    _ => None
+            pub const fn from_state_id(id: u16) -> Option<&'static Self> {
+                if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+                    return None;
+                }
+                match Self::RAW_ID_FROM_STATE_ID[id as usize] {
+                    Some(id) => Self::from_id(id),
+                    None => None,
                 }
             }
 
             #[doc = r" Try to parse a block from an item id."]
-            pub const fn from_item_id(id: u16) -> Option<Self> {
+            pub const fn from_item_id(id: u16) -> Option<&'static Self> {
                 #[allow(unreachable_patterns)]
                 match id {
                     #block_from_item_id
@@ -986,7 +984,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Get the properties of the block."]
-            pub fn from_properties(&self, props: Vec<(&str, &str)>) -> Option<Box<dyn BlockProperties>> {
+            pub fn from_properties(&self, props: HashMap<&str, &str>) -> Option<Box<dyn BlockProperties>> {
                 match self.id {
                     #block_properties_from_props_and_name
                     _ => None
@@ -997,14 +995,6 @@ pub(crate) fn build() -> TokenStream {
         #(#properties)*
 
         #(#block_props)*
-
-        impl BlockStateRef {
-            pub fn get_state(&self) -> BlockState {
-                let mut state = BLOCK_STATES[self.state_idx as usize].clone();
-                state.id = self.id;
-                state
-            }
-        }
 
         impl Facing {
             pub fn opposite(&self) -> Self {
@@ -1064,6 +1054,18 @@ pub(crate) fn build() -> TokenStream {
                     Self::West => Self::South,
                     Self::East => Self::North,
                 }
+            }
+        }
+
+        impl RailShape {
+            pub fn is_ascending(&self) -> bool {
+                matches!(self, Self::AscendingEast | Self::AscendingWest | Self::AscendingNorth | Self::AscendingSouth)
+            }
+        }
+
+        impl StraightRailShape {
+            pub fn is_ascending(&self) -> bool {
+                matches!(self, Self::AscendingEast | Self::AscendingWest | Self::AscendingNorth | Self::AscendingSouth)
             }
         }
     }
