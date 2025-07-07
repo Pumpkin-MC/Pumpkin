@@ -114,15 +114,15 @@ pub trait EntityBase: Send + Sync {
             self.get_entity().damage(amount, damage_type).await
         }
     }
-    
+
     fn is_spectator(&self) -> bool {
         false
     }
-    
+
     fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
         false
     }
-    
+
     fn can_hit(&self) -> bool {
         false
     }
@@ -167,7 +167,6 @@ impl RemovalReason {
         }
     }
 }
-
 
 static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
 
@@ -843,11 +842,11 @@ impl Entity {
             ))
             .await;
     }
-    
+
     pub fn get_eye_y(&self) -> f64 {
         self.pos.load().y + self.standing_eye_height as f64
     }
-    
+
     pub fn is_removed(&self) -> bool {
         self.removal_reason.load().is_some()
     }
@@ -855,11 +854,11 @@ impl Entity {
     pub fn is_alive(&self) -> bool {
         !self.is_removed()
     }
-    
+
     pub async fn has_passengers(&self) -> bool {
         !self.passengers.lock().await.is_empty()
     }
-    
+
     pub fn has_vehicle(&self) -> bool {
         self.vehicle.load().is_some()
     }

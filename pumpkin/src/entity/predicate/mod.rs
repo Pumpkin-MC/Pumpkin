@@ -1,5 +1,5 @@
-use std::pin::Pin;
 use crate::entity::{Entity, EntityBase};
+use std::pin::Pin;
 
 pub enum EntityPredicate<'a> {
     ValidEntity,
@@ -14,12 +14,13 @@ pub enum EntityPredicate<'a> {
 }
 
 impl<'a> EntityPredicate<'a> {
-    pub fn test<'b>(&'b self, entity: &'b Entity) -> Pin<Box<dyn Future<Output = bool> + Send + 'b>> {
+    pub fn test<'b>(
+        &'b self,
+        entity: &'b Entity,
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'b>> {
         Box::pin(async move {
             match self {
-                EntityPredicate::ValidEntity => {
-                    entity.is_alive()
-                }
+                EntityPredicate::ValidEntity => entity.is_alive(),
                 EntityPredicate::ValidLivingEntity => {
                     entity.is_alive() && entity.get_living_entity().is_some()
                 }
@@ -37,11 +38,10 @@ impl<'a> EntityPredicate<'a> {
                         false
                     }
                 }
-                EntityPredicate::ExceptSpectator => {
-                    !entity.is_spectator()
-                }
+                EntityPredicate::ExceptSpectator => !entity.is_spectator(),
                 EntityPredicate::CanCollide => {
-                    EntityPredicate::ExceptSpectator.test(entity).await && entity.is_collidable(None)
+                    EntityPredicate::ExceptSpectator.test(entity).await
+                        && entity.is_collidable(None)
                 }
                 EntityPredicate::CanHit => {
                     EntityPredicate::ExceptSpectator.test(entity).await && entity.can_hit()
@@ -63,7 +63,8 @@ impl<'a> EntityPredicate<'a> {
                         }
 
                         opt_vehicle_arc = {
-                            let vehicle_lock = vehicle_entity_base.get_entity().vehicle.lock().await;
+                            let vehicle_lock =
+                                vehicle_entity_base.get_entity().vehicle.lock().await;
                             vehicle_lock.clone()
                         }
                     }

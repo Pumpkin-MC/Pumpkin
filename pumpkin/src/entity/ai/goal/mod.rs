@@ -2,8 +2,13 @@ use async_trait::async_trait;
 
 use crate::entity::mob::MobEntity;
 
+pub mod active_target_goal;
 pub mod look_at_entity;
-pub mod target_goal;
+mod track_target_goal;
+
+pub fn to_goal_ticks(server_ticks: i32) -> i32 {
+    -(-server_ticks).div_euclid(2)
+}
 
 #[async_trait]
 pub trait Goal: Send + Sync {
@@ -23,10 +28,10 @@ pub trait Goal: Send + Sync {
     }
 
     fn get_tick_count(&self, ticks: i32) -> i32 {
-        if self.should_run_every_tick() { ticks } else { self.to_goal_ticks(ticks) }
-    }
-
-    fn to_goal_ticks(&self, server_ticks: i32) -> i32 {
-        -(-server_ticks).div_euclid(2)
+        if self.should_run_every_tick() {
+            ticks
+        } else {
+            to_goal_ticks(ticks)
+        }
     }
 }

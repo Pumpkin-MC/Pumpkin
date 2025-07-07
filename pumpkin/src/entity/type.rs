@@ -15,7 +15,7 @@ use crate::{
     world::World,
 };
 
-pub fn from_type(
+pub async fn from_type(
     entity_type: EntityType,
     position: Vector3<f64>,
     world: &Arc<World>,
@@ -25,7 +25,7 @@ pub fn from_type(
 
     #[allow(clippy::single_match)]
     let mob = match entity_type {
-        EntityType::ZOMBIE => Zombie::make(entity),
+        EntityType::ZOMBIE => Zombie::make(entity).await,
         // TODO
         _ => Arc::new(MobEntity {
             living_entity: LivingEntity::new(entity),

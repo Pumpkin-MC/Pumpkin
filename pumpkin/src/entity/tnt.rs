@@ -1,3 +1,5 @@
+use super::{Entity, EntityBase, living::LivingEntity};
+use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::{Block, damage::DamageType};
@@ -13,8 +15,6 @@ use std::{
         atomic::{AtomicU32, Ordering::Relaxed},
     },
 };
-use crate::entity::player::Player;
-use super::{Entity, EntityBase, living::LivingEntity};
 
 pub struct TNTEntity {
     entity: Entity,

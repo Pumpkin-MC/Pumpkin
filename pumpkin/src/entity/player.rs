@@ -1900,7 +1900,7 @@ impl Player {
             .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
             .await
     }
-    
+
     pub fn is_creative(&self) -> bool {
         self.gamemode.load() == GameMode::Creative
     }

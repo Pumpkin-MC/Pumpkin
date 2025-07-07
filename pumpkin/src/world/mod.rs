@@ -1297,7 +1297,8 @@ impl World {
                         };
                         // Pos is zero since it will read from nbt
                         let entity =
-                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
+                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid)
+                                .await;
                         entity.read_nbt(entity_nbt).await;
                         let base_entity = entity.get_entity();
 
@@ -1333,7 +1334,8 @@ impl World {
                         continue;
                     };
                     // Pos is zero since it will read from nbt
-                    let entity = from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
+                    let entity =
+                        from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid).await;
                     entity.read_nbt(entity_nbt).await;
                     let base_entity = entity.get_entity();
                     player
@@ -1546,12 +1548,7 @@ impl World {
                     .pos
                     .load()
                     .squared_distance_to_vec(pos)
-                    .partial_cmp(
-                        &b.1.get_entity()
-                            .pos
-                            .load()
-                            .squared_distance_to_vec(pos),
-                    )
+                    .partial_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(pos))
                     .unwrap()
             })
             .map(|p| p.1.clone())
