@@ -9,6 +9,7 @@ use crate::{
     entity::{
         Entity, EntityBase,
         ai::path::Navigator,
+        decoration::painting::PaintingEntity,
         living::LivingEntity,
         mob::{MobEntity, zombie::Zombie},
     },
@@ -23,15 +24,15 @@ pub fn from_type(
 ) -> Arc<dyn EntityBase> {
     let entity = Entity::new(uuid, world.clone(), position, entity_type, false);
 
-    #[allow(clippy::single_match)]
-    let mob = match entity_type {
-        EntityType::ZOMBIE => Zombie::make(entity),
+    let base: Arc<dyn EntityBase> = match entity_type {
+        EntityType::ZOMBIE => Arc::new(Zombie::make(entity)),
+        EntityType::PAINTING => Arc::new(PaintingEntity::new(entity)),
         // TODO
-        _ => MobEntity {
+        _ => Arc::new(MobEntity {
             living_entity: LivingEntity::new(entity),
             goals: Mutex::new(vec![]),
             navigator: Mutex::new(Navigator::default()),
-        },
+        }),
     };
-    Arc::new(mob)
+    base
 }

@@ -325,7 +325,7 @@ impl PumpkinServer {
     pub async fn unified_listener_task(
         &self,
         mut master_client_id_counter: u64,
-        _tasks: &Arc<TaskTracker>,
+        tasks: &Arc<TaskTracker>,
         bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<BedrockClientPlatform>>>>,
     ) -> bool {
         let mut udp_buf = vec![0; 4096]; // Buffer for UDP receive
@@ -355,25 +355,25 @@ impl PumpkinServer {
 
                         let server_clone = self.server.clone();
 
-                        tokio::spawn(async move {
-                                    java_client.process_packets(&server_clone).await;
-                                    java_client.close();
-                                    java_client.await_tasks().await;
+                        tasks.spawn(async move {
+                                java_client.process_packets(&server_clone).await;
+                                java_client.close();
+                                java_client.await_tasks().await;
 
-                                    let player = java_client.player.lock().await;
-                                    if let Some(player) = player.as_ref() {
-                                        log::debug!("Cleaning up player for id {client_id}");
+                                let player = java_client.player.lock().await;
+                                if let Some(player) = player.as_ref() {
+                                    log::debug!("Cleaning up player for id {client_id}");
 
-                                        if let Err(e) = server_clone.player_data_storage
+                                    if let Err(e) = server_clone.player_data_storage
                                             .handle_player_leave(player)
                                             .await
-                                        {
-                                            log::error!("Failed to save player data on disconnect: {e}");
-                                        }
-
-                                        player.remove().await;
-                                        server_clone.remove_player(player).await;
+                                    {
+                                        log::error!("Failed to save player data on disconnect: {e}");
                                     }
+
+                                    player.remove().await;
+                                    server_clone.remove_player(player).await;
+                                }
                         });
                     }
                     Err(e) => {
@@ -411,7 +411,7 @@ impl PumpkinServer {
 
                         let reader = Cursor::new(received_data.to_vec());
                         let client = client.clone();
-                        tokio::spawn(async move {
+                        tasks.spawn(async move {
                             client.process_packet(&server_clone, reader).await;
                         });
                     }

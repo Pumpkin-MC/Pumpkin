@@ -287,8 +287,7 @@ where
                         error!("Error reading the data before write: {err}");
                         Err(ChunkWritingError::IoError(err))
                     }
-                    Err(err) => {
-                        error!("Error reading the data before write: {err:?}");
+                    Err(_) => {
                         Err(ChunkWritingError::IoError(std::io::ErrorKind::Other))
                     }
                 }?;
