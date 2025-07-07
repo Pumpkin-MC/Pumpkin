@@ -53,15 +53,7 @@ fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> TextCo
             "commands.clear.success.single",
             [
                 TextComponent::text(item_count.to_string()),
-                TextComponent::text(target.gameprofile.name.clone())
-                    .click_event(ClickEvent::SuggestCommand {
-                        command: format!("/tell {} ", target.gameprofile.name.clone()).into(),
-                    })
-                    .hover_event(HoverEvent::show_entity(
-                        target.living_entity.entity.entity_uuid.to_string(),
-                        target.living_entity.entity.entity_type.resource_name.into(),
-                        Some(TextComponent::text(target.gameprofile.name.clone())),
-                    )),
+                target.living_entity.entity.get_display_name(),
             ],
         ),
         targets if item_count == 0 => TextComponent::translate(

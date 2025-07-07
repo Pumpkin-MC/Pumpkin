@@ -32,7 +32,10 @@ use pumpkin_util::math::{
     wrap_degrees,
 };
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::hover::HoverEvent;
 use serde::Serialize;
+use std::any::Any;
 use std::sync::{
     Arc,
     atomic::{
@@ -124,6 +127,23 @@ pub trait EntityBase: Send + Sync {
     async fn on_player_collision(&self, _player: &Arc<Player>) {}
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+    /// Should return the translatable name of the entity without click or hover events.
+    /// Returns `None` for default. Do not call this directly.
+    fn get_name(&self) -> Option<TextComponent> {
+        None
+    }
+    async fn get_display_name(&self) -> TextComponent {
+        let entity = self.get_entity();
+        let mut name = entity.get_plain_name().await.clone();
+        let name_clone = name.clone();
+        name = name.hover_event(HoverEvent::show_entity(
+            entity.entity_uuid.to_string(),
+            entity.entity_type.resource_name.into(),
+            Some(name_clone),
+        ));
+        name = name.insertion(entity.entity_uuid.to_string());
+        name
+    }
 }
 
 static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
@@ -180,6 +200,10 @@ pub struct Entity {
     pub portal_cooldown: AtomicU32,
 
     pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
+    /// Custom name for the entity
+    pub custom_name: Option<TextComponent>,
+    /// Indicates whether the entity's custom name is visible
+    pub custom_name_visible: bool,
 }
 
 impl Entity {
@@ -231,6 +255,8 @@ impl Entity {
             has_visual_fire: AtomicBool::new(false),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
+            custom_name: None,
+            custom_name_visible: false,
         }
     }
 
@@ -802,13 +828,20 @@ impl Entity {
         }
     }
 
+    /// Should return the translatable name of the entity without click or hover events.
     #[allow(clippy::unused_async)]
-    pub async fn get_display_name(&self) -> TextComponent {
-        // TODO
-        TextComponent::text(format!(
-            "{} {}",
-            self.entity_type.resource_name, self.entity_id
-        ))
+    pub async fn get_plain_name(&self) -> &TextComponent {
+        // TODO: team color
+        if let Some(custom_name) = &self.custom_name {
+            custom_name
+        } else if let Some(type_name) = self.get_name() {
+            &type_name
+        } else {
+            &TextComponent::translate(
+                format!("entity.minecraft.{}", self.entity_type.resource_name),
+                [],
+            )
+        }
     }
 }
 

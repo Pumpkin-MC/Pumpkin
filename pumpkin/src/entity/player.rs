@@ -56,6 +56,7 @@ use pumpkin_util::math::{
 use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::click::ClickEvent;
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::entity::entity_data_flags::{
@@ -2011,6 +2012,18 @@ impl EntityBase for Player {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
+    }
+
+    fn get_name(&self) -> Option<TextComponent> {
+        //TODO: team color
+        Some(TextComponent::text(&self.gameprofile.name))
+    }
+
+    async fn get_display_name(&self) -> TextComponent {
+        let mut name = self.living_entity.get_display_name().await;
+        name.click_event(ClickEvent::SuggestCommand {
+            command: format!("/tell {} ", self.gameprofile.name.clone()).into(),
+        })
     }
 }
 
