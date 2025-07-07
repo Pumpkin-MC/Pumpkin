@@ -49,6 +49,7 @@ use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
 
+use crate::block::pumpkin_block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
@@ -1403,6 +1404,7 @@ impl JavaClientPlatform {
             .await;
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_use_item_on(
         &self,
         player: &Player,
@@ -1415,6 +1417,8 @@ impl JavaClientPlatform {
         self.update_sequence(player, use_item_on.sequence.0);
 
         let position = use_item_on.position;
+        let cursor_pos = use_item_on.cursor_pos;
+
         let mut should_try_decrement = false;
 
         if !player.can_interact_with_block_at(&position, 1.0) {
@@ -1428,6 +1432,7 @@ impl JavaClientPlatform {
 
         let inventory = player.inventory();
         let held_item = inventory.held_item();
+        let off_hand_item = inventory.off_hand_item().await;
 
         let entity = &player.living_entity.entity;
         let world = &entity.world.read().await;
@@ -1438,40 +1443,73 @@ impl JavaClientPlatform {
             .entity
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
-        if held_item.lock().await.is_empty() {
-            if !sneaking {
-                // Using block with empty hand
-                server
-                    .block_registry
-                    .on_use(block, player, &position, server, world)
-                    .await;
-            }
-            return Ok(());
-        }
-        if !sneaking {
-            let action_result = server
+        // Code based on the java class ServerPlayerInteractionManager
+        if !(sneaking
+            && (!held_item.lock().await.is_empty() || !off_hand_item.lock().await.is_empty()))
+        {
+            match match server
                 .block_registry
-                .use_with_item(block, player, &position, &held_item, server, world)
-                .await;
-            match action_result {
-                BlockActionResult::Continue => {}
-                BlockActionResult::Consume => {
+                .use_with_item(
+                    block,
+                    player,
+                    &position,
+                    &BlockHitResult {
+                        side: &face,
+                        cursor_pos: &cursor_pos,
+                    },
+                    &held_item,
+                    server,
+                    world,
+                )
+                .await
+            {
+                BlockActionResult::PassToDefault => {
+                    server
+                        .block_registry
+                        .on_use(
+                            block,
+                            player,
+                            &position,
+                            &BlockHitResult {
+                                side: &face,
+                                cursor_pos: &cursor_pos,
+                            },
+                            server,
+                            world,
+                        )
+                        .await
+                }
+                BlockActionResult::Fail => BlockActionResult::Fail,
+                BlockActionResult::Consume => BlockActionResult::Consume,
+                BlockActionResult::Continue => BlockActionResult::Continue,
+                BlockActionResult::Success => BlockActionResult::Success,
+            } {
+                BlockActionResult::Fail => return Ok(()),
+                BlockActionResult::Success | BlockActionResult::Consume => {
+                    /* TODO: Swing hand */
                     return Ok(());
                 }
+                BlockActionResult::Continue | BlockActionResult::PassToDefault => {} // Do nothing,
             }
-            server
-                .item_registry
-                .use_on_block(
-                    held_item.lock().await.item,
-                    player,
-                    position,
-                    face,
-                    block,
-                    server,
-                )
-                .await;
-            self.update_sequence(player, use_item_on.sequence.0);
         }
+
+        if held_item.lock().await.is_empty() {
+            // If the hand is empty we stop here
+            return Ok(());
+        }
+
+        server
+            .item_registry
+            .use_on_block(
+                held_item.lock().await.item,
+                player,
+                position,
+                face,
+                block,
+                server,
+            )
+            .await;
+        self.update_sequence(player, use_item_on.sequence.0);
 
         // Check if the item is a block, because not every item can be placed :D
         if let Some(block) = get_block_by_item(held_item.lock().await.item.id) {
