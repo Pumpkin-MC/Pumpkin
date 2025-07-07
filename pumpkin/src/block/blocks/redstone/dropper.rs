@@ -1,7 +1,7 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::pumpkin_block::{
     NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-    PlacedArgs, PumpkinBlock, UseWithItemArgs,
+    PlacedArgs, PumpkinBlock,
 };
 use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
@@ -81,7 +81,7 @@ const fn to_data3d(facing: Facing) -> i32 {
 
 #[async_trait]
 impl PumpkinBlock for DropperBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(inventory) = block_entity.1.get_inventory() {
                 args.player
@@ -89,17 +89,7 @@ impl PumpkinBlock for DropperBlock {
                     .await;
             }
         }
-    }
-
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(inventory) = block_entity.1.get_inventory() {
-                args.player
-                    .open_handled_screen(&DropperScreenFactory(inventory))
-                    .await;
-            }
-        }
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {

@@ -13,8 +13,8 @@ use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
 use crate::{
-    block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity, dropper::DropperBlockEntity,
-    inventory::Inventory, world::SimpleWorld,
+    block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
+    block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
 };
 
 pub mod barrel;
