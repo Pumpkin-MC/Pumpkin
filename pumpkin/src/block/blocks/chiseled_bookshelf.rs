@@ -97,6 +97,7 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
                 {
                     Self::try_add_book(
                         args.world,
+                        args.player,
                         args.position,
                         block_entity,
                         properties,
@@ -137,6 +138,7 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
 impl ChiseledBookshelfBlock {
     async fn try_add_book(
         world: &Arc<World>,
+        player: &Player,
         position: &BlockPos,
         entity: &ChiseledBookshelfBlockEntity,
         properties: ChiseledBookshelfLikeProperties,
@@ -152,7 +154,12 @@ impl ChiseledBookshelfBlock {
             Sound::BlockChiseledBookshelfPickup
         };
 
-        entity.set_stack(slot as usize, item.split(1)).await;
+        entity
+            .set_stack(
+                slot as usize,
+                item.split_unless_creative(player.gamemode.load(), 1),
+            )
+            .await;
         entity.update_state(properties, world.clone(), slot).await;
 
         world
