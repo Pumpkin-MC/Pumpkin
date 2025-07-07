@@ -101,6 +101,7 @@ plugins/**/*.so
 plugins/**/*.dylib
 plugins/**/*.dll
 world/*
+logs/
 
 # docker-compose
 data/*

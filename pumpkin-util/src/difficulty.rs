@@ -7,21 +7,10 @@ pub struct ParseDifficultyError;
 
 #[derive(Serialize, Deserialize, FromPrimitive, ToPrimitive, PartialEq, Clone, Copy, Debug)]
 pub enum Difficulty {
-    Peaceful,
-    Easy,
-    Normal,
-    Hard,
-}
-
-impl Difficulty {
-    pub fn to_int(&self) -> u8 {
-        match self {
-            Self::Peaceful => 0,
-            Self::Easy => 1,
-            Self::Normal => 2,
-            Self::Hard => 3,
-        }
-    }
+    Peaceful = 0,
+    Easy = 1,
+    Normal = 2,
+    Hard = 3,
 }
 
 impl FromStr for Difficulty {

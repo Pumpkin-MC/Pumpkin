@@ -111,7 +111,7 @@ pub struct NormalUseArgs<'a> {
     pub server: &'a Server,
     pub world: &'a Arc<World>,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub player: &'a Player,
 }
 
@@ -119,7 +119,7 @@ pub struct UseWithItemArgs<'a> {
     pub server: &'a Server,
     pub world: &'a Arc<World>,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub player: &'a Player,
     pub item_stack: &'a Arc<Mutex<ItemStack>>,
 }
@@ -129,20 +129,20 @@ pub struct OnEntityCollisionArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub state: &'a BlockState,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub entity: &'a dyn EntityBase,
 }
 
 pub struct ExplodeArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
 }
 
 pub struct OnSyncedBlockEventArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub r#type: u8,
     pub data: u8,
 }
@@ -151,7 +151,7 @@ pub struct OnPlaceArgs<'a> {
     pub server: &'a Server,
     pub world: &'a World,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub direction: BlockDirection,
     pub player: &'a Player,
     pub replacing: BlockIsReplacing,
@@ -161,7 +161,7 @@ pub struct OnPlaceArgs<'a> {
 pub struct RandomTickArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
 }
 
 pub struct CanPlaceAtArgs<'a> {
@@ -169,7 +169,7 @@ pub struct CanPlaceAtArgs<'a> {
     pub world: Option<&'a World>,
     pub block_accessor: &'a dyn BlockAccessor,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub direction: BlockDirection,
     pub player: Option<&'a Player>,
     pub use_item_on: Option<&'a SUseItemOn>,
@@ -179,7 +179,7 @@ pub struct CanUpdateAtArgs<'a> {
     pub world: &'a World,
     pub block: &'a Block,
     pub state_id: BlockStateId,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub direction: BlockDirection,
     pub player: &'a Player,
     pub use_item_on: &'a SUseItemOn,
@@ -190,7 +190,7 @@ pub struct PlacedArgs<'a> {
     pub block: &'a Block,
     pub state_id: BlockStateId,
     pub old_state_id: BlockStateId,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub notify: bool,
 }
 
@@ -198,7 +198,7 @@ pub struct PlayerPlacedArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub state_id: BlockStateId,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub direction: BlockDirection,
     pub player: &'a Player,
 }
@@ -206,7 +206,7 @@ pub struct PlayerPlacedArgs<'a> {
 pub struct BrokenArgs<'a> {
     pub block: &'a Block,
     pub player: &'a Arc<Player>,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub server: &'a Server,
     pub world: &'a Arc<World>,
     pub state: &'a BlockState,
@@ -215,7 +215,7 @@ pub struct BrokenArgs<'a> {
 pub struct OnNeighborUpdateArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub source_block: &'a Block,
     pub notify: bool,
 }
@@ -224,7 +224,7 @@ pub struct PrepareArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub state_id: BlockStateId,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub flags: BlockFlags,
 }
 
@@ -232,23 +232,23 @@ pub struct GetStateForNeighborUpdateArgs<'a> {
     pub world: &'a World,
     pub block: &'a Block,
     pub state_id: BlockStateId,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub direction: BlockDirection,
-    pub neighbor_location: &'a BlockPos,
+    pub neighbor_position: &'a BlockPos,
     pub neighbor_state_id: BlockStateId,
 }
 
 pub struct OnScheduledTickArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
 }
 
 pub struct OnStateReplacedArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub old_state_id: BlockStateId,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub moved: bool,
 }
 
@@ -262,7 +262,7 @@ pub struct GetRedstonePowerArgs<'a> {
     pub world: &'a World,
     pub block: &'a Block,
     pub state: &'a BlockState,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
     pub direction: BlockDirection,
 }
 
@@ -270,5 +270,5 @@ pub struct GetComparatorOutputArgs<'a> {
     pub world: &'a World,
     pub block: &'a Block,
     pub state: &'a BlockState,
-    pub location: &'a BlockPos,
+    pub position: &'a BlockPos,
 }

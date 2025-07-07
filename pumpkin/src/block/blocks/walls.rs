@@ -2,6 +2,8 @@ use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::EastWallShape;
 use pumpkin_data::block_properties::HorizontalFacing;
@@ -14,12 +16,11 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
-type WallProperties = pumpkin_data::block_properties::ResinBrickWallLikeProperties;
-type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
-type FenceLikeProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
-
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::world::World;
+type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
+type FenceLikeProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
+type WallProperties = pumpkin_data::block_properties::ResinBrickWallLikeProperties;
 
 pub struct WallBlock;
 impl BlockMetadata for WallBlock {
@@ -38,7 +39,7 @@ impl PumpkinBlock for WallBlock {
         let mut wall_props = WallProperties::default(args.block);
         wall_props.waterlogged = args.replacing.water_source();
 
-        compute_wall_state(wall_props, args.world, args.block, args.location).await
+        compute_wall_state(wall_props, args.world, args.block, args.position).await
     }
 
     async fn get_state_for_neighbor_update(
@@ -46,7 +47,7 @@ impl PumpkinBlock for WallBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let wall_props = WallProperties::from_state_id(args.state_id, args.block);
-        compute_wall_state(wall_props, args.world, args.block, args.location).await
+        compute_wall_state(wall_props, args.world, args.block, args.position).await
     }
 }
 
@@ -63,12 +64,7 @@ pub async fn compute_wall_state(
         let (other_block, other_block_state) =
             world.get_block_and_block_state(&other_block_pos).await;
 
-        let connected = other_block == block
-            || (other_block_state.is_solid() && other_block_state.is_full_cube())
-            || other_block.is_tagged_with("minecraft:walls").unwrap()
-            || other_block.is_tagged_with("minecraft:fence_gates").unwrap()
-            || other_block == &Block::IRON_BARS
-            || other_block.is_tagged_with("c:glass_panes").unwrap();
+        let connected = is_connected(block, direction, other_block, other_block_state);
 
         let shape = if connected {
             let raise = if block_above_state.is_full_cube() {
@@ -96,13 +92,14 @@ pub async fn compute_wall_state(
             } else if block_above.is_tagged_with("minecraft:fence_gates").unwrap() {
                 let other_props =
                     FenceGateProperties::from_state_id(block_above_state.id, block_above);
+                // gate is perp to connected direction
+                let perpendicular_gate = direction == other_props.facing.rotate_clockwise()
+                    || direction == other_props.facing.rotate_counter_clockwise();
 
-                direction == other_props.facing.rotate_clockwise()
-                    || direction == other_props.facing.rotate_counter_clockwise()
+                perpendicular_gate && !other_props.open
             } else {
                 false
             };
-
             if raise {
                 WallShape::Tall
             } else {
@@ -120,11 +117,11 @@ pub async fn compute_wall_state(
         }
     }
 
-    let line_north_south = wall_props.north != NorthWallShape::None
+    let connected_north_south = wall_props.north != NorthWallShape::None
         && wall_props.south != SouthWallShape::None
         && wall_props.east == EastWallShape::None
         && wall_props.west == WestWallShape::None;
-    let line_east_west = wall_props.north == NorthWallShape::None
+    let connected_east_west = wall_props.north == NorthWallShape::None
         && wall_props.south == SouthWallShape::None
         && wall_props.east != EastWallShape::None
         && wall_props.west != WestWallShape::None;
@@ -133,17 +130,52 @@ pub async fn compute_wall_state(
         && wall_props.east != EastWallShape::None
         && wall_props.west != WestWallShape::None;
 
-    wall_props.up =
-        if block_above_state.is_full_cube() || !(cross || line_north_south || line_east_west) {
-            true
-        } else if block_above.is_tagged_with("minecraft:walls").unwrap() {
-            let other_props = WallProperties::from_state_id(block_above_state.id, block_above);
-            other_props.up
-        } else {
+    wall_props.up = if !(cross || connected_north_south || connected_east_west) {
+        true
+    } else if block_above.is_tagged_with("minecraft:walls").unwrap() {
+        let other_props = WallProperties::from_state_id(block_above_state.id, block_above);
+        other_props.up
+    } else if block_above.is_tagged_with("minecraft:fence_gates").unwrap() {
+        let other_props = FenceGateProperties::from_state_id(block_above_state.id, block_above);
+        if other_props.open {
             false
-        };
-
+        } else {
+            match other_props.facing {
+                HorizontalFacing::East | HorizontalFacing::West => connected_east_west,
+                HorizontalFacing::South | HorizontalFacing::North => connected_north_south,
+            }
+        }
+    } else {
+        false
+    };
     wall_props.to_state_id(block)
+}
+
+fn is_connected(
+    block: &Block,
+    direction: HorizontalFacing,
+    other_block: &Block,
+    other_block_state: &BlockState,
+) -> bool {
+    let mut connected = other_block == block
+        || (other_block_state.is_solid() && other_block_state.is_full_cube())
+        || other_block_state.is_side_solid(BlockDirection::from_cardinal_direction(
+            direction.opposite(),
+        ))
+        || other_block.is_tagged_with("minecraft:walls").unwrap()
+        || other_block == &Block::IRON_BARS
+        || other_block.is_tagged_with("c:glass_panes").unwrap();
+
+    // fence gates do not pass is_side_solid check
+    if !connected && other_block.is_tagged_with("minecraft:fence_gates").unwrap() {
+        let fence_props = FenceGateProperties::from_state_id(other_block_state.id, other_block);
+        if fence_props.facing == direction.rotate_clockwise()
+            || fence_props.facing == direction.rotate_counter_clockwise()
+        {
+            connected = true;
+        }
+    }
+    connected
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

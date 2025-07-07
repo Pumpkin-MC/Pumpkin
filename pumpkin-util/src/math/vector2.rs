@@ -1,5 +1,6 @@
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
+use bytes::BufMut;
 use num_traits::Float;
 
 use super::vector3::Vector3;
@@ -7,36 +8,36 @@ use super::vector3::Vector3;
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
 pub struct Vector2<T> {
     pub x: T,
-    pub z: T,
+    pub y: T,
 }
 
 impl<T: Math + Copy> Vector2<T> {
     pub const fn new(x: T, z: T) -> Self {
-        Vector2 { x, z }
+        Vector2 { x, y: z }
     }
 
     pub fn length_squared(&self) -> T {
-        self.x * self.x + self.z * self.z
+        self.x * self.x + self.y * self.y
     }
 
     pub fn add(&self, other: &Vector2<T>) -> Self {
         Vector2 {
             x: self.x + other.x,
-            z: self.z + other.z,
+            y: self.y + other.y,
         }
     }
 
     pub fn sub(&self, other: &Vector2<T>) -> Self {
         Vector2 {
             x: self.x - other.x,
-            z: self.z - other.z,
+            y: self.y - other.y,
         }
     }
 
     pub fn multiply(self, x: T, z: T) -> Self {
         Self {
             x: self.x * x,
-            z: self.z * z,
+            y: self.y * z,
         }
     }
 }
@@ -49,7 +50,7 @@ impl<T: Math + Copy + Float> Vector2<T> {
         let length = self.length();
         Vector2 {
             x: self.x / length,
-            z: self.z / length,
+            y: self.y / length,
         }
     }
 }
@@ -60,7 +61,7 @@ impl<T: Math + Copy> Mul<T> for Vector2<T> {
     fn mul(self, scalar: T) -> Self {
         Self {
             x: self.x * scalar,
-            z: self.z * scalar,
+            y: self.y * scalar,
         }
     }
 }
@@ -70,7 +71,7 @@ impl<T: Math + Copy> Add for Vector2<T> {
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             x: self.x + rhs.x,
-            z: self.z + rhs.z,
+            y: self.y + rhs.y,
         }
     }
 }
@@ -81,14 +82,14 @@ impl<T: Math + Copy> Neg for Vector2<T> {
     fn neg(self) -> Self {
         Vector2 {
             x: -self.x,
-            z: -self.z,
+            y: -self.y,
         }
     }
 }
 
 impl<T> From<(T, T)> for Vector2<T> {
     fn from((x, z): (T, T)) -> Self {
-        Vector2 { x, z }
+        Vector2 { x, y: z }
     }
 }
 
@@ -96,7 +97,7 @@ impl<T> From<Vector3<T>> for Vector2<T> {
     fn from(value: Vector3<T>) -> Self {
         Self {
             x: value.x,
-            z: value.z,
+            y: value.z,
         }
     }
 }
@@ -117,5 +118,17 @@ impl Math for i64 {}
 impl Math for i8 {}
 
 pub const fn to_chunk_pos(vec: &Vector2<i32>) -> Vector2<i32> {
-    Vector2::new(vec.x >> 4, vec.z >> 4)
+    Vector2::new(vec.x >> 4, vec.y >> 4)
+}
+
+impl serde::Serialize for Vector2<f32> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut buf = Vec::with_capacity(size_of::<Vector2<f32>>());
+        buf.put_f32(self.x);
+        buf.put_f32(self.y);
+        serializer.serialize_bytes(&buf)
+    }
 }

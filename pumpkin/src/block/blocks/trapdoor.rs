@@ -81,7 +81,7 @@ impl BlockMetadata for TrapDoorBlock {
 impl PumpkinBlock for TrapDoorBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) {
         if can_open_trapdoor(args.block) {
-            toggle_trapdoor(args.player, args.world, args.location).await;
+            toggle_trapdoor(args.player, args.world, args.position).await;
         }
     }
 
@@ -90,7 +90,7 @@ impl PumpkinBlock for TrapDoorBlock {
             return BlockActionResult::Continue;
         }
 
-        toggle_trapdoor(args.player, args.world, args.location).await;
+        toggle_trapdoor(args.player, args.world, args.position).await;
 
         BlockActionResult::Consume
     }
@@ -99,7 +99,7 @@ impl PumpkinBlock for TrapDoorBlock {
         let mut trapdoor_props = TrapDoorProperties::default(args.block);
         trapdoor_props.waterlogged = args.replacing.water_source();
 
-        let powered = block_receives_redstone_power(args.world, args.location).await;
+        let powered = block_receives_redstone_power(args.world, args.position).await;
         let direction = args
             .player
             .living_entity
@@ -123,9 +123,9 @@ impl PumpkinBlock for TrapDoorBlock {
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let block_state = args.world.get_block_state(args.location).await;
+        let block_state = args.world.get_block_state(args.position).await;
         let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id, args.block);
-        let powered = block_receives_redstone_power(args.world, args.location).await;
+        let powered = block_receives_redstone_power(args.world, args.position).await;
         if powered != trapdoor_props.powered {
             trapdoor_props.powered = !trapdoor_props.powered;
 
@@ -136,7 +136,7 @@ impl PumpkinBlock for TrapDoorBlock {
                     .play_block_sound(
                         get_sound(args.block, powered),
                         SoundCategory::Blocks,
-                        *args.location,
+                        *args.position,
                     )
                     .await;
             }
@@ -144,7 +144,7 @@ impl PumpkinBlock for TrapDoorBlock {
 
         args.world
             .set_block_state(
-                args.location,
+                args.position,
                 trapdoor_props.to_state_id(args.block),
                 BlockFlags::NOTIFY_LISTENERS,
             )

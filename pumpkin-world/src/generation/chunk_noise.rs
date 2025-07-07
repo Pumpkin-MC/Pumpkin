@@ -203,7 +203,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
             vertical_cell_count,
             horizontal_cell_count,
             biome_pos.x,
-            biome_pos.z,
+            biome_pos.y,
             horizontal_biome_end,
         );
 
@@ -263,7 +263,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         let x = current_x * self.horizontal_cell_block_count() as i32;
 
         for cell_z in 0..=(16 / self.horizontal_cell_block_count()) {
-            let current_cell_z_pos = self.start_cell_pos.z + cell_z as i32;
+            let current_cell_z_pos = self.start_cell_pos.y + cell_z as i32;
             let z = current_cell_z_pos * self.horizontal_cell_block_count() as i32;
             self.cache_fill_unique_id += 1;
 
@@ -337,7 +337,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         let start_y =
             (cell_y as i32 + self.minimum_cell_y) * self.vertical_cell_block_count() as i32;
         let start_z =
-            (self.start_cell_pos.z + cell_z as i32) * self.horizontal_cell_block_count() as i32;
+            (self.start_cell_pos.y + cell_z as i32) * self.horizontal_cell_block_count() as i32;
 
         let mapper = ChunkIndexMapper {
             start_x,

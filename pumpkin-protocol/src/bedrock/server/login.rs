@@ -5,5 +5,5 @@ use serde::{Deserialize, Serialize};
 #[packet(0x01)]
 pub struct SLogin {
     pub protocol_version: i32,
-    pub connection_request: String,
+    // TODO: Add More
 }
