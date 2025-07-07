@@ -6,10 +6,7 @@ use pumpkin_data::{
     item::Item,
     tag::{RegistryKey, get_tag_values},
 };
-use pumpkin_world::{
-    BlockStateId,
-    world::BlockFlags,
-};
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::{
