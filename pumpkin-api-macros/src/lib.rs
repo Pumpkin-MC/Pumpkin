@@ -53,22 +53,35 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
             })
         })
         .collect();
-    
+
     //let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
-    
-    let metadata = MetadataCommand::new().exec().expect("Failed to run cargo metadata");
-    
-    let api_pkg = metadata.packages.iter().find(|it| *it.name == "pumpkin").expect("`pumpkin` not found in Cargo metadata");
-    
-    let host_commit = api_pkg.source.as_ref().and_then(|src| src.repr.split("#").nth(1).map(str::to_string))
+
+    let metadata = MetadataCommand::new()
+        .exec()
+        .expect("Failed to run cargo metadata");
+
+    let api_pkg = metadata
+        .packages
+        .iter()
+        .find(|it| *it.name == "pumpkin")
+        .expect("`pumpkin` not found in Cargo metadata");
+
+    let host_commit = api_pkg
+        .source
+        .as_ref()
+        .and_then(|src| src.repr.split("#").nth(1).map(str::to_string))
         .unwrap_or_else(|| "ignore".to_string());
 
-    let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
-    
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+
     let commit_lit = proc_macro2::Literal::string(&host_commit);
     let profile_lit = proc_macro2::Literal::string(profile);
     let windows = cfg!(target_os = "windows");
-    
+
     // Combine the original struct definition with the impl block and plugin() function
     let expanded = quote! {
         pub static GLOBAL_RUNTIME: std::sync::LazyLock<std::sync::Arc<tokio::runtime::Runtime>> =
