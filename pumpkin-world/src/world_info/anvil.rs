@@ -228,15 +228,18 @@ mod test {
                 water_source_conversion: true,
                 ..Default::default()
             },
-            world_gen_settings: WorldGenSettings { seed: 1 },
+            world_gen_settings: WorldGenSettings {
+                seed: 1,
+                ..Default::default()
+            },
             last_played: 1733847709327,
             level_name: "New World".to_string(),
             spawn_x: 160,
             spawn_y: 70,
             spawn_z: 160,
             spawn_angle: 0.0,
-            nbt_version: 19133,
-            version: WorldVersion {
+            level_version: 19133,
+            world_version: WorldVersion {
                 name: "1.21.4".to_string(),
                 id: 4189,
                 snapshot: false,
