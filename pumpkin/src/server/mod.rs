@@ -661,6 +661,9 @@ impl Server {
             // Tick scheduled block/fluid updates
             world.tick_scheduled_block_ticks().await;
 
+            // Tick random ticks
+            world.perform_random_ticks().await;
+
             // Tick non-player entities
             let entities_to_tick: Vec<_> = world.entities.read().await.values().cloned().collect();
             for entity in entities_to_tick {

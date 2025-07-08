@@ -298,7 +298,7 @@ impl BiomePalette {
 
         Self::from_palette_and_packed_data(
             &palette,
-            nbt.data.as_ref().unwrap_or(&vec![].into_boxed_slice()),
+            nbt.data.as_ref().unwrap_or(&Box::default()),
             BIOME_DISK_MIN_BITS,
         )
     }
@@ -398,22 +398,12 @@ impl BlockPalette {
         let palette = nbt
             .palette
             .into_iter()
-            .map(|entry| {
-                if let Some(block_state) = entry.get_state() {
-                    block_state.id
-                } else {
-                    log::warn!(
-                        "Could not find valid block state for {}. Defaulting...",
-                        entry.name.name
-                    );
-                    0
-                }
-            })
+            .map(|entry| entry.get_state_id())
             .collect::<Vec<_>>();
 
         Self::from_palette_and_packed_data(
             &palette,
-            nbt.data.as_ref().unwrap_or(&vec![].into_boxed_slice()),
+            nbt.data.as_ref().unwrap_or(&Box::default()),
             BLOCK_DISK_MIN_BITS,
         )
     }
