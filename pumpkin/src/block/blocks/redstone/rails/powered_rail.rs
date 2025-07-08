@@ -68,7 +68,7 @@ impl PumpkinBlock for PoweredRailBlock {
             let neighbor_pos = args.position.offset(direction.to_offset());
 
             if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &neighbor_pos).await {
-                self.update_powered_state_internal(args.world, &neighbor_rail.0, &neighbor_pos, false)
+                self.update_powered_state_internal(args.world, neighbor_rail.0, &neighbor_pos, false)
                     .await;
                 self.update_connected_rails(args.world, &neighbor_pos, &neighbor_rail.1, true, 0)
                     .await;
@@ -78,7 +78,7 @@ impl PumpkinBlock for PoweredRailBlock {
 
             let up_pos = neighbor_pos.up();
             if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &up_pos).await {
-                self.update_powered_state_internal(args.world, &neighbor_rail.0, &up_pos, false)
+                self.update_powered_state_internal(args.world, neighbor_rail.0, &up_pos, false)
                     .await;
                 self.update_connected_rails(args.world, &up_pos, &neighbor_rail.1, true, 0)
                     .await;
@@ -88,7 +88,7 @@ impl PumpkinBlock for PoweredRailBlock {
 
             let down_pos = neighbor_pos.down();
             if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &down_pos).await {
-                self.update_powered_state_internal(args.world, &neighbor_rail.0, &down_pos, false)
+                self.update_powered_state_internal(args.world, neighbor_rail.0, &down_pos, false)
                     .await;
                 self.update_connected_rails(args.world, &down_pos, &neighbor_rail.1, true, 0)
                     .await;
@@ -133,7 +133,7 @@ impl PumpkinBlock for PoweredRailBlock {
             let neighbor_pos = args.position.offset(direction.to_offset());
 
             if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &neighbor_pos).await {
-                self.update_powered_state(args.world, &neighbor_rail.0, &neighbor_pos)
+                self.update_powered_state(args.world, neighbor_rail.0, &neighbor_pos)
                     .await;
                 self.update_connected_rails(args.world, &neighbor_pos, &neighbor_rail.1, true, 0)
                     .await;
@@ -143,7 +143,7 @@ impl PumpkinBlock for PoweredRailBlock {
 
             let up_pos = neighbor_pos.up();
             if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &up_pos).await {
-                self.update_powered_state(args.world, &neighbor_rail.0, &up_pos)
+                self.update_powered_state(args.world, neighbor_rail.0, &up_pos)
                     .await;
                 self.update_connected_rails(args.world, &up_pos, &neighbor_rail.1, true, 0)
                     .await;
@@ -153,7 +153,7 @@ impl PumpkinBlock for PoweredRailBlock {
 
             let down_pos = neighbor_pos.down();
             if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &down_pos).await {
-                self.update_powered_state(args.world, &neighbor_rail.0, &down_pos)
+                self.update_powered_state(args.world, neighbor_rail.0, &down_pos)
                     .await;
                 self.update_connected_rails(args.world, &down_pos, &neighbor_rail.1, true, 0)
                     .await;
@@ -289,7 +289,7 @@ impl PoweredRailBlock {
         }
 
         let state_id = world.get_block_state_id(pos).await;
-        let rail_props = RailProperties::new(state_id, &block);
+        let rail_props = RailProperties::new(state_id, block);
         let rail_shape = rail_props.shape();
 
         match expected_shape {
@@ -478,7 +478,7 @@ impl PoweredRailBlock {
         }
 
         let state_id = world.get_block_state_id(pos).await;
-        let rail_props = RailProperties::new(state_id, &block);
+        let rail_props = RailProperties::new(state_id, block);
         let rail_shape = rail_props.shape();
 
         let shapes_compatible = match expected_shape {
@@ -498,7 +498,7 @@ impl PoweredRailBlock {
         };
 
         if shapes_compatible {
-            self.update_powered_state_internal(world, &block, pos, false)
+            self.update_powered_state_internal(world, block, pos, false)
                 .await;
 
             Box::pin(self.update_connected_rails(world, pos, &rail_props, direction, distance + 1))
@@ -512,6 +512,7 @@ impl PoweredRailBlock {
         pos: &BlockPos,
     ) -> Option<(&'static Block, RailProperties)> {
         let block = world.get_block(pos).await;
+        #[allow(clippy::if_then_some_else_none)]
         if *block == Block::POWERED_RAIL {
             let state_id = world.get_block_state_id(pos).await;
             let rail_props = RailProperties::new(state_id, block);
