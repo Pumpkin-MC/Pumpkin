@@ -615,7 +615,7 @@ impl Server {
 
         // Only run world/game logic if the tick rate manager allows it
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
-            self.tick_worlds(self).await;
+            self.tick_worlds().await;
         }
     }
 
@@ -634,56 +634,9 @@ impl Server {
         }
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
-    pub async fn tick_worlds(&self, server: &Self) {
+    pub async fn tick_worlds(&self) {
         for world in self.worlds.read().await.iter() {
-            // Tick world-specific logic like time and weather
-            world.level_time.lock().await.tick_time();
-            world.weather.lock().await.tick_weather(world).await;
-
-            if world.should_skip_night().await {
-                let mut level_time = world.level_time.lock().await;
-                let time = level_time.time_of_day + 24000;
-                level_time.set_time(time - time % 24000);
-                level_time.send_time(world).await;
-
-                for player in world.players.read().await.values() {
-                    player.wake_up().await;
-                }
-
-                let mut weather = world.weather.lock().await;
-                if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
-                    weather.reset_weather_cycle(world).await;
-                }
-            } else if world.level_time.lock().await.world_age % 20 == 0 {
-                world.level_time.lock().await.send_time(world).await;
-            }
-
-            // Tick scheduled block/fluid updates
-            world.tick_scheduled_block_ticks().await;
-
-            // Tick random ticks
-            world.perform_random_ticks().await;
-
-            // Tick non-player entities
-            let entities_to_tick: Vec<_> = world.entities.read().await.values().cloned().collect();
-            for entity in entities_to_tick {
-                entity.tick(entity.clone(), server).await;
-                // Handle entity-player collision detection
-                for player in world.players.read().await.values() {
-                    if player
-                        .living_entity
-                        .entity
-                        .bounding_box
-                        .load()
-                        // TODO: change this when is in a vehicle
-                        .expand(1.0, 0.5, 1.0)
-                        .intersects(&entity.get_entity().bounding_box.load())
-                    {
-                        entity.on_player_collision(player).await;
-                        break;
-                    }
-                }
-            }
+            world.tick(self).await;
         }
 
         // Global periodic tasks

@@ -148,7 +148,7 @@ impl Level {
             remaining_block_ticks_this_tick: Arc::new(Mutex::new(VecDeque::new())),
             fluid_ticks: Arc::new(Mutex::new(Vec::new())),
             // Limits concurrent chunk generation tasks to 2x the number of CPUs
-            chunk_generation_semaphore: Arc::new(Semaphore::new(num_cpus::get() * 2)),
+            chunk_generation_semaphore: Arc::new(Semaphore::new(1)),
         }
     }
 
@@ -384,7 +384,6 @@ impl Level {
     }
 
     pub async fn tick_block_entities(&self, world: Arc<dyn SimpleWorld>) {
-        println!("Ticking block entities");
         for chunk in self.loaded_chunks.iter() {
             let chunk = chunk.read().await;
             let cloned_entities = chunk.block_entities.clone();
@@ -393,7 +392,6 @@ impl Level {
                 block_entity.1.tick(&world).await;
             }
         }
-        println!("Done ticking block entities");
     }
 
     pub async fn get_random_ticks(&self) -> Vec<ScheduledTick> {

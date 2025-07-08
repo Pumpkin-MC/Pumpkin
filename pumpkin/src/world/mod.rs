@@ -515,9 +515,9 @@ impl World {
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         println!("Ticking world");
         self.flush_block_updates().await;
+
         // tick block entities
         // TODO: fix dead lock
-        log::info!("Ticking block entities");
         //self.level.tick_block_entities(self.clone()).await;
         self.flush_synced_block_events().await;
 
@@ -546,6 +546,7 @@ impl World {
         drop(weather);
 
         self.tick_scheduled_block_ticks().await;
+        //self.perform_random_ticks().await;
 
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
 
