@@ -7,8 +7,8 @@ use std::sync::Arc;
 use crate::block::pumpkin_block::CanPlaceAtArgs;
 use crate::block::pumpkin_block::OnNeighborUpdateArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::PlacedArgs;
 use crate::block::pumpkin_block::OnStateReplacedArgs;
+use crate::block::pumpkin_block::PlacedArgs;
 use crate::block::pumpkin_block::PumpkinBlock;
 use crate::world::World;
 use pumpkin_data::Block;
@@ -25,7 +25,7 @@ use super::common::{
 // Currently, redstone sources (like redstone torch) can incorrectly extend rail power
 // when placed at any powered rail position. In Minecraft, power should only extend
 // when a redstone source is placed at the LAST powered rail or at an unpowered rail.
-// 
+//
 // Example of INCORRECT current behavior:
 // redstone_torch [powered_rail×9] [unpowered_rail×3]
 // If redstone torch is placed at 6th powered rail → power extends (WRONG)
@@ -54,7 +54,8 @@ impl PumpkinBlock for ActivatorRailBlock {
     async fn placed(&self, args: PlacedArgs<'_>) {
         update_flanking_rails_shape(args.world, args.block, args.state_id, args.position).await;
 
-        self.update_powered_state(args.world, args.block, args.position).await;
+        self.update_powered_state(args.world, args.block, args.position)
+            .await;
 
         let final_state_id = args.world.get_block_state_id(args.position).await;
         let rail_props = RailProperties::new(final_state_id, args.block);
@@ -67,9 +68,15 @@ impl PumpkinBlock for ActivatorRailBlock {
         for direction in rail_props.directions() {
             let neighbor_pos = args.position.offset(direction.to_offset());
 
-            if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &neighbor_pos).await {
-                self.update_powered_state_internal(args.world, neighbor_rail.0, &neighbor_pos, false)
-                    .await;
+            if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &neighbor_pos).await
+            {
+                self.update_powered_state_internal(
+                    args.world,
+                    neighbor_rail.0,
+                    &neighbor_pos,
+                    false,
+                )
+                .await;
                 self.update_connected_rails(args.world, &neighbor_pos, &neighbor_rail.1, true, 0)
                     .await;
                 self.update_connected_rails(args.world, &neighbor_pos, &neighbor_rail.1, false, 0)
@@ -106,7 +113,8 @@ impl PumpkinBlock for ActivatorRailBlock {
             return;
         }
 
-        self.update_powered_state(args.world, args.block, args.position).await;
+        self.update_powered_state(args.world, args.block, args.position)
+            .await;
 
         let state_id = args.world.get_block_state_id(args.position).await;
         let rail_props = RailProperties::new(state_id, args.block);
@@ -121,17 +129,22 @@ impl PumpkinBlock for ActivatorRailBlock {
         let rail_props = RailProperties::new(args.old_state_id, args.block);
 
         if rail_props.shape().is_ascending() {
-            args.world.update_neighbor(&args.position.up(), args.block).await;
+            args.world
+                .update_neighbor(&args.position.up(), args.block)
+                .await;
         }
 
         args.world.update_neighbor(args.position, args.block).await;
-        args.world.update_neighbor(&args.position.down(), args.block).await;
+        args.world
+            .update_neighbor(&args.position.down(), args.block)
+            .await;
 
         let directions = rail_props.directions();
         for direction in directions {
             let neighbor_pos = args.position.offset(direction.to_offset());
 
-            if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &neighbor_pos).await {
+            if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &neighbor_pos).await
+            {
                 self.update_powered_state(args.world, neighbor_rail.0, &neighbor_pos)
                     .await;
                 self.update_connected_rails(args.world, &neighbor_pos, &neighbor_rail.1, true, 0)
@@ -166,11 +179,17 @@ impl PumpkinBlock for ActivatorRailBlock {
         can_place_rail_at(args.block_accessor, args.position).await
     }
 
-    async fn emits_redstone_power(&self, _args: crate::block::pumpkin_block::EmitsRedstonePowerArgs<'_>) -> bool {
+    async fn emits_redstone_power(
+        &self,
+        _args: crate::block::pumpkin_block::EmitsRedstonePowerArgs<'_>,
+    ) -> bool {
         false
     }
 
-    async fn get_weak_redstone_power(&self, _args: crate::block::pumpkin_block::GetRedstonePowerArgs<'_>) -> u8 {
+    async fn get_weak_redstone_power(
+        &self,
+        _args: crate::block::pumpkin_block::GetRedstonePowerArgs<'_>,
+    ) -> u8 {
         0
     }
 }
@@ -469,7 +488,8 @@ impl ActivatorRailBlock {
         pos: &BlockPos,
         direction: bool,
         distance: u8,
-        expected_shape: pumpkin_data::block_properties::RailShape,    ) {
+        expected_shape: pumpkin_data::block_properties::RailShape,
+    ) {
         let block = world.get_block(pos).await;
         if *block != Block::ACTIVATOR_RAIL {
             return;
