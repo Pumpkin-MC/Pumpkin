@@ -83,17 +83,16 @@ impl PumpkinBlock for ComparatorBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if args.direction == BlockDirection::Down {
-            if !RedstoneGateBlock::can_place_above(
+        if args.direction == BlockDirection::Down
+            && !RedstoneGateBlock::can_place_above(
                 self,
                 args.world,
                 *args.neighbor_position,
                 get_state_by_state_id(args.neighbor_state_id),
             )
             .await
-            {
-                return Block::AIR.default_state.id;
-            }
+        {
+            return Block::AIR.default_state.id;
         }
         args.state_id
     }
