@@ -2039,7 +2039,7 @@ impl NBTStorage for Abilities {
         nbt.put_component("abilities", component);
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         if let Some(component) = nbt.get_compound("abilities") {
             self.invulnerable = component.get_bool("invulnerable").unwrap_or(false);
             self.flying = component.get_bool("flying").unwrap_or(false);
@@ -2047,7 +2047,7 @@ impl NBTStorage for Abilities {
             self.creative = component.get_bool("instabuild").unwrap_or(false);
             self.allow_modify_world = component.get_bool("mayBuild").unwrap_or(false);
             self.fly_speed = component.get_float("flySpeed").unwrap_or(0.0);
-            self.walk_speed = component.get_float("walk_speed").unwrap_or(0.0);
+            self.walk_speed = component.get_float("walkSpeed").unwrap_or(0.0);
         }
     }
 }
