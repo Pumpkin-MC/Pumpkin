@@ -45,16 +45,15 @@ impl PumpkinBlock for FlowerBlock {
 
     async fn random_tick(&self, args: RandomTickArgs<'_>) {
         //TODO add trail particule
-        if args
+        if (args
             .world
             .dimension_type
             .eq(&VanillaDimensionType::Overworld)
             || args
                 .world
                 .dimension_type
-                .eq(&VanillaDimensionType::OverworldCaves)
-        {
-            if args.block.eq(&Block::CLOSED_EYEBLOSSOM)
+                .eq(&VanillaDimensionType::OverworldCaves))
+            && args.block.eq(&Block::CLOSED_EYEBLOSSOM)
                 && args.world.level_time.lock().await.time_of_day % 24000 > 14500
             {
                 args.world
@@ -65,7 +64,6 @@ impl PumpkinBlock for FlowerBlock {
                     )
                     .await;
             }
-        }
         if args.block.eq(&Block::OPEN_EYEBLOSSOM)
             && args.world.level_time.lock().await.time_of_day % 24000 <= 14500
         {

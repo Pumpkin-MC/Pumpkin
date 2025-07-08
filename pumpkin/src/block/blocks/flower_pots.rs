@@ -54,16 +54,15 @@ impl PumpkinBlock for FlowerPotBlock {
     }
 
     async fn random_tick(&self, args: RandomTickArgs<'_>) {
-        if args
+        if (args
             .world
             .dimension_type
             .eq(&VanillaDimensionType::Overworld)
             || args
                 .world
                 .dimension_type
-                .eq(&VanillaDimensionType::OverworldCaves)
-        {
-            if args.block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM)
+                .eq(&VanillaDimensionType::OverworldCaves))
+            && args.block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM)
                 && args.world.level_time.lock().await.time_of_day % 24000 > 14500
             {
                 args.world
@@ -74,7 +73,6 @@ impl PumpkinBlock for FlowerPotBlock {
                     )
                     .await;
             }
-        }
         if args.block.eq(&Block::POTTED_OPEN_EYEBLOSSOM)
             && args.world.level_time.lock().await.time_of_day % 24000 <= 14500
         {
