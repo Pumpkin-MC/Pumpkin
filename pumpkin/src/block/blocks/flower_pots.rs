@@ -63,16 +63,16 @@ impl PumpkinBlock for FlowerPotBlock {
                 .dimension_type
                 .eq(&VanillaDimensionType::OverworldCaves))
             && args.block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM)
-                && args.world.level_time.lock().await.time_of_day % 24000 > 14500
-            {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::POTTED_OPEN_EYEBLOSSOM.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
+            && args.world.level_time.lock().await.time_of_day % 24000 > 14500
+        {
+            args.world
+                .set_block_state(
+                    args.position,
+                    Block::POTTED_OPEN_EYEBLOSSOM.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
+        }
         if args.block.eq(&Block::POTTED_OPEN_EYEBLOSSOM)
             && args.world.level_time.lock().await.time_of_day % 24000 <= 14500
         {
