@@ -87,9 +87,7 @@ impl NativePluginLoader {
         let server_commit = &GIT_VERSION[..=8];
         if pumpkin_commit != GIT_VERSION && pumpkin_commit != "ignored" {
             log::warn!(
-                "Plugin was compiled with pumpkin commit `{}` but server was compiled with version `{}`",
-                pumpkin_commit,
-                server_commit
+                "Plugin was compiled with pumpkin commit `{pumpkin_commit}` but server was compiled with version `{server_commit}`",
             );
         }
 
