@@ -2037,6 +2037,7 @@ dependencies = [
  "proc-macro2",
  "pumpkin-util",
  "quote",
+ "rayon",
  "serde",
  "serde_json",
  "serde_json5",
