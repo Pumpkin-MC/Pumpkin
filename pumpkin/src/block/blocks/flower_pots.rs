@@ -1,6 +1,4 @@
-use crate::block::pumpkin_block::{
-    BlockMetadata, NormalUseArgs, PumpkinBlock, RandomTickArgs, UseWithItemArgs,
-};
+use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock, RandomTickArgs, UseWithItemArgs};
 use crate::block::registry::BlockActionResult;
 use async_trait::async_trait;
 use pumpkin_data::Block;
@@ -23,18 +21,6 @@ impl BlockMetadata for FlowerPotBlock {
 
 #[async_trait]
 impl PumpkinBlock for FlowerPotBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        if !args.block.eq(&Block::FLOWER_POT) {
-            args.world
-                .set_block_state(
-                    args.position,
-                    Block::FLOWER_POT.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
-        }
-    }
-
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let item = args.item_stack.lock().await.item;
         //Place the flower inside the pot
@@ -48,7 +34,7 @@ impl PumpkinBlock for FlowerPotBlock {
                     )
                     .await;
             }
-            return BlockActionResult::Consume;
+            return BlockActionResult::Success;
         }
 
         //if the player have an item that can be potted in his hand, nothing happens
@@ -64,7 +50,7 @@ impl PumpkinBlock for FlowerPotBlock {
                 BlockFlags::NOTIFY_ALL,
             )
             .await;
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 
     async fn random_tick(&self, args: RandomTickArgs<'_>) {

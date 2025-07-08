@@ -49,7 +49,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
+use pumpkin_inventory::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::{
@@ -68,8 +68,8 @@ use pumpkin_protocol::{
         client::play::{
             CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
             CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-            CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat, PlayerAction,
-            PlayerInfoFlags,
+            CSetSelectedSlot, CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat,
+            PlayerAction, PlayerInfoFlags,
         },
         server::play::SChatMessage,
     },
@@ -203,7 +203,7 @@ impl World {
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
-            worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
+            worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 30_000_000.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
             dimension_type,
             weather: Mutex::new(Weather::new()),
@@ -1039,6 +1039,13 @@ impl World {
                 .await;
         }
         player.send_client_information().await;
+
+        // Sync selected slot
+        player
+            .enqueue_set_held_item_packet(&CSetSelectedSlot::new(
+                player.get_inventory().get_selected_slot() as i8,
+            ))
+            .await;
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
@@ -1976,7 +1983,19 @@ impl World {
         self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, false))
             .await;
     }
-
+    #[must_use]
+    pub fn is_valid(dest: Vector3<f64>) -> bool {
+        Self::is_valid_horizontally(dest) && Self::is_valid_vertically(dest.y)
+    }
+    #[must_use]
+    pub fn is_valid_horizontally(dest: Vector3<f64>) -> bool {
+        (-30_000_000.0..=30_000_000.0).contains(&dest.x)
+            && (-30_000_000.0..=30_000_000.0).contains(&dest.z)
+    }
+    #[must_use]
+    pub fn is_valid_vertically(y: f64) -> bool {
+        (-20_000_000.0..=20_000_000.0).contains(&y)
+    }
     /// Gets a `Block` from the block registry. Returns `Block::AIR` if the block was not found.
     pub async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
         let id = self.get_block_state_id(position).await;

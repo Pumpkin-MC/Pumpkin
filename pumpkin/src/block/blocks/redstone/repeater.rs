@@ -18,7 +18,6 @@ use crate::{
             CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
             GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
             OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs, PlayerPlacedArgs, PumpkinBlock,
-            UseWithItemArgs,
         },
         registry::BlockActionResult,
     },
@@ -115,19 +114,13 @@ impl PumpkinBlock for RepeaterBlock {
         }
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position).await;
         let props = RepeaterProperties::from_state_id(state.id, args.block);
         self.on_use(props, args.world, *args.position, args.block)
             .await;
-    }
 
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let state = args.world.get_block_state(args.position).await;
-        let props = RepeaterProperties::from_state_id(state.id, args.block);
-        self.on_use(props, args.world, *args.position, args.block)
-            .await;
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 
     async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
