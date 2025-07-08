@@ -25,7 +25,7 @@ pub async fn from_type(
     let entity = Entity::new(uuid, world.clone(), position, entity_type, false);
 
     #[allow(clippy::single_match)]
-    let mob = match entity_type {
+    let mob: Arc<dyn EntityBase> = match entity_type {
         EntityType::ZOMBIE => Zombie::make(entity).await,
         EntityType::PAINTING => Arc::new(PaintingEntity::new(entity)),
         // TODO
@@ -36,4 +36,6 @@ pub async fn from_type(
             target: Mutex::new(None),
         }),
     };
+
+    mob
 }
