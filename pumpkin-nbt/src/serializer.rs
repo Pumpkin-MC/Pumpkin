@@ -22,55 +22,29 @@ impl<W: Write> WriteAdaptor<W> {
     }
 }
 
+macro_rules! write_number_be {
+    ($type:ty) => {
+        paste::item! {
+            pub fn [<write_ $type _be>](&mut self, value: $type) -> Result<()> {
+                let buf = value.to_be_bytes();
+                self.writer.write_all(&buf).map_err(Error::Incomplete)?;
+                Ok(())
+            }
+        }
+    };
+}
+
 impl<W: Write> WriteAdaptor<W> {
-    //TODO: Macroize this
-    pub fn write_u8_be(&mut self, value: u8) -> Result<()> {
-        let buf = value.to_be_bytes();
-        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
-        Ok(())
-    }
-
-    pub fn write_i8_be(&mut self, value: i8) -> Result<()> {
-        let buf = value.to_be_bytes();
-        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
-        Ok(())
-    }
-
-    pub fn write_u16_be(&mut self, value: u16) -> Result<()> {
-        let buf = value.to_be_bytes();
-        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
-        Ok(())
-    }
-
-    pub fn write_i16_be(&mut self, value: i16) -> Result<()> {
-        let buf = value.to_be_bytes();
-        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
-        Ok(())
-    }
-
-    pub fn write_i32_be(&mut self, value: i32) -> Result<()> {
-        let buf = value.to_be_bytes();
-        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
-        Ok(())
-    }
-
-    pub fn write_i64_be(&mut self, value: i64) -> Result<()> {
-        let buf = value.to_be_bytes();
-        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
-        Ok(())
-    }
-
-    pub fn write_f32_be(&mut self, value: f32) -> Result<()> {
-        let buf = value.to_be_bytes();
-        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
-        Ok(())
-    }
-
-    pub fn write_f64_be(&mut self, value: f64) -> Result<()> {
-        let buf = value.to_be_bytes();
-        self.writer.write_all(&buf).map_err(Error::Incomplete)?;
-        Ok(())
-    }
+    write_number_be!(u8);
+    write_number_be!(i8);
+    write_number_be!(u16);
+    write_number_be!(i16);
+    write_number_be!(u32);
+    write_number_be!(i32);
+    write_number_be!(u64);
+    write_number_be!(i64);
+    write_number_be!(f32);
+    write_number_be!(f64);
 
     pub fn write_slice(&mut self, value: &[u8]) -> Result<()> {
         self.writer.write_all(value).map_err(Error::Incomplete)?;

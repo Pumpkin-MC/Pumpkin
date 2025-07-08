@@ -1687,6 +1687,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
 name = "pem-rfc7468"
 version = "1.0.0-rc.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2078,6 +2084,7 @@ dependencies = [
  "bytes",
  "cesu8",
  "flate2",
+ "paste",
  "serde",
  "tempfile",
  "thiserror",
@@ -2094,6 +2101,7 @@ dependencies = [
  "cfb8",
  "flate2",
  "log",
+ "paste",
  "pumpkin-data",
  "pumpkin-macros",
  "pumpkin-nbt",
