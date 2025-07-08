@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
+use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
 use crate::block::pumpkin_block::NormalUseArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::UseWithItemArgs;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
+use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -70,12 +71,42 @@ impl PumpkinBlock for FenceGateBlock {
         fence_gate_props.to_state_id(args.block)
     }
 
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        toggle_fence_gate(args.world, args.location, args.player).await;
-        BlockActionResult::Consume
+    async fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let fence_props = is_in_wall(&args).await;
+        fence_props.to_state_id(args.block)
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        toggle_fence_gate(args.world, args.location, args.player).await;
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        toggle_fence_gate(args.world, args.position, args.player).await;
+
+        BlockActionResult::Success
     }
+}
+
+async fn is_in_wall(args: &GetStateForNeighborUpdateArgs<'_>) -> FenceGateProperties {
+    let mut fence_props = FenceGateProperties::from_state_id(args.state_id, args.block);
+
+    let side_offset_left = args
+        .position
+        .offset(fence_props.facing.rotate_clockwise().to_offset());
+
+    let side_offset_right = args
+        .position
+        .offset(fence_props.facing.rotate_counter_clockwise().to_offset());
+
+    let neighbor_on_side =
+        args.neighbor_position == &side_offset_left || args.neighbor_position == &side_offset_right;
+
+    if neighbor_on_side {
+        let neighbor_right = args.world.get_block(&side_offset_right).await;
+        let neighbor_left = args.world.get_block(&side_offset_left).await;
+
+        fence_props.in_wall = neighbor_left.is_tagged_with("minecraft:walls").unwrap()
+            || neighbor_right.is_tagged_with("minecraft:walls").unwrap();
+    }
+
+    fence_props
 }

@@ -36,7 +36,7 @@ impl PumpkinBlock for TripwireHookBlock {
         let mut props = TripwireHookProperties::default(args.block);
         props.powered = false;
         props.attached = false;
-        if Self::can_place_at(args.world, args.location, args.direction).await {
+        if Self::can_place_at(args.world, args.position, args.direction).await {
             props.facing = args.direction.opposite().to_cardinal_direction();
             return props.to_state_id(args.block);
         }
@@ -44,13 +44,13 @@ impl PumpkinBlock for TripwireHookBlock {
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        Self::can_place_at(args.block_accessor, args.location, args.direction).await
+        Self::can_place_at(args.block_accessor, args.position, args.direction).await
     }
 
     async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
         Self::update(
             args.world,
-            *args.location,
+            *args.position,
             args.state_id,
             false,
             false,
@@ -67,7 +67,7 @@ impl PumpkinBlock for TripwireHookBlock {
         if args.direction.to_horizontal_facing().is_some_and(|facing| {
             let props = TripwireHookProperties::from_state_id(args.state_id, args.block);
             facing.opposite() == props.facing
-        }) && !Self::can_place_at(args.world, args.location, args.direction).await
+        }) && !Self::can_place_at(args.world, args.position, args.direction).await
         {
             Block::AIR.default_state.id
         } else {
@@ -76,8 +76,8 @@ impl PumpkinBlock for TripwireHookBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state_id = args.world.get_block_state_id(args.location).await;
-        Self::update(args.world, *args.location, state_id, false, true, -1, None).await;
+        let state_id = args.world.get_block_state_id(args.position).await;
+        Self::update(args.world, *args.position, state_id, false, true, -1, None).await;
     }
 
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
@@ -91,7 +91,7 @@ impl PumpkinBlock for TripwireHookBlock {
         if props.powered || props.attached {
             Self::update(
                 args.world,
-                *args.location,
+                *args.position,
                 args.old_state_id,
                 true,
                 false,
@@ -101,10 +101,10 @@ impl PumpkinBlock for TripwireHookBlock {
             .await;
         }
         if props.powered {
-            args.world.update_neighbor(args.location, args.block).await;
+            args.world.update_neighbor(args.position, args.block).await;
             args.world
                 .update_neighbor(
-                    &args.location.offset(props.facing.opposite().to_offset()),
+                    &args.position.offset(props.facing.opposite().to_offset()),
                     args.block,
                 )
                 .await;

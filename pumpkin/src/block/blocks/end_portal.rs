@@ -26,17 +26,17 @@ impl PumpkinBlock for EndPortalBlock {
         };
         args.entity
             .get_entity()
-            .try_use_portal(0, world, *args.location)
+            .try_use_portal(0, world, *args.position)
             .await;
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
         args.world
-            .add_block_entity(Arc::new(EndPortalBlockEntity::new(*args.location)))
+            .add_block_entity(Arc::new(EndPortalBlockEntity::new(*args.position)))
             .await;
     }
 
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.location).await;
+        args.world.remove_block_entity(args.position).await;
     }
 }

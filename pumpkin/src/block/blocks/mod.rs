@@ -1,10 +1,15 @@
+pub mod anvil;
 pub mod bamboo;
 pub mod barrel;
 pub mod bed;
 pub mod cactus;
+pub mod cake;
 pub mod campfire;
+pub mod candle_cakes;
+pub mod candles;
 pub mod carpet;
 pub mod chest;
+pub mod chiseled_bookshelf;
 pub mod command;
 pub mod composter;
 pub mod crafting_table;

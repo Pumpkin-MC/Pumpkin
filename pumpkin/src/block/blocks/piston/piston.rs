@@ -98,11 +98,11 @@ impl PumpkinBlock for PistonBlock {
         if args.old_state_id == args.state_id {
             return;
         }
-        try_move(args.world, args.block, args.location).await;
+        try_move(args.world, args.block, args.position).await;
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        try_move(args.world, args.block, args.location).await;
+        try_move(args.world, args.block, args.position).await;
     }
 
     #[expect(clippy::too_many_lines)]
@@ -110,7 +110,7 @@ impl PumpkinBlock for PistonBlock {
         let (block, world, pos, r#type, data) = (
             args.block,
             args.world,
-            args.location,
+            args.position,
             args.r#type,
             args.data,
         );

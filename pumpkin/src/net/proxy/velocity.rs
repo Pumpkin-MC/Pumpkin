@@ -17,7 +17,7 @@ use rand::Rng;
 use sha2::Sha256;
 use thiserror::Error;
 
-use crate::net::{Client, GameProfile};
+use crate::net::{GameProfile, java::JavaClientPlatform};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -46,7 +46,7 @@ pub enum VelocityError {
     FailedReadProfileProperties,
 }
 
-pub async fn velocity_login(client: &Client) {
+pub async fn velocity_login(client: &JavaClientPlatform) {
     // TODO: Validate the packet transaction id from the plugin response with this
     let velocity_message_id: i32 = rand::rng().random();
 

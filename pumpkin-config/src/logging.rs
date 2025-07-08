@@ -7,6 +7,7 @@ pub struct LoggingConfig {
     pub threads: bool,
     pub color: bool,
     pub timestamp: bool,
+    pub file: String,
 }
 
 impl Default for LoggingConfig {
@@ -16,6 +17,7 @@ impl Default for LoggingConfig {
             threads: true,
             color: true,
             timestamp: true,
+            file: "latest.log".to_string(),
         }
     }
 }

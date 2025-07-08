@@ -33,14 +33,14 @@ impl BlockMetadata for CopperBulbBlock {
 impl PumpkinBlock for CopperBulbBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = CopperBulbLikeProperties::default(args.block);
-        let is_receiving_power = block_receives_redstone_power(args.world, args.location).await;
+        let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
         if is_receiving_power {
             props.lit = true;
             args.world
                 .play_block_sound(
                     Sound::BlockCopperBulbTurnOn,
                     SoundCategory::Blocks,
-                    *args.location,
+                    *args.position,
                 )
                 .await;
             props.powered = true;
@@ -49,9 +49,9 @@ impl PumpkinBlock for CopperBulbBlock {
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
+        let state = args.world.get_block_state(args.position).await;
         let mut props = CopperBulbLikeProperties::from_state_id(state.id, args.block);
-        let is_receiving_power = block_receives_redstone_power(args.world, args.location).await;
+        let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
         if props.powered != is_receiving_power {
             if !props.powered {
                 props.lit = !props.lit;
@@ -63,14 +63,14 @@ impl PumpkinBlock for CopperBulbBlock {
                             Sound::BlockCopperBulbTurnOff
                         },
                         SoundCategory::Blocks,
-                        *args.location,
+                        *args.position,
                     )
                     .await;
             }
             props.powered = is_receiving_power;
             args.world
                 .set_block_state(
-                    args.location,
+                    args.position,
                     props.to_state_id(args.block),
                     BlockFlags::NOTIFY_ALL,
                 )

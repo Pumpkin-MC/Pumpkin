@@ -21,12 +21,29 @@ pub fn create_generic_9x3(
         player_inventory,
         inventory,
         3,
+        9,
+    )
+}
+
+pub fn create_generic_3x3(
+    sync_id: u8,
+    player_inventory: &Arc<PlayerInventory>,
+    inventory: Arc<dyn Inventory>,
+) -> GenericContainerScreenHandler {
+    GenericContainerScreenHandler::new(
+        WindowType::Generic3x3,
+        sync_id,
+        player_inventory,
+        inventory,
+        3,
+        3,
     )
 }
 
 pub struct GenericContainerScreenHandler {
     pub inventory: Arc<dyn Inventory>,
     pub rows: u8,
+    pub columns: u8,
     behaviour: ScreenHandlerBehaviour,
 }
 
@@ -37,10 +54,12 @@ impl GenericContainerScreenHandler {
         player_inventory: &Arc<PlayerInventory>,
         inventory: Arc<dyn Inventory>,
         rows: u8,
+        columns: u8,
     ) -> Self {
         let mut handler = Self {
             inventory,
             rows,
+            columns,
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(screen_type)),
         };
 
@@ -54,10 +73,10 @@ impl GenericContainerScreenHandler {
 
     fn add_inventory_slots(&mut self) {
         for i in 0..self.rows {
-            for j in 0..9 {
+            for j in 0..self.columns {
                 self.add_slot(Arc::new(NormalSlot::new(
                     self.inventory.clone(),
-                    (j + i * 9) as usize,
+                    (j + i * self.columns) as usize,
                 )));
             }
         }

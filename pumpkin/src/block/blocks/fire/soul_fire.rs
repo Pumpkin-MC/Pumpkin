@@ -28,7 +28,7 @@ impl PumpkinBlock for SoulFireBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if !Self::is_soul_base(args.world.get_block(&args.location.down()).await) {
+        if !Self::is_soul_base(args.world.get_block(&args.position.down()).await) {
             return Block::AIR.default_state.id;
         }
 
@@ -36,10 +36,10 @@ impl PumpkinBlock for SoulFireBlock {
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        Self::is_soul_base(args.block_accessor.get_block(&args.location.down()).await)
+        Self::is_soul_base(args.block_accessor.get_block(&args.position.down()).await)
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {
-        FireBlockBase::broken(args.world.clone(), *args.location).await;
+        FireBlockBase::broken(args.world.clone(), *args.position).await;
     }
 }

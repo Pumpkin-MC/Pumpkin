@@ -37,13 +37,13 @@ impl PumpkinBlock for TripwireBlock {
 
         let state_id = props.to_state_id(args.block);
         args.world
-            .set_block_state(args.location, state_id, BlockFlags::NOTIFY_ALL)
+            .set_block_state(args.position, state_id, BlockFlags::NOTIFY_ALL)
             .await;
 
-        Self::update(args.world, args.location, state_id).await;
+        Self::update(args.world, args.position, state_id).await;
 
         args.world
-            .schedule_block_tick(args.block, *args.location, 10, TickPriority::Normal)
+            .schedule_block_tick(args.block, *args.position, 10, TickPriority::Normal)
             .await;
     }
 
@@ -55,7 +55,7 @@ impl PumpkinBlock for TripwireBlock {
             BlockDirection::West,
         ]
         .map(async |dir| {
-            let current_pos = args.location.offset(dir.to_offset());
+            let current_pos = args.position.offset(dir.to_offset());
             let state_id = args.world.get_block_state_id(&current_pos).await;
             Self::should_connect_to(state_id, dir)
         });
@@ -79,7 +79,7 @@ impl PumpkinBlock for TripwireBlock {
                 return;
             }
         }
-        Self::update(args.world, args.location, args.state_id).await;
+        Self::update(args.world, args.position, args.state_id).await;
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {
@@ -96,7 +96,7 @@ impl PumpkinBlock for TripwireBlock {
             props.disarmed = true;
             args.world
                 .set_block_state(
-                    args.location,
+                    args.position,
                     props.to_state_id(args.block),
                     BlockFlags::empty(),
                 )
@@ -124,14 +124,14 @@ impl PumpkinBlock for TripwireBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state_id = args.world.get_block_state_id(args.location).await;
+        let state_id = args.world.get_block_state_id(args.position).await;
 
         let mut props = TripwireProperties::from_state_id(state_id, args.block);
         if !props.powered {
             return;
         }
 
-        let aabb = BoundingBox::from_block(args.location);
+        let aabb = BoundingBox::from_block(args.position);
         // TODO entity.canAvoidTraps()
         if args.world.get_entities_at_box(&aabb).await.is_empty()
             && args.world.get_players_at_box(&aabb).await.is_empty()
@@ -139,12 +139,12 @@ impl PumpkinBlock for TripwireBlock {
             props.powered = false;
             let state_id = props.to_state_id(args.block);
             args.world
-                .set_block_state(args.location, state_id, BlockFlags::NOTIFY_ALL)
+                .set_block_state(args.position, state_id, BlockFlags::NOTIFY_ALL)
                 .await;
-            Self::update(args.world, args.location, state_id).await;
+            Self::update(args.world, args.position, state_id).await;
         } else {
             args.world
-                .schedule_block_tick(args.block, *args.location, 10, TickPriority::Normal)
+                .schedule_block_tick(args.block, *args.position, 10, TickPriority::Normal)
                 .await;
         }
     }
@@ -156,8 +156,8 @@ impl PumpkinBlock for TripwireBlock {
         {
             return;
         }
-        let state_id = args.world.get_block_state_id(args.location).await;
-        Self::update(args.world, args.location, state_id).await;
+        let state_id = args.world.get_block_state_id(args.position).await;
+        Self::update(args.world, args.position, state_id).await;
     }
 }
 

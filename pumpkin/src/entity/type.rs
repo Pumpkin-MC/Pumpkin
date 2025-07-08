@@ -9,6 +9,7 @@ use crate::{
     entity::{
         Entity, EntityBase,
         ai::path::Navigator,
+        decoration::painting::PaintingEntity,
         living::LivingEntity,
         mob::{MobEntity, zombie::Zombie},
     },
@@ -26,6 +27,7 @@ pub async fn from_type(
     #[allow(clippy::single_match)]
     let mob = match entity_type {
         EntityType::ZOMBIE => Zombie::make(entity).await,
+        EntityType::PAINTING => Arc::new(PaintingEntity::new(entity)),
         // TODO
         _ => Arc::new(MobEntity {
             living_entity: LivingEntity::new(entity),
@@ -34,5 +36,4 @@ pub async fn from_type(
             target: Mutex::new(None),
         }),
     };
-    mob
 }
