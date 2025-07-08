@@ -42,6 +42,7 @@ impl EntityBase for PaintingEntity {
         _cause: Option<&Entity>,
     ) -> bool {
         // TODO
-        self.entity.remove()
+        self.entity.remove().await;
+        true
     }
 }
