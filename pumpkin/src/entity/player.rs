@@ -2027,7 +2027,7 @@ pub struct Abilities {
 
 #[async_trait]
 impl NBTStorage for Abilities {
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
         let mut component = NbtCompound::new();
         component.put_bool("invulnerable", self.invulnerable);
         component.put_bool("flying", self.flying);
@@ -2041,13 +2041,34 @@ impl NBTStorage for Abilities {
 
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         if let Some(component) = nbt.get_compound("abilities") {
-            self.invulnerable = component.get_bool("invulnerable").unwrap_or(false);
-            self.flying = component.get_bool("flying").unwrap_or(false);
-            self.allow_flying = component.get_bool("mayfly").unwrap_or(false);
-            self.creative = component.get_bool("instabuild").unwrap_or(false);
-            self.allow_modify_world = component.get_bool("mayBuild").unwrap_or(false);
-            self.fly_speed = component.get_float("flySpeed").unwrap_or(0.0);
-            self.walk_speed = component.get_float("walkSpeed").unwrap_or(0.0);
+            self.invulnerable = component.get_bool("invulnerable").unwrap_or_else(|| {
+                warn!("Unable to read player ability `invulnerable`: value is missing or invalid. Defaulting to `false`");
+                false
+            });
+            self.flying = component.get_bool("flying").unwrap_or_else(|| {
+                warn!("Unable to read player ability `flying`: value is missing or invalid. Defaulting to `false`");
+                false
+            });
+            self.allow_flying = component.get_bool("mayfly").unwrap_or_else(|| {
+                warn!("Unable to read player ability `allow_flying`: value is missing or invalid. Defaulting to `false`");
+                false
+            });
+            self.creative = component.get_bool("instabuild").unwrap_or_else(|| {
+                warn!("Unable to read player ability `creative`: value is missing or invalid. Defaulting to `false`");
+                false
+            });
+            self.allow_modify_world = component.get_bool("mayBuild").unwrap_or_else(|| {
+                warn!("Unable to read player ability `allow_modify_world`: value is missing or invalid. Defaulting to `false`");
+                false
+            });
+            self.fly_speed = component.get_float("flySpeed").unwrap_or_else(|| {
+                warn!("Unable to read player ability `fly_speed`: value is missing or invalid. Defaulting to `0.05`");
+                0.05
+            });
+            self.walk_speed = component.get_float("walkSpeed").unwrap_or_else(|| {
+                warn!("Unable to read player ability `walk_speed`: value is missing or invalid. Defaulting to `0.1`");
+                0.1
+            });
         }
     }
 }
