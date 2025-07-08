@@ -47,7 +47,7 @@ impl PumpkinBlock for CampfireBlock {
             CampfireLikeProperties::from_state_id(args.block.default_state.id, args.block);
         props.waterlogged = is_replacing_water;
         props.signal_fire =
-            is_signal_fire_base_block(args.world.get_block(&args.location.down()).await);
+            is_signal_fire_base_block(args.world.get_block(&args.position.down()).await);
         props.lit = !is_replacing_water;
         props.facing = args.player.get_entity().get_horizontal_facing();
         props.to_state_id(args.block)
@@ -63,7 +63,7 @@ impl PumpkinBlock for CampfireBlock {
             args.world
                 .schedule_fluid_tick(
                     args.block.id,
-                    *args.location,
+                    *args.position,
                     Fluid::WATER.flow_speed as u16,
                 )
                 .await;
@@ -71,7 +71,7 @@ impl PumpkinBlock for CampfireBlock {
 
         if args.direction == BlockDirection::Down {
             props.signal_fire =
-                is_signal_fire_base_block(args.world.get_block(args.neighbor_location).await);
+                is_signal_fire_base_block(args.world.get_block(args.neighbor_position).await);
         }
 
         props.to_state_id(args.block)

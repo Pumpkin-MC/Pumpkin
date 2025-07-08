@@ -1,10 +1,16 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
+use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_registry::VanillaDimensionType;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::pumpkin_block::{BlockMetadata, CanPlaceAtArgs, PumpkinBlock, RandomTickArgs};
+use crate::block::blocks::plant::PlantBlockBase;
+use crate::block::pumpkin_block::{
+    BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock,
+};
+
+use crate::block::pumpkin_block::RandomTickArgs;
 
 pub struct FlowerBlock;
 
@@ -21,8 +27,20 @@ impl BlockMetadata for FlowerBlock {
 #[async_trait]
 impl PumpkinBlock for FlowerBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let block_below = args.block_accessor.get_block(&args.location.down()).await;
-        block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == &Block::FARMLAND
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
+    }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
+        .await
     }
 
     async fn random_tick(&self, args: RandomTickArgs<'_>) {
@@ -41,7 +59,7 @@ impl PumpkinBlock for FlowerBlock {
             {
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         Block::OPEN_EYEBLOSSOM.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
@@ -51,7 +69,7 @@ impl PumpkinBlock for FlowerBlock {
             {
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         Block::CLOSED_EYEBLOSSOM.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
@@ -60,3 +78,5 @@ impl PumpkinBlock for FlowerBlock {
         }
     }
 }
+
+impl PlantBlockBase for FlowerBlock {}

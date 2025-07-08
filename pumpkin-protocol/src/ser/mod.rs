@@ -66,6 +66,7 @@ pub trait NetworkReadExt {
     fn get_bool(&mut self) -> Result<bool, ReadingError>;
     fn get_u24(&mut self) -> Result<U24, ReadingError>;
     fn get_var_int(&mut self) -> Result<VarInt, ReadingError>;
+    fn get_var_uint(&mut self) -> Result<VarUInt, ReadingError>;
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
     fn get_string(&mut self) -> Result<String, ReadingError>;
@@ -224,13 +225,16 @@ impl<R: Read> NetworkReadExt for R {
     fn get_var_int(&mut self) -> Result<VarInt, ReadingError> {
         VarInt::decode(self)
     }
+    fn get_var_uint(&mut self) -> Result<VarUInt, ReadingError> {
+        VarUInt::decode(self)
+    }
 
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError> {
         VarLong::decode(self)
     }
 
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError> {
-        let size = self.get_var_int()?.0 as usize;
+        let size = self.get_var_uint()?.0 as usize;
         if size > bound {
             return Err(ReadingError::TooLarge("string".to_string()));
         }
@@ -240,7 +244,7 @@ impl<R: Read> NetworkReadExt for R {
     }
 
     fn get_string(&mut self) -> Result<String, ReadingError> {
-        self.get_string_bounded(i16::MAX as usize)
+        self.get_string_bounded(i32::MAX as usize)
     }
 
     fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError> {

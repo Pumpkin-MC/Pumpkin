@@ -56,8 +56,10 @@ impl BlockMetadata for CommandBlock {
 #[async_trait]
 impl PumpkinBlock for CommandBlock {
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.location).await {
-            if block_entity.resource_location() != CommandBlockEntity::ID {
+        if let Some((nbt, block_entity)) = args.world.get_block_entity(args.position).await {
+            let command_entity = CommandBlockEntity::from_nbt(&nbt, *args.position);
+
+            if block_entity.resource_location() != command_entity.resource_location() {
                 return;
             }
             let command_entity =
@@ -67,16 +69,18 @@ impl PumpkinBlock for CommandBlock {
                 args.world,
                 args.block,
                 command_entity,
-                args.location,
-                block_receives_redstone_power(args.world, args.location).await,
+                args.position,
+                block_receives_redstone_power(args.world, args.position).await,
             )
             .await;
         }
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.location).await {
-            if block_entity.resource_location() != CommandBlockEntity::ID {
+        if let Some((nbt, block_entity)) = args.world.get_block_entity(args.position).await {
+            let command_entity = CommandBlockEntity::from_nbt(&nbt, *args.position);
+
+            if block_entity.resource_location() != command_entity.resource_location() {
                 return;
             }
             // TODO

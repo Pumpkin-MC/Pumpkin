@@ -19,7 +19,7 @@ impl ClientPacket for CChunkData<'_> {
         // Chunk X
         write.write_i32_be(self.0.position.x)?;
         // Chunk Z
-        write.write_i32_be(self.0.position.z)?;
+        write.write_i32_be(self.0.position.y)?;
 
         let heightmaps = &self.0.heightmap;
         // the heighmap is a map, we put 3 values in so the size is 3

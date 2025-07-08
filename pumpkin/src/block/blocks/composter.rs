@@ -32,21 +32,23 @@ pub struct ComposterBlock;
 
 #[async_trait]
 impl PumpkinBlock for ComposterBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        let state_id = args.world.get_block_state_id(args.location).await;
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let state_id = args.world.get_block_state_id(args.position).await;
         let props = ComposterLikeProperties::from_state_id(state_id, args.block);
         if props.get_level() == 8 {
-            self.clear_composter(args.world, args.location, state_id, args.block)
+            self.clear_composter(args.world, args.position, state_id, args.block)
                 .await;
         }
+
+        BlockActionResult::Continue
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let state_id = args.world.get_block_state_id(args.location).await;
+        let state_id = args.world.get_block_state_id(args.position).await;
         let props = ComposterLikeProperties::from_state_id(state_id, args.block);
         let level = props.get_level();
         if level == 8 {
-            self.clear_composter(args.world, args.location, state_id, args.block)
+            self.clear_composter(args.world, args.position, state_id, args.block)
                 .await;
         }
         if level < 7 {
@@ -56,14 +58,14 @@ impl PumpkinBlock for ComposterBlock {
                 if level == 0 || rand::rng().random_bool(f64::from(chance)) {
                     self.update_level_composter(
                         args.world,
-                        args.location,
+                        args.position,
                         state_id,
                         args.block,
                         level + 1,
                     )
                     .await;
                     args.world
-                        .sync_world_event(WorldEvent::ComposterUsed, *args.location, 1)
+                        .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
                         .await;
                 }
             }
@@ -72,11 +74,11 @@ impl PumpkinBlock for ComposterBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state_id = args.world.get_block_state_id(args.location).await;
+        let state_id = args.world.get_block_state_id(args.position).await;
         let props = ComposterLikeProperties::from_state_id(state_id, args.block);
         let level = props.get_level();
         if level == 7 {
-            self.update_level_composter(args.world, args.location, state_id, args.block, level + 1)
+            self.update_level_composter(args.world, args.position, state_id, args.block, level + 1)
                 .await;
         }
     }

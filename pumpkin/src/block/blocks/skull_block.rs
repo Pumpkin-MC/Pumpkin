@@ -33,19 +33,19 @@ impl PumpkinBlock for SkullBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = SkeletonSkullLikeProperties::default(args.block);
         props.rotation = args.player.get_entity().get_rotation_16();
-        props.powered = block_receives_redstone_power(args.world, args.location).await;
+        props.powered = block_receives_redstone_power(args.world, args.position).await;
         props.to_state_id(args.block)
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
+        let state = args.world.get_block_state(args.position).await;
         let mut props = SkeletonSkullLikeProperties::from_state_id(state.id, args.block);
-        let is_receiving_power = block_receives_redstone_power(args.world, args.location).await;
+        let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
         if props.powered != is_receiving_power {
             props.powered = is_receiving_power;
             args.world
                 .set_block_state(
-                    args.location,
+                    args.position,
                     props.to_state_id(args.block),
                     BlockFlags::NOTIFY_LISTENERS,
                 )

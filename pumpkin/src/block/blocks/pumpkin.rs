@@ -23,7 +23,7 @@ impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
         // TODO: set direction
         args.world
             .set_block_state(
-                args.location,
+                args.position,
                 Block::CARVED_PUMPKIN.default_state.id,
                 BlockFlags::NOTIFY_ALL,
             )
@@ -31,7 +31,7 @@ impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
         let entity = Entity::new(
             Uuid::new_v4(),
             args.world.clone(),
-            args.location.to_f64(),
+            args.position.to_f64(),
             EntityType::ITEM,
             false,
         );

@@ -4,23 +4,19 @@ use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::player_server_data::ServerPlayerData;
 use crate::entity::NBTStorage;
 use crate::item::registry::ItemRegistry;
-use crate::net::EncryptionError;
+use crate::net::{ClientPlatform, EncryptionError, GameProfile, PlayerConfig};
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::custom_bossbar::CustomBossbars;
-use crate::{
-    command::dispatcher::CommandDispatcher, entity::player::Player, net::Client, world::World,
-};
+use crate::{command::dispatcher::CommandDispatcher, entity::player::Player, world::World};
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
-use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::CChangeDifficulty;
-use pumpkin_protocol::java::client::play::CSetSelectedSlot;
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_registry::{Registry, VanillaDimensionType};
 use pumpkin_util::Difficulty;
@@ -54,6 +50,7 @@ pub mod tick_rate_manager;
 pub mod ticker;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.7";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.93";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -283,11 +280,15 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
-    pub async fn add_player(&self, client: Client) -> Option<(Arc<Player>, Arc<World>)> {
+    pub async fn add_player(
+        &self,
+        client: ClientPlatform,
+        profile: GameProfile,
+        config: Option<PlayerConfig>,
+    ) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
-        let uuid = client.gameprofile.lock().await.as_ref().unwrap().id;
 
-        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&uuid) {
+        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
             if let Some(dimension_key) = data.get_string("Dimension") {
                 if let Some(dimension) =
                     VanillaDimensionType::from_resource_location_string(dimension_key)
@@ -319,7 +320,14 @@ impl Server {
             (default_world.clone(), None)
         };
 
-        let mut player = Player::new(client, world.clone(), gamemode).await;
+        let mut player = Player::new(
+            client,
+            profile,
+            config.clone().unwrap_or_default(),
+            world.clone(),
+            gamemode,
+        )
+        .await;
 
         if let Some(mut nbt_data) = nbt {
             player.read_nbt(&mut nbt_data).await;
@@ -336,19 +344,19 @@ impl Server {
                     .add_player(player.gameprofile.id, player.clone())
                     .await.is_ok() {
                     // TODO: Config if we want increase online
-                    if let Some(config) = player.client.config.lock().await.as_ref() {
+                    if let Some(config) = config {
                         // TODO: Config so we can also just ignore this hehe
                         if config.server_listing {
                             self.listing.lock().await.add_player(&player);
                         }
                     }
 
-                    player.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
-                        player.get_inventory().get_selected_slot() as i8,
-                    )).await;
-
                     // Send tick rate information to the new player
-                    self.tick_rate_manager.update_joining_player(&player).await;
+                    if let ClientPlatform::Java(_) = &player.client {
+                        self.tick_rate_manager.update_joining_player(&player).await;
+                    } else {
+                        // Todo
+                    }
 
                     Some((player, world.clone()))
                 } else {
@@ -492,7 +500,7 @@ impl Server {
 
         for world in self.worlds.read().await.iter() {
             for player in world.players.read().await.values() {
-                if player.client.address.lock().await.ip() == ip {
+                if player.client.address().await.ip() == ip {
                     players.push(player.clone());
                 }
             }
@@ -652,6 +660,9 @@ impl Server {
 
             // Tick scheduled block/fluid updates
             world.tick_scheduled_block_ticks().await;
+
+            // Tick random ticks
+            world.perform_random_ticks().await;
 
             // Tick non-player entities
             let entities_to_tick: Vec<_> = world.entities.read().await.values().cloned().collect();

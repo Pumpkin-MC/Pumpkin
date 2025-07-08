@@ -2,9 +2,9 @@ use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::{ConnectionState, java::server::handshake::SHandShake};
 use pumpkin_util::text::TextComponent;
 
-use crate::{net::Client, server::CURRENT_MC_VERSION};
+use crate::{net::java::JavaClientPlatform, server::CURRENT_MC_VERSION};
 
-impl Client {
+impl JavaClientPlatform {
     pub async fn handle_handshake(&self, handshake: SHandShake) {
         let version = handshake.protocol_version.0;
         self.protocol_version

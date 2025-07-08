@@ -9,17 +9,18 @@ pub struct COpenConnectionReply1 {
     magic: [u8; 16],
     server_guid: u64,
     has_server_security: bool,
-    cookie: u32,
+    // Only write when has_server_security
+    // cookie: u32,
     mtu: u16,
 }
 
 impl COpenConnectionReply1 {
-    pub fn new(server_guid: u64, has_server_security: bool, cookie: u32, mtu: u16) -> Self {
+    pub fn new(server_guid: u64, has_server_security: bool, mtu: u16) -> Self {
         Self {
             magic: RAKNET_MAGIC,
             server_guid,
             has_server_security,
-            cookie,
+            // cookie,
             mtu,
         }
     }
