@@ -1,8 +1,8 @@
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::{fs, io::Write, path::Path, process::Command};
 use rayon::prelude::*;
+use std::{fs, io::Write, path::Path, process::Command};
 
 mod biome;
 mod block;
@@ -42,6 +42,7 @@ pub fn main() {
     if !path.exists() {
         let _ = fs::create_dir(OUT_DIR);
     }
+    #[allow(clippy::type_complexity)]
     let build_functions: Vec<(fn() -> TokenStream, &str)> = vec![
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
@@ -69,17 +70,18 @@ pub fn main() {
         (noise_router::build, "noise_router.rs"),
         (
             flower_pot_transformations::build,
-            "flower_pot_transformations.rs"),
+            "flower_pot_transformations.rs",
+        ),
         (
             composter_increase_chance::build,
-            "composter_increase_chance.rs"),
+            "composter_increase_chance.rs",
+        ),
         (recipes::build, "recipes.rs"),
         (enchantments::build, "enchantment.rs"),
         (fuels::build, "fuels.rs"),
     ];
 
-    build_functions.par_iter()
-    .for_each(|(build_fn, file)| {
+    build_functions.par_iter().for_each(|(build_fn, file)| {
         write_generated_file(build_fn(), file);
     });
 }
