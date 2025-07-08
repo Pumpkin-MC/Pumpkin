@@ -90,6 +90,7 @@ use crate::block::blocks::plant::nether_wart::NetherWartBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
+use crate::block::blocks::redstone::dropper::DropperBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::loot::LootContextParameters;
 use crate::block::registry::BlockRegistry;
@@ -201,6 +202,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ComparatorBlock);
     manager.register(TargetBlock);
     manager.register(BarrelBlock);
+    manager.register(DropperBlock);
 
     // Rails
     manager.register(RailBlock);

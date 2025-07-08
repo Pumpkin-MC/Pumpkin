@@ -203,7 +203,7 @@ impl World {
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
-            worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 29_999_984.0, 0, 0, 0)),
+            worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 30_000_000.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
             dimension_type,
             weather: Mutex::new(Weather::new()),
@@ -1998,7 +1998,19 @@ impl World {
         self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, false))
             .await;
     }
-
+    #[must_use]
+    pub fn is_valid(dest: Vector3<f64>) -> bool {
+        Self::is_valid_horizontally(dest) && Self::is_valid_vertically(dest.y)
+    }
+    #[must_use]
+    pub fn is_valid_horizontally(dest: Vector3<f64>) -> bool {
+        (-30_000_000.0..=30_000_000.0).contains(&dest.x)
+            && (-30_000_000.0..=30_000_000.0).contains(&dest.z)
+    }
+    #[must_use]
+    pub fn is_valid_vertically(y: f64) -> bool {
+        (-20_000_000.0..=20_000_000.0).contains(&y)
+    }
     /// Gets a `Block` from the block registry. Returns `Block::AIR` if the block was not found.
     pub async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
         let id = self.get_block_state_id(position).await;
