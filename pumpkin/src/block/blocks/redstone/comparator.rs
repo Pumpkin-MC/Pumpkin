@@ -12,9 +12,7 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{
-    BlockStateId,
-    block::entities::{BlockEntity, comparator::ComparatorBlockEntity, transform_block_entity},
-    chunk::TickPriority,
+    BlockStateId, block::entities::comparator::ComparatorBlockEntity, chunk::TickPriority,
     world::BlockFlags,
 };
 
@@ -145,8 +143,10 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
     async fn get_output_level(&self, world: &World, pos: BlockPos) -> u8 {
         if let Some(blockentity) = world.get_block_entity(&pos).await {
             if blockentity.resource_location() == ComparatorBlockEntity::ID {
-                let comparator =
-                    transform_block_entity::<ComparatorBlockEntity>(blockentity).unwrap();
+                let comparator = blockentity
+                    .as_any()
+                    .downcast_ref::<ComparatorBlockEntity>()
+                    .unwrap();
                 return comparator.output_signal.load(Ordering::Relaxed);
             }
         }
@@ -341,13 +341,14 @@ impl ComparatorBlock {
         let mut now_level = 0;
         if let Some(blockentity) = world.get_block_entity(&pos).await {
             if blockentity.resource_location() == ComparatorBlockEntity::ID {
-                let comparator =
-                    transform_block_entity::<ComparatorBlockEntity>(blockentity).unwrap();
-                now_level = comparator.output_signal.load(Ordering::Relaxed) as i32;
+                let comparator = blockentity
+                    .as_any()
+                    .downcast_ref::<ComparatorBlockEntity>()
+                    .unwrap();
+                now_level = i32::from(comparator.output_signal.load(Ordering::Relaxed));
                 comparator
                     .output_signal
                     .store(future_level as u8, Ordering::Relaxed);
-                world.add_block_entity(comparator).await;
             }
         }
         let mut props = ComparatorLikeProperties::from_state_id(state.id, block);
