@@ -44,6 +44,7 @@ use std::sync::{
 use tokio::sync::{Mutex, RwLock};
 
 pub mod ai;
+pub mod decoration;
 pub mod effect;
 pub mod experience_orb;
 pub mod hunger;
@@ -202,6 +203,9 @@ pub struct Entity {
     pub custom_name: Option<TextComponent>,
     /// Indicates whether the entity's custom name is visible
     pub custom_name_visible: bool,
+
+    /// The data send in the Entity Spawn packet
+    pub data: AtomicI32,
 }
 
 impl Entity {
@@ -249,6 +253,7 @@ impl Entity {
             bounding_box_size: AtomicCell::new(bounding_box_size),
             invulnerable: AtomicBool::new(invulnerable),
             damage_immunities: Vec::new(),
+            data: AtomicI32::new(0),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
             portal_cooldown: AtomicU32::new(0),
@@ -469,7 +474,7 @@ impl Entity {
             self.pitch.load(),
             self.yaw.load(),
             self.head_yaw.load(), // todo: head_yaw and yaw are swapped, find out why
-            0.into(),
+            self.data.load(Relaxed).into(),
             entity_vel,
         )
     }

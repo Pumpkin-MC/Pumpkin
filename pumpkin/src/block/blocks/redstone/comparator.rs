@@ -24,7 +24,7 @@ use crate::{
             BrokenArgs, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
             GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
             OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-            PlacedArgs, PlayerPlacedArgs, PumpkinBlock, UseWithItemArgs,
+            PlacedArgs, PlayerPlacedArgs, PumpkinBlock,
         },
         registry::BlockActionResult,
     },
@@ -42,19 +42,13 @@ impl PumpkinBlock for ComparatorBlock {
         RedstoneGateBlock::on_place(self, args.player, args.block).await
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position).await;
         let props = ComparatorLikeProperties::from_state_id(state.id, args.block);
         self.on_use(props, args.world, *args.position, args.block)
             .await;
-    }
 
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let state = args.world.get_block_state(args.position).await;
-        let props = ComparatorLikeProperties::from_state_id(state.id, args.block);
-        self.on_use(props, args.world, *args.position, args.block)
-            .await;
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 
     async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
