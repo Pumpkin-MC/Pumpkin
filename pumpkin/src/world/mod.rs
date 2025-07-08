@@ -513,11 +513,11 @@ impl World {
     }
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
-        println!("Ticking world");
+        log::debug!("Ticking world");
         self.flush_block_updates().await;
 
         // tick block entities
-        // TODO: fix dead lock
+        //TODO: Locks all chunks so is super slow
         //self.level.tick_block_entities(self.clone()).await;
         self.flush_synced_block_events().await;
 
@@ -546,6 +546,7 @@ impl World {
         drop(weather);
 
         self.tick_scheduled_block_ticks().await;
+        //TODO: Locks all chunks so is super slow
         //self.perform_random_ticks().await;
 
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
@@ -1805,8 +1806,8 @@ impl World {
             .insert(*position, block_state_id);
         drop(chunk);
 
-        let old_block = Block::from_state_id(replaced_block_state_id).unwrap();
-        let new_block = Block::from_state_id(block_state_id).unwrap();
+        let old_block = Block::from_state_id(replaced_block_state_id);
+        let new_block = Block::from_state_id(block_state_id);
 
         let block_moved = flags.contains(BlockFlags::MOVED);
 
@@ -1869,7 +1870,7 @@ impl World {
                     .prepare(
                         self,
                         position,
-                        Block::from_state_id(replaced_block_state_id).unwrap(),
+                        Block::from_state_id(replaced_block_state_id),
                         replaced_block_state_id,
                         new_flags,
                     )
@@ -1878,7 +1879,7 @@ impl World {
                     .update_neighbors(
                         self,
                         position,
-                        Block::from_state_id(block_state_id).unwrap(),
+                        Block::from_state_id(block_state_id),
                         new_flags,
                     )
                     .await;
@@ -1886,7 +1887,7 @@ impl World {
                     .prepare(
                         self,
                         position,
-                        Block::from_state_id(block_state_id).unwrap(),
+                        Block::from_state_id(block_state_id),
                         block_state_id,
                         new_flags,
                     )
@@ -1958,7 +1959,7 @@ impl World {
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
 
-            if Block::from_state_id(broken_state_id) != Some(&Block::FIRE) {
+            if Block::from_state_id(broken_state_id) != &Block::FIRE {
                 let particles_packet = CWorldEvent::new(
                     WorldEvent::BlockBroken as i32,
                     *position,
@@ -1976,7 +1977,7 @@ impl World {
 
             if !flags.contains(BlockFlags::SKIP_DROPS) {
                 let params = LootContextParameters {
-                    block_state: get_state_by_state_id(broken_state_id),
+                    block_state: Some(get_state_by_state_id(broken_state_id)),
                     ..Default::default()
                 };
                 block::drop_loot(self, broken_block, position, true, params).await;
@@ -2017,7 +2018,7 @@ impl World {
     /// Gets a `Block` from the block registry. Returns `Block::AIR` if the block was not found.
     pub async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
         let id = self.get_block_state_id(position).await;
-        get_block_by_state_id(id).unwrap_or(&Block::AIR)
+        get_block_by_state_id(id)
     }
 
     pub async fn get_fluid(&self, position: &BlockPos) -> pumpkin_data::fluid::Fluid {
@@ -2026,7 +2027,7 @@ impl World {
         if let Ok(fluid) = fluid {
             return fluid;
         }
-        let block = get_block_by_state_id(id).unwrap_or(&Block::AIR);
+        let block = get_block_by_state_id(id);
         block
             .properties(id)
             .and_then(|props| {
@@ -2052,7 +2053,7 @@ impl World {
     /// Gets the `BlockState` from the block registry. Returns Air if the block state was not found.
     pub async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState {
         let id = self.get_block_state_id(position).await;
-        get_state_by_state_id(id).unwrap_or(Block::AIR.default_state)
+        get_state_by_state_id(id)
     }
 
     /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
@@ -2064,7 +2065,7 @@ impl World {
         &'static pumpkin_data::BlockState,
     ) {
         let id = self.get_block_state_id(position).await;
-        get_block_and_state_by_state_id(id).unwrap_or((&Block::AIR, Block::AIR.default_state))
+        get_block_and_state_by_state_id(id)
     }
 
     /// Updates neighboring blocks of a block
@@ -2160,7 +2161,7 @@ impl World {
 
         if new_state_id != block_state.id {
             let flags = flags & !BlockFlags::SKIP_DROPS;
-            if get_state_by_state_id(new_state_id).is_some_and(pumpkin_data::BlockState::is_air) {
+            if get_state_by_state_id(new_state_id).is_air() {
                 self.break_block(block_pos, None, flags).await;
             } else {
                 self.set_block_state(block_pos, new_state_id, flags).await;
@@ -2457,6 +2458,6 @@ impl BlockAccessor for World {
         &'static pumpkin_data::BlockState,
     ) {
         let id = self.get_block_state(position).await.id;
-        get_block_and_state_by_state_id(id).unwrap_or((&Block::AIR, Block::AIR.default_state))
+        get_block_and_state_by_state_id(id)
     }
 }

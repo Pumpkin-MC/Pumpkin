@@ -374,7 +374,7 @@ impl BlockPalette {
     pub fn non_air_block_count(&self) -> u16 {
         match self {
             Self::Homogeneous(registry_id) => {
-                if !get_state_by_state_id(*registry_id).unwrap().is_air() {
+                if !get_state_by_state_id(*registry_id).is_air() {
                     Self::VOLUME as u16
                 } else {
                     0
@@ -384,7 +384,7 @@ impl BlockPalette {
                 .counts
                 .iter()
                 .map(|(registry_id, count)| {
-                    if !get_state_by_state_id(*registry_id).unwrap().is_air() {
+                    if !get_state_by_state_id(*registry_id).is_air() {
                         *count
                     } else {
                         0
@@ -425,7 +425,7 @@ impl BlockPalette {
     }
 
     fn block_state_id_to_palette_entry(registry_id: u16) -> BlockStateCodec {
-        let block = Block::from_state_id(registry_id).unwrap();
+        let block = Block::from_state_id(registry_id);
 
         BlockStateCodec {
             name: block,

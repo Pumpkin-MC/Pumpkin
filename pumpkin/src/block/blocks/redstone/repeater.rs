@@ -142,16 +142,14 @@ impl PumpkinBlock for RepeaterBlock {
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
-        if let Some(state) = get_state_by_state_id(args.state_id) {
-            RedstoneGateBlock::update_target(
-                self,
-                args.world,
-                *args.position,
-                state.id,
-                args.block,
-            )
-            .await;
-        }
+        RedstoneGateBlock::update_target(
+            self,
+            args.world,
+            *args.position,
+            get_state_by_state_id(args.state_id).id,
+            args.block,
+        )
+        .await;
     }
 
     async fn get_state_for_neighbor_update(
@@ -159,17 +157,15 @@ impl PumpkinBlock for RepeaterBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         if args.direction == BlockDirection::Down {
-            if let Some(neighbor_state) = get_state_by_state_id(args.neighbor_state_id) {
-                if !RedstoneGateBlock::can_place_above(
-                    self,
-                    args.world,
-                    *args.neighbor_position,
-                    neighbor_state,
-                )
-                .await
-                {
-                    return Block::AIR.default_state.id;
-                }
+            if !RedstoneGateBlock::can_place_above(
+                self,
+                args.world,
+                *args.neighbor_position,
+                get_state_by_state_id(args.neighbor_state_id),
+            )
+            .await
+            {
+                return Block::AIR.default_state.id;
             }
         }
         let mut props = RepeaterProperties::from_state_id(args.state_id, args.block);

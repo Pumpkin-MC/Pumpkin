@@ -279,7 +279,7 @@ impl ChunkData {
                         priority: tick.priority as i32,
                         target_block: format!(
                             "minecraft:{}",
-                            Block::from_id(tick.target_block_id).unwrap().name
+                            Block::from_id(tick.target_block_id).name
                         ),
                     })
                     .collect()
@@ -295,7 +295,7 @@ impl ChunkData {
                         priority: tick.priority as i32,
                         target_block: format!(
                             "minecraft:{}",
-                            Block::from_id(tick.target_block_id).unwrap().name
+                            Block::from_id(tick.target_block_id).name
                         ),
                     })
                     .collect()

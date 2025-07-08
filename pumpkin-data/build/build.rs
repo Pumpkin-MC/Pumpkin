@@ -110,8 +110,4 @@ pub fn write_generated_file(content: TokenStream, out_file: &str) {
     // Try to format the output for debugging purposes.
     // Doesn't matter if rustfmt is unavailable.
     let _ = Command::new("rustfmt").arg(&path).output();
-    // Try to auto optimize using clippy.
-    let _ = Command::new("cargo clippy --fix --allow-dirty")
-        .arg(&path)
-        .output();
 }

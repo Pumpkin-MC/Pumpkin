@@ -1887,9 +1887,7 @@ impl JavaClientPlatform {
             .await;
 
         // Check if there is a player in the way of the block being placed
-        let shapes = get_state_by_state_id(new_state)
-            .unwrap()
-            .get_block_collision_shapes();
+        let shapes = get_state_by_state_id(new_state).get_block_collision_shapes();
         for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {

@@ -23,7 +23,7 @@ impl SimpleBlockFeature {
         pos: BlockPos,
     ) -> bool {
         let state = self.to_place.get(random, pos);
-        let block = get_block_by_state_id(state.id).unwrap();
+        let block = get_block_by_state_id(state.id);
         let block_accessor: &dyn BlockAccessor = chunk;
         if !futures::executor::block_on(async move {
             block_registry

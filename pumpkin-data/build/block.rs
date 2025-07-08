@@ -906,21 +906,18 @@ pub(crate) fn build() -> TokenStream {
         }
 
         pub fn get_state_by_state_id(id: u16) -> &'static BlockState {
-            let state: &BlockState = Block::from_state_id(id).states.iter().find(|state| state.id == id)?;
+            let state: &BlockState = Block::from_state_id(id).states.iter().find(|state| state.id == id).unwrap();
             state
         }
 
-        pub fn get_block_by_state_id(id: u16) -> Option<&'static Block> {
+        pub fn get_block_by_state_id(id: u16) -> &'static Block {
             Block::from_state_id(id)
         }
 
-        pub fn get_block_and_state_by_state_id(id: u16) -> Option<(&'static Block, &'static BlockState)> {
-            if let Some(block) = Block::from_state_id(id) {
-                let state: &BlockState = block.states.iter().find(|state| state.id == id)?;
-                Some((block, state))
-            } else {
-                None
-            }
+        pub fn get_block_and_state_by_state_id(id: u16) -> (&'static Block, &'static BlockState) {
+            let block = Block::from_state_id(id);
+            let state: &BlockState = block.states.iter().find(|state| state.id == id).unwrap();
+            (block, state)
         }
 
         pub fn get_block_by_item(item_id: u16) -> Option<&'static Block> {
@@ -933,9 +930,8 @@ pub(crate) fn build() -> TokenStream {
 
         pub fn blocks_movement(block_state: &BlockState) -> bool {
             if block_state.is_solid() {
-                if let Some(block) = get_block_by_state_id(block_state.id) {
-                    return block != &Block::COBWEB && block != &Block::BAMBOO_SAPLING;
-                }
+                let block = get_block_by_state_id(block_state.id);
+                return block != &Block::COBWEB && block != &Block::BAMBOO_SAPLING;
             }
             false
         }

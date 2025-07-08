@@ -188,7 +188,7 @@ impl PumpkinBlock for PistonBlock {
             .add_block_entity(Arc::new(PistonBlockEntity {
                 position: *pos,
                 facing: dir,
-                pushed_block_state: get_state_by_state_id(props.to_state_id(block)).unwrap(),
+                pushed_block_state: get_state_by_state_id(props.to_state_id(block)),
                 current_progress: 0.0.into(),
                 last_progress: 0.0.into(),
                 extending: false,
@@ -418,8 +418,7 @@ async fn move_piston(
             .add_block_entity(Arc::new(PistonBlockEntity {
                 position: extended_pos,
                 facing: dir.to_facing().to_block_direction(),
-                pushed_block_state: get_state_by_state_id(props.to_state_id(&Block::PISTON_HEAD))
-                    .unwrap(),
+                pushed_block_state: get_state_by_state_id(props.to_state_id(&Block::PISTON_HEAD)),
                 current_progress: 0.0.into(),
                 last_progress: 0.0.into(),
                 extending: true,
@@ -445,7 +444,7 @@ async fn move_piston(
             .prepare(
                 world,
                 pos,
-                get_block_by_state_id(state.id).unwrap(),
+                get_block_by_state_id(state.id),
                 state.id,
                 BlockFlags::NOTIFY_LISTENERS,
             )
@@ -469,7 +468,7 @@ async fn move_piston(
                 .block_registry
                 .on_state_replaced(
                     world,
-                    get_block_by_state_id(block_state.id).unwrap(),
+                    get_block_by_state_id(block_state.id),
                     &broken_block_pos,
                     block_state.id, // ?
                     false,
@@ -480,7 +479,7 @@ async fn move_piston(
                 .prepare(
                     world,
                     &broken_block_pos,
-                    get_block_by_state_id(block_state.id).unwrap(),
+                    get_block_by_state_id(block_state.id),
                     block_state.id,
                     BlockFlags::NOTIFY_LISTENERS,
                 )

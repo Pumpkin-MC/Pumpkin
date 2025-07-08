@@ -43,7 +43,7 @@ where
 }
 
 impl BlockStateCodec {
-    pub fn get_state(&self) -> Option<&'static BlockState> {
+    pub fn get_state(&self) -> &'static BlockState {
         let state_id = self.get_state_id();
         get_state_by_state_id(state_id)
     }
@@ -75,7 +75,7 @@ mod test {
     #[test]
     fn test_proper_network_bits_per_entry() {
         let id_to_test = 1 << BLOCK_NETWORK_MAX_BITS;
-        if Block::from_state_id(id_to_test).is_some() {
+        if Block::from_state_id(id_to_test) != &Block::AIR {
             panic!("We need to update our constants!");
         }
     }
