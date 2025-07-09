@@ -637,7 +637,7 @@ impl Server {
     pub async fn tick_worlds(self: &Arc<Self>) {
         let worlds = self.worlds.read().await.clone();
         let mut handles = Vec::with_capacity(worlds.len());
-        for world in worlds.iter() {
+        for world in &worlds {
             let world = world.clone();
             let server = self.clone();
             handles.push(tokio::spawn(async move {
