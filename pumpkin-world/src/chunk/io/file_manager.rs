@@ -152,7 +152,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
 #[async_trait]
 impl<P, S> FileIO for ChunkFileManager<S>
 where
-    P: PathFromLevelFolder + Send + Sync + Sized + Dirtiable + 'static + Clone,
+    P: PathFromLevelFolder + Send + Sync + Sized + Dirtiable + 'static,
     S: ChunkSerializer<Data = P, WriteBackend = PathBuf>,
 {
     type Data = Arc<RwLock<S::Data>>;
@@ -307,10 +307,7 @@ where
 
                         // We only need to update the chunk if it is dirty
                         if chunk_is_dirty {
-                            let chunk_clone = chunk.clone();
-                            //TODO: Look into if the tradeoff of cloning the chunk is worth it
-                            drop(chunk);
-                            chunk_serializer.write().await.update_chunk(&chunk_clone).await?;
+                            chunk_serializer.write().await.update_chunk(&*chunk).await?;
                         }
                         Ok::<(), ChunkWritingError>(())
                     }

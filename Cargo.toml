@@ -16,9 +16,6 @@ members = [
 [workspace.package]
 version = "0.1.0-dev+1.21.7"
 edition = "2024"
-
-
-[profile.dev]
 #opt-level = 0
 
 [profile.release]
@@ -55,7 +52,6 @@ rayon = "1.10"
 crossbeam = "0.8"
 
 uuid = { version = "1.17", features = ["serde", "v3", "v4"] }
-derive_more = { version = "2.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

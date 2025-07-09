@@ -544,11 +544,13 @@ impl World {
         drop(weather);
 
         let chunk_start = tokio::time::Instant::now();
+        log::debug!("Ticking chunks");
         self.tick_chunks().await;
         let elapsed = chunk_start.elapsed();
 
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
 
+        log::debug!("Ticking players");
         // player ticks
         for player in players_to_tick {
             player.tick(server).await;
@@ -556,6 +558,7 @@ impl World {
 
         let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
 
+        log::debug!("Ticking entities");
         // Entity ticks
         for entity in entities_to_tick {
             entity.tick(entity.clone(), server).await;
@@ -1782,7 +1785,11 @@ impl World {
     ) -> BlockStateId {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.level.get_chunk(chunk_coordinate).await;
-        let mut chunk = chunk.write().await;
+        let mut chunk =
+            match tokio::time::timeout(std::time::Duration::from_secs(1), chunk.write()).await {
+                Ok(lock) => lock,
+                Err(_) => panic!("Timed out while waiting to acquire chunk write lock"),
+            };
         let Some(replaced_block_state_id) = chunk.section.get_block_absolute_y(
             relative.x as usize,
             relative.y,
