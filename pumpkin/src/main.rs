@@ -51,9 +51,10 @@ use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
 use crate::server::CURRENT_MC_VERSION;
+use log::Log;
 use log4rs::config::Deserializers;
 use pumpkin::logging::{PumpkinLogWriter, register_rustyline_console_appender};
-use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
+use pumpkin::{PumpkinServer, READLINE, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
     text::{TextComponent, color::NamedColor},
@@ -124,11 +125,10 @@ async fn main() {
     } else {
         (None, None)
     };
-    let readline = Arc::new(Mutex::new(rl.0));
+    *READLINE.lock().unwrap() = rl.0;
     let mut deserializers = Deserializers::default();
     register_rustyline_console_appender(
         &mut deserializers,
-        readline.clone(),
         rl.1.map_or(
             Arc::new(Mutex::new(PumpkinLogWriter::Raw(io::stdout()))),
             |writer| Arc::new(Mutex::new(PumpkinLogWriter::Tty(writer))),
@@ -137,6 +137,7 @@ async fn main() {
     if !std::fs::exists("config/log4rs.yaml").unwrap() {
         log::warn!("No log4rs configuration file found, using default configuration.");
         // Create a default configuration file
+        std::fs::create_dir_all("config").expect("Failed to create config directory");
         std::fs::write("config/log4rs.yaml", include_str!("../log4rs.yaml"))
             .expect("Failed to create default log4rs configuration file");
     }
@@ -144,6 +145,12 @@ async fn main() {
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        if let Some(mut lock) = READLINE.try_lock().ok() {
+            if let Some(rl) = lock.take() {
+                // Reset terminal state before panicking
+                drop(rl);
+            }
+        }
         default_panic(info);
         // TODO: Gracefully exit?
         // We need to abide by the panic rules here.
@@ -180,7 +187,7 @@ async fn main() {
             .expect("Unable to setup signal handlers");
     });
 
-    let pumpkin_server = PumpkinServer::new(readline).await;
+    let pumpkin_server = PumpkinServer::new().await;
     pumpkin_server.init_plugins().await;
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());
@@ -208,6 +215,12 @@ async fn main() {
 
     pumpkin_server.start().await;
     log::info!("The server has stopped.");
+
+    log::logger().flush();
+    if let Some(rl) = READLINE.lock().ok().and_then(|mut lock| lock.take()) {
+        // Drop rl to reset terminal state
+        drop(rl);
+    }
 }
 
 fn handle_interrupt() {

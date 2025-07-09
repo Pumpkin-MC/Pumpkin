@@ -1,3 +1,4 @@
+use crate::READLINE;
 use log4rs::append::Append;
 use log4rs::config::Deserializers;
 use log4rs::encode::pattern::PatternEncoder;
@@ -170,11 +171,13 @@ impl log4rs::config::Deserialize for RustylineConsoleAppenderDeserializer {
 
 pub fn register_rustyline_console_appender(
     deserializers: &mut Deserializers,
-    readline: Arc<Mutex<Option<Readline>>>,
     writer: Arc<Mutex<PumpkinLogWriter>>,
 ) {
     deserializers.insert(
         "rustyline_console",
-        RustylineConsoleAppenderDeserializer { readline, writer },
+        RustylineConsoleAppenderDeserializer {
+            readline: READLINE.clone(),
+            writer,
+        },
     );
 }

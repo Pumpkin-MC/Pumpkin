@@ -61,6 +61,9 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
+pub static READLINE: LazyLock<Arc<std::sync::Mutex<Option<Readline>>>> =
+    LazyLock::new(|| Arc::new(std::sync::Mutex::new(None)));
+
 #[macro_export]
 macro_rules! init_log {
     () => {
@@ -86,7 +89,7 @@ pub struct PumpkinServer {
 }
 
 impl PumpkinServer {
-    pub async fn new(readline: Arc<std::sync::Mutex<Option<Readline>>>) -> Self {
+    pub async fn new() -> Self {
         let server = Arc::new(Server::new().await);
 
         for world in &*server.worlds.read().await {
@@ -98,8 +101,8 @@ impl PumpkinServer {
         let mut ticker = Ticker::new();
 
         if advanced_config().commands.use_console {
-            if let Some(rl) = readline.lock().unwrap().take() {
-                setup_console(rl, server.clone());
+            if let Some(rl) = READLINE.clone().lock().unwrap().take() {
+                setup_console(READLINE.clone(), rl, server.clone());
             } else {
                 if advanced_config().commands.use_tty {
                     log::warn!(
@@ -357,9 +360,16 @@ async fn setup_stdin_console(server: Arc<Server>) {
                 .expect("Failed to send command to server");
         }
     });
-    tokio::spawn(async move {
+    server.clone().spawn_task(async move {
         while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
-            if let Some(command) = rx.recv().await {
+            let t1 = rx.recv();
+            let t2 = STOP_INTERRUPT.notified();
+
+            let result = select! {
+                line = t1 => line,
+                () = t2 => None,
+            };
+            if let Some(command) = result {
                 send_cancellable! {{
                     ServerCommandEvent::new(command.clone());
 
@@ -375,7 +385,11 @@ async fn setup_stdin_console(server: Arc<Server>) {
     });
 }
 
-fn setup_console(rl: Readline, server: Arc<Server>) {
+fn setup_console(
+    readline: Arc<std::sync::Mutex<Option<Readline>>>,
+    rl: Readline,
+    server: Arc<Server>,
+) {
     // This needs to be async, or it will hog a thread.
     server.clone().spawn_task(async move {
         let mut rl = rl;
@@ -418,6 +432,10 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
         }
 
         log::debug!("Stopped console commands task");
+        // Send the readline back to the mutex so it will not be dropped abd make the terminal unusable.
+        let _ = readline.lock().map(|mut lock| {
+            lock.replace(rl);
+        });
     });
 }
 

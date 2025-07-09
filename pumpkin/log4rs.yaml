@@ -2,12 +2,12 @@ appenders:
   console:
     kind: rustyline_console
     encoder:
-      pattern: "{d} [{l}] {m}{n}"
+      pattern: "{d(%Y-%m-%d %H:%M:%S)} [{h({l})}] {m}{n}"
   file:
     kind: file
     path: "logs/latest.log"
     encoder:
-      pattern: "{d} - {m}{n}"
+      pattern: "{d(%Y-%m-%d %H:%M:%S)} [{h({l})}] {m}{n}"
 root:
   level: debug
   appenders:
