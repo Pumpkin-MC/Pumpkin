@@ -609,7 +609,7 @@ impl Server {
 
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
-    pub async fn tick(&self) {
+    pub async fn tick(self: &Arc<Self>) {
         // Always run player and network ticking, even when game is frozen
         self.tick_players_and_network().await;
 
@@ -634,9 +634,19 @@ impl Server {
         }
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
-    pub async fn tick_worlds(&self) {
-        for world in self.worlds.read().await.iter() {
-            world.tick(self).await;
+    pub async fn tick_worlds(self: &Arc<Self>) {
+        let worlds = self.worlds.read().await.clone();
+        let mut handles = Vec::with_capacity(worlds.len());
+        for world in worlds.iter() {
+            let world = world.clone();
+            let server = self.clone();
+            handles.push(tokio::spawn(async move {
+                world.tick(&server).await;
+            }));
+        }
+        for handle in handles {
+            // Wait for all world ticks to complete
+            let _ = handle.await;
         }
 
         // Global periodic tasks

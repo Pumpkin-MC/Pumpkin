@@ -293,7 +293,7 @@ where
                 }?;
 
                 for chunk_lock in chunk_locks {
-                    let mut chunk = chunk_lock.write().await;
+                    let mut chunk = chunk_lock.try_write().unwrap();
                     let chunk_is_dirty = chunk.is_dirty();
                     // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
                     // updating what we will write here

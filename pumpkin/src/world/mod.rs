@@ -98,7 +98,7 @@ use pumpkin_util::{
 };
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable, item::ItemStack,
+    chunk::io::Dirtiable, item::ItemStack, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{chunk::TickPriority, level::Level};
@@ -513,12 +513,10 @@ impl World {
     }
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
-        log::debug!("Ticking world");
+        let start = tokio::time::Instant::now();
         self.flush_block_updates().await;
 
         // tick block entities
-        //TODO: Locks all chunks so is super slow
-        //self.level.tick_block_entities(self.clone()).await;
         self.flush_synced_block_events().await;
 
         // world ticks
@@ -545,9 +543,9 @@ impl World {
         drop(level_time);
         drop(weather);
 
-        self.tick_scheduled_block_ticks().await;
-        //TODO: Locks all chunks so is super slow
-        //self.perform_random_ticks().await;
+        let chunk_start = tokio::time::Instant::now();
+        self.tick_chunks().await;
+        let elapsed = chunk_start.elapsed();
 
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
 
@@ -576,6 +574,13 @@ impl World {
                 }
             }
         }
+
+        log::debug!(
+            "Ticking world took {:?}, loaded chunks: {}, chunk tick took {:?}",
+            start.elapsed(),
+            self.level.loaded_chunk_count(),
+            elapsed
+        );
     }
 
     pub async fn flush_block_updates(&self) {
@@ -608,15 +613,10 @@ impl World {
         }
     }
 
-    pub async fn tick_scheduled_block_ticks(self: &Arc<Self>) {
-        let blocks_to_tick = self.level.get_and_tick_block_ticks().await;
-        let fluids_to_tick = self.level.get_and_tick_fluid_ticks().await;
-
-        while let Some(scheduled_tick) = { blocks_to_tick.lock().await.pop_front() } {
+    pub async fn tick_chunks(self: &Arc<Self>) {
+        let tick_data = self.level.get_tick_data().await;
+        for scheduled_tick in tick_data.block_ticks {
             let block = self.get_block(&scheduled_tick.block_pos).await;
-            if scheduled_tick.target_block_id != block.id {
-                continue;
-            }
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
                     .on_scheduled_tick(OnScheduledTickArgs {
@@ -627,8 +627,7 @@ impl World {
                     .await;
             }
         }
-
-        for scheduled_tick in fluids_to_tick {
+        for scheduled_tick in tick_data.fluid_ticks {
             let fluid = self.get_fluid(&scheduled_tick.block_pos).await;
             if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
                 pumpkin_fluid
@@ -636,10 +635,7 @@ impl World {
                     .await;
             }
         }
-    }
-
-    pub async fn perform_random_ticks(self: &Arc<Self>) {
-        for scheduled_tick in self.level.get_random_ticks().await {
+        for scheduled_tick in tick_data.random_ticks {
             let block = self.get_block(&scheduled_tick.block_pos).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
@@ -650,6 +646,11 @@ impl World {
                     })
                     .await;
             }
+        }
+
+        for block_entity in tick_data.block_entities {
+            let world: Arc<dyn SimpleWorld> = self.clone();
+            block_entity.tick(&world).await;
         }
     }
 
@@ -1905,21 +1906,30 @@ impl World {
         delay: u16,
         priority: TickPriority,
     ) {
-        self.level
-            .schedule_block_tick(block.id, block_pos, delay, priority)
+        let chunk = self
+            .level
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
             .await;
+        let mut chunk = chunk.write().await;
+        chunk.schedule_block_tick(block.id, block_pos, delay, priority);
     }
 
     pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: BlockPos, delay: u16) {
-        self.level
-            .schedule_fluid_tick(block_id, &block_pos, delay)
+        let chunk = self
+            .level
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
             .await;
+        let mut chunk = chunk.write().await;
+        chunk.schedule_fluid_tick(block_id, &block_pos, delay);
     }
 
     pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block: &Block) -> bool {
-        self.level
-            .is_block_tick_scheduled(block_pos, block.id)
-            .await
+        let chunk = self
+            .level
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
+        let chunk = chunk.read().await;
+        chunk.is_block_tick_scheduled(block_pos, block.id)
     }
 
     pub async fn break_block(
