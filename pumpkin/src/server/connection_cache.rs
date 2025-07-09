@@ -11,7 +11,6 @@ use pumpkin_protocol::{
 use pumpkin_world::CURRENT_MC_VERSION;
 use std::{fs::File, io::Read, path::Path};
 
-
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
 
 fn load_icon_from_file<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn error::Error>> {
