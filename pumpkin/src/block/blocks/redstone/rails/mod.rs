@@ -271,6 +271,20 @@ impl RailProperties {
             Self::StraightRail(props) => props.shape = shape,
         }
     }
+
+    fn is_powered(&self) -> bool {
+        match self {
+            Self::Rail(_) => false,
+            Self::StraightRail(props) => props.powered,
+        }
+    }
+
+    fn set_powered(&mut self, powered: bool) {
+        match self {
+            Self::Rail(_) => {}
+            Self::StraightRail(props) => props.powered = powered,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]

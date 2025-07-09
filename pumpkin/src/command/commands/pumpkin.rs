@@ -6,12 +6,11 @@ use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::CURRENT_MC_VERSION;
 use std::borrow::Cow;
 
-use crate::{
-    GIT_VERSION,
-    command::{
-        CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
-    },
+
+use crate::command::{
+    CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
 };
+use crate::server::CURRENT_MC_VERSION;
 
 const NAMES: [&str; 2] = ["pumpkin", "version"];
 
@@ -32,12 +31,12 @@ impl CommandExecutor for Executor {
     ) -> Result<(), CommandError> {
         sender
             .send_message(
-                TextComponent::text(format!("Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION})\n"))
+                TextComponent::text(format!("Pumpkin {CARGO_PKG_VERSION}\n"))
                     .hover_event(HoverEvent::show_text(TextComponent::text(Cow::from(
                         "Click to Copy Version",
                     ))))
                     .click_event(ClickEvent::CopyToClipboard {
-                        value: Cow::from(format!("Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION})")),
+                        value: Cow::from(format!("Pumpkin {CARGO_PKG_VERSION}")),
                     })
                     .color_named(NamedColor::Green)
                     .add_child(

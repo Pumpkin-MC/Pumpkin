@@ -34,7 +34,7 @@ num-traits = "0.2"
 # Compression
 flate2 = "1.1"
 lz4-java-wrc = "0.2.0"
-zstd = "0.13.3"
+zstd = { version = "0.13.3", default-features = false }
 
 itertools = "0.14.0"
 file-guard = "0.2"
