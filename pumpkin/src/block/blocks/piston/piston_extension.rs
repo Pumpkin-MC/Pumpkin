@@ -5,9 +5,9 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::pumpkin_block::BrokenArgs;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::pumpkin_block::PumpkinBlock;
 
-use super::piston::{PistonBlock, PistonProps};
+use super::piston::PistonProps;
 
 pub(crate) type MovingPistonProps = pumpkin_data::block_properties::MovingPistonLikeProperties;
 
