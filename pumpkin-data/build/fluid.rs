@@ -671,7 +671,7 @@ pub(crate) fn build() -> TokenStream {
             fn from_props(props: Vec<(String, String)>, fluid: &Fluid) -> Self where Self: Sized;
         }
 
-        pub fn get_fluid(registry_id: &str) -> Option<Fluid> {
+        pub fn get_fluid(registry_id: &str) -> Option<&'static Fluid> {
            let key = registry_id.strip_prefix("minecraft:").unwrap_or(registry_id);
            Fluid::from_registry_key(key)
         }
