@@ -18,7 +18,7 @@ fn fill_array<T: Clone + quote::ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStre
     let mut raw_id_from_state_id_ordered = vec![quote! { None }; (max_index + 1) as usize];
 
     for (state_id, id_lit) in array {
-        raw_id_from_state_id_ordered[state_id as usize] = quote! { Some(#id_lit) };
+        raw_id_from_state_id_ordered[state_id as usize] = quote! { #id_lit };
     }
 
     raw_id_from_state_id_ordered
@@ -400,6 +400,7 @@ pub struct BlockState {
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
     pub outline_shapes: Vec<u16>,
+    pub has_random_ticks: bool,
     pub opacity: Option<u8>,
     pub block_entity_type: Option<u16>,
 }
@@ -459,6 +460,7 @@ impl BlockState {
             .outline_shapes
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
+        let has_random_ticks = self.has_random_ticks;
         let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
@@ -472,6 +474,7 @@ impl BlockState {
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],
                 outline_shapes: &[#(#outline_shapes),*],
+                has_random_tick: #has_random_ticks,
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
             }
@@ -644,6 +647,7 @@ pub(crate) fn build() -> TokenStream {
     let mut block_from_name = TokenStream::new();
     let mut raw_id_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
+    let mut random_tick_states = Vec::new();
     let mut block_properties_from_state_and_block_id = TokenStream::new();
     let mut block_properties_from_props_and_name = TokenStream::new();
     let mut existing_item_ids: Vec<u16> = Vec::new();
@@ -677,6 +681,14 @@ pub(crate) fn build() -> TokenStream {
     let mut optimized_blocks: Vec<(String, Block)> = Vec::new();
     for block in blocks_assets.blocks.clone() {
         optimized_blocks.push((block.name.clone(), block.clone()));
+
+        // Collect state IDs that have random ticks.
+        for state in &block.states {
+            if state.has_random_ticks {
+                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                random_tick_states.push(state_id);
+            }
+        }
 
         let mut property_collection = HashSet::new();
         let mut property_mapping = Vec::new();
@@ -758,6 +770,10 @@ pub(crate) fn build() -> TokenStream {
         .shapes
         .iter()
         .map(|shape| shape.to_token_stream());
+
+    let random_tick_state_ids = quote! {
+        #(#random_tick_states)|*
+    };
 
     //let unique_states_tokens = unique_states.iter().map(|state| state.to_tokens());
 
@@ -915,6 +931,10 @@ pub(crate) fn build() -> TokenStream {
             Block::from_item_id(item_id)
         }
 
+        pub fn has_random_ticks(state_id: u16) -> bool {
+            matches!(state_id, #random_tick_state_ids)
+        }
+
         pub fn blocks_movement(block_state: &BlockState) -> bool {
             if block_state.is_solid() {
                 if let Some(block) = get_block_by_state_id(block_state.id) {
@@ -933,11 +953,11 @@ pub(crate) fn build() -> TokenStream {
             };
 
             // Many state ids map to single raw block id
-            const RAW_ID_FROM_STATE_ID: [Option<u16>; #max_state_id] = [
+            const RAW_ID_FROM_STATE_ID: [u16; #max_state_id] = [
                 #raw_id_from_state_id
             ];
 
-            const TYPE_FROM_RAW_ID: [Option<&Block>; #max_type_id] = [
+            const TYPE_FROM_RAW_ID: [&Block; #max_type_id] = [
                 #type_from_raw_id_items
             ];
 
@@ -951,7 +971,7 @@ pub(crate) fn build() -> TokenStream {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     None
                 } else {
-                    Self::TYPE_FROM_RAW_ID[id as usize]
+                    Some(Self::TYPE_FROM_RAW_ID[id as usize])
                 }
             }
 
@@ -960,10 +980,7 @@ pub(crate) fn build() -> TokenStream {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     return None;
                 }
-                match Self::RAW_ID_FROM_STATE_ID[id as usize] {
-                    Some(id) => Self::from_id(id),
-                    None => None,
-                }
+                Self::from_id(Self::RAW_ID_FROM_STATE_ID[id as usize])
             }
 
             #[doc = r" Try to parse a block from an item id."]

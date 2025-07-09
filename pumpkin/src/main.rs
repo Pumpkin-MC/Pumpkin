@@ -101,7 +101,6 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
 });
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-const GIT_VERSION: &str = env!("GIT_VERSION");
 
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
@@ -161,7 +160,7 @@ async fn main() {
         .build_global()
         .expect("Rayon thread pool can only be initialized once");
     log::info!(
-        "Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
+        "Starting Pumpkin {CARGO_PKG_VERSION} for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
     );
 
     log::debug!(

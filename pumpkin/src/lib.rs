@@ -36,8 +36,6 @@ pub mod plugin;
 pub mod server;
 pub mod world;
 
-const GIT_VERSION: &str = env!("GIT_VERSION");
-
 #[cfg(feature = "dhat-heap")]
 pub static HEAP_PROFILER: LazyLock<Mutex<Option<dhat::Profiler>>> =
     LazyLock::new(|| Mutex::new(None));
