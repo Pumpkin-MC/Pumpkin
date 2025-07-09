@@ -178,13 +178,6 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .unwrap();
     registry
         .register_permission(Permission::new(
-            "minecraft:command.transfer",
-            "Transfers the player to another server",
-            PermissionDefault::Allow,
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
             "minecraft:command.me",
             "Broadcasts a narrative message about the player",
             PermissionDefault::Allow,
@@ -374,6 +367,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.difficulty",
             "Sets the difficulty of the world",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.transfer",
+            "Transfers the player to another server",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
