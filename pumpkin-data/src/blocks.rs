@@ -34,6 +34,8 @@ impl PartialEq for Block {
     }
 }
 
+impl Eq for Block {}
+
 impl Hash for Block {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);

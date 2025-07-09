@@ -45,8 +45,8 @@ pub enum BlockActionResult {
 
 #[derive(Default)]
 pub struct BlockRegistry {
-    blocks: HashMap<u16, Arc<dyn PumpkinBlock>>,
-    fluids: HashMap<u16, Arc<dyn PumpkinFluid>>,
+    blocks: HashMap<&'static Block, Arc<dyn PumpkinBlock>>,
+    fluids: HashMap<&'static Fluid, Arc<dyn PumpkinFluid>>,
 }
 
 #[async_trait]
@@ -78,7 +78,7 @@ impl BlockRegistry {
         let val = Arc::new(block);
         for i in names {
             self.blocks.insert(
-                block_properties::get_block(i.as_str()).unwrap().id,
+                block_properties::get_block(i.as_str()).unwrap(),
                 val.clone(),
             );
         }
@@ -89,7 +89,7 @@ impl BlockRegistry {
         let val = Arc::new(fluid);
         for i in names {
             self.fluids
-                .insert(fluid::get_fluid(i.as_str()).unwrap().id, val.clone());
+                .insert(fluid::get_fluid(i.as_str()).unwrap(), val.clone());
         }
     }
 
@@ -553,12 +553,12 @@ impl BlockRegistry {
 
     #[must_use]
     pub fn get_pumpkin_block(&self, block: &Block) -> Option<&Arc<dyn PumpkinBlock>> {
-        self.blocks.get(&block.id)
+        self.blocks.get(block)
     }
 
     #[must_use]
     pub fn get_pumpkin_fluid(&self, fluid: &Fluid) -> Option<&Arc<dyn PumpkinFluid>> {
-        self.fluids.get(&fluid.id)
+        self.fluids.get(fluid)
     }
 
     pub async fn emits_redstone_power(
