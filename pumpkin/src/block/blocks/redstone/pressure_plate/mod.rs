@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, chunk::TickPriority, world::BlockFlags};
 
@@ -62,6 +62,11 @@ pub(crate) trait PressurePlate {
                 .schedule_block_tick(block, *pos, self.tick_rate(), TickPriority::Normal)
                 .await;
         }
+    }
+
+    async fn can_pressure_plate_place_at(world: &World, block_pos: &BlockPos) -> bool {
+        let floor = world.get_block_state(&block_pos.down()).await;
+        floor.is_side_solid(BlockDirection::Up)
     }
 
     fn get_redstone_output(&self, block: &Block, state: BlockStateId) -> u8;

@@ -42,7 +42,7 @@ async fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockP
 }
 
 fn can_open_trapdoor(block: &Block) -> bool {
-    if block.id == Block::IRON_TRAPDOOR.id {
+    if block == &Block::IRON_TRAPDOOR {
         return false;
     }
     true
@@ -53,14 +53,14 @@ fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
         if block.is_tagged_with("minecraft:wooden_trapdoors").unwrap() {
             Sound::BlockWoodenTrapdoorOpen
-        } else if block.id == Block::IRON_TRAPDOOR.id {
+        } else if block == &Block::IRON_TRAPDOOR {
             Sound::BlockIronTrapdoorOpen
         } else {
             Sound::BlockCopperTrapdoorOpen
         }
     } else if block.is_tagged_with("minecraft:wooden_trapdoors").unwrap() {
         Sound::BlockWoodenTrapdoorClose
-    } else if block.id == Block::IRON_TRAPDOOR.id {
+    } else if block == &Block::IRON_TRAPDOOR {
         Sound::BlockIronTrapdoorClose
     } else {
         Sound::BlockCopperTrapdoorClose

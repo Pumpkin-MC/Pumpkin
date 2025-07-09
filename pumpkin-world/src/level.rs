@@ -3,8 +3,9 @@ use log::trace;
 use num_cpus;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
-use pumpkin_data::Block;
+use pumpkin_data::{Block, block_properties::has_random_ticks};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
@@ -391,6 +392,73 @@ impl Level {
                 block_entity.1.1.tick(&world).await;
             }
         }
+    }
+
+    pub async fn get_random_ticks(&self) -> Vec<ScheduledTick> {
+        let mut ticks = Vec::with_capacity(self.loaded_chunks.len() * 3 * 16 * 16);
+        let mut rng = SmallRng::from_os_rng();
+
+        let chunk_refs: Vec<_> = self
+            .loaded_chunks
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        for chunk_arc in chunk_refs {
+            let section_data = {
+                let chunk = chunk_arc.read().await;
+
+                let chunk_x_base = chunk.position.x * 16;
+                let chunk_z_base = chunk.position.y * 16;
+
+                let mut section_blocks = Vec::new();
+                for i in 0..chunk.section.sections.len() {
+                    let mut section_block_data = Vec::new();
+
+                    //TODO use game rules to determine how many random ticks to perform
+                    for _ in 0..3 {
+                        let r = rng.random::<u32>();
+                        let x_offset = (r & 0xF) as i32;
+                        let y_offset = ((r >> 4) & 0xF) as i32 - 32;
+                        let z_offset = (r >> 8 & 0xF) as i32;
+
+                        let random_pos = BlockPos::new(
+                            chunk_x_base + x_offset,
+                            i as i32 * 16 + y_offset,
+                            chunk_z_base + z_offset,
+                        );
+
+                        let block_id = chunk
+                            .section
+                            .get_block_absolute_y(
+                                x_offset as usize,
+                                random_pos.0.y,
+                                z_offset as usize,
+                            )
+                            .unwrap_or(Block::AIR.default_state.id);
+
+                        section_block_data.push((random_pos, block_id));
+                    }
+                    section_blocks.push(section_block_data);
+                }
+
+                section_blocks
+            };
+
+            for section_data in section_data {
+                for (random_pos, block_id) in section_data {
+                    if has_random_ticks(block_id) {
+                        ticks.push(ScheduledTick {
+                            block_pos: random_pos,
+                            delay: 0,
+                            priority: TickPriority::Normal,
+                            target_block_id: 0,
+                        });
+                    }
+                }
+            }
+        }
+        ticks
     }
 
     pub async fn clean_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {

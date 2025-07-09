@@ -40,8 +40,6 @@ pub mod plugin;
 pub mod server;
 pub mod world;
 
-const GIT_VERSION: &str = env!("GIT_VERSION");
-
 #[cfg(feature = "dhat-heap")]
 pub static HEAP_PROFILER: LazyLock<Mutex<Option<dhat::Profiler>>> =
     LazyLock::new(|| Mutex::new(None));
@@ -228,9 +226,7 @@ impl PumpkinServer {
         }
 
         if BASIC_CONFIG.allow_chat_reports {
-            let mojang_public_keys = fetch_mojang_public_keys(server.auth_client.as_ref().unwrap())
-                .await
-                .unwrap();
+            let mojang_public_keys = fetch_mojang_public_keys().unwrap();
             *server.mojang_public_keys.lock().await = mojang_public_keys;
         }
 

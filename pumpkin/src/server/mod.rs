@@ -74,8 +74,6 @@ pub struct Server {
     pub cached_registry: Vec<Registry>,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
-    /// Manages authentication with an authentication server, if enabled.
-    pub auth_client: Option<reqwest::Client>,
     /// Mojang's public keys, used for chat session signing
     /// Pulled from Mojang API on startup
     pub mojang_public_keys: Mutex<Vec<RsaPublicKey>>,
@@ -111,18 +109,6 @@ impl Server {
     #[allow(clippy::new_without_default)]
     #[must_use]
     pub async fn new() -> Self {
-        let auth_client = BASIC_CONFIG.online_mode.then(|| {
-            reqwest::Client::builder()
-                .connect_timeout(Duration::from_millis(u64::from(
-                    advanced_config().networking.authentication.connect_timeout,
-                )))
-                .read_timeout(Duration::from_millis(u64::from(
-                    advanced_config().networking.authentication.read_timeout,
-                )))
-                .build()
-                .expect("Failed to to make reqwest client")
-        });
-
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = RwLock::new(default_dispatcher().await);
         let world_path = BASIC_CONFIG.get_world_path();
@@ -194,7 +180,6 @@ impl Server {
             command_dispatcher,
             block_registry,
             item_registry: super::item::items::default_registry(),
-            auth_client,
             key_store: KeyStore::new(),
             listing: Mutex::new(CachedStatus::new()),
             branding: CachedBranding::new(),
@@ -660,6 +645,9 @@ impl Server {
 
             // Tick scheduled block/fluid updates
             world.tick_scheduled_block_ticks().await;
+
+            // Tick random ticks
+            world.perform_random_ticks().await;
 
             // Tick non-player entities
             let entities_to_tick: Vec<_> = world.entities.read().await.values().cloned().collect();
