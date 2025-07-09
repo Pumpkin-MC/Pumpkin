@@ -432,7 +432,7 @@ fn setup_console(
         }
 
         log::debug!("Stopped console commands task");
-        // Send the readline back to the mutex so it will not be dropped abd make the terminal unusable.
+        // Send the readline back to the mutex so it will not be dropped and make the terminal unusable.
         let _ = readline.lock().map(|mut lock| {
             lock.replace(rl);
         });
