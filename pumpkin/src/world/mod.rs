@@ -626,9 +626,9 @@ impl World {
 
         for scheduled_tick in fluids_to_tick {
             let fluid = self.get_fluid(&scheduled_tick.block_pos).await;
-            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(&fluid) {
+            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid) {
                 pumpkin_fluid
-                    .on_scheduled_tick(self, &fluid, &scheduled_tick.block_pos)
+                    .on_scheduled_tick(self, fluid, &scheduled_tick.block_pos)
                     .await;
             }
         }
@@ -1838,7 +1838,7 @@ impl World {
             self.block_registry
                 .on_placed_fluid(
                     self,
-                    &new_fluid,
+                    new_fluid,
                     block_state_id,
                     position,
                     replaced_block_state_id,
@@ -2017,9 +2017,9 @@ impl World {
         get_block_by_state_id(id).unwrap_or(&Block::AIR)
     }
 
-    pub async fn get_fluid(&self, position: &BlockPos) -> pumpkin_data::fluid::Fluid {
+    pub async fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
         let id = self.get_block_state_id(position).await;
-        let fluid = Fluid::from_state_id(id).ok_or(Fluid::EMPTY);
+        let fluid = Fluid::from_state_id(id).ok_or(&Fluid::EMPTY);
         if let Ok(fluid) = fluid {
             return fluid;
         }
@@ -2033,13 +2033,13 @@ impl World {
                     .find(|p| p.0 == "waterlogged")
                     .map(|(_, value)| {
                         if value == true.to_string() {
-                            Fluid::FLOWING_WATER
+                            &Fluid::FLOWING_WATER
                         } else {
-                            Fluid::EMPTY
+                            &Fluid::EMPTY
                         }
                     })
             })
-            .unwrap_or(Fluid::EMPTY)
+            .unwrap_or(&Fluid::EMPTY)
     }
 
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
@@ -2095,10 +2095,10 @@ impl World {
             }
 
             if let Some(neighbor_pumpkin_fluid) =
-                self.block_registry.get_pumpkin_fluid(&neighbor_fluid)
+                self.block_registry.get_pumpkin_fluid(neighbor_fluid)
             {
                 neighbor_pumpkin_fluid
-                    .on_neighbor_update(self, &neighbor_fluid, &neighbor_pos, false)
+                    .on_neighbor_update(self, neighbor_fluid, &neighbor_pos, false)
                     .await;
             }
         }
