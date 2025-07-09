@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::CURRENT_MC_VERSION;
+use crate::generation::Seed;
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_data::game_rules::GameRuleRegistry;
 use pumpkin_util::{Difficulty, serde_enum_as_integer};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-use crate::generation::Seed;
 
 pub mod anvil;
 
@@ -17,8 +17,6 @@ pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4438; // 1.21.7
 
 pub const MINIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19132; // 1.21.7
 pub const MAXIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19133; // 1.21.7
-
-pub const CURRENT_MC_VERSION: &str = "1.21.7";
 
 pub trait WorldInfoReader {
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError>;

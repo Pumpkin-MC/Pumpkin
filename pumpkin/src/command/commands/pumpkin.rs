@@ -3,9 +3,9 @@ use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_world::CURRENT_MC_VERSION;
 use std::borrow::Cow;
 
-use crate::server::CURRENT_MC_VERSION;
 use crate::{
     GIT_VERSION,
     command::{

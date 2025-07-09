@@ -6,17 +6,14 @@ use std::{
     time::Duration,
 };
 
+use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
+use pumpkin_world::CURRENT_MC_VERSION;
 use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
-
-use crate::{
-    SHOULD_STOP, STOP_INTERRUPT,
-    server::{CURRENT_MC_VERSION, Server},
-};
 
 pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let socket = Arc::new(

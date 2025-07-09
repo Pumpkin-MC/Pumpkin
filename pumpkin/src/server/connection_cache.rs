@@ -1,4 +1,3 @@
-use super::CURRENT_MC_VERSION;
 use crate::entity::player::Player;
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
@@ -9,6 +8,7 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
+use pumpkin_world::CURRENT_MC_VERSION;
 use std::{
     fs::File,
     io::{Cursor, Read},
