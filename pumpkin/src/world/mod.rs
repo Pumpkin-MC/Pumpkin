@@ -1785,11 +1785,11 @@ impl World {
     ) -> BlockStateId {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.level.get_chunk(chunk_coordinate).await;
-        let mut chunk =
-            match tokio::time::timeout(std::time::Duration::from_secs(1), chunk.write()).await {
-                Ok(lock) => lock,
-                Err(_) => panic!("Timed out while waiting to acquire chunk write lock"),
-            };
+        let Ok(mut chunk) =
+            tokio::time::timeout(std::time::Duration::from_secs(1), chunk.write()).await
+        else {
+            panic!("Timed out while waiting to acquire chunk write lock")
+        };
         let Some(replaced_block_state_id) = chunk.section.get_block_absolute_y(
             relative.x as usize,
             relative.y,
