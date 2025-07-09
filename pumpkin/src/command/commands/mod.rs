@@ -370,13 +370,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.transfer",
-            "Transfers the player to another server",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
 }
 
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
@@ -462,6 +455,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.tick",
             "Triggers the tick event",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.transfer",
+            "Transfers the player to another server",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();
