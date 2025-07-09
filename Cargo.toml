@@ -16,7 +16,6 @@ members = [
 [workspace.package]
 version = "0.1.0-dev+1.21.7"
 edition = "2024"
-#opt-level = 0
 
 [profile.release]
 lto = true
@@ -40,6 +39,7 @@ tokio = { version = "1.46", features = [
     "signal",
     "fs",
     "io-util",
+    "time",
 ] }
 
 thiserror = "2.0"
@@ -47,7 +47,7 @@ thiserror = "2.0"
 bytes = "1.10"
 
 # Concurrency/Parallelism and Synchronization
-futures = "0.3"
+futures = { version = "0.3", default-features = false, features = ["executor"] }
 rayon = "1.10"
 crossbeam = "0.8"
 
@@ -57,5 +57,5 @@ serde_json = "1.0"
 
 async-trait = "0.1"
 
-tempfile = "3.20.0"
+tempfile = { version = "3.20.0", default-features = false }
 proc-macro-error2 = "2"

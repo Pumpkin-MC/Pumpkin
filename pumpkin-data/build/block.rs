@@ -949,7 +949,7 @@ pub(crate) fn build() -> TokenStream {
                 #raw_id_from_state_id
             ];
 
-            const TYPE_FROM_RAW_ID: [&'static Block; #max_type_id] = [
+            const TYPE_FROM_RAW_ID: [Option<&Block>; #max_type_id] = [
                 #type_from_raw_id_items
             ];
 
@@ -963,7 +963,7 @@ pub(crate) fn build() -> TokenStream {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     &Self::AIR
                 } else {
-                    Self::TYPE_FROM_RAW_ID[id as usize]
+                    Some(Self::TYPE_FROM_RAW_ID[id as usize])
                 }
             }
 

@@ -98,9 +98,7 @@ target/
 #.idea/
 
 # === PROJECT SPECIFIC ===
-plugins/**/*.so
-plugins/**/*.dylib
-plugins/**/*.dll
+plugins/
 world/*
 logs/
 
@@ -137,3 +135,25 @@ result-*
 
 # Generated Data
 pumpkin-data/src/generated
+
+# Vanilla minecraft server
+banned-ips.json
+banned-players.json
+crash-reports/
+eula.txt
+ops.json
+server.properties
+usercache.json
+whitelist.json
+
+# Paper minecraft server
+.console_history
+bukkit.yml
+commands.yml
+config/
+help.yml
+permissions.yml
+spigot.yml
+version_history.json
+world_nether/
+world_the_end/
