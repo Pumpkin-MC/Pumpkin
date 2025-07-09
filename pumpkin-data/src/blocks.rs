@@ -1,4 +1,3 @@
-use std::hash::{Hash, Hasher};
 use crate::{
     BlockState, BlockStateRef,
     block_properties::get_state_by_state_id,
@@ -9,6 +8,7 @@ use pumpkin_util::{
     math::experience::Experience,
     resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation},
 };
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug)]
 pub struct Block {
