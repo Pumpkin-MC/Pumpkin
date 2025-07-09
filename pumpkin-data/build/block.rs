@@ -19,7 +19,6 @@ fn fill_array<T: Clone + quote::ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStre
 
     for (state_id, id_lit) in array {
         raw_id_from_state_id_ordered[state_id as usize] = quote! { #id_lit };
-        raw_id_from_state_id_ordered[state_id as usize] = quote! { #id_lit };
     }
 
     raw_id_from_state_id_ordered
@@ -947,7 +946,6 @@ pub(crate) fn build() -> TokenStream {
 
             // Many state ids map to single raw block id
             const RAW_ID_FROM_STATE_ID: [u16; #max_state_id] = [
-            const RAW_ID_FROM_STATE_ID: [u16; #max_state_id] = [
                 #raw_id_from_state_id
             ];
 
@@ -965,7 +963,7 @@ pub(crate) fn build() -> TokenStream {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     &Self::AIR
                 } else {
-                    Some(Self::TYPE_FROM_RAW_ID[id as usize])
+                    Self::TYPE_FROM_RAW_ID[id as usize]
                 }
             }
 
@@ -974,7 +972,6 @@ pub(crate) fn build() -> TokenStream {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     return &Self::AIR;
                 }
-                Self::from_id(Self::RAW_ID_FROM_STATE_ID[id as usize])
                 Self::from_id(Self::RAW_ID_FROM_STATE_ID[id as usize])
             }
 
