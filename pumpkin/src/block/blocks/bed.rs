@@ -23,7 +23,7 @@ use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
 
-static NO_SLEEP_IDS: &[u16] = &[
+const NO_SLEEP_IDS: &[u16] = &[
     EntityType::BLAZE.id,
     EntityType::BOGGED.id,
     EntityType::SKELETON.id,
