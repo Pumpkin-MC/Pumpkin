@@ -1924,7 +1924,7 @@ impl NBTStorage for PlayerInventory {
         }
 
         let mut equipment_compound = NbtCompound::new();
-        for (_i, slot) in &self.equipment_slots {
+        for slot in self.equipment_slots.values() {
             let equipment_binding = self.entity_equipment.lock().await;
             let stack_binding = equipment_binding.get(slot);
             let stack = stack_binding.lock().await;
@@ -1948,7 +1948,7 @@ impl NBTStorage for PlayerInventory {
                         equipment_compound.put_component("head", item_compound);
                     }
                     _ => {
-                        warn!("Invalid equipment slot for a player {:?}", slot);
+                        warn!("Invalid equipment slot for a player {slot:?}");
                     }
                 }
             }
