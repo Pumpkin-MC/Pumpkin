@@ -25,7 +25,6 @@ use crate::block::pumpkin_block::NormalUseArgs;
 use crate::block::pumpkin_block::OnNeighborUpdateArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
 use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::UseWithItemArgs;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
@@ -76,7 +75,7 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
 }
 
 fn can_open_door(block: &Block) -> bool {
-    if block.id == Block::IRON_DOOR.id {
+    if block == &Block::IRON_DOOR {
         return false;
     }
 
@@ -88,14 +87,14 @@ fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
         if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
             Sound::BlockWoodenDoorOpen
-        } else if block.id == Block::IRON_DOOR.id {
+        } else if block == &Block::IRON_DOOR {
             Sound::BlockIronDoorOpen
         } else {
             Sound::BlockCopperDoorOpen
         }
     } else if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
         Sound::BlockWoodenDoorClose
-    } else if block.id == Block::IRON_DOOR.id {
+    } else if block == &Block::IRON_DOOR {
         Sound::BlockIronDoorClose
     } else {
         Sound::BlockCopperDoorClose
@@ -209,20 +208,14 @@ impl PumpkinBlock for DoorBlock {
             .await;
     }
 
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !can_open_door(args.block) {
             return BlockActionResult::Continue;
         }
 
         toggle_door(args.player, args.world, args.position).await;
 
-        BlockActionResult::Consume
-    }
-
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        if can_open_door(args.block) {
-            toggle_door(args.player, args.world, args.position).await;
-        }
+        BlockActionResult::Success
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {

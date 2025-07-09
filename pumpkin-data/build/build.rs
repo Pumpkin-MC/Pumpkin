@@ -1,6 +1,7 @@
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
+use rayon::prelude::*;
 use std::{fs, io::Write, path::Path, process::Command};
 
 mod biome;
@@ -41,41 +42,48 @@ pub fn main() {
     if !path.exists() {
         let _ = fs::create_dir(OUT_DIR);
     }
-    write_generated_file(packet::build(), "packet.rs");
-    write_generated_file(screen::build(), "screen.rs");
-    write_generated_file(particle::build(), "particle.rs");
-    write_generated_file(sound::build(), "sound.rs");
-    write_generated_file(chunk_status::build(), "chunk_status.rs");
-    write_generated_file(game_event::build(), "game_event.rs");
-    write_generated_file(game_rules::build(), "game_rules.rs");
-    write_generated_file(sound_category::build(), "sound_category.rs");
-    write_generated_file(entity_pose::build(), "entity_pose.rs");
-    write_generated_file(scoreboard_slot::build(), "scoreboard_slot.rs");
-    write_generated_file(world_event::build(), "world_event.rs");
-    write_generated_file(entity_type::build(), "entity_type.rs");
-    write_generated_file(noise_parameter::build(), "noise_parameter.rs");
-    write_generated_file(biome::build(), "biome.rs");
-    write_generated_file(damage_type::build(), "damage_type.rs");
-    write_generated_file(message_type::build(), "message_type.rs");
-    write_generated_file(spawn_egg::build(), "spawn_egg.rs");
-    write_generated_file(item::build(), "item.rs");
-    write_generated_file(fluid::build(), "fluid.rs");
-    write_generated_file(status_effect::build(), "status_effect.rs");
-    write_generated_file(entity_status::build(), "entity_status.rs");
-    write_generated_file(block::build(), "block.rs");
-    write_generated_file(tag::build(), "tag.rs");
-    write_generated_file(noise_router::build(), "noise_router.rs");
-    write_generated_file(
-        flower_pot_transformations::build(),
-        "flower_pot_transformations.rs",
-    );
-    write_generated_file(
-        composter_increase_chance::build(),
-        "composter_increase_chance.rs",
-    );
-    write_generated_file(recipes::build(), "recipes.rs");
-    write_generated_file(enchantments::build(), "enchantment.rs");
-    write_generated_file(fuels::build(), "fuels.rs");
+    #[allow(clippy::type_complexity)]
+    let build_functions: Vec<(fn() -> TokenStream, &str)> = vec![
+        (packet::build, "packet.rs"),
+        (screen::build, "screen.rs"),
+        (particle::build, "particle.rs"),
+        (sound::build, "sound.rs"),
+        (chunk_status::build, "chunk_status.rs"),
+        (game_event::build, "game_event.rs"),
+        (game_rules::build, "game_rules.rs"),
+        (sound_category::build, "sound_category.rs"),
+        (entity_pose::build, "entity_pose.rs"),
+        (scoreboard_slot::build, "scoreboard_slot.rs"),
+        (world_event::build, "world_event.rs"),
+        (entity_type::build, "entity_type.rs"),
+        (noise_parameter::build, "noise_parameter.rs"),
+        (biome::build, "biome.rs"),
+        (damage_type::build, "damage_type.rs"),
+        (message_type::build, "message_type.rs"),
+        (spawn_egg::build, "spawn_egg.rs"),
+        (item::build, "item.rs"),
+        (fluid::build, "fluid.rs"),
+        (status_effect::build, "status_effect.rs"),
+        (entity_status::build, "entity_status.rs"),
+        (block::build, "block.rs"),
+        (tag::build, "tag.rs"),
+        (noise_router::build, "noise_router.rs"),
+        (
+            flower_pot_transformations::build,
+            "flower_pot_transformations.rs",
+        ),
+        (
+            composter_increase_chance::build,
+            "composter_increase_chance.rs",
+        ),
+        (recipes::build, "recipes.rs"),
+        (enchantments::build, "enchantment.rs"),
+        (fuels::build, "fuels.rs"),
+    ];
+
+    build_functions.par_iter().for_each(|(build_fn, file)| {
+        write_generated_file(build_fn(), file);
+    });
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
@@ -102,8 +110,4 @@ pub fn write_generated_file(content: TokenStream, out_file: &str) {
     // Try to format the output for debugging purposes.
     // Doesn't matter if rustfmt is unavailable.
     let _ = Command::new("rustfmt").arg(&path).output();
-    // Try to auto optimize using clippy.
-    let _ = Command::new("cargo clippy --fix --allow-dirty")
-        .arg(&path)
-        .output();
 }

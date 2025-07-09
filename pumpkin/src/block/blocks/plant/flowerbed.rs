@@ -1,7 +1,9 @@
 use async_trait::async_trait;
+use pumpkin_data::Block;
 use pumpkin_data::tag::Tagable;
-use pumpkin_data::{Block, BlockDirection};
 use pumpkin_world::BlockStateId;
+
+use crate::block::blocks::plant::PlantBlockBase;
 
 use crate::block::pumpkin_block::{
     BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
@@ -43,17 +45,17 @@ impl PumpkinBlock for FlowerbedBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if args.direction == BlockDirection::Down {
-            let block_below = args.world.get_block(&args.position.down()).await;
-            if !(block_below.is_tagged_with("minecraft:dirt").unwrap()
-                || block_below == &Block::FARMLAND)
-            {
-                return Block::AIR.default_state.id;
-            }
-        }
-        args.state_id
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
+        .await
     }
 }
+
+impl PlantBlockBase for FlowerbedBlock {}
 
 impl Segmented for FlowerbedBlock {
     type Properties = FlowerbedProperties;

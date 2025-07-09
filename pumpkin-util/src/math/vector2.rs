@@ -12,8 +12,8 @@ pub struct Vector2<T> {
 }
 
 impl<T: Math + Copy> Vector2<T> {
-    pub const fn new(x: T, z: T) -> Self {
-        Vector2 { x, y: z }
+    pub const fn new(x: T, y: T) -> Self {
+        Vector2 { x, y }
     }
 
     pub fn length_squared(&self) -> T {
@@ -34,10 +34,10 @@ impl<T: Math + Copy> Vector2<T> {
         }
     }
 
-    pub fn multiply(self, x: T, z: T) -> Self {
+    pub fn multiply(self, x: T, y: T) -> Self {
         Self {
             x: self.x * x,
-            y: self.y * z,
+            y: self.y * y,
         }
     }
 }

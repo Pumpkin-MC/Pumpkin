@@ -9,7 +9,7 @@ serde.workspace = true
 log.workspace = true
 uuid.workspace = true
 
-toml = "0.8"
+toml = "0.9"
 
 [features]
 # Adds helper to change the config at runtime

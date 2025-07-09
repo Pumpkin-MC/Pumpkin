@@ -138,7 +138,8 @@ impl<'a> ProtoChunk<'a> {
         let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(
                 settings.sea_level,
-                settings.default_fluid.get_state().unwrap().block(),
+                // Block
+                settings.default_fluid.name,
             ),
             FluidLevel::new(-54, &LAVA_BLOCK), // this is always the same for every dimension
         )));

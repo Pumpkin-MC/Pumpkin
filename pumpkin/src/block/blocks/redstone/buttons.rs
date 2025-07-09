@@ -24,7 +24,6 @@ use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
 use crate::block::pumpkin_block::OnScheduledTickArgs;
 use crate::block::pumpkin_block::OnStateReplacedArgs;
-use crate::block::pumpkin_block::UseWithItemArgs;
 use crate::block::pumpkin_block::{BlockMetadata, NormalUseArgs, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::world::World;
@@ -68,13 +67,10 @@ impl BlockMetadata for ButtonBlock {
 
 #[async_trait]
 impl PumpkinBlock for ButtonBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         click_button(args.world, args.position).await;
-    }
 
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        click_button(args.world, args.position).await;
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
