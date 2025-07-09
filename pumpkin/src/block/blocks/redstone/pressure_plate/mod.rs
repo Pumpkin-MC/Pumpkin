@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, chunk::TickPriority, world::BlockFlags};
 
@@ -16,25 +16,25 @@ pub(crate) trait PressurePlate {
     async fn on_entity_collision_pp(&self, args: OnEntityCollisionArgs<'_>) {
         let output = self.get_redstone_output(args.block, args.state.id);
         if output == 0 {
-            self.update_plate_state(args.world, args.location, args.block, args.state, output)
+            self.update_plate_state(args.world, args.position, args.block, args.state, output)
                 .await;
         }
     }
 
     async fn on_scheduled_tick_pp(&self, args: OnScheduledTickArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
+        let state = args.world.get_block_state(args.position).await;
         let output = self.get_redstone_output(args.block, state.id);
         if output > 0 {
-            self.update_plate_state(args.world, args.location, args.block, state, output)
+            self.update_plate_state(args.world, args.position, args.block, state, output)
                 .await;
         }
     }
 
     async fn on_state_replaced_pp(&self, args: OnStateReplacedArgs<'_>) {
         if !args.moved && self.get_redstone_output(args.block, args.old_state_id) > 0 {
-            args.world.update_neighbors(args.location, None).await;
+            args.world.update_neighbors(args.position, None).await;
             args.world
-                .update_neighbors(&args.location.down(), None)
+                .update_neighbors(&args.position.down(), None)
                 .await;
         }
     }
@@ -62,6 +62,11 @@ pub(crate) trait PressurePlate {
                 .schedule_block_tick(block, *pos, self.tick_rate(), TickPriority::Normal)
                 .await;
         }
+    }
+
+    async fn can_pressure_plate_place_at(world: &World, block_pos: &BlockPos) -> bool {
+        let floor = world.get_block_state(&block_pos.down()).await;
+        floor.is_side_solid(BlockDirection::Up)
     }
 
     fn get_redstone_output(&self, block: &Block, state: BlockStateId) -> u8;

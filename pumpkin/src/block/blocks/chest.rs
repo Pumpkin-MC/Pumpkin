@@ -36,7 +36,7 @@ impl PumpkinBlock for ChestBlock {
             args.world,
             args.player,
             args.block,
-            args.location,
+            args.position,
             args.direction,
         )
         .await;
@@ -47,7 +47,7 @@ impl PumpkinBlock for ChestBlock {
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
-        let chest = ChestBlockEntity::new(*args.location);
+        let chest = ChestBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(chest)).await;
 
         let chest_props = ChestLikeProperties::from_state_id(args.state_id, args.block);
@@ -60,7 +60,7 @@ impl PumpkinBlock for ChestBlock {
         if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
             args.world,
             args.block,
-            args.location,
+            args.position,
             chest_props.facing,
             connected_towards,
             ChestType::Single,
@@ -71,7 +71,7 @@ impl PumpkinBlock for ChestBlock {
 
             args.world
                 .set_block_state(
-                    &args.location.offset(connected_towards.to_offset()),
+                    &args.position.offset(connected_towards.to_offset()),
                     neighbor_props.to_state_id(args.block),
                     BlockFlags::NOTIFY_LISTENERS,
                 )
@@ -80,7 +80,7 @@ impl PumpkinBlock for ChestBlock {
     }
 
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.location).await;
+        args.world.remove_block_entity(args.position).await;
     }
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
@@ -98,7 +98,7 @@ impl PumpkinBlock for ChestBlock {
         if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
             args.world,
             args.block,
-            args.location,
+            args.position,
             chest_props.facing,
             connected_towards,
             chest_props.r#type.opposite(),
@@ -109,7 +109,7 @@ impl PumpkinBlock for ChestBlock {
 
             args.world
                 .set_block_state(
-                    &args.location.offset(connected_towards.to_offset()),
+                    &args.position.offset(connected_towards.to_offset()),
                     neighbor_props.to_state_id(args.block),
                     BlockFlags::NOTIFY_LISTENERS,
                 )

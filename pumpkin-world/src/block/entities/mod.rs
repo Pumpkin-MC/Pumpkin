@@ -12,13 +12,18 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
-use crate::{inventory::Inventory, world::SimpleWorld};
+use crate::{
+    block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
+    block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
+};
 
 pub mod barrel;
 pub mod bed;
 pub mod chest;
+pub mod chiseled_bookshelf;
 pub mod command_block;
 pub mod comparator;
+pub mod dropper;
 pub mod end_portal;
 pub mod piston;
 pub mod sign;
@@ -80,12 +85,18 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         BarrelBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<BarrelBlockEntity>(
             nbt,
         ))),
+        DropperBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<DropperBlockEntity>(
+            nbt,
+        ))),
         PistonBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<PistonBlockEntity>(
             nbt,
         ))),
         EndPortalBlockEntity::ID => Some(Arc::new(
             block_entity_from_generic::<EndPortalBlockEntity>(nbt),
         )),
+        ChiseledBookshelfBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<
+            ChiseledBookshelfBlockEntity,
+        >(nbt))),
         _ => None,
     }
 }

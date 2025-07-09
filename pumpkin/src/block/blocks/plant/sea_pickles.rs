@@ -1,6 +1,8 @@
 use crate::block::BlockIsReplacing;
+use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, CanUpdateAtArgs, OnPlaceArgs, PumpkinBlock, UseWithItemArgs,
+    CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock,
+    UseWithItemArgs,
 };
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
@@ -28,12 +30,12 @@ impl PumpkinBlock for SeaPickleBlock {
         if args.item_stack.lock().await.item != &Item::BONE_MEAL
             || !args
                 .world
-                .get_block(&args.location.down())
+                .get_block(&args.position.down())
                 .await
                 .is_tagged_with("minecraft:coral_blocks")
                 .unwrap()
             || !SeaPickleProperties::from_state_id(
-                args.world.get_block_state_id(args.location).await,
+                args.world.get_block_state_id(args.position).await,
                 args.block,
             )
             .waterlogged
@@ -46,16 +48,16 @@ impl PumpkinBlock for SeaPickleBlock {
 
         //let mut j = 1;
         let mut count = 0;
-        let base_x = args.location.0.x - 2;
+        let base_x = args.position.0.x - 2;
         let mut removed_z = 0;
         for added_x in 0..5 {
             for added_z in 0..1 {
-                let temp_y = 2 + args.location.0.y - 1;
+                let temp_y = 2 + args.position.0.y - 1;
                 for y in (temp_y - 2)..temp_y {
                     //let mut lv2: BlockState;
                     let lv =
-                        BlockPos::new(base_x + added_x, y, args.location.0.z - removed_z + added_z);
-                    if &lv == args.location
+                        BlockPos::new(base_x + added_x, y, args.position.0.z - removed_z + added_z);
+                    if &lv == args.position
                         || rand::rng().random_range(0..6) != 0
                         || !args.world.get_block(&lv).await.eq(&Block::WATER)
                         || !args
@@ -97,7 +99,7 @@ impl PumpkinBlock for SeaPickleBlock {
         sea_pickle_prop.pickles = Integer1To4::L4;
         args.world
             .set_block_state(
-                args.location,
+                args.position,
                 sea_pickle_prop.to_state_id(args.block),
                 BlockFlags::NOTIFY_LISTENERS,
             )
@@ -129,7 +131,7 @@ impl PumpkinBlock for SeaPickleBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let support_block = args
             .block_accessor
-            .get_block_state(&args.location.down())
+            .get_block_state(&args.position.down())
             .await;
         support_block.is_center_solid(BlockDirection::Up)
     }
@@ -139,4 +141,19 @@ impl PumpkinBlock for SeaPickleBlock {
             && SeaPickleProperties::from_state_id(args.state_id, args.block).pickles
                 != Integer1To4::L4
     }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
+        .await
+    }
 }
+
+impl PlantBlockBase for SeaPickleBlock {}

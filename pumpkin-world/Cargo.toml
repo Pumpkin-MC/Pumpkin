@@ -34,7 +34,7 @@ num-traits = "0.2"
 # Compression
 flate2 = "1.1"
 lz4-java-wrc = "0.2.0"
-zstd = "0.13.3"
+ruzstd = "0.8.1"
 
 itertools = "0.14.0"
 file-guard = "0.2"
@@ -43,13 +43,14 @@ enum_dispatch = "0.3"
 derive-getters = "0.5.0"
 
 thread_local = "1.1.9"
-lru = "0.15.0"
+lru = "0.16.0"
 
 tokio-util = { version = "0.7.15", features = ["rt"] }
+rand = "0.9.1"
 num_cpus = "1.17.0"
 
 [dev-dependencies]
-criterion = { version = "0.6", features = ["html_reports", "async_tokio"] }
+criterion = { version = "0.6", default-features = false, features = ["html_reports", "async_tokio"] }
 temp-dir = "0.1.16"
 # Print log info inside tests when needed
 env_logger = "0.11.8"

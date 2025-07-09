@@ -32,14 +32,14 @@ impl PumpkinBlock for ObserverBlock {
     async fn on_neighbor_update(&self, _args: OnNeighborUpdateArgs<'_>) {}
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
+        let state = args.world.get_block_state(args.position).await;
         let mut props = ObserverLikeProperties::from_state_id(state.id, args.block);
 
         if props.powered {
             props.powered = false;
             args.world
                 .set_block_state(
-                    args.location,
+                    args.position,
                     props.to_state_id(args.block),
                     BlockFlags::NOTIFY_LISTENERS,
                 )
@@ -48,17 +48,17 @@ impl PumpkinBlock for ObserverBlock {
             props.powered = true;
             args.world
                 .set_block_state(
-                    args.location,
+                    args.position,
                     props.to_state_id(args.block),
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
             args.world
-                .schedule_block_tick(args.block, *args.location, 2, TickPriority::Normal)
+                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
                 .await;
         }
 
-        Self::update_neighbors(args.world, args.block, args.location, &props).await;
+        Self::update_neighbors(args.world, args.block, args.position, &props).await;
     }
 
     async fn get_state_for_neighbor_update(
@@ -68,7 +68,7 @@ impl PumpkinBlock for ObserverBlock {
         let props = ObserverLikeProperties::from_state_id(args.state_id, args.block);
 
         if props.facing.to_block_direction() == args.direction && !props.powered {
-            Self::schedule_tick(args.world, args.location).await;
+            Self::schedule_tick(args.world, args.position).await;
         }
 
         args.state_id
@@ -98,10 +98,10 @@ impl PumpkinBlock for ObserverBlock {
             if props.powered
                 && args
                     .world
-                    .is_block_tick_scheduled(args.location, &Block::OBSERVER)
+                    .is_block_tick_scheduled(args.position, &Block::OBSERVER)
                     .await
             {
-                Self::update_neighbors(args.world, args.block, args.location, &props).await;
+                Self::update_neighbors(args.world, args.block, args.position, &props).await;
             }
         }
     }

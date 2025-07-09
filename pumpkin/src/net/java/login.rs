@@ -16,9 +16,11 @@ use uuid::Uuid;
 
 use crate::{
     net::{
-        Client, GameProfile,
+        GameProfile,
         authentication::{self, AuthError},
-        is_valid_player_name, offline_uuid,
+        is_valid_player_name,
+        java::JavaClientPlatform,
+        offline_uuid,
         proxy::{bungeecord, velocity},
     },
     server::Server,
@@ -84,7 +86,7 @@ static LINKS: LazyLock<Vec<Link>> = LazyLock::new(|| {
     links
 });
 
-impl Client {
+impl JavaClientPlatform {
     pub async fn handle_login_start(&self, server: &Server, login_start: SLoginStart) {
         log::debug!("login start");
 
@@ -208,11 +210,10 @@ impl Client {
         // Don't allow duplicate UUIDs
         if let Some(online_player) = &server.get_player_by_uuid(profile.id).await {
             log::debug!(
-                "Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (IP '{}', username '{}')",
+                "Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (username '{}')",
                 &self.address.lock().await,
                 &profile.name,
                 &profile.id,
-                &online_player.client.address.lock().await,
                 &online_player.gameprofile.name
             );
             self.kick(TextComponent::translate(
@@ -226,11 +227,10 @@ impl Client {
         // Don't allow a duplicate username
         if let Some(online_player) = &server.get_player_by_name(&profile.name).await {
             log::debug!(
-                "A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', IP '{}', username '{}')",
+                "A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', username '{}')",
                 &self.address.lock().await,
                 &profile.name,
                 &profile.id,
-                &online_player.client.address.lock().await,
                 &online_player.gameprofile.name
             );
             self.kick(TextComponent::translate(
@@ -265,47 +265,44 @@ impl Client {
         shared_secret: &[u8],
         username: &str,
     ) -> Result<GameProfile, AuthError> {
-        if let Some(auth_client) = &server.auth_client {
-            let hash = server.digest_secret(shared_secret);
-            let ip = self.address.lock().await.ip();
-            let profile = authentication::authenticate(username, &hash, &ip, auth_client).await?;
+        let hash = server.digest_secret(shared_secret);
+        let ip = self.address.lock().await.ip();
+        let profile = authentication::authenticate(username, &hash, &ip)?;
 
-            // Check if the player should join
-            if let Some(actions) = &profile.profile_actions {
-                if advanced_config()
+        // Check if the player should join
+        if let Some(actions) = &profile.profile_actions {
+            if advanced_config()
+                .networking
+                .authentication
+                .player_profile
+                .allow_banned_players
+            {
+                for allowed in &advanced_config()
                     .networking
                     .authentication
                     .player_profile
-                    .allow_banned_players
+                    .allowed_actions
                 {
-                    for allowed in &advanced_config()
-                        .networking
-                        .authentication
-                        .player_profile
-                        .allowed_actions
-                    {
-                        if !actions.contains(allowed) {
-                            return Err(AuthError::DisallowedAction);
-                        }
+                    if !actions.contains(allowed) {
+                        return Err(AuthError::DisallowedAction);
                     }
-                    if !actions.is_empty() {
-                        return Err(AuthError::Banned);
-                    }
-                } else if !actions.is_empty() {
+                }
+                if !actions.is_empty() {
                     return Err(AuthError::Banned);
                 }
+            } else if !actions.is_empty() {
+                return Err(AuthError::Banned);
             }
-            // Validate textures
-            for property in &profile.properties {
-                authentication::validate_textures(
-                    property,
-                    &advanced_config().networking.authentication.textures,
-                )
-                .map_err(AuthError::TextureError)?;
-            }
-            return Ok(profile);
         }
-        Err(AuthError::MissingAuthClient)
+        // Validate textures
+        for property in &profile.properties {
+            authentication::validate_textures(
+                property,
+                &advanced_config().networking.authentication.textures,
+            )
+            .map_err(AuthError::TextureError)?;
+        }
+        Ok(profile)
     }
 
     pub fn handle_login_cookie_response(&self, packet: &SLoginCookieResponse) {

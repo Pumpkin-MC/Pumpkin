@@ -4,7 +4,6 @@ use std::{
 };
 
 use pumpkin_protocol::{
-    ConnectionState,
     bedrock::{
         RakReliability,
         client::raknet::connection::{CConnectedPong, CConnectionRequestAccepted},
@@ -13,52 +12,39 @@ use pumpkin_protocol::{
     codec::socket_address::SocketAddress,
 };
 
-use crate::net::{Client, bedrock::BedrockClientPlatform};
+use crate::net::bedrock::BedrockClientPlatform;
 
-impl Client {
-    pub async fn handle_connection_request(
-        &self,
-        bedrock: &BedrockClientPlatform,
-        packet: SConnectionRequest,
-    ) {
+impl BedrockClientPlatform {
+    pub async fn handle_connection_request(&self, packet: SConnectionRequest) {
         dbg!("send connection accepted");
-        bedrock
-            .send_framed_packet(
-                self,
-                &CConnectionRequestAccepted::new(
-                    SocketAddress(*self.address.lock().await),
-                    0,
-                    [SocketAddress(SocketAddr::V4(SocketAddrV4::new(
-                        Ipv4Addr::new(0, 0, 0, 0),
-                        19132,
-                    ))); 10],
-                    packet.time,
-                    UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
-                ),
-                RakReliability::Unreliable,
-            )
-            .await;
+        self.send_framed_packet(
+            &CConnectionRequestAccepted::new(
+                SocketAddress(self.address),
+                0,
+                [SocketAddress(SocketAddr::V4(SocketAddrV4::new(
+                    Ipv4Addr::new(0, 0, 0, 0),
+                    19132,
+                ))); 10],
+                packet.time,
+                UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+            ),
+            RakReliability::Unreliable,
+        )
+        .await;
     }
 
-    pub fn handle_new_incoming_connection(&self, packet: &SNewIncomingConnection) {
-        dbg!(packet.pong_time);
-        self.connection_state.store(ConnectionState::Login);
+    pub fn handle_new_incoming_connection(&self, _packet: &SNewIncomingConnection) {
+        // self.connection_state.store(ConnectionState::Login);
     }
 
-    pub async fn handle_connected_ping(
-        &self,
-        bedrock: &BedrockClientPlatform,
-        packet: SConnectedPing,
-    ) {
-        bedrock
-            .send_framed_packet(
-                self,
-                &CConnectedPong::new(
-                    packet.time,
-                    UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
-                ),
-                RakReliability::Unreliable,
-            )
-            .await;
+    pub async fn handle_connected_ping(&self, packet: SConnectedPing) {
+        self.send_framed_packet(
+            &CConnectedPong::new(
+                packet.time,
+                UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+            ),
+            RakReliability::Unreliable,
+        )
+        .await;
     }
 }

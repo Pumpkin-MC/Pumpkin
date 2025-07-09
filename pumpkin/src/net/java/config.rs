@@ -1,12 +1,12 @@
-use std::num::NonZeroU8;
+use std::{num::NonZeroU8, sync::Arc};
 
 use crate::{
     entity::player::{ChatMode, Hand},
-    net::{Client, PlayerConfig},
+    net::{ClientPlatform, PlayerConfig, can_not_join, java::JavaClientPlatform},
     server::Server,
 };
 use core::str;
-use pumpkin_config::advanced_config;
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_protocol::{
     ConnectionState,
     java::client::config::{CFinishConfig, CRegistryData},
@@ -17,7 +17,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::text::TextComponent;
 
-impl Client {
+impl JavaClientPlatform {
     pub async fn handle_client_information_config(
         &self,
         client_information: SClientInformationConfig,
@@ -159,16 +159,29 @@ impl Client {
         self.send_packet_now(&CFinishConfig).await;
     }
 
-    pub async fn handle_config_acknowledged(&self, server: &Server) {
+    pub async fn handle_config_acknowledged(self: &Arc<Self>, server: &Server) {
         log::debug!("Handling config acknowledgement");
         self.connection_state.store(ConnectionState::Play);
 
-        if let Some(reason) = self.can_not_join(server).await {
+        let profile = self.gameprofile.lock().await.clone();
+        let profile = profile.unwrap();
+        let address = self.address.lock().await;
+
+        if let Some(reason) = can_not_join(&profile, &address, server).await {
             self.kick(reason).await;
             return;
         }
 
-        self.make_player
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        let config = self.config.lock().await;
+
+        if let Some((player, world)) = server
+            .add_player(ClientPlatform::Java(self.clone()), profile, config.clone())
+            .await
+        {
+            world
+                .spawn_java_player(&BASIC_CONFIG, player.clone(), server)
+                .await;
+            *self.player.lock().await = Some(player);
+        }
     }
 }

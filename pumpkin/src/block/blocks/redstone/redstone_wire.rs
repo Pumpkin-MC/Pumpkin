@@ -14,7 +14,7 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::pumpkin_block::{
     BrokenArgs, CanPlaceAtArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
-    OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs, PrepareArgs, UseWithItemArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs, PrepareArgs,
 };
 use crate::block::registry::BlockActionResult;
 use crate::{
@@ -33,14 +33,14 @@ pub struct RedstoneWireBlock;
 #[async_trait]
 impl PumpkinBlock for RedstoneWireBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.location).await
+        can_place_at(args.block_accessor, args.position).await
     }
 
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut wire = RedstoneWireProperties::default(args.block);
         wire.power =
-            Integer0To15::from_index(calculate_power(args.world, args.location).await.into());
-        wire = get_regulated_sides(wire, args.world, args.location).await;
+            Integer0To15::from_index(calculate_power(args.world, args.position).await.into());
+        wire = get_regulated_sides(wire, args.world, args.position).await;
         if is_dot(wire) {
             wire = make_cross(wire.power);
         }
@@ -61,33 +61,33 @@ impl PumpkinBlock for RedstoneWireBlock {
                 return args.state_id;
             }
             BlockDirection::Down => {
-                return get_regulated_sides(wire, args.world, args.location)
+                return get_regulated_sides(wire, args.world, args.position)
                     .await
                     .to_state_id(args.block);
             }
             BlockDirection::North => {
-                let side = get_side(args.world, args.location, BlockDirection::North).await;
+                let side = get_side(args.world, args.position, BlockDirection::North).await;
                 wire.north = side.to_north();
                 new_side = side;
             }
             BlockDirection::South => {
-                let side = get_side(args.world, args.location, BlockDirection::South).await;
+                let side = get_side(args.world, args.position, BlockDirection::South).await;
                 wire.south = side.to_south();
                 new_side = side;
             }
             BlockDirection::East => {
-                let side = get_side(args.world, args.location, BlockDirection::East).await;
+                let side = get_side(args.world, args.position, BlockDirection::East).await;
                 wire.east = side.to_east();
                 new_side = side;
             }
             BlockDirection::West => {
-                let side = get_side(args.world, args.location, BlockDirection::West).await;
+                let side = get_side(args.world, args.position, BlockDirection::West).await;
                 wire.west = side.to_west();
                 new_side = side;
             }
         }
 
-        wire = get_regulated_sides(wire, args.world, args.location).await;
+        wire = get_regulated_sides(wire, args.world, args.position).await;
         if is_cross(old_state) && new_side.is_none() {
             return wire.to_state_id(args.block);
         }
@@ -103,7 +103,7 @@ impl PumpkinBlock for RedstoneWireBlock {
             RedstoneWireLikeProperties::from_state_id(args.state_id, &Block::REDSTONE_WIRE);
 
         for direction in BlockDirection::horizontal() {
-            let other_block_pos = args.location.offset(direction.to_offset());
+            let other_block_pos = args.position.offset(direction.to_offset());
             let other_block = args.world.get_block(&other_block_pos).await;
 
             if wire_props.is_side_connected(direction) && other_block != &Block::REDSTONE_WIRE {
@@ -134,41 +134,35 @@ impl PumpkinBlock for RedstoneWireBlock {
         }
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        let state = args.world.get_block_state(args.location).await;
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.position).await;
         let wire = RedstoneWireProperties::from_state_id(state.id, args.block);
-        on_use(wire, args.world, args.location).await;
-    }
-
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let state = args.world.get_block_state(args.location).await;
-        let wire = RedstoneWireProperties::from_state_id(state.id, args.block);
-        if on_use(wire, args.world, args.location).await {
-            BlockActionResult::Consume
+        if on_use(wire, args.world, args.position).await {
+            BlockActionResult::Success
         } else {
             BlockActionResult::Continue
         }
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if can_place_at(args.world.as_ref(), args.location).await {
-            let state = args.world.get_block_state(args.location).await;
+        if can_place_at(args.world.as_ref(), args.position).await {
+            let state = args.world.get_block_state(args.position).await;
             let mut wire = RedstoneWireProperties::from_state_id(state.id, args.block);
-            let new_power = calculate_power(args.world, args.location).await;
+            let new_power = calculate_power(args.world, args.position).await;
             if wire.power.to_index() as u8 != new_power {
                 wire.power = Integer0To15::from_index(new_power.into());
                 args.world
                     .set_block_state(
-                        args.location,
+                        args.position,
                         wire.to_state_id(&Block::REDSTONE_WIRE),
                         BlockFlags::empty(),
                     )
                     .await;
-                RedstoneWireTurbo::update_surrounding_neighbors(args.world, *args.location).await;
+                RedstoneWireTurbo::update_surrounding_neighbors(args.world, *args.position).await;
             }
         } else {
             args.world
-                .break_block(args.location, None, BlockFlags::NOTIFY_ALL)
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
                 .await;
         }
     }
@@ -194,11 +188,11 @@ impl PumpkinBlock for RedstoneWireBlock {
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
-        update_wire_neighbors(args.world, args.location).await;
+        update_wire_neighbors(args.world, args.position).await;
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {
-        update_wire_neighbors(args.world, args.location).await;
+        update_wire_neighbors(args.world, args.position).await;
     }
 }
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{BrokenArgs, NormalUseArgs, PumpkinBlock, UseWithItemArgs};
+use crate::block::pumpkin_block::{BrokenArgs, PumpkinBlock, UseWithItemArgs};
 use crate::block::registry::BlockActionResult;
 use crate::world::World;
 use async_trait::async_trait;
@@ -46,19 +46,13 @@ impl JukeboxBlock {
 
 #[async_trait]
 impl PumpkinBlock for JukeboxBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        // For now just stop the music at this position
-        let world = &args.player.living_entity.entity.world.read().await;
-        self.stop_music(args.block, args.location, world).await;
-    }
-
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let world = &args.player.living_entity.entity.world.read().await;
 
         // if the jukebox already has a record, stop playing
-        if self.has_record(args.block, args.location, world).await {
-            self.stop_music(args.block, args.location, world).await;
-            return BlockActionResult::Consume;
+        if self.has_record(args.block, args.position, world).await {
+            self.stop_music(args.block, args.position, world).await;
+            return BlockActionResult::Success;
         }
 
         let Some(jukebox_playable) = &args
@@ -83,23 +77,23 @@ impl PumpkinBlock for JukeboxBlock {
 
         //TODO: Update block nbt
 
-        self.set_record(true, args.block, args.location, world)
+        self.set_record(true, args.block, args.position, world)
             .await;
         world
             .sync_world_event(
                 WorldEvent::JukeboxStartsPlaying,
-                *args.location,
+                *args.position,
                 jukebox_song as i32,
             )
             .await;
 
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {
         // For now just stop the music at this position
         args.world
-            .sync_world_event(WorldEvent::JukeboxStopsPlaying, *args.location, 0)
+            .sync_world_event(WorldEvent::JukeboxStopsPlaying, *args.position, 0)
             .await;
     }
 }

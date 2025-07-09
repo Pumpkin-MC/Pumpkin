@@ -9,7 +9,7 @@ use crate::VarInt;
 #[packet(PLAY_USE_ITEM_ON)]
 pub struct SUseItemOn {
     pub hand: VarInt,
-    pub location: BlockPos,
+    pub position: BlockPos,
     pub face: VarInt,
     pub cursor_pos: Vector3<f32>,
     pub inside_block: bool,
