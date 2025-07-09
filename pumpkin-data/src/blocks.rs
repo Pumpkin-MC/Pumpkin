@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use crate::{
     BlockState, BlockStateRef,
     block_properties::get_state_by_state_id,
@@ -30,6 +31,12 @@ pub struct Block {
 impl PartialEq for Block {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
+    }
+}
+
+impl Hash for Block {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 
