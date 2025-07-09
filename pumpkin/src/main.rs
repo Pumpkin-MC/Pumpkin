@@ -39,6 +39,7 @@ compile_error!("Compiling for WASI targets is not supported!");
 use plugin::PluginManager;
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+use std::io::IsTerminal;
 use std::{
     io::{self},
     sync::{Arc, LazyLock},
@@ -50,11 +51,15 @@ use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
 use crate::server::CURRENT_MC_VERSION;
-use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+use log4rs::config::Deserializers;
+use pumpkin::logging::{PumpkinLogWriter, register_rustyline_console_appender};
+use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
     text::{TextComponent, color::NamedColor},
 };
+use rustyline_async::Readline;
+use std::sync::Mutex;
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 
@@ -112,7 +117,30 @@ async fn main() {
 
     let time = Instant::now();
 
-    init_log!();
+    let rl = if io::stdin().is_terminal() {
+        Readline::new("$ ".to_owned())
+            .map(|pair| (Some(pair.0), Some(pair.1)))
+            .unwrap_or((None, None))
+    } else {
+        (None, None)
+    };
+    let readline = Arc::new(Mutex::new(rl.0));
+    let mut deserializers = Deserializers::default();
+    register_rustyline_console_appender(
+        &mut deserializers,
+        readline.clone(),
+        rl.1.map_or(
+            Arc::new(Mutex::new(PumpkinLogWriter::Raw(io::stdout()))),
+            |writer| Arc::new(Mutex::new(PumpkinLogWriter::Tty(writer))),
+        ),
+    );
+    if !std::fs::exists("config/log4rs.yaml").unwrap() {
+        log::warn!("No log4rs configuration file found, using default configuration.");
+        // Create a default configuration file
+        std::fs::write("config/log4rs.yaml", include_str!("../log4rs.yaml"))
+            .expect("Failed to create default log4rs configuration file");
+    }
+    log4rs::init_file("config/log4rs.yaml", deserializers).expect("Failed to initialize logger");
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -152,7 +180,7 @@ async fn main() {
             .expect("Unable to setup signal handlers");
     });
 
-    let pumpkin_server = PumpkinServer::new().await;
+    let pumpkin_server = PumpkinServer::new(readline).await;
     pumpkin_server.init_plugins().await;
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());

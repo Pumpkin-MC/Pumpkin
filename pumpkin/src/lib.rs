@@ -1,13 +1,11 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
-use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
 use crate::net::bedrock::BedrockClientPlatform;
 use crate::net::java::JavaClientPlatform;
 use crate::net::{lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use bytes::Bytes;
-use log::{Level, LevelFilter};
 use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
@@ -16,10 +14,8 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
-use simplelog::SharedLogger;
 use std::collections::HashMap;
-use std::io::{Cursor, IsTerminal, stdin};
-use std::str::FromStr;
+use std::io::{Cursor, stdin};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::{net::SocketAddr, sync::LazyLock};
@@ -65,88 +61,6 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
-pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = LazyLock::new(|| {
-    if advanced_config().logging.enabled {
-        let mut config = simplelog::ConfigBuilder::new();
-
-        if advanced_config().logging.timestamp {
-            config.set_time_format_custom(time::macros::format_description!(
-                "[year]-[month]-[day] [hour]:[minute]:[second]"
-            ));
-            config.set_time_level(LevelFilter::Error);
-        } else {
-            config.set_time_level(LevelFilter::Off);
-        }
-
-        if !advanced_config().logging.color {
-            for level in Level::iter() {
-                config.set_level_color(level, None);
-            }
-        } else {
-            // We are technically logging to a file-like object.
-            config.set_write_log_enable_colors(true);
-        }
-
-        if !advanced_config().logging.threads {
-            config.set_thread_level(LevelFilter::Off);
-        } else {
-            config.set_thread_level(LevelFilter::Info);
-        }
-
-        let level = std::env::var("RUST_LOG")
-            .ok()
-            .as_deref()
-            .map(LevelFilter::from_str)
-            .and_then(Result::ok)
-            .unwrap_or(LevelFilter::Info);
-
-        let file_logger: Option<Box<dyn SharedLogger + 'static>> =
-            if advanced_config().logging.file.is_empty() {
-                None
-            } else {
-                Some(
-                    GzipRollingLogger::new(
-                        level,
-                        {
-                            let mut config = config.clone();
-                            for level in Level::iter() {
-                                config.set_level_color(level, None);
-                            }
-                            config.build()
-                        },
-                        advanced_config().logging.file.clone(),
-                    )
-                    .expect("Failed to initialize file logger.")
-                        as Box<dyn SharedLogger>,
-                )
-            };
-
-        if advanced_config().commands.use_tty && stdin().is_terminal() {
-            match Readline::new("$ ".to_owned()) {
-                Ok((rl, stdout)) => {
-                    let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
-                    Some((
-                        ReadlineLogWrapper::new(logger, file_logger, Some(rl)),
-                        level,
-                    ))
-                }
-                Err(e) => {
-                    log::warn!(
-                        "Failed to initialize console input ({e}); falling back to simple logger"
-                    );
-                    let logger = simplelog::SimpleLogger::new(level, config.build());
-                    Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
-                }
-            }
-        } else {
-            let logger = simplelog::SimpleLogger::new(level, config.build());
-            Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
-        }
-    } else {
-        None
-    }
-});
-
 #[macro_export]
 macro_rules! init_log {
     () => {
@@ -172,7 +86,7 @@ pub struct PumpkinServer {
 }
 
 impl PumpkinServer {
-    pub async fn new() -> Self {
+    pub async fn new(readline: Arc<std::sync::Mutex<Option<Readline>>>) -> Self {
         let server = Arc::new(Server::new().await);
 
         for world in &*server.worlds.read().await {
@@ -184,17 +98,15 @@ impl PumpkinServer {
         let mut ticker = Ticker::new();
 
         if advanced_config().commands.use_console {
-            if let Some((wrapper, _)) = &*LOGGER_IMPL {
-                if let Some(rl) = wrapper.take_readline() {
-                    setup_console(rl, server.clone());
-                } else {
-                    if advanced_config().commands.use_tty {
-                        log::warn!(
-                            "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
-                        );
-                    }
-                    setup_stdin_console(server.clone()).await;
+            if let Some(rl) = readline.lock().unwrap().take() {
+                setup_console(rl, server.clone());
+            } else {
+                if advanced_config().commands.use_tty {
+                    log::warn!(
+                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                    );
                 }
+                setup_stdin_console(server.clone()).await;
             }
         }
 
@@ -312,13 +224,6 @@ impl PumpkinServer {
         self.server.shutdown().await;
 
         log::info!("Completed save!");
-
-        // Explicitly drop the line reader to return the terminal to the original state.
-        if let Some((wrapper, _)) = &*LOGGER_IMPL {
-            if let Some(rl) = wrapper.take_readline() {
-                let _ = rl;
-            }
-        }
     }
 
     #[expect(unused_assignments)]
@@ -510,9 +415,6 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
                     break;
                 }
             }
-        }
-        if let Some((wrapper, _)) = &*LOGGER_IMPL {
-            wrapper.return_readline(rl);
         }
 
         log::debug!("Stopped console commands task");

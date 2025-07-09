@@ -74,6 +74,7 @@ png = "0.17"
 
 # logging
 simplelog = { version = "0.12.2", features = ["ansi_term"] }
+log4rs = "1.2"
 
 # Remove time in favor of chrono?
 time = "0.3"
@@ -92,6 +93,7 @@ tokio-util = { version = "0.7.15", features = ["rt"] }
 dhat = { version = "0.3.3", optional = true }
 
 flate2 = "1.1.2"
+anyhow = "1.0.98"
 
 [build-dependencies]
 git-version = "0.3"

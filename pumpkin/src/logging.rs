@@ -1,205 +1,180 @@
-use flate2::write::GzEncoder;
-use log::{LevelFilter, Log};
-use rustyline_async::Readline;
-use simplelog::{CombinedLogger, Config, SharedLogger, WriteLogger};
-use std::fs::File;
-use std::io::BufWriter;
-use std::path::Path;
+use log4rs::append::Append;
+use log4rs::config::Deserializers;
+use log4rs::encode::pattern::PatternEncoder;
+use log4rs::encode::{Color, Encode, EncoderConfig, Style};
+use rustyline_async::{Readline, SharedWriter};
+use std::fmt::{Debug, Formatter};
+use std::io::Write;
+use std::sync::{Arc, Mutex};
 
-/// A wrapper for our logger to hold the terminal input while no input is expected in order to
-/// properly flush logs to the output while they happen instead of batched
-pub struct ReadlineLogWrapper {
-    internal: Box<CombinedLogger>,
-    readline: std::sync::Mutex<Option<Readline>>,
+pub static LOGGER_TIME_FORMAT: &[time::format_description::BorrowedFormatItem] =
+    time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
+
+pub struct RustylineConsoleAppender {
+    encoder: Box<dyn Encode>,
+    pub readline: Arc<Mutex<Option<Readline>>>,
+    pub writer: Arc<Mutex<PumpkinLogWriter>>,
 }
 
-struct GzipRollingLoggerData {
-    pub current_day_of_month: u8,
-    pub last_rotate_time: time::OffsetDateTime,
-    pub latest_logger: WriteLogger<File>,
-    latest_filename: String,
+pub enum PumpkinLogWriter {
+    Tty(SharedWriter),
+    Raw(std::io::Stdout),
 }
 
-pub struct GzipRollingLogger {
-    log_level: LevelFilter,
-    data: std::sync::Mutex<GzipRollingLoggerData>,
-    config: Config,
-}
-
-impl GzipRollingLogger {
-    pub fn new(
-        log_level: LevelFilter,
-        config: Config,
-        filename: String,
-    ) -> Result<Box<Self>, Box<dyn std::error::Error>> {
-        let now = time::OffsetDateTime::now_utc();
-        std::fs::create_dir_all("logs")?;
-
-        // If latest.log exists, we will gzip it
-        if Path::new(&format!("logs/{filename}")).exists() {
-            let new_filename = Self::new_filename(false);
-            let mut file = File::open(format!("logs/{filename}"))?;
-            let mut encoder = GzEncoder::new(
-                BufWriter::new(File::create(&new_filename)?),
-                flate2::Compression::default(),
-            );
-            println!("logs/{filename}");
-            std::io::copy(&mut file, &mut encoder)?;
-            encoder.finish()?;
+impl Write for PumpkinLogWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            PumpkinLogWriter::Tty(tty) => std::io::Write::write(tty, buf),
+            PumpkinLogWriter::Raw(raw) => raw.write(buf),
         }
-
-        Ok(Box::new(Self {
-            log_level,
-            data: std::sync::Mutex::new(GzipRollingLoggerData {
-                current_day_of_month: now.day(),
-                last_rotate_time: now,
-                latest_filename: filename.clone(),
-                latest_logger: *WriteLogger::new(
-                    log_level,
-                    config.clone(),
-                    File::create(format!("logs/{filename}")).unwrap(),
-                ),
-            }),
-            config,
-        }))
     }
 
-    pub fn new_filename(yesterday: bool) -> String {
-        let mut now = time::OffsetDateTime::now_utc()
-            .to_offset(time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC));
-        if yesterday {
-            now -= time::Duration::days(1)
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            PumpkinLogWriter::Tty(tty) => std::io::Write::flush(tty),
+            PumpkinLogWriter::Raw(raw) => raw.flush(),
         }
-        let base_filename = format!("{}-{:02}-{:02}", now.year(), now.month() as u8, now.day());
+    }
+}
 
-        let mut id = 1;
-        loop {
-            let filename = format!("logs/{base_filename}-{id}.log.gz");
-            if !Path::new(&filename).exists() {
-                return filename;
+fn color_byte(c: Color) -> u8 {
+    match c {
+        Color::Black => b'0',
+        Color::Red => b'1',
+        Color::Green => b'2',
+        Color::Yellow => b'3',
+        Color::Blue => b'4',
+        Color::Magenta => b'5',
+        Color::Cyan => b'6',
+        Color::White => b'7',
+    }
+}
+
+impl log4rs::encode::Write for PumpkinLogWriter {
+    fn set_style(&mut self, style: &Style) -> std::io::Result<()> {
+        match self {
+            PumpkinLogWriter::Tty(tty) => {
+                let mut buf = [0; 12];
+                buf[0] = b'\x1b';
+                buf[1] = b'[';
+                buf[2] = b'0';
+                let mut idx = 3;
+
+                if let Some(text) = style.text {
+                    buf[idx] = b';';
+                    buf[idx + 1] = b'3';
+                    buf[idx + 2] = color_byte(text);
+                    idx += 3;
+                }
+
+                if let Some(background) = style.background {
+                    buf[idx] = b';';
+                    buf[idx + 1] = b'4';
+                    buf[idx + 2] = color_byte(background);
+                    idx += 3;
+                }
+
+                if let Some(intense) = style.intense {
+                    buf[idx] = b';';
+                    if intense {
+                        buf[idx + 1] = b'1';
+                        idx += 2;
+                    } else {
+                        buf[idx + 1] = b'2';
+                        buf[idx + 2] = b'2';
+                        idx += 3;
+                    }
+                }
+                buf[idx] = b'm';
+                Write::write_all(tty, &buf[..=idx])
             }
-            id += 1;
+            PumpkinLogWriter::Raw(_) => Ok(()),
         }
     }
+}
 
-    fn rotate_log(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let now = time::OffsetDateTime::now_utc();
-        let mut data = self.data.lock().unwrap();
+impl RustylineConsoleAppender {
+    pub fn new(
+        encoder: Box<dyn Encode>,
+        readline: Arc<Mutex<Option<Readline>>>,
+        writer: Arc<Mutex<PumpkinLogWriter>>,
+    ) -> Self {
+        Self {
+            encoder,
+            readline,
+            writer,
+        }
+    }
+}
 
-        let new_filename = Self::new_filename(true);
-        let mut file = File::open(format!("logs/{}", data.latest_filename))?;
-        let mut encoder = GzEncoder::new(
-            BufWriter::new(File::create(format!("logs/{new_filename}"))?),
-            flate2::Compression::default(),
-        );
-        std::io::copy(&mut file, &mut encoder)?;
-        encoder.finish()?;
+impl Debug for RustylineConsoleAppender {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RustylineConsoleAppender").finish()
+    }
+}
 
-        data.current_day_of_month = now.day();
-        data.last_rotate_time = now;
-        data.latest_logger = *WriteLogger::new(
-            self.log_level,
-            self.config.clone(),
-            File::create(format!("logs/{}", data.latest_filename)).unwrap(),
-        );
+impl Append for RustylineConsoleAppender {
+    fn append(&self, record: &log::Record) -> anyhow::Result<()> {
+        let mut writer = self
+            .writer
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock writer mutex"))?;
+        self.encoder.encode(&mut *writer, record)?;
+        drop(writer);
+        if let Some(readline) = self
+            .readline
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock readline mutex"))?
+            .as_mut()
+        {
+            readline.flush()?;
+        }
         Ok(())
     }
+
+    fn flush(&self) {}
 }
 
-impl Log for GzipRollingLogger {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        metadata.level() <= self.log_level
-    }
-
-    fn log(&self, record: &log::Record) {
-        if !self.enabled(record.metadata()) {
-            return;
-        }
-
-        let now = time::OffsetDateTime::now_utc();
-
-        if let Ok(data) = self.data.lock() {
-            data.latest_logger.log(record);
-            if data.current_day_of_month != now.day() {
-                drop(data);
-                if let Err(e) = self.rotate_log() {
-                    eprintln!("Failed to rotate log: {e}");
-                }
-            }
-        }
-    }
-
-    fn flush(&self) {
-        if let Ok(data) = self.data.lock() {
-            data.latest_logger.flush();
-        }
-    }
+#[derive(Debug, serde::Deserialize)]
+struct RustylineConsoleAppenderConfig {
+    encoder: Option<EncoderConfig>,
 }
 
-impl SharedLogger for GzipRollingLogger {
-    fn level(&self) -> LevelFilter {
-        self.log_level
-    }
-
-    fn config(&self) -> Option<&Config> {
-        Some(&self.config)
-    }
-
-    fn as_log(self: Box<Self>) -> Box<dyn Log> {
-        Box::new(*self)
-    }
+struct RustylineConsoleAppenderDeserializer {
+    readline: Arc<Mutex<Option<Readline>>>,
+    writer: Arc<Mutex<PumpkinLogWriter>>,
 }
 
-impl ReadlineLogWrapper {
-    pub fn new(
-        log: Box<dyn SharedLogger + 'static>,
-        file_logger: Option<Box<dyn SharedLogger + 'static>>,
-        rl: Option<Readline>,
-    ) -> Self {
-        let loggers: Vec<Option<Box<dyn SharedLogger + 'static>>> = vec![Some(log), file_logger];
-        Self {
-            internal: CombinedLogger::new(loggers.into_iter().flatten().collect()),
-            readline: std::sync::Mutex::new(rl),
-        }
-    }
+impl log4rs::config::Deserialize for RustylineConsoleAppenderDeserializer {
+    type Trait = dyn Append;
+    type Config = RustylineConsoleAppenderConfig;
 
-    pub(crate) fn take_readline(&self) -> Option<Readline> {
-        if let Ok(mut result) = self.readline.lock() {
-            result.take()
+    fn deserialize(
+        &self,
+        config: Self::Config,
+        deserializers: &Deserializers,
+    ) -> anyhow::Result<Box<Self::Trait>> {
+        let encoder = if let Some(encoder_config) = config.encoder {
+            deserializers.deserialize(&encoder_config.kind, encoder_config.config)?
         } else {
-            None
-        }
-    }
+            Box::<PatternEncoder>::default() as Box<dyn Encode>
+        };
 
-    pub(crate) fn return_readline(&self, rl: Readline) {
-        if let Ok(mut result) = self.readline.lock() {
-            println!("Returned rl");
-            let _ = result.insert(rl);
-        }
+        Ok(Box::new(RustylineConsoleAppender::new(
+            encoder,
+            self.readline.clone(),
+            self.writer.clone(),
+        )) as Box<dyn Append>)
     }
 }
 
-// Writing to `stdout` is expensive anyway, so I don't think having a `Mutex` here is a big deal.
-impl Log for ReadlineLogWrapper {
-    fn log(&self, record: &log::Record) {
-        self.internal.log(record);
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
-        }
-    }
-
-    fn flush(&self) {
-        self.internal.flush();
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
-        }
-    }
-
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        self.internal.enabled(metadata)
-    }
+pub fn register_rustyline_console_appender(
+    deserializers: &mut Deserializers,
+    readline: Arc<Mutex<Option<Readline>>>,
+    writer: Arc<Mutex<PumpkinLogWriter>>,
+) {
+    deserializers.insert(
+        "rustyline_console",
+        RustylineConsoleAppenderDeserializer { readline, writer },
+    );
 }

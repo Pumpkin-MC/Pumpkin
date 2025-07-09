@@ -1,0 +1,16 @@
+appenders:
+  console:
+    kind: rustyline_console
+    encoder:
+      pattern: "{d} [{l}] {m}{n}"
+  file:
+    kind: file
+    path: "logs/latest.log"
+    encoder:
+      pattern: "{d} - {m}{n}"
+root:
+  level: debug
+  appenders:
+    - console
+    - file
+
