@@ -12,7 +12,7 @@ use crate::{
     PLUGIN_MANAGER,
     block::{
         self,
-        pumpkin_block::{OnNeighborUpdateArgs, OnScheduledTickArgs, RandomTickArgs},
+        pumpkin_block::{OnNeighborUpdateArgs, OnScheduledTickArgs},
         registry::BlockRegistry,
     },
     command::client_suggestions,
@@ -635,6 +635,8 @@ impl World {
                     .await;
             }
         }
+
+        /* TODO: Fix this deadlock
         for scheduled_tick in tick_data.random_ticks {
             let block = self.get_block(&scheduled_tick.block_pos).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
@@ -646,7 +648,7 @@ impl World {
                     })
                     .await;
             }
-        }
+        } */
 
         for block_entity in tick_data.block_entities {
             let world: Arc<dyn SimpleWorld> = self.clone();

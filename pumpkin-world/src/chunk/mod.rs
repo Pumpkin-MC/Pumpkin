@@ -110,6 +110,8 @@ pub struct ScheduledTick {
     pub target_block_id: u16,
 }
 
+// Clone here cause we want to clone a snapshot of the chunk so we don't block writing for too long
+#[derive(Clone)]
 pub struct ChunkData {
     pub section: ChunkSections,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
@@ -199,6 +201,7 @@ impl ChunkData {
     }
 }
 
+#[derive(Clone)]
 pub struct ChunkEntityData {
     pub chunk_position: Vector2<i32>,
     pub data: HashMap<uuid::Uuid, NbtCompound>,
@@ -212,7 +215,7 @@ pub struct ChunkEntityData {
 ///
 /// A chunk can be:
 /// - Subchunks: 24 separate subchunks are stored.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChunkSections {
     pub sections: Box<[SubChunk]>,
     min_y: i32,
@@ -244,13 +247,13 @@ impl ChunkSections {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SubChunk {
     pub block_states: BlockPalette,
     pub biomes: BiomePalette,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ChunkLight {
     pub sky_light: Box<[LightContainer]>,
     pub block_light: Box<[LightContainer]>,
