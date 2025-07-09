@@ -1,7 +1,6 @@
 use chunk::ChunkConfig;
 use fun::FunConfig;
 use log::warn;
-use logging::LoggingConfig;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -14,7 +13,6 @@ use std::{
     sync::LazyLock,
 };
 pub mod fun;
-pub mod logging;
 pub mod networking;
 
 pub mod resource_pack;
@@ -93,7 +91,6 @@ pub fn advanced_config() -> &'static AdvancedConfiguration {
 #[derive(Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct AdvancedConfiguration {
-    pub logging: LoggingConfig,
     pub resource_pack: ResourcePackConfig,
     pub chunk: ChunkConfig,
     pub networking: NetworkingConfig,

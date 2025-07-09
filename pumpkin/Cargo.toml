@@ -73,8 +73,7 @@ base64 = "0.22"
 png = "0.17"
 
 # logging
-simplelog = { version = "0.12.2", features = ["ansi_term"] }
-log4rs = "1.2"
+log4rs = "1.3"
 
 # Remove time in favor of chrono?
 time = "0.3"

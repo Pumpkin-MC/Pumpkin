@@ -51,7 +51,6 @@ use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
 use crate::server::CURRENT_MC_VERSION;
-use log::Log;
 use log4rs::config::Deserializers;
 use pumpkin::logging::{PumpkinLogWriter, register_rustyline_console_appender};
 use pumpkin::{PumpkinServer, READLINE, SHOULD_STOP, STOP_INTERRUPT, stop_server};
@@ -145,7 +144,7 @@ async fn main() {
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        if let Some(mut lock) = READLINE.try_lock().ok() {
+        if let Ok(mut lock) = READLINE.try_lock() {
             if let Some(rl) = lock.take() {
                 // Reset terminal state before panicking
                 drop(rl);
