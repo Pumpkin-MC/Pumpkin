@@ -2002,7 +2002,7 @@ impl EntityBase for Player {
     }
 
     fn get_player(&self) -> Option<&Player> {
-        Some(&self)
+        Some(self)
     }
 
     fn is_spectator(&self) -> bool {

@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use super::MobEntity;
+use super::{Mob, MobEntity};
+use crate::entity::ai::control::look_control::LookControl;
+use crate::entity::ai::goal::look_around_goal::LookAroundGoal;
 use crate::entity::{
     Entity,
     ai::{
@@ -16,11 +18,14 @@ pub struct Zombie;
 
 impl Zombie {
     pub async fn make(entity: Entity) -> Arc<MobEntity> {
+        let zombie = Self {};
         let mob_entity = MobEntity {
             living_entity: LivingEntity::new(entity),
+            mob: Some(Arc::new(zombie)),
             goals: Mutex::new(vec![]),
             navigator: Mutex::new(Navigator::default()),
             target: Mutex::new(None),
+            look_control: Mutex::new(LookControl::default()),
         };
         let mob_arc = Arc::new(mob_entity);
         let mob_weak = Arc::downgrade(&mob_arc);
@@ -37,6 +42,8 @@ impl Zombie {
                 )),
                 false,
             ));
+            goals.push((Arc::new(LookAroundGoal::new(mob_weak.clone())), false));
+
             goals.push((
                 Arc::new(ActiveTargetGoal::with_default(
                     mob_weak.clone(),
@@ -44,8 +51,10 @@ impl Zombie {
                 )),
                 false,
             ));
-        }
+        };
 
         mob_arc
     }
 }
+
+impl Mob for Zombie {}

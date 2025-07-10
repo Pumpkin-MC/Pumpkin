@@ -99,6 +99,12 @@ impl Navigator {
                 .await;
         }
     }
+
+    #[must_use]
+    pub fn is_idle(&self) -> bool {
+        // TODO: implement
+        true
+    }
 }
 
 pub struct Node {

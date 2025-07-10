@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
 
+#[allow(dead_code)]
 pub struct ActiveTargetGoal {
     mob: Weak<MobEntity>,
     track_target_goal: TrackTargetGoal,
@@ -23,7 +24,6 @@ pub struct ActiveTargetGoal {
 }
 
 impl ActiveTargetGoal {
-    #[must_use]
     pub fn new<F, Fut>(
         mob: Weak<MobEntity>,
         target_type: EntityType,
@@ -44,7 +44,7 @@ impl ActiveTargetGoal {
             target_predicate.set_predicate(predicate);
         }
         Self {
-            mob: mob.clone(),
+            mob,
             track_target_goal,
             target: Mutex::new(None),
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
@@ -53,12 +53,13 @@ impl ActiveTargetGoal {
         }
     }
 
+    #[must_use]
     pub fn with_default(mob: Weak<MobEntity>, target_type: EntityType) -> Self {
         let track_target_goal = TrackTargetGoal::with_default(mob.clone(), true);
         let mut target_predicate = TargetPredicate::attackable();
         target_predicate.base_max_distance = track_target_goal.get_follow_range();
         Self {
-            mob: mob.clone(),
+            mob,
             track_target_goal,
             target: Mutex::new(None),
             reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
@@ -110,7 +111,7 @@ impl Goal for ActiveTargetGoal {
     async fn start(&self, mob: &MobEntity) {
         let mut mob_target = mob.target.lock().await;
         let target = self.target.lock().await.clone();
-        *mob_target = target.clone();
+        (*mob_target).clone_from(&target);
 
         self.track_target_goal.start(mob).await;
     }

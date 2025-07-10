@@ -5,6 +5,7 @@ use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+use crate::entity::ai::control::look_control::LookControl;
 use crate::{
     entity::{
         Entity, EntityBase,
@@ -31,9 +32,11 @@ pub async fn from_type(
         // TODO
         _ => Arc::new(MobEntity {
             living_entity: LivingEntity::new(entity),
+            mob: None,
             goals: Mutex::new(vec![]),
             navigator: Mutex::new(Navigator::default()),
             target: Mutex::new(None),
+            look_control: Mutex::new(LookControl::default()),
         }),
     };
 

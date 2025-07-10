@@ -11,6 +11,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 
+#[allow(dead_code)]
 pub struct LookAtEntityGoal {
     mob: Weak<MobEntity>,
     target: Mutex<Option<Arc<dyn EntityBase>>>,
@@ -44,6 +45,7 @@ impl LookAtEntityGoal {
         }
     }
 
+    #[must_use]
     pub fn with_default(mob_weak: Weak<MobEntity>, target_type: EntityType, range: f64) -> Self {
         Self::new(mob_weak, target_type, range, 0.02, false)
     }
@@ -84,7 +86,7 @@ impl Goal for LookAtEntityGoal {
 
         let mob_target = mob.target.lock().await;
         if mob_target.is_some() {
-            *target = mob_target.clone();
+            (*target).clone_from(&mob_target);
         }
         drop(mob_target);
 

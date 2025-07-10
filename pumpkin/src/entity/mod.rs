@@ -148,23 +148,21 @@ pub enum RemovalReason {
 }
 
 impl RemovalReason {
+    #[must_use]
     pub fn should_destroy(&self) -> bool {
         match self {
-            RemovalReason::Killed => true,
-            RemovalReason::Discarded => true,
-            RemovalReason::UnloadedToChunk => false,
-            RemovalReason::UnloadedWithPlayer => false,
-            RemovalReason::ChangedDimension => false,
+            Self::Killed | Self::Discarded => true,
+            Self::UnloadedToChunk | Self::UnloadedWithPlayer | Self::ChangedDimension => false,
         }
     }
 
+    #[must_use]
     pub fn should_save(&self) -> bool {
         match self {
-            RemovalReason::Killed => false,
-            RemovalReason::Discarded => false,
-            RemovalReason::UnloadedToChunk => true,
-            RemovalReason::UnloadedWithPlayer => false,
-            RemovalReason::ChangedDimension => false,
+            Self::Killed | Self::Discarded | Self::UnloadedWithPlayer | Self::ChangedDimension => {
+                false
+            }
+            Self::UnloadedToChunk => true,
         }
     }
 }
@@ -201,6 +199,8 @@ pub struct Entity {
     pub yaw: AtomicCell<f32>,
     /// The entity's head yaw rotation (horizontal rotation of the head)
     pub head_yaw: AtomicCell<f32>,
+    /// The entity's body yaw rotation (horizontal rotation of the body)
+    pub body_yaw: AtomicCell<f32>,
     /// The entity's pitch rotation (vertical rotation) ↑ ↓
     pub pitch: AtomicCell<f32>,
     /// The height of the entity's eyes from the ground.
@@ -264,6 +264,7 @@ impl Entity {
             fall_flying: AtomicBool::new(false),
             yaw: AtomicCell::new(0.0),
             head_yaw: AtomicCell::new(0.0),
+            body_yaw: AtomicCell::new(0.0),
             pitch: AtomicCell::new(0.0),
             velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             standing_eye_height: entity_type.eye_height,
@@ -481,6 +482,10 @@ impl Entity {
     pub fn set_rotation(&self, yaw: f32, pitch: f32) {
         // TODO
         self.yaw.store(yaw);
+        self.set_pitch(pitch);
+    }
+
+    pub fn set_pitch(&self, pitch: f32) {
         self.pitch.store(pitch.clamp(-90.0, 90.0) % 360.0);
     }
 
@@ -849,7 +854,7 @@ impl Entity {
     }
 
     pub fn get_eye_y(&self) -> f64 {
-        self.pos.load().y + self.standing_eye_height as f64
+        self.pos.load().y + f64::from(self.standing_eye_height)
     }
 
     pub fn is_removed(&self) -> bool {

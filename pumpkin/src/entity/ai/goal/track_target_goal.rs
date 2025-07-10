@@ -1,7 +1,7 @@
 use super::{Goal, to_goal_ticks};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
-use crate::entity::{EntityBase,mob::MobEntity};
+use crate::entity::{EntityBase, mob::MobEntity};
 use async_trait::async_trait;
 use rand::Rng;
 use std::sync::atomic::AtomicI32;
@@ -10,9 +10,12 @@ use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 
 const UNSET: i32 = 0;
+#[allow(dead_code)]
 const CAN_TRACK: i32 = 1;
+#[allow(dead_code)]
 const CANNOT_TRACK: i32 = 2;
 
+#[allow(dead_code)]
 pub struct TrackTargetGoal {
     mob: Weak<MobEntity>,
     target: Mutex<Option<Arc<dyn EntityBase>>>,
@@ -24,6 +27,7 @@ pub struct TrackTargetGoal {
     max_time_without_visibility: AtomicI32, // Default 60
 }
 
+#[allow(dead_code)]
 impl TrackTargetGoal {
     #[must_use]
     pub fn new(
@@ -48,11 +52,7 @@ impl TrackTargetGoal {
     }
 
     pub fn get_follow_range(&self) -> f64 {
-        if let Some(_mob) = self.mob.upgrade() {
-            0.0 // TODO: Get mob Attribute FOLLOW_RANGE
-        } else {
-            0.0
-        }
+        self.mob.upgrade().map_or(0.0, |_mob| 1.0)
     }
 
     pub fn set_max_time_without_visibility(&self, time: i32) {
@@ -79,10 +79,7 @@ impl TrackTargetGoal {
         }
         let target = target.unwrap();
         let world = mob.living_entity.entity.world.read().await;
-        if !target_predicate
-            .test(world.clone(), mob.get_living_entity(), target)
-            .await
-        {
+        if !target_predicate.test(world.clone(), mob.get_living_entity(), target) {
             return false;
         } /*else if (!this.mob.isInPositionTargetRange(target.getBlockPos())) {
         return false;

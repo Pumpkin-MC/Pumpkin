@@ -3,6 +3,7 @@ use crate::world::World;
 use std::pin::Pin;
 use std::sync::Arc;
 
+#[allow(dead_code)]
 const MIN_DISTANCE: f64 = 2.0;
 
 pub type PredicateFn = dyn Fn(Arc<LivingEntity>, Arc<World>) -> Pin<Box<dyn Future<Output = bool> + Send>>
@@ -31,19 +32,23 @@ impl Default for TargetPredicate {
 
 impl TargetPredicate {
     fn new(attackable: bool) -> Self {
-        let mut instance = Self::default();
-        instance.attackable = attackable;
-        instance
+        Self {
+            attackable,
+            ..Default::default()
+        }
     }
 
+    #[must_use]
     pub fn attackable() -> Self {
         Self::new(true)
     }
 
+    #[must_use]
     pub fn non_attackable() -> Self {
         Self::new(false)
     }
 
+    #[must_use]
     pub fn copy(&self) -> Self {
         let mut instance = if self.attackable {
             Self::attackable()
@@ -53,7 +58,7 @@ impl TargetPredicate {
         instance.base_max_distance = self.base_max_distance;
         instance.respects_visibility = self.respects_visibility;
         instance.use_distance_scaling_factor = self.use_distance_scaling_factor;
-        instance.predicate = self.predicate.clone();
+        instance.predicate.clone_from(&self.predicate);
 
         instance
     }
@@ -66,15 +71,14 @@ impl TargetPredicate {
         self.use_distance_scaling_factor = false;
     }
 
-    pub async fn test(
+    pub fn test(
         &self,
         _world: Arc<World>,
         tester: Option<&LivingEntity>,
         target: &LivingEntity,
     ) -> bool {
-        if tester.is_some() && std::ptr::eq(tester.unwrap(), target) {
-            return false;
-        } else if !target.is_part_of_game().await {
+        if (tester.is_some() && std::ptr::eq(tester.unwrap(), target)) || !target.is_part_of_game()
+        {
             return false;
         }
         //TODO: continue

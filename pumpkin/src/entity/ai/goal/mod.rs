@@ -3,9 +3,12 @@ use async_trait::async_trait;
 use crate::entity::mob::MobEntity;
 
 pub mod active_target_goal;
+pub mod ambient_stand_goal;
+pub mod look_around_goal;
 pub mod look_at_entity;
 mod track_target_goal;
 
+#[must_use]
 pub fn to_goal_ticks(server_ticks: i32) -> i32 {
     -(-server_ticks).div_euclid(2)
 }

@@ -13,7 +13,7 @@ pub enum EntityPredicate<'a> {
     Rides(&'a Entity),
 }
 
-impl<'a> EntityPredicate<'a> {
+impl EntityPredicate<'_> {
     pub fn test<'b>(
         &'b self,
         entity: &'b Entity,
@@ -25,19 +25,17 @@ impl<'a> EntityPredicate<'a> {
                     entity.is_alive() && entity.get_living_entity().is_some()
                 }
                 EntityPredicate::NotMounted => {
-                    entity.is_alive() && !entity.has_passengers().await && !entity.has_vehicle().await
+                    entity.is_alive()
+                        && !entity.has_passengers().await
+                        && !entity.has_vehicle().await
                 }
                 EntityPredicate::ValidInventories => {
                     // TODO: implement
                     false
                 }
-                EntityPredicate::ExceptCreativeOrSpectator => {
-                    if let Some(player) = entity.get_player() {
-                        player.is_spectator() || player.is_creative()
-                    } else {
-                        false
-                    }
-                }
+                EntityPredicate::ExceptCreativeOrSpectator => entity
+                    .get_player()
+                    .is_some_and(|player| player.is_spectator() || player.is_creative()),
                 EntityPredicate::ExceptSpectator => !entity.is_spectator(),
                 EntityPredicate::CanCollide => {
                     EntityPredicate::ExceptSpectator.test(entity).await
@@ -47,7 +45,7 @@ impl<'a> EntityPredicate<'a> {
                     EntityPredicate::ExceptSpectator.test(entity).await && entity.can_hit()
                 }
                 EntityPredicate::Rides(target_entity) => {
-                    let target: &Entity = *target_entity;
+                    let target: &Entity = target_entity;
 
                     let mut opt_vehicle_arc = {
                         let vehicle_lock = entity.vehicle.lock().await;
