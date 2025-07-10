@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
@@ -190,7 +190,7 @@ pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
 pub static STOP_INTERRUPT: LazyLock<Notify> = LazyLock::new(Notify::new);
 
 pub fn stop_server() {
-    SHOULD_STOP.store(true, std::sync::atomic::Ordering::Relaxed);
+    SHOULD_STOP.store(true, Ordering::Relaxed);
     STOP_INTERRUPT.notify_waiters();
 }
 
@@ -304,7 +304,7 @@ impl PumpkinServer {
         let master_client_id: u64 = 0;
         let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
 
-        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
                 .unified_listener_task(master_client_id, &tasks, &bedrock_clients)
                 .await
@@ -445,6 +445,7 @@ impl PumpkinServer {
                         });
                     }
                     Err(e) => {
+                        // TODO Close connection
                         log::error!("Failed to receive UDP packet for Bedrock: {e}");
                         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
                     }
@@ -464,7 +465,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     let rt = tokio::runtime::Handle::current();
     std::thread::spawn(move || {
-        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
             let mut line = String::new();
             if let Ok(size) = stdin().read_line(&mut line) {
                 // if no bytes were read, we may have hit EOF
@@ -482,7 +483,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
         }
     });
     tokio::spawn(async move {
-        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
             if let Some(command) = rx.recv().await {
                 send_cancellable! {{
                     ServerCommandEvent::new(command.clone());
@@ -503,7 +504,7 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
     // This needs to be async, or it will hog a thread.
     server.clone().spawn_task(async move {
         let mut rl = rl;
-        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
             let t1 = rl.readline();
             let t2 = STOP_INTERRUPT.notified();
 

@@ -169,10 +169,7 @@ async fn main() {
             ""
         },
         if BASIC_CONFIG.bedrock_edition {
-            format!(
-                "Bedrock/Pocket Edition: {}",
-                BASIC_CONFIG.bedrock_edition_address
-            )
+            format!("Bedrock Edition: {}", BASIC_CONFIG.bedrock_edition_address)
         } else {
             String::new()
         }

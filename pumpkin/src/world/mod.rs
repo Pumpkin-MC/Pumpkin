@@ -58,11 +58,12 @@ use pumpkin_protocol::{
         RakReliability,
         client::{
             gamerules_changed::GameRules,
-            start_game::{Experiments, GAME_PUBLISH_SETTING_PUBLIC, LevelSettings},
+            start_game::{Experiments, GamePublishSetting, LevelSettings},
         },
     },
     codec::{
-        bedrock_block_pos::BedrockPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
+        bedrock_block_pos::BedrockPos, little_endian::Le32, var_long::VarLong, var_uint::VarUInt,
+        var_ulong::VarULong,
     },
     java::{
         client::play::{
@@ -677,8 +678,9 @@ impl World {
             spawn_biome_type: 0,
             custom_biome_name: String::with_capacity(0),
             dimension: VarInt(0),
-            generator_type: VarInt(1),
-            world_gamemode: VarInt(server.defaultgamemode.lock().await.gamemode as i32),
+            // Don't know what problem the client has with 1
+            generator_type: VarInt(2),
+            world_gamemode: VarInt(1),
             hardcore: base_config.hardcore,
             difficulty: VarInt(level_info.difficulty as i32),
             spawn_position: BedrockPos(BlockPos(Vector3::new(
@@ -699,9 +701,9 @@ impl World {
             has_confirmed_platform_locked_content: false,
             was_multiplayer_intended: true,
             was_lan_broadcasting_intended: true,
-            xbox_live_broadcast_setting: VarInt(GAME_PUBLISH_SETTING_PUBLIC),
-            platform_broadcast_setting: VarInt(GAME_PUBLISH_SETTING_PUBLIC),
-            commands_enabled: level_info.allow_commands,
+            xbox_live_broadcast_setting: VarInt(GamePublishSetting::Public as _),
+            platform_broadcast_setting: VarInt(GamePublishSetting::Public as _),
+            commands_enabled: false,
             is_texture_packs_required: false,
             rule_data: GameRules {
                 list_size: VarUInt(0),
@@ -713,8 +715,8 @@ impl World {
             bonus_chest: false,
             has_start_with_map_enabled: false,
             // TODO Bedrock permission level are different
-            permission_level: VarInt(2),
-            server_chunk_tick_range: base_config.simulation_distance.get().into(),
+            permission_level: VarInt(1),
+            server_chunk_tick_range: Le32(4),
             has_locked_behavior_pack: false,
             has_locked_resource_pack: false,
             is_from_locked_world_template: false,
@@ -728,7 +730,7 @@ impl World {
             game_version: CURRENT_BEDROCK_MC_VERSION.into(),
             limited_world_width: 0,
             limited_world_height: 0,
-            is_nether_type: base_config.allow_nether,
+            new_nether: true,
             edu_shared_uri_button_name: String::with_capacity(0),
             edu_shared_uri_link_uri: String::with_capacity(0),
             override_force_experimental_gameplay_has_value: false,
@@ -739,19 +741,20 @@ impl World {
             scenario_id: String::with_capacity(0),
             owner_id: String::with_capacity(0),
         };
+
         if let ClientPlatform::Bedrock(client) = &player.client {
             client
                 .send_game_packet(
                     &CStartGame {
-                        entity_id: VarLong(i64::from(player.entity_id())),
-                        runtime_entity_id: VarULong(player.entity_id() as u64),
-                        player_gamemode: VarInt(player.gamemode.load() as i32),
+                        entity_id: VarLong(i64::from(76654)),
+                        runtime_entity_id: VarULong(76654),
+                        player_gamemode: VarInt(1),
                         position: Vector3::new(0.0, 100.0, 0.0),
-                        yaw: 0.0,
                         pitch: 0.0,
+                        yaw: 0.0,
                         level_settings,
                         level_id: String::with_capacity(0),
-                        level_name: "level".to_string(),
+                        level_name: "new pumpkin world".to_string(),
                         premium_world_template_id: String::with_capacity(0),
                         is_trial: false,
                         rewind_history_size: VarInt(40),
@@ -763,7 +766,7 @@ impl World {
                         multiplayer_correlation_id: Uuid::default().to_string(),
                         enable_itemstack_net_manager: false,
                         // TODO Make this description better!
-                        // This gets send from the client to mojang server for telemetry
+                        // This gets send from the client to mojang for telemetry
                         server_version: "Pumpkin Rust Server".to_string(),
 
                         compound_id: 10,
@@ -781,7 +784,7 @@ impl World {
                 )
                 .await;
         } else {
-            panic!();
+            unreachable!();
         }
     }
 

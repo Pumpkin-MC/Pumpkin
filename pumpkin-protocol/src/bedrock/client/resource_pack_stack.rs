@@ -6,6 +6,7 @@ use crate::{bedrock::client::start_game::Experiments, codec::var_uint::VarUInt};
 #[derive(Serialize, Deserialize)]
 #[packet(0x07)]
 pub struct CResourcePackStackPacket {
+    // https://mojang.github.io/bedrock-protocol-docs/html/ResourcePackStackPacket.html
     resource_pack_required: bool,
     addons_list_size: VarUInt,
     texture_pack_list_size: VarUInt,

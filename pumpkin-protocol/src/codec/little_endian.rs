@@ -10,7 +10,7 @@ impl Serialize for Le64 {
         serializer.serialize_bytes(&self.0.to_le_bytes())
     }
 }
-
+#[derive(Debug)]
 pub struct Le32(pub i32);
 
 impl Serialize for Le32 {

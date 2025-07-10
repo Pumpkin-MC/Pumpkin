@@ -39,7 +39,7 @@ fn load_icon_from_bytes(png_data: &[u8]) -> Result<String, Box<dyn error::Error>
 }
 
 pub struct CachedStatus {
-    status_response: StatusResponse,
+    pub status_response: StatusResponse,
     // We cache the json response here so we don't parse it every time someone makes a status request.
     // Keep in mind that we must parse this again when the StatusResponse changes, which usually happen when a player joins or leaves.
     status_response_json: String,

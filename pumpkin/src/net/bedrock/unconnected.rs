@@ -14,12 +14,23 @@ use crate::{
 
 impl BedrockClientPlatform {
     pub async fn handle_unconnected_ping(&self, server: &Server, packet: SUnconnectedPing) {
+        // TODO
+        let player_count = server
+            .get_status()
+            .lock()
+            .await
+            .status_response
+            .players
+            .as_ref()
+            .unwrap()
+            .online as _;
+
         let motd_string = ServerInfo {
             edition: "MCPE",
             motd_line_1: &BASIC_CONFIG.motd,
             protocol_version: 819,
             version_name: CURRENT_BEDROCK_MC_VERSION,
-            player_count: 1,
+            player_count,
             max_player_count: BASIC_CONFIG.max_players,
             server_unique_id: server.server_guid,
             motd_line_2: &BASIC_CONFIG.default_level_name,

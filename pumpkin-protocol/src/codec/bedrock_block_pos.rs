@@ -6,6 +6,7 @@ use crate::{
 };
 
 /// Bedrocks Writes and Reads BlockPos types in Packets differently
+#[derive(Debug)]
 pub struct BedrockPos(pub BlockPos);
 
 impl serde::Serialize for BedrockPos {

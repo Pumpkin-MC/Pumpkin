@@ -1,4 +1,4 @@
-use std::{io::Write, net::SocketAddr};
+use std::{io::Write, net::SocketAddr, pin::Pin};
 
 use bytes::Bytes;
 use thiserror::Error;
@@ -27,49 +27,49 @@ impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
 
 impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
     fn poll_write(
-        self: std::pin::Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<Result<usize, std::io::Error>> {
         match self.get_mut() {
             Self::Encrypt(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_write(cx, buf)
             }
             Self::None(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_write(cx, buf)
             }
         }
     }
 
     fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
         match self.get_mut() {
             Self::Encrypt(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_flush(cx)
             }
             Self::None(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_flush(cx)
             }
         }
     }
 
     fn poll_shutdown(
-        self: std::pin::Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
         match self.get_mut() {
             Self::Encrypt(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_shutdown(cx)
             }
             Self::None(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_shutdown(cx)
             }
         }

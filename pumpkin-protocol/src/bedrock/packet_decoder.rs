@@ -1,4 +1,4 @@
-use std::io::Cursor;
+use std::{io::Cursor, pin::Pin};
 
 use async_compression::tokio::bufread::ZlibDecoder;
 use bytes::Bytes;
@@ -19,17 +19,17 @@ pub enum DecompressionReader<R: AsyncRead + Unpin> {
 impl<R: AsyncRead + Unpin> AsyncRead for DecompressionReader<R> {
     #[inline]
     fn poll_read(
-        self: std::pin::Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
             Self::Decompress(reader) => {
-                let reader = std::pin::Pin::new(reader);
+                let reader = Pin::new(reader);
                 reader.poll_read(cx, buf)
             }
             Self::None(reader) => {
-                let reader = std::pin::Pin::new(reader);
+                let reader = Pin::new(reader);
                 reader.poll_read(cx, buf)
             }
         }
@@ -53,17 +53,17 @@ impl<R: AsyncRead + Unpin> DecryptionReader<R> {
 impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
     #[inline]
     fn poll_read(
-        self: std::pin::Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
             Self::Decrypt(reader) => {
-                let reader = std::pin::Pin::new(reader);
+                let reader = Pin::new(reader);
                 reader.poll_read(cx, buf)
             }
             Self::None(reader) => {
-                let reader = std::pin::Pin::new(reader);
+                let reader = Pin::new(reader);
                 reader.poll_read(cx, buf)
             }
         }
@@ -120,7 +120,6 @@ impl UDPNetworkDecoder {
     ) -> Result<RawPacket, PacketDecodeError> {
         if self.compression.is_some() {
             let _method = reader.get_u8().unwrap();
-            dbg!(_method);
             // None Compression
         }
 

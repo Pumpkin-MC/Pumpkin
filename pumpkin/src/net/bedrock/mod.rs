@@ -452,7 +452,6 @@ impl BedrockClientPlatform {
                 return Ok(());
             }
 
-            dbg!("compound complete! size", entry.len());
             let mut frames = compounds.remove(&compound_id).unwrap();
 
             // Safety: We already checked that all frames are Some at this point

@@ -112,9 +112,9 @@ pub struct BasicConfiguration {
     pub java_edition: bool,
     /// The address and port to which the Java Edition server will bind
     pub java_edition_address: SocketAddr,
-    // Whether Bedrock/Pocket Edition Client's are Accepted
+    // Whether Bedrock Edition Client's are Accepted
     pub bedrock_edition: bool,
-    /// The address and port to which the Bedrock/Pocket Edition server will bind
+    /// The address and port to which the Bedrock Edition server will bind
     pub bedrock_edition_address: SocketAddr,
     /// The seed for world generation.
     pub seed: String,
@@ -169,7 +169,7 @@ impl Default for BasicConfiguration {
             bedrock_edition_address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 19132),
             seed: "".to_string(),
             max_players: 100000,
-            view_distance: NonZeroU8::new(10).unwrap(),
+            view_distance: NonZeroU8::new(16).unwrap(),
             simulation_distance: NonZeroU8::new(10).unwrap(),
             default_difficulty: Difficulty::Normal,
             op_permission_level: PermissionLvl::Four,
@@ -260,7 +260,7 @@ impl LoadConfiguration for BasicConfiguration {
 
     fn validate(&self) {
         let min = NonZeroU8::new(2).unwrap();
-        let max = NonZeroU8::new(32).unwrap();
+        let max = NonZeroU8::new(64).unwrap();
 
         assert!(
             self.view_distance.ge(&min),
@@ -268,7 +268,7 @@ impl LoadConfiguration for BasicConfiguration {
         );
         assert!(
             self.view_distance.le(&max),
-            "View distance must be less than 32"
+            "View distance must be less than 64"
         );
         if self.online_mode {
             assert!(

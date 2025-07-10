@@ -1,8 +1,8 @@
 use crate::{
     bedrock::client::gamerules_changed::GameRules,
     codec::{
-        bedrock_block_pos::BedrockPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt,
-        var_ulong::VarULong,
+        bedrock_block_pos::BedrockPos, little_endian::Le32, var_int::VarInt, var_long::VarLong,
+        var_uint::VarUInt, var_ulong::VarULong,
     },
 };
 use pumpkin_macros::packet;
@@ -10,21 +10,17 @@ use pumpkin_util::math::vector3::Vector3;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const GAME_PUBLISH_SETTING_NO_MULTI_PLAY: i32 = 0;
-pub const GAME_PUBLISH_SETTING_INVITE_ONLY: i32 = 1;
-pub const GAME_PUBLISH_SETTING_FRIENDS_ONLY: i32 = 2;
-pub const GAME_PUBLISH_SETTING_FRIENDS_OF_FRIENDS: i32 = 3;
-pub const GAME_PUBLISH_SETTING_PUBLIC: i32 = 4;
-
 #[derive(Serialize)]
 #[packet(11)]
 pub struct CStartGame {
+    // https://mojang.github.io/bedrock-protocol-docs/html/StartGamePacket.html
+
     pub entity_id: VarLong,
     pub runtime_entity_id: VarULong,
     pub player_gamemode: VarInt,
     pub position: Vector3<f32>,
-    pub yaw: f32,
     pub pitch: f32,
+    pub yaw: f32,
     pub level_settings: LevelSettings,
 
     pub level_id: String,
@@ -56,9 +52,10 @@ pub struct CStartGame {
     pub server_auth_sounds: bool,
 }
 
-#[derive(Serialize)]
-// https://mojang.github.io/bedrock-protocol-docs/html/LevelSettings.html
+#[derive(Serialize, Debug)]
 pub struct LevelSettings {
+    // https://mojang.github.io/bedrock-protocol-docs/html/LevelSettings.html
+
     pub seed: u64,
 
     // Spawn Settings
@@ -97,7 +94,7 @@ pub struct LevelSettings {
     pub bonus_chest: bool,
     pub has_start_with_map_enabled: bool,
     pub permission_level: VarInt,
-    pub server_chunk_tick_range: i32,
+    pub server_chunk_tick_range: Le32,
     pub has_locked_behavior_pack: bool,
     pub has_locked_resource_pack: bool,
     pub is_from_locked_world_template: bool,
@@ -113,7 +110,7 @@ pub struct LevelSettings {
     // TODO: LE
     pub limited_world_width: i32,
     pub limited_world_height: i32,
-    pub is_nether_type: bool,
+    pub new_nether: bool,
     pub edu_shared_uri_button_name: String,
     pub edu_shared_uri_link_uri: String,
     pub override_force_experimental_gameplay_has_value: bool,
@@ -125,9 +122,18 @@ pub struct LevelSettings {
     pub owner_id: String,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Experiments {
-    pub names_size: u32,
     //TODO! https://mojang.github.io/bedrock-protocol-docs/html/Experiments.html
+    pub names_size: u32,
     pub experiments_ever_toggled: bool,
+}
+
+#[repr(i32)]
+pub enum GamePublishSetting {
+    NoMultiPlay = 0,
+    InviteOnly = 1,
+    FriendsOnly = 2,
+    FriendsOfFriends = 3,
+    Public = 4,
 }

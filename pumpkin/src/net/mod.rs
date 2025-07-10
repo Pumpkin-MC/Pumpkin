@@ -75,7 +75,7 @@ impl Default for PlayerConfig {
     fn default() -> Self {
         Self {
             locale: "en_us".to_string(),
-            view_distance: NonZeroU8::new(10).unwrap(),
+            view_distance: NonZeroU8::new(16).unwrap(),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,
             skin_parts: 0,
