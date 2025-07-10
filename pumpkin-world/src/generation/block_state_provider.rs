@@ -71,7 +71,7 @@ pub struct PillarBlockStateProvider {
 impl PillarBlockStateProvider {
     pub fn get(&self, _pos: BlockPos) -> &'static BlockState {
         // TODO: random axis
-        self.state.get_state().unwrap()
+        self.state.get_state()
     }
 }
 
@@ -109,10 +109,7 @@ impl DualNoiseBlockStateProvider {
             list.push(self.base.get_state_by_value(&self.base.states, value));
         }
         let value = self.base.base.get_noise(pos);
-        self.base
-            .get_state_by_value(&list, value)
-            .get_state()
-            .unwrap()
+        self.base.get_state_by_value(&list, value).get_state()
     }
 
     fn get_slow_noise(&self, pos: &BlockPos, sampler: &DoublePerlinNoiseSampler) -> f64 {
@@ -131,10 +128,7 @@ pub struct WeightedBlockStateProvider {
 
 impl WeightedBlockStateProvider {
     pub fn get(&self, random: &mut RandomGenerator) -> &'static BlockState {
-        Pool::get(&self.entries, random)
-            .unwrap()
-            .get_state()
-            .unwrap()
+        Pool::get(&self.entries, random).unwrap().get_state()
     }
 }
 
@@ -145,7 +139,7 @@ pub struct SimpleStateProvider {
 
 impl SimpleStateProvider {
     pub fn get(&self, _pos: BlockPos) -> &'static BlockState {
-        self.state.get_state().unwrap()
+        self.state.get_state()
     }
 }
 
@@ -187,9 +181,7 @@ pub struct NoiseBlockStateProvider {
 impl NoiseBlockStateProvider {
     pub fn get(&self, pos: BlockPos) -> &'static BlockState {
         let value = self.base.get_noise(pos);
-        self.get_state_by_value(&self.states, value)
-            .get_state()
-            .unwrap()
+        self.get_state_by_value(&self.states, value).get_state()
     }
 
     fn get_state_by_value(&self, states: &[BlockStateCodec], value: f64) -> BlockStateCodec {
@@ -214,15 +206,13 @@ impl NoiseThresholdBlockStateProvider {
         let value = self.base.get_noise(pos);
         if value < self.threshold as f64 {
             return self.low_states[random.next_bounded_i32(self.low_states.len() as i32) as usize]
-                .get_state()
-                .unwrap();
+                .get_state();
         }
         if random.next_f32() < self.high_chance {
             return self.high_states
                 [random.next_bounded_i32(self.high_states.len() as i32) as usize]
-                .get_state()
-                .unwrap();
+                .get_state();
         }
-        self.default_state.get_state().unwrap()
+        self.default_state.get_state()
     }
 }

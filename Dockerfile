@@ -1,4 +1,4 @@
-FROM rust:1-alpine3.21 AS builder
+FROM rust:1-alpine3.22 AS builder
 ENV RUSTFLAGS="-C target-feature=-crt-static"
 RUN apk add --no-cache musl-dev \
     # Required for git-version

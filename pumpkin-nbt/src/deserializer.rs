@@ -1,8 +1,5 @@
-use std::vec::IntoIter;
-
 use crate::*;
 use io::Read;
-use serde::de::value::SeqDeserializer;
 use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, forward_to_deserialize_any};
 
@@ -19,6 +16,19 @@ impl<R: Read> NbtReadHelper<R> {
     }
 }
 
+macro_rules! define_get_number_be {
+    ($name:ident, $type:ty) => {
+        pub fn $name(&mut self) -> Result<$type> {
+            let mut buf = [0u8; std::mem::size_of::<$type>()];
+            self.reader
+                .read_exact(&mut buf)
+                .map_err(Error::Incomplete)?;
+
+            Ok(<$type>::from_be_bytes(buf))
+        }
+    };
+}
+
 impl<R: Read> NbtReadHelper<R> {
     pub fn skip_bytes(&mut self, count: u64) -> Result<()> {
         let _ = io::copy(&mut self.reader.by_ref().take(count), &mut io::sink())
@@ -26,78 +36,16 @@ impl<R: Read> NbtReadHelper<R> {
         Ok(())
     }
 
-    //TODO: Macroize this
-    pub fn get_u8_be(&mut self) -> Result<u8> {
-        let mut buf = [0u8];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(u8::from_be_bytes(buf))
-    }
-
-    pub fn get_i8_be(&mut self) -> Result<i8> {
-        let mut buf = [0u8];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(i8::from_be_bytes(buf))
-    }
-
-    pub fn get_i16_be(&mut self) -> Result<i16> {
-        let mut buf = [0u8; 2];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(i16::from_be_bytes(buf))
-    }
-
-    pub fn get_u16_be(&mut self) -> Result<u16> {
-        let mut buf = [0u8; 2];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(u16::from_be_bytes(buf))
-    }
-
-    pub fn get_i32_be(&mut self) -> Result<i32> {
-        let mut buf = [0u8; 4];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(i32::from_be_bytes(buf))
-    }
-
-    pub fn get_i64_be(&mut self) -> Result<i64> {
-        let mut buf = [0u8; 8];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(i64::from_be_bytes(buf))
-    }
-
-    pub fn get_f32_be(&mut self) -> Result<f32> {
-        let mut buf = [0u8; 4];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(f32::from_be_bytes(buf))
-    }
-
-    pub fn get_f64_be(&mut self) -> Result<f64> {
-        let mut buf = [0u8; 8];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(f64::from_be_bytes(buf))
-    }
+    define_get_number_be!(get_u8_be, u8);
+    define_get_number_be!(get_i8_be, i8);
+    define_get_number_be!(get_u16_be, u16);
+    define_get_number_be!(get_i16_be, i16);
+    define_get_number_be!(get_u32_be, u32);
+    define_get_number_be!(get_i32_be, i32);
+    define_get_number_be!(get_u64_be, u64);
+    define_get_number_be!(get_i64_be, i64);
+    define_get_number_be!(get_f32_be, f32);
+    define_get_number_be!(get_f64_be, f64);
 
     pub fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>> {
         let mut buf = vec![0u8; count];
@@ -116,6 +64,8 @@ pub struct Deserializer<R: Read> {
     // Yes, this breaks with recursion. Just an attempt at a sanity check
     in_list: bool,
     is_named: bool,
+    // For debugging
+    key_stack: Vec<String>,
 }
 
 impl<R: Read> Deserializer<R> {
@@ -125,6 +75,7 @@ impl<R: Read> Deserializer<R> {
             tag_to_deserialize_stack: Vec::new(),
             in_list: false,
             is_named,
+            key_stack: Vec::new(),
         }
     }
 }
@@ -181,21 +132,28 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
             END_ID => Err(Error::SerdeError(
                 "Trying to deserialize an END tag!".to_string(),
             )),
-            LIST_ID => {
-                let list_type = self.input.get_u8_be()?;
+            LIST_ID | INT_ARRAY_ID | LONG_ARRAY_ID | BYTE_ARRAY_ID => {
+                let list_type = match tag_to_deserialize {
+                    LIST_ID => self.input.get_u8_be()?,
+                    INT_ARRAY_ID => INT_ID,
+                    LONG_ARRAY_ID => LONG_ID,
+                    BYTE_ARRAY_ID => BYTE_ID,
+                    _ => unreachable!(),
+                };
 
                 let remaining_values = self.input.get_i32_be()?;
                 if remaining_values < 0 {
                     return Err(Error::NegativeLength(remaining_values));
                 }
 
-                visitor.visit_seq(ListAccess {
+                let result = visitor.visit_seq(ListAccess {
                     de: self,
                     list_type,
                     remaining_values: remaining_values as usize,
-                })
+                })?;
+                Ok(result)
             }
-            COMPOUND_ID => self.deserialize_map(visitor),
+            COMPOUND_ID => visitor.visit_map(CompoundAccess { de: self }),
             _ => {
                 let result = match NbtTag::deserialize_data(&mut self.input, tag_to_deserialize)? {
                     NbtTag::Byte(value) => visitor.visit_i8::<Error>(value)?,
@@ -205,22 +163,6 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
                     NbtTag::Float(value) => visitor.visit_f32::<Error>(value)?,
                     NbtTag::Double(value) => visitor.visit_f64::<Error>(value)?,
                     NbtTag::String(value) => visitor.visit_string::<Error>(value)?,
-                    NbtTag::LongArray(value) => visitor
-                        .visit_seq::<SeqDeserializer<IntoIter<i64>, Error>>(
-                            value.into_deserializer(),
-                        )?,
-                    NbtTag::IntArray(value) => visitor
-                        .visit_seq::<SeqDeserializer<IntoIter<i32>, Error>>(
-                            value.into_deserializer(),
-                        )?,
-                    NbtTag::ByteArray(value) => {
-                        // For compatibility, we serialize byte arrays as Vec<i8>
-                        // It could be probably changed in the future
-                        let array: Vec<_> = value.iter().map(|&byte| byte as i8).collect();
-                        visitor.visit_seq::<SeqDeserializer<IntoIter<i8>, Error>>(
-                            array.into_deserializer(),
-                        )?
-                    }
                     _ => unreachable!(),
                 };
                 Ok(result)
@@ -277,11 +219,21 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
             if *tag_id == BYTE_ID {
                 let value = self.input.get_u8_be()?;
                 if value != 0 {
-                    return visitor.visit_bool(true);
+                    visitor.visit_bool(true)
+                } else {
+                    visitor.visit_bool(false)
                 }
+            } else {
+                Err(Error::UnsupportedType(format!(
+                    "Non-byte bool (found type {tag_id})"
+                )))
             }
+        } else {
+            Err(Error::SerdeError(
+                "Wanted to deserialize a bool, but there was no type hint on the stack!"
+                    .to_string(),
+            ))
         }
-        visitor.visit_bool(false)
     }
 
     fn deserialize_enum<V>(
@@ -312,7 +264,12 @@ impl<'de, R: Read> de::Deserializer<'de> for &mut Deserializer<R> {
         if let Some(tag_id) = self.tag_to_deserialize_stack.pop() {
             if tag_id != COMPOUND_ID {
                 return Err(Error::SerdeError(format!(
-                    "Trying to deserialize a map without a compound ID (with id {tag_id})"
+                    "Trying to deserialize a map without a compound ID ({} with id {})",
+                    self.key_stack
+                        .last()
+                        .cloned()
+                        .unwrap_or_else(|| "compound root".to_string()),
+                    tag_id
                 )));
             }
         } else {
@@ -381,7 +338,9 @@ impl<'de, R: Read> MapAccess<'de> for CompoundAccess<'_, R> {
     where
         V: DeserializeSeed<'de>,
     {
-        seed.deserialize(&mut *self.de)
+        let result = seed.deserialize(&mut *self.de);
+        self.de.key_stack.pop();
+        result
     }
 }
 
@@ -397,6 +356,7 @@ impl<'de, R: Read> de::Deserializer<'de> for MapKey<'_, R> {
         V: de::Visitor<'de>,
     {
         let key = get_nbt_string(&mut self.de.input)?;
+        self.de.key_stack.push(key.clone());
         visitor.visit_string(key)
     }
 

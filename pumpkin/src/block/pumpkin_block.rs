@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -28,10 +29,12 @@ pub trait BlockMetadata {
 
 #[async_trait]
 pub trait PumpkinBlock: Send + Sync {
-    async fn normal_use(&self, _args: NormalUseArgs<'_>) {}
+    async fn normal_use(&self, _args: NormalUseArgs<'_>) -> BlockActionResult {
+        BlockActionResult::Continue
+    }
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
-        BlockActionResult::Continue
+        BlockActionResult::PassToDefault
     }
 
     async fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {}
@@ -113,6 +116,7 @@ pub struct NormalUseArgs<'a> {
     pub block: &'a Block,
     pub position: &'a BlockPos,
     pub player: &'a Player,
+    pub hit: &'a BlockHitResult<'a>,
 }
 
 pub struct UseWithItemArgs<'a> {
@@ -121,7 +125,13 @@ pub struct UseWithItemArgs<'a> {
     pub block: &'a Block,
     pub position: &'a BlockPos,
     pub player: &'a Player,
+    pub hit: &'a BlockHitResult<'a>,
     pub item_stack: &'a Arc<Mutex<ItemStack>>,
+}
+
+pub struct BlockHitResult<'a> {
+    pub side: &'a BlockDirection,
+    pub cursor_pos: &'a Vector3<f32>,
 }
 
 pub struct OnEntityCollisionArgs<'a> {

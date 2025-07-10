@@ -42,13 +42,13 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
-use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
 
+use crate::block::pumpkin_block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
@@ -630,10 +630,8 @@ impl JavaClientPlatform {
     pub async fn handle_set_command_block(&self, player: &Arc<Player>, command: SSetCommandBlock) {
         // TODO: check things
         let pos = command.pos;
-        if let Some((nbt, block_entity)) = player.world().await.get_block_entity(&pos).await {
-            let command_entity = CommandBlockEntity::from_nbt(&nbt, pos);
-
-            if block_entity.resource_location() != command_entity.resource_location() {
+        if let Some(block_entity) = player.world().await.get_block_entity(&pos).await {
+            if block_entity.resource_location() != CommandBlockEntity::ID {
                 log::warn!(
                     "Client tried to change Command block but not Command block entity found"
                 );
@@ -1403,6 +1401,7 @@ impl JavaClientPlatform {
             .await;
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_use_item_on(
         &self,
         player: &Player,
@@ -1415,6 +1414,8 @@ impl JavaClientPlatform {
         self.update_sequence(player, use_item_on.sequence.0);
 
         let position = use_item_on.position;
+        let cursor_pos = use_item_on.cursor_pos;
+
         let mut should_try_decrement = false;
 
         if !player.can_interact_with_block_at(&position, 1.0) {
@@ -1428,6 +1429,7 @@ impl JavaClientPlatform {
 
         let inventory = player.inventory();
         let held_item = inventory.held_item();
+        let off_hand_item = inventory.off_hand_item().await;
 
         let entity = &player.living_entity.entity;
         let world = &entity.world.read().await;
@@ -1438,40 +1440,73 @@ impl JavaClientPlatform {
             .entity
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
-        if held_item.lock().await.is_empty() {
-            if !sneaking {
-                // Using block with empty hand
-                server
-                    .block_registry
-                    .on_use(block, player, &position, server, world)
-                    .await;
-            }
-            return Ok(());
-        }
-        if !sneaking {
-            let action_result = server
+        // Code based on the java class ServerPlayerInteractionManager
+        if !(sneaking
+            && (!held_item.lock().await.is_empty() || !off_hand_item.lock().await.is_empty()))
+        {
+            match match server
                 .block_registry
-                .use_with_item(block, player, &position, &held_item, server, world)
-                .await;
-            match action_result {
-                BlockActionResult::Continue => {}
-                BlockActionResult::Consume => {
+                .use_with_item(
+                    block,
+                    player,
+                    &position,
+                    &BlockHitResult {
+                        side: &face,
+                        cursor_pos: &cursor_pos,
+                    },
+                    &held_item,
+                    server,
+                    world,
+                )
+                .await
+            {
+                BlockActionResult::PassToDefault => {
+                    server
+                        .block_registry
+                        .on_use(
+                            block,
+                            player,
+                            &position,
+                            &BlockHitResult {
+                                side: &face,
+                                cursor_pos: &cursor_pos,
+                            },
+                            server,
+                            world,
+                        )
+                        .await
+                }
+                BlockActionResult::Fail => BlockActionResult::Fail,
+                BlockActionResult::Consume => BlockActionResult::Consume,
+                BlockActionResult::Continue => BlockActionResult::Continue,
+                BlockActionResult::Success => BlockActionResult::Success,
+            } {
+                BlockActionResult::Fail => return Ok(()),
+                BlockActionResult::Success | BlockActionResult::Consume => {
+                    /* TODO: Swing hand */
                     return Ok(());
                 }
+                BlockActionResult::Continue | BlockActionResult::PassToDefault => {} // Do nothing,
             }
-            server
-                .item_registry
-                .use_on_block(
-                    held_item.lock().await.item,
-                    player,
-                    position,
-                    face,
-                    block,
-                    server,
-                )
-                .await;
-            self.update_sequence(player, use_item_on.sequence.0);
         }
+
+        if held_item.lock().await.is_empty() {
+            // If the hand is empty we stop here
+            return Ok(());
+        }
+
+        server
+            .item_registry
+            .use_on_block(
+                held_item.lock().await.item,
+                player,
+                position,
+                face,
+                block,
+                server,
+            )
+            .await;
+        self.update_sequence(player, use_item_on.sequence.0);
 
         // Check if the item is a block, because not every item can be placed :D
         if let Some(block) = get_block_by_item(held_item.lock().await.item.id) {
@@ -1852,9 +1887,7 @@ impl JavaClientPlatform {
             .await;
 
         // Check if there is a player in the way of the block being placed
-        let shapes = get_state_by_state_id(new_state)
-            .unwrap()
-            .get_block_collision_shapes();
+        let shapes = get_state_by_state_id(new_state).get_block_collision_shapes();
         for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {

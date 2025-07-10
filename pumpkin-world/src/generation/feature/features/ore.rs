@@ -197,7 +197,7 @@ impl OreFeature {
                             ) {
                                 chunk.set_block_state(
                                     &Vector3::new(ad, ae, af),
-                                    target.state.get_state().unwrap(),
+                                    target.state.get_state(),
                                 );
                                 placed_blocks_count += 1;
                                 break; // Equivalent to 'continue block11;'

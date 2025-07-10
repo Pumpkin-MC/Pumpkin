@@ -71,7 +71,7 @@ impl PumpkinItem for EnderEyeItem {
 
         let (block, _) = world.get_block_and_block_state(&block_pos).await;
 
-        if block.id == Block::END_PORTAL_FRAME.id {
+        if block == &Block::END_PORTAL_FRAME {
             return;
         }
         //TODO Throw the Ender Eye in the direction of the stronghold.

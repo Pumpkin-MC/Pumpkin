@@ -123,7 +123,12 @@ impl PumpkinBlock for RedstoneTorchBlock {
         if args.block == &Block::REDSTONE_WALL_TORCH {
             let props = RWallTorchProps::from_state_id(args.state_id, args.block);
             if props.facing.to_block_direction().opposite() == args.direction
-                && !can_place_at(args.world, args.position, props.facing.to_block_direction()).await
+                && !can_place_at(
+                    args.world,
+                    args.position,
+                    props.facing.to_block_direction().opposite(),
+                )
+                .await
             {
                 return 0;
             }

@@ -1,6 +1,6 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::pumpkin_block::{
-    BlockMetadata, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock, UseWithItemArgs,
+    BlockMetadata, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock,
 };
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
@@ -42,7 +42,7 @@ async fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockP
 }
 
 fn can_open_trapdoor(block: &Block) -> bool {
-    if block.id == Block::IRON_TRAPDOOR.id {
+    if block == &Block::IRON_TRAPDOOR {
         return false;
     }
     true
@@ -53,14 +53,14 @@ fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
         if block.is_tagged_with("minecraft:wooden_trapdoors").unwrap() {
             Sound::BlockWoodenTrapdoorOpen
-        } else if block.id == Block::IRON_TRAPDOOR.id {
+        } else if block == &Block::IRON_TRAPDOOR {
             Sound::BlockIronTrapdoorOpen
         } else {
             Sound::BlockCopperTrapdoorOpen
         }
     } else if block.is_tagged_with("minecraft:wooden_trapdoors").unwrap() {
         Sound::BlockWoodenTrapdoorClose
-    } else if block.id == Block::IRON_TRAPDOOR.id {
+    } else if block == &Block::IRON_TRAPDOOR {
         Sound::BlockIronTrapdoorClose
     } else {
         Sound::BlockCopperTrapdoorClose
@@ -79,20 +79,14 @@ impl BlockMetadata for TrapDoorBlock {
 
 #[async_trait]
 impl PumpkinBlock for TrapDoorBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) {
-        if can_open_trapdoor(args.block) {
-            toggle_trapdoor(args.player, args.world, args.position).await;
-        }
-    }
-
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !can_open_trapdoor(args.block) {
             return BlockActionResult::Continue;
         }
 
         toggle_trapdoor(args.player, args.world, args.position).await;
 
-        BlockActionResult::Consume
+        BlockActionResult::Success
     }
 
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {

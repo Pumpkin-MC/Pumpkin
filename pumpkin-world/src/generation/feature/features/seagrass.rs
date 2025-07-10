@@ -41,7 +41,7 @@ impl SeagrassFeature {
                     chunk.set_block_state(&top_pos.0, Block::TALL_SEAGRASS.default_state);
                     chunk.set_block_state(
                         &tall_pos.0,
-                        get_state_by_state_id(props.to_state_id(&Block::TALL_SEAGRASS)).unwrap(),
+                        get_state_by_state_id(props.to_state_id(&Block::TALL_SEAGRASS)),
                     );
                 }
             } else {

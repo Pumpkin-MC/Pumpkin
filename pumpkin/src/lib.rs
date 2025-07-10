@@ -1,12 +1,13 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
+use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
 use crate::net::bedrock::BedrockClientPlatform;
 use crate::net::java::JavaClientPlatform;
 use crate::net::{lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use bytes::Bytes;
-use log::{Level, LevelFilter, Log};
+use log::{Level, LevelFilter};
 use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
@@ -15,11 +16,12 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
+use simplelog::SharedLogger;
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
@@ -32,12 +34,11 @@ pub mod data;
 pub mod entity;
 pub mod error;
 pub mod item;
+pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
-
-const GIT_VERSION: &str = env!("GIT_VERSION");
 
 #[cfg(feature = "dhat-heap")]
 pub static HEAP_PROFILER: LazyLock<Mutex<Option<dhat::Profiler>>> =
@@ -62,62 +63,6 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
-/// A wrapper for our logger to hold the terminal input while no input is expected in order to
-/// properly flush logs to the output while they happen instead of batched
-pub struct ReadlineLogWrapper {
-    internal: Box<dyn Log>,
-    readline: std::sync::Mutex<Option<Readline>>,
-}
-
-impl ReadlineLogWrapper {
-    fn new(log: impl Log + 'static, rl: Option<Readline>) -> Self {
-        Self {
-            internal: Box::new(log),
-            readline: std::sync::Mutex::new(rl),
-        }
-    }
-
-    fn take_readline(&self) -> Option<Readline> {
-        if let Ok(mut result) = self.readline.lock() {
-            result.take()
-        } else {
-            None
-        }
-    }
-
-    fn return_readline(&self, rl: Readline) {
-        if let Ok(mut result) = self.readline.lock() {
-            println!("Returned rl");
-            let _ = result.insert(rl);
-        }
-    }
-}
-
-// Writing to `stdout` is expensive anyway, so I don't think having a `Mutex` here is a big deal.
-impl Log for ReadlineLogWrapper {
-    fn log(&self, record: &log::Record) {
-        self.internal.log(record);
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
-        }
-    }
-
-    fn flush(&self) {
-        self.internal.flush();
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
-        }
-    }
-
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        self.internal.enabled(metadata)
-    }
-}
-
 pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = LazyLock::new(|| {
     if advanced_config().logging.enabled {
         let mut config = simplelog::ConfigBuilder::new();
@@ -126,7 +71,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             config.set_time_format_custom(time::macros::format_description!(
                 "[year]-[month]-[day] [hour]:[minute]:[second]"
             ));
-            config.set_time_level(LevelFilter::Trace);
+            config.set_time_level(LevelFilter::Error);
         } else {
             config.set_time_level(LevelFilter::Off);
         }
@@ -153,23 +98,47 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::Info);
 
+        let file_logger: Option<Box<dyn SharedLogger + 'static>> =
+            if advanced_config().logging.file.is_empty() {
+                None
+            } else {
+                Some(
+                    GzipRollingLogger::new(
+                        level,
+                        {
+                            let mut config = config.clone();
+                            for level in Level::iter() {
+                                config.set_level_color(level, None);
+                            }
+                            config.build()
+                        },
+                        advanced_config().logging.file.clone(),
+                    )
+                    .expect("Failed to initialize file logger.")
+                        as Box<dyn SharedLogger>,
+                )
+            };
+
         if advanced_config().commands.use_tty && stdin().is_terminal() {
             match Readline::new("$ ".to_owned()) {
                 Ok((rl, stdout)) => {
                     let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
-                    Some((ReadlineLogWrapper::new(logger, Some(rl)), level))
+                    Some((
+                        ReadlineLogWrapper::new(logger, file_logger, Some(rl)),
+                        level,
+                    ))
                 }
                 Err(e) => {
                     log::warn!(
                         "Failed to initialize console input ({e}); falling back to simple logger"
                     );
                     let logger = simplelog::SimpleLogger::new(level, config.build());
-                    Some((ReadlineLogWrapper::new(logger, None), level))
+                    Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
                 }
             }
         } else {
             let logger = simplelog::SimpleLogger::new(level, config.build());
-            Some((ReadlineLogWrapper::new(logger, None), level))
+            Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
         }
     } else {
         None
@@ -257,9 +226,7 @@ impl PumpkinServer {
         }
 
         if BASIC_CONFIG.allow_chat_reports {
-            let mojang_public_keys = fetch_mojang_public_keys(server.auth_client.as_ref().unwrap())
-                .await
-                .unwrap();
+            let mojang_public_keys = fetch_mojang_public_keys().unwrap();
             *server.mojang_public_keys.lock().await = mojang_public_keys;
         }
 
@@ -354,7 +321,7 @@ impl PumpkinServer {
     pub async fn unified_listener_task(
         &self,
         mut master_client_id_counter: u64,
-        _tasks: &Arc<TaskTracker>,
+        tasks: &Arc<TaskTracker>,
         bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<BedrockClientPlatform>>>>,
     ) -> bool {
         let mut udp_buf = vec![0; 4096]; // Buffer for UDP receive
@@ -384,25 +351,25 @@ impl PumpkinServer {
 
                         let server_clone = self.server.clone();
 
-                        tokio::spawn(async move {
-                                    java_client.process_packets(&server_clone).await;
-                                    java_client.close();
-                                    java_client.await_tasks().await;
+                        tasks.spawn(async move {
+                                java_client.process_packets(&server_clone).await;
+                                java_client.close();
+                                java_client.await_tasks().await;
 
-                                    let player = java_client.player.lock().await;
-                                    if let Some(player) = player.as_ref() {
-                                        log::debug!("Cleaning up player for id {client_id}");
+                                let player = java_client.player.lock().await;
+                                if let Some(player) = player.as_ref() {
+                                    log::debug!("Cleaning up player for id {client_id}");
 
-                                        if let Err(e) = server_clone.player_data_storage
+                                    if let Err(e) = server_clone.player_data_storage
                                             .handle_player_leave(player)
                                             .await
-                                        {
-                                            log::error!("Failed to save player data on disconnect: {e}");
-                                        }
-
-                                        player.remove().await;
-                                        server_clone.remove_player(player).await;
+                                    {
+                                        log::error!("Failed to save player data on disconnect: {e}");
                                     }
+
+                                    player.remove().await;
+                                    server_clone.remove_player(player).await;
+                                }
                         });
                     }
                     Err(e) => {
@@ -440,7 +407,7 @@ impl PumpkinServer {
 
                         let reader = Cursor::new(received_data.to_vec());
                         let client = client.clone();
-                        tokio::spawn(async move {
+                        tasks.spawn(async move {
                             client.process_packet(&server_clone, reader).await;
                         });
                     }

@@ -14,6 +14,7 @@ pub struct BlockState {
     pub hardness: f32,
     pub collision_shapes: &'static [u16],
     pub outline_shapes: &'static [u16],
+    pub has_random_tick: bool,
     /// u8::MAX is used as None
     pub opacity: u8,
     /// u16::MAX is used as None
@@ -93,7 +94,7 @@ impl BlockState {
     }
 
     pub fn block(&self) -> &'static Block {
-        get_block_by_state_id(self.id).unwrap()
+        get_block_by_state_id(self.id)
     }
 
     pub fn get_block_collision_shapes(&self) -> Vec<CollisionShape> {
@@ -109,7 +110,7 @@ impl BlockState {
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize])
             .collect();
-        let block = get_block_by_state_id(self.id)?;
+        let block = get_block_by_state_id(self.id);
         if block.properties(self.id).and_then(|properties| {
             properties
                 .to_props()

@@ -54,11 +54,8 @@ rsa = { version = "=0.10.0-rc.1", features = ["sha1"] }
 rsa-der = "0.3"
 
 # authentication
-reqwest = { version = "0.12", default-features = false, features = [
-    "http2",
+ureq = { version = "3.0.12", features = [
     "json",
-    "macos-system-configuration",
-    "rustls-tls",
 ] }
 
 sha1 = "=0.11.0-rc.0"
@@ -69,16 +66,11 @@ sha2 = "=0.11.0-rc.0"
 
 base64 = "0.22"
 
-# icon loading
-png = "0.17"
-
 # logging
 simplelog = { version = "0.12.2", features = ["ansi_term"] }
 
 # Remove time in favor of chrono?
 time = "0.3"
-
-chrono = { version = "0.4", features = ["serde"] }
 
 # plugins
 libloading = "0.8"
@@ -91,15 +83,10 @@ tokio-util = { version = "0.7.15", features = ["rt"] }
 # Memory profiling
 dhat = { version = "0.3.3", optional = true }
 
-[build-dependencies]
-git-version = "0.3"
+flate2 = "1.1.2"
 
 [dev-dependencies]
 tempfile.workspace = true
-
-# This makes it so the entire project doesn't recompile on each build on linux.
-[target.'cfg(target_os = "windows")'.build-dependencies]
-tauri-winres = "0.3"
 
 [features]
 #https://nnethercote.github.io/dh_view/dh_view.html

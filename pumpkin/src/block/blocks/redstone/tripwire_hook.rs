@@ -81,10 +81,7 @@ impl PumpkinBlock for TripwireHookBlock {
     }
 
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        if args.moved
-            || Block::from_state_id(args.old_state_id)
-                .is_some_and(|old_block| old_block == args.block)
-        {
+        if args.moved || Block::from_state_id(args.old_state_id) == args.block {
             return;
         }
         let props = TripwireHookProperties::from_state_id(args.old_state_id, args.block);

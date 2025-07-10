@@ -53,7 +53,6 @@ use blocks::redstone::repeater::RepeaterBlock;
 use blocks::redstone::target_block::TargetBlock;
 use blocks::redstone::tripwire::TripwireBlock;
 use blocks::redstone::tripwire_hook::TripwireHookBlock;
-use blocks::sea_pickles::SeaPickleBlock;
 use blocks::signs::SignBlock;
 use blocks::slabs::SlabBlock;
 use blocks::stairs::StairBlock;
@@ -63,7 +62,7 @@ use blocks::trapdoor::TrapDoorBlock;
 use blocks::vine::VineBlock;
 use blocks::walls::WallBlock;
 use blocks::{
-    chest::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
+    chests::ChestBlock, furnace::FurnaceBlock, redstone::lever::LeverBlock, tnt::TNTBlock,
 };
 use fluid::lava::FlowingLava;
 use fluid::water::FlowingWater;
@@ -75,11 +74,31 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use pumpkin_world::BlockStateId;
 
+use crate::block::blocks::banners::BannerBlock;
+use crate::block::blocks::cake::CakeBlock;
 use crate::block::blocks::campfire::CampfireBlock;
+use crate::block::blocks::candle_cakes::CandleCakeBlock;
+use crate::block::blocks::candles::CandleBlock;
+use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::flower_pots::FlowerPotBlock;
 use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
+use crate::block::blocks::plant::crop::beetroot::BeetrootBlock;
+use crate::block::blocks::plant::crop::carrot::CarrotBlock;
+use crate::block::blocks::plant::crop::potatoes::PotatoBlock;
+use crate::block::blocks::plant::crop::torch_flower::TorchFlowerBlock;
+use crate::block::blocks::plant::crop::wheat::WheatBlock;
+use crate::block::blocks::plant::nether_wart::NetherWartBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
+use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
+use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
+use crate::block::blocks::redstone::dispenser::DispenserBlock;
+use crate::block::blocks::redstone::dropper::DropperBlock;
+
+use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
+use crate::block::blocks::ender_chest::EnderChestBlock;
+use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::skull_block::SkullBlock;
+use crate::block::blocks::smoker::SmokerBlock;
 use crate::block::loot::LootContextParameters;
 use crate::block::registry::BlockRegistry;
 use crate::world::World;
@@ -108,6 +127,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
+    manager.register(EnderChestBlock);
     manager.register(CraftingTableBlock);
     manager.register(DirtPathBlock);
     manager.register(DoorBlock);
@@ -116,6 +136,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FenceBlock);
     manager.register(FlowerPotBlock);
     manager.register(FurnaceBlock);
+    manager.register(BlastFurnaceBlock);
+    manager.register(SmokerBlock);
     manager.register(GlassPaneBlock);
     manager.register(GlazedTerracottaBlock);
     manager.register(GrindstoneBlock);
@@ -123,6 +145,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
     manager.register(BambooBlock);
+    manager.register(BannerBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
     manager.register(StairBlock);
@@ -134,6 +157,13 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TNTBlock);
     manager.register(BushBlock);
     manager.register(FlowerBlock);
+    manager.register(PotatoBlock);
+    manager.register(BeetrootBlock);
+    manager.register(TorchFlowerBlock);
+    manager.register(CarrotBlock);
+    manager.register(SeaGrassBlock);
+    manager.register(NetherWartBlock);
+    manager.register(WheatBlock);
     manager.register(TorchBlock);
     manager.register(TrapDoorBlock);
     manager.register(MushroomPlantBlock);
@@ -151,8 +181,13 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(WeightedPressurePlateBlock);
     manager.register(EndPortalBlock);
     manager.register(EndPortalFrameBlock);
+    manager.register(CandleBlock);
     manager.register(SeaPickleBlock);
+    manager.register(CakeBlock);
+    manager.register(CandleCakeBlock);
     manager.register(SkullBlock);
+    manager.register(ChiseledBookshelfBlock);
+    manager.register(LecternBlock);
 
     // Fire
     manager.register(SoulFireBlock);
@@ -179,6 +214,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ComparatorBlock);
     manager.register(TargetBlock);
     manager.register(BarrelBlock);
+    manager.register(DropperBlock);
+    manager.register(DispenserBlock);
 
     // Rails
     manager.register(RailBlock);
