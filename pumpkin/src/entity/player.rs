@@ -66,10 +66,17 @@ use pumpkin_world::entity::entity_data_flags::{
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
 
+use super::combat::{self, AttackType, player_attack_sound};
+use super::effect::Effect;
+use super::hunger::HungerManager;
+use super::item::ItemEntity;
+use super::living::LivingEntity;
+use super::{Entity, EntityBase, EntityId, NBTStorage};
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
 use crate::data::op_data::OPERATOR_CONFIG;
+use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::net::PlayerConfig;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
@@ -78,13 +85,6 @@ use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
-
-use super::combat::{self, AttackType, player_attack_sound};
-use super::effect::Effect;
-use super::hunger::HungerManager;
-use super::item::ItemEntity;
-use super::living::LivingEntity;
-use super::{Entity, EntityBase, EntityId, NBTStorage};
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -1450,6 +1450,13 @@ impl Player {
                 world.spawn_entity(item_entity).await;
             }
         }
+
+        ExperienceOrbEntity::spawn(
+            &world,
+            self.living_entity.entity.pos.load(),
+            (self.experience_level.load(Ordering::Relaxed) * 7).min(100) as u32,
+        )
+        .await;
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
