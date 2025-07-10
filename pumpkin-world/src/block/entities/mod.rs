@@ -6,6 +6,7 @@ use bed::BedBlockEntity;
 use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
 use end_portal::EndPortalBlockEntity;
+use furnace::FurnaceBlockEntity;
 use piston::PistonBlockEntity;
 use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
@@ -25,6 +26,7 @@ pub mod command_block;
 pub mod comparator;
 pub mod dropper;
 pub mod end_portal;
+pub mod furnace;
 pub mod piston;
 pub mod sign;
 
@@ -97,6 +99,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         ChiseledBookshelfBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<
             ChiseledBookshelfBlockEntity,
         >(nbt))),
+        FurnaceBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<FurnaceBlockEntity>(
+            nbt,
+        ))),
         _ => None,
     }
 }
