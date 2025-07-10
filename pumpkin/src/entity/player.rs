@@ -1451,12 +1451,14 @@ impl Player {
             }
         }
 
-        ExperienceOrbEntity::spawn(
-            &world,
-            self.living_entity.entity.pos.load(),
-            (self.experience_level.load(Ordering::Relaxed) * 7).min(100) as u32,
-        )
-        .await;
+        if self.gamemode.load() != GameMode::Spectator {
+            ExperienceOrbEntity::spawn(
+                &world,
+                self.living_entity.entity.pos.load(),
+                (self.experience_level.load(Ordering::Relaxed) * 7).min(100) as u32,
+            )
+                .await;
+        }
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
