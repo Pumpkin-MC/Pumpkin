@@ -292,21 +292,28 @@ where
                     }
                 }?;
 
-                for chunk_lock in chunk_locks {
-                    let mut chunk = chunk_lock.write().await;
-                    let chunk_is_dirty = chunk.is_dirty();
-                    // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
-                    // updating what we will write here
-                    chunk.mark_dirty(false);
-                    // It is important that we keep the lock after we mark the chunk as clean so no one else
-                    // can modify it
-                    let chunk = chunk.downgrade();
+                // Create a task for each chunk_lock
+                let update_tasks = chunk_locks.into_iter().map(|chunk_lock| {
+                    let chunk_serializer = chunk_serializer.clone();
+                    async move {
+                        let mut chunk = chunk_lock.write().await;
+                        let chunk_is_dirty = chunk.is_dirty();
+                        // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
+                        // updating what we will write here
+                        chunk.mark_dirty(false);
+                        // It is important that we keep the lock after we mark the chunk as clean so no one else
+                        // can modify it
+                        let chunk = chunk.downgrade();
 
-                    // We only need to update the chunk if it is dirty
-                    if chunk_is_dirty {
-                        chunk_serializer.write().await.update_chunk(&*chunk).await?;
+                        // We only need to update the chunk if it is dirty
+                        if chunk_is_dirty {
+                            chunk_serializer.write().await.update_chunk(&*chunk).await?;
+                        }
+                        Ok::<(), ChunkWritingError>(())
                     }
-                }
+                });
+                // Run all update tasks concurrently and propagate any error
+                futures::future::try_join_all(update_tasks).await?;
                 log::trace!("Updated data for file {path:?}");
 
                 let is_watched = self

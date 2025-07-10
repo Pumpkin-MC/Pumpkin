@@ -54,7 +54,7 @@ rsa = { version = "=0.10.0-rc.1", features = ["sha1"] }
 rsa-der = "0.3"
 
 # authentication
-reqwest = { version = "0.12", features = [
+ureq = { version = "3.0.12", features = [
     "json",
 ] }
 
@@ -71,8 +71,6 @@ simplelog = { version = "0.12.2", features = ["ansi_term"] }
 
 # Remove time in favor of chrono?
 time = "0.3"
-
-chrono = { version = "0.4", features = ["serde"] }
 
 # plugins
 libloading = "0.8"

@@ -121,7 +121,7 @@ impl ClientPacket for CChunkData<'_> {
         // TODO: block entities
         write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
         for block_entity in self.0.block_entities.values() {
-            let block_entity = &block_entity.1;
+            let block_entity = &block_entity;
             let chunk_data_nbt = block_entity.chunk_data_nbt();
             let pos = block_entity.get_position();
             let block_entity_id = block_entity.get_id();

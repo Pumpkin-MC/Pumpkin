@@ -48,7 +48,7 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
 
         if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
             if Self::is_slot_used(properties, slot) {
-                if let Some((_, block_entity)) = args.world.get_block_entity(args.position).await {
+                if let Some(block_entity) = args.world.get_block_entity(args.position).await {
                     if let Some(block_entity) = block_entity
                         .as_any()
                         .downcast_ref::<ChiseledBookshelfBlockEntity>()
@@ -89,8 +89,7 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
         if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
             if Self::is_slot_used(properties, slot) {
                 return BlockActionResult::PassToDefault;
-            } else if let Some((_, block_entity)) = args.world.get_block_entity(args.position).await
-            {
+            } else if let Some(block_entity) = args.world.get_block_entity(args.position).await {
                 if let Some(block_entity) = block_entity
                     .as_any()
                     .downcast_ref::<ChiseledBookshelfBlockEntity>()
@@ -123,7 +122,7 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
     }
 
     async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        if let Some((_, block_entity)) = args.world.get_block_entity(args.position).await {
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(block_entity) = block_entity
                 .as_any()
                 .downcast_ref::<ChiseledBookshelfBlockEntity>()

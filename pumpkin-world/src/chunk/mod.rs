@@ -4,6 +4,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 
@@ -109,6 +110,7 @@ pub struct ScheduledTick {
     pub target_block_id: u16,
 }
 
+// Clone here cause we want to clone a snapshot of the chunk so we don't block writing for too long
 pub struct ChunkData {
     pub section: ChunkSections,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
@@ -116,12 +118,89 @@ pub struct ChunkData {
     pub position: Vector2<i32>,
     pub block_ticks: Vec<ScheduledTick>,
     pub fluid_ticks: Vec<ScheduledTick>,
-    pub block_entities: HashMap<BlockPos, (NbtCompound, Arc<dyn BlockEntity>)>,
+    pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
     pub light_engine: ChunkLight,
 
     pub dirty: bool,
 }
 
+impl ChunkData {
+    pub fn get_and_tick_block_ticks(&mut self) -> VecDeque<ScheduledTick> {
+        let mut ticks = VecDeque::new();
+        let mut remaining_ticks = Vec::new();
+        for mut tick in self.block_ticks.drain(..) {
+            tick.delay = tick.delay.saturating_sub(1);
+            if tick.delay == 0 {
+                ticks.push_back(tick);
+            } else {
+                remaining_ticks.push(tick);
+            }
+        }
+
+        self.block_ticks = remaining_ticks;
+        ticks
+    }
+
+    pub fn get_and_tick_fluid_ticks(&mut self) -> Vec<ScheduledTick> {
+        let mut ticks = Vec::new();
+        self.fluid_ticks.retain_mut(|tick| {
+            tick.delay = tick.delay.saturating_sub(1);
+            if tick.delay == 0 {
+                ticks.push(*tick);
+                false
+            } else {
+                true
+            }
+        });
+        ticks
+    }
+
+    pub fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block_id: u16) -> bool {
+        self.block_ticks
+            .iter()
+            .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
+    }
+
+    pub fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos) -> bool {
+        self.fluid_ticks
+            .iter()
+            .any(|tick| tick.block_pos == *block_pos)
+    }
+
+    pub fn schedule_block_tick(
+        &mut self,
+        block_id: u16,
+        block_pos: BlockPos,
+        delay: u16,
+        priority: TickPriority,
+    ) {
+        self.block_ticks.push(ScheduledTick {
+            block_pos,
+            delay,
+            priority,
+            target_block_id: block_id,
+        });
+    }
+
+    pub fn schedule_fluid_tick(&mut self, block_id: u16, block_pos: &BlockPos, delay: u16) {
+        if self
+            .fluid_ticks
+            .iter()
+            .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
+        {
+            // If a fluid tick is already scheduled for this block, we don't need to schedule it again
+            return;
+        }
+        self.fluid_ticks.push(ScheduledTick {
+            block_pos: *block_pos,
+            delay,
+            priority: TickPriority::Normal,
+            target_block_id: block_id,
+        });
+    }
+}
+
+#[derive(Clone)]
 pub struct ChunkEntityData {
     pub chunk_position: Vector2<i32>,
     pub data: HashMap<uuid::Uuid, NbtCompound>,
@@ -135,7 +214,7 @@ pub struct ChunkEntityData {
 ///
 /// A chunk can be:
 /// - Subchunks: 24 separate subchunks are stored.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChunkSections {
     pub sections: Box<[SubChunk]>,
     min_y: i32,
@@ -167,13 +246,13 @@ impl ChunkSections {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SubChunk {
     pub block_states: BlockPalette,
     pub biomes: BiomePalette,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ChunkLight {
     pub sky_light: Box<[LightContainer]>,
     pub block_light: Box<[LightContainer]>,
