@@ -1247,7 +1247,6 @@ impl Player {
         self.set_client_loaded(false);
         self.drop_all().await;
 
-        // TODO: implement experience drop and mob loot
         self.client
             .send_packet_now(&CCombatDeath::new(
                 self.entity_id().into(),
