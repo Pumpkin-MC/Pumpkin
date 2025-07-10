@@ -33,7 +33,7 @@ impl PumpkinBlock for LanternBlock {
             .await
             .is_air()
         {
-            props.r#hanging = true
+            props.r#hanging = true;
         }
         props.to_state_id(args.block)
     }

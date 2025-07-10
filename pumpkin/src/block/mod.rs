@@ -115,6 +115,7 @@ pub mod pumpkin_block;
 pub mod pumpkin_fluid;
 pub mod registry;
 
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
