@@ -95,6 +95,7 @@ use crate::block::blocks::redstone::dispenser::DispenserBlock;
 use crate::block::blocks::redstone::dropper::DropperBlock;
 
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
+use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
 use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::skull_block::SkullBlock;
@@ -188,6 +189,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SkullBlock);
     manager.register(ChiseledBookshelfBlock);
     manager.register(LecternBlock);
+    manager.register(ChainBlock);
 
     // Fire
     manager.register(SoulFireBlock);

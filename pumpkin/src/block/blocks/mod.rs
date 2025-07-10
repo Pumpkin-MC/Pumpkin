@@ -56,4 +56,5 @@ pub mod ender_chest;
 
 // abstruct
 pub mod abstruct_wall_mounting;
+pub mod chain;
 pub mod lectern;
