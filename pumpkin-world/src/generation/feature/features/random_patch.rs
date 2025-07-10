@@ -32,9 +32,9 @@ impl RandomPatchFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let mut i = 0;
         let xz = self.xz_spread as i32 + 1;
         let y = self.y_spread as i32 + 1;
+        let mut is_some = false;
         for _ in 0..self.tries {
             let pos = Vector3::new(
                 pos.0.x + random.next_bounded_i32(xz) - random.next_bounded_i32(xz),
@@ -55,8 +55,8 @@ impl RandomPatchFeature {
             {
                 continue;
             }
-            i += 1;
+            is_some = true
         }
-        i > 0
+        is_some
     }
 }

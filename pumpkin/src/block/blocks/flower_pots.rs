@@ -29,7 +29,7 @@ impl PumpkinBlock for FlowerPotBlock {
                 args.world
                     .set_block_state(
                         args.position,
-                        Block::from_id(potted_block_id).unwrap().default_state.id,
+                        Block::from_id(potted_block_id).default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;

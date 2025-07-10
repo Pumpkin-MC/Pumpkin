@@ -73,8 +73,8 @@ impl DropperBlockEntity {
         // this.unpackLootTable(null);
         let mut ret = None;
         let mut j = 0;
-        for i in 0..self.items.len() {
-            let item = self.items[i].lock().await;
+        for i in &self.items {
+            let item = i.lock().await;
             if !item.is_empty() {
                 if rng().random_range(0..=j) == 0 {
                     ret = Some(item);

@@ -3,10 +3,7 @@ use std::sync::atomic::Ordering;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_util::{GameMode, math::position::BlockPos};
-use pumpkin_world::{
-    block::entities::{BlockEntity, command_block::CommandBlockEntity},
-    chunk::TickPriority,
-};
+use pumpkin_world::{block::entities::command_block::CommandBlockEntity, chunk::TickPriority};
 
 use crate::{
     block::pumpkin_block::{
@@ -23,7 +20,7 @@ impl CommandBlock {
     pub async fn update(
         world: &World,
         block: &Block,
-        command_block: CommandBlockEntity,
+        command_block: &CommandBlockEntity,
         pos: &BlockPos,
         powered: bool,
     ) {
@@ -56,12 +53,15 @@ impl BlockMetadata for CommandBlock {
 #[async_trait]
 impl PumpkinBlock for CommandBlock {
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if let Some((nbt, block_entity)) = args.world.get_block_entity(args.position).await {
-            let command_entity = CommandBlockEntity::from_nbt(&nbt, *args.position);
-
-            if block_entity.resource_location() != command_entity.resource_location() {
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
+            if block_entity.resource_location() != CommandBlockEntity::ID {
                 return;
             }
+            let command_entity = block_entity
+                .as_any()
+                .downcast_ref::<CommandBlockEntity>()
+                .unwrap();
+
             Self::update(
                 args.world,
                 args.block,
@@ -74,10 +74,8 @@ impl PumpkinBlock for CommandBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if let Some((nbt, block_entity)) = args.world.get_block_entity(args.position).await {
-            let command_entity = CommandBlockEntity::from_nbt(&nbt, *args.position);
-
-            if block_entity.resource_location() != command_entity.resource_location() {
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
+            if block_entity.resource_location() != CommandBlockEntity::ID {
                 return;
             }
             // TODO

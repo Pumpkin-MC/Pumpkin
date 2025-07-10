@@ -48,7 +48,7 @@ impl PumpkinItem for AxeItem {
         // If there is a strip equivalent.
         if let Some(replacement_block) = replacement_block {
             let new_block = Block::from_id(replacement_block);
-            let new_block = &new_block.unwrap();
+            let new_block = &new_block;
             let new_state_id = if block.is_tagged_with("#minecraft:logs") == Some(true) {
                 let log_information = world.get_block_state_id(&location).await;
                 let log_props = PaleOakWoodLikeProperties::from_state_id(log_information, block);

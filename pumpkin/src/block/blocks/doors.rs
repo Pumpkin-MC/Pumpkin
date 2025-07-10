@@ -282,7 +282,7 @@ impl PumpkinBlock for DoorBlock {
             {
                 return 0;
             }
-        } else if Block::from_state_id(args.neighbor_state_id).unwrap().id == args.block.id
+        } else if Block::from_state_id(args.neighbor_state_id).id == args.block.id
             && DoorProperties::from_state_id(args.neighbor_state_id, args.block).half != lv
         {
             let mut new_state = DoorProperties::from_state_id(args.neighbor_state_id, args.block);

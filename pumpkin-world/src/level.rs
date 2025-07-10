@@ -7,7 +7,7 @@ use pumpkin_data::{Block, block_properties::has_random_ticks};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     path::PathBuf,
     sync::{
         Arc,
@@ -26,7 +26,7 @@ use tokio_util::task::TaskTracker;
 
 use crate::{
     BlockStateId,
-    block::RawBlockState,
+    block::{RawBlockState, entities::BlockEntity},
     chunk::{
         ChunkData, ChunkEntityData, ChunkParsingError, ChunkReadingError, ScheduledTick,
         TickPriority,
@@ -35,7 +35,7 @@ use crate::{
     },
     dimension::Dimension,
     generation::{Seed, get_world_gen, implementation::WorldGenerator},
-    world::{BlockRegistryExt, SimpleWorld},
+    world::BlockRegistryExt,
 };
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
@@ -70,15 +70,21 @@ pub struct Level {
 
     world_gen: Arc<dyn WorldGenerator>,
 
-    block_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
-    remaining_block_ticks_this_tick: Arc<Mutex<VecDeque<ScheduledTick>>>,
-    fluid_ticks: Arc<Mutex<Vec<ScheduledTick>>>,
     /// Semaphore to limit concurrent chunk generation tasks
     chunk_generation_semaphore: Arc<Semaphore>,
+    /// Map to deduplicate chunk generation and avoid DashMap write lock
+    chunk_generation_locks: Arc<Mutex<HashMap<Vector2<i32>, Arc<Notify>>>>,
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
     pub shutdown_notifier: Notify,
+}
+
+pub struct TickData {
+    pub block_ticks: Vec<ScheduledTick>,
+    pub fluid_ticks: Vec<ScheduledTick>,
+    pub random_ticks: Vec<ScheduledTick>,
+    pub block_entities: Vec<Arc<dyn BlockEntity>>,
 }
 
 #[derive(Clone)]
@@ -144,11 +150,9 @@ impl Level {
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
-            block_ticks: Arc::new(Mutex::new(Vec::new())),
-            remaining_block_ticks_this_tick: Arc::new(Mutex::new(VecDeque::new())),
-            fluid_ticks: Arc::new(Mutex::new(Vec::new())),
             // Limits concurrent chunk generation tasks to 2x the number of CPUs
-            chunk_generation_semaphore: Arc::new(Semaphore::new(num_cpus::get() * 2)),
+            chunk_generation_semaphore: Arc::new(Semaphore::new(num_cpus::get())),
+            chunk_generation_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -312,9 +316,7 @@ impl Level {
                     .get(pos)
                     .is_none_or(|count| count.is_zero())
                 {
-                    self.loaded_chunks
-                        .get(pos)
-                        .map(|chunk| (*pos, chunk.value().clone()))
+                    self.loaded_chunks.remove(pos).map(|chunk| (*pos, chunk.1))
                 } else {
                     None
                 }
@@ -324,17 +326,18 @@ impl Level {
         let level = self.clone();
         self.spawn_task(async move {
             let chunks_to_remove = chunks_with_no_watchers.clone();
+
             level.write_chunks(chunks_with_no_watchers).await;
             // Only after we have written the chunks to the serializer do we remove them from the
             // cache
-            for (pos, _) in chunks_to_remove {
-                let _ = level.loaded_chunks.remove_if(&pos, |_, _| {
-                    // Recheck that there is no one watching
-                    level
-                        .chunk_watchers
-                        .get(&pos)
-                        .is_none_or(|count| count.is_zero())
-                });
+            for (pos, chunk) in chunks_to_remove {
+                // Add them back if they have watchers
+                if level.chunk_watchers.get(&pos).is_some() {
+                    let entry = level.loaded_chunks.entry(pos);
+                    if let Entry::Vacant(vacant) = entry {
+                        vacant.insert(chunk);
+                    }
+                }
             }
         });
     }
@@ -383,72 +386,62 @@ impl Level {
         });
     }
 
-    pub async fn tick_block_entities(&self, world: Arc<dyn SimpleWorld>) {
-        for chunk in self.loaded_chunks.iter() {
-            let chunk = chunk.read().await;
-            let cloned_entities = chunk.block_entities.clone();
-            drop(chunk);
-            for block_entity in &cloned_entities {
-                block_entity.1.1.tick(&world).await;
-            }
-        }
-    }
-
-    pub async fn get_random_ticks(&self) -> Vec<ScheduledTick> {
-        let mut ticks = Vec::with_capacity(self.loaded_chunks.len() * 3 * 16 * 16);
+    // Gets random ticks, block ticks and fluid ticks
+    pub async fn get_tick_data(&self) -> TickData {
+        let mut ticks = TickData {
+            block_ticks: Vec::new(),
+            fluid_ticks: Vec::new(),
+            random_ticks: Vec::with_capacity(self.loaded_chunks.len() * 3 * 16 * 16),
+            block_entities: Vec::new(),
+        };
         let mut rng = SmallRng::from_os_rng();
-
-        let chunk_refs: Vec<_> = self
-            .loaded_chunks
-            .iter()
-            .map(|entry| entry.value().clone())
-            .collect();
-
-        for chunk_arc in chunk_refs {
-            let section_data = {
-                let chunk = chunk_arc.read().await;
-
-                let chunk_x_base = chunk.position.x * 16;
-                let chunk_z_base = chunk.position.y * 16;
-
-                let mut section_blocks = Vec::new();
-                for i in 0..chunk.section.sections.len() {
-                    let mut section_block_data = Vec::new();
-
-                    //TODO use game rules to determine how many random ticks to perform
-                    for _ in 0..3 {
-                        let r = rng.random::<u32>();
-                        let x_offset = (r & 0xF) as i32;
-                        let y_offset = ((r >> 4) & 0xF) as i32 - 32;
-                        let z_offset = (r >> 8 & 0xF) as i32;
-
-                        let random_pos = BlockPos::new(
-                            chunk_x_base + x_offset,
-                            i as i32 * 16 + y_offset,
-                            chunk_z_base + z_offset,
-                        );
-
-                        let block_id = chunk
-                            .section
-                            .get_block_absolute_y(
-                                x_offset as usize,
-                                random_pos.0.y,
-                                z_offset as usize,
-                            )
-                            .unwrap_or(Block::AIR.default_state.id);
-
-                        section_block_data.push((random_pos, block_id));
-                    }
-                    section_blocks.push(section_block_data);
+        for chunk in self.loaded_chunks.iter() {
+            use tokio::time::{Duration, timeout};
+            let mut chunk = match timeout(Duration::from_millis(1), chunk.write()).await {
+                Ok(chunk_guard) => chunk_guard,
+                Err(_) => {
+                    log::info!("Chunk {:?} took too long to lock, skipping", chunk.key());
+                    continue;
                 }
-
-                section_blocks
             };
+            ticks.block_ticks.extend(chunk.get_and_tick_block_ticks());
+            ticks.fluid_ticks.extend(chunk.get_and_tick_fluid_ticks());
+            let chunk = chunk.downgrade();
 
-            for section_data in section_data {
+            let chunk_x_base = chunk.position.x * 16;
+            let chunk_z_base = chunk.position.y * 16;
+
+            let mut section_blocks = Vec::new();
+            for i in 0..chunk.section.sections.len() {
+                let mut section_block_data = Vec::new();
+
+                //TODO use game rules to determine how many random ticks to perform
+                for _ in 0..3 {
+                    let r = rng.random::<u32>();
+                    let x_offset = (r & 0xF) as i32;
+                    let y_offset = ((r >> 4) & 0xF) as i32 - 32;
+                    let z_offset = (r >> 8 & 0xF) as i32;
+
+                    let random_pos = BlockPos::new(
+                        chunk_x_base + x_offset,
+                        i as i32 * 16 + y_offset,
+                        chunk_z_base + z_offset,
+                    );
+
+                    let block_id = chunk
+                        .section
+                        .get_block_absolute_y(x_offset as usize, random_pos.0.y, z_offset as usize)
+                        .unwrap_or(Block::AIR.default_state.id);
+
+                    section_block_data.push((random_pos, block_id));
+                }
+                section_blocks.push(section_block_data);
+            }
+
+            for section_data in section_blocks {
                 for (random_pos, block_id) in section_data {
                     if has_random_ticks(block_id) {
-                        ticks.push(ScheduledTick {
+                        ticks.random_ticks.push(ScheduledTick {
                             block_pos: random_pos,
                             delay: 0,
                             priority: TickPriority::Normal,
@@ -457,7 +450,13 @@ impl Level {
                     }
                 }
             }
+
+            let cloned_entities = chunk.block_entities.values().cloned().collect::<Vec<_>>();
+            ticks.block_entities.extend(cloned_entities);
         }
+
+        ticks.block_ticks.sort_by_key(|tick| tick.priority);
+
         ticks
     }
 
@@ -636,37 +635,6 @@ impl Level {
         if chunks_to_write.is_empty() {
             return;
         }
-        let mut block_ticks = self.block_ticks.lock().await;
-        let mut fluid_ticks = self.fluid_ticks.lock().await;
-
-        for (coord, chunk) in &chunks_to_write {
-            let mut chunk_data = chunk.write().await;
-            chunk_data.block_ticks.clear();
-            chunk_data.fluid_ticks.clear();
-            // Only keep ticks that are not saved in the chunk
-            block_ticks.retain(|tick| {
-                let (chunk_coord, _relative_coord) =
-                    tick.block_pos.chunk_and_chunk_relative_position();
-                if chunk_coord == *coord {
-                    chunk_data.block_ticks.push(*tick);
-                    false
-                } else {
-                    true
-                }
-            });
-            fluid_ticks.retain(|tick| {
-                let (chunk_coord, _relative_coord) =
-                    tick.block_pos.chunk_and_chunk_relative_position();
-                if chunk_coord == *coord {
-                    chunk_data.fluid_ticks.push(*tick);
-                    false
-                } else {
-                    true
-                }
-            });
-        }
-        drop(block_ticks);
-        drop(fluid_ticks);
 
         let chunk_saver = self.chunk_saver.clone();
         let level_folder = self.level_folder.clone();
@@ -765,25 +733,11 @@ impl Level {
 
         let load_channel = channel.clone();
         let loaded_chunks = self.loaded_chunks.clone();
-        let level_block_ticks = self.block_ticks.clone();
-        let level_fluid_ticks = self.fluid_ticks.clone();
         let handle_load = async move {
             while let Some(data) = load_bridge_recv.recv().await {
                 let is_ok = match data {
                     LoadedData::Loaded(chunk) => {
                         let position = chunk.read().await.position;
-
-                        // Load the block ticks from the chunk
-                        let block_ticks = chunk.read().await.block_ticks.clone();
-                        let mut level_block_ticks = level_block_ticks.lock().await;
-                        level_block_ticks.extend(block_ticks);
-                        drop(level_block_ticks);
-
-                        // Load the fluid ticks from the chunk
-                        let fluid_ticks = chunk.read().await.fluid_ticks.clone();
-                        let mut level_fluid_ticks = level_fluid_ticks.lock().await;
-                        level_fluid_ticks.extend(fluid_ticks);
-                        drop(level_fluid_ticks);
 
                         let value = loaded_chunks
                             .entry(position)
@@ -849,21 +803,37 @@ impl Level {
                     }
 
                     let result = {
-                        let entry = loaded_chunks.entry(pos); // Get the entry for the position
-
-                        // Check if the entry already exists.
-                        // If not, generate the chunk asynchronously and insert it.
-                        match entry {
-                            Entry::Occupied(entry) => entry.into_ref(),
-                            Entry::Vacant(entry) => {
-                                let generated_chunk = world_gen
-                                    .generate_chunk(&self_clone, block_registry.as_ref(), &pos)
-                                    .await;
-                                entry.insert(Arc::new(RwLock::new(generated_chunk)))
+                        // Deduplicate chunk generation using chunk_generation_locks
+                        let notify = {
+                            let mut locks = self_clone.chunk_generation_locks.lock().await;
+                            if let Some(existing) = locks.get(&pos) {
+                                Some(existing.clone())
+                            } else {
+                                let notify = Arc::new(Notify::new());
+                                locks.insert(pos, notify.clone());
+                                None
                             }
+                        };
+                        if let Some(notify) = notify {
+                            // Wait for the chunk to be generated by another task
+                            notify.notified().await;
+                            // After being notified, the chunk should be in loaded_chunks
+                            loaded_chunks.get(&pos).unwrap().clone()
+                        } else {
+                            // We are responsible for generating the chunk
+                            let generated_chunk = world_gen
+                                .generate_chunk(&self_clone, block_registry.as_ref(), &pos)
+                                .await;
+                            let arc_chunk = Arc::new(RwLock::new(generated_chunk));
+                            loaded_chunks.insert(pos, arc_chunk.clone());
+                            // Remove the notify and wake up any waiters
+                            let notify = {
+                                let mut locks = self_clone.chunk_generation_locks.lock().await;
+                                locks.remove(&pos).unwrap()
+                            };
+                            notify.notify_waiters();
+                            arc_chunk
                         }
-                        .value()
-                        .clone()
                     };
 
                     if !send_chunk(true, result, &channel) {
@@ -1047,86 +1017,5 @@ impl Level {
         coordinates: Vector2<i32>,
     ) -> Option<dashmap::mapref::one::Ref<'_, Vector2<i32>, Arc<RwLock<ChunkEntityData>>>> {
         self.loaded_entity_chunks.try_get(&coordinates).try_unwrap()
-    }
-
-    pub async fn get_and_tick_block_ticks(&self) -> Arc<Mutex<VecDeque<ScheduledTick>>> {
-        let mut block_ticks = self.block_ticks.lock().await;
-        let mut ticks = VecDeque::new();
-        let mut remaining_ticks = Vec::new();
-        for mut tick in block_ticks.drain(..) {
-            tick.delay = tick.delay.saturating_sub(1);
-            if tick.delay == 0 {
-                ticks.push_back(tick);
-            } else {
-                remaining_ticks.push(tick);
-            }
-        }
-
-        *block_ticks = remaining_ticks;
-        ticks.make_contiguous().sort_by_key(|tick| tick.priority);
-        *self.remaining_block_ticks_this_tick.lock().await = ticks;
-        self.remaining_block_ticks_this_tick.clone()
-    }
-
-    pub async fn get_and_tick_fluid_ticks(&self) -> Vec<ScheduledTick> {
-        let mut fluid_ticks = self.fluid_ticks.lock().await;
-        let mut ticks = Vec::new();
-        fluid_ticks.retain_mut(|tick| {
-            tick.delay = tick.delay.saturating_sub(1);
-            if tick.delay == 0 {
-                ticks.push(*tick);
-                false
-            } else {
-                true
-            }
-        });
-        ticks
-    }
-
-    pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block_id: u16) -> bool {
-        let block_ticks = self.block_ticks.lock().await;
-        let remaining_block_ticks_this_tick = self.remaining_block_ticks_this_tick.lock().await;
-        block_ticks
-            .iter()
-            .chain(remaining_block_ticks_this_tick.iter())
-            .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
-    }
-
-    pub async fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos) -> bool {
-        let fluid_ticks = self.fluid_ticks.lock().await;
-        fluid_ticks.iter().any(|tick| tick.block_pos == *block_pos)
-    }
-
-    pub async fn schedule_block_tick(
-        &self,
-        block_id: u16,
-        block_pos: BlockPos,
-        delay: u16,
-        priority: TickPriority,
-    ) {
-        let mut block_ticks = self.block_ticks.lock().await;
-        block_ticks.push(ScheduledTick {
-            block_pos,
-            delay,
-            priority,
-            target_block_id: block_id,
-        });
-    }
-
-    pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: &BlockPos, delay: u16) {
-        let mut fluid_ticks = self.fluid_ticks.lock().await;
-        if fluid_ticks
-            .iter()
-            .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
-        {
-            // If a fluid tick is already scheduled for this block, we don't need to schedule it again
-            return;
-        }
-        fluid_ticks.push(ScheduledTick {
-            block_pos: *block_pos,
-            delay,
-            priority: TickPriority::Normal,
-            target_block_id: block_id,
-        });
     }
 }

@@ -85,6 +85,17 @@ pub trait NetworkReadExt {
     ) -> Result<Vec<G>, ReadingError>;
 }
 
+macro_rules! get_number_be {
+    ($name:ident, $type:ty) => {
+        fn $name(&mut self) -> Result<$type, ReadingError> {
+            let mut buf = [0u8; std::mem::size_of::<$type>()];
+            self.read_exact(&mut buf)
+                .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
+            Ok(<$type>::from_be_bytes(buf))
+        }
+    };
+}
+
 impl<R: Read> NetworkReadExt for R {
     //TODO: Macroize this
     fn get_i8(&mut self) -> Result<i8, ReadingError> {
@@ -103,86 +114,20 @@ impl<R: Read> NetworkReadExt for R {
         Ok(buf[0])
     }
 
-    fn get_i16_be(&mut self) -> Result<i16, ReadingError> {
-        let mut buf = [0u8; 2];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(i16::from_be_bytes(buf))
-    }
-
-    fn get_u16_be(&mut self) -> Result<u16, ReadingError> {
-        let mut buf = [0u8; 2];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(u16::from_be_bytes(buf))
-    }
-
     fn get_u24(&mut self) -> Result<U24, ReadingError> {
         U24::decode(self)
     }
 
-    fn get_i32_be(&mut self) -> Result<i32, ReadingError> {
-        let mut buf = [0u8; 4];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(i32::from_be_bytes(buf))
-    }
-
-    fn get_u32_be(&mut self) -> Result<u32, ReadingError> {
-        let mut buf = [0u8; 4];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(u32::from_be_bytes(buf))
-    }
-
-    fn get_i64_be(&mut self) -> Result<i64, ReadingError> {
-        let mut buf = [0u8; 8];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(i64::from_be_bytes(buf))
-    }
-
-    fn get_u64_be(&mut self) -> Result<u64, ReadingError> {
-        let mut buf = [0u8; 8];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(u64::from_be_bytes(buf))
-    }
-    fn get_f32_be(&mut self) -> Result<f32, ReadingError> {
-        let mut buf = [0u8; 4];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(f32::from_be_bytes(buf))
-    }
-
-    fn get_f64_be(&mut self) -> Result<f64, ReadingError> {
-        let mut buf = [0u8; 8];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(f64::from_be_bytes(buf))
-    }
-
-    fn get_i128_be(&mut self) -> Result<i128, ReadingError> {
-        let mut buf = [0u8; 16];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-        Ok(i128::from_be_bytes(buf))
-    }
-
-    fn get_u128_be(&mut self) -> Result<u128, ReadingError> {
-        let mut buf = [0u8; 16];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-        Ok(u128::from_be_bytes(buf))
-    }
+    get_number_be!(get_i16_be, i16);
+    get_number_be!(get_u16_be, u16);
+    get_number_be!(get_i32_be, i32);
+    get_number_be!(get_u32_be, u32);
+    get_number_be!(get_i64_be, i64);
+    get_number_be!(get_u64_be, u64);
+    get_number_be!(get_i128_be, i128);
+    get_number_be!(get_u128_be, u128);
+    get_number_be!(get_f32_be, f32);
+    get_number_be!(get_f64_be, f64);
 
     fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>, ReadingError> {
         let mut buf = vec![0u8; count];
@@ -362,6 +307,15 @@ pub trait NetworkWriteExt {
     fn write_nbt(&mut self, data: &NbtTag) -> Result<(), WritingError>;
 }
 
+macro_rules! write_number_be {
+    ($name:ident, $type:ty) => {
+        fn $name(&mut self, data: $type) -> Result<(), WritingError> {
+            self.write_all(&data.to_be_bytes())
+                .map_err(WritingError::IoError)
+        }
+    };
+}
+
 impl<W: Write> NetworkWriteExt for W {
     fn write_i8(&mut self, data: i8) -> Result<(), WritingError> {
         self.write_all(&data.to_be_bytes())
@@ -373,49 +327,18 @@ impl<W: Write> NetworkWriteExt for W {
             .map_err(WritingError::IoError)
     }
 
-    fn write_i16_be(&mut self, data: i16) -> Result<(), WritingError> {
-        self.write_all(&data.to_be_bytes())
-            .map_err(WritingError::IoError)
-    }
-
-    fn write_u16_be(&mut self, data: u16) -> Result<(), WritingError> {
-        self.write_all(&data.to_be_bytes())
-            .map_err(WritingError::IoError)
-    }
-
     fn write_u24_be(&mut self, data: U24) -> Result<(), WritingError> {
         data.encode(self)
     }
 
-    fn write_i32_be(&mut self, data: i32) -> Result<(), WritingError> {
-        self.write_all(&data.to_be_bytes())
-            .map_err(WritingError::IoError)
-    }
-
-    fn write_u32_be(&mut self, data: u32) -> Result<(), WritingError> {
-        self.write_all(&data.to_be_bytes())
-            .map_err(WritingError::IoError)
-    }
-
-    fn write_i64_be(&mut self, data: i64) -> Result<(), WritingError> {
-        self.write_all(&data.to_be_bytes())
-            .map_err(WritingError::IoError)
-    }
-
-    fn write_u64_be(&mut self, data: u64) -> Result<(), WritingError> {
-        self.write_all(&data.to_be_bytes())
-            .map_err(WritingError::IoError)
-    }
-
-    fn write_f32_be(&mut self, data: f32) -> Result<(), WritingError> {
-        self.write_all(&data.to_be_bytes())
-            .map_err(WritingError::IoError)
-    }
-
-    fn write_f64_be(&mut self, data: f64) -> Result<(), WritingError> {
-        self.write_all(&data.to_be_bytes())
-            .map_err(WritingError::IoError)
-    }
+    write_number_be!(write_i16_be, i16);
+    write_number_be!(write_u16_be, u16);
+    write_number_be!(write_i32_be, i32);
+    write_number_be!(write_u32_be, u32);
+    write_number_be!(write_i64_be, i64);
+    write_number_be!(write_u64_be, u64);
+    write_number_be!(write_f32_be, f32);
+    write_number_be!(write_f64_be, f64);
 
     fn write_slice(&mut self, data: &[u8]) -> Result<(), WritingError> {
         self.write_all(data).map_err(WritingError::IoError)

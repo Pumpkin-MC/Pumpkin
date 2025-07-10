@@ -159,7 +159,7 @@ impl FancyTrunkPlacer {
                 let axis = Self::get_log_axis(start_pos, block_pos_2.0);
 
                 if TreeFeature::can_replace(block.to_state(), block.to_block()) {
-                    let block = get_block_by_state_id(trunk_provider.id).unwrap();
+                    let block = get_block_by_state_id(trunk_provider.id);
                     let original_props = &block.properties(trunk_provider.id).unwrap().to_props();
                     let axis = axis.to_value();
                     // Set the right Axis
@@ -175,8 +175,7 @@ impl FancyTrunkPlacer {
                         .collect();
                     let state = block.from_properties(props).unwrap().to_state_id(block);
                     if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
-                        chunk
-                            .set_block_state(&block_pos_2.0, get_state_by_state_id(state).unwrap());
+                        chunk.set_block_state(&block_pos_2.0, get_state_by_state_id(state));
                     } else {
                         // level.set_block_state(&block_pos_2, state).await;
                     }

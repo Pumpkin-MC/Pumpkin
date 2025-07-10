@@ -45,7 +45,7 @@ impl CoralFeature {
             props.pickles = Integer1To4::from_index(random.next_bounded_i32(4) as u16); // TODO: vanilla adds + 1, but this can crash
             chunk.set_block_state(
                 &pos.0,
-                get_state_by_state_id(props.to_state_id(&Block::SEA_PICKLE)).unwrap(),
+                get_state_by_state_id(props.to_state_id(&Block::SEA_PICKLE)),
             );
         }
         for dir in BlockDirection::horizontal() {
@@ -79,8 +79,7 @@ impl CoralFeature {
                         .from_properties(props)
                         .unwrap()
                         .to_state_id(wall_coral),
-                )
-                .unwrap(),
+                ),
             );
         }
 

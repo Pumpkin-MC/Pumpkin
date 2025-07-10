@@ -594,6 +594,7 @@ pub(crate) fn build() -> TokenStream {
     let properties = property_enums.values().map(|prop| prop.to_token_stream());
 
     quote! {
+        use std::hash::{Hash, Hasher};
         use crate::tag::{Tagable, RegistryKey};
         use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 
@@ -639,6 +640,20 @@ pub(crate) fn build() -> TokenStream {
             pub can_convert_to_source: bool,
         }
 
+        impl Hash for Fluid {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.id.hash(state);
+            }
+        }
+
+        impl PartialEq for Fluid {
+            fn eq(&self, other: &Self) -> bool {
+                self.id == other.id
+            }
+        }
+
+        impl Eq for Fluid {}
+
         pub static FLUID_STATES: &[PartialFluidState] = &[
             #(#unique_fluid_states),*
         ];
@@ -669,6 +684,11 @@ pub(crate) fn build() -> TokenStream {
 
             // Convert properties to a fluid state, and add them onto the default state.
             fn from_props(props: Vec<(String, String)>, fluid: &Fluid) -> Self where Self: Sized;
+        }
+
+        pub fn get_fluid(registry_id: &str) -> Option<&'static Fluid> {
+           let key = registry_id.strip_prefix("minecraft:").unwrap_or(registry_id);
+           Fluid::from_registry_key(key)
         }
 
         impl Fluid {

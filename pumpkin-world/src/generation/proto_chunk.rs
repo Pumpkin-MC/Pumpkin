@@ -186,7 +186,7 @@ impl<'a> ProtoChunk<'a> {
         let surface_height_estimate_sampler =
             SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
-        let default_block = settings.default_block.get_state().unwrap();
+        let default_block = settings.default_block.get_state();
         let default_heightmap = vec![i64::MIN; CHUNK_AREA].into_boxed_slice();
         Self {
             chunk_pos,
@@ -377,11 +377,10 @@ impl<'a> ProtoChunk<'a> {
 
         if blocks_movement(block_state) || block_state.is_liquid() {
             self.maybe_update_motion_blocking_height_map(pos);
-            if let Some(block) = get_block_by_state_id(block_state.id) {
-                if !block.is_tagged_with("minecraft:leaves").unwrap() {
-                    {
-                        self.maybe_update_motion_blocking_no_leaves_height_map(pos);
-                    }
+            let block = get_block_by_state_id(block_state.id);
+            if !block.is_tagged_with("minecraft:leaves").unwrap() {
+                {
+                    self.maybe_update_motion_blocking_no_leaves_height_map(pos);
                 }
             }
         }
@@ -780,7 +779,7 @@ impl BlockAccessor for ProtoChunk<'_> {
         &'static pumpkin_data::BlockState,
     ) {
         let id = self.get_block_state(&position.0);
-        get_block_and_state_by_state_id(id.0).unwrap_or((&Block::AIR, Block::AIR.default_state))
+        get_block_and_state_by_state_id(id.0)
     }
 }
 
