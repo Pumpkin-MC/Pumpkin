@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
-use pumpkin_world::inventory::Inventory;
+use pumpkin_world::inventory::{Clearable, Inventory};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -64,9 +64,17 @@ use pumpkin_world::entity::entity_data_flags::{
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
 
+use super::combat::{self, AttackType, player_attack_sound};
+use super::effect::Effect;
+use super::hunger::HungerManager;
+use super::item::ItemEntity;
+use super::living::LivingEntity;
+use super::{Entity, EntityBase, EntityId, NBTStorage};
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
+use crate::entity::experience_orb::ExperienceOrbEntity;
+
 use crate::data::op_data::OPERATOR_CONFIG;
 use crate::net::PlayerConfig;
 use crate::net::{ClientPlatform, GameProfile};
@@ -76,13 +84,6 @@ use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
-
-use super::combat::{self, AttackType, player_attack_sound};
-use super::effect::Effect;
-use super::hunger::HungerManager;
-use super::item::ItemEntity;
-use super::living::LivingEntity;
-use super::{Entity, EntityBase, EntityId, NBTStorage};
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -1238,6 +1239,35 @@ impl Player {
 
     pub async fn kill(&self) {
         self.living_entity.kill().await;
+
+        let world = self.world().await;
+        if !world.level_info.read().await.game_rules.keep_inventory {
+            let pos = self.living_entity.entity.block_pos.load();
+            for item in &self.inventory.main_inventory {
+                world.drop_stack(&pos, *item.lock().await).await;
+            }
+            for item in self
+                .inventory
+                .entity_equipment
+                .lock()
+                .await
+                .equipment
+                .values()
+            {
+                world.drop_stack(&pos, *item.lock().await).await;
+            }
+            self.inventory.clear().await;
+
+            if self.gamemode.load() != GameMode::Spectator {
+                ExperienceOrbEntity::spawn(
+                    &world,
+                    pos.to_f64(),
+                    (self.experience_level.load(Ordering::Relaxed) * 7).min(100) as u32,
+                )
+                .await;
+            }
+        }
+
         self.handle_killed().await;
     }
 
