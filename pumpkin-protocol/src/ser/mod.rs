@@ -86,14 +86,12 @@ pub trait NetworkReadExt {
 }
 
 macro_rules! get_number_be {
-    ($type:ty) => {
-        paste::paste! {
-            fn [<get_ $type _be>](&mut self) -> Result<$type, ReadingError> {
-                let mut buf = [0u8; std::mem::size_of::<$type>()];
-                self.read_exact(&mut buf)
-                    .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-                Ok($type::from_be_bytes(buf))
-            }
+    ($name:ident, $type:ty) => {
+        fn $name(&mut self) -> Result<$type, ReadingError> {
+            let mut buf = [0u8; std::mem::size_of::<$type>()];
+            self.read_exact(&mut buf)
+                .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
+            Ok(<$type>::from_be_bytes(buf))
         }
     };
 }
@@ -120,16 +118,16 @@ impl<R: Read> NetworkReadExt for R {
         U24::decode(self)
     }
 
-    get_number_be!(i16);
-    get_number_be!(u16);
-    get_number_be!(i32);
-    get_number_be!(u32);
-    get_number_be!(i64);
-    get_number_be!(u64);
-    get_number_be!(i128);
-    get_number_be!(u128);
-    get_number_be!(f32);
-    get_number_be!(f64);
+    get_number_be!(get_i16_be, i16);
+    get_number_be!(get_u16_be, u16);
+    get_number_be!(get_i32_be, i32);
+    get_number_be!(get_u32_be, u32);
+    get_number_be!(get_i64_be, i64);
+    get_number_be!(get_u64_be, u64);
+    get_number_be!(get_i128_be, i128);
+    get_number_be!(get_u128_be, u128);
+    get_number_be!(get_f32_be, f32);
+    get_number_be!(get_f64_be, f64);
 
     fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>, ReadingError> {
         let mut buf = vec![0u8; count];
@@ -310,12 +308,10 @@ pub trait NetworkWriteExt {
 }
 
 macro_rules! write_number_be {
-    ($type:ty) => {
-        paste::paste! {
-            fn [<write_ $type _be>](&mut self, data: $type) -> Result<(), WritingError> {
-                self.write_all(&data.to_be_bytes())
-                    .map_err(WritingError::IoError)
-            }
+    ($name:ident, $type:ty) => {
+        fn $name(&mut self, data: $type) -> Result<(), WritingError> {
+            self.write_all(&data.to_be_bytes())
+                .map_err(WritingError::IoError)
         }
     };
 }
@@ -335,14 +331,14 @@ impl<W: Write> NetworkWriteExt for W {
         data.encode(self)
     }
 
-    write_number_be!(i16);
-    write_number_be!(u16);
-    write_number_be!(i32);
-    write_number_be!(u32);
-    write_number_be!(i64);
-    write_number_be!(u64);
-    write_number_be!(f32);
-    write_number_be!(f64);
+    write_number_be!(write_i16_be, i16);
+    write_number_be!(write_u16_be, u16);
+    write_number_be!(write_i32_be, i32);
+    write_number_be!(write_u32_be, u32);
+    write_number_be!(write_i64_be, i64);
+    write_number_be!(write_u64_be, u64);
+    write_number_be!(write_f32_be, f32);
+    write_number_be!(write_f64_be, f64);
 
     fn write_slice(&mut self, data: &[u8]) -> Result<(), WritingError> {
         self.write_all(data).map_err(WritingError::IoError)

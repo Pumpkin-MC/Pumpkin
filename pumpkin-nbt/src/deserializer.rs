@@ -17,16 +17,14 @@ impl<R: Read> NbtReadHelper<R> {
 }
 
 macro_rules! define_get_number_be {
-    ($type:ty) => {
-        paste::item! {
-            pub fn [<get_ $type _be>](&mut self) -> Result<$type> {
-                let mut buf = [0u8; std::mem::size_of::<$type>()];
-                self.reader
-                    .read_exact(&mut buf)
-                    .map_err(Error::Incomplete)?;
+    ($name:ident, $type:ty) => {
+        pub fn $name(&mut self) -> Result<$type> {
+            let mut buf = [0u8; std::mem::size_of::<$type>()];
+            self.reader
+                .read_exact(&mut buf)
+                .map_err(Error::Incomplete)?;
 
-                Ok(<$type>::from_be_bytes(buf))
-            }
+            Ok(<$type>::from_be_bytes(buf))
         }
     };
 }
@@ -38,16 +36,16 @@ impl<R: Read> NbtReadHelper<R> {
         Ok(())
     }
 
-    define_get_number_be!(u8);
-    define_get_number_be!(i8);
-    define_get_number_be!(u16);
-    define_get_number_be!(i16);
-    define_get_number_be!(u32);
-    define_get_number_be!(i32);
-    define_get_number_be!(u64);
-    define_get_number_be!(i64);
-    define_get_number_be!(f32);
-    define_get_number_be!(f64);
+    define_get_number_be!(get_u8_be, u8);
+    define_get_number_be!(get_i8_be, i8);
+    define_get_number_be!(get_u16_be, u16);
+    define_get_number_be!(get_i16_be, i16);
+    define_get_number_be!(get_u32_be, u32);
+    define_get_number_be!(get_i32_be, i32);
+    define_get_number_be!(get_u64_be, u64);
+    define_get_number_be!(get_i64_be, i64);
+    define_get_number_be!(get_f32_be, f32);
+    define_get_number_be!(get_f64_be, f64);
 
     pub fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>> {
         let mut buf = vec![0u8; count];
