@@ -18,17 +18,14 @@ impl BlockMetadata for MushroomPlantBlock {
 #[async_trait]
 impl PumpkinBlock for MushroomPlantBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let (block_below, state) = args
-            .block_accessor
-            .get_block_and_block_state(&args.position.down())
-            .await;
+        let block_below = args.block_accessor.get_block(&args.position.down()).await;
         if block_below
             .is_tagged_with("minecraft:mushroom_grow_block")
             .unwrap()
         {
             return true;
         }
-        // TODO
-        state.is_full_cube()
+        // TODO: Check light level and isOpaqueFullCube
+        false
     }
 }
