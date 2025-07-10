@@ -1245,8 +1245,6 @@ impl Player {
 
     async fn handle_killed(&self) {
         self.set_client_loaded(false);
-        self.drop_all().await;
-
         self.client
             .send_packet_now(&CCombatDeath::new(
                 self.entity_id().into(),
@@ -1410,7 +1408,7 @@ impl Player {
             .await;
     }
 
-    async fn drop_all(&self) {
+    pub async fn drop_all(&self) {
         let world = self.world().await;
 
         let level_info = world.level_info.read().await;

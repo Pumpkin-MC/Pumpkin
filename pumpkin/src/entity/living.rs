@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
-use pumpkin_data::entity::{EffectType, EntityStatus};
+use pumpkin_data::entity::{EffectType, EntityStatus, EntityType};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
@@ -266,6 +266,8 @@ impl LivingEntity {
     pub async fn kill(&self) {
         self.set_health(0.0).await;
 
+        let entity_id = self.entity.entity_id;
+
         // Plays the death sound
         self.entity
             .world
@@ -276,7 +278,19 @@ impl LivingEntity {
                 EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
             )
             .await;
+
+        // Handle loot
         self.drop_loot().await;
+        if let Some(player) = self
+            .entity
+            .world
+            .read()
+            .await
+            .get_player_by_id(entity_id)
+            .await
+        {
+            player.drop_all().await;
+        }
     }
 
     async fn drop_loot(&self) {
