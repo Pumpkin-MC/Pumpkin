@@ -1,14 +1,29 @@
-use std::num::NonZeroU8;
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use pumpkin_util::PermissionLvl;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
+use std::num::NonZeroU8;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
+use crate::block::pumpkin_block::BlockHitResult;
+use crate::block::registry::BlockActionResult;
+use crate::block::{self, BlockIsReplacing};
+use crate::command::CommandSender;
+use crate::entity::EntityBase;
+use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
+use crate::entity::r#type::from_type;
+use crate::error::PumpkinError;
+use crate::net::PlayerConfig;
+use crate::net::java::JavaClientPlatform;
+use crate::plugin::player::player_chat::PlayerChatEvent;
+use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
+use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
+use crate::plugin::player::player_move::PlayerMoveEvent;
+use crate::server::{Server, seasonal_events};
+use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block_properties::{
     BlockProperties, WaterLikeProperties, get_block_by_item, get_state_by_state_id,
@@ -47,23 +62,6 @@ use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
-
-use crate::block::pumpkin_block::BlockHitResult;
-use crate::block::registry::BlockActionResult;
-use crate::block::{self, BlockIsReplacing};
-use crate::command::CommandSender;
-use crate::entity::EntityBase;
-use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
-use crate::entity::r#type::from_type;
-use crate::error::PumpkinError;
-use crate::net::PlayerConfig;
-use crate::net::java::JavaClientPlatform;
-use crate::plugin::player::player_chat::PlayerChatEvent;
-use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
-use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
-use crate::plugin::player::player_move::PlayerMoveEvent;
-use crate::server::{Server, seasonal_events};
-use crate::world::{World, chunker};
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -1426,10 +1424,18 @@ impl JavaClientPlatform {
         let Ok(face) = BlockDirection::try_from(use_item_on.face.0) else {
             return Err(BlockPlacingError::InvalidBlockFace.into());
         };
-
+        //TODO this.player.resetLastActionTime();
+        //TODO this.gameModeForPlayer == GameType.SPECTATOR
         let inventory = player.inventory();
         let held_item = inventory.held_item();
         let off_hand_item = inventory.off_hand_item().await;
+        let held_item_empty = held_item.lock().await.is_empty();
+        let off_hand_item_empty = off_hand_item.lock().await.is_empty();
+        let item = if use_item_on.hand == VarInt::from(0) {
+            held_item
+        } else {
+            off_hand_item
+        };
 
         let entity = &player.living_entity.entity;
         let world = &entity.world.read().await;
@@ -1440,10 +1446,9 @@ impl JavaClientPlatform {
             .entity
             .sneaking
             .load(std::sync::atomic::Ordering::Relaxed);
+
         // Code based on the java class ServerPlayerInteractionManager
-        if !(sneaking
-            && (!held_item.lock().await.is_empty() || !off_hand_item.lock().await.is_empty()))
-        {
+        if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
             match match server
                 .block_registry
                 .use_with_item(
@@ -1454,7 +1459,7 @@ impl JavaClientPlatform {
                         side: &face,
                         cursor_pos: &cursor_pos,
                     },
-                    &held_item,
+                    &item,
                     server,
                     world,
                 )
@@ -1490,7 +1495,8 @@ impl JavaClientPlatform {
             }
         }
 
-        if held_item.lock().await.is_empty() {
+        if item.lock().await.is_empty() {
+            // TODO item cool down
             // If the hand is empty we stop here
             return Ok(());
         }
@@ -1498,7 +1504,7 @@ impl JavaClientPlatform {
         server
             .item_registry
             .use_on_block(
-                held_item.lock().await.item,
+                item.lock().await.item,
                 player,
                 position,
                 face,
@@ -1509,14 +1515,14 @@ impl JavaClientPlatform {
         self.update_sequence(player, use_item_on.sequence.0);
 
         // Check if the item is a block, because not every item can be placed :D
-        if let Some(block) = get_block_by_item(held_item.lock().await.item.id) {
+        if let Some(block) = get_block_by_item(item.lock().await.item.id) {
             should_try_decrement = self
                 .run_is_block_place(player, block, server, use_item_on, position, face)
                 .await?;
         }
 
         // Check if the item is a spawn egg
-        if let Some(entity) = entity_from_egg(held_item.lock().await.item.id) {
+        if let Some(entity) = entity_from_egg(item.lock().await.item.id) {
             self.spawn_entity_from_egg(player, entity, position, face)
                 .await;
             should_try_decrement = true;
@@ -1526,7 +1532,7 @@ impl JavaClientPlatform {
             // TODO: Config
             // Decrease block count
             if player.gamemode.load() != GameMode::Creative {
-                held_item.lock().await.decrement(1);
+                item.lock().await.decrement(1);
             }
         }
 
@@ -1560,7 +1566,11 @@ impl JavaClientPlatform {
         }
 
         let inventory = player.inventory();
-        let binding = inventory.held_item();
+        let binding = if use_item.hand == VarInt::from(0) {
+            inventory.held_item()
+        } else {
+            inventory.off_hand_item().await
+        };
 
         let hit_result = player
             .world()
