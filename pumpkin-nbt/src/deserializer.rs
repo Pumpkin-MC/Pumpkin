@@ -16,6 +16,19 @@ impl<R: Read> NbtReadHelper<R> {
     }
 }
 
+macro_rules! define_get_number_be {
+    ($name:ident, $type:ty) => {
+        pub fn $name(&mut self) -> Result<$type> {
+            let mut buf = [0u8; std::mem::size_of::<$type>()];
+            self.reader
+                .read_exact(&mut buf)
+                .map_err(Error::Incomplete)?;
+
+            Ok(<$type>::from_be_bytes(buf))
+        }
+    };
+}
+
 impl<R: Read> NbtReadHelper<R> {
     pub fn skip_bytes(&mut self, count: u64) -> Result<()> {
         let _ = io::copy(&mut self.reader.by_ref().take(count), &mut io::sink())
@@ -23,78 +36,16 @@ impl<R: Read> NbtReadHelper<R> {
         Ok(())
     }
 
-    //TODO: Macroize this
-    pub fn get_u8_be(&mut self) -> Result<u8> {
-        let mut buf = [0u8];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(u8::from_be_bytes(buf))
-    }
-
-    pub fn get_i8_be(&mut self) -> Result<i8> {
-        let mut buf = [0u8];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(i8::from_be_bytes(buf))
-    }
-
-    pub fn get_i16_be(&mut self) -> Result<i16> {
-        let mut buf = [0u8; 2];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(i16::from_be_bytes(buf))
-    }
-
-    pub fn get_u16_be(&mut self) -> Result<u16> {
-        let mut buf = [0u8; 2];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(u16::from_be_bytes(buf))
-    }
-
-    pub fn get_i32_be(&mut self) -> Result<i32> {
-        let mut buf = [0u8; 4];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(i32::from_be_bytes(buf))
-    }
-
-    pub fn get_i64_be(&mut self) -> Result<i64> {
-        let mut buf = [0u8; 8];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(i64::from_be_bytes(buf))
-    }
-
-    pub fn get_f32_be(&mut self) -> Result<f32> {
-        let mut buf = [0u8; 4];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(f32::from_be_bytes(buf))
-    }
-
-    pub fn get_f64_be(&mut self) -> Result<f64> {
-        let mut buf = [0u8; 8];
-        self.reader
-            .read_exact(&mut buf)
-            .map_err(Error::Incomplete)?;
-
-        Ok(f64::from_be_bytes(buf))
-    }
+    define_get_number_be!(get_u8_be, u8);
+    define_get_number_be!(get_i8_be, i8);
+    define_get_number_be!(get_u16_be, u16);
+    define_get_number_be!(get_i16_be, i16);
+    define_get_number_be!(get_u32_be, u32);
+    define_get_number_be!(get_i32_be, i32);
+    define_get_number_be!(get_u64_be, u64);
+    define_get_number_be!(get_i64_be, i64);
+    define_get_number_be!(get_f32_be, f32);
+    define_get_number_be!(get_f64_be, f64);
 
     pub fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>> {
         let mut buf = vec![0u8; count];

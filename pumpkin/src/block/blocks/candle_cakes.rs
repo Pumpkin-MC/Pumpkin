@@ -117,8 +117,7 @@ impl PumpkinBlock for CandleCakeBlock {
             } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
             _ => {
                 Self::consume_and_drop_candle(args.block, args.player, args.position, args.world)
-                    .await;
-                BlockActionResult::Consume
+                    .await
             }
         }
     }
