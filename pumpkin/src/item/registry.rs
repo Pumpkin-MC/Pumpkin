@@ -23,9 +23,9 @@ impl ItemRegistry {
     }
 
     pub async fn on_use(&self, item: &Item, player: &Player) {
-        let pumpkin_block = self.get_pumpkin_item(item);
-        if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.normal_use(item, player).await;
+        let pumpkin_item = self.get_pumpkin_item(item);
+        if let Some(pumpkin_item) = pumpkin_item {
+            pumpkin_item.normal_use(item, player).await;
         }
     }
 
