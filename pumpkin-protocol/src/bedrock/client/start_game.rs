@@ -14,7 +14,6 @@ use uuid::Uuid;
 #[packet(11)]
 pub struct CStartGame {
     // https://mojang.github.io/bedrock-protocol-docs/html/StartGamePacket.html
-
     pub entity_id: VarLong,
     pub runtime_entity_id: VarULong,
     pub player_gamemode: VarInt,
@@ -52,10 +51,9 @@ pub struct CStartGame {
     pub server_auth_sounds: bool,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize)]
 pub struct LevelSettings {
     // https://mojang.github.io/bedrock-protocol-docs/html/LevelSettings.html
-
     pub seed: u64,
 
     // Spawn Settings
@@ -122,7 +120,7 @@ pub struct LevelSettings {
     pub owner_id: String,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct Experiments {
     //TODO! https://mojang.github.io/bedrock-protocol-docs/html/Experiments.html
     pub names_size: u32,
