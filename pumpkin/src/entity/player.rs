@@ -1424,28 +1424,31 @@ impl Player {
 
         for slot in 0..self.inventory.size() {
             let item_stack = self.inventory.remove_stack(slot).await;
+            let item_pos = self.living_entity.entity.pos.load()
+                + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
             if !item_stack.is_empty() {
                 let entity = Entity::new(
                     Uuid::new_v4(),
                     self.world().await,
-                    self.living_entity.entity.pos.load(),
+                    item_pos,
                     EntityType::ITEM,
                     false,
                 );
 
                 let mut rng = Xoroshiro::from_seed(get_seed());
 
-                let f = rng.next_f32() * 0.5;
-                let g = rng.next_f32() * std::f32::consts::TAU;
+                let mag = rng.next_f32() * 0.5;
+                let ang = rng.next_f32() * std::f32::consts::TAU;
 
-                let x = -g.sin() * f;
-                let y = 0.2;
-                let z = g.cos() * f;
+                let vx = -ang.sin() * mag;
+                let vy = 0.2;
+                let vz = ang.cos() * mag;
 
-                let velocity = Vector3::new(x, y, z).to_f64();
+                let velocity = Vector3::new(vx, vy, vz);
 
-                let item_entity =
-                    Arc::new(ItemEntity::new_with_velocity(entity, item_stack, velocity, 40).await);
+                let item_entity = Arc::new(
+                    ItemEntity::new_with_velocity(entity, item_stack, velocity.to_f64(), 40).await,
+                );
 
                 world.spawn_entity(item_entity).await;
             }
