@@ -1566,7 +1566,7 @@ impl JavaClientPlatform {
         }
 
         let inventory = player.inventory();
-        let binding = if use_item.hand == VarInt::from(0) {
+        let item_in_hand = if Hand::try_from(use_item.hand).unwrap() == Hand::Left {
             inventory.held_item()
         } else {
             inventory.off_hand_item().await
@@ -1592,7 +1592,7 @@ impl JavaClientPlatform {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickBlock,
-                &binding,
+                &item_in_hand,
                 player.world().await.get_block(&hit_pos).await,
                 Some(hit_pos),
             )
@@ -1600,7 +1600,7 @@ impl JavaClientPlatform {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickAir,
-                &binding,
+                &item_in_hand,
                 &Block::AIR,
                 None,
             )
@@ -1609,7 +1609,7 @@ impl JavaClientPlatform {
         send_cancellable! {{
             event;
             'after: {
-                let held = binding.lock().await;
+                let held = item_in_hand.lock().await;
                 let item = held.item;
                 drop(held);
                 server.item_registry.on_use(item, player).await;
