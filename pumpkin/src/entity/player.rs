@@ -1457,7 +1457,7 @@ impl Player {
                 self.living_entity.entity.pos.load(),
                 (self.experience_level.load(Ordering::Relaxed) * 7).min(100) as u32,
             )
-                .await;
+            .await;
         }
     }
 
