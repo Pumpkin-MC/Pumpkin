@@ -10,8 +10,6 @@ use pumpkin_protocol::{
 use crate::{
     net::bedrock::BedrockClientPlatform,
     server::{CURRENT_BEDROCK_MC_VERSION, Server},
-    net::bedrock::BedrockClientPlatform,
-    server::{CURRENT_BEDROCK_MC_VERSION, Server},
 };
 
 impl BedrockClientPlatform {
@@ -35,7 +33,6 @@ impl BedrockClientPlatform {
             player_count,
             max_player_count: BASIC_CONFIG.max_players,
             server_unique_id: server.server_guid,
-            motd_line_2: &BASIC_CONFIG.default_level_name,
             motd_line_2: &BASIC_CONFIG.default_level_name,
             game_mode: "Survival",
             game_mode_numeric: 1,
