@@ -23,7 +23,6 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockState};
-use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
