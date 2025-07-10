@@ -11,18 +11,21 @@ use super::pumpkin_item::{ItemMetadata, PumpkinItem};
 
 #[derive(Default)]
 pub struct ItemRegistry {
-    items: HashMap<Box<[u16]>, Arc<dyn PumpkinItem>>,
+    items: HashMap<&'static Item, Arc<dyn PumpkinItem>>,
 }
 
 impl ItemRegistry {
     pub fn register<T: PumpkinItem + ItemMetadata + 'static>(&mut self, item: T) {
-        self.items.insert(T::ids(), Arc::new(item));
+        let val = Arc::new(item);
+        for i in T::ids() {
+            self.items.insert(Item::from_id(i).unwrap(), val.clone());
+        }
     }
 
     pub async fn on_use(&self, item: &Item, player: &Player) {
-        let pumpkin_block = self.get_pumpkin_item(item.id);
-        if let Some(pumpkin_block) = pumpkin_block {
-            pumpkin_block.normal_use(item, player).await;
+        let pumpkin_item = self.get_pumpkin_item(item);
+        if let Some(pumpkin_item) = pumpkin_item {
+            pumpkin_item.normal_use(item, player).await;
         }
     }
 
@@ -35,7 +38,7 @@ impl ItemRegistry {
         block: &Block,
         server: &Server,
     ) {
-        let pumpkin_item = self.get_pumpkin_item(item.id);
+        let pumpkin_item = self.get_pumpkin_item(item);
         if let Some(pumpkin_item) = pumpkin_item {
             return pumpkin_item
                 .use_on_block(item, player, location, face, block, server)
@@ -44,7 +47,7 @@ impl ItemRegistry {
     }
 
     pub fn can_mine(&self, item: &Item, player: &Player) -> bool {
-        let pumpkin_block = self.get_pumpkin_item(item.id);
+        let pumpkin_block = self.get_pumpkin_item(item);
         if let Some(pumpkin_block) = pumpkin_block {
             return pumpkin_block.can_mine(player);
         }
@@ -52,10 +55,7 @@ impl ItemRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_item(&self, item_id: u16) -> Option<&Arc<dyn PumpkinItem>> {
-        //TODO: We really want to use a lookup table for this
-        self.items
-            .iter()
-            .find_map(|(ids, item)| ids.contains(&item_id).then_some(item))
+    pub fn get_pumpkin_item(&self, item: &Item) -> Option<&Arc<dyn PumpkinItem>> {
+        self.items.get(item)
     }
 }

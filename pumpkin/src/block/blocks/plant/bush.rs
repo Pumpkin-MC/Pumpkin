@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::tag::Tagable;
 
+use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::pumpkin_block::{BlockMetadata, CanPlaceAtArgs, PumpkinBlock};
 
 pub struct BushBlock;
@@ -19,7 +19,8 @@ impl BlockMetadata for BushBlock {
 #[async_trait]
 impl PumpkinBlock for BushBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let block_below = args.block_accessor.get_block(&args.position.down()).await;
-        block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == &Block::FARMLAND
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }
 }
+
+impl PlantBlockBase for BushBlock {}

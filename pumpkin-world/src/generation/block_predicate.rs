@@ -221,11 +221,11 @@ impl WouldSurviveBlockPredicate {
         chunk: &ProtoChunk<'_>,
         pos: &BlockPos,
     ) -> bool {
-        let state = self.state.get_state().unwrap();
+        let state = self.state.get_state();
         let pos = self.offset.get(pos);
         return block_registry
             .can_place_at(
-                get_block_by_state_id(state.id).unwrap(),
+                get_block_by_state_id(state.id),
                 chunk,
                 &pos,
                 BlockDirection::Up,

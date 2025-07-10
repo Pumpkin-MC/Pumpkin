@@ -5,12 +5,13 @@ use pumpkin_data::{
     tag::{RegistryKey, get_tag_values},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::BlockStateId;
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::pumpkin_block::{
-        BlockMetadata, EmitsRedstonePowerArgs, GetRedstonePowerArgs, OnEntityCollisionArgs,
-        OnScheduledTickArgs, OnStateReplacedArgs, PumpkinBlock,
+        BlockMetadata, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+        OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs, OnStateReplacedArgs,
+        PumpkinBlock,
     },
     world::World,
 };
@@ -66,6 +67,19 @@ impl PumpkinBlock for PressurePlateBlock {
 
     async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
         true
+    }
+
+    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        if !Self::can_pressure_plate_place_at(args.world, args.position).await {
+            args.world
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
+                .await;
+            return;
+        }
+    }
+
+    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        Self::can_pressure_plate_place_at(args.world.unwrap(), args.position).await
     }
 }
 

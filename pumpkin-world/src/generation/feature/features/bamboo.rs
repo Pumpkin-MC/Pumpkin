@@ -72,19 +72,19 @@ impl BambooFeature {
 
                     chunk.set_block_state(
                         &bpos.0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)).unwrap(),
+                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
                     );
                     props.stage = Integer0To1::L0;
 
                     chunk.set_block_state(
                         &bpos.down().0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)).unwrap(),
+                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
                     );
                     props.leaves = BambooLeaves::Small;
 
                     chunk.set_block_state(
                         &bpos.down().down().0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)).unwrap(),
+                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
                     );
                 }
             }

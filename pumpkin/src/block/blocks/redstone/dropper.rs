@@ -83,7 +83,7 @@ const fn to_data3d(facing: Facing) -> i32 {
 impl PumpkinBlock for DropperBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(inventory) = block_entity.1.get_inventory() {
+            if let Some(inventory) = block_entity.get_inventory() {
                 args.player
                     .open_handled_screen(&DropperScreenFactory(inventory))
                     .await;
@@ -143,7 +143,6 @@ impl PumpkinBlock for DropperBlock {
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             let dropper = block_entity
-                .1
                 .as_any()
                 .downcast_ref::<DropperBlockEntity>()
                 .unwrap();

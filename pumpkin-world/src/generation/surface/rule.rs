@@ -25,7 +25,7 @@ impl MaterialRule {
     ) -> Option<&'static BlockState> {
         match self {
             MaterialRule::Badlands(badlands) => badlands.try_apply(context),
-            MaterialRule::Block(block) => block.try_apply(),
+            MaterialRule::Block(block) => Some(block.try_apply()),
             MaterialRule::Sequence(sequence) => sequence.try_apply(chunk, context),
             MaterialRule::Condition(condition) => condition.try_apply(chunk, context),
         }
@@ -51,7 +51,7 @@ pub struct BlockMaterialRule {
 }
 
 impl BlockMaterialRule {
-    pub fn try_apply(&self) -> Option<&'static BlockState> {
+    pub fn try_apply(&self) -> &'static BlockState {
         self.result_state.get_state()
     }
 }

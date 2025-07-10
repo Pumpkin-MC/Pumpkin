@@ -42,7 +42,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
-use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
@@ -631,10 +630,8 @@ impl JavaClientPlatform {
     pub async fn handle_set_command_block(&self, player: &Arc<Player>, command: SSetCommandBlock) {
         // TODO: check things
         let pos = command.pos;
-        if let Some((nbt, block_entity)) = player.world().await.get_block_entity(&pos).await {
-            let command_entity = CommandBlockEntity::from_nbt(&nbt, pos);
-
-            if block_entity.resource_location() != command_entity.resource_location() {
+        if let Some(block_entity) = player.world().await.get_block_entity(&pos).await {
+            if block_entity.resource_location() != CommandBlockEntity::ID {
                 log::warn!(
                     "Client tried to change Command block but not Command block entity found"
                 );
@@ -1890,9 +1887,7 @@ impl JavaClientPlatform {
             .await;
 
         // Check if there is a player in the way of the block being placed
-        let shapes = get_state_by_state_id(new_state)
-            .unwrap()
-            .get_block_collision_shapes();
+        let shapes = get_state_by_state_id(new_state).get_block_collision_shapes();
         for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {

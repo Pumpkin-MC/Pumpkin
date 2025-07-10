@@ -11,6 +11,7 @@ use crate::block::pumpkin_block::OnStateReplacedArgs;
 use crate::block::pumpkin_block::PlacedArgs;
 use crate::block::pumpkin_block::PlayerPlacedArgs;
 use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::entity::EntityBase;
 
 type SignProperties = pumpkin_data::block_properties::OakSignLikeProperties;
 
@@ -31,7 +32,7 @@ impl PumpkinBlock for SignBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> u16 {
         let mut sign_props = SignProperties::default(args.block);
         sign_props.waterlogged = args.replacing.water_source();
-
+        sign_props.rotation = args.player.get_entity().get_flipped_rotation_16();
         sign_props.to_state_id(args.block)
     }
 

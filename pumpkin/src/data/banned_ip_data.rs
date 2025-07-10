@@ -1,7 +1,7 @@
 use std::{net::IpAddr, path::Path, sync::LazyLock};
 
-use chrono::Local;
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 use super::{LoadJSONConfiguration, SaveJSONConfiguration, banlist_serializer::BannedIpEntry};
 
@@ -24,8 +24,11 @@ impl BannedIpList {
     fn remove_invalid_entries(&mut self) {
         let original_len = self.banned_ips.len();
 
-        self.banned_ips
-            .retain(|entry| entry.expires.is_none_or(|expires| expires >= Local::now()));
+        self.banned_ips.retain(|entry| {
+            entry
+                .expires
+                .is_none_or(|expires| expires >= OffsetDateTime::now_utc())
+        });
 
         if original_len != self.banned_ips.len() {
             self.save();

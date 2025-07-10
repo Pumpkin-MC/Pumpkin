@@ -12,6 +12,6 @@ pub struct RandomBlockStateMatchRuleTest {
 
 impl RandomBlockStateMatchRuleTest {
     pub fn test(&self, state: &BlockState, random: &mut RandomGenerator) -> bool {
-        state.id == self.block_state.get_state().unwrap().id && random.next_f32() < self.probability
+        state.id == self.block_state.get_state_id() && random.next_f32() < self.probability
     }
 }

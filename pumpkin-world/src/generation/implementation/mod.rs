@@ -85,9 +85,17 @@ impl WorldGenerator for VanillaGenerator {
             &self.random_config,
             generation_settings,
         );
+        // TODO: Temporary yield to allow other tasks to run, eventually replace with rayon
+        tokio::task::yield_now().await;
         proto_chunk.populate_biomes(self.dimension);
+        // TODO: Temporary yield to allow other tasks to run, eventually replace with rayon
+        tokio::task::yield_now().await;
         proto_chunk.populate_noise();
+        // TODO: Temporary yield to allow other tasks to run, eventually replace with rayon
+        tokio::task::yield_now().await;
         proto_chunk.build_surface();
+        // TODO: Temporary yield to allow other tasks to run, eventually replace with rayon
+        tokio::task::yield_now().await;
         proto_chunk.generate_features(level, block_registry).await;
 
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
