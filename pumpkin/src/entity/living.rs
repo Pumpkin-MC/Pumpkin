@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
-use pumpkin_data::entity::{EffectType, EntityStatus, EntityType};
+use pumpkin_data::entity::{EffectType, EntityStatus};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
