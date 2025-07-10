@@ -13,7 +13,7 @@ pub struct AcaciaFoliagePlacer;
 
 impl AcaciaFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -34,8 +34,7 @@ impl AcaciaFoliagePlacer {
             -1,
             node.giant_trunk,
             foliage_provider,
-        )
-        .await;
+        );
         FoliagePlacer::generate_square(
             self,
             chunk,
@@ -46,8 +45,7 @@ impl AcaciaFoliagePlacer {
             -foliage_height,
             node.giant_trunk,
             foliage_provider,
-        )
-        .await;
+        );
         FoliagePlacer::generate_square(
             self,
             chunk,
@@ -58,8 +56,7 @@ impl AcaciaFoliagePlacer {
             0,
             node.giant_trunk,
             foliage_provider,
-        )
-        .await;
+        );
     }
 
     pub fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {

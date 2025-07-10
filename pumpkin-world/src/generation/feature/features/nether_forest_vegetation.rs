@@ -20,7 +20,7 @@ pub struct NetherForestVegetationFeature {
 
 impl NetherForestVegetationFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         block_registry: &dyn BlockRegistryExt,
@@ -50,9 +50,7 @@ impl NetherForestVegetationFeature {
             let nether_block = get_block_by_state_id(nether_state.id);
             if !chunk.is_air(&pos.0)
                 || pos.0.y <= chunk.bottom_y() as i32
-                || block_registry
-                    .can_place_at(nether_block, chunk, &pos, BlockDirection::Up)
-                    .await
+                || block_registry.can_place_at(nether_block, chunk, &pos, BlockDirection::Up)
             {
                 continue;
             }

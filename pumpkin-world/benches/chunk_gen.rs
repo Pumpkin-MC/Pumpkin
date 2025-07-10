@@ -20,7 +20,7 @@ struct BlockRegistry;
 
 #[async_trait]
 impl BlockRegistryExt for BlockRegistry {
-    async fn can_place_at(
+    fn can_place_at(
         &self,
         _block: &pumpkin_data::Block,
         _block_accessor: &dyn BlockAccessor,
@@ -52,9 +52,11 @@ async fn chunk_generation_seed(seed: i64) {
             let level_clone = level.clone();
             let block_registry_clone = block_registry.clone();
             tasks.spawn(async move {
-                generator_clone
-                    .generate_chunk(&level_clone, block_registry_clone.as_ref(), &position)
-                    .await;
+                generator_clone.generate_chunk(
+                    &level_clone,
+                    block_registry_clone.as_ref(),
+                    &position,
+                );
             });
         }
     }

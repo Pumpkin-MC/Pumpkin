@@ -21,7 +21,7 @@ pub struct BendingTrunkPlacer {
 
 impl BendingTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         placer: &TrunkPlacer,
         height: u32,

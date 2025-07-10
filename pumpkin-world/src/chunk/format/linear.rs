@@ -395,7 +395,7 @@ mod tests {
 
     #[async_trait]
     impl BlockRegistryExt for BlockRegistry {
-        async fn can_place_at(
+        fn can_place_at(
             &self,
             _block: &pumpkin_data::Block,
             _block_accessor: &dyn BlockAccessor,
@@ -459,9 +459,7 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator
-                    .generate_chunk(&level, block_registry.as_ref(), &position)
-                    .await;
+                let chunk = generator.generate_chunk(&level, block_registry.as_ref(), &position);
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }

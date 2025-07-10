@@ -49,24 +49,26 @@ pub struct BlockRegistry {
 
 #[async_trait]
 impl BlockRegistryExt for BlockRegistry {
-    async fn can_place_at(
+    fn can_place_at(
         &self,
         block: &pumpkin_data::Block,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
         face: BlockDirection,
     ) -> bool {
-        self.can_place_at(
-            None,
-            None,
-            block_accessor,
-            None,
-            block,
-            block_pos,
-            face,
-            None,
-        )
-        .await
+        futures::executor::block_on(async move {
+            self.can_place_at(
+                None,
+                None,
+                block_accessor,
+                None,
+                block,
+                block_pos,
+                face,
+                None,
+            )
+            .await
+        })
     }
 }
 

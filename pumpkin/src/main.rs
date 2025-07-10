@@ -120,11 +120,6 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-
-    rayon::ThreadPoolBuilder::new()
-        .thread_name(|_| "rayon-worker".to_string())
-        .build_global()
-        .expect("Rayon thread pool can only be initialized once");
     log::info!(
         "Starting Pumpkin {CARGO_PKG_VERSION} for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
     );
