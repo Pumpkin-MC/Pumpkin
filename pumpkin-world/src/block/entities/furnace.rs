@@ -74,16 +74,19 @@ impl FurnaceBlockEntity {
             None => return false,
         };
 
+        let top_item_stack = self.items[0].lock().await;
+        let is_top_items_empty = top_item_stack.is_empty();
+        drop(top_item_stack);
+
         let side_item_stack = self.items[2].lock().await;
         if side_item_stack.is_empty() {
-            return true;
+            return !is_top_items_empty;
         }
 
         if let Some(recipe_output_item) =
             Item::from_registry_key(recipe.result.id.strip_prefix("minecraft:").unwrap())
         {
-            let top_item_stack = self.items[0].lock().await;
-            if !top_item_stack.is_empty()
+            if !is_top_items_empty
                 && recipe_output_item.id == side_item_stack.item.id
                 && side_item_stack.item_count < max_count
                 && side_item_stack.item_count < side_item_stack.get_max_stack_size()
@@ -122,13 +125,15 @@ impl FurnaceBlockEntity {
                 }
             }
 
-            let mut top_items = self.items[0].lock().await;
             let bottom_items = self.items[1].lock().await;
+            let mut top_items = self.items[0].lock().await;
             if top_items.item.id == Item::WET_SPONGE.id
                 && !bottom_items.is_empty()
                 && bottom_items.item.id == Item::BUCKET.id
             {
-                self.set_stack(1, ItemStack::new(1, &Item::BUCKET)).await;
+                drop(bottom_items);
+                self.set_stack(1, ItemStack::new(1, &Item::WATER_BUCKET))
+                    .await;
             }
 
             top_items.decrement(1);
@@ -160,6 +165,7 @@ impl BlockEntity for FurnaceBlockEntity {
         let can_accpet_output = self
             .can_accept_recipe_output(furnace_recipe, self.get_max_count_per_stack())
             .await;
+
         log::info!("can accept output:  {can_accpet_output}");
 
         let mut bottom_items = self.items[1].lock().await;

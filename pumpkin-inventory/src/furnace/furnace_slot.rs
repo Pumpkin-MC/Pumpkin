@@ -1,7 +1,7 @@
 use std::sync::{Arc, atomic::AtomicU8};
 
 use async_trait::async_trait;
-use pumpkin_data::fuels::is_fuel;
+use pumpkin_data::{fuels::is_fuel, item::Item};
 use pumpkin_world::inventory::Inventory;
 
 use crate::slot::Slot;
@@ -53,7 +53,7 @@ impl Slot for FurnaceSlot {
     async fn can_insert(&self, stack: &pumpkin_world::item::ItemStack) -> bool {
         match self.slot_type {
             FurnaceSlotType::Top => true,
-            FurnaceSlotType::Bottom => is_fuel(stack.item.id),
+            FurnaceSlotType::Bottom => is_fuel(stack.item.id) || stack.item.id == Item::BUCKET.id,
             FurnaceSlotType::Side => false,
         }
     }
