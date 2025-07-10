@@ -8,6 +8,7 @@ pub mod campfire;
 pub mod candle_cakes;
 pub mod candles;
 pub mod carpet;
+pub mod chain;
 pub mod chests;
 pub mod chiseled_bookshelf;
 pub mod command;
@@ -28,6 +29,7 @@ pub mod glazed_terracotta;
 pub mod grindstone;
 pub mod iron_bars;
 pub mod jukebox;
+pub mod lanterns;
 pub mod logs;
 pub mod nether_portal;
 pub mod note;
@@ -56,5 +58,4 @@ pub mod ender_chest;
 
 // abstruct
 pub mod abstruct_wall_mounting;
-pub mod chain;
 pub mod lectern;
