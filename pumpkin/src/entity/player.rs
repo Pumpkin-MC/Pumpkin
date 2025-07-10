@@ -1431,8 +1431,7 @@ impl Player {
 
                 // TODO: Merge stacks together
                 // I’m not sure if creating another drop method was the right thing to do
-                let item_entity =
-                    Arc::new(ItemEntity::new(entity, stack).await);
+                let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
 
                 world.spawn_entity(item_entity).await;
             }
