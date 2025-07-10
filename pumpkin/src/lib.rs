@@ -72,6 +72,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                 "[year]-[month]-[day] [hour]:[minute]:[second]"
             ));
             config.set_time_level(LevelFilter::Error);
+            config.set_time_offset_to_local();
         } else {
             config.set_time_level(LevelFilter::Off);
         }

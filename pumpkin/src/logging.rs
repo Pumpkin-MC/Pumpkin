@@ -43,7 +43,6 @@ impl GzipRollingLogger {
                 BufWriter::new(File::create(&new_filename)?),
                 flate2::Compression::default(),
             );
-            println!("logs/{filename}");
             std::io::copy(&mut file, &mut encoder)?;
             encoder.finish()?;
         }
