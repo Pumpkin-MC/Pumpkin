@@ -1566,7 +1566,7 @@ impl JavaClientPlatform {
         }
 
         let inventory = player.inventory();
-        let item_in_hand = if Hand::try_from(use_item.hand).unwrap() == Hand::Left {
+        let item_in_hand = if Hand::try_from(use_item.hand.0).unwrap_or(Hand::Left) == Hand::Left {
             inventory.held_item()
         } else {
             inventory.off_hand_item().await
