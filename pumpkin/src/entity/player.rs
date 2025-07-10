@@ -1299,7 +1299,7 @@ impl Player {
             Status::StartedDigging => self.handle_started_digging(location, server).await,
             Status::CancelledDigging => self.handle_cancelled_digging(location).await,
             Status::FinishedDigging => self.handle_finished_digging(location, server).await,
-            _ => unreachable!(),
+            _ => {},
         }
     }
 
