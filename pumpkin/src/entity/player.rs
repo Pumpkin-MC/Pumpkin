@@ -23,6 +23,7 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::{Block, BlockState};
+use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
@@ -1243,6 +1244,7 @@ impl Player {
 
     async fn handle_killed(&self) {
         self.set_client_loaded(false);
+        self.drop_inventory().await;
         self.client
             .send_packet_now(&CCombatDeath::new(
                 self.entity_id().into(),
@@ -1404,6 +1406,38 @@ impl Player {
                 target_name,
             ))
             .await;
+    }
+
+    async fn drop_inventory(&self) {
+        let world = self.world().await;
+
+        let level_info = world.level_info.read().await;
+
+        if level_info.game_rules.keep_inventory {
+            return;
+        }
+
+        drop(level_info);
+
+        for slot in 0..self.inventory.size() {
+            let stack = self.inventory.remove_stack(slot).await;
+            if !stack.is_empty() {
+                let entity = Entity::new(
+                    Uuid::new_v4(),
+                    self.world().await,
+                    self.living_entity.entity.pos.load(),
+                    EntityType::ITEM,
+                    false,
+                );
+
+                // TODO: Merge stacks together
+                // I’m not sure if creating another drop method was the right thing to do
+                let item_entity =
+                    Arc::new(ItemEntity::new(entity, stack).await);
+
+                world.spawn_entity(item_entity).await;
+            }
+        }
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
