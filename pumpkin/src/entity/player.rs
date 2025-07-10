@@ -54,6 +54,8 @@ use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
 use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomImpl, get_seed};
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::biome;
@@ -1243,7 +1245,9 @@ impl Player {
 
     async fn handle_killed(&self) {
         self.set_client_loaded(false);
-        self.drop_inventory().await;
+        self.drop_all().await;
+
+        // TODO: implement experience drop and mob loot
         self.client
             .send_packet_now(&CCombatDeath::new(
                 self.entity_id().into(),
@@ -1407,7 +1411,7 @@ impl Player {
             .await;
     }
 
-    async fn drop_inventory(&self) {
+    async fn drop_all(&self) {
         let world = self.world().await;
 
         let level_info = world.level_info.read().await;
@@ -1419,8 +1423,8 @@ impl Player {
         drop(level_info);
 
         for slot in 0..self.inventory.size() {
-            let stack = self.inventory.remove_stack(slot).await;
-            if !stack.is_empty() {
+            let item_stack = self.inventory.remove_stack(slot).await;
+            if !item_stack.is_empty() {
                 let entity = Entity::new(
                     Uuid::new_v4(),
                     self.world().await,
@@ -1429,9 +1433,19 @@ impl Player {
                     false,
                 );
 
-                // TODO: Merge stacks together
-                // I’m not sure if creating another drop method was the right thing to do
-                let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
+                let mut rng = Xoroshiro::from_seed(get_seed());
+
+                let f = rng.next_f32() * 0.5;
+                let g = rng.next_f32() * std::f32::consts::TAU;
+
+                let x = -g.sin() * f;
+                let y = 0.2;
+                let z = g.cos() * f;
+
+                let velocity = Vector3::new(x, y, z).to_f64();
+
+                let item_entity =
+                    Arc::new(ItemEntity::new_with_velocity(entity, item_stack, velocity, 40).await);
 
                 world.spawn_entity(item_entity).await;
             }
