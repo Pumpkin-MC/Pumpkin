@@ -44,8 +44,8 @@ use pumpkin_protocol::java::client::play::{
     CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
     CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
     CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CSystemChatMessage, CTabList, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
+    GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_registry::VanillaDimensionType;
@@ -1537,6 +1537,23 @@ impl Player {
         }
 
         self.set_experience(new_level, progress, points).await;
+    }
+
+    pub async fn set_tablist_message(
+        &self,
+        header: Option<TextComponent>,
+        footer: Option<TextComponent>,
+    ) {
+        if let ClientPlatform::Java(_) = self.client {
+            let mut tablist = CTabList::default();
+            if let Some(header) = header {
+                tablist.header = header;
+            }
+            if let Some(footer) = footer {
+                tablist.footer = footer;
+            }
+            self.client.enqueue_packet(&tablist).await;
+        }
     }
 
     pub async fn add_effect(&self, effect: Effect) {
