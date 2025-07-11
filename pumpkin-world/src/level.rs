@@ -405,7 +405,6 @@ impl Level {
         };
         let mut rng = SmallRng::from_os_rng();
         for chunk in self.loaded_chunks.iter() {
-            use tokio::time::{Duration, timeout};
             let mut chunk = chunk.write().await;
             ticks.block_ticks.extend(chunk.get_and_tick_block_ticks());
             ticks.fluid_ticks.extend(chunk.get_and_tick_fluid_ticks());
