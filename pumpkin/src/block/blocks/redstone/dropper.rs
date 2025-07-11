@@ -163,7 +163,7 @@ impl PumpkinBlock for DropperBlock {
                     Uuid::new_v4(),
                     args.world.clone(),
                     position,
-                    EntityType::ITEM,
+                    &EntityType::ITEM,
                     false,
                 );
                 let rd = rng().random::<f64>() * 0.1 + 0.2;

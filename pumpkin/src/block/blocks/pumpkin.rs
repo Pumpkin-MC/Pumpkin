@@ -32,7 +32,7 @@ impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
             Uuid::new_v4(),
             args.world.clone(),
             args.position.to_f64(),
-            EntityType::ITEM,
+            &EntityType::ITEM,
             false,
         );
         let item_entity =

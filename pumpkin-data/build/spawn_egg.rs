@@ -15,12 +15,12 @@ pub(crate) fn build() -> TokenStream {
     for (egg, entity) in &eggs {
         let entity = entity.to_shouty_snake_case();
         let entity = format_ident!("{}", entity);
-        names.extend(quote! { #egg => Some(EntityType::#entity), });
+        names.extend(quote! { #egg => Some(&EntityType::#entity), });
     }
     quote! {
     use crate::entity_type::EntityType;
 
-    pub fn entity_from_egg(id: u16) -> Option<EntityType> {
+    pub fn entity_from_egg(id: u16) -> Option<&'static EntityType> {
         match id {
             #names
             _ => None

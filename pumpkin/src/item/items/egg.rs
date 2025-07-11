@@ -37,7 +37,7 @@ impl PumpkinItem for EggItem {
             Uuid::new_v4(),
             world.clone(),
             position,
-            EntityType::EGG,
+            &EntityType::EGG,
             false,
         );
         let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);

@@ -1710,7 +1710,7 @@ impl JavaClientPlatform {
     async fn spawn_entity_from_egg(
         &self,
         player: &Player,
-        entity_type: EntityType,
+        entity_type: &'static EntityType,
         location: BlockPos,
         face: BlockDirection,
     ) {
