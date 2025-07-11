@@ -1,5 +1,3 @@
-use std::{any::Any, sync::Arc};
-
 use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::inventory::Inventory;
@@ -8,7 +6,7 @@ use pumpkin_world::item::ItemStack;
 use crate::crafting::crafting_inventory::CraftingInventory;
 use crate::crafting::crafting_screen_handler::CraftingScreenHandler;
 use crate::crafting::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
-use crate::equipment_slot::EquipmentSlot;
+use crate::equipment_slot::{EquipmentSlot, EquipmentType};
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::{ArmorSlot, NormalSlot, Slot};
 
@@ -111,6 +109,12 @@ impl ScreenHandler for PlayerScreenHandler {
             let mut slot_stack = slot_stack.lock().await;
             let stack_prev = *slot_stack;
 
+            let equipment_slot = slot_stack
+                .components
+                .equippable
+                .and_then(|equippable| EquipmentSlot::get_from_name(equippable.slot))
+                .unwrap_or(EquipmentSlot::MAIN_HAND);
+
             #[allow(clippy::if_same_then_else)]
             if slot_index == 0 {
                 // From crafting result slot
@@ -125,6 +129,31 @@ impl ScreenHandler for PlayerScreenHandler {
             } else if (5..9).contains(&slot_index) {
                 // From armour slots
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
+                    return ItemStack::EMPTY;
+                }
+            } else if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
+                && self
+                    .get_slot((8 - equipment_slot.get_entity_slot_id()) as usize)
+                    .await
+                    .get_cloned_stack()
+                    .await
+                    .is_empty()
+            {
+                // Into armour slots
+                let index = 8 - equipment_slot.get_entity_slot_id();
+                if !self
+                    .insert_item(&mut slot_stack, index, index + 1, false)
+                    .await
+                {
+                    return ItemStack::EMPTY;
+                }
+            } else if matches!(equipment_slot, EquipmentSlot::OffHand(_)) {
+                // Into offhand slot
+                let index = 45;
+                if !self
+                    .insert_item(&mut slot_stack, index, index + 1, false)
+                    .await
+                {
                     return ItemStack::EMPTY;
                 }
             } else if (9..36).contains(&slot_index) {
