@@ -25,11 +25,7 @@ impl SimpleBlockFeature {
         let state = self.to_place.get(random, pos);
         let block = get_block_by_state_id(state.id);
         let block_accessor: &dyn BlockAccessor = chunk;
-        if !futures::executor::block_on(async move {
-            block_registry
-                .can_place_at(block, block_accessor, &pos, BlockDirection::Up)
-                .await
-        }) {
+        if !block_registry.can_place_at(block, block_accessor, &pos, BlockDirection::Up) {
             return false;
         }
 

@@ -704,11 +704,7 @@ impl<'a> ProtoChunk<'a> {
     ///
     /// 1. First, we determine **whether** to generate a feature and **at which block positions** to place it.
     /// 2. Then, using the second file, we determine **how** to generate the feature.
-    pub async fn generate_features(
-        &mut self,
-        level: &Arc<Level>,
-        block_registry: &dyn BlockRegistryExt,
-    ) {
+    pub fn generate_features(&mut self, level: &Arc<Level>, block_registry: &dyn BlockRegistryExt) {
         let chunk_pos = self.chunk_pos;
         let min_y = self.noise_sampler.min_y();
         let height = self.noise_sampler.height();
@@ -729,18 +725,16 @@ impl<'a> ProtoChunk<'a> {
             // TODO: Properly set index and step
             let decorator_seed = get_decorator_seed(population_seed, 0, 0);
             let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
-            feature
-                .generate(
-                    self,
-                    level,
-                    block_registry,
-                    min_y,
-                    height,
-                    name,
-                    &mut random,
-                    block_pos,
-                )
-                .await;
+            feature.generate(
+                self,
+                level,
+                block_registry,
+                min_y,
+                height,
+                name,
+                &mut random,
+                block_pos,
+            );
         }
     }
 
