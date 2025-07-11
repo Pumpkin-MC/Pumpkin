@@ -324,6 +324,10 @@ impl BlockPos {
         let z = (other.0.z - self.0.z).abs();
         x + y + z
     }
+
+    pub fn squared_distance(&self, other: Self) -> i32 {
+        self.0.squared_distance_to_vec(other.0)
+    }
 }
 
 impl Serialize for BlockPos {

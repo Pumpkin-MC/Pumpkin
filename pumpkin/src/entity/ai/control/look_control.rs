@@ -1,6 +1,6 @@
 use crate::entity::EntityBase;
 use crate::entity::ai::control::Control;
-use crate::entity::mob::MobEntity;
+use crate::entity::mob::{Mob, MobEntity};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_util::math::clamp_angle;
 use pumpkin_util::math::vector3::Vector3;
@@ -19,11 +19,11 @@ pub struct LookControl {
 impl Control for LookControl {}
 
 impl LookControl {
-    pub fn look_at_position(&self, mob: &MobEntity, position: Vector3<f64>) {
+    pub fn look_at_position(&self, mob: &dyn Mob, position: Vector3<f64>) {
         self.look_at(mob, position.x, position.y, position.z);
     }
 
-    pub fn look_at_entity(&self, mob: &MobEntity, entity: &Arc<dyn EntityBase>) {
+    pub fn look_at_entity(&self, mob: &dyn Mob, entity: &Arc<dyn EntityBase>) {
         let entity = entity.get_entity();
         let pos = entity.pos.load();
         self.look_at_position(mob, pos);
@@ -40,17 +40,14 @@ impl LookControl {
         self.look_at_with_range(pos.x, pos.y, pos.z, max_yaw_change, max_pitch_change);
     }
 
-    pub fn look_at(&self, mob: &MobEntity, x: f64, y: f64, z: f64) {
-        let (max_look_yaw_change, max_look_pitch_change) = mob.mob.as_ref().map_or_else(
-            || (self.max_yaw_change.load(), self.max_pitch_change.load()),
-            |mob| {
-                (
-                    mob.get_max_look_yaw_change() as f32,
-                    mob.get_max_look_pitch_change() as f32,
-                )
-            },
+    pub fn look_at(&self, mob: &dyn Mob, x: f64, y: f64, z: f64) {
+        self.look_at_with_range(
+            x,
+            y,
+            z,
+            mob.get_max_look_yaw_change() as f32,
+            mob.get_max_look_pitch_change() as f32,
         );
-        self.look_at_with_range(x, y, z, max_look_yaw_change, max_look_pitch_change);
     }
 
     pub fn look_at_with_range(
@@ -67,7 +64,7 @@ impl LookControl {
         self.look_at_timer.store(2, Relaxed);
     }
 
-    pub async fn tick(&self, mob: &MobEntity) {
+    pub async fn tick(&self, mob: &dyn Mob) {
         let entity = mob.get_entity();
         if Self::should_stay_horizontal() {
             entity.set_pitch(0.0);
@@ -75,14 +72,14 @@ impl LookControl {
 
         if self.look_at_timer.load(Relaxed) > 0 {
             self.look_at_timer.fetch_sub(1, Relaxed);
-            if let Some(yaw) = self.get_target_yaw(mob) {
+            if let Some(yaw) = self.get_target_yaw(mob.get_mob_entity()) {
                 entity.head_yaw.store(self.change_angle(
                     entity.head_yaw.load(),
                     yaw,
                     self.max_yaw_change.load(),
                 ));
             }
-            if let Some(pitch) = self.get_target_pitch(mob) {
+            if let Some(pitch) = self.get_target_pitch(mob.get_mob_entity()) {
                 entity.set_pitch(self.change_angle(
                     entity.pitch.load(),
                     pitch,
@@ -104,14 +101,12 @@ impl LookControl {
         true
     }
 
-    async fn clamp_head_yaw(&self, mob: &MobEntity) {
-        let navigator = mob.navigator.lock().await;
+    async fn clamp_head_yaw(&self, mob: &dyn Mob) {
+        let mob_entity = mob.get_mob_entity();
+        let navigator = mob_entity.navigator.lock().await;
         if !navigator.is_idle() {
-            let entity = &mob.living_entity.entity;
-            let max_head_rotation = mob
-                .mob
-                .as_ref()
-                .map_or(90.0, |mob| mob.get_max_head_rotation() as f32);
+            let entity = &mob_entity.living_entity.entity;
+            let max_head_rotation = mob.get_max_head_rotation() as f32;
             entity.head_yaw.store(clamp_angle(
                 entity.head_yaw.load(),
                 entity.body_yaw.load(),

@@ -1,7 +1,8 @@
 use super::Goal;
 use crate::entity::ai::target_predicate::TargetPredicate;
+use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
-use crate::entity::{EntityBase, mob::MobEntity, player::Player};
+use crate::entity::{EntityBase, player::Player};
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
@@ -13,7 +14,6 @@ use tokio::sync::Mutex;
 
 #[allow(dead_code)]
 pub struct LookAtEntityGoal {
-    mob: Weak<MobEntity>,
     target: Mutex<Option<Arc<dyn EntityBase>>>,
     range: f64,
     look_time: AtomicI32,
@@ -26,15 +26,14 @@ pub struct LookAtEntityGoal {
 impl LookAtEntityGoal {
     #[must_use]
     pub fn new(
-        mob_weak: Weak<MobEntity>,
+        mob_weak: Weak<dyn Mob>,
         target_type: EntityType,
         range: f64,
         chance: f64,
         look_forward: bool,
     ) -> Self {
-        let target_predicate = Self::create_target_predicate(mob_weak.clone(), target_type, range);
+        let target_predicate = Self::create_target_predicate(mob_weak, target_type, range);
         Self {
-            mob: mob_weak,
             target: Mutex::new(None),
             range,
             look_time: AtomicI32::new(0),
@@ -46,12 +45,12 @@ impl LookAtEntityGoal {
     }
 
     #[must_use]
-    pub fn with_default(mob_weak: Weak<MobEntity>, target_type: EntityType, range: f64) -> Self {
+    pub fn with_default(mob_weak: Weak<dyn Mob>, target_type: EntityType, range: f64) -> Self {
         Self::new(mob_weak, target_type, range, 0.02, false)
     }
 
     fn create_target_predicate(
-        mob_weak: Weak<MobEntity>,
+        mob_weak: Weak<dyn Mob>,
         target_type: EntityType,
         range: f64,
     ) -> TargetPredicate {
@@ -62,7 +61,7 @@ impl LookAtEntityGoal {
                 let mob_weak = mob_weak.clone();
                 async move {
                     if let Some(mob_arc) = mob_weak.upgrade() {
-                        let predicate = EntityPredicate::Rides(&mob_arc.living_entity.entity);
+                        let predicate = EntityPredicate::Rides(mob_arc.get_entity());
                         predicate.test(&living_entity.entity).await
                     } else {
                         // MobEntity is destroyed
@@ -77,29 +76,30 @@ impl LookAtEntityGoal {
 
 #[async_trait]
 impl Goal for LookAtEntityGoal {
-    async fn can_start(&self, mob: &MobEntity) -> bool {
+    async fn can_start(&self, mob: &dyn Mob) -> bool {
         if mob.get_random().random::<f64>() >= self.chance {
             return false;
         }
 
+        let mob_entity = mob.get_mob_entity();
         let mut target = self.target.lock().await;
 
-        let mob_target = mob.target.lock().await;
+        let mob_target = mob_entity.target.lock().await;
         if mob_target.is_some() {
             (*target).clone_from(&mob_target);
         }
         drop(mob_target);
 
-        let world = mob.living_entity.entity.world.read().await;
+        let world = mob_entity.living_entity.entity.world.read().await;
         if self.target_type == EntityType::PLAYER {
             *target = world
-                .get_closest_player(mob.living_entity.entity.pos.load(), self.range)
+                .get_closest_player(mob_entity.living_entity.entity.pos.load(), self.range)
                 .await
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
         } else {
             *target = world
                 .get_closest_entity(
-                    mob.living_entity.entity.pos.load(),
+                    mob_entity.living_entity.entity.pos.load(),
                     self.range,
                     Some(&[self.target_type]),
                 )
@@ -109,7 +109,8 @@ impl Goal for LookAtEntityGoal {
         target.is_some()
     }
 
-    async fn should_continue(&self, mob: &MobEntity) -> bool {
+    async fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let mob = mob.get_mob_entity();
         if let Some(target) = self.target.lock().await.as_ref() {
             if !target.get_entity().is_alive() {
                 return false;
@@ -124,16 +125,17 @@ impl Goal for LookAtEntityGoal {
         false
     }
 
-    async fn start(&self, mob: &MobEntity) {
+    async fn start(&self, mob: &dyn Mob) {
         let tick_count = self.get_tick_count(40 + mob.get_random().random_range(0..40));
         self.look_time.store(tick_count, Relaxed);
     }
 
-    async fn stop(&self, _mob: &MobEntity) {
+    async fn stop(&self, _mob: &dyn Mob) {
         *self.target.lock().await = None;
     }
 
-    async fn tick(&self, mob: &MobEntity) {
+    async fn tick(&self, mob: &dyn Mob) {
+        let mob = mob.get_mob_entity();
         if let Some(target) = self.target.lock().await.as_ref() {
             if target.get_entity().is_alive() {
                 let d = if self.look_forward {
