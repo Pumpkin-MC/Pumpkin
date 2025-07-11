@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
-use chrono::{DateTime, FixedOffset, Local};
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::net::GameProfile;
@@ -11,10 +11,10 @@ pub struct BannedPlayerEntry {
     pub uuid: Uuid,
     pub name: String,
     #[serde(with = "format::date")]
-    pub created: DateTime<FixedOffset>,
+    pub created: time::OffsetDateTime,
     pub source: String,
     #[serde(with = "format::option_date")]
-    pub expires: Option<DateTime<FixedOffset>>,
+    pub expires: Option<time::OffsetDateTime>,
     pub reason: String,
 }
 
@@ -23,13 +23,13 @@ impl BannedPlayerEntry {
     pub fn new(
         profile: &GameProfile,
         source: String,
-        expires: Option<DateTime<FixedOffset>>,
+        expires: Option<time::OffsetDateTime>,
         reason: String,
     ) -> Self {
         Self {
             uuid: profile.id,
             name: profile.name.clone(),
-            created: Local::now().fixed_offset(),
+            created: OffsetDateTime::now_utc(),
             source,
             expires,
             reason,
@@ -41,10 +41,10 @@ impl BannedPlayerEntry {
 pub struct BannedIpEntry {
     pub ip: IpAddr,
     #[serde(with = "format::date")]
-    pub created: DateTime<FixedOffset>,
+    pub created: time::OffsetDateTime,
     pub source: String,
     #[serde(with = "format::option_date")]
-    pub expires: Option<DateTime<FixedOffset>>,
+    pub expires: Option<time::OffsetDateTime>,
     pub reason: String,
 }
 
@@ -53,12 +53,12 @@ impl BannedIpEntry {
     pub fn new(
         ip: IpAddr,
         source: String,
-        expires: Option<DateTime<FixedOffset>>,
+        expires: Option<time::OffsetDateTime>,
         reason: String,
     ) -> Self {
         Self {
             ip,
-            created: Local::now().fixed_offset(),
+            created: OffsetDateTime::now_utc(),
             source,
             expires,
             reason,
@@ -67,56 +67,55 @@ impl BannedIpEntry {
 }
 
 mod format {
-    const FORMAT: &str = "%Y-%m-%d %H:%M:%S %z";
+    use simplelog::FormatItem;
+
+    const DATE_FORMAT: &[FormatItem<'static>] = time::macros::format_description!(
+        "[year]-[month]-[day] [hour]:[minute]:[second][offset_hour sign:mandatory]:[offset_minute]"
+    );
 
     pub mod date {
-        use chrono::{DateTime, FixedOffset};
         use serde::{self, Deserialize, Deserializer, Serializer};
+        use time::OffsetDateTime;
 
-        use super::FORMAT;
+        use super::DATE_FORMAT;
 
-        pub fn serialize<S>(date: &DateTime<FixedOffset>, serializer: S) -> Result<S::Ok, S::Error>
+        pub fn serialize<S>(date: &OffsetDateTime, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
-            let s = date.format(FORMAT).to_string();
+            let s = date.format(DATE_FORMAT).unwrap().to_string();
             serializer.serialize_str(&s)
         }
 
-        pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
+        pub fn deserialize<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
         where
             D: Deserializer<'de>,
         {
             let s = String::deserialize(deserializer)?;
-            DateTime::parse_from_str(&s, FORMAT).map_err(serde::de::Error::custom)
+            OffsetDateTime::parse(&s, DATE_FORMAT).map_err(serde::de::Error::custom)
         }
     }
 
     pub mod option_date {
-        use chrono::{DateTime, FixedOffset};
         use serde::{self, Deserialize, Deserializer, Serializer};
+        use time::OffsetDateTime;
 
-        use super::FORMAT;
+        use crate::data::banlist_serializer::format::DATE_FORMAT;
 
         #[allow(clippy::ref_option)]
-        pub fn serialize<S>(
-            date: &Option<DateTime<FixedOffset>>,
-            serializer: S,
-        ) -> Result<S::Ok, S::Error>
+        pub fn serialize<S>(date: &Option<OffsetDateTime>, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
             if let Some(date) = date {
-                let s = date.format(FORMAT).to_string();
+                let s = date.format(DATE_FORMAT).unwrap().to_string();
                 serializer.serialize_str(&s)
             } else {
                 serializer.serialize_str("forever")
             }
         }
 
-        pub fn deserialize<'de, D>(
-            deserializer: D,
-        ) -> Result<Option<DateTime<FixedOffset>>, D::Error>
+        pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<OffsetDateTime>, D::Error>
         where
             D: Deserializer<'de>,
         {
@@ -124,7 +123,7 @@ mod format {
             if s == "forever" {
                 Ok(None)
             } else {
-                DateTime::parse_from_str(&s, FORMAT)
+                OffsetDateTime::parse(&s, DATE_FORMAT)
                     .map(Some)
                     .map_err(serde::de::Error::custom)
             }

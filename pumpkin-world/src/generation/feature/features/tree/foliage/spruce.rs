@@ -18,7 +18,7 @@ pub struct SpruceFoliagePlacer {
 
 impl SpruceFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -43,8 +43,7 @@ impl SpruceFoliagePlacer {
                 y,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
             if radius >= max {
                 radius = next;
                 next = 1;

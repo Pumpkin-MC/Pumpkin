@@ -93,49 +93,48 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-          #[derive(Eq, PartialEq, Hash, Debug)]
-          #registry_key_enum
+        #[derive(Eq, PartialEq, Hash, Debug)]
+        #registry_key_enum
 
-          impl RegistryKey {
-              // IDK why the linter is saying this isn't used
-              #[allow(dead_code)]
-              pub fn identifier_string(&self) -> &str {
-                  match self {
-                      #(#tag_identifiers),*
-                  }
-              }
-          }
+        impl RegistryKey {
+            // IDK why the linter is saying this isn't used
+            #[allow(dead_code)]
+            pub fn identifier_string(&self) -> &str {
+                match self {
+                    #(#tag_identifiers),*
+                }
+            }
+        }
 
-          #(#tag_dicts)*
+        #(#tag_dicts)*
 
-          pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&'static [&'static str]> {
-              match tag_category {
-                  #(#match_arms),*
-              }
-          }
+        pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&'static [&'static str]> {
+            match tag_category {
+                #(#match_arms),*
+            }
+        }
 
-          pub fn get_registry_key_tags(tag_category: &RegistryKey) -> &phf::Map<&'static str, &'static [&'static str]> {
-              match tag_category {
-                  #(#match_arms_tags_all),*
-              }
-          }
+        pub fn get_registry_key_tags(tag_category: &RegistryKey) -> &phf::Map<&'static str, &'static [&'static str]> {
+            match tag_category {
+                #(#match_arms_tags_all),*
+            }
+        }
 
-          pub trait Tagable {
-              fn tag_key() -> RegistryKey;
-              fn registry_key(&self) -> &str;
+        pub trait Tagable {
+            fn tag_key() -> RegistryKey;
+            fn registry_key(&self) -> &str;
 
-              /// Returns `None` if the tag does not exist.
-              fn is_tagged_with(&self, tag: &str) -> Option<bool> {
-                  let tag = tag.strip_prefix("#").unwrap_or(tag);
-                  let items = get_tag_values(Self::tag_key(), tag)?;
-                  Some(items.iter().any(|elem| *elem == self.registry_key()))
-              }
+            /// Returns `None` if the tag does not exist.
+            fn is_tagged_with(&self, tag: &str) -> Option<bool> {
+                let tag = tag.strip_prefix("#").unwrap_or(tag);
+                let items = get_tag_values(Self::tag_key(), tag)?;
+                Some(items.iter().any(|elem| *elem == self.registry_key()))
+            }
 
-              fn get_tag_values(tag: &str) -> Option<&'static [&'static str]> {
-
-    let tag = tag.strip_prefix("#").unwrap_or(tag);
-                  get_tag_values(Self::tag_key(), tag)
-              }
-          }
-      }
+            fn get_tag_values(tag: &str) -> Option<&'static [&'static str]> {
+                let tag = tag.strip_prefix("#").unwrap_or(tag);
+                get_tag_values(Self::tag_key(), tag)
+            }
+        }
+    }
 }

@@ -1,6 +1,6 @@
 use crate::{SHOULD_STOP, server::Server};
 use std::{
-    sync::atomic::Ordering,
+    sync::{Arc, atomic::Ordering},
     time::{Duration, Instant},
 };
 use tokio::time::sleep;
@@ -24,7 +24,7 @@ impl Ticker {
     }
 
     /// IMPORTANT: Run this in a new thread/tokio task.
-    pub async fn run(&mut self, server: &Server) {
+    pub async fn run(&mut self, server: &Arc<Server>) {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let tick_start_time = Instant::now();
             let manager = &server.tick_rate_manager;

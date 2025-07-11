@@ -122,7 +122,7 @@ impl SpringFeatureFeature {
             air += 1;
         }
         if valid == self.rock_count && air == self.hole_count {
-            chunk.set_block_state(&pos.0, self.state.get_state().unwrap());
+            chunk.set_block_state(&pos.0, self.state.get_state());
             return true;
         }
         false

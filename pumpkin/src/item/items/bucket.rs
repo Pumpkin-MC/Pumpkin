@@ -102,7 +102,7 @@ impl PumpkinItem for EmptyBucketItem {
         let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
             let state_id = world_inner.get_block_state_id(pos).await;
 
-            let block = Block::from_state_id(state_id).unwrap();
+            let block = Block::from_state_id(state_id);
 
             if state_id == Block::AIR.default_state.id {
                 return false;

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use async_trait::async_trait;
 use pumpkin_data::{
@@ -12,9 +12,7 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{
-    BlockStateId,
-    block::entities::{BlockEntity, comparator::ComparatorBlockEntity},
-    chunk::TickPriority,
+    BlockStateId, block::entities::comparator::ComparatorBlockEntity, chunk::TickPriority,
     world::BlockFlags,
 };
 
@@ -62,16 +60,15 @@ impl PumpkinBlock for ComparatorBlock {
     async fn placed(&self, args: PlacedArgs<'_>) {
         let comparator = ComparatorBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(comparator)).await;
-        if let Some(state) = get_state_by_state_id(args.state_id) {
-            RedstoneGateBlock::update_target(
-                self,
-                args.world,
-                *args.position,
-                state.id,
-                args.block,
-            )
-            .await;
-        }
+
+        RedstoneGateBlock::update_target(
+            self,
+            args.world,
+            *args.position,
+            get_state_by_state_id(args.state_id).id,
+            args.block,
+        )
+        .await;
     }
 
     async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
@@ -86,19 +83,16 @@ impl PumpkinBlock for ComparatorBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if args.direction == BlockDirection::Down {
-            if let Some(neighbor_state) = get_state_by_state_id(args.neighbor_state_id) {
-                if !RedstoneGateBlock::can_place_above(
-                    self,
-                    args.world,
-                    *args.neighbor_position,
-                    neighbor_state,
-                )
-                .await
-                {
-                    return Block::AIR.default_state.id;
-                }
-            }
+        if args.direction == BlockDirection::Down
+            && !RedstoneGateBlock::can_place_above(
+                self,
+                args.world,
+                *args.neighbor_position,
+                get_state_by_state_id(args.neighbor_state_id),
+            )
+            .await
+        {
+            return Block::AIR.default_state.id;
         }
         args.state_id
     }
@@ -143,10 +137,13 @@ impl RedstoneGateBlockProperties for ComparatorLikeProperties {
 #[async_trait]
 impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
     async fn get_output_level(&self, world: &World, pos: BlockPos) -> u8 {
-        if let Some((nbt, raw_blockentity)) = world.get_block_entity(&pos).await {
-            if raw_blockentity.resource_location() == ComparatorBlockEntity::ID {
-                let comparator = ComparatorBlockEntity::from_nbt(&nbt, pos);
-                return comparator.output_signal as u8;
+        if let Some(blockentity) = world.get_block_entity(&pos).await {
+            if blockentity.resource_location() == ComparatorBlockEntity::ID {
+                let comparator = blockentity
+                    .as_any()
+                    .downcast_ref::<ComparatorBlockEntity>()
+                    .unwrap();
+                return comparator.output_signal.load(Ordering::Relaxed);
             }
         }
         0
@@ -285,9 +282,9 @@ impl ComparatorBlock {
         world
             .set_block_state(&block_pos, state_id, BlockFlags::empty())
             .await;
-        if let Some(state) = get_state_by_state_id(state_id) {
-            self.update(world, block_pos, state, block).await;
-        }
+
+        self.update(world, block_pos, get_state_by_state_id(state_id), block)
+            .await;
     }
 
     async fn calculate_output_signal(
@@ -338,12 +335,16 @@ impl ComparatorBlock {
     async fn update(&self, world: &Arc<World>, pos: BlockPos, state: &BlockState, block: &Block) {
         let future_level = i32::from(self.calculate_output_signal(world, pos, state, block).await);
         let mut now_level = 0;
-        if let Some((nbt, blockentity)) = world.get_block_entity(&pos).await {
+        if let Some(blockentity) = world.get_block_entity(&pos).await {
             if blockentity.resource_location() == ComparatorBlockEntity::ID {
-                let mut comparator = ComparatorBlockEntity::from_nbt(&nbt, pos);
-                now_level = comparator.output_signal;
-                comparator.output_signal = future_level;
-                world.add_block_entity(Arc::new(comparator)).await;
+                let comparator = blockentity
+                    .as_any()
+                    .downcast_ref::<ComparatorBlockEntity>()
+                    .unwrap();
+                now_level = i32::from(comparator.output_signal.load(Ordering::Relaxed));
+                comparator
+                    .output_signal
+                    .store(future_level as u8, Ordering::Relaxed);
             }
         }
         let mut props = ComparatorLikeProperties::from_state_id(state.id, block);

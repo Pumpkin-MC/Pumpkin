@@ -39,7 +39,7 @@ impl PumpkinItem for HoneyCombItem {
             // get block state of the old log.
             // get the log properties
             // create new properties for the new log.
-            let new_block = &Block::from_id(replacement_block.unwrap()).unwrap();
+            let new_block = &Block::from_id(replacement_block.unwrap());
 
             let new_state_id = if block.is_tagged_with("#minecraft:doors").is_some()
                 && block.is_tagged_with("#minecraft:doors").unwrap()

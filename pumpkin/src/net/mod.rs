@@ -19,6 +19,7 @@ use pumpkin_util::{ProfileAction, text::TextComponent};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;
+use simplelog::FormatItem;
 use tokio::task::JoinHandle;
 
 use thiserror::Error;
@@ -173,6 +174,10 @@ pub async fn can_not_join(
     address: &SocketAddr,
     server: &Server,
 ) -> Option<TextComponent> {
+    const FORMAT_DESCRIPTION: &[FormatItem<'_>] = time::macros::format_description!(
+        "[year]-[month]-[day] at [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
+    );
+
     let mut banned_players = BANNED_PLAYER_LIST.write().await;
     if let Some(entry) = banned_players.get_entry(profile) {
         let text = TextComponent::translate(
@@ -183,7 +188,7 @@ pub async fn can_not_join(
             Some(expires) => text.add_child(TextComponent::translate(
                 "multiplayer.disconnect.banned.expiration",
                 [TextComponent::text(
-                    expires.format("%F at %T %Z").to_string(),
+                    expires.format(FORMAT_DESCRIPTION).unwrap().to_string(),
                 )],
             )),
             None => text,
@@ -213,7 +218,7 @@ pub async fn can_not_join(
             Some(expires) => text.add_child(TextComponent::translate(
                 "multiplayer.disconnect.banned_ip.expiration",
                 [TextComponent::text(
-                    expires.format("%F at %T %Z").to_string(),
+                    expires.format(FORMAT_DESCRIPTION).unwrap().to_string(),
                 )],
             )),
             None => text,

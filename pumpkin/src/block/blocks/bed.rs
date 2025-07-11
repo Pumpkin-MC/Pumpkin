@@ -23,6 +23,44 @@ use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
 
+const NO_SLEEP_IDS: &[u16] = &[
+    EntityType::BLAZE.id,
+    EntityType::BOGGED.id,
+    EntityType::SKELETON.id,
+    EntityType::STRAY.id,
+    EntityType::WITHER_SKELETON.id,
+    EntityType::BREEZE.id,
+    EntityType::CREAKING.id,
+    EntityType::CREEPER.id,
+    EntityType::DROWNED.id,
+    EntityType::ENDERMITE.id,
+    EntityType::EVOKER.id,
+    EntityType::GIANT.id,
+    EntityType::GUARDIAN.id,
+    EntityType::ELDER_GUARDIAN.id,
+    EntityType::ILLUSIONER.id,
+    EntityType::OCELOT.id,
+    EntityType::PIGLIN.id,
+    EntityType::PIGLIN_BRUTE.id,
+    EntityType::PILLAGER.id,
+    EntityType::PHANTOM.id,
+    EntityType::RAVAGER.id,
+    EntityType::SILVERFISH.id,
+    EntityType::SPIDER.id,
+    EntityType::CAVE_SPIDER.id,
+    EntityType::VEX.id,
+    EntityType::VINDICATOR.id,
+    EntityType::WARDEN.id,
+    EntityType::WITCH.id,
+    EntityType::WITHER.id,
+    EntityType::ZOGLIN.id,
+    EntityType::ZOMBIE.id,
+    EntityType::ZOMBIE_VILLAGER.id,
+    EntityType::HUSK.id,
+    EntityType::ENDERMAN.id,
+    EntityType::ZOMBIFIED_PIGLIN.id,
+];
+
 pub struct BedBlock;
 impl BlockMetadata for BedBlock {
     fn namespace(&self) -> &'static str {
@@ -297,45 +335,5 @@ async fn can_sleep(world: &Arc<World>) -> bool {
 }
 
 fn entity_prevents_sleep(entity: &Entity) -> bool {
-    match entity.entity_type {
-        EntityType::BLAZE
-        | EntityType::BOGGED
-        | EntityType::SKELETON
-        | EntityType::STRAY
-        | EntityType::WITHER_SKELETON
-        | EntityType::BREEZE
-        | EntityType::CREAKING
-        | EntityType::CREEPER
-        | EntityType::DROWNED
-        | EntityType::ENDERMITE
-        | EntityType::EVOKER
-        | EntityType::GIANT
-        | EntityType::GUARDIAN
-        | EntityType::ELDER_GUARDIAN
-        | EntityType::ILLUSIONER
-        | EntityType::OCELOT
-        | EntityType::PIGLIN
-        | EntityType::PIGLIN_BRUTE
-        | EntityType::PILLAGER
-        | EntityType::PHANTOM
-        | EntityType::RAVAGER
-        | EntityType::SILVERFISH
-        | EntityType::SPIDER
-        | EntityType::CAVE_SPIDER
-        | EntityType::VEX
-        | EntityType::VINDICATOR
-        | EntityType::WARDEN
-        | EntityType::WITCH
-        | EntityType::WITHER
-        | EntityType::ZOGLIN
-        | EntityType::ZOMBIE
-        | EntityType::ZOMBIE_VILLAGER
-        | EntityType::HUSK => true,
-        EntityType::ENDERMAN | EntityType::ZOMBIFIED_PIGLIN => {
-            // TODO: Only when hostile
-            #[allow(clippy::match_same_arms)]
-            true
-        }
-        _ => false,
-    }
+    NO_SLEEP_IDS.contains(&entity.entity_type.id)
 }

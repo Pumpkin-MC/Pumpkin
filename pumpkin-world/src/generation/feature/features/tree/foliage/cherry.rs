@@ -22,7 +22,7 @@ pub struct CherryFoliagePlacer {
 
 impl CherryFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -45,8 +45,7 @@ impl CherryFoliagePlacer {
             foliage_height - 3,
             node.giant_trunk,
             foliage_provider,
-        )
-        .await;
+        );
         FoliagePlacer::generate_square(
             self,
             chunk,
@@ -57,8 +56,7 @@ impl CherryFoliagePlacer {
             foliage_height - 4,
             node.giant_trunk,
             foliage_provider,
-        )
-        .await;
+        );
         for y in foliage_height - 5..0 {
             FoliagePlacer::generate_square(
                 self,
@@ -70,8 +68,7 @@ impl CherryFoliagePlacer {
                 y,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
         }
         // TODO: generateSquareWithHangingLeaves
         FoliagePlacer::generate_square(
@@ -84,8 +81,7 @@ impl CherryFoliagePlacer {
             -1,
             node.giant_trunk,
             foliage_provider,
-        )
-        .await;
+        );
         // TODO: generateSquareWithHangingLeaves
         FoliagePlacer::generate_square(
             self,
@@ -97,8 +93,7 @@ impl CherryFoliagePlacer {
             -2,
             node.giant_trunk,
             foliage_provider,
-        )
-        .await;
+        );
     }
     pub fn get_random_height(&self, random: &mut RandomGenerator) -> i32 {
         self.height.get(random)

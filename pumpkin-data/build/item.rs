@@ -260,6 +260,7 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
+        use std::hash::{Hash, Hasher};
         use pumpkin_util::text::TextComponent;
         use crate::tag::{Tagable, RegistryKey};
 
@@ -273,6 +274,14 @@ pub(crate) fn build() -> TokenStream {
         impl PartialEq for Item {
             fn eq(&self, other: &Self) -> bool {
                 self.id == other.id
+            }
+        }
+
+        impl Eq for Item {}
+
+        impl Hash for Item {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.id.hash(state);
             }
         }
 

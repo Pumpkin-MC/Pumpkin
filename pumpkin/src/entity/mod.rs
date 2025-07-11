@@ -536,6 +536,27 @@ impl Entity {
         }
     }
 
+    pub fn get_flipped_rotation_16(&self) -> Integer0To15 {
+        match self.get_rotation_16() {
+            Integer0To15::L0 => Integer0To15::L8,
+            Integer0To15::L1 => Integer0To15::L9,
+            Integer0To15::L2 => Integer0To15::L10,
+            Integer0To15::L3 => Integer0To15::L11,
+            Integer0To15::L4 => Integer0To15::L12,
+            Integer0To15::L5 => Integer0To15::L13,
+            Integer0To15::L6 => Integer0To15::L14,
+            Integer0To15::L7 => Integer0To15::L15,
+            Integer0To15::L8 => Integer0To15::L0,
+            Integer0To15::L9 => Integer0To15::L1,
+            Integer0To15::L10 => Integer0To15::L2,
+            Integer0To15::L11 => Integer0To15::L3,
+            Integer0To15::L12 => Integer0To15::L4,
+            Integer0To15::L13 => Integer0To15::L5,
+            Integer0To15::L14 => Integer0To15::L6,
+            Integer0To15::L15 => Integer0To15::L7,
+        }
+    }
+
     pub fn get_facing(&self) -> Facing {
         let pitch = self.pitch.load().to_radians();
         let yaw = -self.yaw.load().to_radians();
@@ -735,7 +756,7 @@ impl Entity {
                             let fluid = world.get_fluid(&pos).await;
                             world
                                 .block_registry
-                                .on_entity_collision_fluid(&fluid, entity)
+                                .on_entity_collision_fluid(fluid, entity)
                                 .await;
                             continue;
                         }
@@ -749,7 +770,7 @@ impl Entity {
                                 let fluid = world.get_fluid(&pos).await;
                                 world
                                     .block_registry
-                                    .on_entity_collision_fluid(&fluid, entity)
+                                    .on_entity_collision_fluid(fluid, entity)
                                     .await;
                                 break;
                             }
@@ -762,7 +783,7 @@ impl Entity {
                         let fluid = world.get_fluid(&pos).await;
                         world
                             .block_registry
-                            .on_entity_collision_fluid(&fluid, entity)
+                            .on_entity_collision_fluid(fluid, entity)
                             .await;
                     }
                 }

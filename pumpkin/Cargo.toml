@@ -54,7 +54,7 @@ rsa = { version = "=0.10.0-rc.1", features = ["sha1"] }
 rsa-der = "0.3"
 
 # authentication
-reqwest = { version = "0.12", features = [
+ureq = { version = "3.0.12", features = [
     "json",
 ] }
 
@@ -72,11 +72,8 @@ simplelog = { version = "0.12.2", features = ["ansi_term"] }
 # Remove time in favor of chrono?
 time = "0.3"
 
-chrono = { version = "0.4", features = ["serde"] }
-
 # plugins
 libloading = "0.8"
-bitflags = "2.9.1"
 rustc-hash = "2.1.1"
 
 # Task handling
@@ -86,6 +83,7 @@ tokio-util = { version = "0.7.15", features = ["rt"] }
 dhat = { version = "0.3.3", optional = true }
 
 flate2 = "1.1.2"
+console-subscriber = { version = "0.4.1", optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -94,3 +92,4 @@ tempfile.workspace = true
 #https://nnethercote.github.io/dh_view/dh_view.html
 #https://valgrind.org/docs/manual/dh-manual.html
 dhat-heap = ["dep:dhat"]
+console-subscriber = ["dep:console-subscriber"]
