@@ -1,16 +1,16 @@
 use crate::block::pumpkin_block::{OnPlaceArgs, PumpkinBlock};
 use async_trait::async_trait;
-use pumpkin_data::block_properties::{BlockProperties, FurnaceLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties, LadderLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 
-#[pumpkin_block("minecraft:furnace")]
-pub struct FurnaceBlock;
+#[pumpkin_block("minecraft:ender_chest")]
+pub struct EnderChestBlock;
 
 #[async_trait]
-impl PumpkinBlock for FurnaceBlock {
+impl PumpkinBlock for EnderChestBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = FurnaceLikeProperties::default(args.block);
+        let mut props = LadderLikeProperties::default(args.block);
         props.facing = args
             .player
             .living_entity

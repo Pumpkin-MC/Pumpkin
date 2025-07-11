@@ -8,6 +8,7 @@ use pumpkin_util::{
     math::experience::Experience,
     resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation},
 };
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug)]
 pub struct Block {
@@ -30,6 +31,14 @@ pub struct Block {
 impl PartialEq for Block {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
+    }
+}
+
+impl Eq for Block {}
+
+impl Hash for Block {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 

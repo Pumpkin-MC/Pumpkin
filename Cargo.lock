@@ -1669,7 +1669,6 @@ version = "0.1.0-dev+1.21.7"
 dependencies = [
  "async-trait",
  "base64",
- "bitflags",
  "bytes",
  "crossbeam",
  "dhat",
@@ -1754,10 +1753,8 @@ dependencies = [
  "log",
  "pumpkin-data",
  "pumpkin-protocol",
- "pumpkin-registry",
  "pumpkin-util",
  "pumpkin-world",
- "rayon",
  "thiserror",
  "tokio",
 ]
@@ -1795,7 +1792,6 @@ dependencies = [
  "bytes",
  "cfb8",
  "flate2",
- "log",
  "pumpkin-data",
  "pumpkin-macros",
  "pumpkin-nbt",
@@ -1813,8 +1809,6 @@ name = "pumpkin-registry"
 version = "0.1.0-dev+1.21.7"
 dependencies = [
  "indexmap",
- "pumpkin-data",
- "pumpkin-nbt",
  "pumpkin-protocol",
  "pumpkin-util",
  "serde",
@@ -1857,7 +1851,6 @@ dependencies = [
  "file-guard",
  "flate2",
  "futures",
- "indexmap",
  "itertools 0.14.0",
  "log",
  "lru",
