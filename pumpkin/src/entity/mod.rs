@@ -1,3 +1,4 @@
+use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
@@ -30,6 +31,8 @@ use pumpkin_util::math::{
     vector3::Vector3,
     wrap_degrees,
 };
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::hover::HoverEvent;
 use serde::Serialize;
 use std::sync::{
     Arc,
@@ -39,8 +42,6 @@ use std::sync::{
     },
 };
 use tokio::sync::{Mutex, RwLock};
-
-use crate::world::World;
 
 pub mod ai;
 pub mod decoration;
@@ -108,17 +109,40 @@ pub trait EntityBase: Send + Sync {
 
     /// Returns if damage was successful or not
     async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-        if let Some(living) = self.get_living_entity() {
-            living.damage(amount, damage_type).await
-        } else {
-            self.get_entity().damage(amount, damage_type).await
-        }
+        self.damage_with_context(amount, damage_type, None, None, None)
+            .await
     }
+
+    async fn damage_with_context(
+        &self,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&Entity>,
+        cause: Option<&Entity>,
+    ) -> bool;
 
     /// Called when a player collides with a entity
     async fn on_player_collision(&self, _player: &Arc<Player>) {}
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+    /// Should return the translatable name of the entity without click or hover events.
+    /// Returns `None` for default. Do not call this directly.
+    fn get_name(&self) -> Option<TextComponent> {
+        None
+    }
+    async fn get_display_name(&self) -> TextComponent {
+        let entity = self.get_entity();
+        let mut name = entity.get_plain_name().clone();
+        let name_clone = name.clone();
+        name = name.hover_event(HoverEvent::show_entity(
+            entity.entity_uuid.to_string(),
+            entity.entity_type.resource_name.into(),
+            Some(name_clone),
+        ));
+        name = name.insertion(entity.entity_uuid.to_string());
+        name
+    }
 }
 
 static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
@@ -175,6 +199,10 @@ pub struct Entity {
     pub portal_cooldown: AtomicU32,
 
     pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
+    /// Custom name for the entity
+    pub custom_name: Option<TextComponent>,
+    /// Indicates whether the entity's custom name is visible
+    pub custom_name_visible: bool,
 
     /// The data send in the Entity Spawn packet
     pub data: AtomicI32,
@@ -230,6 +258,8 @@ impl Entity {
             has_visual_fire: AtomicBool::new(false),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
+            custom_name: None,
+            custom_name_visible: false,
         }
     }
 
@@ -812,11 +842,43 @@ impl Entity {
             ))
             .await;
     }
+
+    pub async fn check_out_of_world(&self) {
+        if self.pos.load().y
+            < f64::from(self.world.read().await.generation_settings().shape.min_y) - 64.0
+        {
+            // Tick out of world damage
+            self.damage(4.0, DamageType::OUT_OF_WORLD).await;
+        }
+    }
+
+    /// Should return the translatable name of the entity without click or hover events.
+    #[allow(clippy::option_if_let_else)]
+    pub fn get_plain_name(&self) -> TextComponent {
+        // TODO: team color
+        if let Some(custom_name) = &self.custom_name {
+            custom_name.clone()
+        } else if let Some(type_name) = self.get_name() {
+            type_name
+        } else {
+            TextComponent::translate(
+                format!("entity.minecraft.{}", self.entity_type.resource_name),
+                [],
+            )
+        }
+    }
 }
 
 #[async_trait]
 impl EntityBase for Entity {
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+    async fn damage_with_context(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&Entity>,
+        _cause: Option<&Entity>,
+    ) -> bool {
         false
     }
 

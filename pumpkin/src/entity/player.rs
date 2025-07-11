@@ -56,6 +56,7 @@ use pumpkin_util::math::{
 use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::click::ClickEvent;
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::entity::entity_data_flags::{
@@ -481,7 +482,13 @@ impl Player {
         }
 
         if !victim
-            .damage(damage as f32, DamageType::PLAYER_ATTACK)
+            .damage_with_context(
+                damage as f32,
+                DamageType::PLAYER_ATTACK,
+                None,
+                Some(&self.living_entity.entity),
+                Some(&self.living_entity.entity),
+            )
             .await
         {
             world
@@ -1957,7 +1964,14 @@ impl NBTStorage for PlayerInventory {
 
 #[async_trait]
 impl EntityBase for Player {
-    async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
+    async fn damage_with_context(
+        &self,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&Entity>,
+        cause: Option<&Entity>,
+    ) -> bool {
         if self.abilities.lock().await.invulnerable {
             return false;
         }
@@ -1969,7 +1983,10 @@ impl EntityBase for Player {
                 &self.living_entity.entity.pos.load(),
             )
             .await;
-        let result = self.living_entity.damage(amount, damage_type).await;
+        let result = self
+            .living_entity
+            .damage_with_context(amount, damage_type, position, source, cause)
+            .await;
         if result {
             let health = self.living_entity.health.load();
             if health <= 0.0 {
@@ -1995,6 +2012,18 @@ impl EntityBase for Player {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
+    }
+
+    fn get_name(&self) -> Option<TextComponent> {
+        //TODO: team color
+        Some(TextComponent::text(self.gameprofile.name.clone()))
+    }
+
+    async fn get_display_name(&self) -> TextComponent {
+        let name = self.living_entity.get_display_name().await;
+        name.click_event(ClickEvent::SuggestCommand {
+            command: format!("/tell {} ", self.gameprofile.name.clone()).into(),
+        })
     }
 }
 

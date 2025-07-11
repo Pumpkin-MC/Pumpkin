@@ -1,3 +1,4 @@
+use std::sync::Weak;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -120,6 +121,7 @@ pub mod custom_bossbar;
 pub mod scoreboard;
 pub mod weather;
 
+use pumpkin_world::generation::settings::GenerationSettings;
 use uuid::Uuid;
 use weather::Weather;
 
@@ -170,6 +172,7 @@ pub struct World {
     pub weather: Mutex<Weather>,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
+    pub server: Weak<Server>,
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
@@ -182,6 +185,7 @@ impl World {
         level_info: LevelData,
         dimension_type: VanillaDimensionType,
         block_registry: Arc<BlockRegistry>,
+        server: Weak<Server>,
     ) -> Self {
         // TODO
         let generation_settings = match dimension_type {
@@ -211,6 +215,7 @@ impl World {
             sea_level: generation_settings.sea_level,
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
+            server,
         }
     }
 
@@ -659,10 +664,9 @@ impl World {
         }
     }
 
-    /// Gets the y position of the first non air block from the top down
-    pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
+    pub fn generation_settings(&self) -> &GenerationSettings {
         // TODO: this is bad
-        let generation_settings = match self.dimension_type {
+        match self.dimension_type {
             VanillaDimensionType::Overworld => GENERATION_SETTINGS
                 .get(&GeneratorSetting::Overworld)
                 .unwrap(),
@@ -673,19 +677,24 @@ impl World {
             VanillaDimensionType::TheNether => {
                 GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
             }
-        };
+        }
+    }
+
+    /// Gets the y position of the first non air block from the top down
+    pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
+        let generation_settings = self.generation_settings();
         for y in (i32::from(generation_settings.shape.min_y)
-            ..=i32::from(generation_settings.shape.height))
+            ..i32::from(generation_settings.shape.max_y()))
             .rev()
         {
-            let pos = BlockPos(Vector3::new(position.x, y, position.y));
+            let pos = BlockPos::new(position.x, y, position.y);
             let block = self.get_block_state(&pos).await;
             if block.is_air() {
                 continue;
             }
             return y;
         }
-        i32::from(generation_settings.shape.height)
+        i32::from(generation_settings.shape.min_y)
     }
 
     #[allow(clippy::too_many_lines)]

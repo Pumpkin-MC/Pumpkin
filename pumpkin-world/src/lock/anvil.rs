@@ -14,6 +14,7 @@ const SNOWMAN: &[u8] = "☃".as_bytes();
 
 impl LevelLocker<Self> for AnvilLevelLocker {
     fn lock(folder: &Path) -> Result<Self, LockError> {
+        std::fs::create_dir_all(folder).map_err(|_| LockError::FailedWrite)?;
         let file_path = folder.join(SESSION_LOCK_FILE_NAME);
         let mut file = File::options()
             .create(true)
