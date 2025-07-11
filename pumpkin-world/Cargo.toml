@@ -38,7 +38,6 @@ ruzstd = "0.8.1"
 
 itertools = "0.14.0"
 file-guard = "0.2"
-indexmap = "2.10"
 enum_dispatch = "0.3"
 derive-getters = "0.5.0"
 
