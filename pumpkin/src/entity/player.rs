@@ -54,6 +54,8 @@ use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
 use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomImpl, get_seed};
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::biome;
@@ -64,10 +66,17 @@ use pumpkin_world::entity::entity_data_flags::{
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
 
+use super::combat::{self, AttackType, player_attack_sound};
+use super::effect::Effect;
+use super::hunger::HungerManager;
+use super::item::ItemEntity;
+use super::living::LivingEntity;
+use super::{Entity, EntityBase, EntityId, NBTStorage};
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
 use crate::data::op_data::OPERATOR_CONFIG;
+use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::net::PlayerConfig;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
@@ -76,13 +85,6 @@ use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
-
-use super::combat::{self, AttackType, player_attack_sound};
-use super::effect::Effect;
-use super::hunger::HungerManager;
-use super::item::ItemEntity;
-use super::living::LivingEntity;
-use super::{Entity, EntityBase, EntityId, NBTStorage};
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -1404,6 +1406,59 @@ impl Player {
                 target_name,
             ))
             .await;
+    }
+
+    pub async fn drop_all(&self) {
+        let world = self.world().await;
+
+        let level_info = world.level_info.read().await;
+
+        if level_info.game_rules.keep_inventory {
+            return;
+        }
+
+        drop(level_info);
+
+        for slot in 0..self.inventory.size() {
+            let item_stack = self.inventory.remove_stack(slot).await;
+            let item_pos = self.living_entity.entity.pos.load()
+                + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
+            if !item_stack.is_empty() {
+                let entity = Entity::new(
+                    Uuid::new_v4(),
+                    self.world().await,
+                    item_pos,
+                    EntityType::ITEM,
+                    false,
+                );
+
+                let mut rng = Xoroshiro::from_seed(get_seed());
+
+                let mag = rng.next_f32() * 0.5;
+                let ang = rng.next_f32() * std::f32::consts::TAU;
+
+                let vx = -ang.sin() * mag;
+                let vy = 0.2;
+                let vz = ang.cos() * mag;
+
+                let velocity = Vector3::new(vx, vy, vz);
+
+                let item_entity = Arc::new(
+                    ItemEntity::new_with_velocity(entity, item_stack, velocity.to_f64(), 40).await,
+                );
+
+                world.spawn_entity(item_entity).await;
+            }
+        }
+
+        if self.gamemode.load() != GameMode::Spectator {
+            ExperienceOrbEntity::spawn(
+                &world,
+                self.living_entity.entity.pos.load(),
+                (self.experience_level.load(Ordering::Relaxed) * 7).min(100) as u32,
+            )
+            .await;
+        }
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
