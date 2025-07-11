@@ -406,13 +406,7 @@ impl Level {
         let mut rng = SmallRng::from_os_rng();
         for chunk in self.loaded_chunks.iter() {
             use tokio::time::{Duration, timeout};
-            let mut chunk = match timeout(Duration::from_millis(1), chunk.write()).await {
-                Ok(chunk_guard) => chunk_guard,
-                Err(_) => {
-                    log::info!("Chunk {:?} took too long to lock, skipping", chunk.key());
-                    continue;
-                }
-            };
+            let mut chunk = chunk.write().await;
             ticks.block_ticks.extend(chunk.get_and_tick_block_ticks());
             ticks.fluid_ticks.extend(chunk.get_and_tick_fluid_ticks());
             let chunk = chunk.downgrade();
@@ -827,6 +821,7 @@ impl Level {
                     //    .acquire()
                     //    .await
                     //    .expect("Semaphore closed");
+                    let handle = tokio::runtime::Handle::current();
                     world_gen_pool.spawn(move || {
                         // Acquire a permit from the semaphore to limit concurrent generation
 
@@ -846,17 +841,25 @@ impl Level {
                             );
                             let arc_chunk = Arc::new(RwLock::new(generated_chunk));
                             loaded_chunks.insert(pos, arc_chunk.clone());
-                            // Remove the notify and wake up any waiters
-                            let notify = {
-                                // SAFTEY: If this panics, we have a logic error
-                                let mut locks = self_clone.chunk_generation_locks.blocking_lock();
-                                locks.remove(&pos).unwrap()
-                            };
-                            notify.notify_waiters();
-                            arc_chunk
+
+                            // Store the notify for later removal
+                            (arc_chunk, pos)
                         };
 
-                        if !send_chunk(true, result, &channel) {
+                        // Remove the notify and wake up any waiters
+                        // Do this outside the rayon thread to avoid deadlock
+                        let (arc_chunk, pos) = result;
+                        {
+                            let self_clone = self_clone.clone();
+                            handle.spawn(async move {
+                                let mut locks = self_clone.chunk_generation_locks.lock().await;
+                                if let Some(notify) = locks.remove(&pos) {
+                                    notify.notify_waiters();
+                                }
+                            });
+                        }
+
+                        if !send_chunk(true, arc_chunk, &channel) {
                             // Stop any additional queued generations
                             cloned_continue_to_generate.store(false, Ordering::Relaxed);
                         }

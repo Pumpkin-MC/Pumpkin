@@ -102,6 +102,8 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 // runtime with a channel! See `Level::fetch_chunks` as an example!
 #[tokio::main]
 async fn main() {
+    #[cfg(feature = "console-subscriber")]
+    console_subscriber::init();
     #[cfg(feature = "dhat-heap")]
     {
         let profiler = dhat::Profiler::new_heap();

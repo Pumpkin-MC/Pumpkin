@@ -7,14 +7,13 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_world::generation::implementation::WorldGenerator;
 use std::sync::Arc;
 use temp_dir::TempDir;
-use tokio_util::task::TaskTracker;
 
 use pumpkin_world::dimension::Dimension;
 use pumpkin_world::generation::{Seed, get_world_gen};
 use pumpkin_world::level::Level;
 use pumpkin_world::world::{BlockAccessor, BlockRegistryExt};
 
-use tokio::runtime::Runtime;
+use rayon::prelude::*;
 
 struct BlockRegistry;
 
@@ -31,7 +30,7 @@ impl BlockRegistryExt for BlockRegistry {
     }
 }
 
-async fn chunk_generation_seed(seed: i64) {
+fn chunk_generation_seed(seed: i64) {
     let generator: Arc<dyn WorldGenerator> =
         get_world_gen(Seed(seed as u64), Dimension::Overworld).into();
     let temp_dir = TempDir::new().unwrap();
@@ -43,37 +42,21 @@ async fn chunk_generation_seed(seed: i64) {
         Dimension::Overworld,
     ));
 
-    let tasks = TaskTracker::new();
+    // Prepare all positions to generate
+    let positions: Vec<Vector2<i32>> = (0..100)
+        .flat_map(|x| (0..10).map(move |y| Vector2::new(x, y)))
+        .collect();
 
-    for x in 0..100 {
-        for y in 0..10 {
-            let position = Vector2::new(x, y);
-            let generator_clone = generator.clone();
-            let level_clone = level.clone();
-            let block_registry_clone = block_registry.clone();
-            tasks.spawn(async move {
-                generator_clone.generate_chunk(
-                    &level_clone,
-                    block_registry_clone.as_ref(),
-                    &position,
-                );
-            });
-        }
-    }
-
-    tasks.close();
-
-    tasks.wait().await;
+    positions.par_iter().for_each(|position| {
+        generator.generate_chunk(&level, block_registry.as_ref(), position);
+    });
 }
 
 fn bench_chunk_generation(c: &mut Criterion) {
     let seeds = [0];
-    let runtime = Runtime::new().unwrap();
     for seed in seeds {
         let name = format!("chunk generation seed {seed}");
-        c.bench_function(&name, |b| {
-            b.to_async(&runtime).iter(|| chunk_generation_seed(seed))
-        });
+        c.bench_function(&name, |b| b.iter(|| chunk_generation_seed(seed)));
     }
 }
 
