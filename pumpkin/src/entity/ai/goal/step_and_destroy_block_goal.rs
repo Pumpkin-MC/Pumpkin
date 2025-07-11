@@ -25,12 +25,18 @@ impl StepAndDestroyBlockGoal {
     #[must_use]
     pub fn new(
         stepping: Option<Weak<dyn Stepping>>,
+        move_to_target_pos: Option<Weak<dyn MoveToTargetPos>>,
         target_block: &'static Block,
         speed: f64,
         max_y_difference: i32,
     ) -> Arc<Self> {
-        Arc::new_cyclic(|weak_self| {
-            let weak_mtp: Weak<Self> = weak_self.clone();
+        Arc::new_cyclic(|weak_self: &Weak<Self>| {
+            let weak_mtp: Weak<dyn MoveToTargetPos> =
+                if let Some(move_to_target_pos) = move_to_target_pos {
+                    move_to_target_pos
+                } else {
+                    weak_self.clone()
+                };
 
             let move_to_target_pos_goal =
                 MoveToTargetPosGoal::new(weak_mtp, speed, 24, max_y_difference);
@@ -50,7 +56,7 @@ impl StepAndDestroyBlockGoal {
         speed: f64,
         max_y_difference: i32,
     ) -> Arc<Self> {
-        Self::new(None, target_block, speed, max_y_difference)
+        Self::new(None, None, target_block, speed, max_y_difference)
     }
 
     async fn tweak_to_proper_pos(&self, pos: BlockPos, world: Arc<World>) -> Option<BlockPos> {
@@ -77,10 +83,11 @@ impl StepAndDestroyBlockGoal {
 }
 
 // Contains overridable functions
+#[async_trait]
 pub trait Stepping: Send + Sync {
-    fn tick_stepping(&self, _world: Arc<World>, _block_pos: BlockPos) {}
+    async fn tick_stepping(&self, _world: Arc<World>, _block_pos: BlockPos) {}
 
-    fn on_destroy_block(&self, _world: Arc<World>, _block_pos: BlockPos) {}
+    async fn on_destroy_block(&self, _world: Arc<World>, _block_pos: BlockPos) {}
 }
 
 #[async_trait]
@@ -151,15 +158,18 @@ impl Goal for StepAndDestroyBlockGoal {
                 .await;
             if counter % 6 == 0 {
                 if let Some(stepping) = self.stepping.upgrade() {
-                    stepping.tick_stepping(
-                        world.clone(),
-                        self.move_to_target_pos_goal.target_pos.load(),
-                    );
+                    stepping
+                        .tick_stepping(
+                            world.clone(),
+                            self.move_to_target_pos_goal.target_pos.load(),
+                        )
+                        .await;
                 } else {
                     self.tick_stepping(
                         world.clone(),
                         self.move_to_target_pos_goal.target_pos.load(),
-                    );
+                    )
+                    .await;
                 }
             }
         }
@@ -167,7 +177,7 @@ impl Goal for StepAndDestroyBlockGoal {
         if counter > 60 {
             // TODO: world.removeBlock HOW?
             // TODO: spawn particles
-            self.on_destroy_block(world.clone(), tweak_pos);
+            self.on_destroy_block(world.clone(), tweak_pos).await;
         }
 
         self.counter.fetch_add(1, Relaxed);
@@ -190,4 +200,5 @@ impl MoveToTargetPos for StepAndDestroyBlockGoal {
     }
 }
 
+#[async_trait]
 impl Stepping for StepAndDestroyBlockGoal {}
