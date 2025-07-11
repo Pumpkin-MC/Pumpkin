@@ -1566,12 +1566,11 @@ impl JavaClientPlatform {
         }
 
         let inventory = player.inventory();
-        let hand = Hand::try_from(use_item.hand.0);
-        if hand.is_err() {
+        let Ok(hand) = Hand::try_from(use_item.hand.0) else {
             self.kick(TextComponent::text("InvalidHand")).await;
             return;
-        }
-        let item_in_hand = if hand.unwrap_or(Hand::Left) == Hand::Left {
+        };
+        let item_in_hand = if hand == Hand::Left {
             inventory.held_item()
         } else {
             inventory.off_hand_item().await
