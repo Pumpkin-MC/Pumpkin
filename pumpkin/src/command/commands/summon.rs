@@ -58,7 +58,7 @@ impl CommandExecutor for Executor {
                 (player.world().await, pos)
             }
         };
-        let mob = from_type(entity, pos, &world, Uuid::new_v4());
+        let mob = from_type(entity, pos, &world, Uuid::new_v4()).await;
         world.spawn_entity(mob).await;
 
         sender
