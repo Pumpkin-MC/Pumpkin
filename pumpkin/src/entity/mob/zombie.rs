@@ -1,4 +1,5 @@
 use super::{Mob, MobEntity};
+use crate::entity::ai::goal::Goal;
 use crate::entity::ai::goal::look_around_goal::LookAroundGoal;
 use crate::entity::ai::goal::move_to_target_pos_goal::MoveToTargetPos;
 use crate::entity::ai::goal::step_and_destroy_block_goal::{StepAndDestroyBlockGoal, Stepping};
@@ -14,7 +15,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
 use rand::{Rng, rng};
 use std::sync::{Arc, Weak};
-use crate::entity::ai::goal::Goal;
 
 pub struct Zombie {
     mob_entity: MobEntity,
