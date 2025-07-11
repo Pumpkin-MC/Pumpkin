@@ -29,6 +29,7 @@ pub mod turbo;
 
 // abstruct
 pub mod abstruct_redstone_gate;
+pub mod dispenser;
 
 pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
     for direction in BlockDirection::all() {
