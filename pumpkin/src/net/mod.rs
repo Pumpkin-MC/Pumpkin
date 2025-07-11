@@ -140,10 +140,7 @@ impl ClientPlatform {
         }
     }
 
-    pub async fn enqueue_packet<P>(&self, packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         match self {
             Self::Java(java) => java.enqueue_packet(packet).await,
             Self::Bedrock(bedrock) => bedrock.enqueue_packet(packet).await,

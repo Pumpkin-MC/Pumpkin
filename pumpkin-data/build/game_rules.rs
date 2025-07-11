@@ -153,11 +153,7 @@ pub(crate) fn build() -> TokenStream {
             use serde::{Serialize, Deserialize, Serializer, Deserializer};
             use std::{fmt::Display, str::FromStr};
 
-            pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                T: Display,
-                S: Serializer,
-            {
+            pub fn serialize<T: Display, S: Serializer>(value: &T, serializer: S) -> Result<S::Ok, S::Error> {
                 serializer.serialize_str(&value.to_string())
             }
 

@@ -6,10 +6,7 @@ use serde::{Serialize, Serializer};
 pub struct AsciiString(pub String);
 
 impl Serialize for AsciiString {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::new();
 
         // Prefixed by a short

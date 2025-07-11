@@ -12,8 +12,8 @@ use pumpkin_util::{
 };
 use ser::{ReadingError, WritingError};
 use serde::{
-    Deserialize, Serialize, Serializer,
-    de::{DeserializeSeed, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+    de::{DeserializeSeed, SeqAccess, Visitor},
 };
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -72,36 +72,27 @@ impl TryFrom<VarInt> for ConnectionState {
 }
 
 struct IdOrVisitor<T>(PhantomData<T>);
-impl<'de, T> Visitor<'de> for IdOrVisitor<T>
-where
-    T: Deserialize<'de>,
-{
+impl<'de, T: Deserialize<'de>> Visitor<'de> for IdOrVisitor<T> {
     type Value = IdOr<T>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("A VarInt followed by a value if the VarInt is 0")
     }
 
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-    where
-        A: serde::de::SeqAccess<'de>,
-    {
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
         enum IdOrStateDeserializer<T> {
             Init,
             Id(u16),
             Value(T),
         }
 
-        impl<'de, T> DeserializeSeed<'de> for &mut IdOrStateDeserializer<T>
-        where
-            T: Deserialize<'de>,
-        {
+        impl<'de, T: Deserialize<'de>> DeserializeSeed<'de> for &mut IdOrStateDeserializer<T> {
             type Value = ();
 
-            fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
+            fn deserialize<D: Deserializer<'de>>(
+                self,
+                deserializer: D,
+            ) -> Result<Self::Value, D::Error> {
                 match self {
                     IdOrStateDeserializer::Init => {
                         // Get the VarInt
@@ -154,23 +145,14 @@ pub enum IdOr<T> {
     Value(T),
 }
 
-impl<'de, T> Deserialize<'de> for IdOr<T>
-where
-    T: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for IdOr<T> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         deserializer.deserialize_seq(IdOrVisitor(PhantomData))
     }
 }
 
 impl<T: Serialize> Serialize for IdOr<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             IdOr::Id(id) => VarInt::from(*id + 1).serialize(serializer),
             IdOr::Value(value) => {
@@ -482,10 +464,7 @@ pub enum Label {
 }
 
 impl Serialize for Label {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             Label::BuiltIn(link_type) => link_type.serialize(serializer),
             Label::TextComponent(component) => component.serialize(serializer),
@@ -513,36 +492,24 @@ impl<'a> Link<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
+#[repr(i32)]
 pub enum LinkType {
-    BugReport,
-    CommunityGuidelines,
-    Support,
-    Status,
-    Feedback,
-    Community,
-    Website,
-    Forums,
-    News,
-    Announcements,
+    BugReport = 0,
+    CommunityGuidelines = 1,
+    Support = 2,
+    Status = 3,
+    Feedback = 4,
+    Community = 5,
+    Website = 6,
+    Forums = 7,
+    News = 8,
+    Announcements = 9,
 }
 
 impl Serialize for LinkType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match self {
-            LinkType::BugReport => VarInt(0).serialize(serializer),
-            LinkType::CommunityGuidelines => VarInt(1).serialize(serializer),
-            LinkType::Support => VarInt(2).serialize(serializer),
-            LinkType::Status => VarInt(3).serialize(serializer),
-            LinkType::Feedback => VarInt(4).serialize(serializer),
-            LinkType::Community => VarInt(5).serialize(serializer),
-            LinkType::Website => VarInt(6).serialize(serializer),
-            LinkType::Forums => VarInt(7).serialize(serializer),
-            LinkType::News => VarInt(8).serialize(serializer),
-            LinkType::Announcements => VarInt(9).serialize(serializer),
-        }
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        VarInt(*self as i32).serialize(serializer)
     }
 }
 

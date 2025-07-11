@@ -57,7 +57,9 @@ use pumpkin_protocol::{
     bedrock::{
         RakReliability,
         client::{
+            creative_content::CreativeContent,
             gamerules_changed::GameRules,
+            play_status::{CPlayStatus, PlayStatus},
             start_game::{Experiments, GamePublishSetting, LevelSettings},
         },
     },
@@ -329,10 +331,7 @@ impl World {
     /// Sends the specified packet to every player currently logged in to the world.
     ///
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
-    pub async fn broadcast_packet_all<P>(&self, packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         self.broadcast_packet_except(&[], packet).await;
     }
 
@@ -405,10 +404,11 @@ impl World {
     /// Sends the specified packet to every player currently logged in to the world, excluding the players listed in the `except` parameter.
     ///
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
-    pub async fn broadcast_packet_except<P>(&self, except: &[uuid::Uuid], packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn broadcast_packet_except<P: ClientPacket>(
+        &self,
+        except: &[uuid::Uuid],
+        packet: &P,
+    ) {
         let current_players = self.players.read().await;
         let players: Vec<_> = current_players
             .iter()
@@ -703,11 +703,10 @@ impl World {
             spawn_biome_type: 0,
             custom_biome_name: String::with_capacity(0),
             dimension: VarInt(0),
-            // Don't know what problem the client has with 1
             generator_type: VarInt(2),
-            world_gamemode: VarInt(1),
+            world_gamemode: VarInt(server.defaultgamemode.lock().await.gamemode as i32 + 1),
             hardcore: base_config.hardcore,
-            difficulty: VarInt(level_info.difficulty as i32),
+            difficulty: VarInt(level_info.difficulty as i32 + 1),
             spawn_position: BedrockPos(BlockPos(Vector3::new(
                 level_info.spawn_x,
                 level_info.spawn_y,
@@ -728,7 +727,7 @@ impl World {
             was_lan_broadcasting_intended: true,
             xbox_live_broadcast_setting: VarInt(GamePublishSetting::Public as _),
             platform_broadcast_setting: VarInt(GamePublishSetting::Public as _),
-            commands_enabled: false,
+            commands_enabled: level_info.allow_commands,
             is_texture_packs_required: false,
             rule_data: GameRules {
                 list_size: VarUInt(0),
@@ -740,8 +739,8 @@ impl World {
             bonus_chest: false,
             has_start_with_map_enabled: false,
             // TODO Bedrock permission level are different
-            permission_level: VarInt(1),
-            server_chunk_tick_range: Le32(4),
+            permission_level: VarInt(2),
+            server_chunk_tick_range: Le32(base_config.simulation_distance.get().into()),
             has_locked_behavior_pack: false,
             has_locked_resource_pack: false,
             is_from_locked_world_template: false,
@@ -771,9 +770,9 @@ impl World {
             client
                 .send_game_packet(
                     &CStartGame {
-                        entity_id: VarLong(i64::from(76654)),
-                        runtime_entity_id: VarULong(76654),
-                        player_gamemode: VarInt(1),
+                        entity_id: VarLong(i64::from(player.entity_id())),
+                        runtime_entity_id: VarULong(player.entity_id() as _),
+                        player_gamemode: VarInt(player.gamemode.load() as i32 + 1),
                         position: Vector3::new(0.0, 100.0, 0.0),
                         pitch: 0.0,
                         yaw: 0.0,
@@ -805,6 +804,21 @@ impl World {
                         blocknetwork_ids_are_hashed: false,
                         server_auth_sounds: false,
                     },
+                    RakReliability::Unreliable,
+                )
+                .await;
+            client
+                .send_game_packet(
+                    &CreativeContent {
+                        groups: &[],
+                        entries: &[],
+                    },
+                    RakReliability::Unreliable,
+                )
+                .await;
+            client
+                .send_game_packet(
+                    &CPlayStatus::new(PlayStatus::PlayerSpawn),
                     RakReliability::Unreliable,
                 )
                 .await;

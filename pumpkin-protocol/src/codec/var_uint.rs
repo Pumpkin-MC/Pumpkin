@@ -135,10 +135,7 @@ gen_try_from!(isize);
 gen_try_from!(usize);
 
 impl Serialize for VarUInt {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut value = self.0;
         let mut buf = Vec::with_capacity(5);
 
@@ -154,10 +151,7 @@ impl Serialize for VarUInt {
 }
 
 impl<'de> Deserialize<'de> for VarUInt {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct VarIntVisitor;
 
         impl<'de> Visitor<'de> for VarIntVisitor {
@@ -167,10 +161,7 @@ impl<'de> Deserialize<'de> for VarUInt {
                 formatter.write_str("a valid VarInt encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let mut val = 0;
                 for i in 0..VarUInt::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {

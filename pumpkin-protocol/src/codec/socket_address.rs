@@ -10,10 +10,7 @@ use serde::{
 pub struct SocketAddress(pub SocketAddr);
 
 impl Serialize for SocketAddress {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let (version, mut buf) = match self.0 {
             SocketAddr::V4(_) => (4, Vec::with_capacity(7)),
             SocketAddr::V6(_) => (6, Vec::with_capacity(19)),
@@ -32,10 +29,7 @@ impl Serialize for SocketAddress {
 }
 
 impl<'de> Deserialize<'de> for SocketAddress {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
+    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
             type Value = SocketAddress;
@@ -44,10 +38,7 @@ impl<'de> Deserialize<'de> for SocketAddress {
                 formatter.write_str("a valid socket addr")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 if let Some(version) = seq.next_element::<u8>()? {
                     match version {
                         4 => {

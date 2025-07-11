@@ -9,10 +9,7 @@ use crate::{
 pub struct BedrockPos(pub BlockPos);
 
 impl serde::Serialize for BedrockPos {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::new();
         buf.write_var_int(&VarInt(self.0.0.x)).unwrap();
         buf.write_var_uint(&VarUInt(self.0.0.y as u32)).unwrap();

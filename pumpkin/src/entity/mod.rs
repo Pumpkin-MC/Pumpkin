@@ -677,10 +677,7 @@ impl Entity {
             .await;
     }
 
-    pub async fn send_meta_data<T>(&self, meta: &[Metadata<T>])
-    where
-        T: Serialize,
-    {
+    pub async fn send_meta_data<T: Serialize>(&self, meta: &[Metadata<T>]) {
         let mut buf = Vec::new();
         for meta in meta {
             let mut serializer_buf = Vec::new();

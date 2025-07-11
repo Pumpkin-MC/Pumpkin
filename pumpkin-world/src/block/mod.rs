@@ -26,19 +26,15 @@ pub struct BlockStateCodec {
     pub properties: Option<HashMap<String, String>>,
 }
 
-fn parse_block_name<'de, D>(deserializer: D) -> Result<&'static Block, D::Error>
-where
-    D: Deserializer<'de>,
-{
+fn parse_block_name<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<&'static Block, D::Error> {
     let s = String::deserialize(deserializer)?;
     let block = get_block(s.as_str()).ok_or(serde::de::Error::custom("Invalid block name"))?;
     Ok(block)
 }
 
-fn block_to_string<S>(block: &'static Block, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
+fn block_to_string<S: Serializer>(block: &'static Block, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(block.name)
 }
 

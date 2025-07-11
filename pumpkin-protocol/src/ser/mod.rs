@@ -3,7 +3,10 @@ use std::io::{Read, Write};
 
 use crate::{
     FixedBitSet,
-    codec::{bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong, var_uint::VarUInt},
+    codec::{
+        bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong, var_uint::VarUInt,
+        var_ulong::VarULong,
+    },
 };
 
 pub mod deserializer;
@@ -15,11 +18,10 @@ pub mod serializer;
 // TODO: This is a bit hacky
 const NO_PREFIX_MARKER: &str = "__network_no_prefix";
 
-pub fn network_serialize_no_prefix<T, S>(input: T, serializer: S) -> Result<S::Ok, S::Error>
-where
-    T: serde::Serialize,
-    S: serde::Serializer,
-{
+pub fn network_serialize_no_prefix<T: serde::Serialize, S: serde::Serializer>(
+    input: T,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
     serializer.serialize_newtype_struct(NO_PREFIX_MARKER, &input)
 }
 
@@ -68,6 +70,7 @@ pub trait NetworkReadExt {
     fn get_var_int(&mut self) -> Result<VarInt, ReadingError>;
     fn get_var_uint(&mut self) -> Result<VarUInt, ReadingError>;
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
+    fn get_var_ulong(&mut self) -> Result<VarULong, ReadingError>;
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
     fn get_string(&mut self) -> Result<String, ReadingError>;
     fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError>;
@@ -176,6 +179,10 @@ impl<R: Read> NetworkReadExt for R {
 
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError> {
         VarLong::decode(self)
+    }
+
+    fn get_var_ulong(&mut self) -> Result<VarULong, ReadingError> {
+        VarULong::decode(self)
     }
 
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError> {

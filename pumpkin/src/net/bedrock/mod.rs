@@ -18,7 +18,9 @@ use pumpkin_protocol::{
         packet_decoder::UDPNetworkDecoder,
         packet_encoder::UDPNetworkEncoder,
         server::{
+            interaction::SInteraction,
             login::SLogin,
+            player_auth_input::SPlayerAuthInput,
             raknet::{
                 connection::{
                     SConnectedPing, SConnectionRequest, SDisconnect, SNewIncomingConnection,
@@ -189,10 +191,7 @@ impl BedrockClientPlatform {
         // TODO
     }
 
-    pub async fn enqueue_packet<P>(&self, packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
         Self::write_raw_packet(packet, writer).unwrap();
@@ -491,6 +490,10 @@ impl BedrockClientPlatform {
             }
             SLogin::PACKET_ID => {
                 self.handle_login(SLogin::read(payload)?, server).await;
+            }
+            SPlayerAuthInput::PACKET_ID => {}
+            SInteraction::PACKET_ID => {
+                dbg!(SInteraction::read(payload)?);
             }
             _ => {
                 log::warn!("Bedrock: Received Unknown Game packet: {}", packet.id);

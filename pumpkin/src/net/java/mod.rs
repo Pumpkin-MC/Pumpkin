@@ -200,10 +200,7 @@ impl JavaClientPlatform {
         }
     }
 
-    pub async fn enqueue_packet<P>(&self, packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
         Self::write_packet(packet, writer).unwrap();
