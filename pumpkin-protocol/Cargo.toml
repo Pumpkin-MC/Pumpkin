@@ -19,7 +19,6 @@ pumpkin-util = { path = "../pumpkin-util" }
 uuid.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-log.workspace = true
 tokio.workspace = true
 bytes.workspace = true
 
