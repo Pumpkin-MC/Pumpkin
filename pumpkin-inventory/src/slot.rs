@@ -5,13 +5,12 @@ use std::{
     time::Duration,
 };
 
+use crate::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::{sync::Mutex, time::timeout};
-
-use crate::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 
 // Slot.java
 // This is a trait due to crafting slots being a thing
@@ -283,6 +282,7 @@ impl Slot for ArmorSlot {
             _ => true,
         }
     }
+
     async fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
         // TODO: Check enchantments
         true
