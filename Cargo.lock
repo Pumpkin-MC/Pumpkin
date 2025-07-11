@@ -2008,7 +2008,6 @@ version = "0.1.0-dev+1.21.7"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
- "bitflags",
  "bytes",
  "console-subscriber",
  "crossbeam",
@@ -2150,8 +2149,6 @@ name = "pumpkin-registry"
 version = "0.1.0-dev+1.21.7"
 dependencies = [
  "indexmap 2.10.0",
- "pumpkin-data",
- "pumpkin-nbt",
  "pumpkin-protocol",
  "pumpkin-util",
  "serde",
@@ -2194,7 +2191,6 @@ dependencies = [
  "file-guard",
  "flate2",
  "futures",
- "indexmap 2.10.0",
  "itertools 0.14.0",
  "log",
  "lru",
