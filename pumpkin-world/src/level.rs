@@ -820,7 +820,7 @@ impl Level {
                     } else {
                         // Chunk was unloaded after notification, skip this iteration
                         // The chunk generation will be retried if needed
-                        log::info!("Chunk at {pos:?} was unloaded after generation notification",);
+                        log::info!("Chunk at {pos:?} was unloaded after generation notification");
                     }
                 } else {
                     //let _permit = chunk_generation_semaphore
