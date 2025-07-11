@@ -6,7 +6,8 @@ pub mod active_target_goal;
 pub mod ambient_stand_goal;
 pub mod look_around_goal;
 pub mod look_at_entity;
-pub mod move_to_target_pos_goal;
+mod move_to_target_pos_goal;
+pub mod step_and_destroy_block_goal;
 mod track_target_goal;
 
 #[must_use]

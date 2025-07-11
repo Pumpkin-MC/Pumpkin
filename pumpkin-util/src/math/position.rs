@@ -318,6 +318,22 @@ impl BlockPos {
         self.offset(Vector3::new(0, -height, 0))
     }
 
+    pub fn west(&self) -> Self {
+        self.offset(Vector3::new(-1, 0, 0))
+    }
+
+    pub fn north(&self) -> Self {
+        self.offset(Vector3::new(0, 0, -1))
+    }
+
+    pub fn east(&self) -> Self {
+        self.offset(Vector3::new(1, 0, 0))
+    }
+
+    pub fn south(&self) -> Self {
+        self.offset(Vector3::new(0, 0, 1))
+    }
+
     pub fn manhattan_distance(&self, other: Self) -> i32 {
         let x = (other.0.x - self.0.x).abs();
         let y = (other.0.y - self.0.y).abs();

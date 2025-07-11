@@ -6,9 +6,9 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::Rng;
-use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicI32};
+use std::sync::{Arc, Weak};
 
 const MIN_WAITING_TIME: i32 = 1200;
 const MAX_TRYING_TIME: i32 = 1200;
@@ -16,22 +16,22 @@ const MIN_INTERVAL: i32 = 200;
 
 #[allow(dead_code)]
 pub struct MoveToTargetPosGoal {
-    move_to_target_pos: Box<dyn MoveToTargetPos>,
-    speed: f64,
-    cooldown: AtomicI32,
-    trying_time: AtomicI32,
-    safe_waiting_time: AtomicI32,
-    target_bos: AtomicCell<BlockPos>,
-    reached: AtomicBool,
-    range: i32,
-    max_y_difference: i32,
-    lowest_y: AtomicI32,
+    move_to_target_pos: Weak<dyn MoveToTargetPos>,
+    pub speed: f64,
+    pub cooldown: AtomicI32,
+    pub trying_time: AtomicI32,
+    pub safe_waiting_time: AtomicI32,
+    pub target_pos: AtomicCell<BlockPos>,
+    pub reached: AtomicBool,
+    pub range: i32,
+    pub max_y_difference: i32,
+    pub lowest_y: AtomicI32,
 }
 
 impl MoveToTargetPosGoal {
     #[must_use]
     pub fn new(
-        move_to_target_pos: Box<dyn MoveToTargetPos>,
+        move_to_target_pos: Weak<dyn MoveToTargetPos>,
         speed: f64,
         range: i32,
         max_y_difference: i32,
@@ -42,7 +42,7 @@ impl MoveToTargetPosGoal {
             cooldown: AtomicI32::new(0),
             trying_time: AtomicI32::new(0),
             safe_waiting_time: AtomicI32::new(0),
-            target_bos: AtomicCell::new(BlockPos::new(0, 0, 0)),
+            target_pos: AtomicCell::new(BlockPos::new(0, 0, 0)),
             reached: AtomicBool::new(false),
             range,
             max_y_difference,
@@ -50,20 +50,21 @@ impl MoveToTargetPosGoal {
         }
     }
 
+    #[allow(dead_code)]
     #[must_use]
     pub fn with_default(
-        move_to_target_pos: Box<dyn MoveToTargetPos>,
+        move_to_target_pos: Weak<dyn MoveToTargetPos>,
         speed: f64,
         range: i32,
     ) -> Self {
         Self::new(move_to_target_pos, speed, range, 1)
     }
 
-    fn get_interval(mob: &dyn Mob) -> i32 {
+    pub fn get_interval(mob: &dyn Mob) -> i32 {
         to_goal_ticks(MIN_INTERVAL + mob.get_random().random_range(0..MIN_INTERVAL))
     }
 
-    async fn find_target_pos(&self, mob: &dyn Mob) -> bool {
+    pub async fn find_target_pos(&self, mob: &dyn Mob) -> bool {
         let block_pos = mob.get_entity().block_pos.load();
         let mut block_pos_mutable = BlockPos::new(0, 0, 0);
 
@@ -80,14 +81,17 @@ impl MoveToTargetPosGoal {
                         // Make sure the world lock is dropped
                         {
                             let world = mob.get_entity().world.read().await;
+                            let can_target = if let Some(x) = self.move_to_target_pos.upgrade() {
+                                x.is_target_pos(world.clone(), block_pos_mutable).await
+                            } else {
+                                false
+                            };
                             if mob
                                 .get_mob_entity()
                                 .is_in_position_target_range_pos(block_pos_mutable)
-                                && self
-                                    .move_to_target_pos
-                                    .is_target_pos(world.clone(), block_pos_mutable)
+                                && can_target
                             {
-                                self.target_bos.store(block_pos_mutable);
+                                self.target_pos.store(block_pos_mutable);
                                 return true;
                             }
                         };
@@ -104,7 +108,7 @@ impl MoveToTargetPosGoal {
     }
 
     fn get_target_pos(&self) -> BlockPos {
-        self.target_bos.load().up()
+        self.target_pos.load().up()
     }
 
     fn should_reset_path(&self) -> bool {
@@ -117,8 +121,9 @@ impl MoveToTargetPosGoal {
 }
 
 // Contains overridable functions
+#[async_trait]
 pub trait MoveToTargetPos: Send + Sync {
-    fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool;
+    async fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool;
 
     fn get_desired_distance_to_target(&self) -> f64 {
         1.0
@@ -138,11 +143,14 @@ impl Goal for MoveToTargetPosGoal {
 
     async fn should_continue(&self, mob: &dyn Mob) -> bool {
         let world = mob.get_entity().world.read().await;
+        let can_target = if let Some(x) = self.move_to_target_pos.upgrade() {
+            x.is_target_pos(world.clone(), self.target_pos.load()).await
+        } else {
+            false
+        };
         self.trying_time.load(Relaxed) >= -self.safe_waiting_time.load(Relaxed)
             && self.trying_time.load(Relaxed) <= MAX_TRYING_TIME
-            && self
-                .move_to_target_pos
-                .is_target_pos(world.clone(), self.target_bos.load())
+            && can_target
     }
 
     async fn start(&self, mob: &dyn Mob) {
@@ -160,7 +168,10 @@ impl Goal for MoveToTargetPosGoal {
     async fn tick(&self, mob: &dyn Mob) {
         let block_pos = self.get_target_pos();
         let block_pos: Vector3<f64> = block_pos.0.to_f64();
-        let desired_distance = self.move_to_target_pos.get_desired_distance_to_target();
+        let Some(move_to_target_pos) = self.move_to_target_pos.upgrade() else {
+            return;
+        };
+        let desired_distance = move_to_target_pos.get_desired_distance_to_target();
         if block_pos.squared_distance_to_vec(mob.get_entity().pos.load())
             < desired_distance * desired_distance
         {
