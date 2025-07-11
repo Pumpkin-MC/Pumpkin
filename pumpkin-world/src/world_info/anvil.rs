@@ -9,7 +9,8 @@ use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
 
 use crate::world_info::{
-    MAXIMUM_SUPPORTED_WORLD_DATA_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION,
+    MAXIMUM_SUPPORTED_LEVEL_VERSION, MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
+    MINIMUM_SUPPORTED_LEVEL_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION,
 };
 
 use super::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
@@ -39,7 +40,7 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
 
     let info: LevelDat = pumpkin_nbt::from_bytes(raw_nbt)
         .map_err(|e|{
-            log::error!("The world.dat file does not have a data version! This means it is either corrupt or very old (read unsupported)");
+            log::error!("The level.dat file does not have a data version! This means it is either corrupt or very old (read unsupported)");
             WorldInfoError::DeserializationError(e.to_string())})?;
 
     let data_version = info.data.data_version;
@@ -47,7 +48,33 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
     if !(MINIMUM_SUPPORTED_WORLD_DATA_VERSION..=MAXIMUM_SUPPORTED_WORLD_DATA_VERSION)
         .contains(&data_version)
     {
-        Err(WorldInfoError::UnsupportedVersion(data_version))
+        Err(WorldInfoError::UnsupportedDataVersion(data_version))
+    } else {
+        Ok(())
+    }
+}
+
+fn check_file_level_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
+    #[derive(Deserialize)]
+    struct LevelData {
+        version: i32,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct LevelDat {
+        data: LevelData,
+    }
+
+    let info: LevelDat = pumpkin_nbt::from_bytes(raw_nbt)
+        .map_err(|e|{
+            log::error!("The level.dat file does not have a level version! This means it is either corrupt or very old (read unsupported)");
+            WorldInfoError::DeserializationError(e.to_string())})?;
+
+    let level_version = info.data.version;
+
+    if !(MINIMUM_SUPPORTED_LEVEL_VERSION..=MAXIMUM_SUPPORTED_LEVEL_VERSION).contains(&level_version)
+    {
+        Err(WorldInfoError::UnsupportedLevelVersion(level_version))
     } else {
         Ok(())
     }
@@ -63,6 +90,7 @@ impl WorldInfoReader for AnvilLevelInfo {
         let _ = compression_reader.read_to_end(&mut buf)?;
 
         check_file_data_version(&buf)?;
+        check_file_level_version(&buf)?;
         let info = pumpkin_nbt::from_bytes::<LevelDat>(&buf[..])
             .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
 
@@ -228,15 +256,18 @@ mod test {
                 water_source_conversion: true,
                 ..Default::default()
             },
-            world_gen_settings: WorldGenSettings { seed: 1 },
+            world_gen_settings: WorldGenSettings {
+                seed: 1,
+                ..Default::default()
+            },
             last_played: 1733847709327,
             level_name: "New World".to_string(),
             spawn_x: 160,
             spawn_y: 70,
             spawn_z: 160,
             spawn_angle: 0.0,
-            nbt_version: 19133,
-            version: WorldVersion {
+            level_version: 19133,
+            world_version: WorldVersion {
                 name: "1.21.4".to_string(),
                 id: 4189,
                 snapshot: false,
@@ -283,7 +314,7 @@ mod test {
         let result = AnvilLevelInfo.read_world_info(temp_dir.path());
         match result {
             Ok(_) => panic!("This should fail!"),
-            Err(WorldInfoError::UnsupportedVersion(_)) => {}
+            Err(WorldInfoError::UnsupportedDataVersion(_)) => {}
             Err(_) => panic!("Wrong error!"),
         }
     }

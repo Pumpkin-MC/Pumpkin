@@ -1,18 +1,22 @@
+use std::collections::HashMap;
 use std::path::Path;
 
+use crate::CURRENT_MC_VERSION;
+use crate::generation::Seed;
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_data::game_rules::GameRuleRegistry;
 use pumpkin_util::{Difficulty, serde_enum_as_integer};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::generation::Seed;
-
 pub mod anvil;
 
 // Constraint: disk biome palette serialization changed in 1.21.5
 pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4435; // 1.21.7
 pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4438; // 1.21.7
+
+pub const MINIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19132; // 1.21.7
+pub const MAXIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19133; // 1.21.7
 
 pub trait WorldInfoReader {
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError>;
@@ -82,18 +86,47 @@ pub struct LevelData {
     pub spawn_z: i32,
     // The Yaw rotation of the world spawn.
     pub spawn_angle: f32,
-    #[serde(rename = "version")]
-    // The NBT version of the level
-    pub nbt_version: i32,
     #[serde(rename = "Version")]
-    pub version: WorldVersion,
-    // TODO: Implement the rest of the fields
+    pub world_version: WorldVersion,
+    #[serde(rename = "version")]
+    pub level_version: i32, // TODO: Implement the rest of the fields
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct WorldGenSettings {
     // the numerical seed of the world
     pub seed: i64,
+    pub dimensions: Dimensions,
+}
+
+pub type Dimensions = HashMap<String, Dimension>;
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Dimension {
+    pub generator: Generator,
+    #[serde(rename = "type")]
+    pub dimension_type: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Generator {
+    pub settings: String,
+    pub biome_source: BiomeSource,
+    #[serde(rename = "type")]
+    pub generator_type: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum BiomeSource {
+    WithPreset {
+        preset: String,
+        #[serde(rename = "type")]
+        biome_type: String,
+    },
+    Simple {
+        #[serde(rename = "type")]
+        biome_type: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -112,7 +145,51 @@ fn get_or_create_seed() -> Seed {
 
 impl Default for WorldGenSettings {
     fn default() -> Self {
+        // TODO: Adjust according to enabled worlds
+        let mut dimensions = Dimensions::new();
+        dimensions.insert(
+            "minecraft:overworld".to_string(),
+            Dimension {
+                generator: Generator {
+                    settings: "minecraft:overworld".to_string(),
+                    biome_source: BiomeSource::WithPreset {
+                        preset: "minecraft:overworld".to_string(),
+                        biome_type: "minecraft:multi_noise".to_string(),
+                    },
+                    generator_type: "minecraft:noise".to_string(),
+                },
+                dimension_type: "minecraft:overworld".to_string(),
+            },
+        );
+        dimensions.insert(
+            "minecraft:the_nether".to_string(),
+            Dimension {
+                generator: Generator {
+                    settings: "minecraft:nether".to_string(),
+                    biome_source: BiomeSource::WithPreset {
+                        preset: "minecraft:nether".to_string(),
+                        biome_type: "minecraft:multi_noise".to_string(),
+                    },
+                    generator_type: "minecraft:noise".to_string(),
+                },
+                dimension_type: "minecraft:the_nether".to_string(),
+            },
+        );
+        dimensions.insert(
+            "minecraft:the_end".to_string(),
+            Dimension {
+                generator: Generator {
+                    settings: "minecraft:end".to_string(),
+                    biome_source: BiomeSource::Simple {
+                        biome_type: "minecraft:the_end".to_string(),
+                    },
+                    generator_type: "minecraft:noise".to_string(),
+                },
+                dimension_type: "minecraft:the_end".to_string(),
+            },
+        );
         Self {
+            dimensions,
             seed: get_or_create_seed().0 as i64,
         }
     }
@@ -134,8 +211,8 @@ pub struct WorldVersion {
 impl Default for WorldVersion {
     fn default() -> Self {
         Self {
-            name: "1.24.4".to_string(),
-            id: -1,
+            name: CURRENT_MC_VERSION.to_string(),
+            id: MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
             snapshot: false,
             series: "main".to_string(),
         }
@@ -172,8 +249,8 @@ impl Default for LevelData {
             spawn_y: 200,
             spawn_z: 0,
             spawn_angle: 0.0,
-            nbt_version: -1,
-            version: Default::default(),
+            world_version: Default::default(),
+            level_version: MAXIMUM_SUPPORTED_LEVEL_VERSION,
         }
     }
 }
@@ -187,7 +264,9 @@ pub enum WorldInfoError {
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
     #[error("Unsupported world data version: {0}")]
-    UnsupportedVersion(i32),
+    UnsupportedDataVersion(i32),
+    #[error("Unsupported world level version: {0}")]
+    UnsupportedLevelVersion(i32),
 }
 
 impl From<std::io::Error> for WorldInfoError {
