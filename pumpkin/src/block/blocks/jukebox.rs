@@ -63,16 +63,16 @@ impl PumpkinBlock for JukeboxBlock {
             .components
             .jukebox_playable
         else {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         };
 
         let Some(song) = jukebox_playable.split(':').nth(1) else {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         };
 
         let Some(jukebox_song) = SYNCED_REGISTRIES.jukebox_song.get_index_of(song) else {
             log::error!("Jukebox playable song not registered!");
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         };
 
         //TODO: Update block nbt
