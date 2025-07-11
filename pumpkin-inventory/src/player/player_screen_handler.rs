@@ -1,14 +1,15 @@
-use async_trait::async_trait;
-use pumpkin_data::screen::WindowType;
-use pumpkin_world::inventory::Inventory;
-use pumpkin_world::item::ItemStack;
-
 use crate::crafting::crafting_inventory::CraftingInventory;
 use crate::crafting::crafting_screen_handler::CraftingScreenHandler;
 use crate::crafting::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
 use crate::equipment_slot::{EquipmentSlot, EquipmentType};
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::{ArmorSlot, NormalSlot, Slot};
+use async_trait::async_trait;
+use pumpkin_data::screen::WindowType;
+use pumpkin_world::inventory::Inventory;
+use pumpkin_world::item::ItemStack;
+use std::any::Any;
+use std::sync::Arc;
 
 use super::player_inventory::PlayerInventory;
 
