@@ -264,7 +264,9 @@ pub enum WorldInfoError {
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
     #[error("Unsupported world data version: {0}")]
-    UnsupportedVersion(i32),
+    UnsupportedDataVersion(i32),
+    #[error("Unsupported world level version: {0}")]
+    UnsupportedLevelVersion(i32),
 }
 
 impl From<std::io::Error> for WorldInfoError {

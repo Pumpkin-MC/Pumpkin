@@ -133,10 +133,11 @@ impl Server {
             match error {
                 // If it doesn't exist, just make a new one
                 WorldInfoError::InfoNotFound => (),
-                WorldInfoError::UnsupportedVersion(version) => {
-                    log::error!("Failed to load world info!, {version}");
+                WorldInfoError::UnsupportedDataVersion(_version)
+                | WorldInfoError::UnsupportedLevelVersion(_version) => {
+                    log::error!("Failed to load world info!");
                     log::error!("{error}");
-                    panic!("Unsupported world data! See the logs for more info.");
+                    panic!("Unsupported world version! See the logs for more info.");
                 }
                 e => {
                     panic!("World Error {e}");
