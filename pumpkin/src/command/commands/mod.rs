@@ -65,7 +65,6 @@ pub async fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
     dispatcher.register(help::init_command_tree(), "minecraft:command.help");
     dispatcher.register(list::init_command_tree(), "minecraft:command.list");
-    dispatcher.register(transfer::init_command_tree(), "minecraft:command.transfer");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
     // Two
@@ -128,6 +127,7 @@ pub async fn default_dispatcher() -> CommandDispatcher {
         whitelist::init_command_tree(),
         "minecraft:command.whitelist",
     );
+    dispatcher.register(transfer::init_command_tree(), "minecraft:command.transfer");
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
 
@@ -173,13 +173,6 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.list",
             "Lists players that are currently online",
-            PermissionDefault::Allow,
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.transfer",
-            "Transfers the player to another server",
             PermissionDefault::Allow,
         ))
         .unwrap();
@@ -462,6 +455,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.tick",
             "Triggers the tick event",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.transfer",
+            "Transfers the player to another server",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();

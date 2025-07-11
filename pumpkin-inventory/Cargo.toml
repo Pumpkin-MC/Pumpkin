@@ -9,11 +9,9 @@ pumpkin-protocol = { path = "../pumpkin-protocol" }
 pumpkin-data = { path = "../pumpkin-data" }
 
 pumpkin-world = { path = "../pumpkin-world" }
-pumpkin-registry = {path = "../pumpkin-registry"}
 pumpkin-util = { path = "../pumpkin-util" }
 
 log.workspace = true
-rayon.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true

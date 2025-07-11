@@ -6,6 +6,8 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
+use pumpkin_data::block_properties;
+use pumpkin_data::fluid;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection, BlockState};
@@ -43,8 +45,8 @@ pub enum BlockActionResult {
 
 #[derive(Default)]
 pub struct BlockRegistry {
-    blocks: HashMap<String, Arc<dyn PumpkinBlock>>,
-    fluids: HashMap<String, Arc<dyn PumpkinFluid>>,
+    blocks: HashMap<&'static Block, Arc<dyn PumpkinBlock>>,
+    fluids: HashMap<&'static Fluid, Arc<dyn PumpkinFluid>>,
 }
 
 #[async_trait]
@@ -76,16 +78,22 @@ impl BlockRegistry {
     pub fn register<T: PumpkinBlock + BlockMetadata + 'static>(&mut self, block: T) {
         let names = block.names();
         let val = Arc::new(block);
+        self.blocks.reserve(names.len());
         for i in names {
-            self.blocks.insert(i, val.clone());
+            self.blocks.insert(
+                block_properties::get_block(i.as_str()).unwrap(),
+                val.clone(),
+            );
         }
     }
 
     pub fn register_fluid<T: PumpkinFluid + BlockMetadata + 'static>(&mut self, fluid: T) {
         let names = fluid.names();
         let val = Arc::new(fluid);
+        self.fluids.reserve(names.len());
         for i in names {
-            self.fluids.insert(i, val.clone());
+            self.fluids
+                .insert(fluid::get_fluid(i.as_str()).unwrap(), val.clone());
         }
     }
 
@@ -549,12 +557,12 @@ impl BlockRegistry {
 
     #[must_use]
     pub fn get_pumpkin_block(&self, block: &Block) -> Option<&Arc<dyn PumpkinBlock>> {
-        self.blocks.get(&format!("minecraft:{}", block.name))
+        self.blocks.get(block)
     }
 
     #[must_use]
     pub fn get_pumpkin_fluid(&self, fluid: &Fluid) -> Option<&Arc<dyn PumpkinFluid>> {
-        self.fluids.get(&format!("minecraft:{}", fluid.name))
+        self.fluids.get(fluid)
     }
 
     pub async fn emits_redstone_power(

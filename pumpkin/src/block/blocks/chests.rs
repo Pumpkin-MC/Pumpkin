@@ -5,15 +5,15 @@ use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
 use pumpkin_data::entity::EntityPose;
+use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::chest::ChestBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::pumpkin_block::{
-    BrokenArgs, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs, UseWithItemArgs,
+    BlockMetadata, BrokenArgs, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs, UseWithItemArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -22,8 +22,17 @@ use crate::{
     entity::player::Player,
 };
 
-#[pumpkin_block("minecraft:chest")]
 pub struct ChestBlock;
+
+impl BlockMetadata for ChestBlock {
+    fn namespace(&self) -> &'static str {
+        "minecraft"
+    }
+
+    fn ids(&self) -> &'static [&'static str] {
+        get_tag_values(RegistryKey::Block, "c:chests/wooden").unwrap()
+    }
+}
 
 #[async_trait]
 impl PumpkinBlock for ChestBlock {

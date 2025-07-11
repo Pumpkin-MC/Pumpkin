@@ -2094,10 +2094,8 @@ dependencies = [
  "log",
  "pumpkin-data",
  "pumpkin-protocol",
- "pumpkin-registry",
  "pumpkin-util",
  "pumpkin-world",
- "rayon",
  "thiserror",
  "tokio",
 ]
@@ -2135,7 +2133,6 @@ dependencies = [
  "bytes",
  "cfb8",
  "flate2",
- "log",
  "pumpkin-data",
  "pumpkin-macros",
  "pumpkin-nbt",

@@ -41,7 +41,7 @@ impl GzipRollingLogger {
             let mut file = File::open(format!("logs/{filename}"))?;
             let mut encoder = GzEncoder::new(
                 BufWriter::new(File::create(&new_filename)?),
-                flate2::Compression::default(),
+                flate2::Compression::best(),
             );
             println!("logs/{filename}");
             std::io::copy(&mut file, &mut encoder)?;
@@ -90,7 +90,7 @@ impl GzipRollingLogger {
         let mut file = File::open(format!("logs/{}", data.latest_filename))?;
         let mut encoder = GzEncoder::new(
             BufWriter::new(File::create(format!("logs/{new_filename}"))?),
-            flate2::Compression::default(),
+            flate2::Compression::best(),
         );
         std::io::copy(&mut file, &mut encoder)?;
         encoder.finish()?;
