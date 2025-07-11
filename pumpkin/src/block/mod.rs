@@ -96,6 +96,7 @@ use crate::block::blocks::redstone::dropper::DropperBlock;
 
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
+use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
@@ -216,6 +217,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BarrelBlock);
     manager.register(DropperBlock);
     manager.register(DispenserBlock);
+    manager.register(LadderBlock);
 
     // Rails
     manager.register(RailBlock);
