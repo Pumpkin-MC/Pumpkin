@@ -5,7 +5,6 @@ use crate::entity::player::Player;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{
     BlockProperties, PoweredRailLikeProperties, RailLikeProperties,
@@ -13,6 +12,7 @@ use pumpkin_data::block_properties::{
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Tagable;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
@@ -60,7 +60,7 @@ impl PumpkinItem for MinecartItem {
     ) {
         let world = player.world().await;
 
-        if !block.is_tagged_with("minecraft:rails").unwrap() {
+        if !block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_RAILS) {
             return;
         }
         let state_id = world.get_block_state_id(&location).await;

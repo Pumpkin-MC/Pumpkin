@@ -1,12 +1,12 @@
 use std::{collections::HashMap, fs};
 
-use heck::ToPascalCase;
-use proc_macro2::TokenStream;
-use quote::{ToTokens, format_ident, quote};
 use crate::biome::Biome;
 use crate::block::BlockAssets;
 use crate::fluid::Fluid;
 use crate::item::Item;
+use heck::ToPascalCase;
+use proc_macro2::TokenStream;
+use quote::{ToTokens, format_ident, quote};
 
 pub struct EnumCreator {
     pub name: String,
@@ -64,7 +64,7 @@ pub(crate) fn build() -> TokenStream {
         name: "RegistryKey".to_string(),
         value: tags.keys().map(|key| key.to_string()).collect(),
     }
-        .to_token_stream();
+    .to_token_stream();
 
     // Generate tag arrays for each registry key
     let mut tag_dicts = Vec::new();
@@ -111,15 +111,34 @@ pub(crate) fn build() -> TokenStream {
                     }).collect::<Vec<_>>(),
                     &_ => Vec::new(),
                 };
+                let mapped_name = format_ident!("{}", tag_name.replace(":", "_").replace("/", "_").to_uppercase());
                 quote! {
-                    #tag_name => (&[#(#tag_values_array),*], &[#(#tag_id_array),*])
+                    pub const #mapped_name: Tag = (&[#(#tag_values_array),*], &[#(#tag_id_array),*]);
+                }
+            })
+            .collect::<Vec<_>>();
+        let tag_array_entries_map = tag_values
+            .iter()
+            .map(|(tag_name, _values)| {
+                let mapped_name = format_ident!(
+                    "{}",
+                    tag_name.replace(":", "_").replace("/", "_").to_uppercase()
+                );
+                quote! {
+                    #tag_name => &#key_pascal::#mapped_name
                 }
             })
             .collect::<Vec<_>>();
         // Add the static array declaration
         tag_dicts.push(quote! {
-            static #dict_name: phf::Map<&str, (&[&str], &[u16])> = phf::phf_map! {
-                #(#tag_array_entries),*
+            #[allow(non_snake_case)]
+            pub mod #key_pascal {
+                use crate::tag::Tag;
+
+                #(#tag_array_entries)*
+            }
+            static #dict_name: phf::Map<&str, &'static Tag> = phf::phf_map! {
+                #(#tag_array_entries_map),*
             };
         });
 
@@ -161,6 +180,8 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
+        type Tag = (&'static [&'static str], &'static [u16]);
+
         #(#tag_dicts)*
 
         pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&'static [&'static str]> {
@@ -175,7 +196,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        pub fn get_registry_key_tags(tag_category: &RegistryKey) -> &phf::Map<&'static str, (&'static [&'static str], &'static [u16])> {
+        pub fn get_registry_key_tags(tag_category: &RegistryKey) -> &phf::Map<&'static str, &'static Tag> {
             match tag_category {
                 #(#match_arms_tags_all),*
             }
@@ -187,11 +208,14 @@ pub(crate) fn build() -> TokenStream {
             fn registry_id(&self) -> u16;
 
             /// Returns `None` if the tag does not exist.
-            #[doc = r" Returns `None` if the tag does not exist."]
             fn is_tagged_with(&self, tag: &str) -> Option<bool> {
                 let tag = tag.strip_prefix("#").unwrap_or(tag);
                 let items = get_tag_ids(Self::tag_key(), tag)?;
                 Some(items.contains(&self.registry_id()))
+            }
+
+            fn is_tagged_with_by_tag(&self, tag: &'static Tag) -> bool {
+                tag.1.contains(&self.registry_id())
             }
 
             fn get_tag_values(tag: &str) -> Option<&'static [&'static str]> {

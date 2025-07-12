@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::tag::Tagable;
+use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 
@@ -16,9 +16,7 @@ pub struct SoulFireBlock;
 impl SoulFireBlock {
     #[must_use]
     pub fn is_soul_base(block: &Block) -> bool {
-        block
-            .is_tagged_with("minecraft:soul_fire_base_blocks")
-            .unwrap()
+        block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_SOUL_FIRE_BASE_BLOCKS)
     }
 }
 

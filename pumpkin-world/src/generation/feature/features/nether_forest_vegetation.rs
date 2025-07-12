@@ -1,3 +1,4 @@
+use pumpkin_data::tag;
 use pumpkin_data::{BlockDirection, block_properties::get_block_by_state_id, tag::Tagable};
 use pumpkin_util::{
     math::position::BlockPos,
@@ -32,7 +33,10 @@ impl NetherForestVegetationFeature {
     ) -> bool {
         let state = chunk.get_block_state(&pos.down().0);
 
-        if !state.to_block().is_tagged_with("minecraft:nylium").unwrap() {
+        if !state
+            .to_block()
+            .is_tagged_with_by_tag(&tag::Block::MINECRAFT_NYLIUM)
+        {
             return false;
         }
         let mut result = false;
