@@ -7,9 +7,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::info;
 use pumpkin_data::{
-    Block,
     block_properties::{BlockProperties, FurnaceLikeProperties},
     fuels::get_item_burn_ticks,
     item::Item,
@@ -99,8 +97,6 @@ impl FurnaceBlockEntity {
     }
 
     async fn craft_recipe(&self, recipe: Option<&CookingRecipe>) -> bool {
-        log::info!("craft_recipe");
-
         let can_accpet_output = self
             .can_accept_recipe_output(recipe, self.get_max_count_per_stack())
             .await;
@@ -114,14 +110,11 @@ impl FurnaceBlockEntity {
                     None => return false,
                 };
                 let output_item_stack = ItemStack::new(recipe.result.count, output_item);
-                info!("Output stack: {}", output_item_stack.item.registry_key);
 
                 if side_items.are_equal(&ItemStack::EMPTY) {
                     drop(side_items);
-                    info!("side haven't item");
                     self.set_stack(2, output_item_stack).await;
                 } else if side_items.are_items_and_components_equal(&output_item_stack) {
-                    info!("side have item");
                     side_items.increment(1);
                 }
             }
@@ -167,7 +160,6 @@ impl FurnaceBlockEntity {
 #[async_trait]
 impl BlockEntity for FurnaceBlockEntity {
     async fn tick(&self, world: &Arc<dyn SimpleWorld>) {
-        log::info!("enter furnace ticks");
         let is_burning = self.is_burning();
         let mut is_dirty = false;
         if self.is_burning() {
@@ -175,29 +167,20 @@ impl BlockEntity for FurnaceBlockEntity {
         }
 
         let top_items = self.items[0].lock().await;
-        log::info!("top items: {}", top_items.item.registry_key);
         let is_top_items_empty = top_items.is_empty();
 
         let furnace_recipe = Self::get_furnace_cooking_recipe(top_items.item);
-        log::info!("furnace_recipe: {furnace_recipe:?}");
         drop(top_items);
 
         let can_accpet_output = self
             .can_accept_recipe_output(furnace_recipe, self.get_max_count_per_stack())
             .await;
 
-        log::info!("can accept output:  {can_accpet_output}");
-
         let mut bottom_items = self.items[1].lock().await;
-        log::info!("bottom items: {}", bottom_items.item.registry_key);
 
         if self.is_burning() || !bottom_items.is_empty() && !is_top_items_empty {
-            log::info!("first big if");
-            log::info!("{:?}", self);
-            log::info!("can accept output: {}", can_accpet_output);
             if !self.is_burning() && can_accpet_output {
                 let fuel_ticks = get_item_burn_ticks(bottom_items.item.id).unwrap_or(0);
-                log::info!("fuel_ticks: {fuel_ticks}");
                 self.lit_time_remaining.store(fuel_ticks, Ordering::Relaxed);
                 self.lit_total_time.store(fuel_ticks, Ordering::Relaxed);
                 if self.is_burning() {
@@ -213,11 +196,6 @@ impl BlockEntity for FurnaceBlockEntity {
             drop(bottom_items);
 
             if self.is_burning() && can_accpet_output {
-                log::info!("second big if");
-                log::info!(
-                    "cooking_total_time: {}",
-                    self.cooking_total_time.load(Ordering::Relaxed)
-                );
                 self.cooking_time_spent.fetch_add(1, Ordering::Relaxed);
 
                 if self.cooking_time_spent.load(Ordering::Relaxed)
