@@ -350,9 +350,10 @@ pub async fn spawn_category_for_position(
     // TODO StructureManager structureManager = level.structureManager();
     // TODO blockState.isRedstoneConductor(chunk, pos) is true then return
     let mut spawn_cluster_size = 0;
+    let mut new_pos = pos;
     for _ in 0..3 {
-        let mut new_x = pos.0.x;
-        let mut new_z = pos.0.z;
+        let mut new_x = new_pos.0.x;
+        let mut new_z = new_pos.0.z;
         let mut random_group_size = (rng().random::<f32>() * 4.).ceil() as i32;
         let mut inc = 0;
         #[allow(unused_variables)]
@@ -360,10 +361,10 @@ pub async fn spawn_category_for_position(
         'outer: while inc < random_group_size {
             new_x += rng().random_range(0..6) - rng().random_range(0..6);
             new_z += rng().random_range(0..6) - rng().random_range(0..6);
-            let new_pos = BlockPos::new(new_x, pos.0.y, new_z);
+            new_pos = BlockPos::new(new_x, new_pos.0.y, new_z);
             let new_pos_center = new_pos.to_centered_f64();
             let player_distance = get_nearest_player(&new_pos_center, world).await;
-            if player_distance.is_infinite() {
+            if player_distance == f64::MAX {
                 return;
             }
             if !is_right_distance_to_player_and_spawn_point(
@@ -388,7 +389,7 @@ pub async fn spawn_category_for_position(
                 entity_type,
                 player_distance,
             )
-            .await
+                .await
                 || !spawn_state.can_spawn(entity_type, &new_pos, world)
             {
                 inc += 1;
@@ -401,6 +402,7 @@ pub async fn spawn_category_for_position(
                 entity_type,
                 false,
             );
+            entity.set_rotation(rng().random::<f32>() * 360., 0.);
             // TODO isValidPositionForMob(level, mob, f)
             // TODO spawnGroupData = mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), EntitySpawnReason.NATURAL, spawnGroupData);
             spawn_cluster_size += 1;
@@ -479,7 +481,7 @@ pub fn get_random_spawn_mob_at(
             id if id == MobCategory::MISC.id => biome.spawners.misc,
             _ => panic!(),
         }
-        .choose(&mut rng())
+            .choose(&mut rng())
     }
 }
 
@@ -494,7 +496,7 @@ pub async fn is_valid_spawn_position_for_type(
     // TODO level.noCollision(entityType.getSpawnAABB(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5))
     !(category == &MobCategory::MISC
         || (!entity_type.can_spawn_far_from_player
-            && distance > f64::from(entity_type.category.despawn_distance))
+        && distance > f64::from(entity_type.category.despawn_distance))
         || !entity_type.summonable
         || !is_spawn_position_ok(world, block_pos, entity_type).await)
 }
