@@ -3,6 +3,7 @@ use std::f64::consts::TAU;
 use std::num::NonZeroU8;
 use std::ops::AddAssign;
 use std::sync::Arc;
+use std::sync::atomic::Ordering::Release;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
@@ -64,6 +65,11 @@ use pumpkin_world::entity::entity_data_flags::{
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
 
+use super::combat::{
+    self, AttackType, ClassicEntityAttackSuccessType, CombatType, GLOBAL_COMBAT_PROFILE,
+    classic_attack_entity_success, player_attack_sound,
+};
+
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
@@ -77,7 +83,6 @@ use crate::server::Server;
 use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
 
-use super::combat::{self, AttackType, player_attack_sound};
 use super::effect::Effect;
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
@@ -428,6 +433,7 @@ impl Player {
         //self.world().level.list_cached();
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn attack(&self, victim: Arc<dyn EntityBase>) {
         let world = self.world().await;
         let victim_entity = victim.get_entity();
@@ -462,7 +468,7 @@ impl Player {
         let attack_speed = base_attack_speed + add_speed;
 
         let attack_cooldown_progress = self.get_attack_cooldown_progress(0.5, attack_speed);
-        self.last_attacked_ticks.store(0, Ordering::Relaxed);
+        self.last_attacked_ticks.store(0, Ordering::Release);
 
         // Only reduce attack damage if in cooldown
         // TODO: Enchantments are reduced in the same way, just without the square.
@@ -480,42 +486,75 @@ impl Player {
             damage *= 1.5;
         }
 
-        if !victim
-            .damage(damage as f32, DamageType::PLAYER_ATTACK)
-            .await
-        {
-            world
-                .play_sound(
-                    Sound::EntityPlayerAttackNodamage,
-                    SoundCategory::Players,
-                    &self.living_entity.entity.pos.load(),
-                )
-                .await;
-            return;
-        }
+        // If the CombatType is `Modern`, the attack and knockback are always successful, so this does not interfere with the previous code :O)
+        let mut attack_success = true;
+        let mut knockback_success = true;
+        let is_modern_combat = GLOBAL_COMBAT_PROFILE.combat_type() == CombatType::Modern;
 
-        if victim.get_living_entity().is_some() {
-            let mut knockback_strength = 1.0;
-            player_attack_sound(&pos, &world, attack_type).await;
-            match attack_type {
-                AttackType::Knockback => knockback_strength += 1.0,
-                AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
+        if is_modern_combat {
+            if !victim
+                .damage(damage as f32, DamageType::PLAYER_ATTACK)
+                .await
+            {
+                world
+                    .play_sound(
+                        Sound::EntityPlayerAttackNodamage,
+                        SoundCategory::Players,
+                        &self.living_entity.entity.pos.load(),
+                    )
+                    .await;
+                return;
+            }
+        } else if let Some(living) = victim.get_living_entity() {
+            match classic_attack_entity_success(&victim.clone(), damage).await {
+                ClassicEntityAttackSuccessType::SmallerHrt => {
+                    living
+                        .damage(damage as f32, DamageType::PLAYER_ATTACK)
+                        .await;
+                    living.last_damage_taken.store(damage as f32);
+                    living.hurt_resistant_time.store(10, Release);
+                    living.hurt_time.store(10, Release);
                 }
-                _ => {}
-            }
-            if config.knockback {
-                combat::handle_knockback(
-                    attacker_entity,
-                    &world,
-                    victim_entity,
-                    knockback_strength,
-                )
-                .await;
+                ClassicEntityAttackSuccessType::GreaterHrt => {
+                    let last_damage_taken = living.last_damage_taken.load();
+                    damage = f64::from(damage as f32 - last_damage_taken);
+                    living
+                        .damage(damage as f32, DamageType::PLAYER_ATTACK)
+                        .await;
+                    living.last_damage_taken.store(damage as f32);
+                    knockback_success = false;
+                }
+                ClassicEntityAttackSuccessType::False => {
+                    attack_success = false;
+                    knockback_success = false;
+                }
             }
         }
 
-        if config.swing {}
+        if attack_success {
+            if victim.get_living_entity().is_some() {
+                let mut knockback_strength = 1.0;
+                player_attack_sound(&pos, &world, attack_type).await;
+                // TODO: this is probably handled differently in classic combat
+                match attack_type {
+                    AttackType::Knockback => knockback_strength += 1.0,
+                    AttackType::Sweeping => {
+                        combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
+                    }
+                    _ => {}
+                }
+                if config.knockback && knockback_success {
+                    combat::handle_knockback(
+                        attacker_entity,
+                        &world,
+                        victim_entity,
+                        knockback_strength,
+                    )
+                    .await;
+                }
+            }
+            if config.swing {}
+        }
     }
 
     pub async fn set_respawn_point(
@@ -828,7 +867,7 @@ impl Player {
     }
 
     pub async fn jump(&self) {
-        if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
+        if self.living_entity.entity.sprinting.load(Ordering::Acquire) {
             self.add_exhaustion(0.2).await;
         } else {
             self.add_exhaustion(0.05).await;
@@ -838,10 +877,10 @@ impl Player {
     #[expect(clippy::cast_precision_loss)]
     pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
         // TODO: Swimming, gliding...
-        if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
+        if self.living_entity.entity.on_ground.load(Ordering::Acquire) {
             let delta = (delta_pos.horizontal_length() * 100.0).round() as i32;
             if delta > 0 {
-                if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
+                if self.living_entity.entity.sprinting.load(Ordering::Acquire) {
                     self.add_exhaustion(0.1 * delta as f32 * 0.01).await;
                 } else {
                     self.add_exhaustion(0.0 * delta as f32 * 0.01).await;

@@ -2011,6 +2011,7 @@ dependencies = [
  "bytes",
  "console-subscriber",
  "crossbeam",
+ "dashmap",
  "dhat",
  "flate2",
  "futures",
