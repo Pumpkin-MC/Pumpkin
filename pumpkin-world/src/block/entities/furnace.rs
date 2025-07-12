@@ -97,11 +97,11 @@ impl FurnaceBlockEntity {
     }
 
     async fn craft_recipe(&self, recipe: Option<&CookingRecipe>) -> bool {
-        let can_accpet_output = self
+        let can_accepet_output = self
             .can_accept_recipe_output(recipe, self.get_max_count_per_stack())
             .await;
         if let Some(recipe) = recipe {
-            if can_accpet_output {
+            if can_accepet_output {
                 let mut side_items = self.items[2].lock().await;
                 let output_item = match Item::from_registry_key(
                     recipe.result.id.strip_prefix("minecraft:").unwrap(),
@@ -172,14 +172,14 @@ impl BlockEntity for FurnaceBlockEntity {
         let furnace_recipe = Self::get_furnace_cooking_recipe(top_items.item);
         drop(top_items);
 
-        let can_accpet_output = self
+        let can_accepet_output = self
             .can_accept_recipe_output(furnace_recipe, self.get_max_count_per_stack())
             .await;
 
         let mut bottom_items = self.items[1].lock().await;
 
         if self.is_burning() || !bottom_items.is_empty() && !is_top_items_empty {
-            if !self.is_burning() && can_accpet_output {
+            if !self.is_burning() && can_accepet_output {
                 let fuel_ticks = get_item_burn_ticks(bottom_items.item.id).unwrap_or(0);
                 self.lit_time_remaining.store(fuel_ticks, Ordering::Relaxed);
                 self.lit_total_time.store(fuel_ticks, Ordering::Relaxed);
@@ -195,7 +195,7 @@ impl BlockEntity for FurnaceBlockEntity {
 
             drop(bottom_items);
 
-            if self.is_burning() && can_accpet_output {
+            if self.is_burning() && can_accepet_output {
                 self.cooking_time_spent.fetch_add(1, Ordering::Relaxed);
 
                 if self.cooking_time_spent.load(Ordering::Relaxed)
