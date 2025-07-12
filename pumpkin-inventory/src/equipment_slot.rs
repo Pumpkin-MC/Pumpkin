@@ -101,6 +101,20 @@ impl EquipmentSlot {
         }
     }
 
+    pub fn get_from_name(name: &str) -> Option<Self> {
+        match name {
+            "mainhand" => Some(Self::MAIN_HAND),
+            "offhand" => Some(Self::OFF_HAND),
+            "feet" => Some(Self::FEET),
+            "legs" => Some(Self::LEGS),
+            "chest" => Some(Self::CHEST),
+            "head" => Some(Self::HEAD),
+            "body" => Some(Self::BODY),
+            "saddle" => Some(Self::SADDLE),
+            _ => None,
+        }
+    }
+
     pub fn get_offset_entity_slot_id(&self, offset: i32) -> i32 {
         self.get_entity_slot_id() + offset
     }

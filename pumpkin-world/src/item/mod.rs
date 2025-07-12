@@ -1,4 +1,4 @@
-use pumpkin_data::item::Item;
+use pumpkin_data::item::{Item, ItemComponents};
 use pumpkin_data::recipes::RecipeResultStruct;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_nbt::compound::NbtCompound;
@@ -21,6 +21,7 @@ pub enum Rarity {
 pub struct ItemStack {
     pub item_count: u8,
     pub item: &'static Item,
+    pub components: ItemComponents,
 }
 
 impl Hash for ItemStack {
@@ -41,10 +42,15 @@ impl ItemStack {
     pub const EMPTY: ItemStack = ItemStack {
         item_count: 0,
         item: &Item::AIR,
+        components: Item::AIR.components,
     };
 
     pub fn new(item_count: u8, item: &'static Item) -> Self {
-        Self { item_count, item }
+        Self {
+            item_count,
+            item,
+            components: item.components,
+        }
     }
 
     pub fn get_max_stack_size(&self) -> u8 {
@@ -221,8 +227,8 @@ impl From<&RecipeResultStruct> for ItemStack {
     fn from(value: &RecipeResultStruct) -> Self {
         Self {
             item_count: value.count,
-            item: Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
-                .expect("Crafting recipe gives invalid item"),
+            item: Item::from_registry_key(value.id).expect("Crafting recipe gives invalid item"),
+            components: Item::from_registry_key(value.id).unwrap().components,
         }
     }
 }

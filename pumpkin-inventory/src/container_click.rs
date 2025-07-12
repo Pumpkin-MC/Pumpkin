@@ -1,6 +1,5 @@
 use crate::InventoryError;
 use pumpkin_protocol::java::server::play::SlotActionType;
-use pumpkin_world::item::ItemStack;
 
 #[derive(Debug)]
 pub struct Click {
@@ -168,9 +167,4 @@ pub enum MouseDragState {
     Start(MouseDragType),
     AddSlot(usize),
     End,
-}
-
-pub enum ItemChange {
-    Remove { slot: usize },
-    Add { slot: usize, item: ItemStack },
 }

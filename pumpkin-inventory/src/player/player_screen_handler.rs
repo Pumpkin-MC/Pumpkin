@@ -1,16 +1,15 @@
-use std::{any::Any, sync::Arc};
-
+use crate::crafting::crafting_inventory::CraftingInventory;
+use crate::crafting::crafting_screen_handler::CraftingScreenHandler;
+use crate::crafting::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
+use crate::equipment_slot::{EquipmentSlot, EquipmentType};
+use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
+use crate::slot::{ArmorSlot, NormalSlot, Slot};
 use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
-
-use crate::crafting::crafting_inventory::CraftingInventory;
-use crate::crafting::crafting_screen_handler::CraftingScreenHandler;
-use crate::crafting::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
-use crate::equipment_slot::EquipmentSlot;
-use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
-use crate::slot::{ArmorSlot, NormalSlot, Slot};
+use std::any::Any;
+use std::sync::Arc;
 
 use super::player_inventory::PlayerInventory;
 
@@ -75,42 +74,6 @@ impl PlayerScreenHandler {
 
         player_screen_handler
     }
-
-    async fn try_move_one_to_armor_slot(&mut self, stack: &ItemStack) -> bool {
-        if stack.item_count == 0 {
-            return false;
-        }
-
-        let one_item = stack.copy_with_count(1);
-
-        for armor_slot_index in 5..9 {
-            let armor_slot = self.get_slot(armor_slot_index).await;
-            if !armor_slot.has_stack().await && armor_slot.can_insert(&one_item).await {
-                armor_slot.set_stack(one_item).await;
-                return true;
-            }
-        }
-        false
-    }
-
-    async fn handle_inventory_move(&mut self, slot_index: i32, slot_stack: &mut ItemStack) -> bool {
-        if !slot_stack.is_empty() && self.try_move_one_to_armor_slot(slot_stack).await {
-            slot_stack.item_count -= 1;
-            if slot_stack.item_count == 0 {
-                *slot_stack = ItemStack::EMPTY;
-            }
-        }
-
-        if slot_stack.is_empty() {
-            true
-        } else {
-            match slot_index {
-                9..=35 => self.insert_item(slot_stack, 36, 45, false).await, // Main → Hotbar
-                36..=44 => self.insert_item(slot_stack, 9, 36, false).await, // Hotbar → Main
-                _ => false,
-            }
-        }
-    }
 }
 
 #[async_trait]
@@ -147,6 +110,12 @@ impl ScreenHandler for PlayerScreenHandler {
             let mut slot_stack = slot_stack.lock().await;
             let stack_prev = *slot_stack;
 
+            let equipment_slot = slot_stack
+                .components
+                .equippable
+                .and_then(|equippable| EquipmentSlot::get_from_name(equippable.slot))
+                .unwrap_or(EquipmentSlot::MAIN_HAND);
+
             #[allow(clippy::if_same_then_else)]
             if slot_index == 0 {
                 // From crafting result slot
@@ -163,11 +132,37 @@ impl ScreenHandler for PlayerScreenHandler {
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                     return ItemStack::EMPTY;
                 }
-            } else if (9..45).contains(&slot_index) {
+            } else if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
+                && self
+                    .get_slot((8 - equipment_slot.get_entity_slot_id()) as usize)
+                    .await
+                    .get_cloned_stack()
+                    .await
+                    .is_empty()
+            {
+                // Into armour slots
+                let index = 8 - equipment_slot.get_entity_slot_id();
                 if !self
-                    .handle_inventory_move(slot_index, &mut slot_stack)
+                    .insert_item(&mut slot_stack, index, index + 1, false)
                     .await
                 {
+                    return ItemStack::EMPTY;
+                }
+            } else if matches!(equipment_slot, EquipmentSlot::OffHand(_)) {
+                // Into offhand slot
+                let index = 45;
+                if !self
+                    .insert_item(&mut slot_stack, index, index + 1, false)
+                    .await
+                {
+                    return ItemStack::EMPTY;
+                }
+            } else if (9..36).contains(&slot_index) {
+                if !self.insert_item(&mut slot_stack, 36, 45, false).await {
+                    return ItemStack::EMPTY;
+                }
+            } else if (36..45).contains(&slot_index) {
+                if !self.insert_item(&mut slot_stack, 9, 36, false).await {
                     return ItemStack::EMPTY;
                 }
             } else if !self.insert_item(&mut slot_stack, 9, 45, false).await {
