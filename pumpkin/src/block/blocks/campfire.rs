@@ -5,7 +5,7 @@ use pumpkin_data::{
     damage::DamageType,
     fluid::Fluid,
 };
-use pumpkin_world::BlockStateId;
+use pumpkin_world::{BlockStateId, tick::TickPriority};
 
 use crate::{
     block::{
@@ -62,9 +62,10 @@ impl PumpkinBlock for CampfireBlock {
             props.lit = false;
             args.world
                 .schedule_fluid_tick(
-                    args.block.id,
+                    &Fluid::WATER,
                     *args.position,
-                    Fluid::WATER.flow_speed as u16,
+                    Fluid::WATER.flow_speed as u8,
+                    TickPriority::Normal,
                 )
                 .await;
         }

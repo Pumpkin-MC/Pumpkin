@@ -101,11 +101,11 @@ use pumpkin_world::{
     chunk::io::Dirtiable, item::ItemStack, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
-use pumpkin_world::{chunk::TickPriority, level::Level};
 use pumpkin_world::{
     entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION},
     world::GetBlockError,
 };
+use pumpkin_world::{level::Level, tick::TickPriority};
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::{Rng, rng};
 use scoreboard::Scoreboard;
@@ -619,22 +619,22 @@ impl World {
     pub async fn tick_chunks(self: &Arc<Self>) {
         let tick_data = self.level.get_tick_data().await;
         for scheduled_tick in tick_data.block_ticks {
-            let block = self.get_block(&scheduled_tick.block_pos).await;
+            let block = self.get_block(&scheduled_tick.position).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
                     .on_scheduled_tick(OnScheduledTickArgs {
                         world: self,
                         block,
-                        position: &scheduled_tick.block_pos,
+                        position: &scheduled_tick.position,
                     })
                     .await;
             }
         }
         for scheduled_tick in tick_data.fluid_ticks {
-            let fluid = self.get_fluid(&scheduled_tick.block_pos).await;
+            let fluid = self.get_fluid(&scheduled_tick.position).await;
             if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid) {
                 pumpkin_fluid
-                    .on_scheduled_tick(self, fluid, &scheduled_tick.block_pos)
+                    .on_scheduled_tick(self, fluid, &scheduled_tick.position)
                     .await;
             }
         }
@@ -1912,33 +1912,32 @@ impl World {
         &self,
         block: &Block,
         block_pos: BlockPos,
-        delay: u16,
+        delay: u8,
         priority: TickPriority,
     ) {
-        let chunk = self
-            .level
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+        self.level
+            .schedule_block_tick(block, block_pos, delay, priority)
             .await;
-        let mut chunk = chunk.write().await;
-        chunk.schedule_block_tick(block.id, block_pos, delay, priority);
     }
 
-    pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: BlockPos, delay: u16) {
-        let chunk = self
-            .level
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+    pub async fn schedule_fluid_tick(
+        &self,
+        fluid: &Fluid,
+        block_pos: BlockPos,
+        delay: u8,
+        priority: TickPriority,
+    ) {
+        self.level
+            .schedule_fluid_tick(fluid, block_pos, delay, priority)
             .await;
-        let mut chunk = chunk.write().await;
-        chunk.schedule_fluid_tick(block_id, &block_pos, delay);
     }
 
     pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block: &Block) -> bool {
-        let chunk = self
-            .level
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
-        let chunk = chunk.read().await;
-        chunk.is_block_tick_scheduled(block_pos, block.id)
+        self.level.is_block_tick_scheduled(block_pos, block).await
+    }
+
+    pub async fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
+        self.level.is_fluid_tick_scheduled(block_pos, fluid).await
     }
 
     pub async fn break_block(

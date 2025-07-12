@@ -1,4 +1,4 @@
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 
@@ -30,6 +30,19 @@ impl ResourceLocation {
 impl std::fmt::Display for ResourceLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.namespace, self.path)
+    }
+}
+
+impl FromStr for ResourceLocation {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.split_once(':') {
+            Some((namespace, path)) => Ok(ResourceLocation {
+                namespace: namespace.to_string(),
+                path: path.to_string(),
+            }),
+            None => Err(()),
+        }
     }
 }
 
