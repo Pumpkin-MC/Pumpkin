@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::mem;
 
 use super::{
@@ -8,6 +9,36 @@ use enum_dispatch::enum_dispatch;
 use pumpkin_util::math::{lerp, lerp3, vector2::Vector2};
 
 use crate::generation::{biome_coords, positions::chunk_pos};
+
+thread_local! {
+    static F64_BUFFER_POOL: RefCell<Vec<Vec<f64>>> = const {
+        RefCell::new(Vec::new())
+    };
+}
+
+#[inline]
+fn get_buffer(len: usize) -> Box<[f64]> {
+    F64_BUFFER_POOL.with(|pool| {
+        let mut buffers = pool.borrow_mut();
+        if let Some(mut buf) = buffers.pop() {
+            if buf.len() != len {
+                buf.resize(len, 0.0);
+            } else {
+                buf.fill(0.0);
+            }
+            buf.into_boxed_slice()
+        } else {
+            vec![0.0; len].into_boxed_slice()
+        }
+    })
+}
+
+#[inline]
+fn recycle_buffer(buf: Box<[f64]>) {
+    F64_BUFFER_POOL.with(|pool| {
+        pool.borrow_mut().push(Vec::from(buf));
+    });
+}
 
 pub struct WrapperData {
     // Our relative position within the cell
@@ -136,18 +167,14 @@ impl DensityInterpolator {
         // These are all dummy values to be populated when sampling values
         Self {
             input_index,
-            start_buffer: vec![
-                0.0;
+            start_buffer: get_buffer(
                 (builder_options.vertical_cell_count + 1)
-                    * (builder_options.horizontal_cell_count + 1)
-            ]
-            .into_boxed_slice(),
-            end_buffer: vec![
-                0.0;
+                    * (builder_options.horizontal_cell_count + 1),
+            ),
+            end_buffer: get_buffer(
                 (builder_options.vertical_cell_count + 1)
-                    * (builder_options.horizontal_cell_count + 1)
-            ]
-            .into_boxed_slice(),
+                    * (builder_options.horizontal_cell_count + 1),
+            ),
             first_pass: Default::default(),
             second_pass: Default::default(),
             third_pass: Default::default(),
@@ -211,6 +238,19 @@ impl DensityInterpolator {
         mem::swap(&mut self.start_buffer, &mut self.end_buffer);
         #[cfg(debug_assertions)]
         assert_eq!(test, self.end_buffer[0]);
+    }
+}
+
+impl Drop for DensityInterpolator {
+    fn drop(&mut self) {
+        recycle_buffer(std::mem::replace(
+            &mut self.start_buffer,
+            Vec::new().into_boxed_slice(),
+        ));
+        recycle_buffer(std::mem::replace(
+            &mut self.end_buffer,
+            Vec::new().into_boxed_slice(),
+        ));
     }
 }
 
@@ -336,6 +376,15 @@ impl MutableChunkNoiseFunctionComponentImpl for FlatCache {
     }
 }
 
+impl Drop for FlatCache {
+    fn drop(&mut self) {
+        recycle_buffer(std::mem::replace(
+            &mut self.cache,
+            Vec::new().into_boxed_slice(),
+        ));
+    }
+}
+
 impl FlatCache {
     pub fn new(
         input_index: usize,
@@ -347,8 +396,7 @@ impl FlatCache {
     ) -> Self {
         Self {
             input_index,
-            cache: vec![0.0; (horizontal_biome_end + 1) * (horizontal_biome_end + 1)]
-                .into_boxed_slice(),
+            cache: get_buffer((horizontal_biome_end + 1) * (horizontal_biome_end + 1)),
             start_biome_x,
             start_biome_z,
             horizontal_biome_end,
@@ -589,13 +637,11 @@ impl CellCache {
     ) -> Self {
         Self {
             input_index,
-            cache: vec![
-                0.0;
+            cache: get_buffer(
                 build_options.horizontal_cell_block_count
                     * build_options.horizontal_cell_block_count
-                    * build_options.vertical_cell_block_count
-            ]
-            .into_boxed_slice(),
+                    * build_options.vertical_cell_block_count,
+            ),
             min_value,
             max_value,
         }

@@ -21,7 +21,7 @@ pub struct RandomPatchFeature {
 
 impl RandomPatchFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -32,16 +32,16 @@ impl RandomPatchFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let mut i = 0;
         let xz = self.xz_spread as i32 + 1;
         let y = self.y_spread as i32 + 1;
+        let mut is_some = false;
         for _ in 0..self.tries {
             let pos = Vector3::new(
                 pos.0.x + random.next_bounded_i32(xz) - random.next_bounded_i32(xz),
                 pos.0.y + random.next_bounded_i32(y) - random.next_bounded_i32(y),
                 pos.0.z + random.next_bounded_i32(xz) - random.next_bounded_i32(xz),
             );
-            if !Box::pin(self.feature.generate(
+            if !self.feature.generate(
                 chunk,
                 level,
                 block_registry,
@@ -50,13 +50,11 @@ impl RandomPatchFeature {
                 feature,
                 random,
                 BlockPos(pos),
-            ))
-            .await
-            {
+            ) {
                 continue;
             }
-            i += 1;
+            is_some = true
         }
-        i > 0
+        is_some
     }
 }

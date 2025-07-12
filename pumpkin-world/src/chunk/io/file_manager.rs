@@ -65,7 +65,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
     async fn can_remove(&self) -> bool {
         match self.internal.get() {
             Some(arc) => {
-                let _write_lock = arc.write().await;
+                // A strong count of 1 means it's only in the map
                 Arc::strong_count(arc) == 1
             }
             None => true,
@@ -240,9 +240,12 @@ where
                 }
             };
 
-            // We need to block the read to avoid other threads to write/modify the data
-            let serializer = chunk_serializer.read().await;
-            let reader = serializer.get_chunks(&chunks, send);
+            // We need to hold the read lock only for the duration of get_chunks
+            // This minimizes the time we block other operations
+            let reader = async move {
+                let serializer = chunk_serializer.read().await;
+                serializer.get_chunks(&chunks, send).await;
+            };
 
             join!(intermediary, reader);
         });

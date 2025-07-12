@@ -1,20 +1,21 @@
 use std::sync::Arc;
 
+use crate::block::pumpkin_block::{OnPlaceArgs, OnStateReplacedArgs, PlacedArgs};
+use crate::block::{
+    pumpkin_block::{NormalUseArgs, PumpkinBlock},
+    registry::BlockActionResult,
+};
 use async_trait::async_trait;
+use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::barrel::BarrelBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
-
-use crate::block::pumpkin_block::{OnStateReplacedArgs, PlacedArgs};
-use crate::block::{
-    pumpkin_block::{NormalUseArgs, PumpkinBlock},
-    registry::BlockActionResult,
-};
 
 struct BarrelScreenFactory(Arc<dyn Inventory>);
 
@@ -54,6 +55,12 @@ impl PumpkinBlock for BarrelBlock {
         }
 
         BlockActionResult::Success
+    }
+
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = BarrelLikeProperties::default(args.block);
+        props.facing = args.player.living_entity.entity.get_facing().opposite();
+        props.to_state_id(args.block)
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {

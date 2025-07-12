@@ -20,7 +20,7 @@ pub struct BambooFeature {
 
 impl BambooFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         block_registry: &dyn BlockRegistryExt,
@@ -32,10 +32,7 @@ impl BambooFeature {
     ) -> bool {
         let mut i = 0;
         if chunk.is_air(&pos.0) {
-            if block_registry
-                .can_place_at(&Block::BAMBOO, chunk, &pos, BlockDirection::Up)
-                .await
-            {
+            if block_registry.can_place_at(&Block::BAMBOO, chunk, &pos, BlockDirection::Up) {
                 let height = random.next_bounded_i32(12) + 5;
                 if random.next_f32() < self.probability {
                     let rnd = random.next_bounded_i32(4) + 1;

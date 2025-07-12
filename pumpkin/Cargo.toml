@@ -74,7 +74,6 @@ time = "0.3"
 
 # plugins
 libloading = "0.8"
-bitflags = "2.9.1"
 rustc-hash = "2.1.1"
 
 # Task handling
@@ -84,6 +83,7 @@ tokio-util = { version = "0.7.15", features = ["rt"] }
 dhat = { version = "0.3.3", optional = true }
 
 flate2 = "1.1.2"
+console-subscriber = { version = "0.4.1", optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -92,3 +92,4 @@ tempfile.workspace = true
 #https://nnethercote.github.io/dh_view/dh_view.html
 #https://valgrind.org/docs/manual/dh-manual.html
 dhat-heap = ["dep:dhat"]
+console-subscriber = ["dep:console-subscriber"]

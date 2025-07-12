@@ -1,11 +1,11 @@
 use dashmap::{DashMap, Entry};
 use log::trace;
-use num_cpus;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_data::{Block, block_properties::has_random_ticks};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -17,7 +17,7 @@ use std::{
 use tokio::{
     select,
     sync::{
-        Mutex, Notify, RwLock, Semaphore,
+        Mutex, Notify, RwLock,
         mpsc::{self, UnboundedReceiver},
     },
     task::JoinHandle,
@@ -71,13 +71,16 @@ pub struct Level {
     world_gen: Arc<dyn WorldGenerator>,
 
     /// Semaphore to limit concurrent chunk generation tasks
-    chunk_generation_semaphore: Arc<Semaphore>,
+    //chunk_generation_semaphore: Arc<Semaphore>,
     /// Map to deduplicate chunk generation and avoid DashMap write lock
     chunk_generation_locks: Arc<Mutex<HashMap<Vector2<i32>, Arc<Notify>>>>,
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
     pub shutdown_notifier: Notify,
+
+    /// Pool of threads for world generation
+    world_gen_pool: Arc<ThreadPool>,
 }
 
 pub struct TickData {
@@ -151,8 +154,14 @@ impl Level {
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             // Limits concurrent chunk generation tasks to 2x the number of CPUs
-            chunk_generation_semaphore: Arc::new(Semaphore::new(num_cpus::get())),
+            //chunk_generation_semaphore: Arc::new(Semaphore::new(num_cpus::get())),
             chunk_generation_locks: Arc::new(Mutex::new(HashMap::new())),
+            world_gen_pool: Arc::new(
+                ThreadPoolBuilder::new()
+                    //.num_threads((num_cpus::get() - 1).min(1))
+                    .build()
+                    .unwrap(),
+            ),
         }
     }
 
@@ -396,14 +405,7 @@ impl Level {
         };
         let mut rng = SmallRng::from_os_rng();
         for chunk in self.loaded_chunks.iter() {
-            use tokio::time::{Duration, timeout};
-            let mut chunk = match timeout(Duration::from_millis(1), chunk.write()).await {
-                Ok(chunk_guard) => chunk_guard,
-                Err(_) => {
-                    log::info!("Chunk {:?} took too long to lock, skipping", chunk.key());
-                    continue;
-                }
-            };
+            let mut chunk = chunk.write().await;
             ticks.block_ticks.extend(chunk.get_and_tick_block_ticks());
             ticks.fluid_ticks.extend(chunk.get_and_tick_fluid_ticks());
             let chunk = chunk.downgrade();
@@ -777,7 +779,8 @@ impl Level {
         let world_gen = self.world_gen.clone();
         let block_registry = self.block_registry.clone();
         let self_clone = self.clone();
-        let chunk_generation_semaphore = self.chunk_generation_semaphore.clone();
+        //let chunk_generation_semaphore = self.chunk_generation_semaphore.clone();
+        let world_gen_pool = self.world_gen_pool.clone();
         let handle_generate = async move {
             let continue_to_generate = Arc::new(AtomicBool::new(true));
             while let Some(pos) = generate_bridge_recv.recv().await {
@@ -791,56 +794,83 @@ impl Level {
                 let cloned_continue_to_generate = continue_to_generate.clone();
                 let block_registry = block_registry.clone();
                 let self_clone = self_clone.clone();
-                let semaphore = chunk_generation_semaphore.clone();
 
-                tokio::spawn(async move {
-                    // Acquire a permit from the semaphore to limit concurrent generation
-                    let _permit = semaphore.acquire().await.expect("Semaphore closed");
-
-                    // Rayon tasks are queued, so also check it here
-                    if !cloned_continue_to_generate.load(Ordering::Relaxed) {
-                        return;
+                let notify = {
+                    let mut locks = self_clone.chunk_generation_locks.lock().await;
+                    if let Some(existing) = locks.get(&pos) {
+                        Some(existing.clone())
+                    } else {
+                        let notify = Arc::new(Notify::new());
+                        locks.insert(pos, notify.clone());
+                        None
                     }
+                };
 
-                    let result = {
-                        // Deduplicate chunk generation using chunk_generation_locks
-                        let notify = {
-                            let mut locks = self_clone.chunk_generation_locks.lock().await;
-                            if let Some(existing) = locks.get(&pos) {
-                                Some(existing.clone())
-                            } else {
-                                let notify = Arc::new(Notify::new());
-                                locks.insert(pos, notify.clone());
-                                None
-                            }
-                        };
-                        if let Some(notify) = notify {
-                            // Wait for the chunk to be generated by another task
-                            notify.notified().await;
-                            // After being notified, the chunk should be in loaded_chunks
-                            loaded_chunks.get(&pos).unwrap().clone()
-                        } else {
+                if let Some(notify) = notify {
+                    // Wait for the chunk to be generated by another task
+                    notify.notified().await;
+                    // After being notified, the chunk should be in loaded_chunks
+                    // However, it might have been unloaded between notification and access
+                    if let Some(chunk) = loaded_chunks.get(&pos) {
+                        let chunk = chunk.clone();
+                        if !send_chunk(true, chunk, &channel) {
+                            // Stop any additional queued generations
+                            cloned_continue_to_generate.store(false, Ordering::Relaxed);
+                        }
+                    } else {
+                        // Chunk was unloaded after notification, skip this iteration
+                        // The chunk generation will be retried if needed
+                        log::info!("Chunk at {pos:?} was unloaded after generation notification");
+                    }
+                } else {
+                    //let _permit = chunk_generation_semaphore
+                    //    .acquire()
+                    //    .await
+                    //    .expect("Semaphore closed");
+                    let handle = tokio::runtime::Handle::current();
+                    world_gen_pool.spawn(move || {
+                        // Acquire a permit from the semaphore to limit concurrent generation
+
+                        // Rayon tasks are queued, so also check it here
+                        if !cloned_continue_to_generate.load(Ordering::Relaxed) {
+                            return;
+                        }
+
+                        let result = {
+                            // Deduplicate chunk generation using chunk_generation_locks
+
                             // We are responsible for generating the chunk
-                            let generated_chunk = world_gen
-                                .generate_chunk(&self_clone, block_registry.as_ref(), &pos)
-                                .await;
+                            let generated_chunk = world_gen.generate_chunk(
+                                &self_clone,
+                                block_registry.as_ref(),
+                                &pos,
+                            );
                             let arc_chunk = Arc::new(RwLock::new(generated_chunk));
                             loaded_chunks.insert(pos, arc_chunk.clone());
-                            // Remove the notify and wake up any waiters
-                            let notify = {
-                                let mut locks = self_clone.chunk_generation_locks.lock().await;
-                                locks.remove(&pos).unwrap()
-                            };
-                            notify.notify_waiters();
-                            arc_chunk
-                        }
-                    };
 
-                    if !send_chunk(true, result, &channel) {
-                        // Stop any additional queued generations
-                        cloned_continue_to_generate.store(false, Ordering::Relaxed);
-                    }
-                });
+                            // Store the notify for later removal
+                            (arc_chunk, pos)
+                        };
+
+                        // Remove the notify and wake up any waiters
+                        // Do this outside the rayon thread to avoid deadlock
+                        let (arc_chunk, pos) = result;
+                        {
+                            let self_clone = self_clone.clone();
+                            handle.spawn(async move {
+                                let mut locks = self_clone.chunk_generation_locks.lock().await;
+                                if let Some(notify) = locks.remove(&pos) {
+                                    notify.notify_waiters();
+                                }
+                            });
+                        }
+
+                        if !send_chunk(true, arc_chunk, &channel) {
+                            // Stop any additional queued generations
+                            cloned_continue_to_generate.store(false, Ordering::Relaxed);
+                        }
+                    });
+                }
             }
         };
 
@@ -943,7 +973,7 @@ impl Level {
         };
 
         let loaded_chunks = self.loaded_entity_chunks.clone();
-        let chunk_generation_semaphore = self.chunk_generation_semaphore.clone();
+        //let chunk_generation_semaphore = self.chunk_generation_semaphore.clone();
         let handle_generate = async move {
             let continue_to_generate = Arc::new(AtomicBool::new(true));
             while let Some(pos) = generate_bridge_recv.recv().await {
@@ -954,11 +984,11 @@ impl Level {
                 let loaded_chunks = loaded_chunks.clone();
                 let channel = channel.clone();
                 let cloned_continue_to_generate = continue_to_generate.clone();
-                let semaphore = chunk_generation_semaphore.clone();
+                //let semaphore = chunk_generation_semaphore.clone();
 
                 tokio::spawn(async move {
                     // Acquire a permit from the semaphore to limit concurrent generation
-                    let _permit = semaphore.acquire().await.expect("Semaphore closed");
+                    //let _permit = semaphore.acquire().await.expect("Semaphore closed");
 
                     // Rayon tasks are queued, so also check it here
                     if !cloned_continue_to_generate.load(Ordering::Relaxed) {

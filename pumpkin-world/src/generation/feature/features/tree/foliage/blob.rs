@@ -15,7 +15,7 @@ pub struct BlobFoliagePlacer {
 
 impl BlobFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -38,8 +38,7 @@ impl BlobFoliagePlacer {
                 y,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
         }
     }
 
