@@ -696,9 +696,11 @@ impl World {
             );
 
         // log::debug!("spawning list size {}", spawn_list.len());
-        log::debug!("spawning counter {spawn_state:?}");
+        log::debug!("spawning counter {:?}", spawn_state.mob_category_counts);
 
         spawning_chunks.shuffle(&mut rng());
+
+        // TODO i think it can be multithread
         for (pos, chunk) in spawning_chunks {
             self.tick_spawning_chunk(&pos, &chunk, &spawn_list, &mut spawn_state)
                 .await;

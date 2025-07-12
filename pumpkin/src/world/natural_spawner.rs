@@ -4,12 +4,14 @@ use pumpkin_data::biome::{Biome, Spawner};
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::{BlockDirection, BlockState};
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::chunk::ChunkData;
+use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting};
 use rand::seq::IndexedRandom;
 use rand::{Rng, rng};
 use std::collections::HashMap;
@@ -19,10 +21,10 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-const MAGIC_NUMBER: i32 = 17i32.pow(2);
+const MAGIC_NUMBER: i32 = 17 * 17;
 
 #[derive(Default, Debug)]
-struct MobCounts([i32; 8]);
+pub struct MobCounts([i32; 8]);
 
 impl MobCounts {
     #[inline]
@@ -158,7 +160,7 @@ impl PotentialCalculator {
 
 pub struct SpawnState {
     spawnable_chunk_count: i32,
-    mob_category_counts: MobCounts,
+    pub mob_category_counts: MobCounts,
     spawn_potential: PotentialCalculator,
     local_mob_cap_calculator: LocalMobCapCalculator,
     // unmodifiable_mob_category_counts: MobCounts, seems only for debug
@@ -318,13 +320,32 @@ pub async fn spawn_for_chunk(
             .await
         {
             let random_pos = get_random_pos_within(world, chunk_pos, chunk).await;
-            if random_pos.0.y >= 1 {
-                // TODO get min_y
+            // debug!("try random pos: {:?}", random_pos);
+            if random_pos.0.y > get_world_min_y(world) {
                 spawn_category_for_position(category, world, random_pos, chunk_pos, spawn_state)
                     .await;
             }
         }
     }
+}
+
+pub fn get_world_min_y(world: &Arc<World>) -> i32 {
+    i32::from(
+        match world.dimension_type {
+            VanillaDimensionType::Overworld => GENERATION_SETTINGS
+                .get(&GeneratorSetting::Overworld)
+                .unwrap(),
+            VanillaDimensionType::OverworldCaves => todo!(),
+            VanillaDimensionType::TheEnd => {
+                GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap()
+            }
+            VanillaDimensionType::TheNether => {
+                GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
+            }
+        }
+        .shape
+        .min_y,
+    )
 }
 
 pub async fn get_random_pos_within(
@@ -335,8 +356,8 @@ pub async fn get_random_pos_within(
     let x = (chunk_pos.x << 4) + rng().random_range(0..16);
     let z = (chunk_pos.y << 4) + rng().random_range(0..16);
     let temp_y = world.get_top_block(Vector2::new(x, z)).await + 1; // TODO chunk.getHeight(Heightmap.Types.WORLD_SURFACE, i, j) + 1
-    let min_y = 0;
-    let y = rng().random_range(min_y..=temp_y); //TODO get min_y
+    let min_y = get_world_min_y(world);
+    let y = rng().random_range(min_y..=temp_y);
     BlockPos::new(x, y, z)
 }
 
@@ -365,6 +386,7 @@ pub async fn spawn_category_for_position(
             let new_pos_center = new_pos.to_centered_f64();
             let player_distance = get_nearest_player(&new_pos_center, world).await;
             if player_distance == f64::MAX {
+                // debug!("player_distance infinity");
                 return;
             }
             if !is_right_distance_to_player_and_spawn_point(
@@ -373,10 +395,12 @@ pub async fn spawn_category_for_position(
                 world,
                 chunk_pos,
             ) {
+                // debug!("{new_pos:?} failed, too near to player or spawn point dst: {player_distance}");
                 inc += 1;
                 continue;
             }
             let Some(spawner) = get_random_spawn_mob_at(category, &new_pos) else {
+                // debug!("{new_pos:?} failed, no random spawn mob at category: {category:?}");
                 break 'outer;
             };
             random_group_size = rng().random_range(spawner.min_count..=spawner.max_count);
@@ -389,9 +413,14 @@ pub async fn spawn_category_for_position(
                 entity_type,
                 player_distance,
             )
-                .await
-                || !spawn_state.can_spawn(entity_type, &new_pos, world)
+            .await
             {
+                // debug!("{new_pos:?} failed, not valid spawn position");
+                inc += 1;
+                continue;
+            }
+            if !spawn_state.can_spawn(entity_type, &new_pos, world) {
+                // debug!("{new_pos:?} failed, can't spawn at");
                 inc += 1;
                 continue;
             }
@@ -440,16 +469,16 @@ pub fn is_right_distance_to_player_and_spawn_point(
     _world: &Arc<World>,
     chunk_pos: &Vector2<i32>,
 ) -> bool {
-    if distance <= 24. {
+    if distance <= 24. * 24. {
         return false;
     }
     // TODO getSharedSpawnPos/WorldSpawnPoint
-    if pos.to_centered_f64().squared_distance_to(0., 0., 0.) <= 24. {
+    if pos.to_centered_f64().squared_distance_to(0., 0., 0.) <= 24. * 24. {
         return false;
     }
-    #[allow(clippy::nonminimal_bool)]
+    #[allow(clippy::overly_complex_bool_expr)]
     {
-        chunk_pos == &Vector2::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)) || false // TODO canSpawnEntitiesInChunk(ChunkPos chunkPos)
+        chunk_pos == &Vector2::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)) || true // TODO canSpawnEntitiesInChunk(ChunkPos chunkPos)
     }
 }
 
@@ -481,7 +510,7 @@ pub fn get_random_spawn_mob_at(
             id if id == MobCategory::MISC.id => biome.spawners.misc,
             _ => panic!(),
         }
-            .choose(&mut rng())
+        .choose(&mut rng())
     }
 }
 
@@ -496,7 +525,9 @@ pub async fn is_valid_spawn_position_for_type(
     // TODO level.noCollision(entityType.getSpawnAABB(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5))
     !(category == &MobCategory::MISC
         || (!entity_type.can_spawn_far_from_player
-        && distance > f64::from(entity_type.category.despawn_distance))
+            && distance
+                > f64::from(entity_type.category.despawn_distance)
+                    * f64::from(entity_type.category.despawn_distance))
         || !entity_type.summonable
         || !is_spawn_position_ok(world, block_pos, entity_type).await)
 }
