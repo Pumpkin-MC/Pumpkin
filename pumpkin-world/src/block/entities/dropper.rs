@@ -76,7 +76,7 @@ impl DropperBlockEntity {
         for i in &self.items {
             let item = i.lock().await;
             if !item.is_empty() {
-                if rng().random_range(0..=j) == 0 {
+                if rng().random_range(0..j) == 0 {
                     ret = Some(item);
                 }
                 j += 1;

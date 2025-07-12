@@ -54,7 +54,7 @@ impl DefaultNameArgConsumer for SummonableEntitiesArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for SummonableEntitiesArgumentConsumer {
-    type Data = EntityType;
+    type Data = &'static EntityType;
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

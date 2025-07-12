@@ -29,7 +29,7 @@ impl TNTBlock {
             Uuid::new_v4(),
             world.clone(),
             location.to_f64(),
-            EntityType::TNT,
+            &EntityType::TNT,
             false,
         );
         let pos = entity.pos.load();
@@ -81,7 +81,7 @@ impl PumpkinBlock for TNTBlock {
             Uuid::new_v4(),
             args.world.clone(),
             args.position.to_f64(),
-            EntityType::TNT,
+            &EntityType::TNT,
             false,
         );
         let angle = rand::random::<f64>() * std::f64::consts::TAU;

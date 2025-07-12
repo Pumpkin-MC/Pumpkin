@@ -27,6 +27,13 @@ impl<T: Math + Copy> Vector2<T> {
         }
     }
 
+    pub fn add_raw(&self, x: T, y: T) -> Self {
+        Vector2 {
+            x: self.x + x,
+            y: self.y + y,
+        }
+    }
+
     pub fn sub(&self, other: &Vector2<T>) -> Self {
         Vector2 {
             x: self.x - other.x,
