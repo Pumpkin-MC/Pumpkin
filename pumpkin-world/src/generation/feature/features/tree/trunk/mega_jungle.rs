@@ -22,7 +22,7 @@ pub struct MegaJungleTrunkPlacer;
 
 impl MegaJungleTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
@@ -43,8 +43,7 @@ impl MegaJungleTrunkPlacer {
             force_dirt,
             dirt_state,
             trunk_block,
-        )
-        .await;
+        );
         let mut i = height as i32 - 2 - random.next_bounded_i32(4);
 
         let mut j_val = 0;

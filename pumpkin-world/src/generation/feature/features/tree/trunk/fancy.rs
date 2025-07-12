@@ -24,7 +24,7 @@ pub struct FancyTrunkPlacer;
 
 impl FancyTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
@@ -69,8 +69,7 @@ impl FancyTrunkPlacer {
                     block_pos_2.0,
                     trunk_block,
                     false,
-                )
-                .await;
+                );
                 logs.extend_from_slice(&new_logs);
 
                 if !i {
@@ -91,8 +90,7 @@ impl FancyTrunkPlacer {
                     block_pos.0,
                     trunk_block,
                     false,
-                )
-                .await;
+                );
                 logs.extend_from_slice(&new_logs);
 
                 if !i {
@@ -109,9 +107,8 @@ impl FancyTrunkPlacer {
             start_pos.up_height(k).0,
             trunk_block,
             true,
-        )
-        .await;
-        Self::make_branches(chunk, level, j, start_pos.0, trunk_block, &list).await;
+        );
+        Self::make_branches(chunk, level, j, start_pos.0, trunk_block, &list);
 
         let mut list_2: Vec<TreeNode> = Vec::new();
         for branch_position in list {
@@ -122,7 +119,7 @@ impl FancyTrunkPlacer {
         (list_2, logs)
     }
 
-    async fn make_or_check_branch(
+    fn make_or_check_branch(
         chunk: &mut ProtoChunk<'_>,
         _level: &Arc<Level>,
         start_pos: Vector3<i32>,
@@ -192,7 +189,7 @@ impl FancyTrunkPlacer {
         (true, logs)
     }
 
-    async fn make_branches(
+    fn make_branches(
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
         tree_height: i32,
@@ -215,8 +212,7 @@ impl FancyTrunkPlacer {
                 branch_position.node.center.0,
                 trunk_provider,
                 true,
-            )
-            .await;
+            );
         }
     }
 

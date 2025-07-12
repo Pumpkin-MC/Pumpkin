@@ -18,7 +18,7 @@ pub struct MegaPineFoliagePlacer {
 
 impl MegaPineFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -51,8 +51,7 @@ impl MegaPineFoliagePlacer {
                 0,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
             current = rad;
         }
     }
