@@ -6,18 +6,25 @@ use pumpkin_inventory::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{block::entities::furnace::FurnaceBlockEntity, inventory::Inventory};
+use pumpkin_world::{
+    block::entities::{BlockEntity, furnace::FurnaceBlockEntity},
+    inventory::Inventory,
+};
 use tokio::sync::Mutex;
 
 use crate::block::pumpkin_block::PumpkinBlock;
 
 struct FurnaceScreenFactory {
     inventory: Arc<dyn Inventory>,
+    furnace_block_entity: Arc<dyn BlockEntity>,
 }
 
 impl FurnaceScreenFactory {
-    fn new(inventory: Arc<dyn Inventory>) -> Self {
-        Self { inventory }
+    fn new(inventory: Arc<dyn Inventory>, furnace_block_entity: Arc<dyn BlockEntity>) -> Self {
+        Self {
+            inventory,
+            furnace_block_entity,
+        }
     }
 }
 
@@ -33,6 +40,7 @@ impl ScreenHandlerFactory for FurnaceScreenFactory {
             sync_id,
             player_inventory,
             self.inventory.clone(),
+            self.furnace_block_entity.clone(),
         ))))
     }
 
@@ -51,8 +59,8 @@ impl PumpkinBlock for FurnaceBlock {
         args: crate::block::pumpkin_block::NormalUseArgs<'_>,
     ) -> crate::block::registry::BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(inventory) = block_entity.get_inventory() {
-                let furnace_screen_factory = FurnaceScreenFactory::new(inventory);
+            if let Some(inventory) = block_entity.clone().get_inventory() {
+                let furnace_screen_factory = FurnaceScreenFactory::new(inventory, block_entity);
                 args.player
                     .open_handled_screen(&furnace_screen_factory)
                     .await;
@@ -67,8 +75,8 @@ impl PumpkinBlock for FurnaceBlock {
         args: crate::block::pumpkin_block::UseWithItemArgs<'_>,
     ) -> crate::block::registry::BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(inventory) = block_entity.get_inventory() {
-                let furnace_screen_factory = FurnaceScreenFactory::new(inventory);
+            if let Some(inventory) = block_entity.clone().get_inventory() {
+                let furnace_screen_factory = FurnaceScreenFactory::new(inventory, block_entity);
                 args.player
                     .open_handled_screen(&furnace_screen_factory)
                     .await;
@@ -175,4 +183,3 @@ impl PumpkinBlock for FurnaceBlock {
         None
     }
 }
-

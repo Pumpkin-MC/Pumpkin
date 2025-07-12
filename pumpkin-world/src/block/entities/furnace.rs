@@ -142,6 +142,25 @@ impl FurnaceBlockEntity {
 
         false
     }
+
+    pub async fn get_cook_progress(&self) -> f32 {
+        let current = self.cooking_time_spent.load(Ordering::Relaxed) as i32;
+        let total = self.cooking_total_time.load(Ordering::Relaxed) as i32;
+
+        if total != 0 && current != 0 {
+            (current as f32 / total as f32).clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    }
+
+    pub async fn get_fuel_progress(&self) -> f32 {
+        let remaining = self.lit_time_remaining.load(Ordering::Relaxed) as i32;
+        let total = self.lit_total_time.load(Ordering::Relaxed) as i32;
+        let adjusted_total = if total == 0 { 200 } else { total };
+
+        (remaining as f32 / adjusted_total as f32).clamp(0.0, 1.0)
+    }
 }
 
 #[async_trait]

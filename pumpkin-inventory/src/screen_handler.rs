@@ -34,6 +34,14 @@ pub struct ScreenProperty {
 }
 
 impl ScreenProperty {
+    pub fn new(value: i32) -> Self {
+        Self {
+            _old_value: i32::default(),
+            _index: u8::default(),
+            value,
+        }
+    }
+
     pub fn get(&self) -> i32 {
         self.value
     }
