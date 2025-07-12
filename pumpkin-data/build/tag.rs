@@ -3,6 +3,10 @@ use std::{collections::HashMap, fs};
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
+use crate::biome::Biome;
+use crate::block::BlockAssets;
+use crate::fluid::Fluid;
+use crate::item::Item;
 
 pub struct EnumCreator {
     pub name: String,
@@ -29,19 +33,43 @@ impl ToTokens for EnumCreator {
 }
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/tags.json");
+    println!("cargo:rerun-if-changed=../assets/blocks.json");
+    println!("cargo:rerun-if-changed=../assets/items.json");
+    println!("cargo:rerun-if-changed=../assets/biome.json");
+    println!("cargo:rerun-if-changed=../assets/fluids.json");
 
     let tags: HashMap<String, HashMap<String, Vec<String>>> =
         serde_json::from_str(&fs::read_to_string("../assets/tags.json").unwrap())
             .expect("Failed to parse tags.json");
+
+    let blocks_assets: BlockAssets =
+        serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
+            .expect("Failed to parse blocks.json");
+
+    let items: HashMap<String, Item> =
+        serde_json::from_str(&fs::read_to_string("../assets/items.json").unwrap())
+            .expect("Failed to parse items.json");
+
+    let biomes: HashMap<String, Biome> =
+        serde_json::from_str(&fs::read_to_string("../assets/biome.json").unwrap())
+            .expect("Failed to parse biome.json");
+
+    let fluids: Vec<Fluid> =
+        match serde_json::from_str(&fs::read_to_string("../assets/fluids.json").unwrap()) {
+            Ok(fluids) => fluids,
+            Err(e) => panic!("Failed to parse fluids.json: {e}"),
+        };
+
     let registry_key_enum = EnumCreator {
         name: "RegistryKey".to_string(),
         value: tags.keys().map(|key| key.to_string()).collect(),
     }
-    .to_token_stream();
+        .to_token_stream();
 
     // Generate tag arrays for each registry key
     let mut tag_dicts = Vec::new();
-    let mut match_arms = Vec::new();
+    let mut match_arms_value = Vec::new();
+    let mut match_arms_id = Vec::new();
     let mut match_arms_tags_all = Vec::new();
     let mut tag_identifiers = Vec::new();
 
@@ -57,27 +85,54 @@ pub(crate) fn build() -> TokenStream {
             tag_values.push((tag_name.clone(), values.clone()));
         }
 
+        tag_values.sort();
+
         // Generate the static array of tag values
         let tag_array_entries = tag_values
             .iter()
             .map(|(tag_name, values)| {
                 let tag_values_array = values.iter().map(|v| quote! { #v }).collect::<Vec<_>>();
+                let tag_id_array = match tag_name {
+                    t if t == "worldgen/biome" => values.iter().map(|v| {
+                        let id = biomes.get(v).unwrap().id;
+                        quote! { #id }
+                    }).collect::<Vec<_>>(),
+                    t if t == "fluid" => values.iter().map(|v| {
+                        let id = fluids.iter().find(|i| { &i.name == v }).unwrap().id;
+                        quote! { #id }
+                    }).collect::<Vec<_>>(),
+                    t if t == "item" => values.iter().map(|v| {
+                        let id = items.get(v).unwrap().id;
+                        quote! { #id }
+                    }).collect::<Vec<_>>(),
+                    t if t == "block" => values.iter().map(|v| {
+                        let id = blocks_assets.blocks.iter().find(|i| { &i.name == v }).unwrap().id;
+                        quote! { #id }
+                    }).collect::<Vec<_>>(),
+                    &_ => Vec::new(),
+                };
                 quote! {
-                    #tag_name => &[#(#tag_values_array),*]
+                    #tag_name => (&[#(#tag_values_array),*], &[#(#tag_id_array),*])
                 }
             })
             .collect::<Vec<_>>();
         // Add the static array declaration
         tag_dicts.push(quote! {
-            static #dict_name: phf::Map<&str, &[&str]> = phf::phf_map! {
+            static #dict_name: phf::Map<&str, (&[&str], &[u16])> = phf::phf_map! {
                 #(#tag_array_entries),*
             };
         });
 
         // Add match arm for this registry key
-        match_arms.push(quote! {
+        match_arms_value.push(quote! {
             RegistryKey::#key_pascal => {
-                #dict_name.get(tag).copied()
+                #dict_name.get(tag).map(|i| i.0)
+            }
+        });
+
+        match_arms_id.push(quote! {
+            RegistryKey::#key_pascal => {
+                #dict_name.get(tag).map(|i| i.1 )
             }
         });
 
@@ -110,11 +165,17 @@ pub(crate) fn build() -> TokenStream {
 
         pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&'static [&'static str]> {
             match tag_category {
-                #(#match_arms),*
+                #(#match_arms_value),*
             }
         }
 
-        pub fn get_registry_key_tags(tag_category: &RegistryKey) -> &phf::Map<&'static str, &'static [&'static str]> {
+        pub fn get_tag_ids(tag_category: RegistryKey, tag: &str) -> Option<&'static [u16]> {
+            match tag_category {
+                #(#match_arms_id),*
+            }
+        }
+
+        pub fn get_registry_key_tags(tag_category: &RegistryKey) -> &phf::Map<&'static str, (&'static [&'static str], &'static [u16])> {
             match tag_category {
                 #(#match_arms_tags_all),*
             }
@@ -123,12 +184,14 @@ pub(crate) fn build() -> TokenStream {
         pub trait Tagable {
             fn tag_key() -> RegistryKey;
             fn registry_key(&self) -> &str;
+            fn registry_id(&self) -> u16;
 
             /// Returns `None` if the tag does not exist.
+            #[doc = r" Returns `None` if the tag does not exist."]
             fn is_tagged_with(&self, tag: &str) -> Option<bool> {
                 let tag = tag.strip_prefix("#").unwrap_or(tag);
-                let items = get_tag_values(Self::tag_key(), tag)?;
-                Some(items.iter().any(|elem| *elem == self.registry_key()))
+                let items = get_tag_ids(Self::tag_key(), tag)?;
+                Some(items.contains(&self.registry_id()))
             }
 
             fn get_tag_values(tag: &str) -> Option<&'static [&'static str]> {

@@ -52,6 +52,11 @@ impl Tagable for Block {
     fn registry_key(&self) -> &str {
         self.name
     }
+
+    #[inline]
+    fn registry_id(&self) -> u16 {
+        self.id
+    }
 }
 
 impl ToResourceLocation for &'static Block {
