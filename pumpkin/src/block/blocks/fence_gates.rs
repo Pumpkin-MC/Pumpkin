@@ -6,6 +6,7 @@ use crate::block::pumpkin_block::OnPlaceArgs;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::tag;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
@@ -104,8 +105,8 @@ async fn is_in_wall(args: &GetStateForNeighborUpdateArgs<'_>) -> FenceGateProper
         let neighbor_right = args.world.get_block(&side_offset_right).await;
         let neighbor_left = args.world.get_block(&side_offset_left).await;
 
-        fence_props.in_wall = neighbor_left.is_tagged_with("minecraft:walls").unwrap()
-            || neighbor_right.is_tagged_with("minecraft:walls").unwrap();
+        fence_props.in_wall = neighbor_left.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WALLS)
+            || neighbor_right.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WALLS);
     }
 
     fence_props

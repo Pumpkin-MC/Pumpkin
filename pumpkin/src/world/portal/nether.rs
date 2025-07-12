@@ -3,6 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
+    tag,
     tag::Tagable,
 };
 use pumpkin_util::math::position::BlockPos;
@@ -242,7 +243,7 @@ impl NetherPortal {
     /// What is allowed to be inside the Portal frame
     fn valid_state_inside_portal(block: &Block, state: &BlockState) -> bool {
         state.is_air()
-            || block.is_tagged_with("minecraft:fire").unwrap()
+            || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_FIRE)
             || block == &Block::NETHER_PORTAL
     }
 }

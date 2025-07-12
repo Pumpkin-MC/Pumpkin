@@ -3,6 +3,7 @@ use pumpkin_data::{
     block_properties::{
         BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1, get_state_by_state_id,
     },
+    tag,
     tag::Tagable,
 };
 use pumpkin_util::{
@@ -44,7 +45,10 @@ impl BambooFeature {
                                 z,
                             );
                             let block = chunk.get_block_state(&block_below.0);
-                            if !block.to_block().is_tagged_with("minecraft:dirt").unwrap() {
+                            if !block
+                                .to_block()
+                                .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)
+                            {
                                 continue;
                             }
                             chunk.set_block_state(&block_below.0, Block::PODZOL.default_state);

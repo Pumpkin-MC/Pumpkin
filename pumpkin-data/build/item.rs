@@ -369,6 +369,11 @@ pub(crate) fn build() -> TokenStream {
             fn registry_key(&self) -> &str {
                 self.registry_key
             }
+
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id
+            }
         }
     }
 }

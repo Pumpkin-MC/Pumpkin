@@ -5,6 +5,7 @@ use pumpkin_data::{
     block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
     item::Item,
     sound::{Sound, SoundCategory},
+    tag,
     tag::Tagable,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
@@ -81,8 +82,7 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
             .lock()
             .await
             .get_item()
-            .is_tagged_with("minecraft:bookshelf_books")
-            .unwrap_or(false)
+            .is_tagged_with_by_tag(&tag::Item::MINECRAFT_BOOKSHELF_BOOKS)
         {
             return BlockActionResult::PassToDefault;
         }

@@ -316,9 +316,9 @@ struct Property {
 }
 
 #[derive(Deserialize, Clone)]
-struct Fluid {
-    name: String,
-    id: u16,
+pub struct Fluid {
+    pub name: String,
+    pub id: u16,
     properties: Vec<Property>,
     default_state_index: u16,
     states: Vec<FluidState>,
@@ -798,6 +798,11 @@ pub(crate) fn build() -> TokenStream {
             #[inline]
             fn registry_key(&self) -> &str {
                 self.name
+            }
+
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id
             }
         }
 
