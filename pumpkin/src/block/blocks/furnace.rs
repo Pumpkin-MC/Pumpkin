@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::block_properties::{BlockProperties, FurnaceLikeProperties};
 use pumpkin_inventory::{
     furnace::furnace_screen_handler::FurnaceScreenHandler, screen_handler::ScreenHandlerFactory,
 };
@@ -108,7 +109,15 @@ impl PumpkinBlock for FurnaceBlock {
         &self,
         args: crate::block::pumpkin_block::OnPlaceArgs<'_>,
     ) -> pumpkin_world::BlockStateId {
-        args.block.default_state.id
+        let mut props = FurnaceLikeProperties::default(args.block);
+        props.facing = args
+            .player
+            .living_entity
+            .entity
+            .get_horizontal_facing()
+            .opposite();
+
+        props.to_state_id(args.block)
     }
 
     async fn random_tick(&self, _args: crate::block::pumpkin_block::RandomTickArgs<'_>) {}

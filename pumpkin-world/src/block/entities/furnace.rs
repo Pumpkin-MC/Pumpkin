@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use log::info;
 use pumpkin_data::{
     Block,
+    block_properties::{BlockProperties, FurnaceLikeProperties},
     fuels::get_item_burn_ticks,
     item::Item,
     recipes::{CookingRecipe, CookingRecipeType, RECIPES_COOKING},
@@ -249,11 +250,18 @@ impl BlockEntity for FurnaceBlockEntity {
         if is_burning != self.is_burning() {
             is_dirty = true;
             let world = world.clone();
+
+            let (furnace_block, furnace_block_state) =
+                world.get_block_and_block_state(&self.position).await;
+            let mut props =
+                FurnaceLikeProperties::from_state_id(furnace_block_state.id, furnace_block);
+
             if self.is_burning() {
+                props.lit = true;
                 world
                     .set_block_state(
                         &self.position,
-                        Block::FURNACE.states[2].id,
+                        props.to_state_id(furnace_block),
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
@@ -261,7 +269,7 @@ impl BlockEntity for FurnaceBlockEntity {
                 world
                     .set_block_state(
                         &self.position,
-                        Block::FURNACE.default_state.id,
+                        props.to_state_id(furnace_block),
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
