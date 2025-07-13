@@ -28,6 +28,11 @@ mod sound_enum;
 #[path = "generated/recipes.rs"]
 pub mod recipes;
 
+#[rustfmt::skip]
+#[path = "generated/data_component.rs"]
+pub mod data_component;
+pub mod data_component_impl;
+
 pub mod sound {
     pub use crate::sound_category::*;
     pub use crate::sound_enum::*;

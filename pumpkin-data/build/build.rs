@@ -9,6 +9,7 @@ mod block;
 mod chunk_status;
 mod composter_increase_chance;
 mod damage_type;
+mod data_component;
 mod enchantments;
 mod entity_pose;
 mod entity_status;
@@ -79,6 +80,7 @@ pub fn main() {
         (recipes::build, "recipes.rs"),
         (enchantments::build, "enchantment.rs"),
         (fuels::build, "fuels.rs"),
+        (data_component::build, "data_component.rs"),
     ];
 
     build_functions.par_iter().for_each(|(build_fn, file)| {
