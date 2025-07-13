@@ -22,7 +22,7 @@ use crate::{
     world::{BlockFlags, SimpleWorld},
 };
 
-use super::BlockEntity;
+use super::{BlockEntity, PropertyDelegate};
 
 #[derive(Debug)]
 pub struct FurnaceBlockEntity {
@@ -335,6 +335,10 @@ impl BlockEntity for FurnaceBlockEntity {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
+        Some(self as Arc<dyn PropertyDelegate>)
+    }
 }
 
 impl FurnaceBlockEntity {
@@ -416,5 +420,34 @@ impl Clearable for FurnaceBlockEntity {
         for slot in self.items.iter() {
             *slot.lock().await = ItemStack::EMPTY;
         }
+    }
+}
+
+impl PropertyDelegate for FurnaceBlockEntity {
+    fn get_property(&self, index: i32) -> i32 {
+        let value = match index {
+            0 => self.lit_time_remaining.load(Ordering::Relaxed),
+            1 => self.lit_total_time.load(Ordering::Relaxed),
+            2 => self.cooking_time_spent.load(Ordering::Relaxed),
+            3 => self.cooking_total_time.load(Ordering::Relaxed),
+            _ => 0,
+        };
+
+        value as i32
+    }
+
+    fn set_property(&self, index: i32, value: i32) {
+        let value = value as u16;
+        match index {
+            0 => self.lit_time_remaining.store(value, Ordering::Relaxed),
+            1 => self.lit_total_time.store(value, Ordering::Relaxed),
+            2 => self.cooking_time_spent.store(value, Ordering::Relaxed),
+            3 => self.cooking_total_time.store(value, Ordering::Relaxed),
+            _ => {}
+        }
+    }
+
+    fn get_properties_size(&self) -> i32 {
+        4
     }
 }

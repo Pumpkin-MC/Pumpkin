@@ -14,8 +14,11 @@ use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
 use crate::{
-    block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
-    block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
+    block::entities::{
+        chiseled_bookshelf::ChiseledBookshelfBlockEntity, dropper::DropperBlockEntity,
+    },
+    inventory::Inventory,
+    world::SimpleWorld,
 };
 
 pub mod barrel;
@@ -66,6 +69,9 @@ pub trait BlockEntity: Send + Sync {
         false
     }
     fn as_any(&self) -> &dyn Any;
+    fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
+        None
+    }
 }
 
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
@@ -108,4 +114,10 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
 
 pub fn has_block_block_entity(block: &Block) -> bool {
     BLOCK_ENTITY_TYPES.contains(&block.name)
+}
+
+pub trait PropertyDelegate: Sync + Send {
+    fn get_property(&self, _index: i32) -> i32;
+    fn set_property(&self, _index: i32, _value: i32);
+    fn get_properties_size(&self) -> i32;
 }

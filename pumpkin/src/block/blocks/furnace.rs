@@ -17,14 +17,14 @@ use crate::block::pumpkin_block::PumpkinBlock;
 
 struct FurnaceScreenFactory {
     inventory: Arc<dyn Inventory>,
-    furnace_block_entity: Arc<dyn BlockEntity>,
+    block_entity: Arc<dyn BlockEntity>,
 }
 
 impl FurnaceScreenFactory {
-    fn new(inventory: Arc<dyn Inventory>, furnace_block_entity: Arc<dyn BlockEntity>) -> Self {
+    fn new(inventory: Arc<dyn Inventory>, block_entity: Arc<dyn BlockEntity>) -> Self {
         Self {
             inventory,
-            furnace_block_entity,
+            block_entity,
         }
     }
 }
@@ -37,12 +37,14 @@ impl ScreenHandlerFactory for FurnaceScreenFactory {
         player_inventory: &Arc<pumpkin_inventory::player::player_inventory::PlayerInventory>,
         _player: &dyn pumpkin_inventory::screen_handler::InventoryPlayer,
     ) -> Option<Arc<Mutex<dyn pumpkin_inventory::screen_handler::ScreenHandler>>> {
-        Some(Arc::new(Mutex::new(FurnaceScreenHandler::new(
+        let furnace_screen_handler = FurnaceScreenHandler::new(
             sync_id,
             player_inventory,
             self.inventory.clone(),
-            self.furnace_block_entity.clone(),
-        ))))
+            self.block_entity.clone(),
+        )
+        .await;
+        Some(Arc::new(Mutex::new(furnace_screen_handler)))
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
@@ -83,6 +85,7 @@ impl PumpkinBlock for FurnaceBlock {
                     .await;
             }
         }
+
         crate::block::registry::BlockActionResult::Consume
     }
 
