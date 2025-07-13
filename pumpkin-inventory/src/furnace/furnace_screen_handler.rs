@@ -1,6 +1,7 @@
 use std::{any::Any, sync::Arc};
 
 use async_trait::async_trait;
+use pumpkin_data::fuels::is_fuel;
 use pumpkin_world::{block::entities::BlockEntity, inventory::Inventory, item::ItemStack};
 
 use crate::{
@@ -103,39 +104,38 @@ impl ScreenHandler for FurnaceScreenHandler {
     }
 
     async fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+        const FUEL_SLOT: i32 = 1;
+
         let mut stack_left = ItemStack::EMPTY;
         let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
-        if slot.has_stack().await {
-            let slot_stack = slot.get_stack().await;
-            stack_left = *slot_stack.lock().await;
-
-            if slot_index < 3 {
-                if !self
-                    .insert_item(
-                        &mut *slot_stack.lock().await,
-                        3,
-                        self.get_behaviour().slots.len() as i32,
-                        true,
-                    )
-                    .await
-                {
-                    return ItemStack::EMPTY;
-                }
-            } else if !self
-                .insert_item(&mut *slot_stack.lock().await, 0, 3, false)
-                .await
-            {
-                return ItemStack::EMPTY;
-            }
-
-            if stack_left.is_empty() {
-                slot.set_stack(ItemStack::EMPTY).await;
-            } else {
-                slot.mark_dirty().await;
-            }
+        if !slot.has_stack().await {
+            return stack_left;
         }
 
-        return stack_left;
+        let slot_stack = slot.get_stack().await;
+        let mut stack = slot_stack.lock().await;
+        stack_left = *stack;
+
+        let success = if slot_index < 3 {
+            self.insert_item(&mut stack, 3, self.get_behaviour().slots.len() as i32, true)
+                .await
+        } else if is_fuel(stack.item.id) {
+            self.insert_item(&mut stack, FUEL_SLOT, 3, false).await
+        } else {
+            self.insert_item(&mut stack, 0, 3, false).await
+        };
+
+        if !success {
+            return ItemStack::EMPTY;
+        }
+
+        if stack_left.is_empty() {
+            slot.set_stack(ItemStack::EMPTY).await;
+        } else {
+            slot.mark_dirty().await;
+        }
+
+        stack_left
     }
 }
