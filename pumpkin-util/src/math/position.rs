@@ -335,14 +335,17 @@ impl BlockPos {
     }
 
     pub fn manhattan_distance(&self, other: Self) -> i32 {
-        let x = (other.0.x - self.0.x).abs();
-        let y = (other.0.y - self.0.y).abs();
-        let z = (other.0.z - self.0.z).abs();
-        x + y + z
+        self.0.manhattan_distance(other.0)
     }
 
     pub fn squared_distance(&self, other: Self) -> i32 {
         self.0.squared_distance_to_vec(other.0)
+    }
+
+    pub fn as_long(&self) -> i64 {
+        ((self.0.x as i64 & 0x3FFFFFF) << 38)
+            | ((self.0.z as i64 & 0x3FFFFFF) << 12)
+            | (self.0.y as i64 & 0xFFF)
     }
 }
 
@@ -351,9 +354,7 @@ impl Serialize for BlockPos {
     where
         S: serde::Serializer,
     {
-        let long = ((self.0.x as i64 & 0x3FFFFFF) << 38)
-            | ((self.0.z as i64 & 0x3FFFFFF) << 12)
-            | (self.0.y as i64 & 0xFFF);
+        let long = self.as_long();
         serializer.serialize_i64(long)
     }
 }

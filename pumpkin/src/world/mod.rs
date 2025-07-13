@@ -122,6 +122,7 @@ pub mod weather;
 
 use uuid::Uuid;
 use weather::Weather;
+use crate::entity::ai::path::path_node_type_cache::PathNodeTypeCache;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
@@ -173,6 +174,7 @@ pub struct World {
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
+    pub path_node_type_cache: Mutex<PathNodeTypeCache>,
 }
 
 impl World {
@@ -211,6 +213,7 @@ impl World {
             sea_level: generation_settings.sea_level,
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
+            path_node_type_cache: Mutex::new(PathNodeTypeCache::new()),
         }
     }
 
@@ -2497,6 +2500,15 @@ impl World {
         }
 
         None
+    }
+
+    pub fn is_space_empty(&self, entity: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        self.is_space_empty_check_fluid(entity, bounding_box, false)
+    }
+
+    pub fn is_space_empty_check_fluid(&self, entity: &dyn EntityBase, bounding_box: BoundingBox, check_fluid: bool) -> bool {
+        // TODO: implement when entity collision is implemented (there is a PR on it)
+        true
     }
 }
 

@@ -1,6 +1,6 @@
 use super::{position::BlockPos, vector3::Vector3};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash)]
 pub struct BoundingBox {
     pub min: Vector3<f64>,
     pub max: Vector3<f64>,
@@ -30,6 +30,13 @@ impl BoundingBox {
         Self {
             min: self.min.add(&other.min),
             max: self.max.add(&other.max),
+        }
+    }
+
+    pub fn offset_vec(&self, vec: &Vector3<f64>) -> Self {
+        Self {
+            min: self.min.add(vec),
+            max: self.max.add(vec),
         }
     }
 
@@ -79,7 +86,39 @@ impl BoundingBox {
         let f = f64::max(f64::max(self.min.z - pos.z, pos.z - self.max.z), 0.0);
         super::squared_magnitude(d, e, f)
     }
+
+    pub fn get_average_side_length(&self) -> f64 {
+        let x = self.get_length_x();
+        let y = self.get_length_y();
+        let z = self.get_length_z();
+        (x + y + z) / 3.0
+    }
+
+    pub fn get_length_x(&self) -> f64 {
+        self.max.x - self.min.x
+    }
+
+    pub fn get_length_y(&self) -> f64 {
+        self.max.y - self.min.y
+    }
+
+    pub fn get_length_z(&self) -> f64 {
+        self.max.z - self.min.z
+    }
 }
+
+impl PartialEq for BoundingBox {
+    fn eq(&self, other: &Self) -> bool {
+        self.min.x.to_bits() == other.min.x.to_bits() &&
+        self.min.y.to_bits() == other.min.y.to_bits() &&
+        self.min.z.to_bits() == other.min.z.to_bits() &&
+
+        self.max.x.to_bits() == other.max.x.to_bits() &&
+        self.max.y.to_bits() == other.max.y.to_bits() &&
+        self.max.z.to_bits() == other.max.z.to_bits()
+    }
+}
+impl Eq for BoundingBox {}
 
 #[derive(Clone, Copy, Debug)]
 pub struct EntityDimensions {
