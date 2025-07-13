@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use fancy::FancyTrunkPlacer;
 use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockState, tag::Tagable};
+use pumpkin_data::{Block, BlockState, tag::Taggable};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},

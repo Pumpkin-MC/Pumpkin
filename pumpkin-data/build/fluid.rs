@@ -595,7 +595,7 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use std::hash::{Hash, Hasher};
-        use crate::tag::{Tagable, RegistryKey};
+        use crate::tag::{Taggable, RegistryKey};
         use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 
         #[derive(Clone, Debug)]
@@ -789,7 +789,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        impl Tagable for Fluid {
+        impl Taggable for Fluid {
             #[inline]
             fn tag_key() -> RegistryKey {
                 RegistryKey::Fluid

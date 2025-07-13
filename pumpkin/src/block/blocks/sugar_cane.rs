@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::block_properties::HorizontalFacing;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15},

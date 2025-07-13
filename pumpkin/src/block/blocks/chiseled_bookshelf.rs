@@ -6,7 +6,7 @@ use pumpkin_data::{
     item::Item,
     sound::{Sound, SoundCategory},
     tag,
-    tag::Tagable,
+    tag::Taggable,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;

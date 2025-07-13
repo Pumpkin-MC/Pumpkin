@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_world::BlockStateId;
 

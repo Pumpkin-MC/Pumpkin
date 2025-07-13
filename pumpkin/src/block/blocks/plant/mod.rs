@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, tag, tag::Tagable};
+use pumpkin_data::{Block, tag, tag::Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 

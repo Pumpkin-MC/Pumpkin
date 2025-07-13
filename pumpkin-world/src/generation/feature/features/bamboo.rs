@@ -4,7 +4,7 @@ use pumpkin_data::{
         BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1, get_state_by_state_id,
     },
     tag,
-    tag::Tagable,
+    tag::Taggable,
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2},

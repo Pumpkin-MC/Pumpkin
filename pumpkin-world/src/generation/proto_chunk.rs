@@ -6,7 +6,7 @@ use pumpkin_data::{
     Block, BlockState,
     block_properties::{blocks_movement, get_block_and_state_by_state_id, get_block_by_state_id},
     chunk::Biome,
-    tag::Tagable,
+    tag::Taggable,
 };
 use pumpkin_util::{
     HeightMap,

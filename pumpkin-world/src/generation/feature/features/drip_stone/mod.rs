@@ -1,5 +1,5 @@
 use pumpkin_data::tag;
-use pumpkin_data::{Block, tag::Tagable};
+use pumpkin_data::{Block, tag::Taggable};
 use pumpkin_util::math::position::BlockPos;
 
 use crate::ProtoChunk;

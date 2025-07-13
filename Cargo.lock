@@ -2010,7 +2010,6 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "console-subscriber",
- "criterion",
  "crossbeam",
  "dhat",
  "flate2",

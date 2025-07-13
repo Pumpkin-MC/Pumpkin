@@ -1,5 +1,5 @@
 use pumpkin_data::tag;
-use pumpkin_data::{BlockDirection, block_properties::get_block_by_state_id, tag::Tagable};
+use pumpkin_data::{BlockDirection, block_properties::get_block_by_state_id, tag::Taggable};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},

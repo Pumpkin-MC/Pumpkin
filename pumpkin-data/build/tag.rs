@@ -202,7 +202,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        pub trait Tagable {
+        pub trait Taggable {
             fn tag_key() -> RegistryKey;
             fn registry_key(&self) -> &str;
             fn registry_id(&self) -> u16;

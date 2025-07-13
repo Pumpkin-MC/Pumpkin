@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_registry::VanillaDimensionType;

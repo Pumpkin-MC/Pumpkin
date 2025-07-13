@@ -4,7 +4,7 @@ use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
     tag,
-    tag::Tagable,
+    tag::Taggable,
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;

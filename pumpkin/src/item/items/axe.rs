@@ -6,7 +6,7 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::{OakDoorLikeProperties, PaleOakWoodLikeProperties};
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -15,16 +15,7 @@ pub struct AxeItem;
 
 impl ItemMetadata for AxeItem {
     fn ids() -> Box<[u16]> {
-        Item::get_tag_values("#minecraft:axes")
-            .expect("This is a valid vanilla tag")
-            .iter()
-            .map(|key| {
-                Item::from_registry_key(key)
-                    .expect("We just got this key from the registry")
-                    .id
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice()
+        tag::Item::MINECRAFT_AXES.1.to_vec().into_boxed_slice()
     }
 }
 

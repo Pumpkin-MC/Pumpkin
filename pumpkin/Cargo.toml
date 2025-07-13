@@ -86,7 +86,6 @@ flate2 = "1.1.2"
 console-subscriber = { version = "0.4.1", optional = true }
 
 [dev-dependencies]
-criterion = { version = "0.6", default-features = false, features = ["html_reports", "async_tokio"] }
 tempfile.workspace = true
 
 [features]
@@ -94,7 +93,3 @@ tempfile.workspace = true
 #https://valgrind.org/docs/manual/dh-manual.html
 dhat-heap = ["dep:dhat"]
 console-subscriber = ["dep:console-subscriber"]
-
-[[bench]]
-name = "bench_tag"
-harness = false

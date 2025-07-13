@@ -3,7 +3,7 @@ use pumpkin_data::block_properties::{
     BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
 };
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
 use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockState, tag::Tagable};
+use pumpkin_data::{Block, BlockState, tag::Taggable};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 use trunk::TrunkPlacer;

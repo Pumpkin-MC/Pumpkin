@@ -10,7 +10,7 @@ use pumpkin_data::block_properties::NorthWallShape;
 use pumpkin_data::block_properties::SouthWallShape;
 use pumpkin_data::block_properties::WestWallShape;
 use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;

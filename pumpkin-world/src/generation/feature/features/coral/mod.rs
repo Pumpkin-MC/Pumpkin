@@ -5,7 +5,7 @@ use pumpkin_data::{
         get_state_by_state_id,
     },
     tag,
-    tag::{RegistryKey, Tagable, get_tag_values},
+    tag::{RegistryKey, Taggable, get_tag_values},
 };
 use pumpkin_util::{
     math::position::BlockPos,

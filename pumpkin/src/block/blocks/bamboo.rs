@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::tag;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_macros::pumpkin_block;
 
 use crate::block::pumpkin_block::{CanPlaceAtArgs, PumpkinBlock};
