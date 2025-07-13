@@ -1,67 +1,98 @@
-use pumpkin_util::PermissionLvl;
-use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
-use rsa::signature::Verifier;
-use sha1::Sha1;
-use std::num::NonZeroU8;
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use std::time::{SystemTime, UNIX_EPOCH};
-use thiserror::Error;
+/* -- Std -- */
+use std::{
+    num::NonZeroU8,
+    sync::{Arc, atomic::Ordering},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use crate::block::pumpkin_block::BlockHitResult;
-use crate::block::registry::BlockActionResult;
-use crate::block::{self, BlockIsReplacing};
-use crate::command::CommandSender;
-use crate::entity::EntityBase;
-use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
-use crate::entity::r#type::from_type;
-use crate::error::PumpkinError;
-use crate::net::PlayerConfig;
-use crate::net::java::JavaClientPlatform;
-use crate::plugin::player::player_chat::PlayerChatEvent;
-use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
-use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
-use crate::plugin::player::player_move::PlayerMoveEvent;
-use crate::server::{Server, seasonal_events};
-use crate::world::{World, chunker};
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block_properties::{
-    BlockProperties, WaterLikeProperties, get_block_by_item, get_state_by_state_id,
+/* -- External -- */
+use rsa::{
+    pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey},
+    signature::Verifier,
 };
-use pumpkin_data::entity::{EntityType, entity_from_egg};
-use pumpkin_data::item::Item;
-use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockDirection};
-use pumpkin_inventory::InventoryError;
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
-use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_inventory::screen_handler::ScreenHandler;
-use pumpkin_macros::send_cancellable;
-use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{
-    Animation, CBlockUpdate, CCommandSuggestions, CEntityAnimation, CEntityPositionSync, CHeadRot,
-    COpenSignEditor, CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot,
-    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
-    PlayerAction,
-};
-use pumpkin_protocol::java::server::play::{
-    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
-    SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
-    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
-    SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
-    SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
-    SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm,
-    SUpdateSign, SUseItem, SUseItemOn, Status,
-};
-use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
-use pumpkin_util::text::color::NamedColor;
-use pumpkin_util::{GameMode, text::TextComponent};
-use pumpkin_world::block::entities::command_block::CommandBlockEntity;
-use pumpkin_world::block::entities::sign::SignBlockEntity;
-use pumpkin_world::item::ItemStack;
-use pumpkin_world::world::BlockFlags;
+use sha1::Sha1;
+use thiserror::Error;
 use uuid::Uuid;
+
+/* -- Pumpkin -- */
+use pumpkin_util::{
+    GameMode, PermissionLvl,
+    math::{polynomial_rolling_hash, position::BlockPos, vector3::Vector3, wrap_degrees},
+    text::{TextComponent, color::NamedColor},
+};
+
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
+
+use pumpkin_data::{
+    Block, BlockDirection,
+    block_properties::{
+        BlockProperties, WaterLikeProperties, get_block_by_item, get_state_by_state_id,
+    },
+    entity::{EntityType, entity_from_egg},
+    item::Item,
+    sound::{Sound, SoundCategory},
+};
+
+use pumpkin_inventory::{
+    InventoryError, equipment_slot::EquipmentSlot, player::player_inventory::PlayerInventory,
+    screen_handler::ScreenHandler,
+};
+
+use pumpkin_macros::send_cancellable;
+
+use pumpkin_protocol::{
+    codec::var_int::VarInt,
+    java::{
+        client::play::{
+            Animation, CBlockUpdate, CCommandSuggestions, CEntityAnimation, CEntityPositionSync,
+            CHeadRot, COpenSignEditor, CPingResponse, CPlayerInfoUpdate, CPlayerPosition,
+            CSetSelectedSlot, CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot,
+            CUpdateEntityRot, InitChat, PlayerAction,
+        },
+        server::play::{
+            Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
+            SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
+            SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
+            SKeepAlive, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
+            SPlayerCommand, SPlayerInput, SPlayerPosition, SPlayerPositionRotation,
+            SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+            SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
+        },
+    },
+};
+
+use pumpkin_world::{
+    block::entities::{command_block::CommandBlockEntity, sign::SignBlockEntity},
+    item::ItemStack,
+    world::BlockFlags,
+};
+
+/* -- Crate -- */
+use crate::{
+    block::{self, BlockIsReplacing, pumpkin_block::BlockHitResult, registry::BlockActionResult},
+    command::CommandSender,
+    entity::{
+        EntityBase,
+        player::{ChatMode, ChatSession, Hand, Player},
+        r#type::from_type,
+    },
+    error::PumpkinError,
+    net::{PlayerConfig, java::JavaClientPlatform},
+    plugin::{
+        block::{
+            block_place::BlockPlaceEvent,
+            sign_change::{Side, SignChangeEvent},
+        },
+        player::{
+            player_chat::PlayerChatEvent,
+            player_command_send::PlayerCommandSendEvent,
+            player_interact::{InteractAction, PlayerInteractEvent},
+            player_move::PlayerMoveEvent,
+        },
+    },
+    server::{Server, seasonal_events},
+    world::{World, chunker},
+};
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -1402,7 +1433,7 @@ impl JavaClientPlatform {
     #[allow(clippy::too_many_lines)]
     pub async fn handle_use_item_on(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         use_item_on: SUseItemOn,
         server: &Arc<Server>,
     ) -> Result<(), Box<dyn PumpkinError>> {
@@ -1413,8 +1444,6 @@ impl JavaClientPlatform {
 
         let position = use_item_on.position;
         let cursor_pos = use_item_on.cursor_pos;
-
-        let mut should_try_decrement = false;
 
         if !player.can_interact_with_block_at(&position, 1.0) {
             // TODO: maybe log?
@@ -1432,7 +1461,7 @@ impl JavaClientPlatform {
         let held_item_empty = held_item.lock().await.is_empty();
         let off_hand_item_empty = off_hand_item.lock().await.is_empty();
         let item = if use_item_on.hand == VarInt::from(0) {
-            held_item
+            held_item.clone()
         } else {
             off_hand_item
         };
@@ -1515,44 +1544,83 @@ impl JavaClientPlatform {
         self.update_sequence(player, use_item_on.sequence.0);
 
         // Check if the item is a block, because not every item can be placed :D
-        if let Some(block) = get_block_by_item(item.lock().await.item.id) {
-            should_try_decrement = self
-                .run_is_block_place(player, block, server, use_item_on, position, face)
-                .await?;
-        }
+        if let Some(block) = get_block_by_item(held_item.lock().await.item.id) {
+            let block_against = world.get_block(&position).await;
+            let can_build = true;
 
-        // Check if the item is a spawn egg
-        if let Some(entity) = entity_from_egg(item.lock().await.item.id) {
-            self.spawn_entity_from_egg(player, entity, position, face)
-                .await;
-            should_try_decrement = true;
-        }
+            send_cancellable! {{
+                BlockPlaceEvent {
+                    player: player.clone(),
+                    block_placed: block,
+                    block_placed_against: block_against,
+                    can_build,
+                    cancelled: false,
+                };
 
-        if should_try_decrement {
-            // TODO: Config
-            // Decrease block count
-            if player.gamemode.load() != GameMode::Creative {
-                item.lock().await.decrement(1);
-            }
-        }
+                'after: {
+                    let mut should_try_decrement = self
+                    .run_is_block_place(player, block, server, use_item_on, position, face)
+                    .await?;
 
+                    // Check if the item is a spawn egg
+                    if let Some(entity) = entity_from_egg(held_item.lock().await.item.id) {
+                        self.spawn_entity_from_egg(player, entity, position, face)
+                            .await;
+                        should_try_decrement = true;
+                    }
+
+                    if should_try_decrement {
+                        // TODO: Config
+                        // Decrease block count
+                        if player.gamemode.load() != GameMode::Creative {
+                            held_item.lock().await.decrement(1);
+                        }
+                    }
+                }
+            }}
+        }
         Ok(())
     }
 
-    pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
+    pub async fn handle_sign_update(&self, player: &Arc<Player>, sign_data: SUpdateSign) {
         let world = &player.living_entity.entity.world.read().await;
-        let updated_sign = SignBlockEntity::new(
-            sign_data.location,
-            sign_data.is_front_text,
-            [
-                sign_data.line_1,
-                sign_data.line_2,
-                sign_data.line_3,
-                sign_data.line_4,
-            ],
-        );
 
-        world.add_block_entity(Arc::new(updated_sign)).await;
+        let content = vec![
+            sign_data.line_1.clone(),
+            sign_data.line_2.clone(),
+            sign_data.line_3.clone(),
+            sign_data.line_4.clone(),
+        ];
+
+        let side = if sign_data.is_front_text {
+            Side::Front
+        } else {
+            Side::Back
+        };
+
+        send_cancellable! {{
+            SignChangeEvent {
+                player: player.clone(),
+                content,
+                side,
+                cancelled: false,
+            };
+
+            'after: {
+                let updated_sign = SignBlockEntity::new(
+                    sign_data.location,
+                    sign_data.is_front_text,
+                    [
+                        sign_data.line_1,
+                        sign_data.line_2,
+                        sign_data.line_3,
+                        sign_data.line_4,
+                    ],
+                );
+
+                world.add_block_entity(Arc::new(updated_sign)).await;
+            }
+        }}
     }
 
     pub async fn handle_use_item(

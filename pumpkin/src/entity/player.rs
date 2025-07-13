@@ -1,88 +1,127 @@
-use std::collections::VecDeque;
-use std::f64::consts::TAU;
-use std::num::NonZeroU8;
-use std::ops::AddAssign;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
-use std::time::{Duration, Instant};
+/* -- Std -- */
+use std::{
+    collections::VecDeque,
+    f64::consts::TAU,
+    num::NonZeroU8,
+    ops::AddAssign,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering},
+    },
+    time::{Duration, Instant},
+};
 
+/*-- External --*/
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
-use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
-use pumpkin_world::inventory::Inventory;
-use tokio::sync::{Mutex, RwLock};
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::{Mutex, RwLock},
+    task::JoinHandle,
+};
 use uuid::Uuid;
 
+/* -- Pumpkin -- */
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
-use pumpkin_data::item::Operation;
-use pumpkin_data::particle::Particle;
-use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::Tagable;
-use pumpkin_data::{Block, BlockState};
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
-use pumpkin_inventory::player::{
-    player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
+
+use pumpkin_data::{
+    Block, BlockState,
+    damage::DamageType,
+    entity::{EffectType, EntityPose, EntityStatus, EntityType},
+    item::Operation,
+    particle::Particle,
+    sound::{Sound, SoundCategory},
+    tag::Tagable,
 };
-use pumpkin_inventory::screen_handler::{
-    InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFactory,
-    ScreenHandlerListener,
+
+use pumpkin_inventory::{
+    equipment_slot::EquipmentSlot,
+    player::{player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler},
+    screen_handler::{
+        InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFactory,
+        ScreenHandlerListener,
+    },
+    sync_handler::SyncHandler,
 };
-use pumpkin_inventory::sync_handler::SyncHandler;
+
 use pumpkin_macros::send_cancellable;
-use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::IdOr;
-use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{
-    Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
-    CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
-    CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
-    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
-    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+
+use pumpkin_protocol::{
+    IdOr,
+    codec::var_int::VarInt,
+    java::client::play::{
+        Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
+        CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
+        CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
+        CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect,
+        CStopSound, CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect,
+        CUpdateTime, GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags,
+        PreviousMessage,
+    },
+    java::server::play::SClickSlot,
 };
-use pumpkin_protocol::java::server::play::SClickSlot;
+
 use pumpkin_registry::VanillaDimensionType;
-use pumpkin_util::GameMode;
-use pumpkin_util::math::{
-    boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
-};
-use pumpkin_util::permission::PermissionLvl;
-use pumpkin_util::resource_location::ResourceLocation;
-use pumpkin_util::text::TextComponent;
-use pumpkin_world::biome;
-use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
-use pumpkin_world::entity::entity_data_flags::{
-    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION, SLEEPING_POS_ID,
-};
-use pumpkin_world::item::ItemStack;
-use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
 
-use crate::block::blocks::bed::BedBlock;
-use crate::command::client_suggestions;
-use crate::command::dispatcher::CommandDispatcher;
-use crate::data::op_data::OPERATOR_CONFIG;
-use crate::net::PlayerConfig;
-use crate::net::{ClientPlatform, GameProfile};
-use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
-use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
-use crate::plugin::player::player_teleport::PlayerTeleportEvent;
-use crate::server::Server;
-use crate::world::World;
-use crate::{PERMISSION_MANAGER, block};
+use pumpkin_util::{
+    GameMode,
+    math::{
+        boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2,
+        vector3::Vector3,
+    },
+    permission::PermissionLvl,
+    resource_location::ResourceLocation,
+    text::TextComponent,
+};
 
-use super::combat::{self, AttackType, player_attack_sound};
-use super::effect::Effect;
-use super::hunger::HungerManager;
-use super::item::ItemEntity;
-use super::living::LivingEntity;
-use super::{Entity, EntityBase, EntityId, NBTStorage};
+use pumpkin_world::{
+    biome,
+    chunk::{ChunkData, ChunkEntityData},
+    cylindrical_chunk_iterator::Cylindrical,
+    entity::entity_data_flags::{
+        DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION, SLEEPING_POS_ID,
+    },
+    inventory::{Clearable, Inventory},
+    item::ItemStack,
+    level::{SyncChunk, SyncEntityChunk},
+};
+
+/* -- Crate -- */
+use crate::{
+    PERMISSION_MANAGER, PLUGIN_MANAGER,
+    block::{self, blocks::bed::BedBlock},
+    command::{client_suggestions, dispatcher::CommandDispatcher},
+    data::op_data::OPERATOR_CONFIG,
+    entity::{
+        experience_orb::ExperienceOrbEntity,
+        player::{
+            player_bed_leave::PlayerBedLeaveEvent, player_change_world::PlayerChangeWorldEvent,
+            player_death::PlayerDeathEvent, player_gamemode_change::PlayerGamemodeChangeEvent,
+            player_teleport::PlayerTeleportEvent,
+        },
+    },
+    net::{ClientPlatform, GameProfile, PlayerConfig},
+    plugin::player::{
+        player_bed_leave, player_change_world, player_death, player_gamemode_change,
+        player_teleport,
+    },
+    server::Server,
+    world::World,
+};
+
+/* -- Super Module -- */
+use super::{
+    Entity, EntityBase, EntityId, NBTStorage,
+    combat::{self, AttackType, player_attack_sound},
+    effect::Effect,
+    hunger::HungerManager,
+    item::ItemEntity,
+    living::LivingEntity,
+};
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -606,30 +645,57 @@ impl Player {
         let (bed, bed_state) = world
             .get_block_and_block_state(&respawn_point.position)
             .await;
-        BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state.id).await;
 
-        self.living_entity
-            .entity
-            .set_pose(EntityPose::Standing)
-            .await;
-        self.living_entity.entity.set_pos(self.position());
-        self.living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
-                SLEEPING_POS_ID,
-                MetaDataType::OptionalBlockPos,
-                None::<BlockPos>,
-            )])
-            .await;
+        if let Some(player) = self
+            .world()
+            .await
+            .get_player_by_uuid(self.gameprofile.id)
+            .await
+        {
+            let mut event = PlayerBedLeaveEvent::new(player.clone(), bed.clone(), true);
 
-        world
-            .broadcast_packet_all(&CEntityAnimation::new(
-                self.entity_id().into(),
-                Animation::LeaveBed,
-            ))
-            .await;
+            event = PLUGIN_MANAGER.read().await.fire(event).await;
 
-        self.sleeping_since.store(None);
+            if !event.cancelled {
+                BedBlock::set_occupied(
+                    false,
+                    &world,
+                    &event.bed,
+                    &respawn_point.position,
+                    bed_state.id,
+                )
+                .await;
+
+                self.living_entity
+                    .entity
+                    .set_pose(EntityPose::Standing)
+                    .await;
+
+                self.living_entity.entity.set_pos(self.position());
+
+                self.living_entity
+                    .entity
+                    .send_meta_data(&[Metadata::new(
+                        SLEEPING_POS_ID,
+                        MetaDataType::OptionalBlockPos,
+                        None::<BlockPos>,
+                    )])
+                    .await;
+
+                world
+                    .broadcast_packet_all(&CEntityAnimation::new(
+                        self.entity_id().into(),
+                        Animation::LeaveBed,
+                    ))
+                    .await;
+
+                self.sleeping_since.store(None);
+
+                if event.set_bed_spawn {
+                    self.respawn_point.store(Some(respawn_point));
+                }
+            }
+        }
     }
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
@@ -1172,6 +1238,7 @@ impl Player {
         }) < d * d
     }
 
+    /// Kicks the player with a reason depending on the connection state.
     pub async fn kick(&self, reason: TextComponent) {
         self.client.kick(reason).await;
     }
@@ -1236,18 +1303,56 @@ impl Player {
         }
     }
 
-    pub async fn kill(&self) {
-        self.living_entity.kill().await;
-        self.handle_killed().await;
+    pub async fn kill(self: &Arc<Self>) {
+        send_cancellable! {{
+            PlayerDeathEvent {
+                player: self.clone(),
+                death_message: TextComponent::translate(
+                    "death.attack.generic",
+                    vec![TextComponent::text(self.gameprofile.name.clone())],
+                ),
+                damage_type: DamageType::GENERIC,
+                cancelled: false,
+            };
+
+            'after: {
+                self.living_entity.kill().await;
+                let world = self.world().await;
+                if !world.level_info.read().await.game_rules.keep_inventory {
+                    let pos = self.living_entity.entity.block_pos.load();
+                    for item in &self.inventory.main_inventory {
+                        world.drop_stack(&pos, *item.lock().await).await;
+                    }
+                    for item in self
+                        .inventory
+                        .entity_equipment
+                        .lock()
+                        .await
+                        .equipment
+                        .values()
+                    {
+                        world.drop_stack(&pos, *item.lock().await).await;
+                    }
+                    self.inventory.clear().await;
+
+                    if self.gamemode.load() != GameMode::Spectator {
+                        ExperienceOrbEntity::spawn(
+                            &world,
+                            pos.to_f64(),
+                            (self.experience_level.load(Ordering::Relaxed) * 7).min(100) as u32,
+                        )
+                        .await;
+                    }
+                }
+                self.handle_killed(event.death_message).await;
+            }
+        }}
     }
 
-    async fn handle_killed(&self) {
+    async fn handle_killed(&self, death_message: TextComponent) {
         self.set_client_loaded(false);
         self.client
-            .send_packet_now(&CCombatDeath::new(
-                self.entity_id().into(),
-                &TextComponent::text("noob"),
-            ))
+            .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_message))
             .await;
     }
 
@@ -1973,7 +2078,25 @@ impl EntityBase for Player {
         if result {
             let health = self.living_entity.health.load();
             if health <= 0.0 {
-                self.handle_killed().await;
+                if let Some(player) = self
+                    .world()
+                    .await
+                    .get_player_by_uuid(self.gameprofile.id)
+                    .await
+                {
+                    let mut event = PlayerDeathEvent::new(
+                        player,
+                        TextComponent::translate(
+                            "death.attack.generic",
+                            vec![TextComponent::text(self.gameprofile.name.clone())],
+                        ),
+                        damage_type,
+                    );
+
+                    event = PLUGIN_MANAGER.read().await.fire(event).await;
+
+                    self.handle_killed(event.death_message).await;
+                }
             }
         }
         result

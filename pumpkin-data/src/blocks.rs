@@ -10,7 +10,7 @@ use pumpkin_util::{
 };
 use std::hash::{Hash, Hasher};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block {
     pub id: u16,
     pub name: &'static str,
