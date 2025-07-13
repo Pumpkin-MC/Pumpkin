@@ -19,7 +19,7 @@ pub struct RandomSpreadFoliagePlacer {
 
 impl RandomSpreadFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -36,7 +36,7 @@ impl RandomSpreadFoliagePlacer {
                 random.next_bounded_i32(foliage_height) - random.next_bounded_i32(foliage_height),
                 random.next_bounded_i32(radius) - random.next_bounded_i32(radius),
             );
-            FoliagePlacer::place_foliage_block(chunk, level, pos, foliage_provider).await;
+            FoliagePlacer::place_foliage_block(chunk, level, pos, foliage_provider);
         }
     }
     // TODO: getRandomRadius

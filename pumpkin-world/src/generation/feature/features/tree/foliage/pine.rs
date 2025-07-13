@@ -18,7 +18,7 @@ pub struct PineFoliagePlacer {
 
 impl PineFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -41,8 +41,7 @@ impl PineFoliagePlacer {
                 y,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
             if radius >= 1 && y == offset - foliage_height + 1 {
                 radius -= 1;
             } else if radius < iradius + node.foliage_radius {

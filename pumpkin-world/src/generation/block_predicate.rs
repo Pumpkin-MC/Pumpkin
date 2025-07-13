@@ -46,7 +46,7 @@ pub enum BlockPredicate {
 }
 
 impl BlockPredicate {
-    pub async fn test(
+    pub fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
         chunk: &ProtoChunk<'_>,
@@ -59,13 +59,11 @@ impl BlockPredicate {
             BlockPredicate::HasSturdyFace(predicate) => predicate.test(chunk, pos),
             BlockPredicate::Solid(predicate) => predicate.test(chunk, pos),
             BlockPredicate::Replaceable(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::WouldSurvive(predicate) => {
-                predicate.test(block_registry, chunk, pos).await
-            }
+            BlockPredicate::WouldSurvive(predicate) => predicate.test(block_registry, chunk, pos),
             BlockPredicate::InsideWorldBounds(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::AnyOf(predicate) => predicate.test(block_registry, chunk, pos).await,
-            BlockPredicate::AllOf(predicate) => predicate.test(block_registry, chunk, pos).await,
-            BlockPredicate::Not(predicate) => predicate.test(block_registry, chunk, pos).await,
+            BlockPredicate::AnyOf(predicate) => predicate.test(block_registry, chunk, pos),
+            BlockPredicate::AllOf(predicate) => predicate.test(block_registry, chunk, pos),
+            BlockPredicate::Not(predicate) => predicate.test(block_registry, chunk, pos),
             BlockPredicate::AlwaysTrue => true,
             BlockPredicate::Unobstructed(_predicate) => false,
         }
@@ -140,14 +138,14 @@ pub struct AnyOfBlockPredicate {
 }
 
 impl AnyOfBlockPredicate {
-    pub async fn test(
+    pub fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
         chunk: &ProtoChunk<'_>,
         pos: &BlockPos,
     ) -> bool {
         for predicate in &self.predicates {
-            if !Box::pin(predicate.test(block_registry, chunk, pos)).await {
+            if !predicate.test(block_registry, chunk, pos) {
                 continue;
             }
             return true;
@@ -162,14 +160,14 @@ pub struct AllOfBlockPredicate {
 }
 
 impl AllOfBlockPredicate {
-    pub async fn test(
+    pub fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
         chunk: &ProtoChunk<'_>,
         pos: &BlockPos,
     ) -> bool {
         for predicate in &self.predicates {
-            if Box::pin(predicate.test(block_registry, chunk, pos)).await {
+            if predicate.test(block_registry, chunk, pos) {
                 continue;
             }
             return false;
@@ -184,13 +182,13 @@ pub struct NotBlockPredicate {
 }
 
 impl NotBlockPredicate {
-    pub async fn test(
+    pub fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
         chunk: &ProtoChunk<'_>,
         pos: &BlockPos,
     ) -> bool {
-        !Box::pin(self.predicate.test(block_registry, chunk, pos)).await
+        !self.predicate.test(block_registry, chunk, pos)
     }
 }
 
@@ -215,7 +213,7 @@ pub struct WouldSurviveBlockPredicate {
 }
 
 impl WouldSurviveBlockPredicate {
-    pub async fn test(
+    pub fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
         chunk: &ProtoChunk<'_>,
@@ -223,14 +221,12 @@ impl WouldSurviveBlockPredicate {
     ) -> bool {
         let state = self.state.get_state();
         let pos = self.offset.get(pos);
-        return block_registry
-            .can_place_at(
-                get_block_by_state_id(state.id),
-                chunk,
-                &pos,
-                BlockDirection::Up,
-            )
-            .await;
+        block_registry.can_place_at(
+            get_block_by_state_id(state.id),
+            chunk,
+            &pos,
+            BlockDirection::Up,
+        )
     }
 }
 
