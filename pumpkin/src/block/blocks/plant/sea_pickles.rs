@@ -40,7 +40,7 @@ impl PumpkinBlock for SeaPickleBlock {
             )
             .waterlogged
         {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
 
         //1:1 vanilla algorithm

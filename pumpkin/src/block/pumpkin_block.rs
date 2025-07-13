@@ -30,11 +30,11 @@ pub trait BlockMetadata {
 #[async_trait]
 pub trait PumpkinBlock: Send + Sync {
     async fn normal_use(&self, _args: NormalUseArgs<'_>) -> BlockActionResult {
-        BlockActionResult::Continue
+        BlockActionResult::Pass
     }
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
-        BlockActionResult::PassToDefault
+        BlockActionResult::PassToDefaultBlockAction
     }
 
     async fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {}

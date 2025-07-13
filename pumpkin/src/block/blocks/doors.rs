@@ -210,7 +210,7 @@ impl PumpkinBlock for DoorBlock {
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !can_open_door(args.block) {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
 
         toggle_door(args.player, args.world, args.position).await;

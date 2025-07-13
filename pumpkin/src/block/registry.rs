@@ -31,16 +31,25 @@ use super::pumpkin_fluid::PumpkinFluid;
 
 // ActionResult.java
 pub enum BlockActionResult {
-    /// Action was successful and we should swing the hand | Same as SUCCESS in vanilla
+    /// Action was successful | Same as SUCCESS in vanilla
     Success,
-    /// Block other actions from being executed and we should swing the hand | Same as CONSUME in vanilla
+    /// Action was successful and we should swing the hand for the server | Same as `SUCCESS_SERVER` in vanilla
+    SuccessServer,
+    /// Block other actions from being executed | Same as CONSUME in vanilla
     Consume,
-    /// Block other actions from being executed | Same as FAIL in vanilla
+    /// Allow other actions to be executed, but indicate it failed | Same as FAIL in vanilla
     Fail,
     /// Allow other actions to be executed | Same as PASS in vanilla
-    Continue,
-    /// Use default action for the block | Same as `PASS_TO_DEFAULT_BLOCK_ACTION` in vanilla
-    PassToDefault,
+    Pass,
+    /// Use default action for the block: `normal_use` | Same as `PASS_TO_DEFAULT_BLOCK_ACTION` in vanilla
+    PassToDefaultBlockAction,
+}
+
+impl BlockActionResult {
+    #[must_use]
+    pub fn consumes_action(&self) -> bool {
+        matches!(self, Self::Consume | Self::Success | Self::SuccessServer)
+    }
 }
 
 #[derive(Default)]
@@ -173,7 +182,7 @@ impl BlockRegistry {
                 })
                 .await;
         }
-        BlockActionResult::Continue
+        BlockActionResult::Pass
     }
 
     pub async fn explode(&self, block: &Block, world: &Arc<World>, position: &BlockPos) {
@@ -214,7 +223,7 @@ impl BlockRegistry {
                 })
                 .await;
         }
-        BlockActionResult::Continue
+        BlockActionResult::Pass
     }
 
     pub async fn use_with_item_fluid(
@@ -232,7 +241,7 @@ impl BlockRegistry {
                 .use_with_item(fluid, player, position, item, server, world)
                 .await;
         }
-        BlockActionResult::Continue
+        BlockActionResult::Pass
     }
 
     #[allow(clippy::too_many_arguments)]

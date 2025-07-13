@@ -40,7 +40,7 @@ impl PumpkinBlock for ComposterBlock {
                 .await;
         }
 
-        BlockActionResult::Continue
+        BlockActionResult::Pass
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {

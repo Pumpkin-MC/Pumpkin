@@ -107,7 +107,7 @@ impl PumpkinBlock for NoteBlock {
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
         // TODO
-        BlockActionResult::PassToDefault
+        BlockActionResult::PassToDefaultBlockAction
     }
 
     async fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {

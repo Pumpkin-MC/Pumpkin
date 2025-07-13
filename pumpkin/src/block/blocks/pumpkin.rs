@@ -18,7 +18,7 @@ pub struct PumpkinBlock;
 impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if args.item_stack.lock().await.item != &Item::SHEARS {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
         // TODO: set direction
         args.world
