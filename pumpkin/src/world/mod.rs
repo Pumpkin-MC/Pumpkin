@@ -122,6 +122,7 @@ pub mod weather;
 
 use uuid::Uuid;
 use weather::Weather;
+use crate::entity::ai::path::path_node_type_cache::PathNodeTypeCache;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
@@ -173,6 +174,7 @@ pub struct World {
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
+    pub path_node_type_cache: Mutex<PathNodeTypeCache>,
 }
 
 impl World {
@@ -211,6 +213,7 @@ impl World {
             sea_level: generation_settings.sea_level,
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
+            path_node_type_cache: Mutex::new(PathNodeTypeCache::new()),
         }
     }
 
@@ -1461,7 +1464,8 @@ impl World {
                         };
                         // Pos is zero since it will read from nbt
                         let entity =
-                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
+                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid)
+                                .await;
                         entity.read_nbt(entity_nbt).await;
                         let base_entity = entity.get_entity();
 
@@ -1497,7 +1501,8 @@ impl World {
                         continue;
                     };
                     // Pos is zero since it will read from nbt
-                    let entity = from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
+                    let entity =
+                        from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid).await;
                     entity.read_nbt(entity_nbt).await;
                     let base_entity = entity.get_entity();
                     player
@@ -1628,6 +1633,25 @@ impl World {
             .collect()
     }
 
+    pub async fn get_nearby_entities(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+    ) -> HashMap<uuid::Uuid, Arc<dyn EntityBase>> {
+        let radius_squared = radius.powi(2);
+
+        self.entities
+            .read()
+            .await
+            .iter()
+            .filter_map(|(id, entity)| {
+                let entity_pos = entity.get_entity().pos.load();
+                (entity_pos.squared_distance_to_vec(pos) <= radius_squared)
+                    .then(|| (*id, entity.clone()))
+            })
+            .collect()
+    }
+
     pub async fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
         let players = self.get_nearby_players(pos, radius).await;
         players
@@ -1645,6 +1669,53 @@ impl World {
                             .load()
                             .squared_distance_to_vec(pos),
                     )
+                    .unwrap()
+            })
+            .map(|p| p.1.clone())
+    }
+
+    /// Gets the closest entity to a position, with optional filtering by entity type.
+    ///
+    /// # Arguments
+    ///
+    /// * `pos` - The position to search around.
+    /// * `radius` - The radius to search within.
+    /// * `entity_types` - Optional array of entity types to filter by. If None, all entity types are included.
+    ///
+    /// # Returns
+    ///
+    /// The closest entity that matches the filter criteria, or None if no entities are found.
+    pub async fn get_closest_entity(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        entity_types: Option<&[EntityType]>,
+    ) -> Option<Arc<dyn EntityBase>> {
+        // Get regular entities
+        let entities = self.get_nearby_entities(pos, radius).await;
+
+        // Filter by entity type if specified
+        let filtered_entities = if let Some(types) = entity_types {
+            entities
+                .into_iter()
+                .filter(|(_, entity)| {
+                    let entity_type = entity.get_entity().entity_type;
+                    types.contains(&entity_type)
+                })
+                .collect::<HashMap<_, _>>()
+        } else {
+            entities
+        };
+
+        // Find the closest entity
+        filtered_entities
+            .iter()
+            .min_by(|a, b| {
+                a.1.get_entity()
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(pos)
+                    .partial_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(pos))
                     .unwrap()
             })
             .map(|p| p.1.clone())
@@ -2429,6 +2500,15 @@ impl World {
         }
 
         None
+    }
+
+    pub fn is_space_empty(&self, entity: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        self.is_space_empty_check_fluid(entity, bounding_box, false)
+    }
+
+    pub fn is_space_empty_check_fluid(&self, entity: &dyn EntityBase, bounding_box: BoundingBox, check_fluid: bool) -> bool {
+        // TODO: implement when entity collision is implemented (there is a PR on it)
+        true
     }
 }
 

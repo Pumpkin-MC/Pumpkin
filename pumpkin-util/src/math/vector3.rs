@@ -1,19 +1,20 @@
+use std::hash::{Hash, Hasher};
 use bytes::BufMut;
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
-use num_traits::{Float, Num};
+use num_traits::{Float, Num, Signed};
 
 use super::position::BlockPos;
 use super::vector2::Vector2;
 
-#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct Vector3<T> {
     pub x: T,
     pub y: T,
     pub z: T,
 }
 
-impl<T: Math + PartialOrd + Copy> Vector3<T> {
+impl<T: Math + PartialOrd + Copy + Signed> Vector3<T> {
     pub const fn new(x: T, y: T, z: T) -> Self {
         Vector3 { x, y, z }
     }
@@ -103,6 +104,13 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
         }
     }
 
+    pub fn manhattan_distance(&self, other: Self) -> T {
+        let x = (other.x - self.x).abs();
+        let y = (other.y - self.y).abs();
+        let z = (other.z - self.z).abs();
+        x + y + z
+    }
+
     pub fn squared_distance_to_vec(&self, other: Self) -> T {
         self.squared_distance_to(other.x, other.y, other.z)
     }
@@ -131,7 +139,7 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
     }
 }
 
-impl<T: Math + Copy + Float> Vector3<T> {
+impl<T: Math + Copy + Float + Signed> Vector3<T> {
     pub fn length(&self) -> T {
         self.length_squared().sqrt()
     }
@@ -433,6 +441,35 @@ impl serde::Serialize for Vector3<i32> {
         buf.put_i32(self.y);
         buf.put_i32(self.z);
         serializer.serialize_bytes(&buf)
+    }
+}
+
+impl Hash for Vector3<i32> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.x.hash(state);
+        self.y.hash(state);
+        self.z.hash(state);
+    }
+}
+
+// Hash only for Vector3<f64>, with NaN normalization
+impl Hash for Vector3<f64> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // canonical bit-pattern for a NaN “quiet”:
+        const CANONICAL_NAN: u64 = 0x7ff8_0000_0000_0000;
+
+        // Helper for normalization
+        fn norm(v: f64) -> u64 {
+            if v.is_nan() {
+                CANONICAL_NAN
+            } else {
+                v.to_bits()
+            }
+        }
+
+        norm(self.x).hash(state);
+        norm(self.y).hash(state);
+        norm(self.z).hash(state);
     }
 }
 
