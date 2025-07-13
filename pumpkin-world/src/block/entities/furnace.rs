@@ -244,6 +244,7 @@ impl BlockEntity for FurnaceBlockEntity {
                     )
                     .await;
             } else {
+                props.lit = false;
                 world
                     .set_block_state(
                         &self.position,
