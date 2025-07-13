@@ -13,7 +13,7 @@ use pumpkin_util::{
     GameMode,
     math::{position::BlockPos, vector3::Vector3},
 };
-use pumpkin_world::{inventory::Inventory, item::ItemStack, world::BlockFlags};
+use pumpkin_world::{inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags};
 
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::world::World;
@@ -134,7 +134,9 @@ impl PumpkinItem for EmptyBucketItem {
             world
                 .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
-            world.schedule_fluid_tick(block.id, block_pos, 5).await;
+            world
+                .schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal)
+                .await;
         } else if state.id == Block::LAVA.default_state.id
             || state.id == Block::WATER.default_state.id
         {
@@ -162,7 +164,12 @@ impl PumpkinItem for EmptyBucketItem {
                     )
                     .await;
                 world
-                    .schedule_fluid_tick(block.id, block_pos.offset(direction.to_offset()), 5)
+                    .schedule_fluid_tick(
+                        &Fluid::WATER,
+                        block_pos.offset(direction.to_offset()),
+                        5,
+                        TickPriority::Normal,
+                    )
                     .await;
             } else {
                 return;
@@ -235,7 +242,9 @@ impl PumpkinItem for FilledBucketItem {
             world
                 .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
-            world.schedule_fluid_tick(block.id, pos, 5).await;
+            world
+                .schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal)
+                .await;
         } else {
             let (block, state) = world
                 .get_block_and_block_state(&pos.offset(direction.to_offset()))
@@ -255,7 +264,12 @@ impl PumpkinItem for FilledBucketItem {
                     )
                     .await;
                 world
-                    .schedule_fluid_tick(block.id, pos.offset(direction.to_offset()), 5)
+                    .schedule_fluid_tick(
+                        &Fluid::WATER,
+                        pos.offset(direction.to_offset()),
+                        5,
+                        TickPriority::Normal,
+                    )
                     .await;
             } else if state.id == Block::AIR.default_state.id || state.is_liquid() {
                 world

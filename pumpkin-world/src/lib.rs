@@ -14,6 +14,7 @@ pub mod inventory;
 pub mod item;
 pub mod level;
 pub mod lock;
+pub mod tick;
 pub mod world;
 pub mod world_info;
 

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::BlockStateId;
+use pumpkin_world::{BlockStateId, tick::TickPriority};
 
 use crate::{block::pumpkin_fluid::PumpkinFluid, entity::EntityBase, world::World};
 
@@ -13,7 +13,7 @@ use super::flowing::FlowingFluid;
 #[pumpkin_block("minecraft:flowing_water")]
 pub struct FlowingWater;
 
-const WATER_FLOW_SPEED: u16 = 5;
+const WATER_FLOW_SPEED: u8 = 5;
 
 #[async_trait]
 impl PumpkinFluid for FlowingWater {
@@ -28,7 +28,7 @@ impl PumpkinFluid for FlowingWater {
     ) {
         if old_state_id != state_id {
             world
-                .schedule_fluid_tick(fluid.id, *block_pos, WATER_FLOW_SPEED)
+                .schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal)
                 .await;
         }
     }
@@ -45,7 +45,7 @@ impl PumpkinFluid for FlowingWater {
         _notify: bool,
     ) {
         world
-            .schedule_fluid_tick(fluid.id, *block_pos, WATER_FLOW_SPEED)
+            .schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal)
             .await;
     }
 
