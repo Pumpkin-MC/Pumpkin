@@ -294,15 +294,6 @@ pub trait ScreenHandler: Send + Sync {
 
     async fn update_tracked_properties(&mut self, idx: i32, value: i32) {
         let behaviour = self.get_behaviour_mut();
-        // let mut property_vec = vec![];
-        //
-        // for (property, prop) in behaviour.properties.iter_mut().enumerate() {
-        //     if prop.has_changed() {
-        //         let value = prop.get();
-        //         behaviour.tracked_property_values[property] = value;
-        //         property_vec.push((property, value));
-        //     }
-        // }
         if idx <= behaviour.tracked_property_values.len() as i32 {
             behaviour.tracked_property_values[idx as usize] = value;
             for listener in behaviour.listeners.iter() {
