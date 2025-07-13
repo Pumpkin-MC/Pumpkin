@@ -275,9 +275,9 @@ pub trait ScreenHandler: Send + Sync {
             self.update_tracked_slot(i, stack).await;
         }
 
-        let behabviour = self.get_behaviour_mut();
+        let behaviour = self.get_behaviour_mut();
         let mut prop_vec = vec![];
-        for (idx, prop) in behabviour.properties.iter_mut().enumerate() {
+        for (idx, prop) in behaviour.properties.iter_mut().enumerate() {
             let value = prop.get();
             if prop.has_changed() {
                 prop_vec.push((idx, value));
@@ -322,8 +322,8 @@ pub trait ScreenHandler: Send + Sync {
                     behaviour
                         .tracked_property_values
                         .insert(idx as usize, value);
-                    if let Some(ref sync_hanlder) = behaviour.sync_handler {
-                        sync_hanlder.update_property(behaviour, idx, value).await;
+                    if let Some(ref sync_handler) = behaviour.sync_handler {
+                        sync_handler.update_property(behaviour, idx, value).await;
                     }
                 }
             }
@@ -389,9 +389,9 @@ pub trait ScreenHandler: Send + Sync {
 
         self.check_cursor_stack_updates().await;
 
-        let behabviour = self.get_behaviour_mut();
+        let behaviour = self.get_behaviour_mut();
         let mut prop_vec = vec![];
-        for (idx, prop) in behabviour.properties.iter_mut().enumerate() {
+        for (idx, prop) in behaviour.properties.iter_mut().enumerate() {
             let value = prop.get();
             if prop.has_changed() {
                 prop_vec.push((idx, value));
