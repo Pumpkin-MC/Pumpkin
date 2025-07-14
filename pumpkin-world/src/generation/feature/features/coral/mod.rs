@@ -4,7 +4,8 @@ use pumpkin_data::{
         BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties, get_block,
         get_state_by_state_id,
     },
-    tag::{RegistryKey, Tagable, get_tag_values},
+    tag,
+    tag::{RegistryKey, Taggable, get_tag_values},
 };
 use pumpkin_util::{
     math::position::BlockPos,
@@ -29,7 +30,7 @@ impl CoralFeature {
         let block = chunk.get_block_state(&pos.0).to_block();
         let above_block = chunk.get_block_state(&pos.up().0).to_block();
 
-        if block != &Block::WATER && !block.is_tagged_with("minecraft:corals").unwrap()
+        if block != &Block::WATER && !block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_CORALS)
             || above_block != &Block::WATER
         {
             return false;

@@ -1,11 +1,11 @@
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::PoweredRailLikeProperties;
 use pumpkin_data::block_properties::RailLikeProperties;
 use pumpkin_data::block_properties::RailShape;
 use pumpkin_data::block_properties::StraightRailShape;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
@@ -28,7 +28,7 @@ struct Rail {
 impl Rail {
     async fn find_with_elevation(world: &World, position: BlockPos) -> Option<Self> {
         let (block, block_state) = world.get_block_and_block_state(&position).await;
-        if block.is_tagged_with("#minecraft:rails").unwrap() {
+        if block.is_tagged_with_by_tag(&tag::Item::MINECRAFT_RAILS) {
             let properties = RailProperties::new(block_state.id, block);
             return Some(Self {
                 block,
@@ -40,7 +40,7 @@ impl Rail {
 
         let pos = position.up();
         let (block, block_state) = world.get_block_and_block_state(&pos).await;
-        if block.is_tagged_with("#minecraft:rails").unwrap() {
+        if block.is_tagged_with_by_tag(&tag::Item::MINECRAFT_RAILS) {
             let properties = RailProperties::new(block_state.id, block);
             return Some(Self {
                 block,
@@ -52,7 +52,7 @@ impl Rail {
 
         let pos = position.down();
         let (block, block_state) = world.get_block_and_block_state(&pos).await;
-        if block.is_tagged_with("#minecraft:rails").unwrap() {
+        if block.is_tagged_with_by_tag(&tag::Item::MINECRAFT_RAILS) {
             let properties = RailProperties::new(block_state.id, block);
             return Some(Self {
                 block,

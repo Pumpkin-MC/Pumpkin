@@ -7,7 +7,7 @@ use serde::Deserialize;
 use syn::LitInt;
 
 #[derive(Deserialize)]
-struct Biome {
+pub struct Biome {
     has_precipitation: bool,
     temperature: f32,
     downfall: f32,
@@ -16,7 +16,7 @@ struct Biome {
     features: Vec<Vec<String>>,
     creature_spawn_probability: Option<f32>,
     spawners: SpawnGroups,
-    id: u8,
+    pub id: u8,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash)]
