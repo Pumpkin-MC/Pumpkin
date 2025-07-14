@@ -180,7 +180,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        type Tag = (&'static [&'static str], &'static [u16]);
+        pub type Tag = (&'static [&'static str], &'static [u16]);
 
         #(#tag_dicts)*
 
