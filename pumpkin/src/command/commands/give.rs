@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use pumpkin_data::data_component::DataComponent::MaxStackSize;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
@@ -61,7 +62,15 @@ impl CommandExecutor for Executor {
         };
 
         for target in targets {
-            let max_stack = i32::from(item.components.max_stack_size);
+            let max_stack = i32::from(
+                item.components
+                    .iter()
+                    .find_map(|i| match i {
+                        MaxStackSize(ret) => Some(ret.size),
+                        _ => None,
+                    })
+                    .unwrap(),
+            );
             let mut remaining = item_count;
 
             while remaining > 0 {

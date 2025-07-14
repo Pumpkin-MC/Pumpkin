@@ -1,28 +1,28 @@
 use heck::ToPascalCase;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
-
-#[derive(Deserialize)]
-struct DataComponent {
-    id: u8,
-}
+use syn::Lifetime;
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/data_component.json");
+    println!("cargo:rerun-if-changed=../assets/data_component_lifetime.json");
 
-    let data_component: HashMap<String, DataComponent> =
+    let data_component: HashMap<String, u8> =
         serde_json::from_str(&fs::read_to_string("../assets/data_component.json").unwrap())
             .expect("Failed to parse data_component.json");
+    let lifetime: HashMap<String, String> = serde_json::from_str(
+        &fs::read_to_string("../assets/data_component_lifetime.json").unwrap(),
+    )
+    .expect("Failed to parse data_component_lifetime.json");
 
     let mut enum_variants = TokenStream::new();
     let mut enum_to_name = TokenStream::new();
     let mut enum_to_id = TokenStream::new();
 
     let mut data_component_vec = data_component.iter().collect::<Vec<_>>();
-    data_component_vec.sort_by_key(|(_, i)| i.id);
+    data_component_vec.sort_by_key(|(_, i)| **i);
 
     for (raw_name, raw_value) in &data_component_vec {
         let strip_name = raw_name
@@ -33,18 +33,24 @@ pub(crate) fn build() -> TokenStream {
         let pascal_case_data = format_ident!("{}Impl", strip_name.to_pascal_case());
 
         // Enum variant
-        enum_variants.extend(quote! {
-            #pascal_case(#pascal_case_data),
-        });
+        if let Some(str) = lifetime.get(*raw_name) {
+            let lifetime = Lifetime::new(str, Span::call_site());
+            enum_variants.extend(quote! {
+                #pascal_case(#pascal_case_data<#lifetime>),
+            });
+        } else {
+            enum_variants.extend(quote! {
+                #pascal_case(#pascal_case_data),
+            });
+        }
 
         // Enum -> &str
         enum_to_name.extend(quote! {
             Self::#pascal_case(_) => #raw_name,
         });
 
-        let id = raw_value.id;
         enum_to_id.extend(quote! {
-            Self::#pascal_case(_) => #id,
+            Self::#pascal_case(_) => #raw_value,
         });
     }
 
@@ -52,11 +58,11 @@ pub(crate) fn build() -> TokenStream {
         use crate::data_component_impl::*;
 
         #[derive(Clone, Debug)]
-        pub enum DataComponent {
+        pub enum DataComponent<'a> {
             #enum_variants
         }
 
-        impl DataComponent {
+        impl DataComponent<'_> {
             pub const fn to_id(&self) -> u8 {
                 match self {
                     #enum_to_id

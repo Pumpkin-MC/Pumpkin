@@ -1,21 +1,35 @@
 #![allow(dead_code)]
+
+use crate::attributes::Attributes;
+use crate::tag::Tag;
+use crate::{AttributeModifierSlot, Block};
+use pumpkin_util::text::TextComponent;
+
 // please don't make the size of the struct too large. use Box<> when necessary
 #[derive(Clone, Debug)]
 pub struct CustomDataImpl;
 #[derive(Clone, Debug)]
 pub struct MaxStackSizeImpl {
-    size: u8,
+    pub size: u8,
 }
 #[derive(Clone, Debug)]
-pub struct MaxDamageImpl;
+pub struct MaxDamageImpl {
+    pub max_damage: i32,
+}
 #[derive(Clone, Debug)]
-pub struct DamageImpl;
+pub struct DamageImpl {
+    pub damage: i32,
+}
 #[derive(Clone, Debug)]
 pub struct UnbreakableImpl;
 #[derive(Clone, Debug)]
 pub struct CustomNameImpl;
 #[derive(Clone, Debug)]
-pub struct ItemNameImpl;
+pub struct ItemNameImpl<'a> {
+    // pub name: &'a TextComponent, TODO make TextComponent in compile time
+    pub name: &'a str,
+}
+
 #[derive(Clone, Debug)]
 pub struct ItemModelImpl;
 #[derive(Clone, Debug)]
@@ -28,8 +42,25 @@ pub struct EnchantmentsImpl;
 pub struct CanPlaceOnImpl;
 #[derive(Clone, Debug)]
 pub struct CanBreakImpl;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Operation {
+    AddValue,
+    AddMultipliedBase,
+    AddMultipliedTotal,
+}
 #[derive(Clone, Debug)]
-pub struct AttributeModifiersImpl;
+pub struct Modifier {
+    pub r#type: &'static Attributes,
+    pub id: &'static str,
+    pub amount: f64,
+    pub operation: Operation,
+    pub slot: AttributeModifierSlot,
+}
+#[derive(Clone, Debug)]
+pub struct AttributeModifiersImpl<'a> {
+    pub attribute_modifiers: &'a [Modifier],
+}
 #[derive(Clone, Debug)]
 pub struct CustomModelDataImpl;
 #[derive(Clone, Debug)]
@@ -43,7 +74,11 @@ pub struct EnchantmentGlintOverrideImpl;
 #[derive(Clone, Debug)]
 pub struct IntangibleProjectileImpl;
 #[derive(Clone, Debug)]
-pub struct FoodImpl;
+pub struct FoodImpl {
+    pub nutrition: i32,
+    pub saturation: f32,
+    pub can_always_eat: bool,
+}
 #[derive(Clone, Debug)]
 pub struct ConsumableImpl;
 #[derive(Clone, Debug)]
@@ -52,8 +87,26 @@ pub struct UseRemainderImpl;
 pub struct UseCooldownImpl;
 #[derive(Clone, Debug)]
 pub struct DamageResistantImpl;
+
 #[derive(Clone, Debug)]
-pub struct ToolImpl;
+pub enum IDSet<'a> {
+    Tag(&'static Tag),
+    Blocks(&'a [&'static Block]),
+}
+
+#[derive(Clone, Debug)]
+pub struct ToolRule<'a> {
+    pub blocks: IDSet<'a>,
+    pub speed: Option<f32>,
+    pub correct_for_drops: Option<bool>,
+}
+#[derive(Clone, Debug)]
+pub struct ToolImpl<'a> {
+    pub rules: &'a [ToolRule<'a>],
+    pub default_mining_speed: f32,
+    pub damage_per_block: u32,
+    pub can_destroy_blocks_in_creative: bool,
+}
 #[derive(Clone, Debug)]
 pub struct WeaponImpl;
 #[derive(Clone, Debug)]
@@ -113,7 +166,9 @@ pub struct ProvidesTrimMaterialImpl;
 #[derive(Clone, Debug)]
 pub struct OminousBottleAmplifierImpl;
 #[derive(Clone, Debug)]
-pub struct JukeboxPlayableImpl;
+pub struct JukeboxPlayableImpl {
+    pub song: &'static str,
+}
 #[derive(Clone, Debug)]
 pub struct ProvidesBannerPatternsImpl;
 #[derive(Clone, Debug)]

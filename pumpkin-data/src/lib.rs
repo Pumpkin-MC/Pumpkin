@@ -33,6 +33,10 @@ pub mod recipes;
 pub mod data_component;
 pub mod data_component_impl;
 
+#[rustfmt::skip]
+#[path = "generated/attributes.rs"]
+pub mod attributes;
+
 pub mod sound {
     pub use crate::sound_category::*;
     pub use crate::sound_enum::*;

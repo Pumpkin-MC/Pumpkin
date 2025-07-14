@@ -1,6 +1,9 @@
+use pumpkin_data::Block;
+use pumpkin_data::data_component::DataComponent::{MaxStackSize, Tool};
+use pumpkin_data::data_component_impl::IDSet;
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
 use std::hash::Hash;
@@ -48,7 +51,12 @@ impl ItemStack {
     }
 
     pub fn get_max_stack_size(&self) -> u8 {
-        self.item.components.max_stack_size
+        for component in self.item.components {
+            if let MaxStackSize(size) = component {
+                return size.size;
+            }
+        }
+        unreachable!();
     }
 
     pub fn get_item(&self) -> &Item {
@@ -112,68 +120,59 @@ impl ItemStack {
     /// Determines the mining speed for a block based on tool rules.
     /// Direct matches return immediately, tagged blocks are checked separately.
     /// If no match is found, returns the tool's default mining speed or `1.0`.
-    pub fn get_speed(&self, block: &str) -> f32 {
+    pub fn get_speed(&self, block: &'static Block) -> f32 {
         // No tool? Use default speed
-        let Some(tool) = &self.item.components.tool else {
-            return 1.0;
-        };
-
-        for rule in tool.rules {
-            // Skip if speed is not set
-            let Some(speed) = rule.speed else {
-                continue;
-            };
-
-            for entry in rule.blocks {
-                if entry.eq(&block) {
-                    return speed;
-                }
-
-                if entry.starts_with('#') {
-                    // Check if block is in the tag group
-                    if let Some(blocks) =
-                        get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
-                    {
-                        if blocks.contains(&block) {
-                            return speed;
+        for component in self.item.components {
+            if let Tool(tool) = component {
+                for rule in tool.rules {
+                    // Skip if speed is not set
+                    let Some(speed) = rule.speed else {
+                        continue;
+                    };
+                    match rule.blocks {
+                        IDSet::Tag(tag) => {
+                            if block.is_tagged_with_by_tag(tag) {
+                                return speed;
+                            }
+                        }
+                        IDSet::Blocks(blocks) => {
+                            if blocks.contains(&block) {
+                                return speed;
+                            }
                         }
                     }
                 }
+                return tool.default_mining_speed;
             }
         }
-        // Return default mining speed if no match is found
-        tool.default_mining_speed.unwrap_or(1.0)
+        1.0
     }
 
     /// Determines if a tool is valid for block drops based on tool rules.
     /// Direct matches return immediately, while tagged blocks are checked separately.
-    pub fn is_correct_for_drops(&self, block: &str) -> bool {
-        // Return false if no tool component exists
-        let Some(tool) = &self.item.components.tool else {
-            return false;
-        };
-
-        for rule in tool.rules {
-            // Skip rules without a drop condition
-            let Some(correct_for_drops) = rule.correct_for_drops else {
-                continue;
-            };
-
-            for entry in rule.blocks {
-                if entry.eq(&block) {
-                    return correct_for_drops;
-                }
-
-                if entry.starts_with('#') {
-                    // Check if block exists within the tag group
-                    if let Some(blocks) =
-                        get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
-                    {
-                        if blocks.contains(&block) {
-                            return correct_for_drops;
+    pub fn is_correct_for_drops(&self, block: &'static Block) -> bool {
+        // No tool? Use default speed
+        for component in self.item.components {
+            if let Tool(tool) = component {
+                for rule in tool.rules {
+                    // Skip if speed is not set
+                    let Some(correct) = rule.correct_for_drops else {
+                        continue;
+                    };
+                    match rule.blocks {
+                        IDSet::Tag(tag) => {
+                            if block.is_tagged_with_by_tag(tag) {
+                                return correct;
+                            }
+                        }
+                        IDSet::Blocks(blocks) => {
+                            if blocks.contains(&block) {
+                                return correct;
+                            }
                         }
                     }
                 }
+                return false;
             }
         }
         false

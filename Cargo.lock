@@ -2073,6 +2073,7 @@ name = "pumpkin-data"
 version = "0.1.0-dev+1.21.7"
 dependencies = [
  "heck",
+ "once_cell",
  "phf",
  "proc-macro2",
  "pumpkin-util",

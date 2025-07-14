@@ -30,7 +30,7 @@ pub enum AttributeModifierSlot {
 }
 
 impl AttributeModifierSlot {
-    fn to_tokens(&self) -> TokenStream {
+    pub fn to_tokens(&self) -> TokenStream {
         match self {
             AttributeModifierSlot::Any => quote! { AttributeModifierSlot::Any },
             AttributeModifierSlot::MainHand => quote! { AttributeModifierSlot::MainHand },

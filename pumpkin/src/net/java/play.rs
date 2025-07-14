@@ -1240,7 +1240,7 @@ impl JavaClientPlatform {
                         std::sync::atomic::Ordering::Relaxed,
                     );
                     if !state.is_air() {
-                        let speed = block::calc_block_breaking(player, state, block.name).await;
+                        let speed = block::calc_block_breaking(player, state, block).await;
                         // Instant break
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&position).await;
@@ -1311,7 +1311,7 @@ impl JavaClientPlatform {
 
                     let (block, state) = world.get_block_and_block_state(&location).await;
                     let drop = player.gamemode.load() != GameMode::Creative
-                        && player.can_harvest(state, block.name).await;
+                        && player.can_harvest(state, block).await;
 
                     world
                         .break_block(
