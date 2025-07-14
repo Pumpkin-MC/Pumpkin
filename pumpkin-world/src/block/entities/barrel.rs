@@ -39,7 +39,7 @@ impl BlockEntity for BarrelBlockEntity {
     {
         let barrel = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::get_empty().clone()))),
             dirty: AtomicBool::new(false),
         };
 
@@ -72,7 +72,7 @@ impl BarrelBlockEntity {
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::get_empty().clone()))),
             dirty: AtomicBool::new(false),
         }
     }
@@ -99,7 +99,7 @@ impl Inventory for BarrelBlockEntity {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY;
+        let mut removed = ItemStack::get_empty().clone();
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -122,7 +122,7 @@ impl Inventory for BarrelBlockEntity {
 impl Clearable for BarrelBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY;
+            *slot.lock().await = ItemStack::get_empty().clone();
         }
     }
 }

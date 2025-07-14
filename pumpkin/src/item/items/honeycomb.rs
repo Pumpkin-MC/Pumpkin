@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::OakDoorLikeProperties;
-use pumpkin_data::item::Item;
+use pumpkin_data::item::{Item, item_properties};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
@@ -15,7 +15,7 @@ pub struct HoneyCombItem;
 
 impl ItemMetadata for HoneyCombItem {
     fn ids() -> Box<[u16]> {
-        [Item::HONEYCOMB.id].into()
+        [item_properties::HONEYCOMB.id].into()
     }
 }
 

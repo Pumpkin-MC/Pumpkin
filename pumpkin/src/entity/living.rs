@@ -64,7 +64,12 @@ impl LivingEntity {
     pub async fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
         let equipment: Vec<(i8, ItemStackSerializer)> = equipment
             .iter()
-            .map(|(slot, stack)| (slot.discriminant(), ItemStackSerializer::from(*stack)))
+            .map(|(slot, stack)| {
+                (
+                    slot.discriminant(),
+                    ItemStackSerializer::from(stack.clone()),
+                )
+            })
             .collect();
         self.entity
             .world

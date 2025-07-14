@@ -1,7 +1,10 @@
+use lazy_static::lazy_static;
 use pumpkin_data::Block;
+use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component::DataComponent::{MaxStackSize, Tool};
 use pumpkin_data::data_component_impl::IDSet;
 use pumpkin_data::item::Item;
+use pumpkin_data::item::item_properties;
 use pumpkin_data::recipes::RecipeResultStruct;
 use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
@@ -20,16 +23,18 @@ pub enum Rarity {
     Epic,
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug)]
 pub struct ItemStack {
     pub item_count: u8,
     pub item: &'static Item,
+    pub patch: Vec<Option<DataComponent>>,
 }
 
 impl Hash for ItemStack {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.item_count.hash(state);
         self.item.id.hash(state);
+        self.patch.hash(state);
     }
 }
 
@@ -40,18 +45,29 @@ impl PartialEq for ItemStack {
     }
 } */
 
-impl ItemStack {
-    pub const EMPTY: ItemStack = ItemStack {
+lazy_static! {
+    pub static ref EMPTY: ItemStack = ItemStack {
         item_count: 0,
-        item: &Item::AIR,
+        item: &item_properties::AIR,
+        patch: Vec::new(),
     };
+}
 
+impl ItemStack {
     pub fn new(item_count: u8, item: &'static Item) -> Self {
-        Self { item_count, item }
+        Self {
+            item_count,
+            item,
+            patch: Vec::new(),
+        }
+    }
+
+    pub fn get_empty() -> &'static Self {
+        &crate::item::EMPTY
     }
 
     pub fn get_max_stack_size(&self) -> u8 {
-        for component in self.item.components {
+        for component in &self.item.components {
             if let MaxStackSize(size) = component {
                 return size.size;
             }
@@ -61,7 +77,7 @@ impl ItemStack {
 
     pub fn get_item(&self) -> &Item {
         if self.is_empty() {
-            &Item::AIR
+            &item_properties::AIR
         } else {
             self.item
         }
@@ -72,7 +88,7 @@ impl ItemStack {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.item_count == 0 || self.item.id == Item::AIR.id
+        self.item_count == 0 || self.item.id == item_properties::AIR.id
     }
 
     pub fn split(&mut self, amount: u8) -> Self {
@@ -92,7 +108,7 @@ impl ItemStack {
     }
 
     pub fn copy_with_count(&self, count: u8) -> Self {
-        let mut stack = *self;
+        let mut stack = self.clone();
         stack.item_count = count;
         stack
     }
@@ -122,14 +138,14 @@ impl ItemStack {
     /// If no match is found, returns the tool's default mining speed or `1.0`.
     pub fn get_speed(&self, block: &'static Block) -> f32 {
         // No tool? Use default speed
-        for component in self.item.components {
+        for component in &self.item.components {
             if let Tool(tool) = component {
-                for rule in tool.rules {
+                for rule in &tool.rules {
                     // Skip if speed is not set
                     let Some(speed) = rule.speed else {
                         continue;
                     };
-                    match rule.blocks {
+                    match &rule.blocks {
                         IDSet::Tag(tag) => {
                             if block.is_tagged_with_by_tag(tag) {
                                 return speed;
@@ -152,14 +168,14 @@ impl ItemStack {
     /// Direct matches return immediately, while tagged blocks are checked separately.
     pub fn is_correct_for_drops(&self, block: &'static Block) -> bool {
         // No tool? Use default speed
-        for component in self.item.components {
+        for component in &self.item.components {
             if let Tool(tool) = component {
-                for rule in tool.rules {
+                for rule in &tool.rules {
                     // Skip if speed is not set
                     let Some(correct) = rule.correct_for_drops else {
                         continue;
                     };
-                    match rule.blocks {
+                    match &rule.blocks {
                         IDSet::Tag(tag) => {
                             if block.is_tagged_with_by_tag(tag) {
                                 return correct;
@@ -222,6 +238,7 @@ impl From<&RecipeResultStruct> for ItemStack {
             item_count: value.count,
             item: Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
                 .expect("Crafting recipe gives invalid item"),
+            patch: Vec::new(),
         }
     }
 }

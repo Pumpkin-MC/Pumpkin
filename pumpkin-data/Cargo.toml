@@ -9,6 +9,7 @@ phf = { version = "0.12.1", features = ["macros"] }
 pumpkin-util = { path = "../pumpkin-util" }
 
 serde.workspace = true
+lazy_static = "1.5.0"
 
 [build-dependencies]
 pumpkin-util = { path = "../pumpkin-util" }

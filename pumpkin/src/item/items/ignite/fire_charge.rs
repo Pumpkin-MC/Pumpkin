@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::item::Item;
+use pumpkin_data::item::{Item, item_properties};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::math::position::BlockPos;
@@ -19,7 +19,7 @@ pub struct FireChargeItem;
 
 impl ItemMetadata for FireChargeItem {
     fn ids() -> Box<[u16]> {
-        [Item::FIRE_CHARGE.id].into()
+        [item_properties::FIRE_CHARGE.id].into()
     }
 }
 

@@ -1630,7 +1630,7 @@ impl JavaClientPlatform {
         }
         let inv = player.inventory();
         inv.set_selected_slot(slot as u8);
-        let stack = *inv.held_item().lock().await;
+        let stack = inv.held_item().lock().await.clone();
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         player.living_entity.send_equipment_changes(equipment).await;
     }
@@ -1654,7 +1654,7 @@ impl JavaClientPlatform {
             player_screen_handler
                 .get_slot(packet.slot as usize)
                 .await
-                .set_stack(item_stack)
+                .set_stack(item_stack.clone())
                 .await;
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
             player_screen_handler.send_content_updates().await;

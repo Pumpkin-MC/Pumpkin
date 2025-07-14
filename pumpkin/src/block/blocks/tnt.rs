@@ -1,3 +1,4 @@
+use pumpkin_data::item::item_properties;
 use std::sync::Arc;
 
 use crate::block::pumpkin_block::{
@@ -9,7 +10,6 @@ use crate::entity::tnt::TNTEntity;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -55,7 +55,7 @@ const DEFAULT_POWER: f32 = 4.0;
 impl PumpkinBlock for TNTBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let item = args.item_stack.lock().await.item;
-        if item != &Item::FLINT_AND_STEEL || item == &Item::FIRE_CHARGE {
+        if *item != *item_properties::FLINT_AND_STEEL || *item == *item_properties::FIRE_CHARGE {
             return BlockActionResult::Continue;
         }
         let world = args.player.world().await;

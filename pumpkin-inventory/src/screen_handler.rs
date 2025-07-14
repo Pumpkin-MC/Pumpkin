@@ -86,8 +86,8 @@ pub trait ScreenHandler: Send + Sync {
     async fn default_on_closed(&mut self, player: &dyn InventoryPlayer) {
         let behaviour = self.get_behaviour_mut();
         if !behaviour.cursor_stack.lock().await.is_empty() {
-            offer_or_drop_stack(player, *behaviour.cursor_stack.lock().await).await;
-            *behaviour.cursor_stack.lock().await = ItemStack::EMPTY;
+            offer_or_drop_stack(player, behaviour.cursor_stack.lock().await.clone()).await;
+            *behaviour.cursor_stack.lock().await = ItemStack::get_empty().clone();
         }
     }
 
@@ -109,7 +109,9 @@ pub trait ScreenHandler: Send + Sync {
         let behaviour = self.get_behaviour_mut();
         slot.set_id(behaviour.slots.len());
         behaviour.slots.push(slot.clone());
-        behaviour.tracked_stacks.push(ItemStack::EMPTY);
+        behaviour
+            .tracked_stacks
+            .push(ItemStack::get_empty().clone());
         behaviour.previous_tracked_stacks.push(TrackedStack::EMPTY);
 
         slot
@@ -160,7 +162,7 @@ pub trait ScreenHandler: Send + Sync {
             if let Some(hash_map) = table.get(&ComparableInventory(inventory.clone())) {
                 if let Some(other_index) = hash_map.get(&index) {
                     self.get_behaviour_mut().tracked_stacks[i] =
-                        other_behaviour.tracked_stacks[*other_index];
+                        other_behaviour.tracked_stacks[*other_index].clone();
                     self.get_behaviour_mut().previous_tracked_stacks[i] =
                         other_behaviour.previous_tracked_stacks[*other_index].clone();
                 }
@@ -197,14 +199,14 @@ pub trait ScreenHandler: Send + Sync {
 
         for i in 0..behaviour.slots.len() {
             let stack = behaviour.slots[i].get_cloned_stack().await;
-            previous_tracked_stacks.push(stack);
+            previous_tracked_stacks.push(stack.clone());
             behaviour.previous_tracked_stacks[i].set_received_stack(stack);
         }
 
-        let cursor_stack = *behaviour.cursor_stack.lock().await;
+        let cursor_stack = behaviour.cursor_stack.lock().await.clone();
         behaviour
             .previous_cursor_stack
-            .set_received_stack(cursor_stack);
+            .set_received_stack(cursor_stack.clone());
 
         for i in 0..behaviour.properties.len() {
             let property_val = behaviour.properties[i].get();
@@ -270,10 +272,12 @@ pub trait ScreenHandler: Send + Sync {
         let behaviour = self.get_behaviour_mut();
         let other_stack = &behaviour.tracked_stacks[slot];
         if !other_stack.are_equal(&stack) {
-            behaviour.tracked_stacks[slot] = stack;
+            behaviour.tracked_stacks[slot] = stack.clone();
 
             for listener in behaviour.listeners.iter() {
-                listener.on_slot_update(behaviour, slot as u8, stack).await;
+                listener
+                    .on_slot_update(behaviour, slot as u8, stack.clone())
+                    .await;
             }
         }
     }
@@ -284,7 +288,7 @@ pub trait ScreenHandler: Send + Sync {
             let prev_stack = &mut behaviour.previous_tracked_stacks[slot];
 
             if !prev_stack.is_in_sync(&stack) {
-                prev_stack.set_received_stack(stack);
+                prev_stack.set_received_stack(stack.clone());
                 let next_revision = behaviour.next_revision();
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
                     sync_handler
@@ -302,7 +306,7 @@ pub trait ScreenHandler: Send + Sync {
             if !behaviour.previous_cursor_stack.is_in_sync(&cursor_stack) {
                 behaviour
                     .previous_cursor_stack
-                    .set_received_stack(*cursor_stack);
+                    .set_received_stack(cursor_stack.clone());
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
                     sync_handler
                         .update_cursor_stack(behaviour, &cursor_stack)
@@ -319,7 +323,7 @@ pub trait ScreenHandler: Send + Sync {
             let slot = self.get_behaviour().slots[i].clone();
             let stack = slot.get_cloned_stack().await;
 
-            self.update_tracked_slot(i, stack).await;
+            self.update_tracked_slot(i, stack.clone()).await;
             self.check_slot_updates(i, stack).await;
         }
 
@@ -562,7 +566,7 @@ pub trait ScreenHandler: Send + Sync {
                             ))
                             .min(cursor_stack.item_count);
                         if inserting_count > 0 {
-                            let mut stack_clone = *stack;
+                            let mut stack_clone = stack.clone();
                             drop(stack);
                             if stack_clone.is_empty() {
                                 stack_clone = cursor_stack.copy_with_count(0);
@@ -631,8 +635,8 @@ pub trait ScreenHandler: Send + Sync {
                 let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
                 if !cursor_stack.is_empty() {
                     if click_type == MouseClick::Left {
-                        player.drop_item(*cursor_stack, true).await;
-                        *cursor_stack = ItemStack::EMPTY;
+                        player.drop_item(cursor_stack.clone(), true).await;
+                        *cursor_stack = ItemStack::get_empty().clone();
                     } else {
                         player.drop_item(cursor_stack.split(1), true).await;
                     }
@@ -678,8 +682,8 @@ pub trait ScreenHandler: Send + Sync {
                         player,
                         click_type.clone(),
                         slot.clone(),
-                        slot_stack,
-                        *cursor_stack,
+                        slot_stack.clone(),
+                        cursor_stack.clone(),
                     )
                     .await
                 {
@@ -693,8 +697,9 @@ pub trait ScreenHandler: Send + Sync {
                         } else {
                             1
                         };
-                        *cursor_stack =
-                            slot.insert_stack_count(*cursor_stack, transfer_count).await;
+                        *cursor_stack = slot
+                            .insert_stack_count(cursor_stack.clone(), transfer_count)
+                            .await;
                     }
                 } else if slot.can_take_items(player).await {
                     if cursor_stack.is_empty() {
@@ -706,7 +711,7 @@ pub trait ScreenHandler: Send + Sync {
                         let taken = slot.try_take_stack_range(take_count, u8::MAX, player).await;
                         if let Some(taken) = taken {
                             // Reverse order of operations, shouldn't affect anything
-                            *cursor_stack = taken;
+                            *cursor_stack = taken.clone();
                             slot.on_take_item(player, &taken).await;
                         }
                     } else if slot.can_insert(&cursor_stack).await {
@@ -716,13 +721,14 @@ pub trait ScreenHandler: Send + Sync {
                             } else {
                                 1
                             };
-                            *cursor_stack =
-                                slot.insert_stack_count(*cursor_stack, insert_count).await;
+                            *cursor_stack = slot
+                                .insert_stack_count(cursor_stack.clone(), insert_count)
+                                .await;
                         } else if cursor_stack.item_count
                             <= slot.get_max_item_count_for_stack(&cursor_stack).await
                         {
-                            let old_cursor_stack = *cursor_stack;
-                            *cursor_stack = slot_stack;
+                            let old_cursor_stack = cursor_stack.clone();
+                            *cursor_stack = slot_stack.clone();
                             slot.set_stack(old_cursor_stack).await;
                         }
                     } else if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack)
@@ -747,12 +753,13 @@ pub trait ScreenHandler: Send + Sync {
                 slot.mark_dirty().await;
             }
         } else if action_type == SlotActionType::Swap && (0..9).contains(&button) || button == 40 {
-            let mut button_stack = *player
+            let mut button_stack = player
                 .get_inventory()
                 .get_stack(button as usize)
                 .await
                 .lock()
-                .await;
+                .await
+                .clone();
             let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
             let source_stack = source_slot.get_cloned_stack().await;
 
@@ -761,9 +768,9 @@ pub trait ScreenHandler: Send + Sync {
                     if source_slot.can_take_items(player).await {
                         player
                             .get_inventory()
-                            .set_stack(button as usize, source_stack)
+                            .set_stack(button as usize, source_stack.clone())
                             .await;
-                        source_slot.set_stack(ItemStack::EMPTY).await;
+                        source_slot.set_stack(ItemStack::get_empty().clone()).await;
                         source_slot.on_take_item(player, &source_stack).await;
                     }
                 } else if source_stack.is_empty() {
@@ -777,7 +784,7 @@ pub trait ScreenHandler: Send + Sync {
                         } else {
                             player
                                 .get_inventory()
-                                .set_stack(button as usize, ItemStack::EMPTY)
+                                .set_stack(button as usize, ItemStack::get_empty().clone())
                                 .await;
                             source_slot.set_stack(button_stack).await;
                         }
@@ -803,7 +810,7 @@ pub trait ScreenHandler: Send + Sync {
                             .get_inventory()
                             .set_stack(button as usize, source_stack)
                             .await;
-                        source_slot.set_stack(button_stack).await;
+                        source_slot.set_stack(button_stack.clone()).await;
                         source_slot.on_take_item(player, &button_stack).await;
                     }
                 }
@@ -877,7 +884,7 @@ impl ScreenHandlerBehaviour {
             listeners: Vec::new(),
             sync_handler: None,
             tracked_stacks: Vec::new(),
-            cursor_stack: Arc::new(Mutex::new(ItemStack::EMPTY)),
+            cursor_stack: Arc::new(Mutex::new(ItemStack::get_empty().clone())),
             previous_tracked_stacks: Vec::new(),
             previous_cursor_stack: TrackedStack::EMPTY,
             revision: AtomicU32::new(0),

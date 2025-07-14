@@ -62,7 +62,7 @@ impl ToTokens for ItemComponents {
         let item_name = LitStr::new(&text, Span::call_site());
         tokens.extend(quote! {
             ItemName(ItemNameImpl {
-                name: #item_name,
+                name: #item_name.to_string(),
             }),
         });
 
@@ -111,7 +111,7 @@ impl ToTokens for ItemComponents {
             });
             tokens.extend(quote! {
                 AttributeModifiers(AttributeModifiersImpl {
-                    attribute_modifiers: &[#(#modifier_code),*]
+                    attribute_modifiers: [#(#modifier_code),*].to_vec()
                 }),
             });
         };
@@ -127,7 +127,7 @@ impl ToTokens for ItemComponents {
                             str.strip_prefix("minecraft:").unwrap().to_uppercase()
                         );
                         block_array = quote! {
-                            Blocks(&[&Block::#ident])
+                            Blocks([&Block::#ident].to_vec())
                         }
                     } else if let TagType::Tag(str) = t {
                         let ident = format_ident!(
@@ -155,7 +155,7 @@ impl ToTokens for ItemComponents {
                         });
                     }
                     block_array = quote! {
-                        Blocks(&[#(#array),*])
+                        Blocks([#(#array),*].to_vec())
                     }
                 } else {
                     unreachable!();
@@ -195,7 +195,7 @@ impl ToTokens for ItemComponents {
             let can_destroy_blocks_in_creative =
                 LitBool::new(tool.can_destroy_blocks_in_creative, Span::call_site());
             tokens.extend(quote! { Tool(ToolImpl {
-                rules: &[#(#rules_code),*],
+                rules: [#(#rules_code),*].to_vec(),
                 default_mining_speed: #default_mining_speed,
                 damage_per_block: #damage_per_block,
                 can_destroy_blocks_in_creative: #can_destroy_blocks_in_creative
@@ -299,19 +299,21 @@ pub(crate) fn build() -> TokenStream {
         let id_lit = LitInt::new(&item.id.to_string(), Span::call_site());
 
         constants.extend(quote! {
-            pub const #const_ident: Item = Item {
-                id: #id_lit,
-                registry_key: #name,
-                components: &[#components_tokens],
-            };
+            lazy_static! {
+                pub static ref #const_ident: Item = Item {
+                    id: #id_lit,
+                    registry_key: #name,
+                    components: [#components_tokens].to_vec(),
+                };
+            }
         });
 
         type_from_raw_id_arms.extend(quote! {
-            #id_lit => Some(&Self::#const_ident),
+            #id_lit => Some(&item_properties::#const_ident),
         });
 
         type_from_name.extend(quote! {
-            #name => Some(&Self::#const_ident),
+            #name => Some(&item_properties::#const_ident),
         });
     }
 
@@ -326,12 +328,13 @@ pub(crate) fn build() -> TokenStream {
         use crate::data_component_impl::IDSet::{Blocks, Tag};
         use crate::data_component::DataComponent;
         use crate::Block;
+        use lazy_static::lazy_static;
 
         #[derive(Clone, Debug)]
         pub struct Item {
             pub id: u16,
             pub registry_key: &'static str,
-            pub components: &'static [DataComponent<'static>],
+            pub components: Vec<DataComponent>,
         }
 
         impl PartialEq for Item {
@@ -348,9 +351,21 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        impl Item {
+        pub mod item_properties {
+            use crate::data_component::DataComponent::*;
+            use crate::data_component_impl::*;
+            use pumpkin_util::text::TextComponent;
+            use crate::{tag, AttributeModifierSlot};
+            use crate::attributes::Attributes;
+            use crate::data_component_impl::IDSet::{Blocks, Tag};
+            use crate::data_component::DataComponent;
+            use crate::Block;
+            use lazy_static::lazy_static;
+            use crate::item::Item;
             #constants
+        }
 
+        impl Item {
             pub fn translated_name(&self) -> TextComponent {
                 TextComponent::translate(self.components.iter().find_map(|i| match i {
                     ItemName(ret) => Some(ret.name.to_string()),
@@ -367,7 +382,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = "Try to parse an item from a raw id."]
-            pub const fn from_id(id: u16) -> Option<&'static Self> {
+            pub fn from_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #type_from_raw_id_arms
                     _ => None

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::entity::player::Player;
 use async_trait::async_trait;
+use pumpkin_data::item::item_properties;
 use pumpkin_data::{
     Block, BlockState,
     fluid::Fluid,
@@ -24,22 +25,22 @@ pub struct MilkBucketItem;
 
 impl ItemMetadata for EmptyBucketItem {
     fn ids() -> Box<[u16]> {
-        [Item::BUCKET.id].into()
+        [item_properties::BUCKET.id].into()
     }
 }
 
 impl ItemMetadata for FilledBucketItem {
     fn ids() -> Box<[u16]> {
         [
-            Item::WATER_BUCKET.id,
-            Item::LAVA_BUCKET.id,
-            Item::POWDER_SNOW_BUCKET.id,
-            Item::AXOLOTL_BUCKET.id,
-            Item::COD_BUCKET.id,
-            Item::SALMON_BUCKET.id,
-            Item::TROPICAL_FISH_BUCKET.id,
-            Item::PUFFERFISH_BUCKET.id,
-            Item::TADPOLE_BUCKET.id,
+            item_properties::WATER_BUCKET.id,
+            item_properties::LAVA_BUCKET.id,
+            item_properties::POWDER_SNOW_BUCKET.id,
+            item_properties::AXOLOTL_BUCKET.id,
+            item_properties::COD_BUCKET.id,
+            item_properties::SALMON_BUCKET.id,
+            item_properties::TROPICAL_FISH_BUCKET.id,
+            item_properties::PUFFERFISH_BUCKET.id,
+            item_properties::TADPOLE_BUCKET.id,
         ]
         .into()
     }
@@ -47,7 +48,7 @@ impl ItemMetadata for FilledBucketItem {
 
 impl ItemMetadata for MilkBucketItem {
     fn ids() -> Box<[u16]> {
-        [Item::MILK_BUCKET.id].into()
+        [item_properties::MILK_BUCKET.id].into()
     }
 }
 
@@ -169,10 +170,10 @@ impl PumpkinItem for EmptyBucketItem {
             }
         }
 
-        let item = if state.id == Block::LAVA.default_state.id {
-            &Item::LAVA_BUCKET
+        let item: &'static Item = if state.id == Block::LAVA.default_state.id {
+            &item_properties::LAVA_BUCKET
         } else {
-            &Item::WATER_BUCKET
+            &item_properties::WATER_BUCKET
         };
 
         if player.gamemode.load() == GameMode::Creative {
@@ -215,7 +216,7 @@ impl PumpkinItem for FilledBucketItem {
             return;
         };
 
-        if item.id != Item::LAVA_BUCKET.id
+        if item.id != item_properties::LAVA_BUCKET.id
             && world.dimension_type == VanillaDimensionType::TheNether
         {
             world
@@ -230,7 +231,8 @@ impl PumpkinItem for FilledBucketItem {
             return;
         }
         let (block, state) = world.get_block_and_block_state(&pos).await;
-        if waterlogged_check(block, state).is_some() && item.id == Item::WATER_BUCKET.id {
+        if waterlogged_check(block, state).is_some() && item.id == item_properties::WATER_BUCKET.id
+        {
             let state_id = set_waterlogged(block, state, true);
             world
                 .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
@@ -242,7 +244,7 @@ impl PumpkinItem for FilledBucketItem {
                 .await;
 
             if waterlogged_check(block, state).is_some() {
-                if item.id == Item::LAVA_BUCKET.id {
+                if item.id == item_properties::LAVA_BUCKET.id {
                     return;
                 }
                 let state_id = set_waterlogged(block, state, true);
@@ -261,7 +263,7 @@ impl PumpkinItem for FilledBucketItem {
                 world
                     .set_block_state(
                         &pos.offset(direction.to_offset()),
-                        if item.id == Item::LAVA_BUCKET.id {
+                        if item.id == item_properties::LAVA_BUCKET.id {
                             Block::LAVA.default_state.id
                         } else {
                             Block::WATER.default_state.id
@@ -276,7 +278,7 @@ impl PumpkinItem for FilledBucketItem {
 
         //TODO: Spawn entity if applicable
         if player.gamemode.load() != GameMode::Creative {
-            let item_stack = ItemStack::new(1, &Item::BUCKET);
+            let item_stack = ItemStack::new(1, &item_properties::BUCKET);
             player
                 .inventory
                 .set_stack(player.inventory.get_selected_slot().into(), item_stack)

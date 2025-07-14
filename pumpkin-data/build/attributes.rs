@@ -36,13 +36,17 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-
+        use std::hash::Hash;
         #[derive(Clone, Debug)]
         pub struct Attributes {
             pub id: u8,
             pub default_value: f64,
         }
-
+        impl Hash for Attributes {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.id.hash(state);
+            }
+        }
         impl Attributes {
             #consts
         }

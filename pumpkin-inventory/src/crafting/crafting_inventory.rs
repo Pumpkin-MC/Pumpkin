@@ -24,7 +24,7 @@ impl CraftingInventory {
                 // Creates a Vec with different Mutexes for each slot
                 let mut v = Vec::with_capacity(width as usize * height as usize);
                 (0..width as usize * height as usize)
-                    .for_each(|_| v.push(Arc::new(Mutex::new(ItemStack::EMPTY))));
+                    .for_each(|_| v.push(Arc::new(Mutex::new(ItemStack::get_empty().clone()))));
                 v
             },
         }
@@ -52,7 +52,7 @@ impl Inventory for CraftingInventory {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY;
+        let mut removed = ItemStack::get_empty().clone();
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -81,7 +81,7 @@ impl RecipeInputInventory for CraftingInventory {
 impl Clearable for CraftingInventory {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY;
+            *slot.lock().await = ItemStack::get_empty().clone();
         }
     }
 }

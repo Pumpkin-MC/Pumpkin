@@ -2015,6 +2015,7 @@ dependencies = [
  "flate2",
  "futures",
  "hmac",
+ "lazy_static",
  "libloading",
  "log",
  "num-bigint",
@@ -2073,6 +2074,7 @@ name = "pumpkin-data"
 version = "0.1.0-dev+1.21.7"
 dependencies = [
  "heck",
+ "lazy_static",
  "phf",
  "proc-macro2",
  "pumpkin-util",
@@ -2192,6 +2194,7 @@ dependencies = [
  "flate2",
  "futures",
  "itertools 0.14.0",
+ "lazy_static",
  "log",
  "lru",
  "lz4-java-wrc",

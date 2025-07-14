@@ -1,3 +1,4 @@
+use pumpkin_data::item::item_properties;
 use std::borrow::Cow;
 
 use crate::VarInt;
@@ -33,7 +34,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
 
                 let slot = if item_count.0 == 0 {
-                    ItemStackSerializer(Cow::Borrowed(&ItemStack::EMPTY))
+                    ItemStackSerializer(Cow::Borrowed(ItemStack::get_empty()))
                 } else {
                     let item_id = seq
                         .next_element::<VarInt>()?
@@ -59,7 +60,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
 
                     ItemStackSerializer(Cow::Owned(ItemStack::new(
                         item_count.0 as u8,
-                        Item::from_id(item_id).unwrap_or(&Item::AIR),
+                        Item::from_id(item_id).unwrap_or(&item_properties::AIR),
                     )))
                 };
 
@@ -116,7 +117,7 @@ impl From<Option<ItemStack>> for ItemStackSerializer<'_> {
     fn from(item: Option<ItemStack>) -> Self {
         match item {
             Some(item) => ItemStackSerializer::from(item),
-            None => ItemStackSerializer(Cow::Borrowed(&ItemStack::EMPTY)),
+            None => ItemStackSerializer(Cow::Borrowed(ItemStack::get_empty())),
         }
     }
 }

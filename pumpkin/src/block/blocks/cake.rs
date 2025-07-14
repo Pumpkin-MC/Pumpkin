@@ -1,17 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use pumpkin_data::{
-    Block,
-    block_properties::{BlockProperties, CakeLikeProperties, EnumVariants, Integer0To6},
-    item::Item,
-    sound::{Sound, SoundCategory},
-};
-use pumpkin_macros::pumpkin_block;
-use pumpkin_util::{GameMode, math::position::BlockPos};
-use pumpkin_world::world::BlockFlags;
-use rand::{Rng, rng};
-
 use crate::{
     block::{
         blocks::candle_cakes::cake_from_candle,
@@ -21,6 +9,17 @@ use crate::{
     entity::player::Player,
     world::World,
 };
+use async_trait::async_trait;
+use pumpkin_data::item::item_properties;
+use pumpkin_data::{
+    Block,
+    block_properties::{BlockProperties, CakeLikeProperties, EnumVariants, Integer0To6},
+    sound::{Sound, SoundCategory},
+};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_util::{GameMode, math::position::BlockPos};
+use pumpkin_world::world::BlockFlags;
+use rand::{Rng, rng};
 
 #[pumpkin_block("minecraft:cake")]
 pub struct CakeBlock;
@@ -88,7 +87,7 @@ impl PumpkinBlock for CakeBlock {
         let item = item_lock.item;
         drop(item_lock);
         match item.id {
-            id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id) => {
+            id if (item_properties::CANDLE.id..=item_properties::BLACK_CANDLE.id).contains(&id) => {
                 if properties.bites.to_index() != 0 {
                     return Self::consume_if_hungry(
                         args.world,

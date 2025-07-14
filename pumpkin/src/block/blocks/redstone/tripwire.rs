@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::item::item_properties;
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{BlockProperties, HorizontalFacing},
-    item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
@@ -85,7 +85,7 @@ impl PumpkinBlock for TripwireBlock {
                 .lock()
                 .await
                 .get_item()
-                .eq(&Item::SHEARS)
+                .eq(&item_properties::SHEARS)
         };
         if has_shears {
             let mut props = TripwireProperties::from_state_id(args.state.id, args.block);

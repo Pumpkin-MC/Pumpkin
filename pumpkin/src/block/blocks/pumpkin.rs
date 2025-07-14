@@ -5,19 +5,20 @@ use crate::entity::item::ItemEntity;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
+use pumpkin_data::item::item_properties;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 use uuid::Uuid;
+
 #[pumpkin_block("minecraft:pumpkin")]
 pub struct PumpkinBlock;
 
 #[async_trait]
 impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        if args.item_stack.lock().await.item != &Item::SHEARS {
+        if *args.item_stack.lock().await.item != *item_properties::SHEARS {
             return BlockActionResult::Continue;
         }
         // TODO: set direction
@@ -35,8 +36,9 @@ impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
             EntityType::ITEM,
             false,
         );
-        let item_entity =
-            Arc::new(ItemEntity::new(entity, ItemStack::new(4, &Item::PUMPKIN_SEEDS)).await);
+        let item_entity = Arc::new(
+            ItemEntity::new(entity, ItemStack::new(4, &item_properties::PUMPKIN_SEEDS)).await,
+        );
         args.world.spawn_entity(item_entity).await;
         BlockActionResult::Consume
     }

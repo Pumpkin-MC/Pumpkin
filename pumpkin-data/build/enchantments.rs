@@ -80,6 +80,7 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
+        use std::hash::Hash;
         #[derive(Debug, Clone)]
         pub struct Enchantment {
             pub name: &'static str,
@@ -90,7 +91,7 @@ pub(crate) fn build() -> TokenStream {
             // TODO: add more
         }
 
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, Hash)]
         pub enum AttributeModifierSlot {
             Any,
             MainHand,
