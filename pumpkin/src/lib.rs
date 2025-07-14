@@ -324,7 +324,7 @@ impl PumpkinServer {
         tasks: &Arc<TaskTracker>,
         bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<BedrockClientPlatform>>>>,
     ) -> bool {
-        let mut udp_buf = vec![0; 4096]; // Buffer for UDP receive
+        let mut udp_buf = [0; 1496]; // Buffer for UDP receive
 
         select! {
             // Branch for TCP connections (Java Edition)

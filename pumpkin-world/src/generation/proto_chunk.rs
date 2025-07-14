@@ -117,10 +117,10 @@ pub struct ProtoChunk<'a> {
     /// HEIGHTMAPS
     ///
     /// Top block that is not air
-    pub flat_surface_height_map: Box<[i64]>,
-    flat_ocean_floor_height_map: Box<[i64]>,
-    pub flat_motion_blocking_height_map: Box<[i64]>,
-    pub flat_motion_blocking_no_leaves_height_map: Box<[i64]>,
+    pub flat_surface_height_map: Box<[i16]>,
+    flat_ocean_floor_height_map: Box<[i16]>,
+    pub flat_motion_blocking_height_map: Box<[i16]>,
+    pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
     // may want to use chunk status
 }
 
@@ -187,7 +187,7 @@ impl<'a> ProtoChunk<'a> {
             SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
         let default_block = settings.default_block.get_state();
-        let default_heightmap = vec![i64::MIN; CHUNK_AREA].into_boxed_slice();
+        let default_heightmap = vec![i16::MIN; CHUNK_AREA].into_boxed_slice();
         Self {
             chunk_pos,
             settings,
@@ -223,7 +223,7 @@ impl<'a> ProtoChunk<'a> {
         let current_height = self.flat_surface_height_map[index];
 
         if pos.y > current_height as i32 {
-            self.flat_surface_height_map[index] = pos.y as i64;
+            self.flat_surface_height_map[index] = pos.y as _;
         }
     }
 
@@ -234,7 +234,7 @@ impl<'a> ProtoChunk<'a> {
         let current_height = self.flat_ocean_floor_height_map[index];
 
         if pos.y > current_height as i32 {
-            self.flat_ocean_floor_height_map[index] = pos.y as i64;
+            self.flat_ocean_floor_height_map[index] = pos.y as _;
         }
     }
 
@@ -245,7 +245,7 @@ impl<'a> ProtoChunk<'a> {
         let current_height = self.flat_motion_blocking_height_map[index];
 
         if pos.y > current_height as i32 {
-            self.flat_motion_blocking_height_map[index] = pos.y as i64;
+            self.flat_motion_blocking_height_map[index] = pos.y as _;
         }
     }
 
@@ -256,11 +256,11 @@ impl<'a> ProtoChunk<'a> {
         let current_height = self.flat_motion_blocking_no_leaves_height_map[index];
 
         if pos.y > current_height as i32 {
-            self.flat_motion_blocking_no_leaves_height_map[index] = pos.y as i64;
+            self.flat_motion_blocking_no_leaves_height_map[index] = pos.y as _;
         }
     }
 
-    pub fn get_top_y(&self, heightmap: &HeightMap, pos: &Vector2<i32>) -> i64 {
+    pub fn get_top_y(&self, heightmap: &HeightMap, pos: &Vector2<i32>) -> i32 {
         match heightmap {
             HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(pos),
             HeightMap::WorldSurface => self.top_block_height_exclusive(pos),
@@ -273,32 +273,32 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
-    pub fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
+    pub fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
         let local_x = (pos.x & 15) as usize;
         let local_z = (pos.y & 15) as usize;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_surface_height_map[index] + 1
+        self.flat_surface_height_map[index] as i32 + 1
     }
 
-    pub fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
+    pub fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
         let local_x = (pos.x & 15) as usize;
         let local_z = (pos.y & 15) as usize;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_ocean_floor_height_map[index] + 1
+        self.flat_ocean_floor_height_map[index] as i32 + 1
     }
 
-    pub fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
+    pub fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
         let local_x = (pos.x & 15) as usize;
         let local_z = (pos.y & 15) as usize;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_motion_blocking_height_map[index] + 1
+        self.flat_motion_blocking_height_map[index] as i32 + 1
     }
 
-    pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
+    pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
         let local_x = (pos.x & 15) as usize;
         let local_z = (pos.y & 15) as usize;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_motion_blocking_no_leaves_height_map[index] + 1
+        self.flat_motion_blocking_no_leaves_height_map[index] as i32 + 1
     }
 
     fn local_position_to_height_map_index(x: usize, z: usize) -> usize {

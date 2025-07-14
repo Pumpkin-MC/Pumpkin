@@ -1,6 +1,8 @@
 use std::{
-    io::{Read, Write},
+    io::{Error, Read, Write},
     marker::PhantomData,
+    pin::Pin,
+    task::{Context, Poll},
 };
 
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, BlockSizeUser, generic_array::GenericArray};
@@ -16,7 +18,7 @@ use serde::{
     de::{DeserializeSeed, SeqAccess, Visitor},
 };
 use thiserror::Error;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use crate::packet::Packet;
 
@@ -27,6 +29,7 @@ pub mod packet;
 #[cfg(feature = "query")]
 pub mod query;
 pub mod ser;
+pub mod serial;
 
 pub const MAX_PACKET_SIZE: u64 = 2097152;
 pub const MAX_PACKET_DATA_SIZE: usize = 8388608;
@@ -195,12 +198,12 @@ impl<R: AsyncRead + Unpin> StreamDecryptor<R> {
 
 impl<R: AsyncRead + Unpin> AsyncRead for StreamDecryptor<R> {
     fn poll_read(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
         let ref_self = self.get_mut();
-        let read = std::pin::Pin::new(&mut ref_self.read);
+        let read = Pin::new(&mut ref_self.read);
         let cipher = &mut ref_self.cipher;
 
         // Get the starting position
@@ -208,7 +211,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for StreamDecryptor<R> {
         // Read the raw data
         let internal_poll = read.poll_read(cx, buf);
 
-        if matches!(internal_poll, std::task::Poll::Ready(Ok(_))) {
+        if matches!(internal_poll, Poll::Ready(Ok(_))) {
             // Decrypt the raw data in-place, note that our block size is 1 byte, so this is always safe
             for block in buf.filled_mut()[original_fill..].chunks_mut(Aes128Cfb8Dec::block_size()) {
                 cipher.decrypt_block_mut(block.into());
@@ -241,10 +244,10 @@ impl<W: AsyncWrite + Unpin> StreamEncryptor<W> {
 
 impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
     fn poll_write(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+    ) -> Poll<Result<usize, Error>> {
         let ref_self = self.get_mut();
         let cipher = &mut ref_self.cipher;
 
@@ -265,46 +268,40 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
                 cipher.encrypt_block_b2b_mut(block.into(), out_block);
             }
 
-            let write = std::pin::Pin::new(&mut ref_self.write);
+            let write = Pin::new(&mut ref_self.write);
             match write.poll_write(cx, &out) {
-                std::task::Poll::Pending => {
+                Poll::Pending => {
                     ref_self.last_unwritten_encrypted_byte = Some(out[0]);
                     if total_written == 0 {
                         //If we didn't write anything, return pending
-                        return std::task::Poll::Pending;
+                        return Poll::Pending;
                     } else {
                         // Otherwise, we actually did write something
-                        return std::task::Poll::Ready(Ok(total_written));
+                        return Poll::Ready(Ok(total_written));
                     }
                 }
-                std::task::Poll::Ready(result) => {
+                Poll::Ready(result) => {
                     ref_self.last_unwritten_encrypted_byte = None;
                     match result {
                         Ok(written) => total_written += written,
-                        Err(err) => return std::task::Poll::Ready(Err(err)),
+                        Err(err) => return Poll::Ready(Err(err)),
                     }
                 }
             }
         }
 
-        std::task::Poll::Ready(Ok(total_written))
+        Poll::Ready(Ok(total_written))
     }
 
-    fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         let ref_self = self.get_mut();
-        let write = std::pin::Pin::new(&mut ref_self.write);
+        let write = Pin::new(&mut ref_self.write);
         write.poll_flush(cx)
     }
 
-    fn poll_shutdown(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         let ref_self = self.get_mut();
-        let write = std::pin::Pin::new(&mut ref_self.write);
+        let write = Pin::new(&mut ref_self.write);
         write.poll_shutdown(cx)
     }
 }
@@ -320,6 +317,14 @@ pub trait ClientPacket: Packet {
 
 pub trait ServerPacket: Packet + Sized {
     fn read(read: impl Read) -> Result<Self, ReadingError>;
+}
+
+pub trait BClientPacket: Packet {
+    fn write_packet(&self, writer: impl Write) -> Result<(), Error>;
+}
+
+pub trait BServerPacket: Packet + Sized {
+    fn read(read: impl Read) -> Result<Self, Error>;
 }
 
 /// Errors that can occur during packet encoding.

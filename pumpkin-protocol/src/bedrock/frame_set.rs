@@ -1,32 +1,27 @@
-use std::io::Write;
+use std::io::{Read, Write};
 
 use bytes::Bytes;
-use pumpkin_macros::packet;
 
 use crate::bedrock::{RAKNET_SPLIT, RakReliability};
-use crate::codec::u24::U24;
+use crate::codec::u24;
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
-use crate::{ClientPacket, ServerPacket};
 
-#[packet[0x80]]
 pub struct FrameSet {
-    pub sequence: U24,
+    pub sequence: u24,
     pub frames: Vec<Frame>,
 }
 
-impl ServerPacket for FrameSet {
-    fn read(mut read: impl std::io::Read) -> Result<Self, ReadingError> {
+impl FrameSet {
+    pub fn read(mut read: impl Read) -> Result<Self, ReadingError> {
         Ok(Self {
             sequence: read.get_u24()?,
             frames: Frame::read(read)?,
         })
     }
-}
 
-impl ClientPacket for FrameSet {
-    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
+    pub fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_u8(0x84)?;
-        write.write_u24_be(self.sequence)?;
+        self.sequence.encode(&mut write)?;
         for frame in &self.frames {
             frame.write(&mut write)?;
         }
@@ -48,7 +43,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn read(mut read: impl std::io::Read) -> Result<Vec<Self>, crate::ser::ReadingError> {
+    pub fn read(mut read: impl Read) -> Result<Vec<Self>, ReadingError> {
         let mut frames = Vec::new();
 
         while let Ok(header) = read.get_u8() {
@@ -102,13 +97,13 @@ impl Frame {
         // Size
         write.write_u16_be((self.payload.len() << 3) as u16)?;
         if self.reliability.is_reliable() {
-            write.write_u24_be(U24(self.reliable_number))?;
+            write.write_u24_be(self.reliable_number)?;
         }
         if self.reliability.is_sequenced() {
-            write.write_u24_be(U24(self.sequence_index))?;
+            write.write_u24_be(self.sequence_index)?;
         }
         if self.reliability.is_ordered() {
-            write.write_u24_be(U24(self.order_index))?;
+            write.write_u24_be(self.order_index)?;
             write.write_u8(self.order_channel)?;
         }
         if is_split {

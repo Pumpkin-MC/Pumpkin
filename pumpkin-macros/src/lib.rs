@@ -10,8 +10,6 @@ use syn::{
     parse_macro_input,
 };
 
-extern crate proc_macro;
-
 #[proc_macro_derive(Event)]
 pub fn event(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
@@ -183,10 +181,9 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let input_string = input.to_string();
     let packet_name = input_string.trim_matches('"');
-    let packet_name_split: Vec<&str> = packet_name.split(":").collect();
-
-    let namespace = packet_name_split[0];
-    let id = packet_name_split[1];
+    let (namespace, id) = packet_name
+        .split_once(":")
+        .unwrap_or_else(|| abort!(packet_name, "A namespace is required!"));
 
     let item: proc_macro2::TokenStream = item.into();
 
@@ -351,4 +348,61 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     code.into()
+}
+
+#[proc_macro_derive(PacketWrite, attributes(serial))]
+pub fn derive_serialize(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
+    let name = &input.ident;
+
+    let fields = if let syn::Data::Struct(data) = &input.data {
+        data.fields.iter().map(|f| {
+            let ident = f.ident.as_ref().unwrap();
+            quote! {
+                self.#ident.write(writer)?;
+            }
+        })
+    } else {
+        unimplemented!()
+    };
+
+    let expanded = quote! {
+        impl PacketWrite for #name {
+            fn write<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+                #(#fields)*
+                Ok(())
+            }
+        }
+    };
+
+    expanded.into()
+}
+
+#[proc_macro_derive(PacketRead, attributes(serial))]
+pub fn derive_deserialize(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
+    let name = &input.ident;
+
+    let fields = if let syn::Data::Struct(data) = &input.data {
+        data.fields.iter().map(|f| {
+            let ident = f.ident.as_ref().unwrap();
+            quote! {
+                #ident: PacketRead::read(reader)?
+            }
+        })
+    } else {
+        unimplemented!()
+    };
+
+    let expanded = quote! {
+        impl PacketRead for #name {
+            fn read<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+                Ok(Self {
+                    #(#fields),*
+                })
+            }
+        }
+    };
+
+    expanded.into()
 }

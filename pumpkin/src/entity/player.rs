@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
+use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
+use pumpkin_protocol::codec::var_uint::VarUInt;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
@@ -735,16 +737,32 @@ impl Player {
 
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             let chunk_count = chunk_of_chunks.len();
-            self.client.send_packet_now(&CChunkBatchStart).await;
-            for chunk in chunk_of_chunks {
-                let chunk = chunk.read().await;
-                // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
-                // player or something.
-                self.client.send_packet_now(&CChunkData(&chunk)).await;
+            match &self.client {
+                ClientPlatform::Java(java_client) => {
+                    java_client.send_packet_now(&CChunkBatchStart).await;
+                    for chunk in chunk_of_chunks {
+                        let chunk = chunk.read().await;
+                        // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
+                        // player or something.
+                        java_client.send_packet_now(&CChunkData(&chunk)).await;
+                    }
+                    java_client
+                        .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))
+                        .await;
+                }
+                ClientPlatform::Bedrock(bedrock_client) => {
+                    println!("Bedrock");
+                    let chunk = chunk_of_chunks[0].read().await;
+                    bedrock_client
+                        .send_game_packet(&CLevelChunk {
+                            dimension: VarInt(0),
+                            sub_chunks_count: VarUInt(0),
+                            cache_enabled: false,
+                            chunk: &chunk,
+                        })
+                        .await;
+                }
             }
-            self.client
-                .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))
-                .await;
         }
 
         self.tick_counter.fetch_add(1, Ordering::Relaxed);

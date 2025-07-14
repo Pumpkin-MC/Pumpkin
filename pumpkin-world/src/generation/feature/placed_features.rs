@@ -415,9 +415,9 @@ impl ConditionalPlacementModifier for SurfaceThresholdFilterPlacementModifier {
         pos: BlockPos,
     ) -> bool {
         let y = chunk.get_top_y(&self.heightmap, &pos.0.to_vec2_i32());
-        let min = y.saturating_add(self.min_inclusive.unwrap_or(i32::MIN) as i64);
-        let max = y.saturating_add(self.max_inclusive.unwrap_or(i32::MAX) as i64);
-        min <= pos.0.y as i64 && pos.0.y as i64 <= max
+        let min = y.saturating_add(self.min_inclusive.unwrap_or(i32::MIN));
+        let max = y.saturating_add(self.max_inclusive.unwrap_or(i32::MAX));
+        min <= pos.0.y && pos.0.y <= max
     }
 }
 

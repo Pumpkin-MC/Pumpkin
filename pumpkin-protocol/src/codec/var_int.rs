@@ -1,5 +1,5 @@
 use std::{
-    io::{ErrorKind, Read, Write},
+    io::{Error, ErrorKind, Read, Write},
     num::NonZeroUsize,
     ops::Deref,
 };
@@ -11,7 +11,10 @@ use serde::{
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
+use crate::{
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
+    serial::PacketWrite,
+};
 
 pub type VarIntType = i32;
 
@@ -36,10 +39,10 @@ impl VarInt {
 
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut val = self.0;
-        for _ in 0..Self::MAX_SIZE.get() {
-            let b: u8 = val as u8 & 0b01111111;
+        loop {
+            let b: u8 = val as u8 & 0x7F;
             val >>= 7;
-            write.write_u8(if val == 0 { b } else { b | 0b10000000 })?;
+            write.write_u8(if val == 0 { b } else { b | 0x80 })?;
             if val == 0 {
                 break;
             }
@@ -193,5 +196,20 @@ impl<'de> Deserialize<'de> for VarInt {
         }
 
         deserializer.deserialize_seq(VarIntVisitor)
+    }
+}
+
+impl PacketWrite for VarInt {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        let mut val = (self.0 << 1) ^ (self.0 >> 31);
+        for _ in 0..Self::MAX_SIZE.get() {
+            let b: u8 = val as u8 & 0b01111111;
+            val >>= 7;
+            writer.write(&if val == 0 { [b] } else { [b | 0b10000000] })?;
+            if val == 0 {
+                break;
+            }
+        }
+        Ok(())
     }
 }

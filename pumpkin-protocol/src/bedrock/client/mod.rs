@@ -1,6 +1,7 @@
 pub mod creative_content;
 pub mod gamerules_changed;
 pub mod handshake;
+pub mod level_chunk;
 pub mod network_settings;
 pub mod play_status;
 pub mod raknet;

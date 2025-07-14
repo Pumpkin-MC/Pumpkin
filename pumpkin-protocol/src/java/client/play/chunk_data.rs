@@ -30,21 +30,21 @@ impl ClientPacket for CChunkData<'_> {
         // write long array
         write.write_var_int(&VarInt(heightmaps.world_surface.len() as i32))?;
         for mb in &heightmaps.world_surface {
-            write.write_i64_be(*mb)?;
+            write.write_i64_be(*mb as i64)?;
         }
         // heighmap index
         write.write_var_int(&VarInt(4))?;
         // write long array
         write.write_var_int(&VarInt(heightmaps.motion_blocking.len() as i32))?;
         for mb in &heightmaps.motion_blocking {
-            write.write_i64_be(*mb)?;
+            write.write_i64_be(*mb as i64)?;
         }
         // heighmap index
         write.write_var_int(&VarInt(5))?;
         // write long array
         write.write_var_int(&VarInt(heightmaps.motion_blocking_no_leaves.len() as i32))?;
         for mb in &heightmaps.motion_blocking {
-            write.write_i64_be(*mb)?;
+            write.write_i64_be(*mb as i64)?;
         }
 
         {

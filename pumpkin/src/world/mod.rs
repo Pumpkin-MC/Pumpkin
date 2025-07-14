@@ -54,18 +54,14 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
-    bedrock::{
-        RakReliability,
-        client::{
-            creative_content::CreativeContent,
-            gamerules_changed::GameRules,
-            play_status::{CPlayStatus, PlayStatus},
-            start_game::{Experiments, GamePublishSetting, LevelSettings},
-        },
+    bedrock::client::{
+        creative_content::CreativeContent,
+        gamerules_changed::GameRules,
+        play_status::{CPlayStatus, PlayStatus},
+        start_game::{Experiments, GamePublishSetting, LevelSettings},
     },
     codec::{
-        bedrock_block_pos::BedrockPos, little_endian::Le32, var_long::VarLong, var_uint::VarUInt,
-        var_ulong::VarULong,
+        bedrock_block_pos::NetworkPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
     },
     java::{
         client::play::{
@@ -703,11 +699,11 @@ impl World {
             spawn_biome_type: 0,
             custom_biome_name: String::with_capacity(0),
             dimension: VarInt(0),
-            generator_type: VarInt(2),
-            world_gamemode: VarInt(server.defaultgamemode.lock().await.gamemode as i32 + 1),
+            generator_type: VarInt(1),
+            world_gamemode: VarInt(server.defaultgamemode.lock().await.gamemode as i32),
             hardcore: base_config.hardcore,
-            difficulty: VarInt(level_info.difficulty as i32 + 1),
-            spawn_position: BedrockPos(BlockPos(Vector3::new(
+            difficulty: VarInt(level_info.difficulty as i32),
+            spawn_position: NetworkPos(BlockPos(Vector3::new(
                 level_info.spawn_x,
                 level_info.spawn_y,
                 level_info.spawn_z,
@@ -740,7 +736,7 @@ impl World {
             has_start_with_map_enabled: false,
             // TODO Bedrock permission level are different
             permission_level: VarInt(2),
-            server_chunk_tick_range: Le32(base_config.simulation_distance.get().into()),
+            server_simulation_distance: base_config.simulation_distance.get().into(),
             has_locked_behavior_pack: false,
             has_locked_resource_pack: false,
             is_from_locked_world_template: false,
@@ -768,59 +764,53 @@ impl World {
 
         if let ClientPlatform::Bedrock(client) = &player.client {
             client
-                .send_game_packet(
-                    &CStartGame {
-                        entity_id: VarLong(i64::from(player.entity_id())),
-                        runtime_entity_id: VarULong(player.entity_id() as _),
-                        player_gamemode: VarInt(player.gamemode.load() as i32 + 1),
-                        position: Vector3::new(0.0, 100.0, 0.0),
-                        pitch: 0.0,
-                        yaw: 0.0,
-                        level_settings,
-                        level_id: String::with_capacity(0),
-                        level_name: "new pumpkin world".to_string(),
-                        premium_world_template_id: String::with_capacity(0),
-                        is_trial: false,
-                        rewind_history_size: VarInt(40),
-                        server_authoritative_block_breaking: false,
-                        current_level_time: 0,
-                        enchantment_seed: VarInt(0),
-                        block_properties_size: VarUInt(0),
-                        // TODO Make this unique
-                        multiplayer_correlation_id: Uuid::default().to_string(),
-                        enable_itemstack_net_manager: false,
-                        // TODO Make this description better!
-                        // This gets send from the client to mojang for telemetry
-                        server_version: "Pumpkin Rust Server".to_string(),
+                .send_game_packet(&CStartGame {
+                    entity_id: VarLong(i64::from(player.entity_id())),
+                    runtime_entity_id: VarULong(player.entity_id() as _),
+                    player_gamemode: VarInt(player.gamemode.load() as i32),
+                    position: Vector3::new(0.0, 100.0, 0.0),
+                    pitch: 0.0,
+                    yaw: 0.0,
+                    level_settings,
+                    level_id: String::with_capacity(0),
+                    level_name: "Pumpkin world".to_string(),
+                    premium_world_template_id: String::with_capacity(0),
+                    is_trial: false,
+                    rewind_history_size: VarInt(-1),
+                    server_authoritative_block_breaking: false,
+                    current_level_time: 0,
+                    enchantment_seed: VarInt(0),
+                    block_properties_size: VarUInt(0),
+                    // TODO Make this unique
+                    multiplayer_correlation_id: Uuid::default().to_string(),
+                    enable_itemstack_net_manager: false,
+                    // TODO Make this description better!
+                    // This gets send from the client to mojang for telemetry
+                    server_version: "Pumpkin Rust Server".to_string(),
 
-                        compound_id: 10,
-                        compound_len: VarUInt(0),
-                        compound_end: 0,
+                    compound_id: 10,
+                    compound_len: VarUInt(0),
+                    compound_end: 0,
 
-                        block_registry_checksum: 0,
-                        world_template_id: Uuid::default(),
-                        // TODO The client needs extra biome data for this
-                        enable_clientside_generation: false,
-                        blocknetwork_ids_are_hashed: false,
-                        server_auth_sounds: false,
-                    },
-                    RakReliability::Unreliable,
-                )
+                    block_registry_checksum: 0,
+                    world_template_id: Uuid::default(),
+                    // TODO The client needs extra biome data for this
+                    enable_clientside_generation: false,
+                    blocknetwork_ids_are_hashed: false,
+                    server_auth_sounds: false,
+                })
                 .await;
             client
-                .send_game_packet(
-                    &CreativeContent {
-                        groups: &[],
-                        entries: &[],
-                    },
-                    RakReliability::Unreliable,
-                )
+                .send_game_packet(&CreativeContent {
+                    groups: &[],
+                    entries: &[],
+                })
                 .await;
+
+            chunker::player_join(&player).await;
+
             client
-                .send_game_packet(
-                    &CPlayStatus::new(PlayStatus::PlayerSpawn),
-                    RakReliability::Unreliable,
-                )
+                .send_game_packet(&CPlayStatus::new(PlayStatus::PlayerSpawn))
                 .await;
         } else {
             unreachable!();

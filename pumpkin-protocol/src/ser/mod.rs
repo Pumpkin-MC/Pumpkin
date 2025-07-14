@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use crate::{
     FixedBitSet,
     codec::{
-        bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong, var_uint::VarUInt,
+        bit_set::BitSet, u24, var_int::VarInt, var_long::VarLong, var_uint::VarUInt,
         var_ulong::VarULong,
     },
 };
@@ -66,7 +66,7 @@ pub trait NetworkReadExt {
     fn read_remaining_to_boxed_slice(&mut self, bound: usize) -> Result<Box<[u8]>, ReadingError>;
 
     fn get_bool(&mut self) -> Result<bool, ReadingError>;
-    fn get_u24(&mut self) -> Result<U24, ReadingError>;
+    fn get_u24(&mut self) -> Result<u24, ReadingError>;
     fn get_var_int(&mut self) -> Result<VarInt, ReadingError>;
     fn get_var_uint(&mut self) -> Result<VarUInt, ReadingError>;
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
@@ -117,8 +117,8 @@ impl<R: Read> NetworkReadExt for R {
         Ok(buf[0])
     }
 
-    fn get_u24(&mut self) -> Result<U24, ReadingError> {
-        U24::decode(self)
+    fn get_u24(&mut self) -> Result<u24, ReadingError> {
+        u24::decode(self)
     }
 
     get_number_be!(get_i16_be, i16);
@@ -251,7 +251,7 @@ pub trait NetworkWriteExt {
     fn write_u8(&mut self, data: u8) -> Result<(), WritingError>;
     fn write_i16_be(&mut self, data: i16) -> Result<(), WritingError>;
     fn write_u16_be(&mut self, data: u16) -> Result<(), WritingError>;
-    fn write_u24_be(&mut self, data: U24) -> Result<(), WritingError>;
+    fn write_u24_be(&mut self, data: u32) -> Result<(), WritingError>;
     fn write_i32_be(&mut self, data: i32) -> Result<(), WritingError>;
     fn write_u32_be(&mut self, data: u32) -> Result<(), WritingError>;
     fn write_i64_be(&mut self, data: i64) -> Result<(), WritingError>;
@@ -334,8 +334,8 @@ impl<W: Write> NetworkWriteExt for W {
             .map_err(WritingError::IoError)
     }
 
-    fn write_u24_be(&mut self, data: U24) -> Result<(), WritingError> {
-        data.encode(self)
+    fn write_u24_be(&mut self, data: u32) -> Result<(), WritingError> {
+        u24(data).encode(self)
     }
 
     write_number_be!(write_i16_be, i16);

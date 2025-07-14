@@ -27,7 +27,8 @@ impl BedrockClientPlatform {
 
         let motd_string = ServerInfo {
             edition: "MCPE",
-            motd_line_1: &BASIC_CONFIG.motd,
+            // TODO The default motd is to long to be displayed completely
+            motd_line_1: "Pumpkin server",
             protocol_version: 819,
             version_name: CURRENT_BEDROCK_MC_VERSION,
             player_count,
@@ -39,13 +40,6 @@ impl BedrockClientPlatform {
             port_ipv4: 19132,
             port_ipv6: 19133,
         };
-        self.send_raknet_packet_now(&CUnconnectedPong::new(
-            packet.time,
-            server.server_guid,
-            packet.magic,
-            AsciiString(format!("{motd_string}")),
-        ))
-        .await;
         self.send_raknet_packet_now(&CUnconnectedPong::new(
             packet.time,
             server.server_guid,

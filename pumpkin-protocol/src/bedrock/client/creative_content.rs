@@ -1,6 +1,8 @@
+use std::io::{Error, Write};
+
 use pumpkin_macros::packet;
 
-use crate::{ClientPacket, codec::var_uint::VarUInt, ser::NetworkWriteExt};
+use crate::{BClientPacket, codec::var_uint::VarUInt, serial::PacketWrite};
 
 #[packet(145)]
 pub struct CreativeContent<'a> {
@@ -9,17 +11,13 @@ pub struct CreativeContent<'a> {
     pub entries: &'a [u8],
 }
 
-impl ClientPacket for CreativeContent<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-    ) -> Result<(), crate::ser::WritingError> {
-        write.write_var_uint(&VarUInt(self.groups.len() as _))?;
-        write.write_slice(self.groups)?;
+impl BClientPacket for CreativeContent<'_> {
+    fn write_packet(&self, mut writer: impl Write) -> Result<(), Error> {
+        VarUInt(self.groups.len() as _).write(&mut writer)?;
+        writer.write_all(self.groups)?;
 
-        write.write_var_uint(&VarUInt(self.entries.len() as _))?;
-        write.write_slice(self.entries)?;
-        Ok(())
+        VarUInt(self.entries.len() as _).write(&mut writer)?;
+        writer.write_all(self.entries)
     }
 }
 

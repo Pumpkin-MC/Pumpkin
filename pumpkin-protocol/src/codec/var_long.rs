@@ -1,5 +1,5 @@
 use std::{
-    io::{Read, Write},
+    io::{Error, Read, Write},
     num::NonZeroUsize,
     ops::Deref,
 };
@@ -12,6 +12,7 @@ use serde::{
 use crate::{
     WritingError,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
+    serial::PacketWrite,
 };
 
 pub type VarLongType = i64;
@@ -37,7 +38,7 @@ impl VarLong {
 
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut x = self.0;
-        for _ in 0..Self::MAX_SIZE.get() {
+        loop {
             let byte = (x & 0x7F) as u8;
             x >>= 7;
             if x == 0 {
@@ -152,5 +153,20 @@ impl<'de> Deserialize<'de> for VarLong {
         }
 
         deserializer.deserialize_seq(VarLongVisitor)
+    }
+}
+
+impl PacketWrite for VarLong {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        let mut value = (self.0 << 1) ^ (self.0 >> 63);
+        loop {
+            let b: u8 = value as u8 & 127;
+            value >>= 7;
+            writer.write(&if value == 0 { [b] } else { [b | 128] })?;
+            if value == 0 {
+                break;
+            }
+        }
+        Ok(())
     }
 }

@@ -255,7 +255,7 @@ impl ToTokens for BlockPropertyStruct {
             match &entry.property_type {
                 PropertyType::Bool => quote! {
                     #key => {
-                        block_props.#field_name = matches!(value, "true")
+                        block_props.#field_name = matches!(*value, "true")
                     }
                 },
                 PropertyType::Enum { name } => {
@@ -323,16 +323,16 @@ impl ToTokens for BlockPropertyStruct {
                     Self::from_state_id(block.default_state.id, block)
                 }
 
-                fn to_props(&self) -> HashMap<String, String> {
-                   HashMap::from([#(#to_props_values)*])
+                fn to_props(&self) -> Box<[(String, String)]> {
+                   vec![#(#to_props_values)*].into_boxed_slice()
                 }
-                fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self {
+                fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
                     for (key, value) in props {
-                        match key {
+                        match *key {
                             #(#from_props_values),*,
                             _ => panic!("Invalid key: {key}"),
                         }
@@ -752,11 +752,11 @@ pub(crate) fn build() -> TokenStream {
             let id_lit = LitInt::new(&id.to_string(), Span::call_site());
 
             block_properties_from_state_and_block_id.extend(quote! {
-                #id_lit => Some(Box::new(#property_name::from_state_id(state_id, &Block::#const_block_name))),
+                #id_lit => Box::new(#property_name::from_state_id(state_id, &Block::#const_block_name)),
             });
 
             block_properties_from_props_and_name.extend(quote! {
-                #id_lit => Some(Box::new(#property_name::from_props(props, &Block::#const_block_name))),
+                #id_lit => Box::new(#property_name::from_props(props, &Block::#const_block_name)),
             });
         }
 
@@ -870,10 +870,10 @@ pub(crate) fn build() -> TokenStream {
             fn default(block: &Block) -> Self where Self: Sized;
 
             // Convert properties to a `Vec` of `(name, value)`
-            fn to_props(&self) -> HashMap<String, String>;
+            fn to_props(&self) -> Box<[(String, String)]>;
 
             // Convert properties to a block state, and add them onto the default state.
-            fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self where Self: Sized;
+            fn from_props(props: &[(&str, &str)], block: &Block) -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
@@ -984,19 +984,21 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
+            #[track_caller]
             #[doc = r" Get the properties of the block."]
             pub fn properties(&self, state_id: u16) -> Option<Box<dyn BlockProperties>> {
-                match self.id {
+                Some(match self.id {
                     #block_properties_from_state_and_block_id
-                    _ => None
-                }
+                    _ => return None,
+                })
             }
 
+            #[track_caller]
             #[doc = r" Get the properties of the block."]
-            pub fn from_properties(&self, props: HashMap<&str, &str>) -> Option<Box<dyn BlockProperties>> {
+            pub fn from_properties(&self, props: &[(&str, &str)]) -> Box<dyn BlockProperties> {
                 match self.id {
                     #block_properties_from_props_and_name
-                    _ => None
+                    _ => panic!("Inavlid props")
                 }
             }
         }

@@ -57,12 +57,11 @@ impl CoralFeature {
             }
             let wall_coral = Self::get_random_tag_entry_block("minecraft:wall_corals", random);
             let original_props = &wall_coral
-                .properties(wall_coral.default_state.id)
-                .unwrap()
+                .properties(wall_coral.default_state.id).unwrap()
                 .to_props();
             let facing = dir.to_facing();
             // Set the right Axis
-            let props = original_props
+            let props: Vec<(&str, &str)> = original_props
                 .iter()
                 .map(|(key, value)| {
                     if key == "facing" {
@@ -74,12 +73,7 @@ impl CoralFeature {
                 .collect();
             chunk.set_block_state(
                 &dir_pos.0,
-                get_state_by_state_id(
-                    wall_coral
-                        .from_properties(props)
-                        .unwrap()
-                        .to_state_id(wall_coral),
-                ),
+                get_state_by_state_id(wall_coral.from_properties(&props).to_state_id(wall_coral)),
             );
         }
 

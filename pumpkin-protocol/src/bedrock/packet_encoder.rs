@@ -1,4 +1,9 @@
-use std::{io::Write, net::SocketAddr, pin::Pin};
+use std::{
+    io::{self, Write},
+    net::SocketAddr,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use bytes::Bytes;
 use thiserror::Error;
@@ -28,9 +33,9 @@ impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
 impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
     fn poll_write(
         self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+    ) -> Poll<Result<usize, io::Error>> {
         match self.get_mut() {
             Self::Encrypt(writer) => {
                 let writer = Pin::new(writer);
@@ -43,10 +48,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
         }
     }
 
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match self.get_mut() {
             Self::Encrypt(writer) => {
                 let writer = Pin::new(writer);
@@ -59,10 +61,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
         }
     }
 
-    fn poll_shutdown(
-        self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match self.get_mut() {
             Self::Encrypt(writer) => {
                 let writer = Pin::new(writer);

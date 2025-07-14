@@ -1,8 +1,10 @@
-use pumpkin_macros::packet;
-use serde::{Deserialize, Serialize};
+use std::io::{Error, Write};
 
-#[derive(Deserialize, Serialize)]
-#[packet(0x02)]
+use pumpkin_macros::packet;
+
+use crate::serial::PacketWrite;
+
+#[packet(2)]
 pub struct CPlayStatus {
     status: i32,
 }
@@ -12,6 +14,12 @@ impl CPlayStatus {
         Self {
             status: status as i32,
         }
+    }
+}
+
+impl PacketWrite for CPlayStatus {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_all(&self.status.to_be_bytes())
     }
 }
 

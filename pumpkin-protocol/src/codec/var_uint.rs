@@ -1,5 +1,5 @@
 use std::{
-    io::{ErrorKind, Read, Write},
+    io::{Error, ErrorKind, Read, Write},
     num::NonZeroUsize,
 };
 
@@ -10,7 +10,10 @@ use serde::{
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
+use crate::{
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
+    serial::{PacketRead, PacketWrite},
+};
 
 pub type VarUIntType = u32;
 
@@ -178,5 +181,18 @@ impl<'de> Deserialize<'de> for VarUInt {
         }
 
         deserializer.deserialize_seq(VarIntVisitor)
+    }
+}
+
+impl PacketWrite for VarUInt {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.encode(writer)
+            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
+    }
+}
+
+impl PacketRead for VarUInt {
+    fn read<W: Read>(writer: &mut W) -> Result<Self, Error> {
+        Self::decode(writer).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
     }
 }

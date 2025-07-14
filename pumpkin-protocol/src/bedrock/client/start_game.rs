@@ -1,16 +1,16 @@
 use crate::{
     bedrock::client::gamerules_changed::GameRules,
     codec::{
-        bedrock_block_pos::BedrockPos, little_endian::Le32, var_int::VarInt, var_long::VarLong,
-        var_uint::VarUInt, var_ulong::VarULong,
+        bedrock_block_pos::NetworkPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt,
+        var_ulong::VarULong,
     },
+    serial::PacketWrite,
 };
 use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize)]
+#[derive(PacketWrite)]
 #[packet(11)]
 pub struct CStartGame {
     // https://mojang.github.io/bedrock-protocol-docs/html/StartGamePacket.html
@@ -51,7 +51,7 @@ pub struct CStartGame {
     pub server_auth_sounds: bool,
 }
 
-#[derive(Serialize)]
+#[derive(PacketWrite)]
 pub struct LevelSettings {
     // https://mojang.github.io/bedrock-protocol-docs/html/LevelSettings.html
     pub seed: u64,
@@ -67,7 +67,7 @@ pub struct LevelSettings {
     pub world_gamemode: VarInt,
     pub hardcore: bool,
     pub difficulty: VarInt,
-    pub spawn_position: BedrockPos,
+    pub spawn_position: NetworkPos,
     pub has_achievements_disabled: bool,
     pub editor_world_type: VarInt,
     pub is_created_in_editor: bool,
@@ -92,7 +92,7 @@ pub struct LevelSettings {
     pub bonus_chest: bool,
     pub has_start_with_map_enabled: bool,
     pub permission_level: VarInt,
-    pub server_chunk_tick_range: Le32,
+    pub server_simulation_distance: i32,
     pub has_locked_behavior_pack: bool,
     pub has_locked_resource_pack: bool,
     pub is_from_locked_world_template: bool,
@@ -120,7 +120,7 @@ pub struct LevelSettings {
     pub owner_id: String,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Default, PacketWrite)]
 pub struct Experiments {
     //TODO! https://mojang.github.io/bedrock-protocol-docs/html/Experiments.html
     pub names_size: u32,

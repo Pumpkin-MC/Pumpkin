@@ -4,7 +4,7 @@ use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::java::client::play::{CCenterChunk, CUnloadChunk};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
-use crate::entity::player::Player;
+use crate::{entity::player::Player, net::ClientPlatform};
 
 pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
     player
@@ -19,19 +19,14 @@ pub async fn player_join(player: &Arc<Player>) {
     let chunk_pos = player.living_entity.entity.chunk_pos.load();
 
     log::debug!("Sending center chunk to {}", player.gameprofile.name);
-    player
-        .client
-        .send_packet_now(&CCenterChunk {
-            chunk_x: chunk_pos.x.into(),
-            chunk_z: chunk_pos.y.into(),
-        })
-        .await;
-    let view_distance = get_view_distance(player).await;
-    log::debug!(
-        "Player {} joined with view distance: {}",
-        player.gameprofile.name,
-        view_distance
-    );
+    if let ClientPlatform::Java(client) = &player.client {
+        client
+            .send_packet_now(&CCenterChunk {
+                chunk_x: chunk_pos.x.into(),
+                chunk_z: chunk_pos.y.into(),
+            })
+            .await;
+    };
 
     update_position(player).await;
 }
@@ -46,14 +41,14 @@ pub async fn update_position(player: &Arc<Player>) {
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical != new_cylindrical {
-        player
-            .client
-            .send_packet_now(&CCenterChunk {
-                chunk_x: new_chunk_center.x.into(),
-                chunk_z: new_chunk_center.y.into(),
-            })
-            .await;
-
+        if let ClientPlatform::Java(client) = &player.client {
+            client
+                .send_packet_now(&CCenterChunk {
+                    chunk_x: new_chunk_center.x.into(),
+                    chunk_z: new_chunk_center.y.into(),
+                })
+                .await;
+        };
         let mut loading_chunks = Vec::new();
         let mut unloading_chunks = Vec::new();
         Cylindrical::for_each_changed_chunk(

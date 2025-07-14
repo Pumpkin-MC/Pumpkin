@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{Cursor, Write},
+    io::{Cursor, Error, ErrorKind, Write},
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
@@ -10,7 +10,7 @@ use std::{
 use bytes::Bytes;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
-    ClientPacket, PacketDecodeError, PacketEncodeError, RawPacket, ServerPacket,
+    BClientPacket, PacketDecodeError, PacketEncodeError, RawPacket, ServerPacket,
     bedrock::{
         RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID, RakReliability, SubClient,
         ack::Ack,
@@ -31,9 +31,10 @@ use pumpkin_protocol::{
             request_network_settings::SRequestNetworkSettings,
         },
     },
-    codec::u24::U24,
+    codec::u24,
     packet::Packet,
-    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
+    serial::PacketRead,
 };
 use pumpkin_util::text::TextComponent;
 use std::net::SocketAddr;
@@ -191,7 +192,7 @@ impl BedrockClientPlatform {
         // TODO
     }
 
-    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+    pub async fn enqueue_packet<P: BClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
         Self::write_raw_packet(packet, writer).unwrap();
@@ -213,21 +214,23 @@ impl BedrockClientPlatform {
         }
     }
 
-    pub fn write_raw_packet<P: ClientPacket>(
+    pub fn write_raw_packet<P: BClientPacket>(
         packet: &P,
         mut write: impl Write,
-    ) -> Result<(), WritingError> {
-        write.write_u8(P::PACKET_ID as u8)?;
-        packet.write_packet_data(write)
+    ) -> Result<(), Error> {
+        write
+            .write_u8(P::PACKET_ID as u8)
+            .map_err(|e| Error::new(ErrorKind::Other, format!("dfg: {e}")))?;
+        packet.write_packet(write)
     }
 
-    pub async fn write_game_packet<P: ClientPacket>(
+    pub async fn write_game_packet<P: BClientPacket>(
         &self,
         packet: &P,
         write: impl Write,
-    ) -> Result<(), WritingError> {
+    ) -> Result<(), Error> {
         let mut packet_payload = Vec::new();
-        packet.write_packet_data(&mut packet_payload)?;
+        packet.write_packet(&mut packet_payload)?;
 
         // TODO
         self.network_writer
@@ -253,22 +256,23 @@ impl BedrockClientPlatform {
             .await
     }
 
-    pub async fn send_raknet_packet_now<P: ClientPacket>(&self, packet: &P) {
+    pub async fn send_raknet_packet_now<P: BClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
         Self::write_raw_packet(packet, writer).unwrap();
         self.send_packet_now(packet_buf).await;
     }
 
-    pub async fn send_game_packet<P: ClientPacket>(&self, packet: &P, reliability: RakReliability) {
+    pub async fn send_game_packet<P: BClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         self.write_game_packet(packet, &mut packet_buf)
             .await
             .unwrap();
-        self.send_framed_packet_data(packet_buf, reliability).await;
+        self.send_framed_packet_data(packet_buf, RakReliability::Unreliable)
+            .await;
     }
 
-    pub async fn send_framed_packet<P: ClientPacket>(
+    pub async fn send_framed_packet<P: BClientPacket>(
         &self,
         packet: &P,
         reliability: RakReliability,
@@ -280,7 +284,7 @@ impl BedrockClientPlatform {
 
     pub async fn send_framed_packet_data(&self, packet_buf: Vec<u8>, reliability: RakReliability) {
         let mut frame_set = FrameSet {
-            sequence: U24(self.output_sequence_number.fetch_add(1, Ordering::Relaxed)),
+            sequence: u24(self.output_sequence_number.fetch_add(1, Ordering::Relaxed)),
             frames: Vec::with_capacity(1),
         };
         let mut frame = Frame {
@@ -357,10 +361,9 @@ impl BedrockClientPlatform {
         self.closed.store(true, Ordering::Relaxed);
     }
 
-    pub async fn send_ack(&self, packet: &Ack) {
+    pub async fn send_ack(&self, ack: &Ack) {
         let mut packet_buf = Vec::new();
-        packet_buf.write_u8(0xC0).unwrap();
-        packet.write_packet_data(&mut packet_buf).unwrap();
+        ack.write(&mut packet_buf).unwrap();
 
         if let Err(err) = self
             .network_writer
@@ -489,11 +492,12 @@ impl BedrockClientPlatform {
                     .await;
             }
             SLogin::PACKET_ID => {
-                self.handle_login(SLogin::read(payload)?, server).await;
+                self.handle_login(SLogin::read(&mut &packet.payload[..]).unwrap(), server)
+                    .await;
             }
             SPlayerAuthInput::PACKET_ID => {}
             SInteraction::PACKET_ID => {
-                dbg!(SInteraction::read(payload)?);
+                dbg!(SInteraction::read(&mut &packet.payload[..]).unwrap().action);
             }
             _ => {
                 log::warn!("Bedrock: Received Unknown Game packet: {}", packet.id);
@@ -562,9 +566,7 @@ impl BedrockClientPlatform {
                 self.handle_open_connection_2(server, SOpenConnectionRequest2::read(payload)?)
                     .await;
             }
-            _ => {
-                log::error!("Bedrock: Received Unknown RakNet Offline packet: {packet_id}");
-            }
+            _ => log::error!("Bedrock: Received Unknown RakNet Offline packet: {packet_id}"),
         }
         Ok(())
     }

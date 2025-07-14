@@ -1,5 +1,5 @@
 use std::{
-    io::{Read, Write},
+    io::{Error, ErrorKind, Read, Write},
     num::NonZeroUsize,
     ops::Deref,
 };
@@ -12,6 +12,7 @@ use serde::{
 use crate::{
     WritingError,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
+    serial::{PacketRead, PacketWrite},
 };
 
 pub type VarULongType = u64;
@@ -37,7 +38,7 @@ impl VarULong {
 
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut x = self.0;
-        for _ in 0..Self::MAX_SIZE.get() {
+        loop {
             let byte = (x & 0x7F) as u8;
             x >>= 7;
             if x == 0 {
@@ -152,5 +153,18 @@ impl<'de> Deserialize<'de> for VarULong {
         }
 
         deserializer.deserialize_seq(VarLongVisitor)
+    }
+}
+
+impl PacketWrite for VarULong {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.encode(writer).unwrap();
+        Ok(())
+    }
+}
+
+impl PacketRead for VarULong {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        Self::decode(reader).map_err(|_| Error::new(ErrorKind::Other, "Invalid VarUInt"))
     }
 }

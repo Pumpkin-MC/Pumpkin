@@ -1,9 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use pumpkin_config::{BASIC_CONFIG, networking::compression::CompressionInfo};
 use pumpkin_protocol::{
     bedrock::{
-        RakReliability,
         client::{
             network_settings::CNetworkSettings,
             play_status::{CPlayStatus, PlayStatus},
@@ -24,19 +23,14 @@ use crate::{
 impl BedrockClientPlatform {
     pub async fn handle_request_network_settings(&self, packet: SRequestNetworkSettings) {
         dbg!("requested network settings");
-        self.protocol_version.store(
-            packet.protocol_version,
-            std::sync::atomic::Ordering::Relaxed,
-        );
-        self.send_game_packet(
-            &CNetworkSettings::new(0, 0, false, 0, 0.0),
-            RakReliability::Unreliable,
-        )
-        .await;
+        self.protocol_version
+            .store(packet.protocol_version, Ordering::Relaxed);
+        self.send_game_packet(&CNetworkSettings::new(0, 0, false, 0, 0.0))
+            .await;
         self.set_compression(CompressionInfo::default()).await;
     }
-    pub async fn handle_login(self: &Arc<Self>, _packet: SLogin, server: &Server) {
-        dbg!("received login");
+    pub async fn handle_login(self: &Arc<Self>, packet: SLogin, server: &Server) {
+        dbg!("received login", packet.jwt);
         // TODO: Enable encryption
         // bedrock
         //     .send_game_packet(
@@ -46,37 +40,28 @@ impl BedrockClientPlatform {
         //     )
         //     .await;
         // TODO: Batch these
-        self.send_game_packet(
-            &CPlayStatus::new(PlayStatus::LoginSuccess),
-            RakReliability::Unreliable,
-        )
+        self.send_game_packet(&CPlayStatus::new(PlayStatus::LoginSuccess))
+            .await;
+        self.send_game_packet(&CResourcePacksInfo::new(
+            false,
+            false,
+            false,
+            false,
+            uuid::Uuid::default(),
+            String::with_capacity(0),
+        ))
         .await;
-        self.send_game_packet(
-            &CResourcePacksInfo::new(
-                false,
-                false,
-                false,
-                false,
-                uuid::Uuid::default(),
-                String::with_capacity(0),
-            ),
-            RakReliability::Unreliable,
-        )
-        .await;
-        self.send_game_packet(
-            &CResourcePackStackPacket::new(
-                false,
-                VarUInt(0),
-                VarUInt(0),
-                CURRENT_BEDROCK_MC_VERSION.to_string(),
-                Experiments {
-                    names_size: 0,
-                    experiments_ever_toggled: false,
-                },
-                false,
-            ),
-            RakReliability::Unreliable,
-        )
+        self.send_game_packet(&CResourcePackStackPacket::new(
+            false,
+            VarUInt(0),
+            VarUInt(0),
+            CURRENT_BEDROCK_MC_VERSION.to_string(),
+            Experiments {
+                names_size: 0,
+                experiments_ever_toggled: false,
+            },
+            false,
+        ))
         .await;
 
         // TODO

@@ -3,13 +3,10 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-use pumpkin_protocol::{
-    bedrock::{
-        RakReliability,
-        client::raknet::connection::{CConnectedPong, CConnectionRequestAccepted},
-        server::raknet::connection::{SConnectedPing, SConnectionRequest, SNewIncomingConnection},
-    },
-    codec::socket_address::SocketAddress,
+use pumpkin_protocol::bedrock::{
+    RakReliability,
+    client::raknet::connection::{CConnectedPong, CConnectionRequestAccepted},
+    server::raknet::connection::{SConnectedPing, SConnectionRequest, SNewIncomingConnection},
 };
 
 use crate::net::bedrock::BedrockClientPlatform;
@@ -19,12 +16,9 @@ impl BedrockClientPlatform {
         dbg!("send connection accepted");
         self.send_framed_packet(
             &CConnectionRequestAccepted::new(
-                SocketAddress(self.address),
+                self.address,
                 0,
-                [SocketAddress(SocketAddr::V4(SocketAddrV4::new(
-                    Ipv4Addr::new(0, 0, 0, 0),
-                    19132,
-                ))); 10],
+                [SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 19132)); 10],
                 packet.time,
                 UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
             ),

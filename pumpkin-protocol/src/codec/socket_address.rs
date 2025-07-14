@@ -1,10 +1,15 @@
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::{
+    io::{Error, Write},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+};
 
 use bytes::BufMut;
 use serde::{
     Deserialize, Serialize, Serializer,
     de::{self, SeqAccess},
 };
+
+use crate::serial::PacketWrite;
 
 #[derive(Clone, Copy)]
 pub struct SocketAddress(pub SocketAddr);
@@ -79,5 +84,22 @@ impl<'de> Deserialize<'de> for SocketAddress {
         }
 
         deserializer.deserialize_seq(Visitor)
+    }
+}
+
+impl PacketWrite for SocketAddr {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        match self {
+            SocketAddr::V4(addr) => {
+                writer.write(&[4])?;
+                writer.write(&addr.ip().octets())?;
+            }
+            SocketAddr::V6(addr) => {
+                writer.write(&[6])?;
+                writer.write(&addr.ip().octets())?;
+            }
+        };
+
+        writer.write_all(&self.port().to_be_bytes())
     }
 }
