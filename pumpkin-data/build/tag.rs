@@ -92,9 +92,9 @@ pub(crate) fn build() -> TokenStream {
             .iter()
             .map(|(tag_name, values)| {
                 let tag_values_array = values.iter().map(|v| quote! { #v }).collect::<Vec<_>>();
-                let tag_id_array = match tag_name {
+                let tag_id_array = match key {
                     t if t == "worldgen/biome" => values.iter().map(|v| {
-                        let id = biomes.get(v).unwrap().id;
+                        let id = biomes.get(v).unwrap().id as u16;
                         quote! { #id }
                     }).collect::<Vec<_>>(),
                     t if t == "fluid" => values.iter().map(|v| {
