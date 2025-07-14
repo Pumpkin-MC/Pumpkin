@@ -316,7 +316,6 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use once_cell::sync::Lazy;
         use crate::data_component::DataComponent::*;
         use crate::data_component_impl::*;
         use crate::tag::{RegistryKey, Taggable};
