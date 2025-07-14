@@ -18,7 +18,7 @@ use uuid::Uuid;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component::DataComponent::AttributeModifiers;
-use pumpkin_data::data_component_impl::{Modifier, Operation};
+use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};

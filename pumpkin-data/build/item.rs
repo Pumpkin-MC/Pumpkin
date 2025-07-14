@@ -66,175 +66,154 @@ impl ToTokens for ItemComponents {
             }),
         });
 
-        match self.damage {
-            Some(d) => {
-                let damage_lit = LitInt::new(&d.to_string(), Span::call_site());
-                tokens.extend(quote! {
-                    Damage(DamageImpl {
-                        damage: #damage_lit,
-                    }),
-                });
-            }
-            None => {}
+        if let Some(d) = self.damage {
+            let damage_lit = LitInt::new(&d.to_string(), Span::call_site());
+            tokens.extend(quote! {
+                Damage(DamageImpl {
+                    damage: #damage_lit,
+                }),
+            });
         };
 
-        match self.max_damage {
-            Some(md) => {
-                let max_damage_lit = LitInt::new(&md.to_string(), Span::call_site());
-                tokens.extend(quote! {
-                    MaxDamage(MaxDamageImpl {
-                        max_damage: #max_damage_lit,
-                    }),
-                });
-            }
-            None => {}
+        if let Some(md) = self.max_damage {
+            let max_damage_lit = LitInt::new(&md.to_string(), Span::call_site());
+            tokens.extend(quote! {
+                MaxDamage(MaxDamageImpl {
+                    max_damage: #max_damage_lit,
+                }),
+            });
         };
 
-        match &self.attribute_modifiers {
-            Some(modifiers) => {
-                let modifier_code = modifiers.iter().map(|modifier| {
-                    let r#type = format_ident!(
-                        "{}",
-                        modifier
-                            .r#type
-                            .strip_prefix("minecraft:")
-                            .unwrap()
-                            .to_uppercase()
-                    );
-                    let id = LitStr::new(&modifier.id, Span::call_site());
-                    let amount = modifier.amount;
-                    let operation =
-                        Ident::new(&format!("{:?}", modifier.operation), Span::call_site());
-                    let slot = modifier.slot.to_tokens();
+        if let Some(modifiers) = &self.attribute_modifiers {
+            let modifier_code = modifiers.iter().map(|modifier| {
+                let r#type = format_ident!(
+                    "{}",
+                    modifier
+                        .r#type
+                        .strip_prefix("minecraft:")
+                        .unwrap()
+                        .to_uppercase()
+                );
+                let id = LitStr::new(&modifier.id, Span::call_site());
+                let amount = modifier.amount;
+                let operation = Ident::new(&format!("{:?}", modifier.operation), Span::call_site());
+                let slot = modifier.slot.to_tokens();
 
-                    quote! {
-                        Modifier {
-                            r#type: &Attributes::#r#type,
-                            id: #id,
-                            amount: #amount,
-                            operation: Operation::#operation,
-                            slot: #slot,
-                        }
+                quote! {
+                    Modifier {
+                        r#type: &Attributes::#r#type,
+                        id: #id,
+                        amount: #amount,
+                        operation: Operation::#operation,
+                        slot: #slot,
                     }
-                });
-                tokens.extend(quote! {
-                    AttributeModifiers(AttributeModifiersImpl {
-                        attribute_modifiers: &[#(#modifier_code),*]
-                    }),
-                });
-            }
-            None => {}
+                }
+            });
+            tokens.extend(quote! {
+                AttributeModifiers(AttributeModifiersImpl {
+                    attribute_modifiers: &[#(#modifier_code),*]
+                }),
+            });
         };
 
-        match &self.tool {
-            Some(tool) => {
-                let rules_code = tool.rules.iter().map(|rule| {
-                    let block_array;
+        if let Some(tool) = &self.tool {
+            let rules_code = tool.rules.iter().map(|rule| {
+                let block_array;
 
-                    if let RegistryEntryList::Single(t) = &rule.blocks {
-                        if let TagType::Item(str) = t {
-                            let ident = format_ident!(
-                                "{}",
-                                str.strip_prefix("minecraft:").unwrap().to_uppercase()
-                            );
-                            block_array = quote! {
-                                Blocks(&[&Block::#ident])
-                            }
-                        } else if let TagType::Tag(str) = t {
-                            let ident = format_ident!(
-                                "{}",
-                                str.replace(":", "_").replace("/", "_").to_uppercase()
-                            );
-                            block_array = quote! {
-                                Tag(&tag::Block::#ident)
-                            }
-                        } else {
-                            unreachable!();
-                        }
-                    } else if let RegistryEntryList::Many(t) = &rule.blocks {
-                        let mut array = vec![];
-                        for i in t {
-                            let TagType::Item(str) = i else {
-                                unreachable!();
-                            };
-                            let ident = format_ident!(
-                                "{}",
-                                str.strip_prefix("minecraft:").unwrap().to_uppercase()
-                            );
-                            array.push(quote! {
-                                &Block::#ident
-                            });
-                        }
+                if let RegistryEntryList::Single(t) = &rule.blocks {
+                    if let TagType::Item(str) = t {
+                        let ident = format_ident!(
+                            "{}",
+                            str.strip_prefix("minecraft:").unwrap().to_uppercase()
+                        );
                         block_array = quote! {
-                            Blocks(&[#(#array),*])
+                            Blocks(&[&Block::#ident])
+                        }
+                    } else if let TagType::Tag(str) = t {
+                        let ident = format_ident!(
+                            "{}",
+                            str.replace(":", "_").replace("/", "_").to_uppercase()
+                        );
+                        block_array = quote! {
+                            Tag(&tag::Block::#ident)
                         }
                     } else {
                         unreachable!();
                     }
-                    let speed = match rule.speed {
-                        Some(speed) => {
-                            quote! { Some(#speed) }
-                        }
-                        None => quote! { None },
-                    };
-                    let correct_for_drops = match rule.correct_for_drops {
-                        Some(correct_for_drops) => {
-                            let correct_for_drops =
-                                LitBool::new(correct_for_drops, Span::call_site());
-                            quote! { Some(#correct_for_drops) }
-                        }
-                        None => quote! { None },
-                    };
-                    quote! {
-                        ToolRule {
-                            blocks: #block_array,
-                            speed: #speed,
-                            correct_for_drops: #correct_for_drops
-                        }
+                } else if let RegistryEntryList::Many(t) = &rule.blocks {
+                    let mut array = vec![];
+                    for i in t {
+                        let TagType::Item(str) = i else {
+                            unreachable!();
+                        };
+                        let ident = format_ident!(
+                            "{}",
+                            str.strip_prefix("minecraft:").unwrap().to_uppercase()
+                        );
+                        array.push(quote! {
+                            &Block::#ident
+                        });
                     }
-                });
-                let damage_per_block = match tool.damage_per_block {
-                    speed => {
-                        let speed = LitInt::new(&speed.to_string(), Span::call_site());
-                        quote! { #speed }
+                    block_array = quote! {
+                        Blocks(&[#(#array),*])
                     }
+                } else {
+                    unreachable!();
+                }
+                let speed = match rule.speed {
+                    Some(speed) => {
+                        quote! { Some(#speed) }
+                    }
+                    None => quote! { None },
                 };
-                let default_mining_speed = match tool.default_mining_speed {
-                    speed => {
-                        let speed = LitFloat::new(&format!("{:.1}", speed), Span::call_site());
-                        quote! { #speed }
+                let correct_for_drops = match rule.correct_for_drops {
+                    Some(correct_for_drops) => {
+                        let correct_for_drops = LitBool::new(correct_for_drops, Span::call_site());
+                        quote! { Some(#correct_for_drops) }
                     }
+                    None => quote! { None },
                 };
-                let can_destroy_blocks_in_creative =
-                    LitBool::new(tool.can_destroy_blocks_in_creative, Span::call_site());
-                tokens.extend(quote! { Tool(ToolImpl {
-                    rules: &[#(#rules_code),*],
-                    default_mining_speed: #default_mining_speed,
-                    damage_per_block: #damage_per_block,
-                    can_destroy_blocks_in_creative: #can_destroy_blocks_in_creative
-                }), });
-            }
-            None => {}
+                quote! {
+                    ToolRule {
+                        blocks: #block_array,
+                        speed: #speed,
+                        correct_for_drops: #correct_for_drops
+                    }
+                }
+            });
+            let damage_per_block = {
+                let speed = LitInt::new(&tool.damage_per_block.to_string(), Span::call_site());
+                quote! { #speed }
+            };
+            let default_mining_speed = {
+                let speed = LitFloat::new(
+                    &format!("{:.1}", tool.default_mining_speed),
+                    Span::call_site(),
+                );
+                quote! { #speed }
+            };
+            let can_destroy_blocks_in_creative =
+                LitBool::new(tool.can_destroy_blocks_in_creative, Span::call_site());
+            tokens.extend(quote! { Tool(ToolImpl {
+                rules: &[#(#rules_code),*],
+                default_mining_speed: #default_mining_speed,
+                damage_per_block: #damage_per_block,
+                can_destroy_blocks_in_creative: #can_destroy_blocks_in_creative
+            }), });
         };
 
-        match &self.food {
-            Some(food) => {
-                let nutrition = LitInt::new(&food.nutrition.to_string(), Span::call_site());
-                let saturation =
-                    LitFloat::new(&format!("{:.1}", food.saturation), Span::call_site());
-                let can_always_eat = match food.can_always_eat {
-                    can => {
-                        let can = LitBool::new(can, Span::call_site());
-                        quote! { #can }
-                    }
-                };
-                tokens.extend(quote! { Food(FoodImpl {
-                    nutrition: #nutrition,
-                    saturation: #saturation,
-                    can_always_eat: #can_always_eat,
-                }), });
-            }
-            None => {}
+        if let Some(food) = &self.food {
+            let nutrition = LitInt::new(&food.nutrition.to_string(), Span::call_site());
+            let saturation = LitFloat::new(&format!("{:.1}", food.saturation), Span::call_site());
+            let can_always_eat = {
+                let can = LitBool::new(food.can_always_eat, Span::call_site());
+                quote! { #can }
+            };
+            tokens.extend(quote! { Food(FoodImpl {
+                nutrition: #nutrition,
+                saturation: #saturation,
+                can_always_eat: #can_always_eat,
+            }), });
         };
     }
 }
