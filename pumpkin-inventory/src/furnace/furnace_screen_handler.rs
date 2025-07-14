@@ -58,9 +58,9 @@ impl FurnaceScreenHandler {
         // 3: Maximum progress always 200 on the vanilla server
         for i in 0..4 {
             handler.add_property(ScreenProperty::new(furnace_property_delegate.clone(), i));
-            handler.add_listener(Arc::new(FurnaceScreenListener)).await;
         }
 
+        handler.add_listener(Arc::new(FurnaceScreenListener)).await;
         handler.add_inventory_slots();
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);
