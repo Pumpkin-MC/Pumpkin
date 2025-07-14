@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use fancy::FancyTrunkPlacer;
-use pumpkin_data::{Block, BlockState, tag::Tagable};
+use pumpkin_data::tag;
+use pumpkin_data::{Block, BlockState, tag::Taggable};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -56,7 +57,7 @@ impl TrunkPlacer {
     ) {
         let block = chunk.get_block_state(&pos.0).to_block();
         if force_dirt
-            || !(block.is_tagged_with("minecraft:dirt").unwrap()
+            || !(block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)
                 && block != &Block::GRASS_BLOCK
                 && block != &Block::MYCELIUM)
         {

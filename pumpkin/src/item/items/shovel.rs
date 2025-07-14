@@ -2,13 +2,12 @@ use crate::entity::player::Player;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::Tagable;
 use pumpkin_data::world::WorldEvent;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
@@ -17,16 +16,7 @@ pub struct ShovelItem;
 
 impl ItemMetadata for ShovelItem {
     fn ids() -> Box<[u16]> {
-        Item::get_tag_values("#minecraft:shovels")
-            .expect("This is a valid vanilla tag")
-            .iter()
-            .map(|key| {
-                Item::from_registry_key(key)
-                    .expect("We just got this key from the registry")
-                    .id
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice()
+        tag::Item::MINECRAFT_SHOVELS.1.to_vec().into_boxed_slice()
     }
 }
 

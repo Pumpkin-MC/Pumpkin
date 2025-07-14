@@ -126,6 +126,7 @@ run/
 *perf.data*
 *flamegraph.svg
 *dhat*
+*bench_root_tmp*
 
 
 # Nix (direnv and result)

@@ -6,11 +6,11 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{BlockHalf, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::{RegistryKey, Tagable, get_tag_values};
+use pumpkin_data::tag::{RegistryKey, Taggable, get_tag_values};
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
@@ -51,14 +51,14 @@ fn can_open_trapdoor(block: &Block) -> bool {
 // Todo: The sounds should be from BlockSetType
 fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
-        if block.is_tagged_with("minecraft:wooden_trapdoors").unwrap() {
+        if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) {
             Sound::BlockWoodenTrapdoorOpen
         } else if block == &Block::IRON_TRAPDOOR {
             Sound::BlockIronTrapdoorOpen
         } else {
             Sound::BlockCopperTrapdoorOpen
         }
-    } else if block.is_tagged_with("minecraft:wooden_trapdoors").unwrap() {
+    } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) {
         Sound::BlockWoodenTrapdoorClose
     } else if block == &Block::IRON_TRAPDOOR {
         Sound::BlockIronTrapdoorClose
