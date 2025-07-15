@@ -22,7 +22,7 @@ impl BedrockClientPlatform {
                 SocketAddress(self.address),
                 0,
                 [SocketAddress(SocketAddr::V4(SocketAddrV4::new(
-                    Ipv4Addr::new(0, 0, 0, 0),
+                    Ipv4Addr::UNSPECIFIED,
                     19132,
                 ))); 10],
                 packet.time,

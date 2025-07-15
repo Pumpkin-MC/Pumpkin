@@ -133,10 +133,9 @@ impl ItemStack {
                     // Check if block is in the tag group
                     if let Some(blocks) =
                         get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
+                        && blocks.contains(&block)
                     {
-                        if blocks.contains(&block) {
-                            return speed;
-                        }
+                        return speed;
                     }
                 }
             }
@@ -168,10 +167,9 @@ impl ItemStack {
                     // Check if block exists within the tag group
                     if let Some(blocks) =
                         get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
+                        && blocks.contains(&block)
                     {
-                        if blocks.contains(&block) {
-                            return correct_for_drops;
-                        }
+                        return correct_for_drops;
                     }
                 }
             }
