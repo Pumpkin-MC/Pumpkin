@@ -6,7 +6,7 @@ use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::{Item, item_properties};
+use pumpkin_data::item::Item;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;
@@ -90,8 +90,7 @@ impl PumpkinItem for HoeItem {
                 );
                 // TODO: Merge stacks together
                 let item_entity = Arc::new(
-                    ItemEntity::new(entity, ItemStack::new(1, &item_properties::HANGING_ROOTS))
-                        .await,
+                    ItemEntity::new(entity, ItemStack::new(1, &Item::HANGING_ROOTS)).await,
                 );
                 world.spawn_entity(item_entity).await;
             }

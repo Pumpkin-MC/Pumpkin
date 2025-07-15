@@ -26,7 +26,7 @@ async fn clear_player(target: &Player) -> u64 {
     for slot in &inventory.main_inventory {
         let mut slot_lock = slot.lock().await;
         count += u64::from(slot_lock.item_count);
-        *slot_lock = ItemStack::get_empty().clone();
+        *slot_lock = ItemStack::EMPTY.clone();
     }
 
     let entity_equipment_lock = inventory.entity_equipment.lock().await;
@@ -36,7 +36,7 @@ async fn clear_player(target: &Player) -> u64 {
             continue;
         }
         count += 1u64;
-        *slot_lock = ItemStack::get_empty().clone();
+        *slot_lock = ItemStack::EMPTY.clone();
     }
 
     count

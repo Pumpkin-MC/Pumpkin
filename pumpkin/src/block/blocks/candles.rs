@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::item::item_properties;
+use pumpkin_data::item::Item;
 use pumpkin_data::{
     BlockDirection,
     block_properties::{BlockProperties, CandleLikeProperties, EnumVariants, Integer1To4},
@@ -58,7 +58,7 @@ impl PumpkinBlock for CandleBlock {
         let item = item_lock.item;
         drop(item_lock);
         match item.id {
-            id if (item_properties::CANDLE.id..=item_properties::BLACK_CANDLE.id).contains(&id)
+            id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id)
                 && item.id == args.block.id =>
             {
                 if properties.candles.to_index() < 3 {

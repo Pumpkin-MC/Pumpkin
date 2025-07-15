@@ -239,7 +239,7 @@ impl ResultSlot {
         Self {
             inventory,
             id: AtomicU8::new(0),
-            result: Arc::new(Mutex::new(ItemStack::get_empty().clone())),
+            result: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             recipe_cache: AtomicCell::new(None),
         }
     }
@@ -316,7 +316,7 @@ impl ResultSlot {
             .match_recipe()
             .await
             .map(|x| ItemStack::from(x.0))
-            .unwrap_or(ItemStack::get_empty().clone());
+            .unwrap_or(ItemStack::EMPTY.clone());
         *self.result.lock().await = result.clone();
         result
     }
@@ -402,7 +402,7 @@ impl Slot for ResultSlot {
             // Regardless of the amount, we always return the full stack
             stack.clone()
         } else {
-            ItemStack::get_empty().clone()
+            ItemStack::EMPTY.clone()
         }
     }
 }
@@ -514,12 +514,12 @@ impl ScreenHandler for CraftingTableScreenHandler {
             if slot_index == 0 {
                 // From crafting result slot - move to player inventory (slots 10-46)
                 if !self.insert_item(&mut slot_stack, 10, 46, true).await {
-                    return ItemStack::get_empty().clone();
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (1..=9).contains(&slot_index) {
                 // From crafting input slots - try to move to player inventory (slots 10-46)
                 if !self.insert_item(&mut slot_stack, 10, 46, false).await {
-                    return ItemStack::get_empty().clone();
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (10..46).contains(&slot_index) {
                 // From player inventory - try to move to crafting input slots first (1-9)
@@ -528,19 +528,19 @@ impl ScreenHandler for CraftingTableScreenHandler {
                     if slot_index < 37 {
                         // From main inventory to hotbar
                         if !self.insert_item(&mut slot_stack, 37, 46, false).await {
-                            return ItemStack::get_empty().clone();
+                            return ItemStack::EMPTY.clone();
                         }
                     } else {
                         // From hotbar to main inventory
                         if !self.insert_item(&mut slot_stack, 10, 37, false).await {
-                            return ItemStack::get_empty().clone();
+                            return ItemStack::EMPTY.clone();
                         }
                     }
                 }
             } else {
                 // Any other slot - try to move to player inventory
                 if !self.insert_item(&mut slot_stack, 10, 46, false).await {
-                    return ItemStack::get_empty().clone();
+                    return ItemStack::EMPTY.clone();
                 }
             }
 
@@ -548,7 +548,7 @@ impl ScreenHandler for CraftingTableScreenHandler {
             drop(slot_stack); // release the lock before calling other methods
 
             if stack.is_empty() {
-                slot.set_stack_prev(ItemStack::get_empty().clone(), stack_prev.clone())
+                slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone())
                     .await;
             } else {
                 slot.mark_dirty().await;
@@ -556,7 +556,7 @@ impl ScreenHandler for CraftingTableScreenHandler {
 
             if stack.item_count == stack_prev.item_count {
                 // Nothing changed
-                return ItemStack::get_empty().clone();
+                return ItemStack::EMPTY.clone();
             }
 
             slot.on_take_item(player, &stack).await;
@@ -573,7 +573,7 @@ impl ScreenHandler for CraftingTableScreenHandler {
             return stack_prev;
         }
 
-        ItemStack::get_empty().clone()
+        ItemStack::EMPTY.clone()
     }
 }
 

@@ -97,7 +97,7 @@ impl PlayerScreenHandler {
         if !slot_stack.is_empty() && self.try_move_one_to_armor_slot(slot_stack).await {
             slot_stack.item_count -= 1;
             if slot_stack.item_count == 0 {
-                *slot_stack = ItemStack::get_empty().clone();
+                *slot_stack = ItemStack::EMPTY.clone();
             }
         }
 
@@ -151,40 +151,40 @@ impl ScreenHandler for PlayerScreenHandler {
             if slot_index == 0 {
                 // From crafting result slot
                 if !self.insert_item(&mut slot_stack, 9, 45, true).await {
-                    return ItemStack::get_empty().clone();
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (1..5).contains(&slot_index) {
                 // From craft ingredient slots
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
-                    return ItemStack::get_empty().clone();
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (5..9).contains(&slot_index) {
                 // From armour slots
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
-                    return ItemStack::get_empty().clone();
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (9..45).contains(&slot_index) {
                 if !self
                     .handle_inventory_move(slot_index, &mut slot_stack)
                     .await
                 {
-                    return ItemStack::get_empty().clone();
+                    return ItemStack::EMPTY.clone();
                 }
             } else if !self.insert_item(&mut slot_stack, 9, 45, false).await {
-                return ItemStack::get_empty().clone();
+                return ItemStack::EMPTY.clone();
             }
 
             let stack = slot_stack.clone();
             drop(slot_stack); // release the lock before calling other methods
             if stack.is_empty() {
-                slot.set_stack_prev(ItemStack::get_empty().clone(), stack_prev.clone())
+                slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone())
                     .await;
             } else {
                 slot.mark_dirty().await;
             }
 
             if stack.item_count == stack_prev.item_count {
-                return ItemStack::get_empty().clone();
+                return ItemStack::EMPTY.clone();
             }
 
             slot.on_take_item(player, &stack).await;
@@ -204,6 +204,6 @@ impl ScreenHandler for PlayerScreenHandler {
         }
 
         // Nothing changed
-        ItemStack::get_empty().clone()
+        ItemStack::EMPTY.clone()
     }
 }

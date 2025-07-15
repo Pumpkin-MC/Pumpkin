@@ -10,7 +10,7 @@ use crate::{
     world::World,
 };
 use async_trait::async_trait;
-use pumpkin_data::item::item_properties;
+use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CakeLikeProperties, EnumVariants, Integer0To6},
@@ -87,7 +87,7 @@ impl PumpkinBlock for CakeBlock {
         let item = item_lock.item;
         drop(item_lock);
         match item.id {
-            id if (item_properties::CANDLE.id..=item_properties::BLACK_CANDLE.id).contains(&id) => {
+            id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id) => {
                 if properties.bites.to_index() != 0 {
                     return Self::consume_if_hungry(
                         args.world,

@@ -9,7 +9,7 @@ use crate::entity::EntityBase;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, Integer1To4};
 use pumpkin_data::entity::EntityPose;
-use pumpkin_data::item::item_properties;
+use pumpkin_data::item::Item;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
@@ -27,7 +27,7 @@ pub struct SeaPickleBlock;
 impl PumpkinBlock for SeaPickleBlock {
     #[allow(clippy::many_single_char_names)]
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        if *args.item_stack.lock().await.item != *item_properties::BONE_MEAL
+        if args.item_stack.lock().await.item != &Item::BONE_MEAL
             || !args
                 .world
                 .get_block(&args.position.down())

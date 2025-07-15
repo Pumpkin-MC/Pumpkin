@@ -8,13 +8,12 @@ use pumpkin_world::world::BlockFlags;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::{entity::player::Player, world::World};
 use async_trait::async_trait;
-use pumpkin_data::item::item_properties;
 
 pub struct EnderEyeItem;
 
 impl ItemMetadata for EnderEyeItem {
     fn ids() -> Box<[u16]> {
-        [item_properties::ENDER_EYE.id].into()
+        [Item::ENDER_EYE.id].into()
     }
 }
 

@@ -27,7 +27,7 @@ impl EntityEquipment {
     pub async fn put(&mut self, slot: &EquipmentSlot, stack: ItemStack) -> ItemStack {
         self.equipment
             .insert(slot.clone(), Arc::new(Mutex::new(stack)))
-            .unwrap_or(Arc::new(Mutex::new(ItemStack::get_empty().clone())))
+            .unwrap_or(Arc::new(Mutex::new(ItemStack::EMPTY.clone())))
             .lock()
             .await
             .clone()
@@ -37,7 +37,7 @@ impl EntityEquipment {
         self.equipment
             .get(slot)
             .cloned()
-            .unwrap_or(Arc::new(Mutex::new(ItemStack::get_empty().clone())))
+            .unwrap_or(Arc::new(Mutex::new(ItemStack::EMPTY.clone())))
     }
 
     pub async fn is_empty(&self) -> bool {

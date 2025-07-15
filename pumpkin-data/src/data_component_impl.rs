@@ -4,6 +4,7 @@ use crate::attributes::Attributes;
 use crate::tag::Tag;
 use crate::{AttributeModifierSlot, Block};
 use pumpkin_util::text::TextComponent;
+use std::borrow::Cow;
 use std::hash::Hash;
 
 // please don't make the size of the struct too large. use Box<> when necessary
@@ -27,8 +28,8 @@ pub struct UnbreakableImpl;
 pub struct CustomNameImpl;
 #[derive(Clone, Debug, Hash)]
 pub struct ItemNameImpl {
-    // pub name: &'a TextComponent, TODO make TextComponent in compile time
-    pub name: String,
+    // TODO make TextComponent const
+    pub name: &'static str,
 }
 
 #[derive(Clone, Debug, Hash)]
@@ -69,7 +70,7 @@ impl Hash for Modifier {
 }
 #[derive(Clone, Debug, Hash)]
 pub struct AttributeModifiersImpl {
-    pub attribute_modifiers: Vec<Modifier>,
+    pub attribute_modifiers: Cow<'static, [Modifier]>,
 }
 #[derive(Clone, Debug, Hash)]
 pub struct CustomModelDataImpl;
@@ -108,7 +109,7 @@ pub struct DamageResistantImpl;
 #[derive(Clone, Debug, Hash)]
 pub enum IDSet {
     Tag(&'static Tag),
-    Blocks(Vec<&'static Block>),
+    Blocks(Cow<'static, [&'static Block]>),
 }
 
 #[derive(Clone, Debug)]
@@ -131,7 +132,7 @@ impl Hash for ToolRule {
 }
 #[derive(Clone, Debug)]
 pub struct ToolImpl {
-    pub rules: Vec<ToolRule>,
+    pub rules: Cow<'static, [ToolRule]>,
     pub default_mining_speed: f32,
     pub damage_per_block: u32,
     pub can_destroy_blocks_in_creative: bool,

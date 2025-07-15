@@ -6,7 +6,7 @@ use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::item::{Item, item_properties};
+use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ pub struct FlintAndSteelItem;
 
 impl ItemMetadata for FlintAndSteelItem {
     fn ids() -> Box<[u16]> {
-        [item_properties::FLINT_AND_STEEL.id].into()
+        [Item::FLINT_AND_STEEL.id].into()
     }
 }
 

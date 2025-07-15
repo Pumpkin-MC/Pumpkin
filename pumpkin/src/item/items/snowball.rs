@@ -6,7 +6,7 @@ use crate::entity::projectile::ThrownItemEntity;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::{Item, item_properties};
+use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use uuid::Uuid;
 
@@ -14,7 +14,7 @@ pub struct SnowBallItem;
 
 impl ItemMetadata for SnowBallItem {
     fn ids() -> Box<[u16]> {
-        [item_properties::SNOWBALL.id].into()
+        [Item::SNOWBALL.id].into()
     }
 }
 

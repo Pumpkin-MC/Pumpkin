@@ -87,7 +87,7 @@ pub trait ScreenHandler: Send + Sync {
         let behaviour = self.get_behaviour_mut();
         if !behaviour.cursor_stack.lock().await.is_empty() {
             offer_or_drop_stack(player, behaviour.cursor_stack.lock().await.clone()).await;
-            *behaviour.cursor_stack.lock().await = ItemStack::get_empty().clone();
+            *behaviour.cursor_stack.lock().await = ItemStack::EMPTY.clone();
         }
     }
 
@@ -109,9 +109,7 @@ pub trait ScreenHandler: Send + Sync {
         let behaviour = self.get_behaviour_mut();
         slot.set_id(behaviour.slots.len());
         behaviour.slots.push(slot.clone());
-        behaviour
-            .tracked_stacks
-            .push(ItemStack::get_empty().clone());
+        behaviour.tracked_stacks.push(ItemStack::EMPTY.clone());
         behaviour.previous_tracked_stacks.push(TrackedStack::EMPTY);
 
         slot
@@ -636,7 +634,7 @@ pub trait ScreenHandler: Send + Sync {
                 if !cursor_stack.is_empty() {
                     if click_type == MouseClick::Left {
                         player.drop_item(cursor_stack.clone(), true).await;
-                        *cursor_stack = ItemStack::get_empty().clone();
+                        *cursor_stack = ItemStack::EMPTY.clone();
                     } else {
                         player.drop_item(cursor_stack.split(1), true).await;
                     }
@@ -770,7 +768,7 @@ pub trait ScreenHandler: Send + Sync {
                             .get_inventory()
                             .set_stack(button as usize, source_stack.clone())
                             .await;
-                        source_slot.set_stack(ItemStack::get_empty().clone()).await;
+                        source_slot.set_stack(ItemStack::EMPTY.clone()).await;
                         source_slot.on_take_item(player, &source_stack).await;
                     }
                 } else if source_stack.is_empty() {
@@ -784,7 +782,7 @@ pub trait ScreenHandler: Send + Sync {
                         } else {
                             player
                                 .get_inventory()
-                                .set_stack(button as usize, ItemStack::get_empty().clone())
+                                .set_stack(button as usize, ItemStack::EMPTY.clone())
                                 .await;
                             source_slot.set_stack(button_stack).await;
                         }
@@ -884,7 +882,7 @@ impl ScreenHandlerBehaviour {
             listeners: Vec::new(),
             sync_handler: None,
             tracked_stacks: Vec::new(),
-            cursor_stack: Arc::new(Mutex::new(ItemStack::get_empty().clone())),
+            cursor_stack: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             previous_tracked_stacks: Vec::new(),
             previous_cursor_stack: TrackedStack::EMPTY,
             revision: AtomicU32::new(0),

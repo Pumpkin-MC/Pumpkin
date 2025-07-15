@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::item::item_properties;
+use pumpkin_data::item::Item;
 use pumpkin_util::GameMode;
 
 use crate::{
@@ -11,7 +11,7 @@ pub struct TridentItem;
 
 impl ItemMetadata for TridentItem {
     fn ids() -> Box<[u16]> {
-        [item_properties::TRIDENT.id].into()
+        [Item::TRIDENT.id].into()
     }
 }
 

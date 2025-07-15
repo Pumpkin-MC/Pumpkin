@@ -1,10 +1,8 @@
-use lazy_static::lazy_static;
 use pumpkin_data::Block;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component::DataComponent::{MaxStackSize, Tool};
 use pumpkin_data::data_component_impl::IDSet;
 use pumpkin_data::item::Item;
-use pumpkin_data::item::item_properties;
 use pumpkin_data::recipes::RecipeResultStruct;
 use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
@@ -45,14 +43,6 @@ impl PartialEq for ItemStack {
     }
 } */
 
-lazy_static! {
-    pub static ref EMPTY: ItemStack = ItemStack {
-        item_count: 0,
-        item: &item_properties::AIR,
-        patch: Vec::new(),
-    };
-}
-
 impl ItemStack {
     pub fn new(item_count: u8, item: &'static Item) -> Self {
         Self {
@@ -62,12 +52,14 @@ impl ItemStack {
         }
     }
 
-    pub fn get_empty() -> &'static Self {
-        &crate::item::EMPTY
-    }
+    pub const EMPTY: &'static ItemStack = &ItemStack {
+        item_count: 0,
+        item: &Item::AIR,
+        patch: Vec::new(),
+    };
 
     pub fn get_max_stack_size(&self) -> u8 {
-        for component in &self.item.components {
+        for component in self.item.components.iter() {
             if let MaxStackSize(size) = component {
                 return size.size;
             }
@@ -77,7 +69,7 @@ impl ItemStack {
 
     pub fn get_item(&self) -> &Item {
         if self.is_empty() {
-            &item_properties::AIR
+            &Item::AIR
         } else {
             self.item
         }
@@ -88,7 +80,7 @@ impl ItemStack {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.item_count == 0 || self.item.id == item_properties::AIR.id
+        self.item_count == 0 || self.item.id == Item::AIR.id
     }
 
     pub fn split(&mut self, amount: u8) -> Self {
@@ -138,9 +130,9 @@ impl ItemStack {
     /// If no match is found, returns the tool's default mining speed or `1.0`.
     pub fn get_speed(&self, block: &'static Block) -> f32 {
         // No tool? Use default speed
-        for component in &self.item.components {
+        for component in self.item.components.iter() {
             if let Tool(tool) = component {
-                for rule in &tool.rules {
+                for rule in tool.rules.iter() {
                     // Skip if speed is not set
                     let Some(speed) = rule.speed else {
                         continue;
@@ -168,9 +160,9 @@ impl ItemStack {
     /// Direct matches return immediately, while tagged blocks are checked separately.
     pub fn is_correct_for_drops(&self, block: &'static Block) -> bool {
         // No tool? Use default speed
-        for component in &self.item.components {
+        for component in self.item.components.iter() {
             if let Tool(tool) = component {
-                for rule in &tool.rules {
+                for rule in tool.rules.iter() {
                     // Skip if speed is not set
                     let Some(correct) = rule.correct_for_drops else {
                         continue;

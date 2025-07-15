@@ -447,9 +447,9 @@ impl Player {
 
         // Get the attack damage
         // TODO: this should be cached in memory, we shouldn't just use default here either
-        for component in &item_stack.lock().await.item.components {
+        for component in item_stack.lock().await.item.components.iter() {
             if let AttributeModifiers(modifiers) = component {
-                for item_mod in &modifiers.attribute_modifiers {
+                for item_mod in modifiers.attribute_modifiers.iter() {
                     if item_mod.operation == Operation::AddValue {
                         if item_mod.id == "minecraft:base_attack_damage" {
                             add_damage = item_mod.amount;

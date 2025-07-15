@@ -12,7 +12,7 @@ use crate::{
     world::World,
 };
 use async_trait::async_trait;
-use pumpkin_data::item::item_properties;
+use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, ComposterLikeProperties, EnumVariants, Integer0To8},
@@ -136,7 +136,7 @@ impl ComposterBlock {
                 EntityType::ITEM,
                 false,
             ),
-            ItemStack::new(1, &item_properties::BONE_MEAL),
+            ItemStack::new(1, &Item::BONE_MEAL),
         )
         .await;
 

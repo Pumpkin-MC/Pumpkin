@@ -29,7 +29,7 @@ impl PlayerInventory {
     pub fn new(entity_equipment: Arc<Mutex<EntityEquipment>>) -> Self {
         Self {
             // Normal syntax can't be used here because Arc doesn't implement Copy
-            main_inventory: from_fn(|_| Arc::new(Mutex::new(ItemStack::get_empty().clone()))),
+            main_inventory: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             equipment_slots: Self::build_equipment_slots(),
             selected_slot: AtomicU8::new(0),
             entity_equipment,
@@ -321,7 +321,7 @@ impl PlayerInventory {
 impl Clearable for PlayerInventory {
     async fn clear(&self) {
         for item in self.main_inventory.iter() {
-            *item.lock().await = ItemStack::get_empty().clone();
+            *item.lock().await = ItemStack::EMPTY.clone();
         }
 
         self.entity_equipment.lock().await.clear();
@@ -380,13 +380,13 @@ impl Inventory for PlayerInventory {
                 return stack.split(amount);
             }
 
-            ItemStack::get_empty().clone()
+            ItemStack::EMPTY.clone()
         }
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
         if slot < self.main_inventory.len() {
-            let mut removed = ItemStack::get_empty().clone();
+            let mut removed = ItemStack::EMPTY.clone();
             let mut guard = self.main_inventory[slot].lock().await;
             std::mem::swap(&mut removed, &mut *guard);
             removed
@@ -395,7 +395,7 @@ impl Inventory for PlayerInventory {
             self.entity_equipment
                 .lock()
                 .await
-                .put(slot, ItemStack::get_empty().clone())
+                .put(slot, ItemStack::EMPTY.clone())
                 .await
         }
     }

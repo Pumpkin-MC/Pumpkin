@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use pumpkin_data::item::item_properties;
+use pumpkin_data::item::Item;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::{sync::Mutex, time::timeout};
@@ -135,7 +135,7 @@ pub trait Slot: Send + Sync + Debug {
             None
         } else {
             if self.get_cloned_stack().await.is_empty() {
-                self.set_stack_prev(ItemStack::get_empty().clone(), stack.clone())
+                self.set_stack_prev(ItemStack::EMPTY.clone(), stack.clone())
                     .await;
             }
 
@@ -154,7 +154,7 @@ pub trait Slot: Send + Sync + Debug {
             self.on_take_item(player, stack).await;
         }
 
-        stack.unwrap_or(ItemStack::get_empty().clone())
+        stack.unwrap_or(ItemStack::EMPTY.clone())
     }
 
     async fn insert_stack(&self, stack: ItemStack) -> ItemStack {
@@ -276,13 +276,9 @@ impl Slot for ArmorSlot {
     async fn can_insert(&self, stack: &ItemStack) -> bool {
         match self.equipment_slot {
             EquipmentSlot::Head(_) => {
-                stack.is_helmet()
-                    || stack.is_skull()
-                    || *stack.item == *item_properties::CARVED_PUMPKIN
+                stack.is_helmet() || stack.is_skull() || stack.item == &Item::CARVED_PUMPKIN
             }
-            EquipmentSlot::Chest(_) => {
-                stack.is_chestplate() || *stack.item == *item_properties::ELYTRA
-            }
+            EquipmentSlot::Chest(_) => stack.is_chestplate() || stack.item == &Item::ELYTRA,
             EquipmentSlot::Legs(_) => stack.is_leggings(),
             EquipmentSlot::Feet(_) => stack.is_boots(),
             _ => true,

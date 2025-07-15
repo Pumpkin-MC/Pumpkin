@@ -12,7 +12,7 @@ use crate::{
     world::World,
 };
 use async_trait::async_trait;
-use pumpkin_data::item::item_properties;
+use pumpkin_data::item::Item;
 use pumpkin_data::{
     block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
     sound::{Sound, SoundCategory},
@@ -146,7 +146,7 @@ impl ChiseledBookshelfBlock {
         // TODO: Increment used stats for chiseled bookshelf on the player
 
         let mut item = item.lock().await;
-        let sound = if *item.get_item() == *item_properties::ENCHANTED_BOOK {
+        let sound = if item.get_item() == &Item::ENCHANTED_BOOK {
             Sound::BlockChiseledBookshelfPickupEnchanted
         } else {
             Sound::BlockChiseledBookshelfPickup
@@ -175,7 +175,7 @@ impl ChiseledBookshelfBlock {
     ) {
         let mut stack = entity.remove_stack_specific(slot as usize, 1).await;
 
-        let sound = if *stack.get_item() == *item_properties::ENCHANTED_BOOK {
+        let sound = if stack.get_item() == &Item::ENCHANTED_BOOK {
             Sound::BlockChiseledBookshelfPickupEnchanted
         } else {
             Sound::BlockChiseledBookshelfPickup

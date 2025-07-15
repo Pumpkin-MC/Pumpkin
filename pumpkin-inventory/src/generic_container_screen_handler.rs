@@ -103,7 +103,7 @@ impl ScreenHandler for GenericContainerScreenHandler {
     }
 
     async fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
-        let mut stack_left = ItemStack::get_empty().clone();
+        let mut stack_left = ItemStack::EMPTY.clone();
         let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
         if slot.has_stack().await {
@@ -120,7 +120,7 @@ impl ScreenHandler for GenericContainerScreenHandler {
                     )
                     .await
                 {
-                    return ItemStack::get_empty().clone();
+                    return ItemStack::EMPTY.clone();
                 }
             } else if !self
                 .insert_item(
@@ -131,11 +131,11 @@ impl ScreenHandler for GenericContainerScreenHandler {
                 )
                 .await
             {
-                return ItemStack::get_empty().clone();
+                return ItemStack::EMPTY.clone();
             }
 
             if stack_left.is_empty() {
-                slot.set_stack(ItemStack::get_empty().clone()).await;
+                slot.set_stack(ItemStack::EMPTY.clone()).await;
             } else {
                 slot.mark_dirty().await;
             }
