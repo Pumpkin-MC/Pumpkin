@@ -118,9 +118,11 @@ gen_from!(u32);
 
 macro_rules! gen_try_from {
     ($ty: ty) => {
-        impl From<$ty> for VarUInt {
-            fn from(value: $ty) -> VarUInt {
-                VarUInt(value as u32)
+        impl TryFrom<$ty> for VarUInt {
+            type Error = <i32 as TryFrom<$ty>>::Error;
+
+            fn try_from(value: $ty) -> Result<Self, Self::Error> {
+                Ok(VarUInt(value as u32))
             }
         }
     };
