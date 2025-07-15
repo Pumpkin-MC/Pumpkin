@@ -18,7 +18,7 @@ use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 pub struct Position2DArgumentConsumer;
 
 impl GetClientSideArgParser for Position2DArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Vec2
     }
 

@@ -85,13 +85,13 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
         if let Stmt::Expr(expr, _) = stmt {
             if event.is_none() {
                 event = Some(expr);
-            } else if let Expr::Block(b) = expr {
-                if let Some(ref label) = b.label {
-                    if label.name.ident == "after" {
-                        after_block = Some(b);
-                    } else if label.name.ident == "cancelled" {
-                        cancelled_block = Some(b);
-                    }
+            } else if let Expr::Block(b) = expr
+                && let Some(ref label) = b.label
+            {
+                if label.name.ident == "after" {
+                    after_block = Some(b);
+                } else if label.name.ident == "cancelled" {
+                    cancelled_block = Some(b);
                 }
             }
         }

@@ -17,7 +17,7 @@ use crate::server::Server;
 pub struct ItemArgumentConsumer;
 
 impl GetClientSideArgParser for ItemArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Resource { identifier: "item" }
     }
 

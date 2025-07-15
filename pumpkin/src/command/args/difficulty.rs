@@ -14,7 +14,7 @@ use super::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSid
 pub struct DifficultyArgumentConsumer;
 
 impl GetClientSideArgParser for DifficultyArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::String(
             pumpkin_protocol::java::client::play::StringProtoArgBehavior::SingleWord,
         )

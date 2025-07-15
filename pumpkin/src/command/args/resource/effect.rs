@@ -16,7 +16,7 @@ use crate::server::Server;
 pub struct EffectTypeArgumentConsumer;
 
 impl GetClientSideArgParser for EffectTypeArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Resource {
             identifier: "mob_effect",
         }

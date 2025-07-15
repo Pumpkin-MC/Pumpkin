@@ -63,15 +63,15 @@ pub trait Inventory: Send + Sync + Debug + Clearable {
     ) {
         if let Some(inventory_list) = nbt.get_list("Items") {
             for tag in inventory_list {
-                if let Some(item_compound) = tag.extract_compound() {
-                    if let Some(slot_byte) = item_compound.get_byte("Slot") {
-                        let slot = slot_byte as usize;
-                        if slot < stacks.len() {
-                            if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
-                                // This won't error cause it's only called on initialization
-                                *stacks[slot].try_lock().unwrap() = item_stack;
-                            }
-                        }
+                if let Some(item_compound) = tag.extract_compound()
+                    && let Some(slot_byte) = item_compound.get_byte("Slot")
+                {
+                    let slot = slot_byte as usize;
+                    if slot < stacks.len()
+                        && let Some(item_stack) = ItemStack::read_item_stack(item_compound)
+                    {
+                        // This won't error cause it's only called on initialization
+                        *stacks[slot].try_lock().unwrap() = item_stack;
                     }
                 }
             }

@@ -20,7 +20,7 @@ use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 pub struct EntityArgumentConsumer;
 
 impl GetClientSideArgParser for EntityArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         // todo: investigate why this does not accept target selectors
         ArgumentType::Entity {
             flags: ArgumentType::ENTITY_FLAG_ONLY_SINGLE,

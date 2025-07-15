@@ -14,7 +14,7 @@ use super::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSid
 pub struct GamemodeArgumentConsumer;
 
 impl GetClientSideArgParser for GamemodeArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Gamemode
     }
 

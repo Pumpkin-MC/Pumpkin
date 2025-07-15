@@ -15,7 +15,7 @@ use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 pub struct Position3DArgumentConsumer;
 
 impl GetClientSideArgParser for Position3DArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Vec3
     }
 

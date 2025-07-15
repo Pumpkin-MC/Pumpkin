@@ -16,7 +16,7 @@ use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 pub struct BlockPosArgumentConsumer;
 
 impl GetClientSideArgParser for BlockPosArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::BlockPos
     }
 

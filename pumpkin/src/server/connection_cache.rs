@@ -46,7 +46,7 @@ impl CachedBranding {
             cached_server_brand,
         }
     }
-    pub fn get_branding(&self) -> CPluginMessage {
+    pub fn get_branding(&self) -> CPluginMessage<'_> {
         CPluginMessage::new("minecraft:brand", &self.cached_server_brand)
     }
     const BRAND: &str = "Pumpkin";
