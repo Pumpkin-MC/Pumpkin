@@ -26,7 +26,7 @@ pub struct SPlayerAuthInput {
     pub pos_delta: Vector3<f32>,
     pub analog_move: Vector2<f32>,
     pub camera_orientation: Vector3<f32>,
-    pub raw_move_vec: Vector2<f32>,
+    //pub raw_move_vec: Vector2<f32>,
 
 }
 
