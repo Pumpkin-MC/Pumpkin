@@ -1,8 +1,6 @@
-#![allow(clippy::non_std_lazy_statics)]
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use lazy_static::lazy_static;
 use pumpkin_data::{
     Block,
     item::Item,
@@ -20,27 +18,26 @@ use crate::{
     entity::player::Player,
     world::World,
 };
-lazy_static! {
-    static ref CANDLE_MAP: [(&'static Item, &'static Block); 17] = [
-        (&Item::CANDLE, &Block::CANDLE_CAKE),
-        (&Item::WHITE_CANDLE, &Block::WHITE_CANDLE_CAKE),
-        (&Item::ORANGE_CANDLE, &Block::ORANGE_CANDLE_CAKE),
-        (&Item::MAGENTA_CANDLE, &Block::MAGENTA_CANDLE_CAKE),
-        (&Item::LIGHT_BLUE_CANDLE, &Block::LIGHT_BLUE_CANDLE_CAKE),
-        (&Item::YELLOW_CANDLE, &Block::YELLOW_CANDLE_CAKE),
-        (&Item::LIME_CANDLE, &Block::LIME_CANDLE_CAKE),
-        (&Item::PINK_CANDLE, &Block::PINK_CANDLE_CAKE),
-        (&Item::GRAY_CANDLE, &Block::GRAY_CANDLE_CAKE),
-        (&Item::LIGHT_GRAY_CANDLE, &Block::LIGHT_GRAY_CANDLE_CAKE),
-        (&Item::CYAN_CANDLE, &Block::CYAN_CANDLE_CAKE),
-        (&Item::PURPLE_CANDLE, &Block::PURPLE_CANDLE_CAKE),
-        (&Item::BLUE_CANDLE, &Block::BLUE_CANDLE_CAKE),
-        (&Item::BROWN_CANDLE, &Block::BROWN_CANDLE_CAKE),
-        (&Item::GREEN_CANDLE, &Block::GREEN_CANDLE_CAKE),
-        (&Item::RED_CANDLE, &Block::RED_CANDLE_CAKE),
-        (&Item::BLACK_CANDLE, &Block::BLACK_CANDLE_CAKE),
-    ];
-}
+
+const CANDLE_MAP: [(&Item, &Block); 17] = [
+    (&Item::CANDLE, &Block::CANDLE_CAKE),
+    (&Item::WHITE_CANDLE, &Block::WHITE_CANDLE_CAKE),
+    (&Item::ORANGE_CANDLE, &Block::ORANGE_CANDLE_CAKE),
+    (&Item::MAGENTA_CANDLE, &Block::MAGENTA_CANDLE_CAKE),
+    (&Item::LIGHT_BLUE_CANDLE, &Block::LIGHT_BLUE_CANDLE_CAKE),
+    (&Item::YELLOW_CANDLE, &Block::YELLOW_CANDLE_CAKE),
+    (&Item::LIME_CANDLE, &Block::LIME_CANDLE_CAKE),
+    (&Item::PINK_CANDLE, &Block::PINK_CANDLE_CAKE),
+    (&Item::GRAY_CANDLE, &Block::GRAY_CANDLE_CAKE),
+    (&Item::LIGHT_GRAY_CANDLE, &Block::LIGHT_GRAY_CANDLE_CAKE),
+    (&Item::CYAN_CANDLE, &Block::CYAN_CANDLE_CAKE),
+    (&Item::PURPLE_CANDLE, &Block::PURPLE_CANDLE_CAKE),
+    (&Item::BLUE_CANDLE, &Block::BLUE_CANDLE_CAKE),
+    (&Item::BROWN_CANDLE, &Block::BROWN_CANDLE_CAKE),
+    (&Item::GREEN_CANDLE, &Block::GREEN_CANDLE_CAKE),
+    (&Item::RED_CANDLE, &Block::RED_CANDLE_CAKE),
+    (&Item::BLACK_CANDLE, &Block::BLACK_CANDLE_CAKE),
+];
 
 #[must_use]
 pub fn cake_from_candle(item: &Item) -> &'static Block {

@@ -302,7 +302,7 @@ pub(crate) fn build() -> TokenStream {
             pub const #const_ident: Item = Item {
                 id: #id_lit,
                 registry_key: #name,
-                components: Cow::Borrowed(&[#components_tokens]),
+                components: &[#components_tokens],
             };
         });
 
@@ -332,7 +332,7 @@ pub(crate) fn build() -> TokenStream {
         pub struct Item {
             pub id: u16,
             pub registry_key: &'static str,
-            pub components: Cow<'static, [DataComponent]>,
+            pub components: &'static [DataComponent],
         }
 
         impl PartialEq for Item {

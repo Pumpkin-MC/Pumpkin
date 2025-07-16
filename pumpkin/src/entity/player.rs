@@ -447,7 +447,7 @@ impl Player {
 
         // Get the attack damage
         // TODO: this should be cached in memory, we shouldn't just use default here either
-        for component in item_stack.lock().await.item.components.iter() {
+        for component in item_stack.lock().await.item.components {
             if let AttributeModifiers(modifiers) = component {
                 for item_mod in modifiers.attribute_modifiers.iter() {
                     if item_mod.operation == Operation::AddValue {

@@ -59,7 +59,7 @@ impl ItemStack {
     };
 
     pub fn get_max_stack_size(&self) -> u8 {
-        for component in self.item.components.iter() {
+        for component in self.item.components {
             if let MaxStackSize(size) = component {
                 return size.size;
             }
@@ -130,7 +130,7 @@ impl ItemStack {
     /// If no match is found, returns the tool's default mining speed or `1.0`.
     pub fn get_speed(&self, block: &'static Block) -> f32 {
         // No tool? Use default speed
-        for component in self.item.components.iter() {
+        for component in self.item.components {
             if let Tool(tool) = component {
                 for rule in tool.rules.iter() {
                     // Skip if speed is not set
@@ -160,7 +160,7 @@ impl ItemStack {
     /// Direct matches return immediately, while tagged blocks are checked separately.
     pub fn is_correct_for_drops(&self, block: &'static Block) -> bool {
         // No tool? Use default speed
-        for component in self.item.components.iter() {
+        for component in self.item.components {
             if let Tool(tool) = component {
                 for rule in tool.rules.iter() {
                     // Skip if speed is not set

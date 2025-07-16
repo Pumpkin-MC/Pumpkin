@@ -58,7 +58,7 @@ impl PumpkinBlock for JukeboxBlock {
 
         let mut jukebox_playable = None;
 
-        for component in args.item_stack.lock().await.item.components.iter() {
+        for component in args.item_stack.lock().await.item.components {
             if let JukeboxPlayable(playable) = component {
                 jukebox_playable = Some(playable.song);
                 break;
