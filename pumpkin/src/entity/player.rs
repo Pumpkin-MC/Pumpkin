@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
-use pumpkin_protocol::codec::var_uint::VarUInt;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
@@ -751,16 +750,17 @@ impl Player {
                         .await;
                 }
                 ClientPlatform::Bedrock(bedrock_client) => {
-                    println!("Bedrock");
-                    let chunk = chunk_of_chunks[0].read().await;
-                    bedrock_client
-                        .send_game_packet(&CLevelChunk {
-                            dimension: VarInt(0),
-                            sub_chunks_count: VarUInt(0),
-                            cache_enabled: false,
-                            chunk: &chunk,
-                        })
-                        .await;
+                    for chunk in chunk_of_chunks {
+                        let chunk = chunk.read().await;
+
+                        bedrock_client
+                            .send_game_packet(&CLevelChunk {
+                                dimension: 0,
+                                cache_enabled: false,
+                                chunk: &chunk,
+                            })
+                            .await;
+                    }
                 }
             }
         }

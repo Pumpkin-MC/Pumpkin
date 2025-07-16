@@ -1,5 +1,7 @@
 use std::io::{Error, Read};
 
+use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+
 use crate::{codec::var_uint::VarUInt, serial::PacketRead};
 
 impl PacketRead for bool {
@@ -117,5 +119,24 @@ impl PacketRead for Vec<u8> {
         let mut buf = vec![0; len];
         reader.read_exact(&mut buf)?;
         Ok(buf)
+    }
+}
+
+impl<T: PacketRead> PacketRead for Vector3<T> {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        Ok(Self {
+            x: T::read(reader)?,
+            y: T::read(reader)?,
+            z: T::read(reader)?,
+        })
+    }
+}
+
+impl<T: PacketRead> PacketRead for Vector2<T> {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        Ok(Self {
+            x: T::read(reader)?,
+            y: T::read(reader)?,
+        })
     }
 }

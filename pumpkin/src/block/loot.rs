@@ -181,7 +181,9 @@ impl LootConditionExt for LootCondition {
                         block_actual_properties
                             .iter()
                             .find(|(actual_key, _)| actual_key == expected_key)
-                            .is_some_and(|(_, actual_value_string)| actual_value_string == expected_value)
+                            .is_some_and(|(_, actual_value_string)| {
+                                actual_value_string == expected_value
+                            })
                     });
                 }
                 false

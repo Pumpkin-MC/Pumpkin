@@ -1,7 +1,5 @@
 use std::io::{Read, Write};
 
-use bytes::Bytes;
-
 use crate::bedrock::{RAKNET_SPLIT, RakReliability};
 use crate::codec::u24;
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
@@ -19,8 +17,8 @@ impl FrameSet {
         })
     }
 
-    pub fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
-        write.write_u8(0x84)?;
+    pub fn write_packet_data(&self, mut write: impl Write, id: u8) -> Result<(), WritingError> {
+        write.write_u8(id)?;
         self.sequence.encode(&mut write)?;
         for frame in &self.frames {
             frame.write(&mut write)?;
@@ -32,7 +30,8 @@ impl FrameSet {
 #[derive(Default)]
 pub struct Frame {
     pub reliability: RakReliability,
-    pub payload: Bytes,
+    // If we write a packet we dont want to own the payload to avoid cloning
+    pub payload: Vec<u8>,
     pub reliable_number: u32,
     pub sequence_index: u32,
     pub order_index: u32,

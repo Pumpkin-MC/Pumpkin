@@ -57,7 +57,8 @@ impl CoralFeature {
             }
             let wall_coral = Self::get_random_tag_entry_block("minecraft:wall_corals", random);
             let original_props = &wall_coral
-                .properties(wall_coral.default_state.id).unwrap()
+                .properties(wall_coral.default_state.id)
+                .unwrap()
                 .to_props();
             let facing = dir.to_facing();
             // Set the right Axis

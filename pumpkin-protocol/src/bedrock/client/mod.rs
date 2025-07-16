@@ -1,3 +1,4 @@
+pub mod chunk_radius_update;
 pub mod creative_content;
 pub mod gamerules_changed;
 pub mod handshake;

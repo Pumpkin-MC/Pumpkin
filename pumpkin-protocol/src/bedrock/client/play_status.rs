@@ -1,11 +1,11 @@
-use std::io::{Error, Write};
-
 use pumpkin_macros::packet;
 
 use crate::serial::PacketWrite;
 
+#[derive(PacketWrite)]
 #[packet(2)]
 pub struct CPlayStatus {
+    #[serial(big_endian)]
     status: i32,
 }
 
@@ -14,12 +14,6 @@ impl CPlayStatus {
         Self {
             status: status as i32,
         }
-    }
-}
-
-impl PacketWrite for CPlayStatus {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        writer.write_all(&self.status.to_be_bytes())
     }
 }
 

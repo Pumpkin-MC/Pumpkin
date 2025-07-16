@@ -64,7 +64,10 @@ fn can_be_lit(block: &Block, state_id: u16) -> Option<u16> {
     }
 
     // Konvertiere zu dem Format, das `from_properties` erwartet
-    let props: Vec<(&str, &str)> = props.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    let props: Vec<(&str, &str)> = props
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
 
     let new_state_id = block.from_properties(&props).to_state_id(block);
 

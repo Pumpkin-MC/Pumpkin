@@ -13,7 +13,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
-    serial::PacketWrite,
+    serial::{PacketRead, PacketWrite},
 };
 
 pub type VarIntType = i32;
@@ -21,7 +21,7 @@ pub type VarIntType = i32;
 /**
  * A variable-length integer type used by the Minecraft network protocol.
  */
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct VarInt(pub VarIntType);
 
 impl VarInt {
@@ -211,5 +211,21 @@ impl PacketWrite for VarInt {
             }
         }
         Ok(())
+    }
+}
+
+impl PacketRead for VarInt {
+    fn read<W: Read>(read: &mut W) -> Result<Self, Error> {
+        let mut val = 0;
+        for i in 0..Self::MAX_SIZE.get() {
+            let byte = read
+                .get_u8()
+                .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            val |= (i32::from(byte) & 0x7F) << (i * 7);
+            if byte & 0x80 == 0 {
+                return Ok(VarInt((val >> 1) ^ (val << 31)));
+            }
+        }
+        Err(Error::new(ErrorKind::InvalidData, ""))
     }
 }

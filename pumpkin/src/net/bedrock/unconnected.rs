@@ -28,14 +28,14 @@ impl BedrockClientPlatform {
         let motd_string = ServerInfo {
             edition: "MCPE",
             // TODO The default motd is to long to be displayed completely
-            motd_line_1: "Pumpkin server",
+            motd_line_1: "Pumpkin Server",
             protocol_version: 819,
             version_name: CURRENT_BEDROCK_MC_VERSION,
             player_count,
             max_player_count: BASIC_CONFIG.max_players,
             server_unique_id: server.server_guid,
             motd_line_2: &BASIC_CONFIG.default_level_name,
-            game_mode: "Survival",
+            game_mode: server.defaultgamemode.lock().await.gamemode.to_str(),
             game_mode_numeric: 1,
             port_ipv4: 19132,
             port_ipv6: 19133,

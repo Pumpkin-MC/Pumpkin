@@ -118,7 +118,7 @@ impl ClientPlatform {
     pub fn protocol_version(&self) -> i32 {
         match self {
             Self::Java(java) => java.protocol_version.load(Ordering::Relaxed),
-            Self::Bedrock(bedrock) => bedrock.protocol_version.load(Ordering::Relaxed),
+            Self::Bedrock(_) => 819,
         }
     }
 

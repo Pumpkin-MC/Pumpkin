@@ -3,7 +3,7 @@ use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site, proc_macro_error};
 use quote::quote;
 use syn::spanned::Spanned;
-use syn::{self};
+use syn::{self, Attribute};
 use syn::{
     Block, Expr, Field, Fields, ItemStruct, Stmt,
     parse::{Nothing, Parser},
@@ -358,8 +358,18 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
     let fields = if let syn::Data::Struct(data) = &input.data {
         data.fields.iter().map(|f| {
             let ident = f.ident.as_ref().unwrap();
-            quote! {
-                self.#ident.write(writer)?;
+            // Check for #[serial(big_endian)] attribute
+            let is_big_endian = has_big_endian_attribute(&f.attrs);
+            if is_big_endian {
+                // For big-endian fields, call a method that handles big-endian serialization
+                quote! {
+                    self.#ident.write_be(writer)?;
+                }
+            } else {
+                // Default to little-endian
+                quote! {
+                    self.#ident.write(writer)?;
+                }
             }
         })
     } else {
@@ -386,8 +396,18 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     let fields = if let syn::Data::Struct(data) = &input.data {
         data.fields.iter().map(|f| {
             let ident = f.ident.as_ref().unwrap();
-            quote! {
-                #ident: PacketRead::read(reader)?
+            // Check for #[serial(big_endian)] attribute
+            let is_big_endian = has_big_endian_attribute(&f.attrs);
+            if is_big_endian {
+                // For big-endian fields, call a method that handles big-endian deserialization
+                quote! {
+                    #ident: PacketRead::read_be(reader)?
+                }
+            } else {
+                // Default to little-endian
+                quote! {
+                    #ident: PacketRead::read(reader)?
+                }
             }
         })
     } else {
@@ -405,4 +425,21 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     };
 
     expanded.into()
+}
+
+fn has_big_endian_attribute(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| {
+        if attr.path().is_ident("serial") {
+            let mut found = false;
+            let _ = attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("big_endian") {
+                    found = true;
+                }
+                Ok(())
+            });
+            found
+        } else {
+            false
+        }
+    })
 }

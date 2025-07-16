@@ -1,4 +1,4 @@
-use std::sync::{Arc, atomic::Ordering};
+use std::sync::Arc;
 
 use pumpkin_config::{BASIC_CONFIG, networking::compression::CompressionInfo};
 use pumpkin_protocol::{
@@ -21,16 +21,13 @@ use crate::{
 };
 
 impl BedrockClientPlatform {
-    pub async fn handle_request_network_settings(&self, packet: SRequestNetworkSettings) {
-        dbg!("requested network settings");
-        self.protocol_version
-            .store(packet.protocol_version, Ordering::Relaxed);
+    pub async fn handle_request_network_settings(&self, _packet: SRequestNetworkSettings) {
         self.send_game_packet(&CNetworkSettings::new(0, 0, false, 0, 0.0))
             .await;
         self.set_compression(CompressionInfo::default()).await;
     }
-    pub async fn handle_login(self: &Arc<Self>, packet: SLogin, server: &Server) {
-        dbg!("received login", packet.jwt);
+    pub async fn handle_login(self: &Arc<Self>, _packet: SLogin, server: &Server) {
+        //dbg!("received login", packet.jwt);
         // TODO: Enable encryption
         // bedrock
         //     .send_game_packet(

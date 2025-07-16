@@ -55,10 +55,13 @@ use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     bedrock::client::{
-        creative_content::CreativeContent,
+        chunk_radius_update::CChunkRadiusUpdate,
+        creative_content::{
+            CreativeContent, Entry, Group, ItemInstanceUserData, NetworkItemInstanceDescriptor,
+        },
         gamerules_changed::GameRules,
         play_status::{CPlayStatus, PlayStatus},
-        start_game::{Experiments, GamePublishSetting, LevelSettings},
+        start_game::{Experiments, GG, GamePublishSetting, LevelSettings},
     },
     codec::{
         bedrock_block_pos::NetworkPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
@@ -776,11 +779,25 @@ impl World {
                     level_name: "Pumpkin world".to_string(),
                     premium_world_template_id: String::with_capacity(0),
                     is_trial: false,
-                    rewind_history_size: VarInt(-1),
+                    rewind_history_size: VarInt(0),
                     server_authoritative_block_breaking: false,
                     current_level_time: 0,
                     enchantment_seed: VarInt(0),
-                    block_properties_size: VarUInt(0),
+                    block_properties_size: VarUInt(2),
+                    block_properties: [
+                        GG {
+                            name: "minecraft:air".to_string(),
+                            id: 10,
+                            len: VarUInt(0),
+                            end: 0,
+                        },
+                        GG {
+                            name: "minecraft:stone".to_string(),
+                            id: 10,
+                            len: VarUInt(0),
+                            end: 0,
+                        },
+                    ],
                     // TODO Make this unique
                     multiplayer_correlation_id: Uuid::default().to_string(),
                     enable_itemstack_net_manager: false,
@@ -802,12 +819,32 @@ impl World {
                 .await;
             client
                 .send_game_packet(&CreativeContent {
-                    groups: &[],
-                    entries: &[],
+                    groups: &[Group {
+                        creative_category: 1,
+                        name: String::new(),
+                        icon_item: NetworkItemInstanceDescriptor::default(),
+                    }],
+                    entries: &[Entry {
+                        id: VarUInt(0),
+                        item: NetworkItemInstanceDescriptor {
+                            id: VarInt(0),
+                            stack_size: 64,
+                            aux_value: VarUInt(0),
+                            block_runtime_id: VarInt(0),
+                            user_data_buffer: ItemInstanceUserData::default(),
+                        },
+                        group_index: VarUInt(0),
+                    }],
                 })
                 .await;
 
             chunker::player_join(&player).await;
+
+            client
+                .send_game_packet(&CChunkRadiusUpdate {
+                    chunk_radius: VarInt(16),
+                })
+                .await;
 
             client
                 .send_game_packet(&CPlayStatus::new(PlayStatus::PlayerSpawn))

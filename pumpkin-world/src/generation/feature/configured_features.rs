@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator, read_data_from_file};
 use serde::Deserialize;
 
 use crate::{ProtoChunk, level::Level, world::BlockRegistryExt};
@@ -74,10 +74,7 @@ use super::features::{
 };
 
 pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> =
-    LazyLock::new(|| {
-        serde_json::from_str(include_str!("../../../../assets/configured_features.json"))
-            .expect("Could not parse configured_features.json registry.")
-    });
+    LazyLock::new(|| read_data_from_file!("../../../../assets/configured_features.json"));
 
 // Yes this may look ugly and you wonder why this is hard coded, but its makes sense to hardcode since we have to add logic for these in code
 #[derive(Deserialize)]

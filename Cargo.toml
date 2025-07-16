@@ -21,6 +21,11 @@ edition = "2024"
 lto = true
 codegen-units = 1
 
+# Makes the building faster and the binary smaller
+# The resulting binary is harder to reverse engineer,
+# but Pumpkin is open source anyway
+strip = true
+
 [profile.bench]
 debug = true
 

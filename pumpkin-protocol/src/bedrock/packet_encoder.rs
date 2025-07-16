@@ -164,11 +164,11 @@ impl UDPNetworkEncoder {
 
     pub async fn write_packet(
         &mut self,
-        packet_data: Bytes,
+        packet_data: &[u8],
         addr: SocketAddr,
         socket: &UdpSocket,
     ) -> Result<(), PacketEncodeError> {
-        socket.send_to(&packet_data, addr).await.unwrap();
+        socket.send_to(packet_data, addr).await.unwrap();
         Ok(())
     }
 }

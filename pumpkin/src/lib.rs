@@ -6,7 +6,6 @@ use crate::net::bedrock::BedrockClientPlatform;
 use crate::net::java::JavaClientPlatform;
 use crate::net::{lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
-use bytes::Bytes;
 use log::{Level, LevelFilter};
 use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
@@ -22,10 +21,12 @@ use std::io::{Cursor, IsTerminal, stdin};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
 use tokio::sync::{Mutex, Notify, RwLock};
+use tokio::time::sleep;
 use tokio_util::task::TaskTracker;
 
 pub mod block;
@@ -374,7 +375,7 @@ impl PumpkinServer {
                     }
                     Err(e) => {
                         log::error!("Failed to accept Java client connection: {e}");
-                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        sleep(Duration::from_millis(50)).await;
                     }
                 }
             },
@@ -386,7 +387,7 @@ impl PumpkinServer {
                         if len == 0 {
                             log::warn!("Received empty UDP packet from {client_addr}");
                         }
-                        let received_data = Bytes::copy_from_slice(&udp_buf[..len]);
+                        let received_data = udp_buf[..len].to_vec();
 
 
                         let mut clients_guard = bedrock_clients.lock().await;
@@ -405,7 +406,7 @@ impl PumpkinServer {
 
                         let server_clone = self.server.clone();
 
-                        let reader = Cursor::new(received_data.to_vec());
+                        let reader = Cursor::new(received_data);
                         let client = client.clone();
                         tasks.spawn(async move {
                             client.process_packet(&server_clone, reader).await;
@@ -414,7 +415,7 @@ impl PumpkinServer {
                     Err(e) => {
                         // TODO Close connection
                         log::error!("Failed to receive UDP packet for Bedrock: {e}");
-                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        sleep(Duration::from_millis(50)).await;
                     }
                 }
             },

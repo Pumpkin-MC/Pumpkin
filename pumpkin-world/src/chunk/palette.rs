@@ -429,7 +429,9 @@ impl BlockPalette {
 
         BlockStateCodec {
             name: block,
-            properties: block.properties(registry_id).map(|p| p.to_props().into_iter().collect()),
+            properties: block
+                .properties(registry_id)
+                .map(|p| p.to_props().into_iter().collect()),
         }
     }
 }

@@ -33,6 +33,7 @@ pub struct CStartGame {
     pub current_level_time: u64,
     pub enchantment_seed: VarInt,
     pub block_properties_size: VarUInt,
+    pub block_properties: [GG; 2],
 
     pub multiplayer_correlation_id: String,
     pub enable_itemstack_net_manager: bool,
@@ -134,4 +135,12 @@ pub enum GamePublishSetting {
     FriendsOnly = 2,
     FriendsOfFriends = 3,
     Public = 4,
+}
+
+#[derive(PacketWrite)]
+pub struct GG {
+    pub name: String,
+    pub id: i8,
+    pub len: VarUInt,
+    pub end: i8,
 }

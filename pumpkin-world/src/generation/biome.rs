@@ -148,12 +148,11 @@ fn salt_mix(seed: i64, salt: i64) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_util::{math::vector3::Vector3, read_data_from_file};
 
     use crate::{
         biome::hash_seed,
         generation::biome::{get_biome_blend, scale_mix, score_permutation},
-        read_data_from_file,
     };
 
     use super::salt_mix;

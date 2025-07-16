@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicI32};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
@@ -193,7 +193,7 @@ impl JavaClientPlatform {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        if self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+        if self.closed.load(Ordering::Relaxed) {
             None
         } else {
             Some(self.tasks.spawn(task))
@@ -216,7 +216,7 @@ impl JavaClientPlatform {
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
         if let Err(err) = self.outgoing_packet_queue_send.send(packet_data).await {
             // This is expected to fail if we are closed
-            if !self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+            if !self.closed.load(Ordering::Relaxed) {
                 log::error!(
                     "Failed to add packet to the outgoing packet queue for client {}: {}",
                     self.id,
@@ -232,7 +232,7 @@ impl JavaClientPlatform {
 
     fn thread_safe_close(interrupt: &Arc<Notify>, closed: &Arc<AtomicBool>) {
         interrupt.notify_waiters();
-        closed.store(true, std::sync::atomic::Ordering::Relaxed);
+        closed.store(true, Ordering::Relaxed);
     }
 
     pub async fn get_packet(&self) -> Option<RawPacket> {
@@ -294,7 +294,7 @@ impl JavaClientPlatform {
             .await
         {
             // It is expected that the packet will fail if we are closed
-            if !self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+            if !self.closed.load(Ordering::Relaxed) {
                 log::warn!("Failed to send packet to client {}: {}", self.id, err);
                 // We now need to close the connection to the client since the stream is in an
                 // unknown state
@@ -434,7 +434,7 @@ impl JavaClientPlatform {
         let writer = self.network_writer.clone();
         let id = self.id;
         self.spawn_task(async move {
-            while !closed.load(std::sync::atomic::Ordering::Relaxed) {
+            while !closed.load(Ordering::Relaxed) {
                 let recv_result = tokio::select! {
                     () = close_interrupt.notified() => {
                         None
@@ -450,7 +450,7 @@ impl JavaClientPlatform {
 
                 if let Err(err) = writer.lock().await.write_packet(packet_data).await {
                     // It is expected that the packet will fail if we are closed
-                    if !closed.load(std::sync::atomic::Ordering::Relaxed) {
+                    if !closed.load(Ordering::Relaxed) {
                         log::warn!("Failed to send packet to client {id}: {err}",);
                         // We now need to close the connection to the client since the stream is in an
                         // unknown state
@@ -473,8 +473,7 @@ impl JavaClientPlatform {
     /// This function does not attempt to send any disconnect packets to the client.
     pub fn close(&self) {
         self.close_interrupt.notify_waiters();
-        self.closed
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.closed.store(true, Ordering::Relaxed);
     }
 
     async fn handle_login_packet(

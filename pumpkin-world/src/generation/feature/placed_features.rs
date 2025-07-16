@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_util::HeightMap;
+use pumpkin_util::{HeightMap, read_data_from_file};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter;
@@ -24,10 +24,8 @@ use crate::world::BlockRegistryExt;
 
 use super::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
 
-pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../../assets/placed_feature.json"))
-        .expect("Could not parse placed_feature.json registry.")
-});
+pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> =
+    LazyLock::new(|| read_data_from_file!("../../../../assets/placed_feature.json"));
 
 #[derive(Deserialize)]
 #[serde(untagged)]

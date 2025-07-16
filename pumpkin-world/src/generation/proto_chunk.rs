@@ -782,7 +782,7 @@ mod test {
     use std::sync::LazyLock;
 
     use pumpkin_data::noise_router::{OVERWORLD_BASE_NOISE_ROUTER, WrapperType};
-    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::{math::vector2::Vector2, read_data_from_file};
 
     use crate::{
         dimension::Dimension,
@@ -794,7 +794,6 @@ mod test {
             },
             settings::{GENERATION_SETTINGS, GeneratorSetting},
         },
-        read_data_from_file,
     };
 
     use super::ProtoChunk;
