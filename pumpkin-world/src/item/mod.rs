@@ -25,7 +25,7 @@ pub enum Rarity {
 pub struct ItemStack {
     pub item_count: u8,
     pub item: &'static Item,
-    pub patch: Vec<Option<DataComponent>>,
+    pub patch: Vec<(u8, Option<DataComponent>)>,
 }
 
 impl Hash for ItemStack {
