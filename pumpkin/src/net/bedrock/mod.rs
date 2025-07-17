@@ -544,8 +544,9 @@ impl BedrockClient {
         let payload = &mut &packet.payload[..];
         match packet.id {
             SPlayerAuthInput::PACKET_ID => {
-                self.player_pos_update(player, SPlayerAuthInput::read(payload).unwrap())
-                    .await;
+                if let Ok(input_packet) = SPlayerAuthInput::read(payload) {
+                    self.player_pos_update(player, input_packet).await;
+                }
             }
             SInteraction::PACKET_ID => {
                 dbg!(SInteraction::read(payload).unwrap());

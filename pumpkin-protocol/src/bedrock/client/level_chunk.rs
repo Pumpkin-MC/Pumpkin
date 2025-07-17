@@ -19,6 +19,7 @@ pub struct CLevelChunk<'a> {
     pub cache_enabled: bool,
 
     // https://gist.github.com/Tomcc/a96af509e275b1af483b25c543cfbf37
+    // https://github.com/Mojang/bedrock-protocol-docs/blob/main/additional_docs/SubChunk%20Request%20System%20v1.18.10.md
     pub chunk: &'a ChunkData,
 }
 
@@ -27,9 +28,9 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
         VarInt(self.chunk.position.x).write(writer)?;
         VarInt(self.chunk.position.y).write(writer)?;
 
+        VarInt(self.dimension).write(writer)?;
         let sub_chunk_count = self.chunk.section.sections.len() as u32;
         VarUInt(sub_chunk_count).write(writer)?;
-        VarInt(self.dimension).write(writer)?;
         self.cache_enabled.write(writer)?;
 
         let mut chunk_data = Vec::new();
@@ -43,19 +44,7 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
             data_write.write_all(&[VERSION, num_storages, i as u8])?;
 
             for _ in 0..num_storages {
-                let format = 1 << 1 | 1;
-                data_write.write_all(&[format])?;
-
-                let blocks_per_word = 32 / 1;
-
-                for _ in 0..(CHUNK_SIZE / blocks_per_word) {
-                    data_write.write_all(&u32::MAX.to_le_bytes())?;
-                }
-
-                VarInt(2).write(data_write)?;
-
-                VarInt(0).write(data_write)?;
-                VarInt(1).write(data_write)?;
+                encode_storage(data_write, 2, CHUNK_SIZE)?;
             }
         }
 
@@ -65,17 +54,7 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
             data_write.write_all(&[VERSION, num_storages, i as u8])?;
 
             for _ in 0..num_storages {
-                let format = 1 << 1 | 1;
-                data_write.write_all(&[format])?;
-
-                let blocks_per_word = 32 / 1;
-
-                for _ in 0..(BIOME_SIZE / blocks_per_word) {
-                    data_write.write_all(&0u32.to_le_bytes())?;
-                }
-
-                VarInt(1).write(data_write)?;
-                VarInt(1).write(data_write)?;
+                encode_storage(data_write, 2, BIOME_SIZE)?;
             }
         }
 
@@ -84,4 +63,25 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
         VarUInt(chunk_data.len() as u32).write(writer)?;
         writer.write_all(&chunk_data)
     }
+}
+
+fn encode_storage<W: Write>(writer: &mut W, palette_size: i32, indices_len: usize) -> Result<(), Error> {
+    let bits_per_index: u8 = 1;
+
+    let format = bits_per_index << 1 | 1;
+    format.write(writer)?;
+
+    let blocks_per_word = 32 / bits_per_index as usize;
+
+    for _ in 0..(indices_len / blocks_per_word) {
+        writer.write_all(&u32::MAX.to_le_bytes())?;
+    }
+
+    VarInt(palette_size).write(writer)?;
+
+    for i in 0..palette_size {
+        VarInt(i).write(writer)?;
+    }
+
+    Ok(())
 }

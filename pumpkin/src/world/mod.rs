@@ -772,7 +772,7 @@ impl World {
                     entity_id: VarLong(runtime_id as i64),
                     runtime_entity_id: VarULong(runtime_id),
                     player_gamemode: VarInt(player.gamemode.load() as i32),
-                    position: Vector3::new(0.0, 100.0, 0.0),
+                    position: Vector3::new(0.0, 322.0, 0.0),
                     pitch: 0.0,
                     yaw: 0.0,
                     level_settings,
