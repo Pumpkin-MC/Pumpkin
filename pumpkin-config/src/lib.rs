@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::path::PathBuf;
 use std::{
     env, fs,
-    net::{Ipv4Addr, SocketAddr},
     num::NonZeroU8,
     path::Path,
     sync::LazyLock,
@@ -111,11 +110,11 @@ pub struct BasicConfiguration {
     // Whether Java Edition Client's are Accepted
     pub java_edition: bool,
     /// The address and port to which the Java Edition server will bind
-    pub java_edition_address: SocketAddr,
+    pub java_edition_port: u16,
     // Whether Bedrock Edition Client's are Accepted
     pub bedrock_edition: bool,
     /// The address and port to which the Bedrock Edition server will bind
-    pub bedrock_edition_address: SocketAddr,
+    pub bedrock_edition_port: u16,
     /// The seed for world generation.
     pub seed: String,
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
@@ -164,9 +163,9 @@ impl Default for BasicConfiguration {
     fn default() -> Self {
         Self {
             java_edition: true,
-            java_edition_address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 25565),
+            java_edition_port: 25565,
             bedrock_edition: true,
-            bedrock_edition_address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 19132),
+            bedrock_edition_port: 19132,
             seed: "".to_string(),
             max_players: 100000,
             view_distance: NonZeroU8::new(16).unwrap(),

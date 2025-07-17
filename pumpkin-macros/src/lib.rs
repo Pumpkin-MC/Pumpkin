@@ -3,7 +3,7 @@ use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site, proc_macro_error};
 use quote::quote;
 use syn::spanned::Spanned;
-use syn::{self, Attribute};
+use syn::{self, Attribute, Type};
 use syn::{
     Block, Expr, Field, Fields, ItemStruct, Stmt,
     parse::{Nothing, Parser},
@@ -350,6 +350,7 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
     code.into()
 }
 
+#[rustfmt::skip]
 #[proc_macro_derive(PacketWrite, attributes(serial))]
 pub fn derive_serialize(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
@@ -358,17 +359,32 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
     let fields = if let syn::Data::Struct(data) = &input.data {
         data.fields.iter().map(|f| {
             let ident = f.ident.as_ref().unwrap();
-            // Check for #[serial(big_endian)] attribute
-            let is_big_endian = has_big_endian_attribute(&f.attrs);
-            if is_big_endian {
-                // For big-endian fields, call a method that handles big-endian serialization
-                quote! {
-                    self.#ident.write_be(writer)?;
+            let (is_big_endian, no_prefix) = check_serial_attributes(&f.attrs);
+            let is_vec = is_vec(&f.ty);
+
+            if is_vec && !no_prefix {
+                // Vec with prefix: write VarUInt length, then data
+                if is_big_endian {
+                    quote! {
+                        crate::codec::var_uint::VarUInt(self.#ident.len() as u32).write(writer)?;
+                        self.#ident.write_be(writer)?;
+                    }
+                } else {
+                    quote! {
+                        crate::codec::var_uint::VarUInt(self.#ident.len() as u32).write(writer)?;
+                        self.#ident.write(writer)?;
+                    }
                 }
             } else {
-                // Default to little-endian
-                quote! {
-                    self.#ident.write(writer)?;
+                // Non-Vec or Vec with no_prefix: write directly
+                if is_big_endian {
+                    quote! {
+                        self.#ident.write_be(writer)?;
+                    }
+                } else {
+                    quote! {
+                        self.#ident.write(writer)?;
+                    }
                 }
             }
         })
@@ -388,6 +404,7 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
     expanded.into()
 }
 
+#[rustfmt::skip]
 #[proc_macro_derive(PacketRead, attributes(serial))]
 pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
@@ -396,17 +413,29 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     let fields = if let syn::Data::Struct(data) = &input.data {
         data.fields.iter().map(|f| {
             let ident = f.ident.as_ref().unwrap();
-            // Check for #[serial(big_endian)] attribute
-            let is_big_endian = has_big_endian_attribute(&f.attrs);
-            if is_big_endian {
-                // For big-endian fields, call a method that handles big-endian deserialization
+            let (is_big_endian, no_prefix) = check_serial_attributes(&f.attrs);
+            let is_vec = is_vec(&f.ty);
+
+            if is_vec && !no_prefix {
+                // Vec with prefix: read VarUInt length, then data
                 quote! {
-                    #ident: PacketRead::read_be(reader)?
+                    #ident: {
+                        let len = crate::codec::var_uint::VarUInt::read(reader)?.0 as usize;
+                        let mut buf = vec![0u8; len];
+                        reader.read_exact(&mut buf)?;
+                        buf
+                    }
                 }
             } else {
-                // Default to little-endian
-                quote! {
-                    #ident: PacketRead::read(reader)?
+                // Non-Vec or Vec with no_prefix: read directly
+                if is_big_endian {
+                    quote! {
+                        #ident: PacketRead::read_be(reader)?
+                    }
+                } else {
+                    quote! {
+                        #ident: PacketRead::read(reader)?
+                    }
                 }
             }
         })
@@ -427,19 +456,36 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     expanded.into()
 }
 
-fn has_big_endian_attribute(attrs: &[Attribute]) -> bool {
-    attrs.iter().any(|attr| {
+fn check_serial_attributes(attrs: &[Attribute]) -> (bool, bool) {
+    let mut is_big_endian = false;
+    let mut no_prefix = false;
+
+    for attr in attrs.iter() {
         if attr.path().is_ident("serial") {
-            let mut found = false;
             let _ = attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("big_endian") {
-                    found = true;
+                    is_big_endian = true;
+                } else if meta.path.is_ident("no_prefix") {
+                    no_prefix = true;
                 }
                 Ok(())
             });
-            found
-        } else {
-            false
         }
-    })
+    }
+
+    (is_big_endian, no_prefix)
+}
+
+fn is_vec(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        type_path
+            .path
+            .segments
+            .iter()
+            .last()
+            .map(|segment| segment.ident.to_string() == "Vec")
+            .unwrap_or(false)
+    } else {
+        false
+    }
 }

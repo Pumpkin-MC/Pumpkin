@@ -2,8 +2,8 @@
 #![allow(unused_labels)]
 
 use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
-use crate::net::bedrock::BedrockClientPlatform;
-use crate::net::java::JavaClientPlatform;
+use crate::net::bedrock::BedrockClient;
+use crate::net::java::JavaClient;
 use crate::net::{lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use log::{Level, LevelFilter};
@@ -18,6 +18,7 @@ use rustyline_async::{Readline, ReadlineEvent};
 use simplelog::SharedLogger;
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -205,7 +206,7 @@ impl PumpkinServer {
         }
 
         // Setup the TCP server socket.
-        let listener = tokio::net::TcpListener::bind(BASIC_CONFIG.java_edition_address)
+        let listener = tokio::net::TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), BASIC_CONFIG.java_edition_port))
             .await
             .expect("Failed to start `TcpListener`");
         // In the event the user puts 0 for their port, this will allow us to know what port it is running on
@@ -239,7 +240,7 @@ impl PumpkinServer {
             });
         };
 
-        let udp_socket = UdpSocket::bind(BASIC_CONFIG.bedrock_edition_address)
+        let udp_socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), BASIC_CONFIG.bedrock_edition_port))
             .await
             .expect("Failed to bind UDP Socket");
 
@@ -323,7 +324,7 @@ impl PumpkinServer {
         &self,
         mut master_client_id_counter: u64,
         tasks: &Arc<TaskTracker>,
-        bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<BedrockClientPlatform>>>>,
+        bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
     ) -> bool {
         let mut udp_buf = [0; 1496]; // Buffer for UDP receive
 
@@ -346,7 +347,7 @@ impl PumpkinServer {
                         };
                         log::debug!("Accepted connection from Java Edition: {formatted_address} (id {client_id})");
 
-                        let mut java_client = JavaClientPlatform::new(connection, client_addr, client_id);
+                        let mut java_client = JavaClient::new(connection, client_addr, client_id);
                         java_client.start_outgoing_packet_task();
                         let java_client = Arc::new(java_client);
 
@@ -397,7 +398,7 @@ impl PumpkinServer {
                             let client_id = master_client_id_counter;
                             master_client_id_counter += 1;
                             log::info!("New Bedrock client detected from: {client_addr} (ID: {client_id})");
-                            let mut platform = BedrockClientPlatform::new(self.udp_socket.clone(), client_addr);
+                            let mut platform = BedrockClient::new(self.udp_socket.clone(), client_addr);
                             platform.start_outgoing_packet_task();
                             Arc::new(
                                 platform

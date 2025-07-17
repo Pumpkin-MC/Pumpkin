@@ -34,6 +34,12 @@ impl PacketRead for i32 {
         reader.read_exact(&mut buf)?;
         Ok(Self::from_le_bytes(buf))
     }
+
+    fn read_be<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let mut buf = [0; size_of::<Self>()];
+        reader.read_exact(&mut buf)?;
+        Ok(Self::from_be_bytes(buf))
+    }
 }
 
 impl PacketRead for i64 {

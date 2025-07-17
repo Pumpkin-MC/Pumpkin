@@ -57,8 +57,6 @@ pub mod r#type;
 
 mod combat;
 
-pub type EntityId = i32;
-
 #[async_trait]
 pub trait EntityBase: Send + Sync {
     /// Called every tick for this entity.
@@ -126,7 +124,7 @@ static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
     /// A unique identifier for the entity
-    pub entity_id: EntityId,
+    pub entity_id: i32,
     /// A persistent, unique identifier for the entity
     pub entity_uuid: uuid::Uuid,
     /// The type of entity (e.g., player, zombie, item)

@@ -9,11 +9,10 @@ use pumpkin_protocol::bedrock::{
     server::raknet::connection::{SConnectedPing, SConnectionRequest, SNewIncomingConnection},
 };
 
-use crate::net::bedrock::BedrockClientPlatform;
+use crate::net::bedrock::BedrockClient;
 
-impl BedrockClientPlatform {
+impl BedrockClient {
     pub async fn handle_connection_request(&self, packet: SConnectionRequest) {
-        dbg!("send connection accepted");
         self.send_framed_packet(
             &CConnectionRequestAccepted::new(
                 self.address,

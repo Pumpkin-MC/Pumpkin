@@ -64,7 +64,7 @@ sha1 = "=0.11.0-rc.0"
 hmac = "=0.13.0-rc.0"
 sha2 = "=0.11.0-rc.0"
 
-base64 = "0.22"
+base64 = "0.22.1"
 
 # logging
 simplelog = { version = "0.12.2", features = ["ansi_term"] }

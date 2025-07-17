@@ -202,13 +202,15 @@ impl<'de> Deserialize<'de> for VarInt {
 impl PacketWrite for VarInt {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let mut val = (self.0 << 1) ^ (self.0 >> 31);
-        for _ in 0..Self::MAX_SIZE.get() {
+        loop {
             let b: u8 = val as u8 & 0b01111111;
             val >>= 7;
-            writer.write(&if val == 0 { [b] } else { [b | 0b10000000] })?;
             if val == 0 {
+                b.write(writer)?;
                 break;
-            }
+            } else {
+                (b | 0b10000000).write(writer)?;
+            };
         }
         Ok(())
     }
@@ -218,9 +220,7 @@ impl PacketRead for VarInt {
     fn read<W: Read>(read: &mut W) -> Result<Self, Error> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
-            let byte = read
-                .get_u8()
-                .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            let byte = u8::read(read)?;
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(VarInt((val >> 1) ^ (val << 31)));

@@ -12,6 +12,9 @@ pub trait PacketWrite {
 
 pub trait PacketRead: Sized {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error>;
+    fn read_be<R: Read>(_reader: &mut R) -> Result<Self, Error> {
+        panic!("not implemented")
+    }
 }
 
 pub enum WError {

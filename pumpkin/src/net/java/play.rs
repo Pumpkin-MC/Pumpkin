@@ -17,7 +17,7 @@ use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
 use crate::entity::r#type::from_type;
 use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
-use crate::net::java::JavaClientPlatform;
+use crate::net::java::JavaClient;
 use crate::plugin::player::player_chat::PlayerChatEvent;
 use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
@@ -168,7 +168,7 @@ impl PumpkinError for ChatError {
 
 /// Handles all Play packets sent by a real player.
 /// NEVER TRUST THE CLIENT. HANDLE EVERY ERROR; UNWRAP/EXPECT ARE FORBIDDEN.
-impl JavaClientPlatform {
+impl JavaClient {
     pub async fn handle_confirm_teleport(
         &self,
         player: &Player,
@@ -200,8 +200,10 @@ impl JavaClientPlatform {
     ) {
         if player.permission_lvl.load() >= PermissionLvl::Two {
             player.set_gamemode(change_game_mode.game_mode).await;
-            let gamemode_string = format!("{:?}", change_game_mode.game_mode).to_lowercase();
-            let gamemode_string = format!("gameMode.{gamemode_string}");
+            let gamemode_string = format!(
+                "gameMode.{}",
+                change_game_mode.game_mode.to_str().to_lowercase()
+            );
             player
                 .send_system_message(&TextComponent::translate(
                     "commands.gamemode.success.self",
@@ -340,7 +342,7 @@ impl JavaClientPlatform {
 
             'cancelled: {
                 self.enqueue_packet(&CPlayerPosition::new(
-                    player.teleport_id_count.load(std::sync::atomic::Ordering::Relaxed).into(),
+                    player.teleport_id_count.load(Ordering::Relaxed).into(),
                     player.living_entity.entity.pos.load(),
                     Vector3::new(0.0, 0.0, 0.0),
                     player.living_entity.entity.yaw.load(),
@@ -395,7 +397,7 @@ impl JavaClientPlatform {
                 player.living_entity.set_pos(pos);
 
                 let height_difference = pos.y - last_pos.y;
-                if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+                if entity.on_ground.load(Ordering::Relaxed)
                     && (packet.collision & FLAG_ON_GROUND) != 0
                     && height_difference > 0.0
                 {
@@ -403,7 +405,7 @@ impl JavaClientPlatform {
                 }
                 entity
                     .on_ground
-                    .store((packet.collision & FLAG_ON_GROUND) != 0, std::sync::atomic::Ordering::Relaxed);
+                    .store((packet.collision & FLAG_ON_GROUND) != 0, Ordering::Relaxed);
 
                 entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
@@ -469,10 +471,7 @@ impl JavaClientPlatform {
     }
 
     pub async fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
-        let teleport_id = player
-            .teleport_id_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-            + 1;
+        let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
         *player.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
         self.enqueue_packet(&CPlayerPosition::new(
             teleport_id.into(),
@@ -498,9 +497,7 @@ impl JavaClientPlatform {
             return;
         }
         let entity = &player.living_entity.entity;
-        entity
-            .on_ground
-            .store(rotation.ground, std::sync::atomic::Ordering::Relaxed);
+        entity.on_ground.store(rotation.ground, Ordering::Relaxed);
         entity.set_rotation(
             wrap_degrees(rotation.yaw) % 360.0,
             wrap_degrees(rotation.pitch),
@@ -570,7 +567,7 @@ impl JavaClientPlatform {
             .living_entity
             .entity
             .on_ground
-            .store(ground.on_ground, std::sync::atomic::Ordering::Relaxed);
+            .store(ground.on_ground, Ordering::Relaxed);
     }
 
     pub async fn handle_pick_item_from_block(
@@ -661,30 +658,24 @@ impl JavaClientPlatform {
         if let Ok(action) = Action::try_from(command.action.0) {
             let entity = &player.living_entity.entity;
             match action {
-                pumpkin_protocol::java::server::play::Action::StartSprinting => {
-                    if !entity.sprinting.load(std::sync::atomic::Ordering::Relaxed) {
+                Action::StartSprinting => {
+                    if !entity.sprinting.load(Ordering::Relaxed) {
                         entity.set_sprinting(true).await;
                     }
                 }
-                pumpkin_protocol::java::server::play::Action::StopSprinting => {
-                    if entity.sprinting.load(std::sync::atomic::Ordering::Relaxed) {
+                Action::StopSprinting => {
+                    if entity.sprinting.load(Ordering::Relaxed) {
                         entity.set_sprinting(false).await;
                     }
                 }
-                pumpkin_protocol::java::server::play::Action::LeaveBed => player.wake_up().await,
+                Action::LeaveBed => player.wake_up().await,
 
-                pumpkin_protocol::java::server::play::Action::StartHorseJump
-                | pumpkin_protocol::java::server::play::Action::StopHorseJump
-                | pumpkin_protocol::java::server::play::Action::OpenVehicleInventory => {
+                Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
                     log::debug!("todo");
                 }
-                pumpkin_protocol::java::server::play::Action::StartFlyingElytra => {
+                Action::StartFlyingElytra => {
                     let fall_flying = entity.check_fall_flying();
-                    if entity
-                        .fall_flying
-                        .load(std::sync::atomic::Ordering::Relaxed)
-                        != fall_flying
-                    {
+                    if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
                         entity.set_fall_flying(fall_flying).await;
                     }
                 } // TODO
@@ -697,12 +688,7 @@ impl JavaClientPlatform {
 
     pub async fn handle_player_input(&self, player: &Arc<Player>, input: SPlayerInput) {
         let sneak = input.input & SPlayerInput::SNEAK != 0;
-        if player
-            .get_entity()
-            .sneaking
-            .load(std::sync::atomic::Ordering::Relaxed)
-            != sneak
-        {
+        if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
             player.get_entity().set_sneaking(sneak).await;
         }
     }
@@ -1104,7 +1090,7 @@ impl JavaClientPlatform {
 
         let sneaking = interact.sneaking;
         let entity = &player.living_entity.entity;
-        if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) != sneaking {
+        if entity.sneaking.load(Ordering::Relaxed) != sneaking {
             entity.set_sneaking(sneaking).await;
         }
         let Ok(action) = ActionType::try_from(interact.r#type.0) else {
@@ -1234,10 +1220,8 @@ impl JavaClientPlatform {
                         return;
                     }
                     player.start_mining_time.store(
-                        player
-                            .tick_counter
-                            .load(std::sync::atomic::Ordering::Relaxed),
-                        std::sync::atomic::Ordering::Relaxed,
+                        player.tick_counter.load(Ordering::Relaxed),
+                        Ordering::Relaxed,
                     );
                     if !state.is_air() {
                         let speed = block::calc_block_breaking(player, state, block.name).await;
@@ -1256,15 +1240,13 @@ impl JavaClientPlatform {
                                 .broken(world, block, player, &position, server, broken_state)
                                 .await;
                         } else {
-                            player
-                                .mining
-                                .store(true, std::sync::atomic::Ordering::Relaxed);
+                            player.mining.store(true, Ordering::Relaxed);
                             *player.mining_pos.lock().await = position;
                             let progress = (speed * 10.0) as i32;
                             world.set_block_breaking(entity, position, progress).await;
                             player
                                 .current_block_destroy_stage
-                                .store(progress, std::sync::atomic::Ordering::Relaxed);
+                                .store(progress, Ordering::Relaxed);
                         }
                     }
                     self.update_sequence(player, player_action.sequence.0);
@@ -1278,9 +1260,7 @@ impl JavaClientPlatform {
                         );
                         return;
                     }
-                    player
-                        .mining
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
+                    player.mining.store(false, Ordering::Relaxed);
                     let entity = &player.living_entity.entity;
                     let world = &entity.world.read().await;
                     world
@@ -1304,9 +1284,7 @@ impl JavaClientPlatform {
                     let entity = &player.living_entity.entity;
                     let world = &entity.world.read().await;
 
-                    player
-                        .mining
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
+                    player.mining.store(false, Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
 
                     let (block, state) = world.get_block_and_block_state(&location).await;
@@ -1350,17 +1328,10 @@ impl JavaClientPlatform {
     }
 
     pub async fn handle_keep_alive(&self, player: &Player, keep_alive: SKeepAlive) {
-        if player
-            .wait_for_keep_alive
-            .load(std::sync::atomic::Ordering::Relaxed)
-            && keep_alive.keep_alive_id
-                == player
-                    .keep_alive_id
-                    .load(std::sync::atomic::Ordering::Relaxed)
+        if player.wait_for_keep_alive.load(Ordering::Relaxed)
+            && keep_alive.keep_alive_id == player.keep_alive_id.load(Ordering::Relaxed)
         {
-            player
-                .wait_for_keep_alive
-                .store(false, std::sync::atomic::Ordering::Relaxed);
+            player.wait_for_keep_alive.store(false, Ordering::Relaxed);
         } else {
             self.kick(TextComponent::text("Timeout")).await;
         }
@@ -1371,11 +1342,8 @@ impl JavaClientPlatform {
             log::error!("Expected packet sequence >= 0");
         }
         player.packet_sequence.store(
-            player
-                .packet_sequence
-                .load(std::sync::atomic::Ordering::Relaxed)
-                .max(sequence),
-            std::sync::atomic::Ordering::Relaxed,
+            player.packet_sequence.load(Ordering::Relaxed).max(sequence),
+            Ordering::Relaxed,
         );
     }
 
@@ -1441,11 +1409,7 @@ impl JavaClientPlatform {
         let world = &entity.world.read().await;
         let block = world.get_block(&position).await;
 
-        let sneaking = player
-            .living_entity
-            .entity
-            .sneaking
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
 
         // Code based on the java class ServerPlayerInteractionManager
         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {

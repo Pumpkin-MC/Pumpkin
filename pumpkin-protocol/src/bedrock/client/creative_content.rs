@@ -45,11 +45,11 @@ enum CreativeCategory {
 pub struct Group {
     pub creative_category: i32,
     pub name: String,
-    pub icon_item: NetworkItemInstanceDescriptor,
+    pub icon_item: NetworkItemDescriptor,
 }
 
 #[derive(Default)]
-pub struct NetworkItemInstanceDescriptor {
+pub struct NetworkItemDescriptor {
     // I hate mojang
     // https://mojang.github.io/bedrock-protocol-docs/html/NetworkItemInstanceDescriptor.html
     pub id: VarInt,
@@ -59,7 +59,7 @@ pub struct NetworkItemInstanceDescriptor {
     pub user_data_buffer: ItemInstanceUserData,
 }
 
-impl PacketWrite for NetworkItemInstanceDescriptor {
+impl PacketWrite for NetworkItemDescriptor {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.id.write(writer)?;
         if self.id.0 != 0 {
@@ -75,7 +75,7 @@ impl PacketWrite for NetworkItemInstanceDescriptor {
 #[derive(PacketWrite)]
 pub struct Entry {
     pub id: VarUInt,
-    pub item: NetworkItemInstanceDescriptor,
+    pub item: NetworkItemDescriptor,
     pub group_index: VarUInt,
 }
 
@@ -88,14 +88,13 @@ pub struct ItemInstanceUserData {
 
 impl PacketWrite for ItemInstanceUserData {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarUInt(5 + VarUInt(0).written_size() as u32 * 3).write(writer)?;
-        (-1i16).write(writer)?;
-        1i8.write(writer)?;
-        writer.write_all(&[10])?;
-        VarUInt(0).write(writer)?;
-        writer.write_all(&[0])?;
-        self.place_on_block_size.write(writer)?;
-        self.destroy_blocks_size.write(writer)
+        let mut buf = Vec::new();
+        (-1i16).write(&mut buf)?;
+        buf.extend_from_slice(&[1, 0]);
+        self.place_on_block_size.write(&mut buf)?;
+        self.destroy_blocks_size.write(&mut buf)?;
+        VarUInt(buf.len() as u32).write(writer)?;
+        writer.write_all(&buf)
     }
 }
 

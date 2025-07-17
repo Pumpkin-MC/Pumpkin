@@ -8,11 +8,11 @@ use pumpkin_protocol::{
 };
 
 use crate::{
-    net::bedrock::BedrockClientPlatform,
+    net::bedrock::BedrockClient,
     server::{CURRENT_BEDROCK_MC_VERSION, Server},
 };
 
-impl BedrockClientPlatform {
+impl BedrockClient {
     pub async fn handle_unconnected_ping(&self, server: &Server, packet: SUnconnectedPing) {
         // TODO
         let player_count = server

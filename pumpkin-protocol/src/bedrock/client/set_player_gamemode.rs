@@ -1,8 +1,7 @@
-use crate::codec::var_int::VarInt;
+use crate::{codec::var_int::VarInt, serial::PacketWrite};
 use pumpkin_macros::packet;
-use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(PacketWrite)]
 #[packet(62)]
 pub struct CSetPlayerGamemode {
     // https://mojang.github.io/bedrock-protocol-docs/html/SetPlayerGameTypePacket.html

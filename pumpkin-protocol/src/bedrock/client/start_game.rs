@@ -33,8 +33,7 @@ pub struct CStartGame {
     pub current_level_time: u64,
     pub enchantment_seed: VarInt,
     pub block_properties_size: VarUInt,
-    pub block_properties: [GG; 2],
-
+    //pub block_properties: [GG; 2],
     pub multiplayer_correlation_id: String,
     pub enable_itemstack_net_manager: bool,
     pub server_version: String,

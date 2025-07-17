@@ -50,7 +50,7 @@ pub mod tick_rate_manager;
 pub mod ticker;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.7";
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.93";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -146,14 +146,14 @@ impl Server {
             VanillaDimensionType::Overworld,
             block_registry.clone(),
         );
-        log::info!("Loading Nether: {seed}");
+        log::info!("Loading Nether");
         let nether = World::load(
             Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
             VanillaDimensionType::TheNether,
             block_registry.clone(),
         );
-        log::info!("Loading End: {seed}");
+        log::info!("Loading End");
         let end = World::load(
             Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),

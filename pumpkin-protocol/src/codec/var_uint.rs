@@ -186,13 +186,32 @@ impl<'de> Deserialize<'de> for VarUInt {
 
 impl PacketWrite for VarUInt {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.encode(writer)
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
+        let mut val = self.0;
+        loop {
+            let mut byte = (val & 0x7F) as u8;
+            val >>= 7;
+            if val != 0 {
+                byte |= 0x80;
+            }
+            byte.write(writer)?;
+            if val == 0 {
+                break;
+            }
+        }
+        Ok(())
     }
 }
 
 impl PacketRead for VarUInt {
-    fn read<W: Read>(writer: &mut W) -> Result<Self, Error> {
-        Self::decode(writer).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
+    fn read<W: Read>(reader: &mut W) -> Result<Self, Error> {
+        let mut val = 0;
+        for i in 0..Self::MAX_SIZE.get() {
+            let byte = u8::read(reader)?;
+            val |= (u32::from(byte) & 0x7F) << (i * 7);
+            if byte & 0x80 == 0 {
+                return Ok(VarUInt(val));
+            }
+        }
+        Err(Error::new(ErrorKind::InvalidData, ""))
     }
 }

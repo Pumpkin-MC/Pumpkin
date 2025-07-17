@@ -11,17 +11,34 @@ use std::{
 use bytes::Bytes;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
+    BClientPacket, PacketDecodeError, RawPacket, ServerPacket,
     bedrock::{
-        ack::Ack, frame_set::{Frame, FrameSet}, packet_decoder::UDPNetworkDecoder, packet_encoder::UDPNetworkEncoder, server::{
-            interaction::SInteraction, login::SLogin, player_auth_input::SPlayerAuthInput, raknet::{
+        RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID, RakReliability, SubClient,
+        ack::Ack,
+        frame_set::{Frame, FrameSet},
+        packet_decoder::UDPNetworkDecoder,
+        packet_encoder::UDPNetworkEncoder,
+        server::{
+            client_chache_status::SClientCacheStatus,
+            interaction::SInteraction,
+            login::SLogin,
+            player_auth_input::SPlayerAuthInput,
+            raknet::{
                 connection::{
                     SConnectedPing, SConnectionRequest, SDisconnect, SNewIncomingConnection,
                 },
                 open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
                 unconnected_ping::SUnconnectedPing,
-            }, request_chunk_radius::SRequestChunkRadius, request_network_settings::SRequestNetworkSettings
-        }, RakReliability, SubClient, RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID
-    }, codec::u24, packet::Packet, ser::{NetworkReadExt, ReadingError}, serial::PacketRead, BClientPacket, PacketDecodeError, PacketEncodeError, RawPacket, ServerPacket
+            },
+            request_chunk_radius::SRequestChunkRadius,
+            request_network_settings::SRequestNetworkSettings,
+            ressource_pack_response::SRessourcePackResponse,
+        },
+    },
+    codec::u24,
+    packet::Packet,
+    ser::{NetworkReadExt, ReadingError},
+    serial::PacketRead,
 };
 use pumpkin_util::text::TextComponent;
 use std::net::SocketAddr;
@@ -40,7 +57,7 @@ pub mod unconnected;
 
 use crate::{entity::player::Player, server::Server};
 
-pub struct BedrockClientPlatform {
+pub struct BedrockClient {
     socket: Arc<UdpSocket>,
     /// The client's IP address.
     pub address: SocketAddr,
@@ -74,7 +91,7 @@ pub struct BedrockClientPlatform {
     //input_sequence_number: AtomicU32,
 }
 
-impl BedrockClientPlatform {
+impl BedrockClient {
     #[must_use]
     pub fn new(socket: Arc<UdpSocket>, address: SocketAddr) -> Self {
         let (send, recv) = tokio::sync::mpsc::channel(128);
@@ -101,10 +118,7 @@ impl BedrockClientPlatform {
     }
 
     pub fn start_outgoing_packet_task(&mut self) {
-        let mut packet_receiver = self
-            .outgoing_packet_queue_recv
-            .take()
-            .expect("This was set in the new fn");
+        let mut packet_receiver = self.outgoing_packet_queue_recv.take().unwrap();
         let close_interrupt = self.close_interrupt.clone();
         let closed = self.closed.clone();
         let writer = self.network_writer.clone();
@@ -136,17 +150,13 @@ impl BedrockClientPlatform {
                         log::warn!("Failed to send packet to client: {err}",);
                         // We now need to close the connection to the client since the stream is in an
                         // unknown state
-                        Self::thread_safe_close(&close_interrupt, &closed);
+                        close_interrupt.notify_waiters();
+                        closed.store(true, Ordering::Relaxed);
                         break;
                     }
                 }
             }
         });
-    }
-
-    fn thread_safe_close(interrupt: &Arc<Notify>, closed: &Arc<AtomicBool>) {
-        interrupt.notify_waiters();
-        closed.store(true, Ordering::Relaxed);
     }
 
     pub async fn process_packet(self: &Arc<Self>, server: &Server, packet: Cursor<Vec<u8>>) {
@@ -232,7 +242,7 @@ impl BedrockClientPlatform {
         Ok(())
     }
 
-    pub async fn write_packet_data(&self, packet_data: Bytes) -> Result<(), PacketEncodeError> {
+    pub async fn write_packet_data(&self, packet_data: Bytes) -> Result<(), Error> {
         self.network_writer
             .lock()
             .await
@@ -510,6 +520,12 @@ impl BedrockClientPlatform {
                 self.handle_login(SLogin::read(&mut &packet.payload[..]).unwrap(), server)
                     .await;
             }
+            SClientCacheStatus::PACKET_ID => {
+                // We dont care about this currently
+            }
+            SRessourcePackResponse::PACKET_ID => {
+                // We dont care about this currently
+            }
             _ => {
                 self.handle_play_packet(self.player.lock().await.as_ref().unwrap(), server, packet)
                     .await
@@ -528,13 +544,18 @@ impl BedrockClientPlatform {
         let payload = &mut &packet.payload[..];
         match packet.id {
             SPlayerAuthInput::PACKET_ID => {
-                dbg!(SPlayerAuthInput::read(payload).unwrap());
+                self.player_pos_update(player, SPlayerAuthInput::read(payload).unwrap())
+                    .await;
             }
             SInteraction::PACKET_ID => {
                 dbg!(SInteraction::read(payload).unwrap());
             }
             SRequestChunkRadius::PACKET_ID => {
-                self.handle_request_chunk_radius(player, SRequestChunkRadius::read(payload).unwrap()).await;
+                self.handle_request_chunk_radius(
+                    player,
+                    SRequestChunkRadius::read(payload).unwrap(),
+                )
+                .await;
             }
             _ => {
                 log::warn!("Bedrock: Received Unknown Game packet: {}", packet.id);

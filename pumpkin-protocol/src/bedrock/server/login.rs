@@ -1,7 +1,7 @@
 use pumpkin_macros::packet;
-use std::io::{Error, ErrorKind, Read};
+use std::io::{Error, Read};
 
-use crate::{codec::var_uint::VarUInt, ser::NetworkReadExt, serial::PacketRead};
+use crate::{codec::var_uint::VarUInt, serial::PacketRead};
 
 #[packet(1)]
 pub struct SLogin {
@@ -9,27 +9,22 @@ pub struct SLogin {
     pub protocol_version: i32,
 
     // https://mojang.github.io/bedrock-protocol-docs/html/connectionRequest.html
-    pub jwt: String,
-    pub raw_token: String,
+    pub jwt: Vec<u8>,
+    pub raw_token: Vec<u8>,
 }
 
 impl PacketRead for SLogin {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let protocol_version = reader
-            .get_i32_be()
-            .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
+        let protocol_version = i32::read_be(reader)?;
         let _len = VarUInt::read(reader)?;
 
-        let mut buf = [0; 4];
-        reader.read_exact(&mut buf)?;
+        let jwt_len = u32::read(reader)?;
+        let mut jwt = vec![0; jwt_len as _];
+        reader.read_exact(&mut jwt)?;
 
-        let mut buf2 = vec![0; i32::from_le_bytes(buf) as _];
-        reader.read_exact(&mut buf2)?;
-        let jwt = unsafe { String::from_utf8_unchecked(buf2) };
-
-        let mut buf2 = vec![0; i32::from_le_bytes(buf) as _];
-        reader.read_exact(&mut buf2)?;
-        let raw_token = unsafe { String::from_utf8_unchecked(buf2) };
+        let raw_token_len = u32::read(reader)?;
+        let mut raw_token = vec![0; raw_token_len as _];
+        reader.read_exact(&mut raw_token)?;
 
         Ok(Self {
             protocol_version,

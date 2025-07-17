@@ -10,7 +10,7 @@ use crate::{
         op_data::OPERATOR_CONFIG, whitelist_data::WHITELIST_CONFIG,
     },
     entity::player::{ChatMode, Hand},
-    net::{bedrock::BedrockClientPlatform, java::JavaClientPlatform},
+    net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
 };
 
@@ -94,8 +94,8 @@ pub enum PacketHandlerState {
 
 /// This is just a Wrapper for both Java & Bedrock connections
 pub enum ClientPlatform {
-    Java(Arc<JavaClientPlatform>),
-    Bedrock(Arc<BedrockClientPlatform>),
+    Java(Arc<JavaClient>),
+    Bedrock(Arc<BedrockClient>),
 }
 
 impl ClientPlatform {
@@ -106,19 +106,27 @@ impl ClientPlatform {
         }
     }
 
+    pub async fn bedrock(&self) -> &Arc<BedrockClient> {
+        if let Self::Bedrock(client) = self {
+            return client;
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub async fn java(&self) -> &Arc<JavaClient> {
+        if let Self::Java(client) = self {
+            return client;
+        } else {
+            unreachable!()
+        }
+    }
+
     #[must_use]
     pub fn closed(&self) -> bool {
         match self {
             Self::Java(java) => java.closed.load(Ordering::Relaxed),
             Self::Bedrock(bedrock) => bedrock.closed.load(Ordering::Relaxed),
-        }
-    }
-
-    #[must_use]
-    pub fn protocol_version(&self) -> i32 {
-        match self {
-            Self::Java(java) => java.protocol_version.load(Ordering::Relaxed),
-            Self::Bedrock(_) => 819,
         }
     }
 

@@ -1,5 +1,5 @@
 use std::{
-    io::{self, Write},
+    io::{self, Error, Write},
     net::SocketAddr,
     pin::Pin,
     task::{Context, Poll},
@@ -10,8 +10,8 @@ use thiserror::Error;
 use tokio::{io::AsyncWrite, net::UdpSocket};
 
 use crate::{
-    Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, PacketEncodeError, StreamEncryptor,
-    bedrock::SubClient, codec::var_uint::VarUInt, ser::NetworkWriteExt,
+    Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, StreamEncryptor, bedrock::SubClient,
+    codec::var_uint::VarUInt, ser::NetworkWriteExt,
 };
 
 // raw -> compress -> encrypt
@@ -114,7 +114,7 @@ impl UDPNetworkEncoder {
         sub_client_target: SubClient,
         packet_payload: Bytes,
         mut writer: impl Write,
-    ) -> Result<(), PacketEncodeError> {
+    ) -> Result<(), Error> {
         // Game Packet ID
         writer.write_u8(0xfe).unwrap();
 
@@ -158,8 +158,7 @@ impl UDPNetworkEncoder {
             .unwrap();
 
         // 5. Write the payload
-        writer.write_all(&packet_payload).unwrap();
-        Ok(())
+        writer.write_all(&packet_payload)
     }
 
     pub async fn write_packet(
@@ -167,9 +166,8 @@ impl UDPNetworkEncoder {
         packet_data: &[u8],
         addr: SocketAddr,
         socket: &UdpSocket,
-    ) -> Result<(), PacketEncodeError> {
-        socket.send_to(packet_data, addr).await.unwrap();
-        Ok(())
+    ) -> Result<(), Error> {
+        socket.send_to(packet_data, addr).await.map(|_| ())
     }
 }
 

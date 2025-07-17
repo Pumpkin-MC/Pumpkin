@@ -3,9 +3,9 @@ use pumpkin_protocol::bedrock::{
     server::raknet::open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
 };
 
-use crate::{net::bedrock::BedrockClientPlatform, server::Server};
+use crate::{net::bedrock::BedrockClient, server::Server};
 
-impl BedrockClientPlatform {
+impl BedrockClient {
     pub async fn handle_open_connection_1(
         &self,
         server: &Server,

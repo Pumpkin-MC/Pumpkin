@@ -62,7 +62,7 @@ use crate::entity::player::Player;
 use crate::net::{GameProfile, PlayerConfig};
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
-pub struct JavaClientPlatform {
+pub struct JavaClient {
     pub id: u64,
     /// The client's game profile information.
     pub gameprofile: Mutex<Option<GameProfile>>,
@@ -95,7 +95,7 @@ pub struct JavaClientPlatform {
     network_reader: Mutex<TCPNetworkDecoder<BufReader<OwnedReadHalf>>>,
 }
 
-impl JavaClientPlatform {
+impl JavaClient {
     #[must_use]
     pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: u64) -> Self {
         let (read, write) = tcp_stream.into_split();
@@ -230,11 +230,6 @@ impl JavaClientPlatform {
         self.close_interrupt.notified().await;
     }
 
-    fn thread_safe_close(interrupt: &Arc<Notify>, closed: &Arc<AtomicBool>) {
-        interrupt.notify_waiters();
-        closed.store(true, Ordering::Relaxed);
-    }
-
     pub async fn get_packet(&self) -> Option<RawPacket> {
         let mut network_reader = self.network_reader.lock().await;
         tokio::select! {
@@ -342,21 +337,14 @@ impl JavaClientPlatform {
         packet: &RawPacket,
     ) -> Result<(), ReadingError> {
         match self.connection_state.load() {
-            pumpkin_protocol::ConnectionState::HandShake => {
-                self.handle_handshake_packet(packet).await
-            }
-            pumpkin_protocol::ConnectionState::Status => {
-                self.handle_status_packet(server, packet).await
-            }
+            ConnectionState::HandShake => self.handle_handshake_packet(packet).await,
+            ConnectionState::Status => self.handle_status_packet(server, packet).await,
             // TODO: Check config if transfer is enabled
-            pumpkin_protocol::ConnectionState::Login
-            | pumpkin_protocol::ConnectionState::Transfer => {
+            ConnectionState::Login | ConnectionState::Transfer => {
                 self.handle_login_packet(server, packet).await
             }
-            pumpkin_protocol::ConnectionState::Config => {
-                self.handle_config_packet(server, packet).await
-            }
-            pumpkin_protocol::ConnectionState::Play => {
+            ConnectionState::Config => self.handle_config_packet(server, packet).await,
+            ConnectionState::Play => {
                 let player = self.player.lock().await;
                 if let Some(player) = player.as_ref() {
                     match self.handle_play_packet(player, server, packet).await {
@@ -454,7 +442,8 @@ impl JavaClientPlatform {
                         log::warn!("Failed to send packet to client {id}: {err}",);
                         // We now need to close the connection to the client since the stream is in an
                         // unknown state
-                        Self::thread_safe_close(&close_interrupt, &closed);
+                        close_interrupt.notify_waiters();
+                        closed.store(true, Ordering::Relaxed);
                         break;
                     }
                 }

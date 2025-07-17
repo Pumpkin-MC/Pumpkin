@@ -16,7 +16,7 @@ use crate::{
         registry::BlockRegistry,
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, EntityId, player::Player, r#type::from_type},
+    entity::{Entity, EntityBase, player::Player, r#type::from_type},
     error::PumpkinError,
     net::ClientPlatform,
     plugin::{
@@ -56,12 +56,11 @@ use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     bedrock::client::{
         chunk_radius_update::CChunkRadiusUpdate,
-        creative_content::{
-            CreativeContent, Entry, Group, ItemInstanceUserData, NetworkItemInstanceDescriptor,
-        },
+        creative_content::{CreativeContent, Group, NetworkItemDescriptor},
         gamerules_changed::GameRules,
         play_status::{CPlayStatus, PlayStatus},
-        start_game::{Experiments, GG, GamePublishSetting, LevelSettings},
+        start_game::{Experiments, GamePublishSetting, LevelSettings},
+        update_artributes::{Attribute, CUpdateAttributes},
     },
     codec::{
         bedrock_block_pos::NetworkPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
@@ -697,6 +696,8 @@ impl World {
     ) {
         let level_info = server.level_info.read().await;
         let weather = self.weather.lock().await;
+        let runtime_id = player.entity_id() as u64;
+        // Todo make the data less spread
         let level_settings = LevelSettings {
             seed: self.level.seed.0,
             spawn_biome_type: 0,
@@ -768,8 +769,8 @@ impl World {
         if let ClientPlatform::Bedrock(client) = &player.client {
             client
                 .send_game_packet(&CStartGame {
-                    entity_id: VarLong(i64::from(player.entity_id())),
-                    runtime_entity_id: VarULong(player.entity_id() as _),
+                    entity_id: VarLong(runtime_id as i64),
+                    runtime_entity_id: VarULong(runtime_id),
                     player_gamemode: VarInt(player.gamemode.load() as i32),
                     position: Vector3::new(0.0, 100.0, 0.0),
                     pitch: 0.0,
@@ -779,25 +780,11 @@ impl World {
                     level_name: "Pumpkin world".to_string(),
                     premium_world_template_id: String::with_capacity(0),
                     is_trial: false,
-                    rewind_history_size: VarInt(0),
+                    rewind_history_size: VarInt(40),
                     server_authoritative_block_breaking: false,
-                    current_level_time: 0,
+                    current_level_time: self.level_time.lock().await.world_age as _,
                     enchantment_seed: VarInt(0),
-                    block_properties_size: VarUInt(2),
-                    block_properties: [
-                        GG {
-                            name: "minecraft:air".to_string(),
-                            id: 10,
-                            len: VarUInt(0),
-                            end: 0,
-                        },
-                        GG {
-                            name: "minecraft:stone".to_string(),
-                            id: 10,
-                            len: VarUInt(0),
-                            end: 0,
-                        },
-                    ],
+                    block_properties_size: VarUInt(0),
                     // TODO Make this unique
                     multiplayer_correlation_id: Uuid::default().to_string(),
                     enable_itemstack_net_manager: false,
@@ -822,27 +809,34 @@ impl World {
                     groups: &[Group {
                         creative_category: 1,
                         name: String::new(),
-                        icon_item: NetworkItemInstanceDescriptor::default(),
+                        icon_item: NetworkItemDescriptor::default(),
                     }],
-                    entries: &[Entry {
-                        id: VarUInt(0),
-                        item: NetworkItemInstanceDescriptor {
-                            id: VarInt(0),
-                            stack_size: 64,
-                            aux_value: VarUInt(0),
-                            block_runtime_id: VarInt(0),
-                            user_data_buffer: ItemInstanceUserData::default(),
-                        },
-                        group_index: VarUInt(0),
-                    }],
+                    entries: &[],
+                })
+                .await;
+
+            client
+                .send_game_packet(&CChunkRadiusUpdate {
+                    chunk_radius: VarInt(16),
                 })
                 .await;
 
             chunker::player_join(&player).await;
 
             client
-                .send_game_packet(&CChunkRadiusUpdate {
-                    chunk_radius: VarInt(16),
+                .send_game_packet(&CUpdateAttributes {
+                    runtime_id: VarULong(runtime_id),
+                    attrubtes: vec![Attribute {
+                        min_value: 0.0,
+                        max_value: f32::MAX,
+                        current_value: 0.1,
+                        default_min_value: 0.0,
+                        default_max_value: f32::MAX,
+                        default_value: 0.1,
+                        name: "minecraft:movement".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    }],
+                    player_tick: VarULong(0),
                 })
                 .await;
 
@@ -1559,7 +1553,7 @@ impl World {
     }
 
     /// Gets a `Player` by an entity id
-    pub async fn get_player_by_id(&self, id: EntityId) -> Option<Arc<Player>> {
+    pub async fn get_player_by_id(&self, id: i32) -> Option<Arc<Player>> {
         for player in self.players.read().await.values() {
             if player.entity_id() == id {
                 return Some(player.clone());
@@ -1569,7 +1563,7 @@ impl World {
     }
 
     /// Gets an entity by an entity id
-    pub async fn get_entity_by_id(&self, id: EntityId) -> Option<Arc<dyn EntityBase>> {
+    pub async fn get_entity_by_id(&self, id: i32) -> Option<Arc<dyn EntityBase>> {
         for entity in self.entities.read().await.values() {
             if entity.get_entity().entity_id == id {
                 return Some(entity.clone());

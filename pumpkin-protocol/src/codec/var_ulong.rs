@@ -158,13 +158,31 @@ impl<'de> Deserialize<'de> for VarULong {
 
 impl PacketWrite for VarULong {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.encode(writer).unwrap();
+        let mut x = self.0;
+        loop {
+            let byte = (x & 0x7F) as u8;
+            x >>= 7;
+            if x == 0 {
+                byte.write(writer)?;
+                break;
+            }
+            (byte | 0x80).write(writer)?;
+        }
+
         Ok(())
     }
 }
 
 impl PacketRead for VarULong {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        Self::decode(reader).map_err(|_| Error::new(ErrorKind::Other, "Invalid VarUInt"))
+        let mut val = 0;
+        for i in 0..Self::MAX_SIZE.get() {
+            let byte = u8::read(reader)?;
+            val |= (u64::from(byte) & 0b01111111) << (i * 7);
+            if byte & 0b10000000 == 0 {
+                return Ok(VarULong(val));
+            }
+        }
+        Err(Error::new(ErrorKind::Other, "Invalid VarUInt"))
     }
 }
