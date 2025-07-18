@@ -3,7 +3,7 @@ use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site, proc_macro_error};
 use quote::quote;
 use syn::spanned::Spanned;
-use syn::{self};
+use syn::{self, DeriveInput};
 use syn::{
     Block, Expr, Field, Fields, ItemStruct, Stmt,
     parse::{Nothing, Parser},
@@ -351,4 +351,133 @@ pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     code.into()
+}
+
+#[proc_macro_derive(PersistentDataHolder, attributes(persistent_data))]
+/// Derive macro to automatically implement the `PersistentDataHolder` trait for a struct.
+///
+/// This macro looks for a single struct field annotated with `#[persistent_data]`
+/// and verifies that this field is of type `PersistentDataContainer`.
+///
+/// It then generates the implementation of the `PersistentDataHolder` trait
+/// that delegates all trait methods to this field.
+///
+/// # Requirements
+/// - Exactly one struct field must be annotated with `#[persistent_data]`.
+/// - The annotated field must have the type `PersistentDataContainer` (fully qualified as needed).
+///
+/// # Errors
+/// - Compilation will fail if no field is annotated with `#[persistent_data]`.
+/// - Compilation will fail if the annotated field is not of the correct type.
+///
+/// # Example
+/// ```ignore
+/// use your_crate::PersistentDataHolder;
+///
+/// // Automatically implements PersistentDataHolder for `Person`
+/// #[derive(PersistentDataHolder)]
+/// pub struct Person {
+///     pub name: String,
+///     #[persistent_data]
+///     pub(crate) container: PersistentDataContainer,
+/// }
+/// ```
+pub fn derive_persistent(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    // Find the struct field annotated with #[persistent_data]
+    let Some((field_ident, field_ty)) = (if let syn::Data::Struct(data) = &input.data {
+        data.fields.iter().find_map(|f| {
+            for attr in &f.attrs {
+                if attr.path().is_ident("persistent_data") {
+                    return Some((f.ident.clone()?, &f.ty));
+                }
+            }
+            None
+        })
+    } else {
+        None
+    }) else {
+        return syn::Error::new_spanned(
+            name,
+            "No field annotated with #[persistent_data] found in struct",
+        )
+        .to_compile_error()
+        .into();
+    };
+
+    // Verify the type of the annotated field is PersistentDataContainer
+    let is_valid_type = match field_ty {
+        syn::Type::Path(type_path) => {
+            let segments: Vec<_> = type_path.path.segments.iter().collect();
+            match segments.as_slice() {
+                // Handles local type: PersistentDataContainer
+                [seg] => seg.ident == "PersistentDataContainer",
+                // Handles fully qualified type path, e.g. pumpkin::plugin::api::persistence::PersistentDataContainer
+                [a, b, c, d, e] => {
+                    a.ident == "pumpkin"
+                        && b.ident == "plugin"
+                        && c.ident == "api"
+                        && d.ident == "persistence"
+                        && e.ident == "PersistentDataContainer"
+                }
+                _ => false,
+            }
+        }
+        _ => false,
+    };
+
+    if !is_valid_type {
+        return syn::Error::new_spanned(
+            field_ty,
+            "Field annotated with #[persistent_data] must have type `PersistentDataContainer`",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    let field = field_ident;
+
+    // Generate the implementation of PersistentDataHolder trait by delegating to the annotated field
+    let expanded = quote! {
+        impl PersistentDataHolder for #name {
+            fn clear(&self) {
+                self.#field.clear();
+            }
+
+            fn get(&self, key: &NamespacedKey) -> Option<PersistentDataType> {
+                self.#field.get(key).map(|v| v.clone())
+            }
+
+            fn get_as<T: FromPersistentDataType>(&self, key: &NamespacedKey) -> Option<T> {
+                self.get(key).and_then(|v| T::from_persistent(&v))
+            }
+
+            fn insert(&self, key: &NamespacedKey, value: PersistentDataType) {
+                if let Some(_old_value) = self.#field.insert(key.clone(), value) {
+                    #[cfg(debug_assertions)]
+                    log::warn!("Inserting key {:?} which already existed in PersistentDataContainer, overwriting old value.", key);
+                }
+            }
+
+            fn remove(&self, key: &NamespacedKey) -> Option<PersistentDataType> {
+                self.#field.remove(key).map(|(_k, v)| v)
+            }
+
+            fn contains_key(&self, key: &NamespacedKey) -> bool {
+                self.#field.contains_key(key)
+            }
+
+            fn iter(&self) -> Box<dyn Iterator<Item = (NamespacedKey, PersistentDataType)> + '_> {
+                Box::new(self.#field.iter().map(|entry| (entry.key().clone(), entry.value().clone())))
+            }
+
+            fn container_mut(&mut self) -> &mut PersistentDataContainer {
+                &mut self.#field
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
 }

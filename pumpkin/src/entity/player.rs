@@ -64,25 +64,25 @@ use pumpkin_world::entity::entity_data_flags::{
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
 
-use crate::block::blocks::bed::BedBlock;
-use crate::command::client_suggestions;
-use crate::command::dispatcher::CommandDispatcher;
-use crate::data::op_data::OPERATOR_CONFIG;
-use crate::net::PlayerConfig;
-use crate::net::{ClientPlatform, GameProfile};
-use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
-use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
-use crate::plugin::player::player_teleport::PlayerTeleportEvent;
-use crate::server::Server;
-use crate::world::World;
-use crate::{PERMISSION_MANAGER, block};
-
 use super::combat::{self, AttackType, player_attack_sound};
 use super::effect::Effect;
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, EntityId, NBTStorage};
+use crate::block::blocks::bed::BedBlock;
+use crate::command::client_suggestions;
+use crate::command::dispatcher::CommandDispatcher;
+use crate::data::op_data::OPERATOR_CONFIG;
+use crate::net::PlayerConfig;
+use crate::net::{ClientPlatform, GameProfile};
+use crate::plugin::persistence::nbt::from_pdc;
+use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
+use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
+use crate::plugin::player::player_teleport::PlayerTeleportEvent;
+use crate::server::Server;
+use crate::world::World;
+use crate::{PERMISSION_MANAGER, block};
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -1839,6 +1839,8 @@ impl NBTStorage for Player {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.living_entity.write_nbt(nbt).await;
         self.inventory.write_nbt(nbt).await;
+        let mut compound = from_pdc(&self.get_entity().container);
+        self.living_entity.write_nbt(&mut compound).await;
 
         self.abilities.lock().await.write_nbt(nbt).await;
 

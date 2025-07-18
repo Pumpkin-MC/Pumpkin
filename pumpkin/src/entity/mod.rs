@@ -1,3 +1,9 @@
+use crate::plugin::persistence::nbt::from_pdc;
+use crate::plugin::persistence::{
+    FromPersistentDataType, NamespacedKey, PersistentDataContainer, PersistentDataHolder,
+    PersistentDataType,
+};
+use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
@@ -12,6 +18,7 @@ use pumpkin_data::{
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
 };
+use pumpkin_macros::PersistentDataHolder;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
     codec::var_int::VarInt,
@@ -39,8 +46,6 @@ use std::sync::{
     },
 };
 use tokio::sync::{Mutex, RwLock};
-
-use crate::world::World;
 
 pub mod ai;
 pub mod decoration;
@@ -76,15 +81,20 @@ pub trait EntityBase: Send + Sync {
         }
     }
 
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        let entity = self.get_entity();
+        let compound = from_pdc(&self.get_entity().container);
+
         if let Some(living) = self.get_living_entity() {
             living.write_nbt(nbt).await;
+            living.write_nbt(&mut compound.clone()).await;
         } else {
-            self.get_entity().write_nbt(nbt).await;
+            entity.write_nbt(nbt).await;
+            entity.write_nbt(&mut compound.clone()).await;
         }
     }
 
-    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&self, nbt: &NbtCompound) {
         if let Some(living) = self.get_living_entity() {
             living.read_nbt(nbt).await;
         } else {
@@ -124,6 +134,7 @@ pub trait EntityBase: Send + Sync {
 static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
 
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
+#[derive(PersistentDataHolder)]
 pub struct Entity {
     /// A unique identifier for the entity
     pub entity_id: EntityId,
@@ -178,6 +189,9 @@ pub struct Entity {
 
     /// The data send in the Entity Spawn packet
     pub data: AtomicI32,
+    /// The `PersistentDataContainer`
+    #[persistent_data]
+    pub(crate) container: PersistentDataContainer,
 }
 
 impl Entity {
@@ -230,6 +244,7 @@ impl Entity {
             has_visual_fire: AtomicBool::new(false),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
+            container: PersistentDataContainer::new(),
         }
     }
 
