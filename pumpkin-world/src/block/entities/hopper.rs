@@ -137,14 +137,14 @@ impl HopperBlockEntity {
             <= 0
             && state.enabled
         {
-            let mut sucess = false;
+            let mut success = false;
             if !self.is_empty().await {
-                sucess = self.eject_items(world).await;
+                success = self.eject_items(world).await;
             }
             if !self.inventory_full().await {
-                sucess |= self.suck_in_items(world).await;
+                success |= self.suck_in_items(world).await;
             }
-            if sucess {
+            if success {
                 self.cooldown_time
                     .store(8, std::sync::atomic::Ordering::Relaxed);
                 self.mark_dirty();
