@@ -4,7 +4,6 @@ use crate::inventory::{Clearable, Inventory, split_stack};
 use crate::item::ItemStack;
 use crate::world::SimpleWorld;
 use async_trait::async_trait;
-use log::debug;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, HopperFacing, HopperLikeProperties};
 use pumpkin_data::tag::Tagable;
@@ -87,7 +86,6 @@ impl BlockEntity for HopperBlockEntity {
                 world.get_block_state(&self.position).await.id,
                 &Block::HOPPER,
             );
-            debug!("{:?}", state);
             self.try_move_items(&state, world).await;
         }
     }
