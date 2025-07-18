@@ -176,24 +176,15 @@ impl PumpkinBlock for DropperBlock {
                         if is_full {
                             return;
                         }
-                        for i in &dropper.items {
-                            let mut item = i.lock().await;
-                            if !item.is_empty() {
-                                //TODO WorldlyContainer
-                                let backup = *item;
-                                let one_item = item.split(1);
-                                if HopperBlockEntity::add_one_item(
-                                    dropper,
-                                    container.as_ref(),
-                                    one_item,
-                                )
-                                .await
-                                {
-                                    return;
-                                }
-                                *item = backup;
-                            }
+                        //TODO WorldlyContainer
+                        let backup = *item;
+                        let one_item = item.split(1);
+                        if HopperBlockEntity::add_one_item(dropper, container.as_ref(), one_item)
+                            .await
+                        {
+                            return;
                         }
+                        *item = backup;
                         return;
                     }
                 }
