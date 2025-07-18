@@ -54,7 +54,6 @@ fn can_be_lit(block: &Block, state_id: u16) -> Option<u16> {
         None => return None,
     };
 
-    // Suche "extinguished"
     if let Some((_, value)) = props.iter_mut().find(|(k, _)| k == "extinguished") {
         *value = "false".into();
     } else if let Some((_, value)) = props.iter_mut().find(|(k, _)| k == "lit") {
@@ -63,7 +62,6 @@ fn can_be_lit(block: &Block, state_id: u16) -> Option<u16> {
         return None;
     }
 
-    // Konvertiere zu dem Format, das `from_properties` erwartet
     let props: Vec<(&str, &str)> = props
         .iter()
         .map(|(k, v)| (k.as_str(), v.as_str()))

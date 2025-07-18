@@ -262,11 +262,11 @@ pub struct ChunkLight {
 #[serde(rename_all = "UPPERCASE")]
 pub struct ChunkHeightmaps {
     #[serde(serialize_with = "nbt_long_array")]
-    pub world_surface: Box<[i16]>,
+    pub world_surface: Box<[i64]>,
     #[serde(serialize_with = "nbt_long_array")]
-    pub motion_blocking: Box<[i16]>,
+    pub motion_blocking: Box<[i64]>,
     #[serde(serialize_with = "nbt_long_array")]
-    pub motion_blocking_no_leaves: Box<[i16]>,
+    pub motion_blocking_no_leaves: Box<[i64]>,
 }
 
 /// The Heightmap for a completely empty chunk
