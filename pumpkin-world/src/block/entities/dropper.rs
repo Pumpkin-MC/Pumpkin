@@ -4,6 +4,7 @@ use crate::item::ItemStack;
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 use rand::{Rng, rng};
+use std::any::Any;
 use std::array::from_fn;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -123,6 +124,10 @@ impl Inventory for DropperBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
