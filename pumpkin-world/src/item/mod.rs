@@ -59,6 +59,13 @@ impl ItemStack {
     };
 
     pub fn get_max_stack_size(&self) -> u8 {
+        for (id, component) in &self.patch {
+            if id == &1 {
+                if let Some(MaxStackSize(max)) = component {
+                    return max.size;
+                }
+            }
+        }
         for component in self.item.components {
             if let MaxStackSize(size) = component {
                 return size.size;
