@@ -6,12 +6,7 @@ use pumpkin_util::{Difficulty, GameMode, PermissionLvl};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::path::PathBuf;
-use std::{
-    env, fs,
-    num::NonZeroU8,
-    path::Path,
-    sync::LazyLock,
-};
+use std::{env, fs, num::NonZeroU8, path::Path, sync::LazyLock};
 pub mod fun;
 pub mod logging;
 pub mod networking;

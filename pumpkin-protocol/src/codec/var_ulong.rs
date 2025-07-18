@@ -1,5 +1,5 @@
 use std::{
-    io::{Error, ErrorKind, Read, Write},
+    io::{Error, Read, Write},
     num::NonZeroUsize,
     ops::Deref,
 };
@@ -183,6 +183,6 @@ impl PacketRead for VarULong {
                 return Ok(VarULong(val));
             }
         }
-        Err(Error::new(ErrorKind::Other, "Invalid VarUInt"))
+        Err(Error::other("Invalid VarUInt"))
     }
 }

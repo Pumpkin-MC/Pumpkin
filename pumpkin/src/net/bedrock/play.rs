@@ -13,7 +13,6 @@ impl BedrockClient {
         player: &Arc<Player>,
         packet: SRequestChunkRadius,
     ) {
-        println!("requestet view_distance: {}", packet.chunk_radius.0);
         player.config.write().await.view_distance =
             NonZero::new(packet.chunk_radius.0 as u8).unwrap();
         self.send_game_packet(&CChunkRadiusUpdate {
@@ -22,7 +21,7 @@ impl BedrockClient {
         .await;
     }
 
-    pub async fn player_pos_update(&self, _player: &Arc<Player>, _packet: SPlayerAuthInput) {
+    pub fn player_pos_update(&self, _player: &Arc<Player>, _packet: SPlayerAuthInput) {
         //println!("{:?}", packet)
         //self.send_game_packet(&CMovePlayer {
         //     player_runtime_id: VarULong(player.entity_id() as u64),

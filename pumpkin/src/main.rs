@@ -121,9 +121,7 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-    log::info!(
-        "Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",
-    );
+    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
 
     log::debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
@@ -164,7 +162,10 @@ async fn main() {
             ""
         },
         if BASIC_CONFIG.bedrock_edition {
-            format!("Bedrock Edition: 0.0.0.0:{}", BASIC_CONFIG.bedrock_edition_port)
+            format!(
+                "Bedrock Edition: 0.0.0.0:{}",
+                BASIC_CONFIG.bedrock_edition_port
+            )
         } else {
             String::with_capacity(0)
         }

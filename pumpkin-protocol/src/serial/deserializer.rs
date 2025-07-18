@@ -8,7 +8,7 @@ impl PacketRead for bool {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let mut buf = [0];
         reader.read_exact(&mut buf)?;
-        Ok(if buf[0] == 0 { false } else { true })
+        Ok(buf[0] != 0)
     }
 }
 
@@ -100,13 +100,12 @@ impl PacketRead for f64 {
 
 impl<T: PacketRead, const N: usize> PacketRead for [T; N] {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        use std::mem::{MaybeUninit, transmute_copy};
-        let mut buf: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
-        for i in 0..N {
-            buf[i] = MaybeUninit::new(T::read(reader)?);
+        #[allow(clippy::uninit_assumed_init)]
+        let mut buf: [T; N] = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
+        for i in &mut buf {
+            *i = T::read(reader)?;
         }
-        let initialized = unsafe { transmute_copy::<[MaybeUninit<T>; N], [T; N]>(&buf) };
-        Ok(initialized)
+        Ok(buf)
     }
 }
 

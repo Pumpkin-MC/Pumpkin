@@ -206,9 +206,12 @@ impl PumpkinServer {
         }
 
         // Setup the TCP server socket.
-        let listener = tokio::net::TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), BASIC_CONFIG.java_edition_port))
-            .await
-            .expect("Failed to start `TcpListener`");
+        let listener = tokio::net::TcpListener::bind(SocketAddrV4::new(
+            Ipv4Addr::new(0, 0, 0, 0),
+            BASIC_CONFIG.java_edition_port,
+        ))
+        .await
+        .expect("Failed to start `TcpListener`");
         // In the event the user puts 0 for their port, this will allow us to know what port it is running on
         let addr = listener
             .local_addr()
@@ -240,9 +243,12 @@ impl PumpkinServer {
             });
         };
 
-        let udp_socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), BASIC_CONFIG.bedrock_edition_port))
-            .await
-            .expect("Failed to bind UDP Socket");
+        let udp_socket = UdpSocket::bind(SocketAddrV4::new(
+            Ipv4Addr::new(0, 0, 0, 0),
+            BASIC_CONFIG.bedrock_edition_port,
+        ))
+        .await
+        .expect("Failed to bind UDP Socket");
 
         Self {
             server: server.clone(),

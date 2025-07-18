@@ -162,7 +162,7 @@ impl PacketWrite for VarLong {
         loop {
             let b: u8 = value as u8 & 127;
             value >>= 7;
-            writer.write(&if value == 0 { [b] } else { [b | 128] })?;
+            writer.write_all(&if value == 0 { [b] } else { [b | 128] })?;
             if value == 0 {
                 break;
             }

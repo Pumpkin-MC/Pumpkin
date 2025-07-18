@@ -58,14 +58,18 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
             }
         }
 
-        data_write.write(&[0])?;
+        data_write.write_all(&[0])?;
 
         VarUInt(chunk_data.len() as u32).write(writer)?;
         writer.write_all(&chunk_data)
     }
 }
 
-fn encode_storage<W: Write>(writer: &mut W, palette_size: i32, indices_len: usize) -> Result<(), Error> {
+fn encode_storage<W: Write>(
+    writer: &mut W,
+    palette_size: i32,
+    indices_len: usize,
+) -> Result<(), Error> {
     let bits_per_index: u8 = 1;
 
     let format = bits_per_index << 1 | 1;

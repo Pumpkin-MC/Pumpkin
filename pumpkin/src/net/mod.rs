@@ -106,20 +106,24 @@ impl ClientPlatform {
         }
     }
 
-    pub async fn bedrock(&self) -> &Arc<BedrockClient> {
+    /// This function should only be used where you know that the client is bedrock!
+    #[inline]
+    #[must_use]
+    pub fn bedrock(&self) -> &Arc<BedrockClient> {
         if let Self::Bedrock(client) = self {
             return client;
-        } else {
-            unreachable!()
         }
+        unreachable!()
     }
 
-    pub async fn java(&self) -> &Arc<JavaClient> {
+    /// This function should only be used where you know that the client is java!
+    #[inline]
+    #[must_use]
+    pub fn java(&self) -> &Arc<JavaClient> {
         if let Self::Java(client) = self {
             return client;
-        } else {
-            unreachable!()
         }
+        unreachable!()
     }
 
     #[must_use]

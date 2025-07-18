@@ -1,4 +1,4 @@
-use std::io::{Error, ErrorKind, Read};
+use std::io::{Error, Read};
 
 use pumpkin_macros::packet;
 
@@ -32,7 +32,7 @@ impl PacketRead for Action {
             4 => Self::InteractUpdate,
             5 => Self::NpcOpen,
             6 => Self::OpenInventory,
-            _ => return Err(Error::new(ErrorKind::Other, "Invalid Action")),
+            _ => return Err(Error::other("")),
         };
 
         Ok(this)

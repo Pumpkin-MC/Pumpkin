@@ -598,7 +598,7 @@ impl<'a> ProtoChunk<'a> {
                 let z = start_z + local_z;
 
                 let mut top_block =
-                    self.top_block_height_exclusive(&Vector2::new(local_x, local_z)) as i32;
+                    self.top_block_height_exclusive(&Vector2::new(local_x, local_z));
 
                 let biome_y = if self.settings.legacy_random_source {
                     0
@@ -611,8 +611,7 @@ impl<'a> ProtoChunk<'a> {
                     terrain_builder.place_badlands_pillar(self, x, z, top_block);
                     // Get the top block again if we placed a pillar!
 
-                    top_block =
-                        self.top_block_height_exclusive(&Vector2::new(local_x, local_z)) as i32;
+                    top_block = self.top_block_height_exclusive(&Vector2::new(local_x, local_z));
                 }
 
                 context.init_horizontal(x, z);

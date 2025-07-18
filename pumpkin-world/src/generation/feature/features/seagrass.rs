@@ -29,7 +29,7 @@ impl SeagrassFeature {
     ) -> bool {
         let x = random.next_bounded_i32(8) - random.next_bounded_i32(8);
         let z = random.next_bounded_i32(8) - random.next_bounded_i32(8);
-        let y = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x + x, pos.0.z + z)) as i32;
+        let y = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x + x, pos.0.z + z));
         let top_pos = BlockPos::new(pos.0.x + x, y, pos.0.z + z);
         if chunk.get_block_state(&top_pos.0).to_block() == &Block::WATER {
             let tall = random.next_f64() < self.probability as f64;

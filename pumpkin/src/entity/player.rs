@@ -700,6 +700,8 @@ impl Player {
             .await;
     }
 
+    // TODO Abstract the chunk sending
+    #[allow(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.current_screen_handler
             .lock()

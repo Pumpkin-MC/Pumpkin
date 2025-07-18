@@ -483,7 +483,7 @@ fn is_vec(ty: &Type) -> bool {
             .segments
             .iter()
             .last()
-            .map(|segment| segment.ident.to_string() == "Vec")
+            .map(|segment| segment.ident == "Vec")
             .unwrap_or(false)
     } else {
         false

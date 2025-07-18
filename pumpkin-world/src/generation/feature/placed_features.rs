@@ -331,7 +331,7 @@ impl CountOnEveryLayerPlacementModifier {
                 let z = random.next_bounded_i32(16) + pos.0.z;
                 let y = chunk.top_motion_blocking_block_height_exclusive(&Vector2::new(x, z));
 
-                let n = Self::find_pos(chunk, x, y as i32, z, i);
+                let n = Self::find_pos(chunk, x, y, z, i);
 
                 if n == i32::MAX {
                     continue;
@@ -478,8 +478,8 @@ impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let world_top = chunk.top_block_height_exclusive(&Vector2::new(pos.0.x, pos.0.z)) as i32;
-        let ocean = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x, pos.0.z)) as i32;
+        let world_top = chunk.top_block_height_exclusive(&Vector2::new(pos.0.x, pos.0.z));
+        let ocean = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x, pos.0.z));
         world_top - ocean <= self.max_water_depth
     }
 }
@@ -545,7 +545,7 @@ impl HeightmapPlacementModifier {
     ) -> Box<dyn Iterator<Item = BlockPos>> {
         let x = pos.0.x;
         let z = pos.0.z;
-        let top = chunk.get_top_y(&self.heightmap, &Vector2::new(x, z)) as i32;
+        let top = chunk.get_top_y(&self.heightmap, &Vector2::new(x, z));
         if top > min_y as i32 {
             return Box::new(iter::once(BlockPos(Vector3::new(x, top, z))));
         }

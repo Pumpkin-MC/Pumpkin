@@ -91,12 +91,12 @@ impl PacketWrite for SocketAddr {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
             SocketAddr::V4(addr) => {
-                writer.write(&[4])?;
-                writer.write(&addr.ip().octets())?;
+                writer.write_all(&[4])?;
+                writer.write_all(&addr.ip().octets())?;
             }
             SocketAddr::V6(addr) => {
-                writer.write(&[6])?;
-                writer.write(&addr.ip().octets())?;
+                writer.write_all(&[6])?;
+                writer.write_all(&addr.ip().octets())?;
             }
         };
 

@@ -26,7 +26,7 @@ pub async fn player_join(player: &Arc<Player>) {
                 chunk_z: chunk_pos.y.into(),
             })
             .await;
-    };
+    }
 
     update_position(player).await;
 }
@@ -48,7 +48,7 @@ pub async fn update_position(player: &Arc<Player>) {
                     chunk_z: new_chunk_center.y.into(),
                 })
                 .await;
-        };
+        }
         let mut loading_chunks = Vec::new();
         let mut unloading_chunks = Vec::new();
         Cylindrical::for_each_changed_chunk(

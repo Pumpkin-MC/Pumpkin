@@ -284,14 +284,15 @@ impl BedrockClient {
         let mut split_size = 0;
         let mut split_id = 0;
         let mut order_index = 0;
-        let mut count = 1;
 
-        if packet_buf.len() > 1340 {
+        let count = if packet_buf.len() > 1340 {
             reliability = RakReliability::ReliableOrdered;
             split_id = self.output_split_number.fetch_add(1, Ordering::Relaxed);
-            split_size = (packet_buf.len() as u32 + 1339) / 1340;
-            count = split_size as usize;
-        }
+            split_size = (packet_buf.len() as u32).div_ceil(1340);
+            split_size as usize
+        } else {
+            1
+        };
 
         if reliability.is_ordered() {
             order_index = self.output_ordered_index.fetch_add(1, Ordering::Relaxed);
@@ -495,7 +496,7 @@ impl BedrockClient {
 
             frame = unsafe { frames[0].take().unwrap_unchecked() };
 
-            frame.payload = merged.into();
+            frame.payload = merged;
             frame.split_size = 0;
         }
 
@@ -520,15 +521,12 @@ impl BedrockClient {
                 self.handle_login(SLogin::read(&mut &packet.payload[..]).unwrap(), server)
                     .await;
             }
-            SClientCacheStatus::PACKET_ID => {
-                // We dont care about this currently
-            }
-            SRessourcePackResponse::PACKET_ID => {
-                // We dont care about this currently
+            SClientCacheStatus::PACKET_ID | SRessourcePackResponse::PACKET_ID => {
+                // TODO
             }
             _ => {
                 self.handle_play_packet(self.player.lock().await.as_ref().unwrap(), server, packet)
-                    .await
+                    .await;
             }
         }
         Ok(())
@@ -545,7 +543,7 @@ impl BedrockClient {
         match packet.id {
             SPlayerAuthInput::PACKET_ID => {
                 if let Ok(input_packet) = SPlayerAuthInput::read(payload) {
-                    self.player_pos_update(player, input_packet).await;
+                    self.player_pos_update(player, input_packet);
                 }
             }
             SInteraction::PACKET_ID => {
