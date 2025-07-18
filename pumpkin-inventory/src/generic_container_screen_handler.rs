@@ -40,6 +40,21 @@ pub fn create_generic_3x3(
     )
 }
 
+pub fn create_hopper(
+    sync_id: u8,
+    player_inventory: &Arc<PlayerInventory>,
+    inventory: Arc<dyn Inventory>,
+) -> GenericContainerScreenHandler {
+    GenericContainerScreenHandler::new(
+        WindowType::Hopper,
+        sync_id,
+        player_inventory,
+        inventory,
+        1,
+        5,
+    )
+}
+
 pub struct GenericContainerScreenHandler {
     pub inventory: Arc<dyn Inventory>,
     pub rows: u8,

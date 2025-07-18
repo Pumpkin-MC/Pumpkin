@@ -20,13 +20,12 @@ use crate::{
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 
-use crate::block::BlockStateCodec;
-
 use super::{
     ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections, ScheduledTick,
     SubChunk, TickPriority,
     palette::{BiomePalette, BlockPalette},
 };
+use crate::block::BlockStateCodec;
 
 pub mod anvil;
 pub mod linear;

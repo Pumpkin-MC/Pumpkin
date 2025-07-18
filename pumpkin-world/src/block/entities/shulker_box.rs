@@ -17,14 +17,14 @@ use crate::{
 use super::BlockEntity;
 
 #[derive(Debug)]
-pub struct BarrelBlockEntity {
+pub struct ShulkerBoxBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; 27],
     pub dirty: AtomicBool,
 }
 
 #[async_trait]
-impl BlockEntity for BarrelBlockEntity {
+impl BlockEntity for ShulkerBoxBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
@@ -67,8 +67,8 @@ impl BlockEntity for BarrelBlockEntity {
     }
 }
 
-impl BarrelBlockEntity {
-    pub const ID: &'static str = "minecraft:barrel";
+impl ShulkerBoxBlockEntity {
+    pub const ID: &'static str = "minecraft:shulker_box"; // TODO support multi IDs
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -79,7 +79,7 @@ impl BarrelBlockEntity {
 }
 
 #[async_trait]
-impl Inventory for BarrelBlockEntity {
+impl Inventory for ShulkerBoxBlockEntity {
     fn size(&self) -> usize {
         self.items.len()
     }
@@ -123,7 +123,7 @@ impl Inventory for BarrelBlockEntity {
 }
 
 #[async_trait]
-impl Clearable for BarrelBlockEntity {
+impl Clearable for ShulkerBoxBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
             *slot.lock().await = ItemStack::EMPTY;

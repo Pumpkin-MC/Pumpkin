@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -64,6 +65,10 @@ impl Inventory for CraftingInventory {
 
     async fn set_stack(&self, slot: usize, stack: ItemStack) {
         *self.items[slot].lock().await = stack;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

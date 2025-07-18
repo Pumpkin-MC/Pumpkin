@@ -1,3 +1,9 @@
+use async_trait::async_trait;
+use log::warn;
+use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
+use std::any::Any;
 use std::{
     array::from_fn,
     sync::{
@@ -5,12 +11,6 @@ use std::{
         atomic::{AtomicBool, AtomicI8, Ordering},
     },
 };
-
-use async_trait::async_trait;
-use log::warn;
-use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
-use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
 
 use crate::{
@@ -154,6 +154,10 @@ impl Inventory for ChiseledBookshelfBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
