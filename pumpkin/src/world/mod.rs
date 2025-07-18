@@ -827,7 +827,7 @@ impl World {
         client
             .send_game_packet(&CUpdateAttributes {
                 runtime_id: VarULong(runtime_id),
-                attrubtes: vec![Attribute {
+                attributes: vec![Attribute {
                     min_value: 0.0,
                     max_value: f32::MAX,
                     current_value: 0.1,

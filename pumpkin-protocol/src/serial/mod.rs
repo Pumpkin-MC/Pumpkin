@@ -18,6 +18,6 @@ pub trait PacketRead: Sized {
 }
 
 pub enum WError {
-    Interupted,
+    Interrupted,
     Errr,
 }

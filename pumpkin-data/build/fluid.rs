@@ -737,7 +737,7 @@ pub(crate) fn build() -> TokenStream {
             pub fn from_properties(&self, props: Vec<(String, String)>) -> Box<dyn FluidProperties> {
                 match self.name {
                     #fluid_properties_from_props_and_name
-                    _ => panic!("Inavlid props")
+                    _ => panic!("Invalid props")
                 }
             }
 

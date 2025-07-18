@@ -19,7 +19,7 @@ use pumpkin_protocol::{
         packet_decoder::UDPNetworkDecoder,
         packet_encoder::UDPNetworkEncoder,
         server::{
-            client_chache_status::SClientCacheStatus,
+            client_cache_status::SClientCacheStatus,
             interaction::SInteraction,
             login::SLogin,
             player_auth_input::SPlayerAuthInput,
@@ -32,7 +32,7 @@ use pumpkin_protocol::{
             },
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
-            ressource_pack_response::SRessourcePackResponse,
+            resource_pack_response::SResourcePackResponse,
         },
     },
     codec::u24,
@@ -521,7 +521,7 @@ impl BedrockClient {
                 self.handle_login(SLogin::read(&mut &packet.payload[..]).unwrap(), server)
                     .await;
             }
-            SClientCacheStatus::PACKET_ID | SRessourcePackResponse::PACKET_ID => {
+            SClientCacheStatus::PACKET_ID | SResourcePackResponse::PACKET_ID => {
                 // TODO
             }
             _ => {

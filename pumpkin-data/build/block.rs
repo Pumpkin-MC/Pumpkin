@@ -998,7 +998,7 @@ pub(crate) fn build() -> TokenStream {
             pub fn from_properties(&self, props: &[(&str, &str)]) -> Box<dyn BlockProperties> {
                 match self.id {
                     #block_properties_from_props_and_name
-                    _ => panic!("Inavlid props")
+                    _ => panic!("Invalid props")
                 }
             }
         }

@@ -9,7 +9,7 @@ use crate::{
 #[packet(29)]
 pub struct CUpdateAttributes {
     pub runtime_id: VarULong,
-    pub attrubtes: Vec<Attribute>,
+    pub attributes: Vec<Attribute>,
     pub player_tick: VarULong,
 }
 
