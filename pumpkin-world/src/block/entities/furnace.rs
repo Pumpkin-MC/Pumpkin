@@ -11,6 +11,7 @@ use pumpkin_data::{
     block_properties::{BlockProperties, FurnaceLikeProperties},
     fuels::get_item_burn_ticks,
     item::Item,
+    recipe_remainder::get_recipe_remiander_id,
     recipes::{CookingRecipe, CookingRecipeType, RECIPES_COOKING},
 };
 use pumpkin_util::math::position::BlockPos;
@@ -176,24 +177,29 @@ impl BlockEntity for FurnaceBlockEntity {
             .can_accept_recipe_output(furnace_recipe, self.get_max_count_per_stack())
             .await;
 
-        let mut bottom_items = self.items[1].lock().await;
-
-        if self.is_burning() || !bottom_items.is_empty() && !is_top_items_empty {
+        let bottom_items_is_empty = self.items[1].lock().await.is_empty();
+        if self.is_burning() || !bottom_items_is_empty && !is_top_items_empty {
             if !self.is_burning() && can_accepet_output {
+                let mut bottom_items = self.items[1].lock().await;
+
                 let fuel_ticks = get_item_burn_ticks(bottom_items.item.id).unwrap_or(0);
                 self.lit_time_remaining.store(fuel_ticks, Ordering::Relaxed);
                 self.lit_total_time.store(fuel_ticks, Ordering::Relaxed);
+
                 if self.is_burning() {
                     is_dirty = true;
                     if !bottom_items.is_empty() {
                         bottom_items.decrement(1);
-                        //TODO: add getRecipeRemainder().
-                        //Using a lava bucket as fuel leaves an empty bucket behind.
+                        if let Some(remainder_id) = get_recipe_remiander_id(bottom_items.item.id)
+                            && bottom_items.is_empty()
+                            && let Some(remainder_item) = Item::from_id(remainder_id)
+                        {
+                            drop(bottom_items);
+                            self.set_stack(1, ItemStack::new(1, remainder_item)).await;
+                        }
                     }
                 }
             }
-
-            drop(bottom_items);
 
             if self.is_burning() && can_accepet_output {
                 self.cooking_time_spent.fetch_add(1, Ordering::Relaxed);
