@@ -1,6 +1,5 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 
-use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -17,7 +16,6 @@ use rayon::prelude::*;
 
 struct BlockRegistry;
 
-#[async_trait]
 impl BlockRegistryExt for BlockRegistry {
     fn can_place_at(
         &self,

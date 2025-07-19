@@ -1,11 +1,11 @@
 use core::fmt;
 
 use pumpkin_macros::packet;
-use serde::Serialize;
 
 use crate::codec::ascii_string::AsciiString;
+use crate::serial::PacketWrite;
 
-#[derive(Serialize)]
+#[derive(PacketWrite)]
 #[packet(0x1c)]
 pub struct CUnconnectedPong {
     time: u64,
@@ -15,7 +15,7 @@ pub struct CUnconnectedPong {
 }
 
 pub struct ServerInfo {
-    /// (MCPE or MCEE for Education Edition)
+    /// (BE or MCEE for Education Edition)
     pub edition: &'static str,
     pub motd_line_1: &'static str,
     pub protocol_version: u32,

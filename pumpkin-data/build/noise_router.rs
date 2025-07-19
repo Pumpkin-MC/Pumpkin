@@ -40,10 +40,7 @@ impl ToTokens for HashableF32 {
 }
 
 impl<'de> Deserialize<'de> for HashableF32 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         f32::deserialize(deserializer).map(Self)
     }
 }
@@ -79,10 +76,7 @@ impl ToTokens for HashableF64 {
 }
 
 impl<'de> Deserialize<'de> for HashableF64 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         f64::deserialize(deserializer).map(Self)
     }
 }

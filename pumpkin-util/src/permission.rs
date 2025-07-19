@@ -251,19 +251,16 @@ impl Ord for PermissionLvl {
 }
 
 impl Serialize for PermissionLvl {
-    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> {
         serializer.serialize_u8(*self as u8)
     }
 }
 
 impl<'de> Deserialize<'de> for PermissionLvl {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = u8::deserialize(deserializer)?;
         match value {
             0 => Ok(PermissionLvl::Zero),

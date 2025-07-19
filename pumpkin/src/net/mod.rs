@@ -10,7 +10,7 @@ use crate::{
         op_data::OPERATOR_CONFIG, whitelist_data::WHITELIST_CONFIG,
     },
     entity::player::{ChatMode, Hand},
-    net::{bedrock::BedrockClientPlatform, java::JavaClientPlatform},
+    net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
 };
 
@@ -76,7 +76,7 @@ impl Default for PlayerConfig {
     fn default() -> Self {
         Self {
             locale: "en_us".to_string(),
-            view_distance: NonZeroU8::new(10).unwrap(),
+            view_distance: NonZeroU8::new(16).unwrap(),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,
             skin_parts: 0,
@@ -93,9 +93,10 @@ pub enum PacketHandlerState {
 }
 
 /// This is just a Wrapper for both Java & Bedrock connections
+#[derive(Clone)]
 pub enum ClientPlatform {
-    Java(Arc<JavaClientPlatform>),
-    Bedrock(Arc<BedrockClientPlatform>),
+    Java(Arc<JavaClient>),
+    Bedrock(Arc<BedrockClient>),
 }
 
 impl ClientPlatform {
@@ -106,19 +107,31 @@ impl ClientPlatform {
         }
     }
 
+    /// This function should only be used where you know that the client is bedrock!
+    #[inline]
+    #[must_use]
+    pub fn bedrock(&self) -> &Arc<BedrockClient> {
+        if let Self::Bedrock(client) = self {
+            return client;
+        }
+        unreachable!()
+    }
+
+    /// This function should only be used where you know that the client is java!
+    #[inline]
+    #[must_use]
+    pub fn java(&self) -> &Arc<JavaClient> {
+        if let Self::Java(client) = self {
+            return client;
+        }
+        unreachable!()
+    }
+
     #[must_use]
     pub fn closed(&self) -> bool {
         match self {
             Self::Java(java) => java.closed.load(Ordering::Relaxed),
             Self::Bedrock(bedrock) => bedrock.closed.load(Ordering::Relaxed),
-        }
-    }
-
-    #[must_use]
-    pub fn protocol_version(&self) -> i32 {
-        match self {
-            Self::Java(java) => java.protocol_version.load(Ordering::Relaxed),
-            Self::Bedrock(bedrock) => bedrock.protocol_version.load(Ordering::Relaxed),
         }
     }
 
@@ -140,13 +153,10 @@ impl ClientPlatform {
         }
     }
 
-    pub async fn enqueue_packet<P>(&self, packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         match self {
             Self::Java(java) => java.enqueue_packet(packet).await,
-            Self::Bedrock(bedrock) => bedrock.enqueue_packet(packet).await,
+            Self::Bedrock(_) => (),
         }
     }
 

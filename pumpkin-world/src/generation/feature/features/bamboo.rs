@@ -40,7 +40,7 @@ impl BambooFeature {
                         for z in pos.0.z - rnd..pos.0.z + rnd {
                             let block_below = BlockPos::new(
                                 x,
-                                chunk.top_block_height_exclusive(&Vector2::new(x, z)) as i32 - 1,
+                                chunk.top_block_height_exclusive(&Vector2::new(x, z)) - 1,
                                 z,
                             );
                             let block = chunk.get_block_state(&block_below.0);

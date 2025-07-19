@@ -19,10 +19,7 @@ impl NbtCompound {
         }
     }
 
-    pub fn skip_content<R>(reader: &mut NbtReadHelper<R>) -> Result<(), Error>
-    where
-        R: Read,
-    {
+    pub fn skip_content<R: Read>(reader: &mut NbtReadHelper<R>) -> Result<(), Error> {
         loop {
             let tag_id = match reader.get_u8_be() {
                 Ok(id) => id,
@@ -53,10 +50,9 @@ impl NbtCompound {
         Ok(())
     }
 
-    pub fn deserialize_content<R>(reader: &mut NbtReadHelper<R>) -> Result<NbtCompound, Error>
-    where
-        R: Read,
-    {
+    pub fn deserialize_content<R: Read>(
+        reader: &mut NbtReadHelper<R>,
+    ) -> Result<NbtCompound, Error> {
         let mut compound = NbtCompound::new();
 
         loop {
@@ -88,10 +84,7 @@ impl NbtCompound {
         Ok(compound)
     }
 
-    pub fn serialize_content<W>(&self, w: &mut WriteAdaptor<W>) -> Result<(), Error>
-    where
-        W: Write,
-    {
+    pub fn serialize_content<W: Write>(&self, w: &mut WriteAdaptor<W>) -> Result<(), Error> {
         for (name, tag) in &self.child_tags {
             w.write_u8_be(tag.get_type_id())?;
             NbtTag::String(name.clone()).serialize_data(w)?;
@@ -243,10 +236,7 @@ impl AsRef<NbtCompound> for NbtCompound {
 }
 
 impl Serialize for NbtCompound {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
         let mut map = serializer.serialize_map(Some(self.child_tags.len()))?;
         for (key, value) in &self.child_tags {
@@ -257,10 +247,7 @@ impl Serialize for NbtCompound {
 }
 
 impl<'de> Deserialize<'de> for NbtCompound {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct CompoundVisitor;
 
         impl<'de> serde::de::Visitor<'de> for CompoundVisitor {
@@ -270,10 +257,10 @@ impl<'de> Deserialize<'de> for NbtCompound {
                 formatter.write_str("an NBT compound")
             }
 
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::MapAccess<'de>,
-            {
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
                 let mut compound = NbtCompound::new();
                 while let Some((key, value)) = map.next_entry::<String, NbtTag>()? {
                     compound.put(&key, value);

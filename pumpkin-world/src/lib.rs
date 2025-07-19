@@ -34,16 +34,6 @@ macro_rules! global_path {
     }};
 }
 
-#[macro_export]
-macro_rules! read_data_from_file {
-    ($path:expr) => {{
-        use std::fs;
-        use $crate::global_path;
-        serde_json::from_str(&fs::read_to_string(global_path!($path)).expect("no data file"))
-            .expect("failed to decode data")
-    }};
-}
-
 // TODO: is there a way to do in-file benches?
 pub use generation::{
     GlobalRandomConfig, noise_router::proto_noise_router::ProtoNoiseRouters,

@@ -19,10 +19,7 @@ pub struct SClickSlot {
 }
 
 impl<'de> Deserialize<'de> for SClickSlot {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
+    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
             type Value = SClickSlot;
@@ -31,10 +28,7 @@ impl<'de> Deserialize<'de> for SClickSlot {
                 formatter.write_str("a valid VarInt encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let sync_id = seq
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode u8"))?;

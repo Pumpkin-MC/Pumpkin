@@ -32,19 +32,13 @@ impl NbtTag {
         unsafe { *(self as *const Self as *const u8) }
     }
 
-    pub fn serialize<W>(&self, w: &mut WriteAdaptor<W>) -> serializer::Result<()>
-    where
-        W: Write,
-    {
+    pub fn serialize<W: Write>(&self, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
         w.write_u8_be(self.get_type_id())?;
         self.serialize_data(w)?;
         Ok(())
     }
 
-    pub fn serialize_data<W>(&self, w: &mut WriteAdaptor<W>) -> serializer::Result<()>
-    where
-        W: Write,
-    {
+    pub fn serialize_data<W: Write>(&self, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
         match self {
             NbtTag::End => {}
             NbtTag::Byte(byte) => w.write_i8_be(*byte)?,
@@ -114,18 +108,12 @@ impl NbtTag {
         Ok(())
     }
 
-    pub fn deserialize<R>(reader: &mut NbtReadHelper<R>) -> Result<NbtTag, Error>
-    where
-        R: Read,
-    {
+    pub fn deserialize<R: Read>(reader: &mut NbtReadHelper<R>) -> Result<NbtTag, Error> {
         let tag_id = reader.get_u8_be()?;
         Self::deserialize_data(reader, tag_id)
     }
 
-    pub fn skip_data<R>(reader: &mut NbtReadHelper<R>, tag_id: u8) -> Result<(), Error>
-    where
-        R: Read,
-    {
+    pub fn skip_data<R: Read>(reader: &mut NbtReadHelper<R>, tag_id: u8) -> Result<(), Error> {
         match tag_id {
             END_ID => Ok(()),
             BYTE_ID => reader.skip_bytes(1),
@@ -179,10 +167,10 @@ impl NbtTag {
         }
     }
 
-    pub fn deserialize_data<R>(reader: &mut NbtReadHelper<R>, tag_id: u8) -> Result<NbtTag, Error>
-    where
-        R: Read,
-    {
+    pub fn deserialize_data<R: Read>(
+        reader: &mut NbtReadHelper<R>,
+        tag_id: u8,
+    ) -> Result<NbtTag, Error> {
         match tag_id {
             END_ID => Ok(NbtTag::End),
             BYTE_ID => {
@@ -393,10 +381,7 @@ impl From<bool> for NbtTag {
 }
 
 impl Serialize for NbtTag {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             NbtTag::End => serializer.serialize_unit(),
             NbtTag::Byte(v) => serializer.serialize_i8(*v),
@@ -444,10 +429,7 @@ impl Serialize for NbtTag {
 }
 
 impl<'de> Deserialize<'de> for NbtTag {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct NbtTagVisitor;
 
         impl<'de> serde::de::Visitor<'de> for NbtTagVisitor {
@@ -485,17 +467,14 @@ impl<'de> Deserialize<'de> for NbtTag {
                 Ok(NbtTag::Double(v))
             }
 
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(NbtTag::String(v.to_string()))
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
                 let mut vec = Vec::new();
                 while let Some(value) = seq.next_element()? {
                     vec.push(value);
@@ -503,10 +482,10 @@ impl<'de> Deserialize<'de> for NbtTag {
                 Ok(NbtTag::List(vec))
             }
 
-            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::MapAccess<'de>,
-            {
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                map: A,
+            ) -> Result<Self::Value, A::Error> {
                 Ok(NbtTag::Compound(NbtCompound::deserialize(
                     serde::de::value::MapAccessDeserializer::new(map),
                 )?))

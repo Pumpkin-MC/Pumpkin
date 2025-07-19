@@ -1,4 +1,7 @@
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::{
+    io::{Error, Write},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+};
 
 use bytes::BufMut;
 use serde::{
@@ -6,14 +9,13 @@ use serde::{
     de::{self, SeqAccess},
 };
 
+use crate::serial::PacketWrite;
+
 #[derive(Clone, Copy)]
 pub struct SocketAddress(pub SocketAddr);
 
 impl Serialize for SocketAddress {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let (version, mut buf) = match self.0 {
             SocketAddr::V4(_) => (4, Vec::with_capacity(7)),
             SocketAddr::V6(_) => (6, Vec::with_capacity(19)),
@@ -32,10 +34,7 @@ impl Serialize for SocketAddress {
 }
 
 impl<'de> Deserialize<'de> for SocketAddress {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
+    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
             type Value = SocketAddress;
@@ -44,10 +43,7 @@ impl<'de> Deserialize<'de> for SocketAddress {
                 formatter.write_str("a valid socket addr")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 if let Some(version) = seq.next_element::<u8>()? {
                     match version {
                         4 => {
@@ -88,5 +84,22 @@ impl<'de> Deserialize<'de> for SocketAddress {
         }
 
         deserializer.deserialize_seq(Visitor)
+    }
+}
+
+impl PacketWrite for SocketAddr {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        match self {
+            SocketAddr::V4(addr) => {
+                writer.write_all(&[4])?;
+                writer.write_all(&addr.ip().octets())?;
+            }
+            SocketAddr::V6(addr) => {
+                writer.write_all(&[6])?;
+                writer.write_all(&addr.ip().octets())?;
+            }
+        };
+
+        writer.write_all(&self.port().to_be_bytes())
     }
 }

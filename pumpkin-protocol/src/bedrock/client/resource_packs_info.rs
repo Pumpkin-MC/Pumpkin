@@ -1,8 +1,9 @@
 use pumpkin_macros::packet;
-use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
-#[packet(0x06)]
+use crate::serial::PacketWrite;
+
+#[derive(PacketWrite)]
+#[packet(6)]
 pub struct CResourcePacksInfo {
     resource_pack_required: bool,
     has_addon_packs: bool,

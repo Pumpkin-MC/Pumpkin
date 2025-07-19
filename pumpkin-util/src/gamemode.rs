@@ -1,6 +1,5 @@
-use std::str::FromStr;
-
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ParseGameModeError;
@@ -11,6 +10,17 @@ pub enum GameMode {
     Creative = 1,
     Adventure = 2,
     Spectator = 3,
+}
+
+impl GameMode {
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            Self::Survival => "Survival",
+            Self::Creative => "Creative",
+            Self::Adventure => "Adventure",
+            Self::Spectator => "Spectator",
+        }
+    }
 }
 
 impl TryFrom<i8> for GameMode {

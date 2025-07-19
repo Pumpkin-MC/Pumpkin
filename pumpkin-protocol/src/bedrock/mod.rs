@@ -1,6 +1,7 @@
 pub mod ack;
 pub mod client;
 pub mod frame_set;
+pub mod network_item;
 pub mod packet_decoder;
 pub mod packet_encoder;
 pub mod server;

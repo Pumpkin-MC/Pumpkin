@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
+use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
+use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
@@ -82,7 +84,7 @@ use super::effect::Effect;
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
-use super::{Entity, EntityBase, EntityId, NBTStorage};
+use super::{Entity, EntityBase, NBTStorage};
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -699,6 +701,8 @@ impl Player {
             .await;
     }
 
+    // TODO Abstract the chunk sending
+    #[allow(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.current_screen_handler
             .lock()
@@ -735,16 +739,33 @@ impl Player {
 
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             let chunk_count = chunk_of_chunks.len();
-            self.client.send_packet_now(&CChunkBatchStart).await;
-            for chunk in chunk_of_chunks {
-                let chunk = chunk.read().await;
-                // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
-                // player or something.
-                self.client.send_packet_now(&CChunkData(&chunk)).await;
+            match &self.client {
+                ClientPlatform::Java(java_client) => {
+                    java_client.send_packet_now(&CChunkBatchStart).await;
+                    for chunk in chunk_of_chunks {
+                        let chunk = chunk.read().await;
+                        // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
+                        // player or something.
+                        java_client.send_packet_now(&CChunkData(&chunk)).await;
+                    }
+                    java_client
+                        .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))
+                        .await;
+                }
+                ClientPlatform::Bedrock(bedrock_client) => {
+                    for chunk in chunk_of_chunks {
+                        let chunk = chunk.read().await;
+
+                        bedrock_client
+                            .send_game_packet(&CLevelChunk {
+                                dimension: 0,
+                                cache_enabled: false,
+                                chunk: &chunk,
+                            })
+                            .await;
+                    }
+                }
             }
-            self.client
-                .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))
-                .await;
         }
 
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
@@ -870,7 +891,7 @@ impl Player {
         progress.clamp(0.0, 1.0)
     }
 
-    pub const fn entity_id(&self) -> EntityId {
+    pub const fn entity_id(&self) -> i32 {
         self.living_entity.entity.entity_id
     }
 
@@ -969,13 +990,24 @@ impl Player {
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
-        self.client
-            .enqueue_packet(&CUpdateTime::new(
-                l_world.world_age,
-                l_world.time_of_day,
-                true,
-            ))
-            .await;
+        match &self.client {
+            ClientPlatform::Java(java_client) => {
+                java_client
+                    .enqueue_packet(&CUpdateTime::new(
+                        l_world.world_age,
+                        l_world.time_of_day,
+                        true,
+                    ))
+                    .await;
+            }
+            ClientPlatform::Bedrock(bedrock_client) => {
+                bedrock_client
+                    .send_game_packet(&CSetTime {
+                        time: VarInt(l_world.query_daytime() as _),
+                    })
+                    .await;
+            }
+        }
     }
 
     async fn unload_watched_chunks(&self, world: &World) {

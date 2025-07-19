@@ -1,5 +1,5 @@
 use std::{
-    io::{ErrorKind, Read, Write},
+    io::{Error, ErrorKind, Read, Write},
     num::NonZeroUsize,
     ops::Deref,
 };
@@ -11,14 +11,17 @@ use serde::{
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
+use crate::{
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
+    serial::{PacketRead, PacketWrite},
+};
 
 pub type VarIntType = i32;
 
 /**
  * A variable-length integer type used by the Minecraft network protocol.
  */
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct VarInt(pub VarIntType);
 
 impl VarInt {
@@ -36,10 +39,10 @@ impl VarInt {
 
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut val = self.0;
-        for _ in 0..Self::MAX_SIZE.get() {
-            let b: u8 = val as u8 & 0b01111111;
+        loop {
+            let b: u8 = val as u8 & 0x7F;
             val >>= 7;
-            write.write_u8(if val == 0 { b } else { b | 0b10000000 })?;
+            write.write_u8(if val == 0 { b } else { b | 0x80 })?;
             if val == 0 {
                 break;
             }
@@ -150,10 +153,7 @@ impl Deref for VarInt {
 }
 
 impl Serialize for VarInt {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut value = self.0 as u32;
         let mut buf = Vec::new();
 
@@ -169,10 +169,7 @@ impl Serialize for VarInt {
 }
 
 impl<'de> Deserialize<'de> for VarInt {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct VarIntVisitor;
 
         impl<'de> Visitor<'de> for VarIntVisitor {
@@ -182,10 +179,7 @@ impl<'de> Deserialize<'de> for VarInt {
                 formatter.write_str("a valid VarInt encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let mut val = 0;
                 for i in 0..VarInt::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
@@ -202,5 +196,36 @@ impl<'de> Deserialize<'de> for VarInt {
         }
 
         deserializer.deserialize_seq(VarIntVisitor)
+    }
+}
+
+impl PacketWrite for VarInt {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        let mut val = (self.0 << 1) ^ (self.0 >> 31);
+        loop {
+            let b: u8 = val as u8 & 0b01111111;
+            val >>= 7;
+            if val == 0 {
+                b.write(writer)?;
+                break;
+            } else {
+                (b | 0b10000000).write(writer)?;
+            };
+        }
+        Ok(())
+    }
+}
+
+impl PacketRead for VarInt {
+    fn read<W: Read>(read: &mut W) -> Result<Self, Error> {
+        let mut val = 0;
+        for i in 0..Self::MAX_SIZE.get() {
+            let byte = u8::read(read)?;
+            val |= (i32::from(byte) & 0x7F) << (i * 7);
+            if byte & 0x80 == 0 {
+                return Ok(VarInt((val >> 1) ^ (val << 31)));
+            }
+        }
+        Err(Error::new(ErrorKind::InvalidData, ""))
     }
 }

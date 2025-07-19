@@ -1,12 +1,17 @@
-use std::{io::Write, net::SocketAddr};
+use std::{
+    io::{self, Error, Write},
+    net::SocketAddr,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use bytes::Bytes;
 use thiserror::Error;
 use tokio::{io::AsyncWrite, net::UdpSocket};
 
 use crate::{
-    Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, PacketEncodeError, StreamEncryptor,
-    bedrock::SubClient, codec::var_uint::VarUInt, ser::NetworkWriteExt,
+    Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, StreamEncryptor, bedrock::SubClient,
+    codec::var_uint::VarUInt, ser::NetworkWriteExt,
 };
 
 // raw -> compress -> encrypt
@@ -27,49 +32,43 @@ impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
 
 impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
     fn poll_write(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+    ) -> Poll<Result<usize, io::Error>> {
         match self.get_mut() {
             Self::Encrypt(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_write(cx, buf)
             }
             Self::None(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_write(cx, buf)
             }
         }
     }
 
-    fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match self.get_mut() {
             Self::Encrypt(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_flush(cx)
             }
             Self::None(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_flush(cx)
             }
         }
     }
 
-    fn poll_shutdown(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match self.get_mut() {
             Self::Encrypt(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_shutdown(cx)
             }
             Self::None(writer) => {
-                let writer = std::pin::Pin::new(writer);
+                let writer = Pin::new(writer);
                 writer.poll_shutdown(cx)
             }
         }
@@ -115,7 +114,7 @@ impl UDPNetworkEncoder {
         sub_client_target: SubClient,
         packet_payload: Bytes,
         mut writer: impl Write,
-    ) -> Result<(), PacketEncodeError> {
+    ) -> Result<(), Error> {
         // Game Packet ID
         writer.write_u8(0xfe).unwrap();
 
@@ -159,18 +158,16 @@ impl UDPNetworkEncoder {
             .unwrap();
 
         // 5. Write the payload
-        writer.write_all(&packet_payload).unwrap();
-        Ok(())
+        writer.write_all(&packet_payload)
     }
 
     pub async fn write_packet(
         &mut self,
-        packet_data: Bytes,
+        packet_data: &[u8],
         addr: SocketAddr,
         socket: &UdpSocket,
-    ) -> Result<(), PacketEncodeError> {
-        socket.send_to(&packet_data, addr).await.unwrap();
-        Ok(())
+    ) -> Result<(), Error> {
+        socket.send_to(packet_data, addr).await.map(|_| ())
     }
 }
 

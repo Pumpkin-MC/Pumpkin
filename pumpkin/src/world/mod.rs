@@ -16,7 +16,7 @@ use crate::{
         registry::BlockRegistry,
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, EntityId, player::Player, r#type::from_type},
+    entity::{Entity, EntityBase, player::Player, r#type::from_type},
     error::PumpkinError,
     net::ClientPlatform,
     plugin::{
@@ -55,16 +55,22 @@ use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
     bedrock::{
-        RakReliability,
         client::{
+            chunk_radius_update::CChunkRadiusUpdate,
+            creative_content::{CreativeContent, Group},
             gamerules_changed::GameRules,
-            start_game::{Experiments, GAME_PUBLISH_SETTING_PUBLIC, LevelSettings},
+            inventory_content::CInventoryContent,
+            play_status::{CPlayStatus, PlayStatus},
+            start_game::{Experiments, GamePublishSetting, LevelSettings},
+            update_artributes::{Attribute, CUpdateAttributes},
         },
+        network_item::NetworkItemDescriptor,
     },
     codec::{
-        bedrock_block_pos::BedrockPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
+        bedrock_block_pos::NetworkPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
     },
     java::{
+        self,
         client::play::{
             CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
             CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
@@ -328,10 +334,7 @@ impl World {
     /// Sends the specified packet to every player currently logged in to the world.
     ///
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
-    pub async fn broadcast_packet_all<P>(&self, packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         self.broadcast_packet_except(&[], packet).await;
     }
 
@@ -404,20 +407,14 @@ impl World {
     /// Sends the specified packet to every player currently logged in to the world, excluding the players listed in the `except` parameter.
     ///
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
-    pub async fn broadcast_packet_except<P>(&self, except: &[uuid::Uuid], packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn broadcast_packet_except<P: ClientPacket>(
+        &self,
+        except: &[uuid::Uuid],
+        packet: &P,
+    ) {
         let current_players = self.players.read().await;
-        let players: Vec<_> = current_players
-            .iter()
-            .filter(|c| !except.contains(c.0))
-            .collect();
-        if players.is_empty() {
-            return;
-        }
 
-        for (_, player) in players {
+        for (_, player) in current_players.iter().filter(|c| !except.contains(c.0)) {
             player.client.enqueue_packet(packet).await;
         }
     }
@@ -697,6 +694,8 @@ impl World {
     ) {
         let level_info = server.level_info.read().await;
         let weather = self.weather.lock().await;
+        let runtime_id = player.entity_id() as u64;
+        // Todo make the data less spread
         let level_settings = LevelSettings {
             seed: self.level.seed.0,
             spawn_biome_type: 0,
@@ -706,7 +705,7 @@ impl World {
             world_gamemode: VarInt(server.defaultgamemode.lock().await.gamemode as i32),
             hardcore: base_config.hardcore,
             difficulty: VarInt(level_info.difficulty as i32),
-            spawn_position: BedrockPos(BlockPos(Vector3::new(
+            spawn_position: NetworkPos(BlockPos(Vector3::new(
                 level_info.spawn_x,
                 level_info.spawn_y,
                 level_info.spawn_z,
@@ -724,8 +723,8 @@ impl World {
             has_confirmed_platform_locked_content: false,
             was_multiplayer_intended: true,
             was_lan_broadcasting_intended: true,
-            xbox_live_broadcast_setting: VarInt(GAME_PUBLISH_SETTING_PUBLIC),
-            platform_broadcast_setting: VarInt(GAME_PUBLISH_SETTING_PUBLIC),
+            xbox_live_broadcast_setting: VarInt(GamePublishSetting::Public as _),
+            platform_broadcast_setting: VarInt(GamePublishSetting::Public as _),
             commands_enabled: level_info.allow_commands,
             is_texture_packs_required: false,
             rule_data: GameRules {
@@ -739,7 +738,7 @@ impl World {
             has_start_with_map_enabled: false,
             // TODO Bedrock permission level are different
             permission_level: VarInt(2),
-            server_chunk_tick_range: base_config.simulation_distance.get().into(),
+            server_simulation_distance: base_config.simulation_distance.get().into(),
             has_locked_behavior_pack: false,
             has_locked_resource_pack: false,
             is_from_locked_world_template: false,
@@ -753,7 +752,7 @@ impl World {
             game_version: CURRENT_BEDROCK_MC_VERSION.into(),
             limited_world_width: 0,
             limited_world_height: 0,
-            is_nether_type: base_config.allow_nether,
+            new_nether: true,
             edu_shared_uri_button_name: String::with_capacity(0),
             edu_shared_uri_link_uri: String::with_capacity(0),
             override_force_experimental_gameplay_has_value: false,
@@ -764,50 +763,94 @@ impl World {
             scenario_id: String::with_capacity(0),
             owner_id: String::with_capacity(0),
         };
-        if let ClientPlatform::Bedrock(client) = &player.client {
-            client
-                .send_game_packet(
-                    &CStartGame {
-                        entity_id: VarLong(i64::from(player.entity_id())),
-                        runtime_entity_id: VarULong(player.entity_id() as u64),
-                        player_gamemode: VarInt(player.gamemode.load() as i32),
-                        position: Vector3::new(0.0, 100.0, 0.0),
-                        yaw: 0.0,
-                        pitch: 0.0,
-                        level_settings,
-                        level_id: String::with_capacity(0),
-                        level_name: "level".to_string(),
-                        premium_world_template_id: String::with_capacity(0),
-                        is_trial: false,
-                        rewind_history_size: VarInt(40),
-                        server_authoritative_block_breaking: false,
-                        current_level_time: 0,
-                        enchantment_seed: VarInt(0),
-                        block_properties_size: VarUInt(0),
-                        // TODO Make this unique
-                        multiplayer_correlation_id: Uuid::default().to_string(),
-                        enable_itemstack_net_manager: false,
-                        // TODO Make this description better!
-                        // This gets send from the client to mojang server for telemetry
-                        server_version: "Pumpkin Rust Server".to_string(),
 
-                        compound_id: 10,
-                        compound_len: VarUInt(0),
-                        compound_end: 0,
+        let client = player.client.bedrock();
+        client
+            .send_game_packet(&CStartGame {
+                entity_id: VarLong(runtime_id as i64),
+                runtime_entity_id: VarULong(runtime_id),
+                player_gamemode: VarInt(player.gamemode.load() as i32),
+                position: Vector3::new(0.0, 322.0, 0.0),
+                pitch: 0.0,
+                yaw: 0.0,
+                level_settings,
+                level_id: String::with_capacity(0),
+                level_name: "Pumpkin world".to_string(),
+                premium_world_template_id: String::with_capacity(0),
+                is_trial: false,
+                rewind_history_size: VarInt(40),
+                server_authoritative_block_breaking: false,
+                current_level_time: self.level_time.lock().await.world_age as _,
+                enchantment_seed: VarInt(0),
+                block_properties_size: VarUInt(0),
+                // TODO Make this unique
+                multiplayer_correlation_id: Uuid::default().to_string(),
+                enable_itemstack_net_manager: false,
+                // TODO Make this description better!
+                // This gets send from the client to mojang for telemetry
+                server_version: "Pumpkin Rust Server".to_string(),
 
-                        block_registry_checksum: 0,
-                        world_template_id: Uuid::default(),
-                        // TODO The client needs extra biome data for this
-                        enable_clientside_generation: false,
-                        blocknetwork_ids_are_hashed: false,
-                        server_auth_sounds: false,
-                    },
-                    RakReliability::Unreliable,
-                )
-                .await;
-        } else {
-            panic!();
-        }
+                compound_id: 10,
+                compound_len: VarUInt(0),
+                compound_end: 0,
+
+                block_registry_checksum: 0,
+                world_template_id: Uuid::default(),
+                // TODO The client needs extra biome data for this
+                enable_clientside_generation: false,
+                blocknetwork_ids_are_hashed: false,
+                server_auth_sounds: false,
+            })
+            .await;
+        client
+            .send_game_packet(&CreativeContent {
+                groups: &[Group {
+                    creative_category: 1,
+                    name: String::new(),
+                    icon_item: NetworkItemDescriptor::default(),
+                }],
+                entries: &[],
+            })
+            .await;
+
+        client
+            .send_game_packet(&CChunkRadiusUpdate {
+                chunk_radius: VarInt(16),
+            })
+            .await;
+
+        chunker::player_join(&player).await;
+
+        client
+            .send_game_packet(&CUpdateAttributes {
+                runtime_id: VarULong(runtime_id),
+                attributes: vec![Attribute {
+                    min_value: 0.0,
+                    max_value: f32::MAX,
+                    current_value: 0.1,
+                    default_min_value: 0.0,
+                    default_max_value: f32::MAX,
+                    default_value: 0.1,
+                    name: "minecraft:movement".to_string(),
+                    modifiers_list_size: VarUInt(0),
+                }],
+                player_tick: VarULong(0),
+            })
+            .await;
+
+        client
+            .send_game_packet(&CInventoryContent {
+                inventory_id: VarUInt(0),
+                slots: vec![NetworkItemDescriptor::default(); 36],
+                container_name: 29,
+                dynamic_id: None,
+                storage_item: NetworkItemDescriptor::default(),
+            })
+            .await;
+
+        client
+            .send_game_packet(&CPlayStatus::new(PlayStatus::PlayerSpawn))
+            .await;
     }
 
     #[expect(clippy::too_many_lines)]
@@ -832,9 +875,9 @@ impl World {
             entity_id
         );
 
+        let client = player.client.java();
         // Send the login packet for our new player
-        player
-            .client
+        client
             .send_packet_now(&CLogin::new(
                 entity_id,
                 base_config.hardcore,
@@ -976,17 +1019,14 @@ impl World {
 
             let entries = current_player_data
                 .iter()
-                .map(
-                    |(id, actions)| pumpkin_protocol::java::client::play::Player {
-                        uuid: **id,
-                        actions,
-                    },
-                )
+                .map(|(id, actions)| java::client::play::Player {
+                    uuid: **id,
+                    actions,
+                })
                 .collect::<Vec<_>>();
 
             log::debug!("Sending player info to {}", player.gameprofile.name);
-            player
-                .client
+            client
                 .enqueue_packet(&CPlayerInfoUpdate::new(action_flags.bits(), &entries))
                 .await;
         };
@@ -1019,8 +1059,7 @@ impl World {
             let gameprofile = &existing_player.gameprofile;
             log::debug!("Sending player entities to {}", player.gameprofile.name);
 
-            player
-                .client
+            client
                 .enqueue_packet(&CSpawnEntity::new(
                     existing_player.entity_id().into(),
                     gameprofile.id,
@@ -1055,8 +1094,7 @@ impl World {
             }
             // END
             buf.put_u8(255);
-            player
-                .client
+            client
                 .enqueue_packet(&CSetEntityMetadata::new(
                     existing_player.get_entity().entity_id.into(),
                     buf.into(),
@@ -1074,16 +1112,11 @@ impl World {
 
         // Start waiting for level chunks. Sets the "Loading Terrain" screen
         log::debug!("Sending waiting chunks to {}", player.gameprofile.name);
-        player
-            .client
+        client
             .send_packet_now(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0))
             .await;
 
-        self.worldborder
-            .lock()
-            .await
-            .init_client(&player.client)
-            .await;
+        self.worldborder.lock().await.init_client(client).await;
 
         // Sends initial time
         player.send_time(self).await;
@@ -1091,8 +1124,7 @@ impl World {
         // Send initial weather state
         let weather = self.weather.lock().await;
         if weather.raining {
-            player
-                .client
+            client
                 .enqueue_packet(&CGameEvent::new(GameEvent::BeginRaining, 0.0))
                 .await;
 
@@ -1100,12 +1132,10 @@ impl World {
             let rain_level = weather.rain_level.clamp(0.0, 1.0);
             let thunder_level = weather.thunder_level.clamp(0.0, 1.0);
 
-            player
-                .client
+            client
                 .enqueue_packet(&CGameEvent::new(GameEvent::RainLevelChange, rain_level))
                 .await;
-            player
-                .client
+            client
                 .enqueue_packet(&CGameEvent::new(
                     GameEvent::ThunderLevelChange,
                     thunder_level,
@@ -1160,11 +1190,9 @@ impl World {
         yaw: f32,
         pitch: f32,
     ) {
-        self.worldborder
-            .lock()
-            .await
-            .init_client(&player.client)
-            .await;
+        if let ClientPlatform::Java(client) = &player.client {
+            self.worldborder.lock().await.init_client(client).await;
+        }
 
         // TODO: World spawn (compass stuff)
 
@@ -1515,7 +1543,7 @@ impl World {
     }
 
     /// Gets a `Player` by an entity id
-    pub async fn get_player_by_id(&self, id: EntityId) -> Option<Arc<Player>> {
+    pub async fn get_player_by_id(&self, id: i32) -> Option<Arc<Player>> {
         for player in self.players.read().await.values() {
             if player.entity_id() == id {
                 return Some(player.clone());
@@ -1525,7 +1553,7 @@ impl World {
     }
 
     /// Gets an entity by an entity id
-    pub async fn get_entity_by_id(&self, id: EntityId) -> Option<Arc<dyn EntityBase>> {
+    pub async fn get_entity_by_id(&self, id: i32) -> Option<Arc<dyn EntityBase>> {
         for entity in self.entities.read().await.values() {
             if entity.get_entity().entity_id == id {
                 return Some(entity.clone());

@@ -2,11 +2,10 @@
 #![allow(unused_labels)]
 
 use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
-use crate::net::bedrock::BedrockClientPlatform;
-use crate::net::java::JavaClientPlatform;
+use crate::net::bedrock::BedrockClient;
+use crate::net::java::JavaClient;
 use crate::net::{lan_broadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
-use bytes::Bytes;
 use log::{Level, LevelFilter};
 use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
@@ -19,13 +18,16 @@ use rustyline_async::{Readline, ReadlineEvent};
 use simplelog::SharedLogger;
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
 use tokio::sync::{Mutex, Notify, RwLock};
+use tokio::time::sleep;
 use tokio_util::task::TaskTracker;
 
 pub mod block;
@@ -159,7 +161,7 @@ pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
 pub static STOP_INTERRUPT: LazyLock<Notify> = LazyLock::new(Notify::new);
 
 pub fn stop_server() {
-    SHOULD_STOP.store(true, std::sync::atomic::Ordering::Relaxed);
+    SHOULD_STOP.store(true, Ordering::Relaxed);
     STOP_INTERRUPT.notify_waiters();
 }
 
@@ -204,9 +206,12 @@ impl PumpkinServer {
         }
 
         // Setup the TCP server socket.
-        let listener = tokio::net::TcpListener::bind(BASIC_CONFIG.java_edition_address)
-            .await
-            .expect("Failed to start `TcpListener`");
+        let listener = tokio::net::TcpListener::bind(SocketAddrV4::new(
+            Ipv4Addr::new(0, 0, 0, 0),
+            BASIC_CONFIG.java_edition_port,
+        ))
+        .await
+        .expect("Failed to start `TcpListener`");
         // In the event the user puts 0 for their port, this will allow us to know what port it is running on
         let addr = listener
             .local_addr()
@@ -238,9 +243,12 @@ impl PumpkinServer {
             });
         };
 
-        let udp_socket = UdpSocket::bind(BASIC_CONFIG.bedrock_edition_address)
-            .await
-            .expect("Failed to bind UDP Socket");
+        let udp_socket = UdpSocket::bind(SocketAddrV4::new(
+            Ipv4Addr::new(0, 0, 0, 0),
+            BASIC_CONFIG.bedrock_edition_port,
+        ))
+        .await
+        .expect("Failed to bind UDP Socket");
 
         Self {
             server: server.clone(),
@@ -271,7 +279,7 @@ impl PumpkinServer {
         let master_client_id: u64 = 0;
         let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
 
-        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
                 .unified_listener_task(master_client_id, &tasks, &bedrock_clients)
                 .await
@@ -322,9 +330,9 @@ impl PumpkinServer {
         &self,
         mut master_client_id_counter: u64,
         tasks: &Arc<TaskTracker>,
-        bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<BedrockClientPlatform>>>>,
+        bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
     ) -> bool {
-        let mut udp_buf = vec![0; 4096]; // Buffer for UDP receive
+        let mut udp_buf = [0; 1496]; // Buffer for UDP receive
 
         select! {
             // Branch for TCP connections (Java Edition)
@@ -345,7 +353,7 @@ impl PumpkinServer {
                         };
                         log::debug!("Accepted connection from Java Edition: {formatted_address} (id {client_id})");
 
-                        let mut java_client = JavaClientPlatform::new(connection, client_addr, client_id);
+                        let mut java_client = JavaClient::new(connection, client_addr, client_id);
                         java_client.start_outgoing_packet_task();
                         let java_client = Arc::new(java_client);
 
@@ -374,7 +382,7 @@ impl PumpkinServer {
                     }
                     Err(e) => {
                         log::error!("Failed to accept Java client connection: {e}");
-                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        sleep(Duration::from_millis(50)).await;
                     }
                 }
             },
@@ -386,7 +394,7 @@ impl PumpkinServer {
                         if len == 0 {
                             log::warn!("Received empty UDP packet from {client_addr}");
                         }
-                        let received_data = Bytes::copy_from_slice(&udp_buf[..len]);
+                        let received_data = udp_buf[..len].to_vec();
 
 
                         let mut clients_guard = bedrock_clients.lock().await;
@@ -396,7 +404,7 @@ impl PumpkinServer {
                             let client_id = master_client_id_counter;
                             master_client_id_counter += 1;
                             log::info!("New Bedrock client detected from: {client_addr} (ID: {client_id})");
-                            let mut platform = BedrockClientPlatform::new(self.udp_socket.clone(), client_addr);
+                            let mut platform = BedrockClient::new(self.udp_socket.clone(), client_addr);
                             platform.start_outgoing_packet_task();
                             Arc::new(
                                 platform
@@ -405,15 +413,16 @@ impl PumpkinServer {
 
                         let server_clone = self.server.clone();
 
-                        let reader = Cursor::new(received_data.to_vec());
+                        let reader = Cursor::new(received_data);
                         let client = client.clone();
                         tasks.spawn(async move {
                             client.process_packet(&server_clone, reader).await;
                         });
                     }
                     Err(e) => {
+                        // TODO Close connection
                         log::error!("Failed to receive UDP packet for Bedrock: {e}");
-                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        sleep(Duration::from_millis(50)).await;
                     }
                 }
             },
@@ -431,7 +440,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     let rt = tokio::runtime::Handle::current();
     std::thread::spawn(move || {
-        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
             let mut line = String::new();
             if let Ok(size) = stdin().read_line(&mut line) {
                 // if no bytes were read, we may have hit EOF
@@ -449,7 +458,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
         }
     });
     tokio::spawn(async move {
-        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
             if let Some(command) = rx.recv().await {
                 send_cancellable! {{
                     ServerCommandEvent::new(command.clone());
@@ -470,7 +479,7 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
     // This needs to be async, or it will hog a thread.
     server.clone().spawn_task(async move {
         let mut rl = rl;
-        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
             let t1 = rl.readline();
             let t2 = STOP_INTERRUPT.notified();
 

@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::EntityBase;
-use super::{Entity, EntityId, NBTStorage, effect::Effect};
+use super::{Entity, NBTStorage, effect::Effect};
 use crate::block::loot::{LootContextParameters, LootTableExt};
 use crate::server::Server;
 use async_trait::async_trait;
@@ -111,7 +111,7 @@ impl LivingEntity {
             .await;
     }
 
-    pub const fn entity_id(&self) -> EntityId {
+    pub const fn entity_id(&self) -> i32 {
         self.entity.entity_id
     }
 

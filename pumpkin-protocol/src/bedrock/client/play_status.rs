@@ -1,9 +1,11 @@
 use pumpkin_macros::packet;
-use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize)]
-#[packet(0x02)]
+use crate::serial::PacketWrite;
+
+#[derive(PacketWrite)]
+#[packet(2)]
 pub struct CPlayStatus {
+    #[serial(big_endian)]
     status: i32,
 }
 

@@ -7,7 +7,7 @@ use std::hash::Hash;
 
 use crate::math::vector2::Vector2;
 use num_traits::Euclid;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub struct BlockPosIterator {
     start_x: i32,
@@ -327,10 +327,7 @@ impl BlockPos {
 }
 
 impl Serialize for BlockPos {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let long = ((self.0.x as i64 & 0x3FFFFFF) << 38)
             | ((self.0.z as i64 & 0x3FFFFFF) << 12)
             | (self.0.y as i64 & 0xFFF);
@@ -339,20 +336,14 @@ impl Serialize for BlockPos {
 }
 
 impl<'de> Deserialize<'de> for BlockPos {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl serde::de::Visitor<'_> for Visitor {
             type Value = BlockPos;
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("An i64 int")
             }
-            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
                 Ok(BlockPos(Vector3 {
                     x: (v >> 38) as i32,
                     y: (v << 52 >> 52) as i32,

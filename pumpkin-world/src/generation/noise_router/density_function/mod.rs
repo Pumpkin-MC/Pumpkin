@@ -83,14 +83,14 @@ pub trait StaticIndependentChunkNoiseFunctionComponentImpl: NoiseFunctionCompone
 
 #[derive(Clone)]
 pub struct Wrapper {
-    input_index: usize,
-    wrapper_type: WrapperType,
+    pub input_index: usize,
+    pub wrapper_type: WrapperType,
     min_value: f64,
     max_value: f64,
 }
 
 impl Wrapper {
-    pub fn new(
+    pub const fn new(
         input_index: usize,
         wrapper_type: WrapperType,
         min_value: f64,
@@ -103,21 +103,15 @@ impl Wrapper {
             max_value,
         }
     }
-
-    pub fn input_index(&self) -> usize {
-        self.input_index
-    }
-
-    pub fn wrapper_type(&self) -> WrapperType {
-        self.wrapper_type
-    }
 }
 
 impl NoiseFunctionComponentRange for Wrapper {
+    #[inline]
     fn min(&self) -> f64 {
         self.min_value
     }
 
+    #[inline]
     fn max(&self) -> f64 {
         self.max_value
     }

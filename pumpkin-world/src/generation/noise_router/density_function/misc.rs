@@ -42,23 +42,20 @@ impl EndIsland {
         let k = x % 2;
         let l = z % 2;
 
-        let f = ((x * x + z * z) as f32).sqrt().mul_add(-8f32, 100f32);
-        let mut f = f.clamp(-100f32, 80f32);
+        let f = ((x * x + z * z) as f32).sqrt().mul_add(-8.0, 100.0);
+        let mut f = f.clamp(-100.0, 80.0);
 
         for m in -12..=12 {
             for n in -12..=12 {
                 let o = (i + m) as i64;
                 let p = (j + n) as i64;
 
-                if (o * o + p * p) > 4096i64
-                    && sampler.sample_2d(o as f64, p as f64) < -0.9f32 as f64
-                {
-                    let g =
-                        (o as f32).abs().mul_add(3439f32, (p as f32).abs() * 147f32) % 13f32 + 9f32;
+                if (o * o + p * p) > 4096 && sampler.sample_2d(o as f64, p as f64) < -0.9 {
+                    let g = (o as f32).abs().mul_add(3439.0, (p as f32).abs() * 147.0) % 13.0 + 9.0;
                     let h = (k - m * 2) as f32;
                     let q = (l - n * 2) as f32;
-                    let r = h.hypot(q).mul_add(-g, 100f32);
-                    let s = r.clamp(-100f32, 80f32);
+                    let r = h.hypot(q).mul_add(-g, 100.0);
+                    let s = r.clamp(-100.0, 80.0);
 
                     f = f.max(s);
                 }
@@ -84,7 +81,7 @@ impl NoiseFunctionComponentRange for EndIsland {
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for EndIsland {
     fn sample(&self, pos: &impl NoisePos) -> f64 {
-        (Self::sample_2d(&self.sampler, pos.x() / 8, pos.z() / 8) as f64 - 8f64) / 128f64
+        (Self::sample_2d(&self.sampler, pos.x() / 8, pos.z() / 8) as f64 - 8.0) / 128.0
     }
 }
 

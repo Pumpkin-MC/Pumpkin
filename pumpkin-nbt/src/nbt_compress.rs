@@ -65,11 +65,7 @@ pub fn write_gzip_compound_tag_to_bytes(compound: &NbtCompound) -> Result<Vec<u8
 /// # Returns
 ///
 /// A Result containing either the deserialized type or an Error
-pub fn from_gzip_bytes<'a, T, R>(input: R) -> Result<T, Error>
-where
-    T: serde::Deserialize<'a>,
-    R: Read,
-{
+pub fn from_gzip_bytes<'a, T: serde::Deserialize<'a>, R: Read>(input: R) -> Result<T, Error> {
     // Create a GZip decoder and directly use it for deserialization
     let decoder = GzDecoder::new(input);
     deserializer::from_bytes(decoder)
@@ -85,11 +81,7 @@ where
 /// # Returns
 ///
 /// A Result indicating success or an Error
-pub fn to_gzip_bytes<T, W>(value: &T, output: W) -> Result<(), Error>
-where
-    T: serde::Serialize,
-    W: Write,
-{
+pub fn to_gzip_bytes<T: serde::Serialize, W: Write>(value: &T, output: W) -> Result<(), Error> {
     // Create a GZip encoder that writes to the output
     let encoder = GzEncoder::new(output, Compression::default());
 
@@ -98,10 +90,7 @@ where
 }
 
 /// Convenience function that returns compressed bytes
-pub fn to_gzip_bytes_vec<T>(value: &T) -> Result<Vec<u8>, Error>
-where
-    T: serde::Serialize,
-{
+pub fn to_gzip_bytes_vec<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, Error> {
     let mut buffer = Vec::new();
     to_gzip_bytes(value, &mut buffer)?;
     Ok(buffer)

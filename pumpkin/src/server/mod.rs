@@ -49,8 +49,8 @@ pub mod seasonal_events;
 pub mod tick_rate_manager;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.7";
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.93";
+pub const CURRENT_MC_VERSION: &str = "1.21.8";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -146,14 +146,14 @@ impl Server {
             VanillaDimensionType::Overworld,
             block_registry.clone(),
         );
-        log::info!("Loading Nether: {seed}");
+        log::info!("Loading Nether");
         let nether = World::load(
             Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
             VanillaDimensionType::TheNether,
             block_registry.clone(),
         );
-        log::info!("Loading End: {seed}");
+        log::info!("Loading End");
         let end = World::load(
             Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
@@ -388,10 +388,7 @@ impl Server {
     /// # Arguments
     ///
     /// * `packet`: A reference to the packet to be broadcast. The packet must implement the `ClientPacket` trait.
-    pub async fn broadcast_packet_all<P>(&self, packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         for world in self.worlds.read().await.iter() {
             let current_players = world.players.read().await;
             for player in current_players.values() {

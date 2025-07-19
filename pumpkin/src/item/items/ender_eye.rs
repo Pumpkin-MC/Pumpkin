@@ -36,7 +36,7 @@ impl PumpkinItem for EnderEyeItem {
         let state_id = world.get_block_state_id(&location).await;
         let original_props = block.properties(state_id).unwrap().to_props();
 
-        let props = original_props
+        let props: Vec<(&str, &str)> = original_props
             .iter()
             .map(|(key, value)| {
                 if key == "eye" {
@@ -47,7 +47,7 @@ impl PumpkinItem for EnderEyeItem {
             })
             .collect();
 
-        let new_state_id = block.from_properties(props).unwrap().to_state_id(block);
+        let new_state_id = block.from_properties(&props).to_state_id(block);
         world
             .set_block_state(&location, new_state_id, BlockFlags::empty())
             .await;

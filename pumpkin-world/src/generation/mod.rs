@@ -70,18 +70,12 @@ pub mod section_coords {
     use num_traits::PrimInt;
 
     #[inline]
-    pub fn block_to_section<T>(coord: T) -> T
-    where
-        T: PrimInt,
-    {
+    pub fn block_to_section<T: PrimInt>(coord: T) -> T {
         coord >> 4
     }
 
     #[inline]
-    pub fn section_to_block<T>(coord: T) -> T
-    where
-        T: PrimInt,
-    {
+    pub fn section_to_block<T: PrimInt>(coord: T) -> T {
         coord << 4
     }
 }
@@ -90,34 +84,22 @@ pub mod biome_coords {
     use num_traits::PrimInt;
 
     #[inline]
-    pub fn from_block<T>(coord: T) -> T
-    where
-        T: PrimInt,
-    {
+    pub fn from_block<T: PrimInt>(coord: T) -> T {
         coord >> 2
     }
 
     #[inline]
-    pub fn to_block<T>(coord: T) -> T
-    where
-        T: PrimInt,
-    {
+    pub fn to_block<T: PrimInt>(coord: T) -> T {
         coord << 2
     }
 
     #[inline]
-    pub fn from_chunk<T>(coord: T) -> T
-    where
-        T: PrimInt,
-    {
+    pub fn from_chunk<T: PrimInt>(coord: T) -> T {
         coord << 2
     }
 
     #[inline]
-    pub fn to_chunk<T>(coord: T) -> T
-    where
-        T: PrimInt,
-    {
+    pub fn to_chunk<T: PrimInt>(coord: T) -> T {
         coord >> 2
     }
 }
