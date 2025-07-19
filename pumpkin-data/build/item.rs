@@ -39,14 +39,14 @@ impl ToTokens for ItemComponents {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let max_stack_size = LitInt::new(&self.max_stack_size.to_string(), Span::call_site());
         tokens.extend(quote! {
-            MaxStackSize(MaxStackSizeImpl {
+            (MaxStackSize, &MaxStackSizeImpl {
                 size: #max_stack_size,
             }),
         });
         if let Some(playable) = &self.jukebox_playable {
             let song = LitStr::new(playable, Span::call_site());
             tokens.extend(quote! {
-                JukeboxPlayable(JukeboxPlayableImpl{
+                (JukeboxPlayable, &JukeboxPlayableImpl{
                     song: #song,
                 }),
             });
@@ -61,7 +61,7 @@ impl ToTokens for ItemComponents {
         };
         let item_name = LitStr::new(&text, Span::call_site());
         tokens.extend(quote! {
-            ItemName(ItemNameImpl {
+            (ItemName, &ItemNameImpl {
                 name: #item_name,
             }),
         });
@@ -69,7 +69,7 @@ impl ToTokens for ItemComponents {
         if let Some(d) = self.damage {
             let damage_lit = LitInt::new(&d.to_string(), Span::call_site());
             tokens.extend(quote! {
-                Damage(DamageImpl {
+                (Damage, &DamageImpl {
                     damage: #damage_lit,
                 }),
             });
@@ -78,7 +78,7 @@ impl ToTokens for ItemComponents {
         if let Some(md) = self.max_damage {
             let max_damage_lit = LitInt::new(&md.to_string(), Span::call_site());
             tokens.extend(quote! {
-                MaxDamage(MaxDamageImpl {
+                (MaxDamage, &MaxDamageImpl {
                     max_damage: #max_damage_lit,
                 }),
             });
@@ -110,7 +110,7 @@ impl ToTokens for ItemComponents {
                 }
             });
             tokens.extend(quote! {
-                AttributeModifiers(AttributeModifiersImpl {
+                (AttributeModifiers, &AttributeModifiersImpl {
                     attribute_modifiers: Cow::Borrowed(&[#(#modifier_code),*])
                 }),
             });
@@ -194,7 +194,7 @@ impl ToTokens for ItemComponents {
             };
             let can_destroy_blocks_in_creative =
                 LitBool::new(tool.can_destroy_blocks_in_creative, Span::call_site());
-            tokens.extend(quote! { Tool(ToolImpl {
+            tokens.extend(quote! { (Tool, &ToolImpl {
                 rules: Cow::Borrowed(&[#(#rules_code),*]),
                 default_mining_speed: #default_mining_speed,
                 damage_per_block: #damage_per_block,
@@ -209,7 +209,7 @@ impl ToTokens for ItemComponents {
                 let can = LitBool::new(food.can_always_eat, Span::call_site());
                 quote! { #can }
             };
-            tokens.extend(quote! { Food(FoodImpl {
+            tokens.extend(quote! { (Food, &FoodImpl {
                 nutrition: #nutrition,
                 saturation: #saturation,
                 can_always_eat: #can_always_eat,
@@ -332,7 +332,7 @@ pub(crate) fn build() -> TokenStream {
         pub struct Item {
             pub id: u16,
             pub registry_key: &'static str,
-            pub components: &'static [DataComponent],
+            pub components: &'static [(DataComponent, &'static dyn DataComponentImpl)],
         }
 
         impl PartialEq for Item {
@@ -353,10 +353,17 @@ pub(crate) fn build() -> TokenStream {
             #constants
 
             pub fn translated_name(&self) -> TextComponent {
-                TextComponent::translate(self.components.iter().find_map(|i| match i {
-                    ItemName(ret) => Some(ret.name.to_string()),
-                    _ => None,
-                }).unwrap(), &[])
+                TextComponent::translate(
+                    self.components
+                        .iter()
+                        .find_map(|(id, data)| if id == &ItemName {
+                            Some(data.as_any().downcast_ref::<ItemNameImpl>().unwrap().name)
+                        } else {
+                            None
+                        }
+                    ).unwrap(),
+                    &[],
+                )
             }
 
             #[doc = "Try to parse an item from a resource location string."]

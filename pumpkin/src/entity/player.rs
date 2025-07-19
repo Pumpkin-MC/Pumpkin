@@ -17,8 +17,7 @@ use uuid::Uuid;
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component::DataComponent::AttributeModifiers;
-use pumpkin_data::data_component_impl::Operation;
+use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -447,19 +446,19 @@ impl Player {
 
         // Get the attack damage
         // TODO: this should be cached in memory, we shouldn't just use default here either
-        for component in item_stack.lock().await.item.components {
-            if let AttributeModifiers(modifiers) = component {
-                for item_mod in modifiers.attribute_modifiers.iter() {
-                    if item_mod.operation == Operation::AddValue {
-                        if item_mod.id == "minecraft:base_attack_damage" {
-                            add_damage = item_mod.amount;
-                        }
-                        if item_mod.id == "minecraft:base_attack_speed" {
-                            add_speed = item_mod.amount;
-                        }
+        if let Some(modifiers) = item_stack
+            .lock()
+            .await
+            .get_data_component::<AttributeModifiersImpl>()
+        {
+            for item_mod in modifiers.attribute_modifiers.iter() {
+                if item_mod.operation == Operation::AddValue {
+                    if item_mod.id == "minecraft:base_attack_damage" {
+                        add_damage = item_mod.amount;
+                    } else if item_mod.id == "minecraft:base_attack_speed" {
+                        add_speed = item_mod.amount;
                     }
                 }
-                break;
             }
         }
 

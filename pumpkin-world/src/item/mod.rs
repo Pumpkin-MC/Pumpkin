@@ -1,13 +1,13 @@
 use pumpkin_data::Block;
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component::DataComponent::{MaxStackSize, Tool};
-use pumpkin_data::data_component_impl::IDSet;
+use pumpkin_data::data_component_impl::{
+    DataComponentImpl, IDSet, MaxStackSizeImpl, ToolImpl, get,
+};
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
 use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
-use std::hash::Hash;
 
 mod categories;
 
@@ -25,16 +25,16 @@ pub enum Rarity {
 pub struct ItemStack {
     pub item_count: u8,
     pub item: &'static Item,
-    pub patch: Vec<(u8, Option<DataComponent>)>,
+    pub patch: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>,
 }
 
-impl Hash for ItemStack {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.item_count.hash(state);
-        self.item.id.hash(state);
-        self.patch.hash(state);
-    }
-}
+// impl Hash for ItemStack {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.item_count.hash(state);
+//         self.item.id.hash(state);
+//         self.patch.hash(state);
+//     }
+// }
 
 /*
 impl PartialEq for ItemStack {
@@ -52,6 +52,25 @@ impl ItemStack {
         }
     }
 
+    pub fn get_data_component<T: DataComponentImpl + 'static>(&self) -> Option<&T> {
+        let to_get_id = &T::get_enum();
+        for (id, component) in &self.patch {
+            if id == to_get_id {
+                return if let Some(component) = component {
+                    Some(get::<T>(component.as_ref()))
+                } else {
+                    None
+                };
+            }
+        }
+        for (id, component) in self.item.components {
+            if id == to_get_id {
+                return Some(get::<T>(*component));
+            }
+        }
+        None
+    }
+
     pub const EMPTY: &'static ItemStack = &ItemStack {
         item_count: 0,
         item: &Item::AIR,
@@ -59,19 +78,11 @@ impl ItemStack {
     };
 
     pub fn get_max_stack_size(&self) -> u8 {
-        for (id, component) in &self.patch {
-            if id == &1 {
-                if let Some(MaxStackSize(max)) = component {
-                    return max.size;
-                }
-            }
+        if let Some(value) = self.get_data_component::<MaxStackSizeImpl>() {
+            value.size
+        } else {
+            1
         }
-        for component in self.item.components {
-            if let MaxStackSize(size) = component {
-                return size.size;
-            }
-        }
-        unreachable!();
     }
 
     pub fn get_item(&self) -> &Item {
@@ -137,60 +148,57 @@ impl ItemStack {
     /// If no match is found, returns the tool's default mining speed or `1.0`.
     pub fn get_speed(&self, block: &'static Block) -> f32 {
         // No tool? Use default speed
-        for component in self.item.components {
-            if let Tool(tool) = component {
-                for rule in tool.rules.iter() {
-                    // Skip if speed is not set
-                    let Some(speed) = rule.speed else {
-                        continue;
-                    };
-                    match &rule.blocks {
-                        IDSet::Tag(tag) => {
-                            if block.is_tagged_with_by_tag(tag) {
-                                return speed;
-                            }
+        if let Some(tool) = self.get_data_component::<ToolImpl>() {
+            for rule in tool.rules.iter() {
+                // Skip if speed is not set
+                let Some(speed) = rule.speed else {
+                    continue;
+                };
+                match &rule.blocks {
+                    IDSet::Tag(tag) => {
+                        if block.is_tagged_with_by_tag(tag) {
+                            return speed;
                         }
-                        IDSet::Blocks(blocks) => {
-                            if blocks.contains(&block) {
-                                return speed;
-                            }
+                    }
+                    IDSet::Blocks(blocks) => {
+                        if blocks.contains(&block) {
+                            return speed;
                         }
                     }
                 }
-                return tool.default_mining_speed;
             }
+            tool.default_mining_speed
+        } else {
+            1.0
         }
-        1.0
     }
 
     /// Determines if a tool is valid for block drops based on tool rules.
     /// Direct matches return immediately, while tagged blocks are checked separately.
     pub fn is_correct_for_drops(&self, block: &'static Block) -> bool {
-        // No tool? Use default speed
-        for component in self.item.components {
-            if let Tool(tool) = component {
-                for rule in tool.rules.iter() {
-                    // Skip if speed is not set
-                    let Some(correct) = rule.correct_for_drops else {
-                        continue;
-                    };
-                    match &rule.blocks {
-                        IDSet::Tag(tag) => {
-                            if block.is_tagged_with_by_tag(tag) {
-                                return correct;
-                            }
+        if let Some(tool) = self.get_data_component::<ToolImpl>() {
+            for rule in tool.rules.iter() {
+                // Skip if speed is not set
+                let Some(correct) = rule.correct_for_drops else {
+                    continue;
+                };
+                match &rule.blocks {
+                    IDSet::Tag(tag) => {
+                        if block.is_tagged_with_by_tag(tag) {
+                            return correct;
                         }
-                        IDSet::Blocks(blocks) => {
-                            if blocks.contains(&block) {
-                                return correct;
-                            }
+                    }
+                    IDSet::Blocks(blocks) => {
+                        if blocks.contains(&block) {
+                            return correct;
                         }
                     }
                 }
-                return false;
             }
+            false
+        } else {
+            false
         }
-        false
     }
 
     pub fn write_item_stack(&self, compound: &mut NbtCompound) {

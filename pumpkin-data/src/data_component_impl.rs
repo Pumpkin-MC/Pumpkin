@@ -1,26 +1,134 @@
 #![allow(dead_code)]
 
 use crate::attributes::Attributes;
+use crate::data_component::DataComponent;
+use crate::data_component::DataComponent::*;
 use crate::tag::Tag;
 use crate::{AttributeModifierSlot, Block};
 use pumpkin_util::text::TextComponent;
+use std::any::Any;
 use std::borrow::Cow;
+use std::fmt::Debug;
 use std::hash::Hash;
 
-// please don't make the size of the struct too large. use Box<> when necessary
+pub trait DataComponentImpl: Send + Sync + Debug {
+    fn write_nbt(&self) {
+        todo!()
+    }
+    fn read_nbt(&self) {
+        todo!()
+    }
+    fn deserialize(&self) {
+        todo!()
+    }
+    fn serialize(&self) {
+        todo!()
+    }
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized;
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl>;
+    fn as_any(&self) -> &dyn Any;
+    fn as_mut_any(&mut self) -> &mut dyn Any;
+}
+
+impl Clone for Box<dyn DataComponentImpl> {
+    fn clone(&self) -> Self {
+        self.clone_dyn()
+    }
+}
+
+pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
+    value.as_any().downcast_ref::<T>().unwrap()
+}
+pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
+    value.as_mut_any().downcast_mut::<T>().unwrap()
+}
+
+// please don't make the size of the struct too large. use Cow<> when necessary
 #[derive(Clone, Debug, Hash)]
 pub struct CustomDataImpl;
+impl DataComponentImpl for CustomDataImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        CustomData
+    }
+
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 #[derive(Clone, Debug, Hash)]
 pub struct MaxStackSizeImpl {
     pub size: u8,
+}
+impl DataComponentImpl for MaxStackSizeImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        MaxStackSize
+    }
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 #[derive(Clone, Debug, Hash)]
 pub struct MaxDamageImpl {
     pub max_damage: i32,
 }
+impl DataComponentImpl for MaxDamageImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        MaxDamage
+    }
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+}
 #[derive(Clone, Debug, Hash)]
 pub struct DamageImpl {
     pub damage: i32,
+}
+impl DataComponentImpl for DamageImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        Damage
+    }
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 #[derive(Clone, Debug, Hash)]
 pub struct UnbreakableImpl;
@@ -31,7 +139,23 @@ pub struct ItemNameImpl {
     // TODO make TextComponent const
     pub name: &'static str,
 }
-
+impl DataComponentImpl for ItemNameImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        ItemName
+    }
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+}
 #[derive(Clone, Debug, Hash)]
 pub struct ItemModelImpl;
 #[derive(Clone, Debug, Hash)]
@@ -72,6 +196,23 @@ impl Hash for Modifier {
 pub struct AttributeModifiersImpl {
     pub attribute_modifiers: Cow<'static, [Modifier]>,
 }
+impl DataComponentImpl for AttributeModifiersImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        AttributeModifiers
+    }
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+}
 #[derive(Clone, Debug, Hash)]
 pub struct CustomModelDataImpl;
 #[derive(Clone, Debug, Hash)]
@@ -89,6 +230,23 @@ pub struct FoodImpl {
     pub nutrition: i32,
     pub saturation: f32,
     pub can_always_eat: bool,
+}
+impl DataComponentImpl for FoodImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        Food
+    }
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 impl Hash for FoodImpl {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -136,6 +294,23 @@ pub struct ToolImpl {
     pub default_mining_speed: f32,
     pub damage_per_block: u32,
     pub can_destroy_blocks_in_creative: bool,
+}
+impl DataComponentImpl for ToolImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        Tool
+    }
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 impl Hash for ToolImpl {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -206,6 +381,23 @@ pub struct OminousBottleAmplifierImpl;
 #[derive(Clone, Debug, Hash)]
 pub struct JukeboxPlayableImpl {
     pub song: &'static str,
+}
+impl DataComponentImpl for JukeboxPlayableImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        JukeboxPlayable
+    }
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 #[derive(Clone, Debug, Hash)]
 pub struct ProvidesBannerPatternsImpl;
