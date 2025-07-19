@@ -11,7 +11,7 @@ use pumpkin_data::{
     block_properties::{BlockProperties, FurnaceLikeProperties},
     fuels::get_item_burn_ticks,
     item::Item,
-    recipe_remainder::get_recipe_remiander_id,
+    recipe_remainder::get_recipe_remainder_id,
     recipes::{CookingRecipe, CookingRecipeType, RECIPES_COOKING},
 };
 use pumpkin_util::math::position::BlockPos;
@@ -190,7 +190,7 @@ impl BlockEntity for FurnaceBlockEntity {
                     is_dirty = true;
                     if !bottom_items.is_empty() {
                         bottom_items.decrement(1);
-                        if let Some(remainder_id) = get_recipe_remiander_id(bottom_items.item.id)
+                        if let Some(remainder_id) = get_recipe_remainder_id(bottom_items.item.id)
                             && bottom_items.is_empty()
                             && let Some(remainder_item) = Item::from_id(remainder_id)
                         {

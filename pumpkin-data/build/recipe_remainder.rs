@@ -16,7 +16,7 @@ pub(crate) fn build() -> TokenStream {
     }
     quote! {
         #[must_use]
-        pub const fn get_recipe_remiander_id(item_id: u16) -> Option<u16> {
+        pub const fn get_recipe_remainder_id(item_id: u16) -> Option<u16> {
             match item_id {
                 #variants
                 _ => None,
