@@ -374,7 +374,7 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use crate::tag::Tagable;
+        use crate::tag::Taggable;
         use crate::item::Item;
 
         #[derive(Clone, Debug)]

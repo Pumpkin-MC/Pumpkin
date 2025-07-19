@@ -4,11 +4,10 @@ use crate::entity::player::Player;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
@@ -19,16 +18,7 @@ pub struct HoeItem;
 
 impl ItemMetadata for HoeItem {
     fn ids() -> Box<[u16]> {
-        Item::get_tag_values("#minecraft:hoes")
-            .expect("This is a valid vanilla tag")
-            .iter()
-            .map(|key| {
-                Item::from_registry_key(key)
-                    .expect("We just got this key from the registry")
-                    .id
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice()
+        tag::Item::MINECRAFT_HOES.1.to_vec().into_boxed_slice()
     }
 }
 

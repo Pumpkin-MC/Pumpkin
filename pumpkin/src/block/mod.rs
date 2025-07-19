@@ -261,20 +261,24 @@ pub async fn drop_loot(
     }
 }
 
-pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name: &str) -> f32 {
+pub async fn calc_block_breaking(
+    player: &Player,
+    state: &BlockState,
+    block: &'static Block,
+) -> f32 {
     let hardness = state.hardness;
     #[expect(clippy::float_cmp)]
     if hardness == -1.0 {
         // unbreakable
         return 0.0;
     }
-    let i = if player.can_harvest(state, block_name).await {
+    let i = if player.can_harvest(state, block).await {
         30
     } else {
         100
     };
 
-    player.get_mining_speed(block_name).await / hardness / i as f32
+    player.get_mining_speed(block).await / hardness / i as f32
 }
 
 #[derive(PartialEq)]

@@ -1240,7 +1240,7 @@ impl JavaClientPlatform {
                         std::sync::atomic::Ordering::Relaxed,
                     );
                     if !state.is_air() {
-                        let speed = block::calc_block_breaking(player, state, block.name).await;
+                        let speed = block::calc_block_breaking(player, state, block).await;
                         // Instant break
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&position).await;
@@ -1311,7 +1311,7 @@ impl JavaClientPlatform {
 
                     let (block, state) = world.get_block_and_block_state(&location).await;
                     let drop = player.gamemode.load() != GameMode::Creative
-                        && player.can_harvest(state, block.name).await;
+                        && player.can_harvest(state, block).await;
 
                     world
                         .break_block(
@@ -1630,7 +1630,7 @@ impl JavaClientPlatform {
         }
         let inv = player.inventory();
         inv.set_selected_slot(slot as u8);
-        let stack = *inv.held_item().lock().await;
+        let stack = inv.held_item().lock().await.clone();
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         player.living_entity.send_equipment_changes(equipment).await;
     }
@@ -1654,7 +1654,7 @@ impl JavaClientPlatform {
             player_screen_handler
                 .get_slot(packet.slot as usize)
                 .await
-                .set_stack(item_stack)
+                .set_stack(item_stack.clone())
                 .await;
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
             player_screen_handler.send_content_updates().await;

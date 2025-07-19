@@ -1,4 +1,4 @@
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 
 use crate::item::ItemStack;
 

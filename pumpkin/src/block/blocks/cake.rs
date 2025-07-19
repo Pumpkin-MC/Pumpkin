@@ -1,17 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use pumpkin_data::{
-    Block,
-    block_properties::{BlockProperties, CakeLikeProperties, EnumVariants, Integer0To6},
-    item::Item,
-    sound::{Sound, SoundCategory},
-};
-use pumpkin_macros::pumpkin_block;
-use pumpkin_util::{GameMode, math::position::BlockPos};
-use pumpkin_world::world::BlockFlags;
-use rand::{Rng, rng};
-
 use crate::{
     block::{
         blocks::candle_cakes::cake_from_candle,
@@ -21,6 +9,17 @@ use crate::{
     entity::player::Player,
     world::World,
 };
+use async_trait::async_trait;
+use pumpkin_data::item::Item;
+use pumpkin_data::{
+    Block,
+    block_properties::{BlockProperties, CakeLikeProperties, EnumVariants, Integer0To6},
+    sound::{Sound, SoundCategory},
+};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_util::{GameMode, math::position::BlockPos};
+use pumpkin_world::world::BlockFlags;
+use rand::{Rng, rng};
 
 #[pumpkin_block("minecraft:cake")]
 pub struct CakeBlock;

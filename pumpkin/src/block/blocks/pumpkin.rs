@@ -11,6 +11,7 @@ use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 use uuid::Uuid;
+
 #[pumpkin_block("minecraft:pumpkin")]
 pub struct PumpkinBlock;
 

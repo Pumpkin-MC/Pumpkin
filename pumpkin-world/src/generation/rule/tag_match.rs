@@ -1,4 +1,4 @@
-use pumpkin_data::{BlockState, block_properties::get_block_by_state_id, tag::Tagable};
+use pumpkin_data::{BlockState, block_properties::get_block_by_state_id, tag::Taggable};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

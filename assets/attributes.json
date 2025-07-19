@@ -1,37 +1,142 @@
 {
-  "armor": 0.0,
-  "armor_toughness": 0.0,
-  "attack_damage": 2.0,
-  "attack_knockback": 0.0,
-  "attack_speed": 4.0,
-  "block_break_speed": 1.0,
-  "block_interaction_range": 4.5,
-  "burning_time": 1.0,
-  "camera_distance": 4.0,
-  "explosion_knockback_resistance": 0.0,
-  "entity_interaction_range": 3.0,
-  "fall_damage_multiplier": 1.0,
-  "flying_speed": 0.4,
-  "follow_range": 32.0,
-  "gravity": 0.08,
-  "jump_strength": 0.41999998688697815,
-  "knockback_resistance": 0.0,
-  "luck": 0.0,
-  "max_absorption": 0.0,
-  "max_health": 20.0,
-  "mining_efficiency": 0.0,
-  "movement_efficiency": 0.0,
-  "movement_speed": 0.7,
-  "oxygen_bonus": 0.0,
-  "safe_fall_distance": 3.0,
-  "scale": 1.0,
-  "sneaking_speed": 0.3,
-  "spawn_reinforcements": 0.0,
-  "step_height": 0.6,
-  "submerged_mining_speed": 0.2,
-  "sweeping_damage_ratio": 0.0,
-  "tempt_range": 10.0,
-  "water_movement_efficiency": 0.0,
-  "waypoint_transmit_range": 0.0,
-  "waypoint_receive_range": 0.0
+  "armor": {
+    "id": 0,
+    "default_value": 0.0
+  },
+  "armor_toughness": {
+    "id": 1,
+    "default_value": 0.0
+  },
+  "attack_damage": {
+    "id": 2,
+    "default_value": 2.0
+  },
+  "attack_knockback": {
+    "id": 3,
+    "default_value": 0.0
+  },
+  "attack_speed": {
+    "id": 4,
+    "default_value": 4.0
+  },
+  "block_break_speed": {
+    "id": 5,
+    "default_value": 1.0
+  },
+  "block_interaction_range": {
+    "id": 6,
+    "default_value": 4.5
+  },
+  "burning_time": {
+    "id": 7,
+    "default_value": 1.0
+  },
+  "camera_distance": {
+    "id": 8,
+    "default_value": 4.0
+  },
+  "explosion_knockback_resistance": {
+    "id": 9,
+    "default_value": 0.0
+  },
+  "entity_interaction_range": {
+    "id": 10,
+    "default_value": 3.0
+  },
+  "fall_damage_multiplier": {
+    "id": 11,
+    "default_value": 1.0
+  },
+  "flying_speed": {
+    "id": 12,
+    "default_value": 0.4
+  },
+  "follow_range": {
+    "id": 13,
+    "default_value": 32.0
+  },
+  "gravity": {
+    "id": 14,
+    "default_value": 0.08
+  },
+  "jump_strength": {
+    "id": 15,
+    "default_value": 0.41999998688697815
+  },
+  "knockback_resistance": {
+    "id": 16,
+    "default_value": 0.0
+  },
+  "luck": {
+    "id": 17,
+    "default_value": 0.0
+  },
+  "max_absorption": {
+    "id": 18,
+    "default_value": 0.0
+  },
+  "max_health": {
+    "id": 19,
+    "default_value": 20.0
+  },
+  "mining_efficiency": {
+    "id": 20,
+    "default_value": 0.0
+  },
+  "movement_efficiency": {
+    "id": 21,
+    "default_value": 0.0
+  },
+  "movement_speed": {
+    "id": 22,
+    "default_value": 0.7
+  },
+  "oxygen_bonus": {
+    "id": 23,
+    "default_value": 0.0
+  },
+  "safe_fall_distance": {
+    "id": 24,
+    "default_value": 3.0
+  },
+  "scale": {
+    "id": 25,
+    "default_value": 1.0
+  },
+  "sneaking_speed": {
+    "id": 26,
+    "default_value": 0.3
+  },
+  "spawn_reinforcements": {
+    "id": 27,
+    "default_value": 0.0
+  },
+  "step_height": {
+    "id": 28,
+    "default_value": 0.6
+  },
+  "submerged_mining_speed": {
+    "id": 29,
+    "default_value": 0.2
+  },
+  "sweeping_damage_ratio": {
+    "id": 30,
+    "default_value": 0.0
+  },
+  "tempt_range": {
+    "id": 31,
+    "default_value": 10.0
+  },
+  "water_movement_efficiency": {
+    "id": 32,
+    "default_value": 0.0
+  },
+  "waypoint_transmit_range": {
+    "id": 33,
+    "default_value": 0.0
+  },
+  "waypoint_receive_range": {
+    "id": 34,
+    "default_value": 0.0
+  }
 }

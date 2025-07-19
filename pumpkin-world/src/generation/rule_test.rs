@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, tag::Tagable};
+use pumpkin_data::{Block, tag::Taggable};
 use serde::Deserialize;
 
 /// Rule tests are used in structure or features generation to check if a block state matches some condition.

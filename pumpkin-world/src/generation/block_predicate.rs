@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use pumpkin_data::{
-    Block, BlockDirection, BlockState, block_properties::get_block_by_state_id, tag::Tagable,
+    Block, BlockDirection, BlockState, block_properties::get_block_by_state_id, tag::Taggable,
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;

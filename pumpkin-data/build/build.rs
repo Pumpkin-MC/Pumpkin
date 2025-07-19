@@ -4,11 +4,13 @@ use quote::{format_ident, quote};
 use rayon::prelude::*;
 use std::{fs, io::Write, path::Path, process::Command};
 
+mod attributes;
 mod biome;
 mod block;
 mod chunk_status;
 mod composter_increase_chance;
 mod damage_type;
+mod data_component;
 mod enchantments;
 mod entity_pose;
 mod entity_status;
@@ -61,11 +63,11 @@ pub fn main() {
         (damage_type::build, "damage_type.rs"),
         (message_type::build, "message_type.rs"),
         (spawn_egg::build, "spawn_egg.rs"),
+        (block::build, "block.rs"),
         (item::build, "item.rs"),
         (fluid::build, "fluid.rs"),
         (status_effect::build, "status_effect.rs"),
         (entity_status::build, "entity_status.rs"),
-        (block::build, "block.rs"),
         (tag::build, "tag.rs"),
         (noise_router::build, "noise_router.rs"),
         (
@@ -79,6 +81,8 @@ pub fn main() {
         (recipes::build, "recipes.rs"),
         (enchantments::build, "enchantment.rs"),
         (fuels::build, "fuels.rs"),
+        (data_component::build, "data_component.rs"),
+        (attributes::build, "attributes.rs"),
     ];
 
     build_functions.par_iter().for_each(|(build_fn, file)| {

@@ -50,10 +50,10 @@ impl SyncHandler {
                     VarInt(next_revision as i32),
                     stacks
                         .iter()
-                        .map(|stack| ItemStackSerializer::from(*stack))
+                        .map(|stack| ItemStackSerializer::from(stack.clone()))
                         .collect::<Vec<_>>()
                         .as_slice(),
-                    &ItemStackSerializer::from(*cursor_stack),
+                    &ItemStackSerializer::from(cursor_stack.clone()),
                 ))
                 .await;
 
@@ -82,7 +82,7 @@ impl SyncHandler {
                     screen_handler.sync_id as i8,
                     next_revision as i32,
                     slot as i16,
-                    &ItemStackSerializer::from(*stack),
+                    &ItemStackSerializer::from(stack.clone()),
                 ))
                 .await;
         }
@@ -95,7 +95,9 @@ impl SyncHandler {
     ) {
         if let Some(player) = self.player.lock().await.as_ref() {
             player
-                .enqueue_cursor_packet(&CSetCursorItem::new(&ItemStackSerializer::from(*stack)))
+                .enqueue_cursor_packet(&CSetCursorItem::new(&ItemStackSerializer::from(
+                    stack.clone(),
+                )))
                 .await;
         }
     }
@@ -146,7 +148,7 @@ impl TrackedStack {
             return stack.are_equal(actual_stack);
         } else if let Some(hash) = &self.received_hash {
             if hash.hash_equals(actual_stack) {
-                self.received_stack = Some(*actual_stack);
+                self.received_stack = Some(actual_stack.clone());
                 return true;
             }
         }

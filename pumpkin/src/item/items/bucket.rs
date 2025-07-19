@@ -169,7 +169,7 @@ impl PumpkinItem for EmptyBucketItem {
             }
         }
 
-        let item = if state.id == Block::LAVA.default_state.id {
+        let item: &'static Item = if state.id == Block::LAVA.default_state.id {
             &Item::LAVA_BUCKET
         } else {
             &Item::WATER_BUCKET

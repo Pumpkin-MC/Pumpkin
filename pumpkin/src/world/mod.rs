@@ -1133,18 +1133,18 @@ impl World {
 
         equipment_list.push((
             EquipmentSlot::MAIN_HAND.discriminant(),
-            *from.inventory.held_item().lock().await,
+            from.inventory.held_item().lock().await.clone(),
         ));
 
         for (slot, item_arc_mutex) in &from.inventory.entity_equipment.lock().await.equipment {
             let item_guard = item_arc_mutex.lock().await;
-            let item_stack = *item_guard;
+            let item_stack = item_guard.clone();
             equipment_list.push((slot.discriminant(), item_stack));
         }
 
         let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
             .iter()
-            .map(|(slot, stack)| (*slot, ItemStackSerializer::from(*stack)))
+            .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
             .collect();
         self.broadcast_packet_except(
             &[from.get_entity().entity_uuid],
