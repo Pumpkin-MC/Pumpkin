@@ -25,6 +25,7 @@ mod noise_parameter;
 mod noise_router;
 mod packet;
 mod particle;
+mod recipe_remainder;
 mod recipes;
 mod scoreboard_slot;
 mod screen;
@@ -79,6 +80,7 @@ pub fn main() {
         (recipes::build, "recipes.rs"),
         (enchantments::build, "enchantment.rs"),
         (fuels::build, "fuels.rs"),
+        (recipe_remainder::build, "recipe_remainder.rs"),
     ];
 
     build_functions.par_iter().for_each(|(build_fn, file)| {
