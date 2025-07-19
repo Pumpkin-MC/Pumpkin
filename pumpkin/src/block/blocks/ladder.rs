@@ -60,19 +60,19 @@ async fn can_place_at(world: &World, position: &BlockPos) -> bool {
     let direction;
     match props.r#facing {
         HorizontalFacing::North => {
-            pos = position.clone().add(0, 0, 1);
+            pos = position.add(0, 0, 1);
             direction = BlockDirection::North;
         }
         HorizontalFacing::South => {
-            pos = position.clone().add(0, 0, -1);
+            pos = position.add(0, 0, -1);
             direction = BlockDirection::South;
         }
         HorizontalFacing::West => {
-            pos = position.clone().add(1, 0, 0);
+            pos = position.add(1, 0, 0);
             direction = BlockDirection::West;
         }
         HorizontalFacing::East => {
-            pos = position.clone().add(-1, 0, 0);
+            pos = position.add(-1, 0, 0);
             direction = BlockDirection::East;
         }
     }
