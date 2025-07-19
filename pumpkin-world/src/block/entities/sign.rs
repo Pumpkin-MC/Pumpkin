@@ -81,17 +81,17 @@ impl From<DyeColor> for NbtTag {
 
 // NBT data structure
 pub struct SignBlockEntity {
-    front_text: Text,
-    back_text: Text,
+    pub front_text: Text,
+    pub back_text: Text,
     pub is_waxed: bool,
     position: BlockPos,
 }
 
 #[derive(Clone, Default)]
-struct Text {
+pub struct Text {
     has_glowing_text: bool,
     color: DyeColor,
-    messages: [String; 4],
+    pub messages: [String; 4],
 }
 
 impl From<Text> for NbtTag {

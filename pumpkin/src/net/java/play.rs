@@ -1540,6 +1540,8 @@ impl JavaClientPlatform {
     }
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
+        //TODO: update block_entity, dont create a new one
+        //Make sure front and back works
         let world = &player.living_entity.entity.world.read().await;
         let updated_sign = SignBlockEntity::new(
             sign_data.location,
@@ -1925,8 +1927,8 @@ impl JavaClientPlatform {
     }
 
     /// Checks if the block placed was a sign, then opens a dialog.
-    pub async fn send_sign_packet(&self, block_position: BlockPos) {
-        self.enqueue_packet(&COpenSignEditor::new(block_position, true))
+    pub async fn send_sign_packet(&self, block_position: BlockPos, is_front_text: bool) {
+        self.enqueue_packet(&COpenSignEditor::new(block_position, is_front_text))
             .await;
     }
 }
