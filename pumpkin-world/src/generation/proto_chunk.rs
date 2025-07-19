@@ -217,8 +217,8 @@ impl<'a> ProtoChunk<'a> {
     }
 
     fn maybe_update_surface_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_surface_height_map[index];
 
@@ -228,8 +228,8 @@ impl<'a> ProtoChunk<'a> {
     }
 
     fn maybe_update_ocean_floor_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_ocean_floor_height_map[index];
 
@@ -239,8 +239,8 @@ impl<'a> ProtoChunk<'a> {
     }
 
     fn maybe_update_motion_blocking_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_motion_blocking_height_map[index];
 
@@ -250,8 +250,8 @@ impl<'a> ProtoChunk<'a> {
     }
 
     fn maybe_update_motion_blocking_no_leaves_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_motion_blocking_no_leaves_height_map[index];
 
@@ -274,35 +274,36 @@ impl<'a> ProtoChunk<'a> {
     }
 
     pub fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.y & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_surface_height_map[index] as i32 + 1
     }
 
     pub fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.y & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_ocean_floor_height_map[index] as i32 + 1
     }
 
     pub fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.y & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_motion_blocking_height_map[index] as i32 + 1
     }
 
     pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.y & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_motion_blocking_no_leaves_height_map[index] as i32 + 1
     }
 
-    fn local_position_to_height_map_index(x: usize, z: usize) -> usize {
-        x * CHUNK_DIM as usize + z
+    #[inline]
+    fn local_position_to_height_map_index(x: i32, z: i32) -> usize {
+        x as usize * CHUNK_DIM as usize + z as usize
     }
 
     #[inline]
@@ -823,12 +824,12 @@ mod test {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
                     if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type() {
+                        match wrapper.wrapper_type {
                             WrapperType::CellCache => (),
                             _ => {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index(),
+                                        wrapper.input_index,
                                         wrapper.min(),
                                         wrapper.max(),
                                     ));
@@ -879,13 +880,13 @@ mod test {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
                     if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type() {
+                        match wrapper.wrapper_type {
                             WrapperType::CellCache => (),
                             WrapperType::Cache2D => (),
                             _ => {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index(),
+                                        wrapper.input_index,
                                         wrapper.min(),
                                         wrapper.max(),
                                     ));
@@ -936,13 +937,13 @@ mod test {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
                     if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type() {
+                        match wrapper.wrapper_type {
                             WrapperType::CellCache => (),
                             WrapperType::CacheFlat => (),
                             _ => {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index(),
+                                        wrapper.input_index,
                                         wrapper.min(),
                                         wrapper.max(),
                                     ));
@@ -993,13 +994,13 @@ mod test {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
                     if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type() {
+                        match wrapper.wrapper_type {
                             WrapperType::CellCache => (),
                             WrapperType::CacheOnce => (),
                             _ => {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index(),
+                                        wrapper.input_index,
                                         wrapper.min(),
                                         wrapper.max(),
                                     ));
@@ -1050,13 +1051,13 @@ mod test {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
                     if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type() {
+                        match wrapper.wrapper_type {
                             WrapperType::CellCache => (),
                             WrapperType::Interpolated => (),
                             _ => {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index(),
+                                        wrapper.input_index,
                                         wrapper.min(),
                                         wrapper.max(),
                                     ));

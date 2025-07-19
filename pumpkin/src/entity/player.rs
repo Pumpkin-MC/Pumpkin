@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
+use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
@@ -989,13 +990,24 @@ impl Player {
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
-        self.client
-            .enqueue_packet(&CUpdateTime::new(
-                l_world.world_age,
-                l_world.time_of_day,
-                true,
-            ))
-            .await;
+        match &self.client {
+            ClientPlatform::Java(java_client) => {
+                java_client
+                    .enqueue_packet(&CUpdateTime::new(
+                        l_world.world_age,
+                        l_world.time_of_day,
+                        true,
+                    ))
+                    .await;
+            }
+            ClientPlatform::Bedrock(bedrock_client) => {
+                bedrock_client
+                    .send_game_packet(&CSetTime {
+                        time: VarInt(l_world.query_daytime() as _),
+                    })
+                    .await;
+            }
+        }
     }
 
     async fn unload_watched_chunks(&self, world: &World) {

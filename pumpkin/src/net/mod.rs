@@ -93,6 +93,7 @@ pub enum PacketHandlerState {
 }
 
 /// This is just a Wrapper for both Java & Bedrock connections
+#[derive(Clone)]
 pub enum ClientPlatform {
     Java(Arc<JavaClient>),
     Bedrock(Arc<BedrockClient>),

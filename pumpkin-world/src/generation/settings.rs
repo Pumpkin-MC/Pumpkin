@@ -52,10 +52,12 @@ pub struct GenerationShapeConfig {
 }
 
 impl GenerationShapeConfig {
+    #[inline]
     pub fn vertical_cell_block_count(&self) -> u8 {
         to_block(self.size_vertical)
     }
 
+    #[inline]
     pub fn horizontal_cell_block_count(&self) -> u8 {
         to_block(self.size_horizontal)
     }

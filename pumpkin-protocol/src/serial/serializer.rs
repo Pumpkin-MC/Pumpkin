@@ -106,3 +106,15 @@ impl<T: PacketWrite> PacketWrite for Vector3<T> {
         self.z.write(writer)
     }
 }
+
+impl<T: PacketWrite> PacketWrite for Option<T> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        match self {
+            Self::Some(value) => {
+                true.write(writer)?;
+                value.write(writer)
+            }
+            Self::None => false.write(writer),
+        }
+    }
+}

@@ -53,7 +53,7 @@ macro_rules! build_function_stack {
             .map(|component| match component {
                 ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
                     ChunkNoiseFunctionComponent::PassThrough(PassThrough::new(
-                        wrapper.input_index(),
+                        wrapper.input_index,
                         wrapper.min(),
                         wrapper.max(),
                     ))

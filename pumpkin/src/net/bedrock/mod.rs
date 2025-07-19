@@ -188,13 +188,6 @@ impl BedrockClient {
         // TODO
     }
 
-    pub async fn enqueue_packet<P: BClientPacket>(&self, packet: &P) {
-        let mut buf = Vec::new();
-        let writer = &mut buf;
-        Self::write_raw_packet(packet, writer).unwrap();
-        self.enqueue_packet_data(buf.into()).await;
-    }
-
     /// Queues a clientbound packet to be sent to the connected client. Queued chunks are sent
     /// in-order to the client
     ///

@@ -49,7 +49,7 @@ pub mod seasonal_events;
 pub mod tick_rate_manager;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.7";
+pub const CURRENT_MC_VERSION: &str = "1.21.8";
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
 
 /// Represents a Minecraft server instance.

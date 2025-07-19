@@ -54,13 +54,17 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::{
     ClientPacket, IdOr, SoundEvent,
-    bedrock::client::{
-        chunk_radius_update::CChunkRadiusUpdate,
-        creative_content::{CreativeContent, Group, NetworkItemDescriptor},
-        gamerules_changed::GameRules,
-        play_status::{CPlayStatus, PlayStatus},
-        start_game::{Experiments, GamePublishSetting, LevelSettings},
-        update_artributes::{Attribute, CUpdateAttributes},
+    bedrock::{
+        client::{
+            chunk_radius_update::CChunkRadiusUpdate,
+            creative_content::{CreativeContent, Group},
+            gamerules_changed::GameRules,
+            inventory_content::CInventoryContent,
+            play_status::{CPlayStatus, PlayStatus},
+            start_game::{Experiments, GamePublishSetting, LevelSettings},
+            update_artributes::{Attribute, CUpdateAttributes},
+        },
+        network_item::NetworkItemDescriptor,
     },
     codec::{
         bedrock_block_pos::NetworkPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
@@ -409,15 +413,8 @@ impl World {
         packet: &P,
     ) {
         let current_players = self.players.read().await;
-        let players: Vec<_> = current_players
-            .iter()
-            .filter(|c| !except.contains(c.0))
-            .collect();
-        if players.is_empty() {
-            return;
-        }
 
-        for (_, player) in players {
+        for (_, player) in current_players.iter().filter(|c| !except.contains(c.0)) {
             player.client.enqueue_packet(packet).await;
         }
     }
@@ -838,6 +835,16 @@ impl World {
                     modifiers_list_size: VarUInt(0),
                 }],
                 player_tick: VarULong(0),
+            })
+            .await;
+
+        client
+            .send_game_packet(&CInventoryContent {
+                inventory_id: VarUInt(0),
+                slots: vec![NetworkItemDescriptor::default(); 36],
+                container_name: 29,
+                dynamic_id: None,
+                storage_item: NetworkItemDescriptor::default(),
             })
             .await;
 
