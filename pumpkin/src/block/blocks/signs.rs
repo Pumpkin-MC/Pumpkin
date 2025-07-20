@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
 use pumpkin_data::Block;
@@ -11,6 +12,7 @@ use pumpkin_data::world::WorldEvent;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::block::entities::sign::DyeColor;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 
 use crate::block::pumpkin_block::NormalUseArgs;
@@ -40,7 +42,6 @@ impl BlockMetadata for SignBlock {
 
 //TODO: Add support for Wall Signs
 //TODO: Add support for Hanging Signs
-//TODO: Add support for waxing signs
 //TODO: add support for click commands
 //TODO: Check if other people are already editing
 #[async_trait]
@@ -74,7 +75,7 @@ impl PumpkinBlock for SignBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() {
-                if sign_entity.is_waxed {
+                if sign_entity.is_waxed.load(Ordering::Relaxed) {
                     args.world
                         .play_block_sound(
                             pumpkin_data::sound::Sound::BlockSignWaxedInteractFail,
@@ -102,29 +103,106 @@ impl PumpkinBlock for SignBlock {
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        match args.item_stack.lock().await {
-            mut item if item.item.id == pumpkin_data::item::Item::HONEYCOMB.id => {
-                if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-                    if let Some(sign_entity) =
-                        block_entity.as_any().downcast_ref::<SignBlockEntity>()
-                    {
-                        if !sign_entity.is_waxed {
-                            //sign_entity.is_waxed = true;
-                            if !args.player.has_infinite_materials() {
-                                item.decrement(1);
-                            }
+        let Some(block_entity) = args.world.get_block_entity(args.position).await else {
+            return BlockActionResult::PassToDefault;
+        };
+        let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
+            return BlockActionResult::PassToDefault;
+        };
 
-                            args.world
-                                .sync_world_event(WorldEvent::BlockWaxed, *args.position, 0)
-                                .await;
-
-                            return BlockActionResult::Success;
-                        }
-                    }
-                }
-            }
-            _ => {}
+        if sign_entity.is_waxed.load(Ordering::Relaxed) {
+            return BlockActionResult::PassToDefault;
         }
+
+        let mut item = args.item_stack.lock().await;
+
+        if item.item.id == pumpkin_data::item::Item::HONEYCOMB.id {
+            sign_entity.is_waxed.store(true, Ordering::Relaxed);
+            if !args.player.has_infinite_materials() {
+                item.decrement(1);
+            }
+            drop(item);
+
+            args.world
+                .sync_world_event(WorldEvent::BlockWaxed, *args.position, 0)
+                .await;
+
+            return BlockActionResult::Success;
+        }
+
+        let is_facing_front_text =
+            is_facing_front_text(args.world, args.position, args.block, args.player).await;
+
+        let text = if is_facing_front_text {
+            &sign_entity.front_text
+        } else {
+            &sign_entity.back_text
+        };
+
+        if item.item.id == pumpkin_data::item::Item::GLOW_INK_SAC.id {
+            let changed = !text.has_glowing_text.swap(true, Ordering::Relaxed);
+
+            if !changed {
+                return BlockActionResult::PassToDefault;
+            }
+
+            if !args.player.has_infinite_materials() {
+                item.decrement(1);
+            }
+            drop(item);
+
+            args.world
+                .play_block_sound(
+                    pumpkin_data::sound::Sound::ItemGlowInkSacUse,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    *args.position,
+                )
+                .await;
+            return BlockActionResult::Success;
+        }
+
+        if item.item.id == pumpkin_data::item::Item::INK_SAC.id {
+            let changed = text.has_glowing_text.swap(false, Ordering::Relaxed);
+
+            if changed {
+                return BlockActionResult::PassToDefault;
+            }
+
+            if !args.player.has_infinite_materials() {
+                item.decrement(1);
+            }
+            drop(item);
+
+            args.world
+                .play_block_sound(
+                    pumpkin_data::sound::Sound::ItemInkSacUse,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    *args.position,
+                )
+                .await;
+            return BlockActionResult::Success;
+        }
+
+        if let Some(color_name) = item.item.registry_key.strip_suffix("_dye") {
+            let dye_color = DyeColor::from(color_name.to_string());
+
+            text.set_color(dye_color);
+
+            if !args.player.has_infinite_materials() {
+                item.decrement(1);
+            }
+            drop(item);
+
+            args.world
+                .play_block_sound(
+                    pumpkin_data::sound::Sound::ItemDyeUse,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    *args.position,
+                )
+                .await;
+            return BlockActionResult::Success;
+        }
+
         BlockActionResult::PassToDefault
     }
 }
