@@ -140,7 +140,7 @@ async fn is_facing_front_text(
     let rotation = get_yaw_from_rotation_16(sign_properties.rotation);
     let bounding_box = Vector3::new(0.5, 0.5, 0.5);
 
-    let d = player.eye_position().x - (f64::from(location.0.z) + bounding_box.x);
+    let d = player.eye_position().x - (f64::from(location.0.x) + bounding_box.x);
     let d1 = player.eye_position().z - (f64::from(location.0.z) + bounding_box.z);
 
     let f = (d1.atan2(d).to_degrees() as f32) - 90.0;
