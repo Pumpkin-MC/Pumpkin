@@ -2232,6 +2232,18 @@ impl World {
         chunk.mark_dirty(true);
     }
 
+    pub async fn update_block_entity(
+        &self,
+        block_pos: &BlockPos
+    ) {
+        let chunk = self
+            .level
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
+        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
+        chunk.mark_dirty(true);
+    }
+
     fn intersects_aabb_with_direction(
         from: Vector3<f64>,
         to: Vector3<f64>,
