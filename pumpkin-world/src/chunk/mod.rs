@@ -5,6 +5,7 @@ use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::ops::{BitAnd, BitOr};
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 
@@ -267,6 +268,99 @@ pub struct ChunkHeightmaps {
     pub motion_blocking: Box<[i64]>,
     #[serde(serialize_with = "nbt_long_array")]
     pub motion_blocking_no_leaves: Box<[i64]>,
+}
+
+impl ChunkHeightmaps {
+    pub fn set(&mut self, x: i32, z: i32, height: i32) {
+        let local_x = (x & 15) as usize;
+        let local_z = (z & 15) as usize;
+
+        let adjust_height = (height + 64) as usize; //Chunk Bottom
+
+        assert!(local_x < 16 && local_z < 16 && adjust_height <= 2 << 9);
+
+        //chunk column index in 16*16 chunk.
+        let column_idx = local_z * 16 + local_x;
+
+        // Each height value uses 9 bits, calculate starting bit position
+        let bit_start_idx = column_idx * 9;
+
+        // Find where these 9 bits start within a 64-bit packed array element
+        // We use bit_start_index % 63, which means the last bit of i64 won't be used,
+        // but this avoids the hassle of bit concatenation.
+        let packed_array_bit_start_idx = bit_start_idx as u32 % 63;
+
+        let mask = {
+            if packed_array_bit_start_idx == 0 {
+                //0b0000_0000_0111_1111_...
+                !(0x1FF << (64 - 9))
+            } else {
+                !(0x1FF << (64 - packed_array_bit_start_idx - 9))
+            }
+        };
+
+        let height_bit_bytes = adjust_height
+            .wrapping_shl(64 - 9 - packed_array_bit_start_idx)
+            .to_ne_bytes();
+        let height = i64::from_ne_bytes(height_bit_bytes);
+
+        let packed_array_idx = column_idx / 7;
+
+        self.world_surface[packed_array_idx] = self.world_surface[packed_array_idx]
+            .bitand(mask)
+            .bitor(height);
+    }
+
+    pub fn get_height(&self, x: i32, z: i32) -> i32 {
+        let local_x = (x & 15) as usize;
+        let local_z = (z & 15) as usize;
+
+        let column_idx = local_z * 16 + local_x;
+        let bit_start_idx = column_idx * 9;
+
+        let packed_array_bit_start_idx = bit_start_idx as u32 % 63;
+
+        let mask = {
+            if packed_array_bit_start_idx == 0 {
+                //0b1111_1111_1000_0000_...
+                0x1ff << (64 - 9)
+            } else {
+                0x1ff << (64 - packed_array_bit_start_idx - 9)
+            }
+        };
+
+        let packed_array_idx = column_idx / 7;
+
+        let height_bit_bytes_i64 = self.world_surface[packed_array_idx]
+            .bitand(mask)
+            .to_ne_bytes();
+
+        (u64::from_ne_bytes(height_bit_bytes_i64)
+            .wrapping_shr(64 - (packed_array_bit_start_idx + 9)) as i32)
+            - 64
+    }
+
+    pub fn log_heightmap(&self) {
+        let mut header = "X/Z".to_string();
+        for x in 0..16 {
+            header.push_str(&format!("{x:4}"));
+        }
+
+        let grid: String = (0..16)
+            .map(|z| {
+                let mut row = format!("{z:3}");
+                row.push_str(
+                    &(0..16)
+                        .map(|x| format!("{:4}", self.get_height(x, z)))
+                        .collect::<String>(),
+                );
+                row
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        log::info!("\nHeightMap:\n{header}\n{grid}");
+    }
 }
 
 /// The Heightmap for a completely empty chunk
