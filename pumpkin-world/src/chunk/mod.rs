@@ -1,7 +1,11 @@
 use crate::block::entities::BlockEntity;
 use itertools::Itertools;
 use palette::{BiomePalette, BlockPalette};
-use pumpkin_data::Block;
+use pumpkin_data::block_properties::{
+    blocks_movement, get_block_and_state_by_state_id, get_block_by_state_id,
+};
+use pumpkin_data::fluid::{Fluid, FluidState};
+use pumpkin_data::{Block, BlockState, fluid};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
@@ -261,7 +265,7 @@ pub struct ChunkLight {
     pub block_light: Box<[LightContainer]>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ChunkHeightmapType {
     WorldSurface,
     MotionBlocking,
@@ -281,10 +285,10 @@ pub struct ChunkHeightmaps {
 
 impl ChunkHeightmaps {
     pub fn set(&mut self, _type: ChunkHeightmapType, pos: BlockPos) {
-        let mut data = match _type {
-            ChunkHeightmapType::WorldSurface => self.world_surface.clone(),
-            ChunkHeightmapType::MotionBlocking => self.motion_blocking.clone(),
-            ChunkHeightmapType::MotionBlockingNoLeaves => self.motion_blocking_no_leaves.clone(),
+        let data = match _type {
+            ChunkHeightmapType::WorldSurface => &mut self.world_surface,
+            ChunkHeightmapType::MotionBlocking => &mut self.motion_blocking,
+            ChunkHeightmapType::MotionBlockingNoLeaves => &mut self.motion_blocking_no_leaves,
         };
 
         let local_x = (pos.0.x & 15) as usize;
@@ -292,7 +296,7 @@ impl ChunkHeightmaps {
 
         let adjust_height = (pos.0.y + 64) as usize; //Chunk Bottom
 
-        assert!(local_x < 16 && local_z < 16 && adjust_height <= 2 << 9);
+        assert!(adjust_height <= 2 << 9);
 
         //chunk column index in 16*16 chunk.
         let column_idx = local_z * 16 + local_x;
@@ -325,10 +329,10 @@ impl ChunkHeightmaps {
     }
 
     pub fn get_height(&self, _type: ChunkHeightmapType, x: i32, z: i32) -> i32 {
-        let mut data = match _type {
-            ChunkHeightmapType::WorldSurface => self.world_surface.clone(),
-            ChunkHeightmapType::MotionBlocking => self.motion_blocking.clone(),
-            ChunkHeightmapType::MotionBlockingNoLeaves => self.motion_blocking_no_leaves.clone(),
+        let data = match _type {
+            ChunkHeightmapType::WorldSurface => &self.world_surface,
+            ChunkHeightmapType::MotionBlocking => &self.motion_blocking,
+            ChunkHeightmapType::MotionBlockingNoLeaves => &self.motion_blocking_no_leaves,
         };
 
         let local_x = (x & 15) as usize;
@@ -357,7 +361,7 @@ impl ChunkHeightmaps {
             - 64
     }
 
-    pub fn log_heightmap(&self) {
+    pub fn log_heightmap(&self, _type: ChunkHeightmapType) {
         let mut header = "X/Z".to_string();
         for x in 0..16 {
             header.push_str(&format!("{x:4}"));
@@ -368,12 +372,7 @@ impl ChunkHeightmaps {
                 let mut row = format!("{z:3}");
                 row.push_str(
                     &(0..16)
-                        .map(|x| {
-                            format!(
-                                "{:4}",
-                                self.get_height(ChunkHeightmapType::WorldSurface, x, z)
-                            )
-                        })
+                        .map(|x| format!("{:4}", self.get_height(_type, x, z)))
                         .collect::<String>(),
                 );
                 row
@@ -547,56 +546,68 @@ impl ChunkData {
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
     }
 
-    // #[expect(dead_code)]
-    // fn calculate_heightmap(&self) -> ChunkHeightmap {
-    //     // figure out how LongArray is formatted
-    //     // figure out how to find out if block is motion blocking
-    //     todo!()
-    // }
+    //TODO: Tracking heightmaps update.
     pub async fn calculate_heightmap(&mut self) -> ChunkHeightmaps {
-        // figure out how to find out if block is motion blocking
-
         let highest_non_empty_subchunk = self.get_highest_non_empty_subchunk();
-        log::info!("non empty subchunk: {highest_non_empty_subchunk}");
         let mut heightmaps = ChunkHeightmaps::default();
 
         for x in 0..16 {
             for z in 0..16 {
-                heightmaps.set(
-                    ChunkHeightmapType::WorldSurface,
-                    self.find_non_air_block_pos(highest_non_empty_subchunk, x, z),
-                );
+                self.populate_heightmaps(&mut heightmaps, highest_non_empty_subchunk, x, z);
             }
         }
 
-        heightmaps.log_heightmap();
+        // log::info!("WorldSurface:");
+        // heightmaps.log_heightmap(ChunkHeightmapType::WorldSurface);
+        // log::info!("MotionBlocking:");
+        // heightmaps.log_heightmap(ChunkHeightmapType::MotionBlocking);
 
-        todo!()
+        heightmaps
     }
 
-    fn find_non_air_block_pos(&self, start_sub_chunk: usize, x: usize, z: usize) -> BlockPos {
-        let mut height = -64;
+    pub fn populate_heightmaps(
+        &self,
+        heightmaps: &mut ChunkHeightmaps,
+        start_sub_chunk: usize,
+        x: usize,
+        z: usize,
+    ) {
         for y in (0..16).rev() {
-            let block_state_id = self.section.sections[start_sub_chunk]
+            let state_id = self.section.sections[start_sub_chunk]
                 .block_states
                 .get(x, y, z);
 
             let y = y as i32;
-            if block_state_id != Block::AIR.default_state.id {
-                height = (start_sub_chunk as i32) * 16 - 64 + y;
-                log::info!("({x},{z},{height})");
-                return BlockPos::new(x as i32, height, z as i32);
+            if state_id != Block::AIR.default_state.id {
+                let height = (start_sub_chunk as i32) * 16 - 64 + y;
+                let pos = BlockPos::new(x as i32, height, z as i32);
+                heightmaps.set(ChunkHeightmapType::WorldSurface, pos);
+
+                let (_, block_state) = get_block_and_state_by_state_id(state_id);
+                if blocks_movement(block_state)
+                    || Fluid::from_state_id(state_id).is_some_and(|fluid| !fluid.states.is_empty())
+                {
+                    heightmaps.set(ChunkHeightmapType::MotionBlocking, pos);
+
+                    //TODO: MotionBlockingNoLeaves
+                }
+                return;
             }
         }
 
         if start_sub_chunk != 0 {
-            return self.find_non_air_block_pos(start_sub_chunk - 1, x, z);
+            self.populate_heightmaps(heightmaps, start_sub_chunk - 1, x, z);
         }
 
-        BlockPos::new(x as i32, height, z as i32)
+        if start_sub_chunk == 0 {
+            heightmaps.set(
+                ChunkHeightmapType::WorldSurface,
+                BlockPos::new(x as i32, -64, z as i32),
+            );
+        }
     }
 
-    fn get_highest_non_empty_subchunk(&self) -> usize {
+    pub fn get_highest_non_empty_subchunk(&self) -> usize {
         let idx = self
             .section
             .sections
