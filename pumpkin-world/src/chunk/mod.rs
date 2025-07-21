@@ -1,5 +1,7 @@
 use crate::block::entities::BlockEntity;
+use itertools::Itertools;
 use palette::{BiomePalette, BlockPalette};
+use pumpkin_data::Block;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
@@ -259,6 +261,13 @@ pub struct ChunkLight {
     pub block_light: Box<[LightContainer]>,
 }
 
+#[derive(Debug, Clone)]
+pub enum ChunkHeightmapType {
+    WorldSurface,
+    MotionBlocking,
+    MotionBlockingNoLeaves,
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 pub struct ChunkHeightmaps {
@@ -271,11 +280,17 @@ pub struct ChunkHeightmaps {
 }
 
 impl ChunkHeightmaps {
-    pub fn set(&mut self, x: i32, z: i32, height: i32) {
-        let local_x = (x & 15) as usize;
-        let local_z = (z & 15) as usize;
+    pub fn set(&mut self, _type: ChunkHeightmapType, pos: BlockPos) {
+        let mut data = match _type {
+            ChunkHeightmapType::WorldSurface => self.world_surface.clone(),
+            ChunkHeightmapType::MotionBlocking => self.motion_blocking.clone(),
+            ChunkHeightmapType::MotionBlockingNoLeaves => self.motion_blocking_no_leaves.clone(),
+        };
 
-        let adjust_height = (height + 64) as usize; //Chunk Bottom
+        let local_x = (pos.0.x & 15) as usize;
+        let local_z = (pos.0.z & 15) as usize;
+
+        let adjust_height = (pos.0.y + 64) as usize; //Chunk Bottom
 
         assert!(local_x < 16 && local_z < 16 && adjust_height <= 2 << 9);
 
@@ -306,12 +321,16 @@ impl ChunkHeightmaps {
 
         let packed_array_idx = column_idx / 7;
 
-        self.world_surface[packed_array_idx] = self.world_surface[packed_array_idx]
-            .bitand(mask)
-            .bitor(height);
+        data[packed_array_idx] = data[packed_array_idx].bitand(mask).bitor(height);
     }
 
-    pub fn get_height(&self, x: i32, z: i32) -> i32 {
+    pub fn get_height(&self, _type: ChunkHeightmapType, x: i32, z: i32) -> i32 {
+        let mut data = match _type {
+            ChunkHeightmapType::WorldSurface => self.world_surface.clone(),
+            ChunkHeightmapType::MotionBlocking => self.motion_blocking.clone(),
+            ChunkHeightmapType::MotionBlockingNoLeaves => self.motion_blocking_no_leaves.clone(),
+        };
+
         let local_x = (x & 15) as usize;
         let local_z = (z & 15) as usize;
 
@@ -331,9 +350,7 @@ impl ChunkHeightmaps {
 
         let packed_array_idx = column_idx / 7;
 
-        let height_bit_bytes_i64 = self.world_surface[packed_array_idx]
-            .bitand(mask)
-            .to_ne_bytes();
+        let height_bit_bytes_i64 = data[packed_array_idx].bitand(mask).to_ne_bytes();
 
         (u64::from_ne_bytes(height_bit_bytes_i64)
             .wrapping_shr(64 - (packed_array_bit_start_idx + 9)) as i32)
@@ -351,7 +368,12 @@ impl ChunkHeightmaps {
                 let mut row = format!("{z:3}");
                 row.push_str(
                     &(0..16)
-                        .map(|x| format!("{:4}", self.get_height(x, z)))
+                        .map(|x| {
+                            format!(
+                                "{:4}",
+                                self.get_height(ChunkHeightmapType::WorldSurface, x, z)
+                            )
+                        })
                         .collect::<String>(),
                 );
                 row
@@ -367,11 +389,9 @@ impl ChunkHeightmaps {
 impl Default for ChunkHeightmaps {
     fn default() -> Self {
         Self {
-            // 9 bits per entry
-            // 0 packed into an i64 7 times.
-            motion_blocking: vec![0; 37].into_boxed_slice(),
-            motion_blocking_no_leaves: vec![0; 37].into_boxed_slice(),
-            world_surface: vec![0; 37].into_boxed_slice(),
+            motion_blocking: vec![-1; 37].into_boxed_slice(),
+            motion_blocking_no_leaves: vec![-1; 37].into_boxed_slice(),
+            world_surface: vec![-1; 37].into_boxed_slice(),
         }
     }
 }
@@ -527,11 +547,65 @@ impl ChunkData {
             .set_relative_block(relative_x, relative_y, relative_z, block_state_id);
     }
 
-    #[expect(dead_code)]
-    fn calculate_heightmap(&self) -> ChunkHeightmaps {
-        // figure out how LongArray is formatted
+    // #[expect(dead_code)]
+    // fn calculate_heightmap(&self) -> ChunkHeightmap {
+    //     // figure out how LongArray is formatted
+    //     // figure out how to find out if block is motion blocking
+    //     todo!()
+    // }
+    pub async fn calculate_heightmap(&mut self) -> ChunkHeightmaps {
         // figure out how to find out if block is motion blocking
+
+        let highest_non_empty_subchunk = self.get_highest_non_empty_subchunk();
+        log::info!("non empty subchunk: {highest_non_empty_subchunk}");
+        let mut heightmaps = ChunkHeightmaps::default();
+
+        for x in 0..16 {
+            for z in 0..16 {
+                heightmaps.set(
+                    ChunkHeightmapType::WorldSurface,
+                    self.find_non_air_block_pos(highest_non_empty_subchunk, x, z),
+                );
+            }
+        }
+
+        heightmaps.log_heightmap();
+
         todo!()
+    }
+
+    fn find_non_air_block_pos(&self, start_sub_chunk: usize, x: usize, z: usize) -> BlockPos {
+        let mut height = -64;
+        for y in (0..16).rev() {
+            let block_state_id = self.section.sections[start_sub_chunk]
+                .block_states
+                .get(x, y, z);
+
+            let y = y as i32;
+            if block_state_id != Block::AIR.default_state.id {
+                height = (start_sub_chunk as i32) * 16 - 64 + y;
+                log::info!("({x},{z},{height})");
+                return BlockPos::new(x as i32, height, z as i32);
+            }
+        }
+
+        if start_sub_chunk != 0 {
+            return self.find_non_air_block_pos(start_sub_chunk - 1, x, z);
+        }
+
+        BlockPos::new(x as i32, height, z as i32)
+    }
+
+    fn get_highest_non_empty_subchunk(&self) -> usize {
+        let idx = self
+            .section
+            .sections
+            .iter()
+            .rev()
+            .find_position(|sub_chunk| sub_chunk.block_states.non_air_block_count() != 0)
+            .map(|(idx, _)| 24 - idx);
+
+        idx.unwrap_or_default()
     }
 }
 
