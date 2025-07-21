@@ -1,11 +1,9 @@
 use crate::block::entities::BlockEntity;
 use itertools::Itertools;
 use palette::{BiomePalette, BlockPalette};
-use pumpkin_data::block_properties::{
-    blocks_movement, get_block_and_state_by_state_id, get_block_by_state_id,
-};
-use pumpkin_data::fluid::{Fluid, FluidState};
-use pumpkin_data::{Block, BlockState, fluid};
+use pumpkin_data::Block;
+use pumpkin_data::block_properties::{blocks_movement, get_block_and_state_by_state_id};
+use pumpkin_data::fluid::Fluid;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
