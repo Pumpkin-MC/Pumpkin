@@ -20,6 +20,7 @@ use pumpkin_protocol::{
         packet_encoder::UDPNetworkEncoder,
         server::{
             client_cache_status::SClientCacheStatus,
+            container_close::SContainerClose,
             interaction::SInteraction,
             login::SLogin,
             player_auth_input::SPlayerAuthInput,
@@ -33,6 +34,7 @@ use pumpkin_protocol::{
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
             resource_pack_response::SResourcePackResponse,
+            text::SText,
         },
     },
     codec::u24,
@@ -539,15 +541,24 @@ impl BedrockClient {
                     self.player_pos_update(player, input_packet);
                 }
             }
-            SInteraction::PACKET_ID => {
-                dbg!(SInteraction::read(payload).unwrap());
-            }
             SRequestChunkRadius::PACKET_ID => {
                 self.handle_request_chunk_radius(
                     player,
                     SRequestChunkRadius::read(payload).unwrap(),
                 )
                 .await;
+            }
+            SInteraction::PACKET_ID => {
+                self.handle_interaction(player, SInteraction::read(payload).unwrap())
+                    .await;
+            }
+            SContainerClose::PACKET_ID => {
+                self.handle_container_close(player, SContainerClose::read(payload).unwrap())
+                    .await;
+            }
+            SText::PACKET_ID => {
+                self.handle_chat_message(player, SText::read(payload).unwrap())
+                    .await;
             }
             _ => {
                 log::warn!("Bedrock: Received Unknown Game packet: {}", packet.id);

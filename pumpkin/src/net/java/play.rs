@@ -1,3 +1,4 @@
+use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_util::PermissionLvl;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
@@ -800,7 +801,7 @@ impl JavaClient {
                 let decorated_message = &TextComponent::chat_decorated(
                     config.chat.format.clone(),
                     gameprofile.name.clone(),
-                    message,
+                    message.clone(),
                 );
 
                 let entity = &player.living_entity.entity;
@@ -808,11 +809,15 @@ impl JavaClient {
                 if BASIC_CONFIG.allow_chat_reports {
                     world.broadcast_secure_player_chat(player, &chat_message, decorated_message).await;
                 } else {
-                    let no_reports_packet = &CSystemChatMessage::new(
+                    let je_packet = CSystemChatMessage::new(
                         decorated_message,
                         false,
                     );
-                    world.broadcast_packet_all(no_reports_packet).await;
+                    let be_packet = SText::new(
+                        message, player.gameprofile.name.clone()
+                    );
+
+                    world.broadcast_editioned(&je_packet, &be_packet).await;
                 }
             }
         }}

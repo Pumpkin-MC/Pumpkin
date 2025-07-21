@@ -85,7 +85,7 @@ impl TextComponentBase {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate { translate, with } => {
                 let translate = translate.into_owned();
-                get_translation_en_us(&translate, with)
+                get_translation_en_us(&translate, &with)
                     .unwrap_or(translate.to_string())
                     .clone()
             }
@@ -169,7 +169,7 @@ impl TextComponent {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate { translate, with } => {
                 let translate = translate.into_owned();
-                get_translation_en_us(&translate, with)
+                get_translation_en_us(&translate, &with)
                     .unwrap_or(translate.to_string())
                     .clone()
             }

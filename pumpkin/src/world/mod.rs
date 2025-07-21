@@ -53,18 +53,18 @@ use pumpkin_inventory::{equipment_slot::EquipmentSlot, screen_handler::Inventory
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::{
-    ClientPacket, IdOr, SoundEvent,
+    BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
         client::{
             chunk_radius_update::CChunkRadiusUpdate,
-            creative_content::{CreativeContent, Group},
+            creative_content::{CreativeContent, Entry, Group},
             gamerules_changed::GameRules,
             inventory_content::CInventoryContent,
             play_status::{CPlayStatus, PlayStatus},
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_artributes::{Attribute, CUpdateAttributes},
         },
-        network_item::NetworkItemDescriptor,
+        network_item::{ItemInstanceUserData, NetworkItemDescriptor, NetworkItemStackDescriptor},
     },
     codec::{
         bedrock_block_pos::NetworkPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
@@ -335,7 +335,11 @@ impl World {
     ///
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
     pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
-        self.broadcast_packet_except(&[], packet).await;
+        let current_players = self.players.read().await;
+
+        for (_, player) in current_players.iter() {
+            player.client.enqueue_packet(packet).await;
+        }
     }
 
     pub async fn broadcast_message(
@@ -352,6 +356,21 @@ impl World {
             target_name,
         ))
         .await;
+    }
+
+    pub async fn broadcast_editioned<J: ClientPacket, B: BClientPacket>(
+        &self,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        let current_players = self.players.read().await;
+
+        for (_, player) in current_players.iter() {
+            match &player.client {
+                ClientPlatform::Java(client) => client.enqueue_packet(je_packet).await,
+                ClientPlatform::Bedrock(client) => client.send_game_packet(be_packet).await,
+            }
+        }
     }
 
     pub async fn broadcast_secure_player_chat(
@@ -785,7 +804,7 @@ impl World {
                 block_properties_size: VarUInt(0),
                 // TODO Make this unique
                 multiplayer_correlation_id: Uuid::default().to_string(),
-                enable_itemstack_net_manager: false,
+                enable_itemstack_net_manager: true,
                 // TODO Make this description better!
                 // This gets send from the client to mojang for telemetry
                 server_version: "Pumpkin Rust Server".to_string(),
@@ -809,7 +828,30 @@ impl World {
                     name: String::new(),
                     icon_item: NetworkItemDescriptor::default(),
                 }],
-                entries: &[],
+                entries: &[
+                    Entry {
+                        id: VarUInt(1),
+                        item: NetworkItemDescriptor {
+                            id: VarInt(1),
+                            stack_size: 64,
+                            aux_value: VarUInt(0),
+                            block_runtime_id: VarInt(1),
+                            user_data_buffer: ItemInstanceUserData::default(),
+                        },
+                        group_index: VarUInt(0),
+                    },
+                    Entry {
+                        id: VarUInt(2),
+                        item: NetworkItemDescriptor {
+                            id: VarInt(2),
+                            stack_size: 64,
+                            aux_value: VarUInt(0),
+                            block_runtime_id: VarInt(2),
+                            user_data_buffer: ItemInstanceUserData::default(),
+                        },
+                        group_index: VarUInt(0),
+                    },
+                ],
             })
             .await;
 
@@ -839,17 +881,27 @@ impl World {
             .await;
 
         client
-            .send_game_packet(&CInventoryContent {
-                inventory_id: VarUInt(0),
-                slots: vec![NetworkItemDescriptor::default(); 36],
-                container_name: 29,
-                dynamic_id: None,
-                storage_item: NetworkItemDescriptor::default(),
-            })
+            .send_game_packet(&CPlayStatus::new(PlayStatus::PlayerSpawn))
             .await;
 
         client
-            .send_game_packet(&CPlayStatus::new(PlayStatus::PlayerSpawn))
+            .send_game_packet(&CInventoryContent {
+                inventory_id: VarUInt(0),
+                slots: vec![
+                    NetworkItemStackDescriptor {
+                        id: VarInt(2),
+                        stack_size: 64,
+                        aux_value: VarUInt(0),
+                        net_id: Some(VarInt(2)),
+                        block_runtime_id: VarInt(2),
+                        user_data_buffer: ItemInstanceUserData::default()
+                    };
+                    36
+                ],
+                container_name: 0,
+                dynamic_id: None,
+                storage_item: NetworkItemStackDescriptor::default(),
+            })
             .await;
     }
 

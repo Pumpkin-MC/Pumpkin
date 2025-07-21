@@ -7,6 +7,7 @@ use crate::{codec::var_ulong::VarULong, serial::PacketRead};
 #[derive(Debug, PacketRead)]
 #[packet(33)]
 pub struct SInteraction {
+    // https://mojang.github.io/bedrock-protocol-docs/html/InteractPacket.html
     pub action: Action,
     pub target_runtime_id: VarULong,
 }

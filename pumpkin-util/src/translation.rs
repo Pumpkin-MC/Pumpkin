@@ -10,9 +10,9 @@ pub static EN_US: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
     serde_json::from_str(&content).expect("Could not parse en_us.json.")
 });
 
-pub fn get_translation_en_us(key: &str, with: Vec<TextComponentBase>) -> Option<String> {
+pub fn get_translation_en_us(key: &str, with: &[TextComponentBase]) -> Option<String> {
     let mut translation = EN_US.get(key)?.clone();
-    for replace in &with {
+    for replace in with {
         translation = translation.replacen("%s", &replace.clone().to_pretty_console(), 1);
     }
     Some(translation)

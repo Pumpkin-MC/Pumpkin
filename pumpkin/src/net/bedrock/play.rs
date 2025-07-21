@@ -1,11 +1,30 @@
 use std::{num::NonZero, sync::Arc};
 
-use pumpkin_protocol::bedrock::{
-    client::chunk_radius_update::CChunkRadiusUpdate,
-    server::{player_auth_input::SPlayerAuthInput, request_chunk_radius::SRequestChunkRadius},
+use pumpkin_config::{BASIC_CONFIG, advanced_config};
+use pumpkin_macros::send_cancellable;
+use pumpkin_protocol::{
+    bedrock::{
+        client::{chunk_radius_update::CChunkRadiusUpdate, container_open::CContainerOpen},
+        server::{
+            container_close::SContainerClose,
+            interaction::{Action, SInteraction},
+            player_auth_input::SPlayerAuthInput,
+            request_chunk_radius::SRequestChunkRadius,
+            text::SText,
+        },
+    },
+    codec::{bedrock_block_pos::NetworkPos, var_long::VarLong},
+    java::client::play::CSystemChatMessage,
+};
+use pumpkin_util::{
+    math::{position::BlockPos, vector3::Vector3},
+    text::TextComponent,
 };
 
-use crate::{entity::player::Player, net::bedrock::BedrockClient};
+use crate::{
+    entity::player::Player, net::bedrock::BedrockClient,
+    plugin::player::player_chat::PlayerChatEvent, server::seasonal_events,
+};
 
 impl BedrockClient {
     pub async fn handle_request_chunk_radius(
@@ -35,5 +54,73 @@ impl BedrockClient {
         //    tick: packet.client_tick,
         //})
         //.await;
+    }
+
+    pub async fn handle_interaction(&self, _player: &Arc<Player>, packet: SInteraction) {
+        dbg!(&packet);
+        if matches!(packet.action, Action::OpenInventory) {
+            self.send_game_packet(&CContainerOpen {
+                container_id: 0,
+                container_type: 0xff,
+                position: NetworkPos(BlockPos(Vector3::new(0, 0, 0))),
+                target_entity_id: VarLong(-1),
+            })
+            .await;
+        }
+    }
+
+    pub async fn handle_container_close(&self, _player: &Arc<Player>, packet: SContainerClose) {
+        dbg!(&packet);
+        if packet.container_id == 0 {
+            self.send_game_packet(&SContainerClose {
+                container_id: 0,
+                container_type: 0xff,
+                server_initated: false,
+            })
+            .await;
+        }
+    }
+
+    pub async fn handle_chat_message(&self, player: &Arc<Player>, packet: SText) {
+        let gameprofile = &player.gameprofile;
+
+        send_cancellable! {{
+            PlayerChatEvent::new(player.clone(), packet.message, vec![]);
+
+            'after: {
+                log::info!("<chat> {}: {}", gameprofile.name, event.message);
+
+                let config = advanced_config();
+
+                let message = match seasonal_events::modify_chat_message(&event.message) {
+                    Some(m) => m,
+                    None => event.message.clone(),
+                };
+
+                let decorated_message = &TextComponent::chat_decorated(
+                    config.chat.format.clone(),
+                    gameprofile.name.clone(),
+                    message.clone(),
+                );
+
+                let entity = &player.living_entity.entity;
+                let world = &entity.world.read().await;
+                if BASIC_CONFIG.allow_chat_reports {
+                    //TODO Alex help, what is this?
+                    //world.broadcast_secure_player_chat(player, &message, decorated_message).await;
+                } else {
+                    let je_packet = CSystemChatMessage::new(
+                        decorated_message,
+                        false,
+                    );
+
+                    let be_packet = SText::new(
+                        message, gameprofile.name.clone()
+                    );
+
+                    world.broadcast_editioned(&je_packet, &be_packet).await;
+                }
+            }
+        }}
     }
 }

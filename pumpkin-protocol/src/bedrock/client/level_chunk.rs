@@ -1,6 +1,7 @@
 use std::io::{Error, Write};
 
 use pumpkin_macros::packet;
+use pumpkin_util::encompassing_bits;
 use pumpkin_world::chunk::ChunkData;
 
 use crate::{
@@ -54,7 +55,7 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
             data_write.write_all(&[VERSION, num_storages, i as u8])?;
 
             for _ in 0..num_storages {
-                encode_storage(data_write, 2, BIOME_SIZE)?;
+                encode_storage(data_write, 1, BIOME_SIZE)?;
             }
         }
 
@@ -70,7 +71,7 @@ fn encode_storage<W: Write>(
     palette_size: i32,
     indices_len: usize,
 ) -> Result<(), Error> {
-    let bits_per_index: u8 = 1;
+    let bits_per_index: u8 = encompassing_bits(palette_size as _);
 
     let format = bits_per_index << 1 | 1;
     format.write(writer)?;
