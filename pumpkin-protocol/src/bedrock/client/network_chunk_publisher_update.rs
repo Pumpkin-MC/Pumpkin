@@ -29,7 +29,7 @@ impl CNetworkChunkPublisherUpdate {
         }
         Self {
             pos_for_view,
-            new_radius: VarUInt(new_radius),
+            new_radius: VarUInt(new_radius << 4),
             server_build_chunk_list: chunk_list,
         }
     }

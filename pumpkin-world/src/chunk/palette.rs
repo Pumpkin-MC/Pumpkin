@@ -371,6 +371,62 @@ impl BlockPalette {
         }
     }
 
+    pub fn convert_be_network(&self) -> BeNetworkSerialization<u16> {
+        match self {
+            Self::Homogeneous(registry_id) => BeNetworkSerialization {
+                bits_per_entry: 0,
+                palette: NetworkPalette::Single(*registry_id),
+                packed_data: Box::new([]),
+            },
+            Self::Heterogeneous(data) => {
+                let bits_per_entry = encompassing_bits(data.counts.len());
+                let palette: Box<[u16]> = data.counts.keys().copied().collect();
+                let key_to_index_map: HashMap<_, usize> = palette
+                    .iter()
+                    .enumerate()
+                    .map(|(index, key)| (*key, index))
+                    .collect();
+
+                let blocks_per_word = 32 / bits_per_entry;
+    
+                // Direktes Verarbeiten in der Reihenfolge [x][y][z] ohne Kopie
+                let mut packed_data = Vec::new();
+                let mut current_word = 0;
+                let mut current_index = 0;
+    
+                for x in 0..16 {
+                    for y in 0..16 {
+                        for z in 0..16 {
+                            let key = data.cube[z][y][x]; // Zugriff in [x][y][z]-Reihenfolge
+                            let key_index = key_to_index_map.get(&key).unwrap();
+                            debug_assert!((1 << bits_per_entry) > *key_index);
+    
+                            let packed_offset_index =
+                                (*key_index as u32) << (bits_per_entry as u32 * current_index as u32);
+                            current_word |= packed_offset_index;
+    
+                            current_index += 1;
+                            if current_index == blocks_per_word {
+                                packed_data.push(current_word);
+                                current_word = 0;
+                                current_index = 0;
+                            }
+                        }
+                    }
+                }
+                if current_index > 0 {
+                    packed_data.push(current_word);
+                }
+
+                BeNetworkSerialization {
+                    bits_per_entry,
+                    palette: NetworkPalette::Indirect(palette),
+                    packed_data: packed_data.into_boxed_slice(),
+                }
+            }
+        }
+    }
+
     pub fn non_air_block_count(&self) -> u16 {
         match self {
             Self::Homogeneous(registry_id) => {
@@ -446,6 +502,12 @@ pub struct NetworkSerialization<V> {
     pub bits_per_entry: u8,
     pub palette: NetworkPalette<V>,
     pub packed_data: Box<[i64]>,
+}
+
+pub struct BeNetworkSerialization<V> {
+    pub bits_per_entry: u8,
+    pub palette: NetworkPalette<V>,
+    pub packed_data: Box<[u32]>,
 }
 
 // According to the wiki, palette serialization for disk and network is different. Disk

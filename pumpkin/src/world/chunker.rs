@@ -30,7 +30,6 @@ pub async fn update_position(player: &Arc<Player>) {
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical != new_cylindrical {
-        println!("not_same");
         match &player.client {
             ClientPlatform::Java(client) => {
                 client
@@ -38,15 +37,15 @@ pub async fn update_position(player: &Arc<Player>) {
                         chunk_x: new_chunk_center.x.into(),
                         chunk_z: new_chunk_center.y.into(),
                     })
-                    .await
+                    .await;
             }
             ClientPlatform::Bedrock(client) => {
                 client
                     .send_game_packet(&CNetworkChunkPublisherUpdate::new(
                         BlockPos::new(pos.x as i32, pos.y as i32, pos.z as i32),
-                        view_distance.get() as u32 * 16,
+                        u32::from(view_distance.get()),
                     ))
-                    .await
+                    .await;
             }
         }
         let mut loading_chunks = Vec::new();

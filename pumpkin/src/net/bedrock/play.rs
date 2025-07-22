@@ -42,8 +42,7 @@ impl BedrockClient {
 
     pub async fn player_pos_update(&self, player: &Arc<Player>, packet: SPlayerAuthInput) {
         let pos = packet.position;
-        let pos = Vector3::new(pos.x as f64, pos.y as f64, pos.z as f64);
-        player.living_entity.set_pos(pos);
+        player.living_entity.set_pos(pos.to_f64());
 
         chunker::update_position(player).await;
         //self.send_game_packet(&CMovePlayer {

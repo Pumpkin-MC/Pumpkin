@@ -789,7 +789,7 @@ impl World {
                 entity_id: VarLong(runtime_id as i64),
                 runtime_entity_id: VarULong(runtime_id),
                 player_gamemode: VarInt(player.gamemode.load() as i32),
-                position: Vector3::new(0.0, 322.0, 0.0),
+                position: Vector3::new(0.0, 100.0, 0.0),
                 pitch: 0.0,
                 yaw: 0.0,
                 level_settings,
@@ -804,7 +804,7 @@ impl World {
                 block_properties_size: VarUInt(0),
                 // TODO Make this unique
                 multiplayer_correlation_id: Uuid::default().to_string(),
-                enable_itemstack_net_manager: true,
+                enable_itemstack_net_manager: false,
                 // TODO Make this description better!
                 // This gets send from the client to mojang for telemetry
                 server_version: "Pumpkin Rust Server".to_string(),
@@ -832,10 +832,10 @@ impl World {
                     Entry {
                         id: VarUInt(1),
                         item: NetworkItemDescriptor {
-                            id: VarInt(1),
+                            id: VarInt(257),
                             stack_size: 64,
                             aux_value: VarUInt(0),
-                            block_runtime_id: VarInt(1),
+                            block_runtime_id: VarInt(0),
                             user_data_buffer: ItemInstanceUserData::default(),
                         },
                         group_index: VarUInt(0),
@@ -843,10 +843,10 @@ impl World {
                     Entry {
                         id: VarUInt(2),
                         item: NetworkItemDescriptor {
-                            id: VarInt(2),
+                            id: VarInt(258),
                             stack_size: 64,
                             aux_value: VarUInt(0),
-                            block_runtime_id: VarInt(2),
+                            block_runtime_id: VarInt(0),
                             user_data_buffer: ItemInstanceUserData::default(),
                         },
                         group_index: VarUInt(0),
@@ -857,7 +857,7 @@ impl World {
 
         client
             .send_game_packet(&CChunkRadiusUpdate {
-                chunk_radius: VarInt(16),
+                chunk_radius: VarInt(6),
             })
             .await;
 

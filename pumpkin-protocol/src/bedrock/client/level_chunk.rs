@@ -2,7 +2,7 @@ use std::io::{Error, Write};
 
 use pumpkin_macros::packet;
 use pumpkin_util::encompassing_bits;
-use pumpkin_world::chunk::ChunkData;
+use pumpkin_world::chunk::{palette::NetworkPalette, ChunkData};
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
@@ -10,7 +10,7 @@ use crate::{
 };
 
 const VERSION: u8 = 9;
-const CHUNK_SIZE: usize = 4096;
+const _CHUNK_SIZE: usize = 4096;
 const BIOME_SIZE: usize = 64;
 
 #[packet(58)]
@@ -38,14 +38,33 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
         let data_write = &mut chunk_data;
 
         // Blocks
-        for i in 0..sub_chunk_count {
+        for (i, sub_chunk) in self.chunk.section.sections.iter().enumerate() {
             // Version 9
             // [version:byte][num_storages:byte][sub_chunk_index:byte][block storage1]...[blockStorageN]
             let num_storages = 1;
             data_write.write_all(&[VERSION, num_storages, ((i as i8) - 4) as u8])?;
+            let network_repr = sub_chunk.block_states.convert_be_network();
+            (network_repr.bits_per_entry << 1 | 1).write(data_write)?;
 
-            for _ in 0..num_storages {
-                encode_storage(data_write, 1, CHUNK_SIZE)?;
+            for data in network_repr.packed_data.iter() {
+                data.write(data_write)?;
+            }
+
+            match network_repr.palette {
+                NetworkPalette::Single(registry_id) => {
+                    //println!("bits: {}, id: {}", network_repr.bits_per_entry, registry_id);
+                    VarInt(!registry_id as i32).write(data_write)?;
+                }
+                NetworkPalette::Indirect(palette) => {
+                    VarInt(palette.len() as i32).write(data_write)?;
+                    for mut id in palette {
+                        if id == 0 { id = u16::MAX;} else {
+                            id = id;
+                        }
+                        VarInt(id as i32).write(data_write)?;
+                    }
+                }
+                NetworkPalette::Direct => ()
             }
         }
 
@@ -55,7 +74,7 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
             data_write.write_all(&[VERSION, num_storages, ((i as i8) - 4) as u8])?;
 
             for _ in 0..num_storages {
-                encode_storage(data_write, 2, BIOME_SIZE)?;
+                encode_storage(data_write, 1, BIOME_SIZE)?;
             }
         }
 
@@ -71,8 +90,13 @@ fn encode_storage<W: Write>(
     palette_size: i32,
     indices_len: usize,
 ) -> Result<(), Error> {
+    if palette_size < 2 {
+        1u8.write(writer)?;
+        VarInt(0).write(writer)?;
+        return Ok(());
+    }
+    
     let bits_per_index: u8 = encompassing_bits(palette_size as _);
-    //println!("bits_per_index: {bits_per_index} {palette_size}");
 
     let format = bits_per_index << 1 | 1;
     format.write(writer)?;
