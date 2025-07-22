@@ -538,7 +538,7 @@ impl BedrockClient {
         match packet.id {
             SPlayerAuthInput::PACKET_ID => {
                 if let Ok(input_packet) = SPlayerAuthInput::read(payload) {
-                    self.player_pos_update(player, input_packet);
+                    self.player_pos_update(player, input_packet).await;
                 }
             }
             SRequestChunkRadius::PACKET_ID => {

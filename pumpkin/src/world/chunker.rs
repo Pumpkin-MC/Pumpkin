@@ -21,6 +21,7 @@ pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
 
 pub async fn update_position(player: &Arc<Player>) {
     let entity = &player.living_entity.entity;
+    let pos = entity.pos.load();
 
     let view_distance = get_view_distance(player).await;
     let new_chunk_center = entity.chunk_pos.load();
@@ -29,6 +30,7 @@ pub async fn update_position(player: &Arc<Player>) {
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical != new_cylindrical {
+        println!("not_same");
         match &player.client {
             ClientPlatform::Java(client) => {
                 client
@@ -41,8 +43,8 @@ pub async fn update_position(player: &Arc<Player>) {
             ClientPlatform::Bedrock(client) => {
                 client
                     .send_game_packet(&CNetworkChunkPublisherUpdate::new(
-                        BlockPos::new(0, 322, 0),
-                        view_distance.get() as u32,
+                        BlockPos::new(pos.x as i32, pos.y as i32, pos.z as i32),
+                        view_distance.get() as u32 * 16,
                     ))
                     .await
             }

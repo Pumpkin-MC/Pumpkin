@@ -152,7 +152,7 @@ impl ChunkManager {
                 count.add_assign(1);
             }
             state @ BatchState::Initial => *state = BatchState::Waiting,
-            BatchState::Waiting => unreachable!(),
+            BatchState::Waiting => (),
         }
 
         chunks.into_boxed_slice()
@@ -732,9 +732,10 @@ impl Player {
 
         let chunk_of_chunks = {
             let mut chunk_manager = self.chunk_manager.lock().await;
-            chunk_manager
-                .can_send_chunk()
-                .then(|| chunk_manager.next_chunk())
+            //chunk_manager
+            //    .can_send_chunk()
+            //    .then(|| chunk_manager.next_chunk())
+            Some(chunk_manager.next_chunk())
         };
 
         if let Some(chunk_of_chunks) = chunk_of_chunks {

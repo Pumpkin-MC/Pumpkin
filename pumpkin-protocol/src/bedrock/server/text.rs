@@ -38,14 +38,14 @@ impl SText {
 
 impl PacketRead for SText {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let typ = TextPacketType::read(reader)?;
+        let r#type = TextPacketType::read(reader)?;
         let localize = bool::read(reader)?;
 
         let mut player_name = String::with_capacity(0);
         let message;
         let mut parameters = Vec::with_capacity(0);
 
-        match typ {
+        match r#type {
             TextPacketType::Raw
             | TextPacketType::Tip
             | TextPacketType::SystemMessage
@@ -72,7 +72,7 @@ impl PacketRead for SText {
         let filtered_message = String::read(reader)?;
 
         Ok(Self {
-            r#type: typ,
+            r#type,
             localize,
             player_name,
             message,

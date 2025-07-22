@@ -23,7 +23,7 @@ use pumpkin_util::{
 
 use crate::{
     entity::player::Player, net::bedrock::BedrockClient,
-    plugin::player::player_chat::PlayerChatEvent, server::seasonal_events,
+    plugin::player::player_chat::PlayerChatEvent, server::seasonal_events, world::chunker,
 };
 
 impl BedrockClient {
@@ -40,8 +40,12 @@ impl BedrockClient {
         .await;
     }
 
-    pub fn player_pos_update(&self, _player: &Arc<Player>, _packet: SPlayerAuthInput) {
-        //println!("{:?}", packet)
+    pub async fn player_pos_update(&self, player: &Arc<Player>, packet: SPlayerAuthInput) {
+        let pos = packet.position;
+        let pos = Vector3::new(pos.x as f64, pos.y as f64, pos.z as f64);
+        player.living_entity.set_pos(pos);
+
+        chunker::update_position(player).await;
         //self.send_game_packet(&CMovePlayer {
         //     player_runtime_id: VarULong(player.entity_id() as u64),
         //    position: packet.position + Vector3::new(10.0, 0.0, 0.0),

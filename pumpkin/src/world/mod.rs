@@ -886,7 +886,7 @@ impl World {
 
         client
             .send_game_packet(&CInventoryContent {
-                inventory_id: VarUInt(0),
+                inventory_id: VarUInt(124),
                 slots: vec![
                     NetworkItemStackDescriptor {
                         id: VarInt(2),
@@ -1273,7 +1273,7 @@ impl World {
         .await;
         player.send_client_information().await;
 
-        chunker::update_position(&player).await;
+        chunker::update_position(player).await;
         // Update commands
 
         player.set_health(20.0).await;
