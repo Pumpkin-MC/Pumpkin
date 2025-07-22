@@ -72,6 +72,7 @@ fn encode_storage<W: Write>(
     indices_len: usize,
 ) -> Result<(), Error> {
     let bits_per_index: u8 = encompassing_bits(palette_size as _);
+    println!("bits_per_index: {bits_per_index} {palette_size}");
 
     let format = bits_per_index << 1 | 1;
     format.write(writer)?;
@@ -79,7 +80,7 @@ fn encode_storage<W: Write>(
     let blocks_per_word = 32 / bits_per_index as usize;
 
     for _ in 0..(indices_len / blocks_per_word) {
-        writer.write_all(&u32::MAX.to_le_bytes())?;
+        writer.write_all(&u32::MIN.to_le_bytes())?;
     }
 
     VarInt(palette_size).write(writer)?;

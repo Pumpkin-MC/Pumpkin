@@ -1,8 +1,11 @@
 use std::io::{Error, Write};
 
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use crate::{codec::var_uint::VarUInt, serial::PacketWrite};
+use crate::{
+    codec::{var_int::VarInt, var_uint::VarUInt},
+    serial::PacketWrite,
+};
 
 impl PacketWrite for bool {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
@@ -106,6 +109,21 @@ impl<T: PacketWrite> PacketWrite for Vector3<T> {
         self.z.write(writer)
     }
 }
+
+impl PacketWrite for BlockPos {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarInt(self.0.x).write(writer)?;
+        VarInt(self.0.y).write(writer)?;
+        VarInt(self.0.z).write(writer)
+    }
+}
+
+//impl PacketWrite for ChunkPos {
+//    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+//        VarInt(self.0.x).write(writer)?;
+//        VarInt(self.0.y).write(writer)
+//    }
+//}
 
 impl<T: PacketWrite> PacketWrite for Option<T> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

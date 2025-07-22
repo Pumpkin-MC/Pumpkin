@@ -228,7 +228,7 @@ impl OctaveSimplexNoiseSampler {
 
         if j > 0 {
             let sample = sampler.sample_3d(sampler.x_origin, sampler.y_origin, sampler.z_origin);
-            let n = (sample * 9.223372E18) as i64;
+            let n = (sample * 9.223372E18f32 as f64) as i64;
             let mut random = LegacyRand::from_seed(n as u64);
 
             for o in (0..=(l - 1)).rev() {

@@ -861,7 +861,7 @@ impl World {
             })
             .await;
 
-        chunker::player_join(&player).await;
+        chunker::update_position(&player).await;
 
         client
             .send_game_packet(&CUpdateAttributes {
@@ -977,7 +977,7 @@ impl World {
 
         // Spawn in initial chunks
         // This is made before the player teleport so that the player doesn't glitch out when spawning
-        chunker::player_join(&player).await;
+        chunker::update_position(&player).await;
 
         // Teleport
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
@@ -1273,7 +1273,7 @@ impl World {
         .await;
         player.send_client_information().await;
 
-        chunker::player_join(player).await;
+        chunker::update_position(&player).await;
         // Update commands
 
         player.set_health(20.0).await;

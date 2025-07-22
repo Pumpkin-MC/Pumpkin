@@ -75,7 +75,7 @@ impl BedrockClient {
             self.send_game_packet(&SContainerClose {
                 container_id: 0,
                 container_type: 0xff,
-                server_initated: false,
+                server_initiated: false,
             })
             .await;
         }

@@ -11,7 +11,7 @@ use crate::{
 #[packet(9)]
 pub struct SText {
     // https://mojang.github.io/bedrock-protocol-docs/html/TextPacket.html
-    pub typ: TextPacketType,
+    pub r#type: TextPacketType,
     pub localize: bool,
     pub player_name: String,
     pub message: String,
@@ -24,7 +24,7 @@ pub struct SText {
 impl SText {
     pub fn new(message: String, player_name: String) -> Self {
         Self {
-            typ: TextPacketType::Chat,
+            r#type: TextPacketType::Chat,
             localize: false,
             player_name,
             message,
@@ -72,7 +72,7 @@ impl PacketRead for SText {
         let filtered_message = String::read(reader)?;
 
         Ok(Self {
-            typ,
+            r#type: typ,
             localize,
             player_name,
             message,
@@ -86,9 +86,9 @@ impl PacketRead for SText {
 
 impl PacketWrite for SText {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.typ.write(writer)?;
+        self.r#type.write(writer)?;
         self.localize.write(writer)?;
-        match self.typ {
+        match self.r#type {
             TextPacketType::Raw
             | TextPacketType::Tip
             | TextPacketType::SystemMessage

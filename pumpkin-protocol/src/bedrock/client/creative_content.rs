@@ -3,8 +3,7 @@ use std::io::{Error, Write};
 use pumpkin_macros::packet;
 
 use crate::{
-    BClientPacket, bedrock::network_item::NetworkItemDescriptor, codec::var_uint::VarUInt,
-    serial::PacketWrite,
+    bedrock::network_item::NetworkItemDescriptor, codec::var_uint::VarUInt, serial::PacketWrite,
 };
 
 #[packet(145)]
@@ -14,16 +13,16 @@ pub struct CreativeContent<'a> {
     pub entries: &'a [Entry],
 }
 
-impl BClientPacket for CreativeContent<'_> {
-    fn write_packet(&self, mut writer: impl Write) -> Result<(), Error> {
-        VarUInt(self.groups.len() as _).write(&mut writer)?;
+impl PacketWrite for CreativeContent<'_> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarUInt(self.groups.len() as _).write(writer)?;
         for group in self.groups {
-            group.write(&mut writer)?;
+            group.write(writer)?;
         }
 
-        VarUInt(self.entries.len() as _).write(&mut writer)?;
+        VarUInt(self.entries.len() as _).write(writer)?;
         for entry in self.entries {
-            entry.write(&mut writer)?;
+            entry.write(writer)?;
         }
         Ok(())
     }

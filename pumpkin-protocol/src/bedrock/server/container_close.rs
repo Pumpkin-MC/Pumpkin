@@ -8,5 +8,5 @@ pub struct SContainerClose {
     // https://mojang.github.io/bedrock-protocol-docs/html/ContainerClosePacket.html
     pub container_id: u8,
     pub container_type: u8,
-    pub server_initated: bool,
+    pub server_initiated: bool,
 }
