@@ -26,13 +26,11 @@ use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block_properties::{
-    BlockProperties, WaterLikeProperties, get_block_by_item, get_state_by_state_id,
-};
+use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -1484,7 +1482,7 @@ impl JavaClient {
         self.update_sequence(player, use_item_on.sequence.0);
 
         // Check if the item is a block, because not every item can be placed :D
-        if let Some(block) = get_block_by_item(item.lock().await.item.id) {
+        if let Some(block) = Block::from_item_id(item.lock().await.item.id) {
             should_try_decrement = self
                 .run_is_block_place(player, block, server, use_item_on, position, face)
                 .await?;
@@ -1870,7 +1868,7 @@ impl JavaClient {
             .await;
 
         // Check if there is a player in the way of the block being placed
-        let shapes = get_state_by_state_id(new_state).get_block_collision_shapes();
+        let shapes = BlockState::from_id(new_state).get_block_collision_shapes();
         for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {

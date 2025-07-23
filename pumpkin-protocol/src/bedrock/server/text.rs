@@ -28,10 +28,10 @@ impl SText {
             localize: false,
             player_name,
             message,
-            parameters: Vec::with_capacity(0),
-            sender_xuid: String::with_capacity(0),
-            platform_id: String::with_capacity(0),
-            filtered_message: String::with_capacity(0),
+            parameters: Vec::new(),
+            sender_xuid: String::new(),
+            platform_id: String::new(),
+            filtered_message: String::new(),
         }
     }
 }
@@ -41,9 +41,9 @@ impl PacketRead for SText {
         let r#type = TextPacketType::read(reader)?;
         let localize = bool::read(reader)?;
 
-        let mut player_name = String::with_capacity(0);
+        let mut player_name = String::new();
         let message;
-        let mut parameters = Vec::with_capacity(0);
+        let mut parameters = Vec::new();
 
         match r#type {
             TextPacketType::Raw

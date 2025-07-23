@@ -1,6 +1,5 @@
 use crate::{
     BlockState, BlockStateRef,
-    block_properties::get_state_by_state_id,
     tag::{RegistryKey, Tagable},
 };
 use pumpkin_util::{

@@ -5,7 +5,7 @@ use pumpkin_data::{
     Block, BlockDirection, BlockState, HorizontalFacingExt,
     block_properties::{
         BlockProperties, ComparatorLikeProperties, EnumVariants, HorizontalFacing,
-        RedstoneWireLikeProperties, RepeaterLikeProperties, get_state_by_state_id,
+        RedstoneWireLikeProperties, RepeaterLikeProperties,
     },
 };
 use pumpkin_util::math::position::BlockPos;
@@ -157,7 +157,7 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
             self,
             args.world,
             *args.position,
-            get_state_by_state_id(args.state_id),
+            BlockState::from_id(args.state_id),
             args.block,
         )
         .await
@@ -176,7 +176,7 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
             self,
             args.world,
             *args.position,
-            get_state_by_state_id(args.old_state_id).id,
+            BlockState::from_id(args.old_state_id).id,
             args.block,
         )
         .await;

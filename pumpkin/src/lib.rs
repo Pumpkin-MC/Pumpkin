@@ -398,12 +398,9 @@ impl PumpkinServer {
 
 
                         let mut clients_guard = bedrock_clients.lock().await;
-
                         // TODO: don't save clients for offline connections
                         let client = clients_guard.entry(client_addr).or_insert_with(|| {
-                            let client_id = master_client_id_counter;
                             master_client_id_counter += 1;
-                            log::info!("New Bedrock client detected from: {client_addr} (ID: {client_id})");
                             let mut platform = BedrockClient::new(self.udp_socket.clone(), client_addr);
                             platform.start_outgoing_packet_task();
                             Arc::new(

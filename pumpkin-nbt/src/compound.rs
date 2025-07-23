@@ -176,7 +176,7 @@ impl NbtCompound {
         self.get(name).and_then(|tag| tag.extract_bool())
     }
 
-    pub fn get_string(&self, name: &str) -> Option<&String> {
+    pub fn get_string(&self, name: &str) -> Option<&str> {
         self.get(name).and_then(|tag| tag.extract_string())
     }
 

@@ -20,17 +20,10 @@ pub struct CNetworkChunkPublisherUpdate {
 
 impl CNetworkChunkPublisherUpdate {
     pub fn new(pos_for_view: BlockPos, new_radius: u32) -> Self {
-        let mut chunk_list = Vec::new();
-
-        for x in -1..1 {
-            for z in -1..1 {
-                chunk_list.push(Vector2::new(x, z));
-            }
-        }
         Self {
             pos_for_view,
-            new_radius: VarUInt(new_radius << 4),
-            server_build_chunk_list: chunk_list,
+            new_radius: VarUInt((1 + new_radius) << 4),
+            server_build_chunk_list: Vec::new(),
         }
     }
 }

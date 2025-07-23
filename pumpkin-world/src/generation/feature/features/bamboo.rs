@@ -1,8 +1,6 @@
 use pumpkin_data::{
-    Block, BlockDirection,
-    block_properties::{
-        BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1, get_state_by_state_id,
-    },
+    Block, BlockDirection, BlockState,
+    block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1},
     tag::Tagable,
 };
 use pumpkin_util::{
@@ -69,19 +67,19 @@ impl BambooFeature {
 
                     chunk.set_block_state(
                         &bpos.0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
+                        BlockState::from_id(props.to_state_id(&Block::BAMBOO)),
                     );
                     props.stage = Integer0To1::L0;
 
                     chunk.set_block_state(
                         &bpos.down().0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
+                        BlockState::from_id(props.to_state_id(&Block::BAMBOO)),
                     );
                     props.leaves = BambooLeaves::Small;
 
                     chunk.set_block_state(
                         &bpos.down().down().0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
+                        BlockState::from_id(props.to_state_id(&Block::BAMBOO)),
                     );
                 }
             }

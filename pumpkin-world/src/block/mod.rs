@@ -3,10 +3,7 @@ pub mod state;
 
 use std::collections::HashMap;
 
-use pumpkin_data::{
-    Block, BlockState,
-    block_properties::{get_block, get_state_by_state_id},
-};
+use pumpkin_data::{Block, BlockState};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub use state::RawBlockState;
 
@@ -30,7 +27,8 @@ fn parse_block_name<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<&'static Block, D::Error> {
     let s = String::deserialize(deserializer)?;
-    let block = get_block(s.as_str()).ok_or(serde::de::Error::custom("Invalid block name"))?;
+    let block =
+        Block::from_name(s.as_str()).ok_or(serde::de::Error::custom("Invalid block name"))?;
     Ok(block)
 }
 
@@ -41,7 +39,7 @@ fn block_to_string<S: Serializer>(block: &'static Block, serializer: S) -> Resul
 impl BlockStateCodec {
     pub fn get_state(&self) -> &'static BlockState {
         let state_id = self.get_state_id();
-        get_state_by_state_id(state_id)
+        BlockState::from_id(state_id)
     }
 
     /// Prefer this over `get_state` when the only the state ID is needed

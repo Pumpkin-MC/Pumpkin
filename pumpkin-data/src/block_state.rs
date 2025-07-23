@@ -1,6 +1,6 @@
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::block_properties::{COLLISION_SHAPES, Instrument, get_block_by_state_id};
+use crate::block_properties::{COLLISION_SHAPES, Instrument};
 use crate::{Block, BlockDirection, CollisionShape};
 
 #[derive(Debug)]
@@ -93,10 +93,6 @@ impl BlockState {
         }
     }
 
-    pub fn block(&self) -> &'static Block {
-        get_block_by_state_id(self.id)
-    }
-
     pub fn get_block_collision_shapes(&self) -> Vec<CollisionShape> {
         self.collision_shapes
             .iter()
@@ -110,7 +106,7 @@ impl BlockState {
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize])
             .collect();
-        let block = get_block_by_state_id(self.id);
+        let block = Block::from_state_id(self.id);
         if block.properties(self.id).and_then(|properties| {
             properties
                 .to_props()

@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockState, block_properties::get_block_by_state_id, item::Item};
+use pumpkin_data::{Block, BlockState, item::Item};
 use pumpkin_util::{
     loot_table::{
         LootCondition, LootFunctionNumberProvider, LootFunctionTypes, LootPoolEntry,
@@ -170,7 +170,7 @@ impl LootConditionExt for LootCondition {
             } => {
                 if let Some(state) = &params.block_state {
                     let block_actual_properties: Box<[(String, String)]> =
-                        match Block::properties(get_block_by_state_id(state.id), state.id) {
+                        match Block::properties(Block::from_state_id(state.id), state.id) {
                             Some(props_data) => props_data.to_props(), // Assuming to_props() returns HashMap<String, String>
                             None => {
                                 return properties.is_empty();

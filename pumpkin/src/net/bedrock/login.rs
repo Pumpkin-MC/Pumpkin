@@ -79,7 +79,7 @@ impl BedrockClient {
             false,
             false,
             uuid::Uuid::default(),
-            String::with_capacity(0),
+            String::new(),
         ))
         .await;
         self.send_game_packet(&CResourcePackStackPacket::new(

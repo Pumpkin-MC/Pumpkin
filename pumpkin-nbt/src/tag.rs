@@ -312,7 +312,7 @@ impl NbtTag {
         }
     }
 
-    pub fn extract_string(&self) -> Option<&String> {
+    pub fn extract_string(&self) -> Option<&str> {
         match self {
             NbtTag::String(string) => Some(string),
             _ => None,

@@ -146,7 +146,7 @@ mod tests {
         assert_eq!(read_compound.get_double("double_value"), Some(123456.789));
         assert_eq!(read_compound.get_bool("bool_value"), Some(true));
         assert_eq!(
-            read_compound.get_string("string_value").map(String::as_str),
+            read_compound.get_string("string_value"),
             Some("test string")
         );
 

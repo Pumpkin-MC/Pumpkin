@@ -1,4 +1,7 @@
-use std::{num::NonZeroU8, sync::Arc};
+use std::{
+    num::{NonZeroU8, NonZeroU32},
+    sync::Arc,
+};
 
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::{
@@ -43,7 +46,7 @@ pub async fn update_position(player: &Arc<Player>) {
                 client
                     .send_game_packet(&CNetworkChunkPublisherUpdate::new(
                         BlockPos::new(pos.x as i32, pos.y as i32, pos.z as i32),
-                        u32::from(view_distance.get()),
+                        NonZeroU32::from(view_distance).get(),
                     ))
                     .await;
             }

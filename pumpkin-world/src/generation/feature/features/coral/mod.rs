@@ -1,9 +1,6 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
-    block_properties::{
-        BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties, get_block,
-        get_state_by_state_id,
-    },
+    block_properties::{BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties},
     tag::{RegistryKey, Tagable, get_tag_values},
 };
 use pumpkin_util::{
@@ -45,7 +42,7 @@ impl CoralFeature {
             props.pickles = Integer1To4::from_index(random.next_bounded_i32(4) as u16); // TODO: vanilla adds + 1, but this can crash
             chunk.set_block_state(
                 &pos.0,
-                get_state_by_state_id(props.to_state_id(&Block::SEA_PICKLE)),
+                BlockState::from_id(props.to_state_id(&Block::SEA_PICKLE)),
             );
         }
         for dir in BlockDirection::horizontal() {
@@ -74,7 +71,7 @@ impl CoralFeature {
                 .collect();
             chunk.set_block_state(
                 &dir_pos.0,
-                get_state_by_state_id(wall_coral.from_properties(&props).to_state_id(wall_coral)),
+                BlockState::from_id(wall_coral.from_properties(&props).to_state_id(wall_coral)),
             );
         }
 
@@ -89,6 +86,6 @@ impl CoralFeature {
     pub fn get_random_tag_entry_block(tag: &str, random: &mut RandomGenerator) -> &'static Block {
         let values = get_tag_values(RegistryKey::Block, tag).unwrap();
         let value = values[random.next_bounded_i32(values.len() as i32) as usize];
-        get_block(value).unwrap()
+        Block::from_name(value).unwrap()
     }
 }

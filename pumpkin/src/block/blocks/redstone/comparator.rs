@@ -5,7 +5,6 @@ use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{
         BlockProperties, ComparatorLikeProperties, ComparatorMode, HorizontalFacing,
-        get_state_by_state_id,
     },
     entity::EntityType,
 };
@@ -65,7 +64,7 @@ impl PumpkinBlock for ComparatorBlock {
             self,
             args.world,
             *args.position,
-            get_state_by_state_id(args.state_id).id,
+            BlockState::from_id(args.state_id).id,
             args.block,
         )
         .await;
@@ -88,7 +87,7 @@ impl PumpkinBlock for ComparatorBlock {
                 self,
                 args.world,
                 *args.neighbor_position,
-                get_state_by_state_id(args.neighbor_state_id),
+                BlockState::from_id(args.neighbor_state_id),
             )
             .await
         {
@@ -283,7 +282,7 @@ impl ComparatorBlock {
             .set_block_state(&block_pos, state_id, BlockFlags::empty())
             .await;
 
-        self.update(world, block_pos, get_state_by_state_id(state_id), block)
+        self.update(world, block_pos, BlockState::from_id(state_id), block)
             .await;
     }
 

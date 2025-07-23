@@ -154,7 +154,7 @@ async fn main() {
         if BASIC_CONFIG.java_edition {
             format!("Java Edition: 0.0.0.0:{}", BASIC_CONFIG.java_edition_port)
         } else {
-            String::with_capacity(0)
+            String::new()
         },
         if BASIC_CONFIG.java_edition && BASIC_CONFIG.bedrock_edition {
             " | " // Separator if both are enabled
@@ -167,7 +167,7 @@ async fn main() {
                 BASIC_CONFIG.bedrock_edition_port
             )
         } else {
-            String::with_capacity(0)
+            String::new()
         }
     );
 

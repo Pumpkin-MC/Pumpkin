@@ -4,7 +4,7 @@ use std::{
     hash::Hash,
 };
 
-use pumpkin_data::{Block, block_properties::get_state_by_state_id, chunk::Biome};
+use pumpkin_data::{Block, BlockState, chunk::Biome};
 use pumpkin_util::encompassing_bits;
 
 use crate::block::BlockStateCodec;
@@ -12,7 +12,7 @@ use crate::block::BlockStateCodec;
 use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEntry};
 
 /// 3d array indexed by y,z,x
-type AbstractCube<T, const DIM: u64> = [[[T; DIM]; DIM]; DIM];
+type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
 
 #[derive(Debug, Clone)]
 pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
@@ -430,7 +430,7 @@ impl BlockPalette {
     pub fn non_air_block_count(&self) -> u16 {
         match self {
             Self::Homogeneous(registry_id) => {
-                if !get_state_by_state_id(*registry_id).is_air() {
+                if !BlockState::from_id(*registry_id).is_air() {
                     Self::VOLUME as u16
                 } else {
                     0
@@ -440,7 +440,7 @@ impl BlockPalette {
                 .counts
                 .iter()
                 .map(|(registry_id, count)| {
-                    if !get_state_by_state_id(*registry_id).is_air() {
+                    if !BlockState::from_id(*registry_id).is_air() {
                         *count
                     } else {
                         0

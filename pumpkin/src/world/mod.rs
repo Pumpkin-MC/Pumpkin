@@ -35,19 +35,18 @@ use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
     Block,
-    block_properties::{
-        get_block_and_state_by_state_id, get_block_by_state_id, get_state_by_state_id,
-    },
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     particle::Particle,
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
+};
+use pumpkin_data::{
+    BlockDirection, BlockState, block_properties::get_block_and_state_from_state_id,
 };
 use pumpkin_inventory::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 use pumpkin_macros::send_cancellable;
@@ -718,7 +717,7 @@ impl World {
         let level_settings = LevelSettings {
             seed: self.level.seed.0,
             spawn_biome_type: 0,
-            custom_biome_name: String::with_capacity(0),
+            custom_biome_name: String::new(),
             dimension: VarInt(0),
             generator_type: VarInt(1),
             world_gamemode: VarInt(server.defaultgamemode.lock().await.gamemode as i32),
@@ -736,7 +735,7 @@ impl World {
             day_cycle_stop_time: VarInt(-1),
             education_edition_offer: VarInt(0),
             has_education_features_enabled: false,
-            education_product_id: String::with_capacity(0),
+            education_product_id: String::new(),
             rain_level: weather.rain_level,
             lightning_level: weather.thunder_level,
             has_confirmed_platform_locked_content: false,
@@ -772,15 +771,15 @@ impl World {
             limited_world_width: 0,
             limited_world_height: 0,
             new_nether: true,
-            edu_shared_uri_button_name: String::with_capacity(0),
-            edu_shared_uri_link_uri: String::with_capacity(0),
+            edu_shared_uri_button_name: String::new(),
+            edu_shared_uri_link_uri: String::new(),
             override_force_experimental_gameplay_has_value: false,
             chat_restriction_level: 0,
             disable_player_interactions: false,
-            server_id: String::with_capacity(0),
-            world_id: String::with_capacity(0),
-            scenario_id: String::with_capacity(0),
-            owner_id: String::with_capacity(0),
+            server_id: String::new(),
+            world_id: String::new(),
+            scenario_id: String::new(),
+            owner_id: String::new(),
         };
 
         let client = player.client.bedrock();
@@ -793,9 +792,9 @@ impl World {
                 pitch: 0.0,
                 yaw: 0.0,
                 level_settings,
-                level_id: String::with_capacity(0),
+                level_id: String::new(),
                 level_name: "Pumpkin world".to_string(),
-                premium_world_template_id: String::with_capacity(0),
+                premium_world_template_id: String::new(),
                 is_trial: false,
                 rewind_history_size: VarInt(40),
                 server_authoritative_block_breaking: false,
@@ -2076,7 +2075,7 @@ impl World {
 
             if !flags.contains(BlockFlags::SKIP_DROPS) {
                 let params = LootContextParameters {
-                    block_state: Some(get_state_by_state_id(broken_state_id)),
+                    block_state: Some(BlockState::from_id(broken_state_id)),
                     ..Default::default()
                 };
                 block::drop_loot(self, broken_block, position, true, params).await;
@@ -2115,9 +2114,9 @@ impl World {
         (-20_000_000.0..=20_000_000.0).contains(&y)
     }
     /// Gets a `Block` from the block registry. Returns `Block::AIR` if the block was not found.
-    pub async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
+    pub async fn get_block(&self, position: &BlockPos) -> &'static Block {
         let id = self.get_block_state_id(position).await;
-        get_block_by_state_id(id)
+        Block::from_state_id(id)
     }
 
     pub async fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
@@ -2126,7 +2125,7 @@ impl World {
         if let Ok(fluid) = fluid {
             return fluid;
         }
-        let block = get_block_by_state_id(id);
+        let block = Block::from_state_id(id);
         block
             .properties(id)
             .and_then(|props| {
@@ -2150,21 +2149,18 @@ impl World {
     }
 
     /// Gets the `BlockState` from the block registry. Returns Air if the block state was not found.
-    pub async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState {
+    pub async fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
         let id = self.get_block_state_id(position).await;
-        get_state_by_state_id(id)
+        BlockState::from_id(id)
     }
 
     /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
     pub async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (
-        &'static pumpkin_data::Block,
-        &'static pumpkin_data::BlockState,
-    ) {
+    ) -> (&'static Block, &'static BlockState) {
         let id = self.get_block_state_id(position).await;
-        get_block_and_state_by_state_id(id)
+        get_block_and_state_from_state_id(id)
     }
 
     /// Updates neighboring blocks of a block
@@ -2260,7 +2256,7 @@ impl World {
 
         if new_state_id != block_state.id {
             let flags = flags & !BlockFlags::SKIP_DROPS;
-            if get_state_by_state_id(new_state_id).is_air() {
+            if BlockState::from_id(new_state_id).is_air() {
                 self.break_block(block_pos, None, flags).await;
             } else {
                 self.set_block_state(block_pos, new_state_id, flags).await;
@@ -2542,21 +2538,18 @@ impl pumpkin_world::world::SimpleWorld for World {
 
 #[async_trait]
 impl BlockAccessor for World {
-    async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
+    async fn get_block(&self, position: &BlockPos) -> &'static Block {
         Self::get_block(self, position).await
     }
-    async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState {
+    async fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
         Self::get_block_state(self, position).await
     }
 
     async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (
-        &'static pumpkin_data::Block,
-        &'static pumpkin_data::BlockState,
-    ) {
+    ) -> (&'static Block, &'static BlockState) {
         let id = self.get_block_state(position).await.id;
-        get_block_and_state_by_state_id(id)
+        get_block_and_state_from_state_id(id)
     }
 }

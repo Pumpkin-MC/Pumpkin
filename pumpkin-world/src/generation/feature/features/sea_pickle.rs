@@ -1,8 +1,6 @@
 use pumpkin_data::{
-    Block,
-    block_properties::{
-        BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties, get_state_by_state_id,
-    },
+    Block, BlockState,
+    block_properties::{BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties},
 };
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos, vector2::Vector2},
@@ -41,7 +39,7 @@ impl SeaPickleFeature {
             let pos = BlockPos::new(pos.0.x + x, y, pos.0.z + z);
             chunk.set_block_state(
                 &pos.0,
-                get_state_by_state_id(props.to_state_id(&Block::SEA_PICKLE)),
+                BlockState::from_id(props.to_state_id(&Block::SEA_PICKLE)),
             );
             times += 1;
         }

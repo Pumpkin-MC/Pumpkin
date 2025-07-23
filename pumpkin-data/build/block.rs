@@ -6,6 +6,9 @@ use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
     fs,
+    io::Read,
+    ops::AddAssign,
+    panic,
 };
 use syn::{Ident, LitInt, LitStr};
 
@@ -633,7 +636,14 @@ pub struct BlockAssets {
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/blocks.json");
+    println!("cargo:rerun-if-changed=../assets/bedrock_block_states.nbt");
     println!("cargo:rerun-if-changed=../assets/properties.json");
+
+    let be_blocks_data = fs::read("../assets/bedrock_block_states.nbt").unwrap();
+    let mut be_blocks = std::io::Cursor::new(be_blocks_data);
+    let be_blocks = get_be_data_from_nbt(&mut be_blocks);
+
+    fs::write("lolo.txt", format!("{:?}", be_blocks)).unwrap();
 
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
@@ -678,9 +688,9 @@ pub(crate) fn build() -> TokenStream {
     // Mapping of a collection of property hashes -> blocks that have these properties.
     let mut property_collection_map: HashMap<Vec<i32>, PropertyCollectionData> = HashMap::new();
     // Validator that we have no `enum` collisions.
-    let mut optimized_blocks: Vec<(String, Block)> = Vec::new();
+    let mut optimized_blocks: Vec<Block> = Vec::new();
     for block in blocks_assets.blocks.clone() {
-        optimized_blocks.push((block.name.clone(), block.clone()));
+        optimized_blocks.push(block.clone());
 
         // Collect state IDs that have random ticks.
         for state in &block.states {
@@ -790,8 +800,9 @@ pub(crate) fn build() -> TokenStream {
     let mut type_from_raw_id_array = vec![];
 
     // Generate constants and `match` arms for each block.
-    for (name, block) in optimized_blocks {
-        let const_ident = format_ident!("{}", const_block_name_from_block_name(&name));
+    for block in optimized_blocks {
+        let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
+        let name = &block.name;
         let mut block_tokens = TokenStream::new();
         block.to_tokens(&mut block_tokens);
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
@@ -896,32 +907,10 @@ pub(crate) fn build() -> TokenStream {
             #(#block_entity_types),*
         ];
 
-        pub fn get_block(registry_id: &str) -> Option<&'static Block> {
-           let key = registry_id.strip_prefix("minecraft:").unwrap_or(registry_id);
-           Block::from_registry_key(key)
-        }
-
-        pub fn get_block_by_id(id: u16) -> &'static Block {
-            Block::from_id(id)
-        }
-
-        pub fn get_state_by_state_id(id: u16) -> &'static BlockState {
-            let state: &BlockState = Block::from_state_id(id).states.iter().find(|state| state.id == id).unwrap();
-            state
-        }
-
-        pub fn get_block_by_state_id(id: u16) -> &'static Block {
-            Block::from_state_id(id)
-        }
-
-        pub fn get_block_and_state_by_state_id(id: u16) -> (&'static Block, &'static BlockState) {
+        pub fn get_block_and_state_from_state_id(id: u16) -> (&'static Block, &'static BlockState) {
             let block = Block::from_state_id(id);
             let state: &BlockState = block.states.iter().find(|state| state.id == id).unwrap();
             (block, state)
-        }
-
-        pub fn get_block_by_item(item_id: u16) -> Option<&'static Block> {
-            Block::from_item_id(item_id)
         }
 
         pub fn has_random_ticks(state_id: u16) -> bool {
@@ -930,10 +919,19 @@ pub(crate) fn build() -> TokenStream {
 
         pub fn blocks_movement(block_state: &BlockState) -> bool {
             if block_state.is_solid() {
-                let block = get_block_by_state_id(block_state.id);
+                let block = Block::from_state_id(block_state.id);
                 return block != &Block::COBWEB && block != &Block::BAMBOO_SAPLING;
             }
             false
+        }
+
+        impl BlockState {
+            #[doc = r" Try to parse a block state from a state id."]
+            #[doc = r" This should only be used if you dont need to have acces to the block."]
+            pub fn from_id(id: u16) -> &'static Self {
+                let state: &Self = Block::from_state_id(id).states.iter().find(|state| state.id == id).unwrap();
+                state
+            }
         }
 
         impl Block {
@@ -958,7 +956,13 @@ pub(crate) fn build() -> TokenStream {
                 Self::BLOCK_FROM_NAME_MAP.get(name)
             }
 
-            #[doc = r" Try to parse a block from a raw id."]
+            #[doc = r" Try to get a block from a namespace prefixed name."]
+            pub fn from_name(name: &str) -> Option<&'static Self> {
+                let key = name.strip_prefix("minecraft:").unwrap_or(name);
+                Self::BLOCK_FROM_NAME_MAP.get(key)
+            }
+
+            #[doc = r" Get a block from a raw block id."]
             pub const fn from_id(id: u16) -> &'static Self {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     &Self::AIR
@@ -967,7 +971,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            #[doc = r" Try to parse a block from a state id."]
+            #[doc = r" Get a block from a state id."]
             pub const fn from_state_id(id: u16) -> &'static Self {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     return &Self::AIR;
@@ -1080,4 +1084,84 @@ pub(crate) fn build() -> TokenStream {
             }
         }
     }
+}
+
+fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> HashMap<String, u32> {
+    let mut block_data: HashMap<String, u32> = HashMap::new();
+
+    while read_byte(reader) == 10 {
+        let len = read_varint(reader);
+        let mut buf = vec![0; len as usize];
+        reader.read_exact(&mut buf).unwrap();
+
+        let mut name = String::new();
+        let mut byte = read_byte(reader);
+
+        while byte != 0 {
+            let mut name_buf = vec![0; read_varint(reader) as usize];
+            reader.read_exact(&mut name_buf).unwrap();
+            let cp_name = String::from_utf8(name_buf).unwrap();
+
+            match cp_name.as_str() {
+                "name" => {
+                    let mut name_buf = vec![0; read_varint(reader) as usize];
+                    reader.read_exact(&mut name_buf).unwrap();
+                    name = String::from_utf8(name_buf).unwrap();
+                }
+                "states" => {
+                    let mut byte = read_byte(reader);
+                    while byte != 0 {
+                        let mut b = &mut vec![0; read_varint(reader) as usize];
+                        reader.read_exact(&mut b).unwrap();
+
+                        match byte {
+                            8 => {
+                                let mut b = &mut vec![0; read_varint(reader) as usize];
+                                reader.read_exact(&mut b).unwrap();
+                            }
+                            3 => {
+                                read_varint(reader);
+                            }
+                            1 => {
+                                read_byte(reader);
+                            }
+                            _ => panic!("{}", byte),
+                        }
+                        byte = read_byte(reader);
+                    }
+                }
+                "version" => {
+                    read_varint(reader);
+                }
+                _ => panic!(),
+            }
+            byte = read_byte(reader);
+        }
+
+        if block_data.contains_key(&name) {
+            block_data.get_mut(&name).unwrap().add_assign(1);
+        } else {
+            block_data.insert(name, 0);
+        }
+    }
+    block_data
+}
+
+fn read_varint<W: Read>(reader: &mut W) -> u32 {
+    let mut val = 0;
+    for i in 0..5u32 {
+        let mut byte = [0];
+        reader.read(&mut byte).unwrap();
+        val |= (u32::from(byte[0]) & 0x7F) << (i * 7);
+        if byte[0] & 0x80 == 0 {
+            return val;
+        }
+    }
+    panic!()
+}
+
+fn read_byte<W: Read>(reader: &mut W) -> u8 {
+    let mut byte = [0];
+    reader.read_exact(&mut byte).unwrap_or_default();
+    byte[0]
 }

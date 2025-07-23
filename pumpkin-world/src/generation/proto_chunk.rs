@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{blocks_movement, get_block_and_state_by_state_id, get_block_by_state_id},
+    block_properties::{blocks_movement, get_block_and_state_from_state_id},
     chunk::Biome,
     tag::Tagable,
 };
@@ -378,7 +378,7 @@ impl<'a> ProtoChunk<'a> {
 
         if blocks_movement(block_state) || block_state.is_liquid() {
             self.maybe_update_motion_blocking_height_map(pos);
-            let block = get_block_by_state_id(block_state.id);
+            let block = Block::from_state_id(block_state.id);
             if !block.is_tagged_with("minecraft:leaves").unwrap() {
                 {
                     self.maybe_update_motion_blocking_no_leaves_height_map(pos);
@@ -768,12 +768,9 @@ impl BlockAccessor for ProtoChunk<'_> {
     async fn get_block_and_block_state(
         &self,
         position: &BlockPos,
-    ) -> (
-        &'static pumpkin_data::Block,
-        &'static pumpkin_data::BlockState,
-    ) {
+    ) -> (&'static Block, &'static BlockState) {
         let id = self.get_block_state(&position.0);
-        get_block_and_state_by_state_id(id.0)
+        get_block_and_state_from_state_id(id.0)
     }
 }
 

@@ -1,8 +1,6 @@
 use pumpkin_data::{
-    Block,
-    block_properties::{
-        BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties, get_state_by_state_id,
-    },
+    Block, BlockState,
+    block_properties::{BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties},
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2},
@@ -41,7 +39,7 @@ impl SeagrassFeature {
                     chunk.set_block_state(&top_pos.0, Block::TALL_SEAGRASS.default_state);
                     chunk.set_block_state(
                         &tall_pos.0,
-                        get_state_by_state_id(props.to_state_id(&Block::TALL_SEAGRASS)),
+                        BlockState::from_id(props.to_state_id(&Block::TALL_SEAGRASS)),
                     );
                 }
             } else {
