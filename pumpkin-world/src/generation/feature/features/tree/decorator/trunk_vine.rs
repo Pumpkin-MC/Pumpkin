@@ -28,7 +28,7 @@ impl TrunkVineTreeDecorator {
                 vine.east = true;
                 chunk.set_block_state(
                     &pos.offset(BlockDirection::West.to_offset()).0,
-                    get_state_by_state_id(vine.to_state_id(&Block::VINE)).unwrap(),
+                    get_state_by_state_id(vine.to_state_id(&Block::VINE)),
                 );
             }
 
@@ -39,7 +39,7 @@ impl TrunkVineTreeDecorator {
                 vine.west = true;
                 chunk.set_block_state(
                     &pos.offset(BlockDirection::West.to_offset()).0,
-                    get_state_by_state_id(vine.to_state_id(&Block::VINE)).unwrap(),
+                    get_state_by_state_id(vine.to_state_id(&Block::VINE)),
                 );
             }
 
@@ -50,7 +50,7 @@ impl TrunkVineTreeDecorator {
                 vine.south = true;
                 chunk.set_block_state(
                     &pos.offset(BlockDirection::West.to_offset()).0,
-                    get_state_by_state_id(vine.to_state_id(&Block::VINE)).unwrap(),
+                    get_state_by_state_id(vine.to_state_id(&Block::VINE)),
                 );
             }
 
@@ -61,7 +61,7 @@ impl TrunkVineTreeDecorator {
                 vine.north = true;
                 chunk.set_block_state(
                     &pos.offset(BlockDirection::West.to_offset()).0,
-                    get_state_by_state_id(vine.to_state_id(&Block::VINE)).unwrap(),
+                    get_state_by_state_id(vine.to_state_id(&Block::VINE)),
                 );
             }
         }

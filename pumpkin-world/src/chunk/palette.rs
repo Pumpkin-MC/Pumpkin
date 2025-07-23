@@ -14,7 +14,7 @@ use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEnt
 /// 3d array indexed by y,z,x
 type AbstractCube<T, const DIM: u64> = [[[T; DIM]; DIM]; DIM];
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
     cube: Box<AbstractCube<V, DIM>>,
     counts: HashMap<V, u16>,
@@ -53,7 +53,7 @@ impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
 
 /// A paletted container is a cube of registry ids. It uses a custom compression scheme based on how
 /// may distinct registry ids are in the cube.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PalettedContainer<V: Hash + Eq + Copy + Default, const DIM: usize> {
     Homogeneous(V),
     Heterogeneous(Box<HeterogeneousPaletteData<V, DIM>>),
@@ -298,7 +298,7 @@ impl BiomePalette {
 
         Self::from_palette_and_packed_data(
             &palette,
-            nbt.data.as_ref().unwrap_or(&vec![].into_boxed_slice()),
+            nbt.data.as_ref().unwrap_or(&Box::default()),
             BIOME_DISK_MIN_BITS,
         )
     }
@@ -374,7 +374,7 @@ impl BlockPalette {
     pub fn non_air_block_count(&self) -> u16 {
         match self {
             Self::Homogeneous(registry_id) => {
-                if !get_state_by_state_id(*registry_id).unwrap().is_air() {
+                if !get_state_by_state_id(*registry_id).is_air() {
                     Self::VOLUME as u16
                 } else {
                     0
@@ -384,7 +384,7 @@ impl BlockPalette {
                 .counts
                 .iter()
                 .map(|(registry_id, count)| {
-                    if !get_state_by_state_id(*registry_id).unwrap().is_air() {
+                    if !get_state_by_state_id(*registry_id).is_air() {
                         *count
                     } else {
                         0
@@ -398,22 +398,12 @@ impl BlockPalette {
         let palette = nbt
             .palette
             .into_iter()
-            .map(|entry| {
-                if let Some(block_state) = entry.get_state() {
-                    block_state.id
-                } else {
-                    log::warn!(
-                        "Could not find valid block state for {}. Defaulting...",
-                        entry.name.name
-                    );
-                    0
-                }
-            })
+            .map(|entry| entry.get_state_id())
             .collect::<Vec<_>>();
 
         Self::from_palette_and_packed_data(
             &palette,
-            nbt.data.as_ref().unwrap_or(&vec![].into_boxed_slice()),
+            nbt.data.as_ref().unwrap_or(&Box::default()),
             BLOCK_DISK_MIN_BITS,
         )
     }
@@ -435,7 +425,7 @@ impl BlockPalette {
     }
 
     fn block_state_id_to_palette_entry(registry_id: u16) -> BlockStateCodec {
-        let block = Block::from_state_id(registry_id).unwrap();
+        let block = Block::from_state_id(registry_id);
 
         BlockStateCodec {
             name: block,

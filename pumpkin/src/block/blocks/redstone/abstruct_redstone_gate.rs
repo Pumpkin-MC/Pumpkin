@@ -153,34 +153,33 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
     }
 
     async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        if let Some(state) = get_state_by_state_id(args.state_id) {
-            if RedstoneGateBlock::has_power(self, args.world, *args.position, state, args.block)
-                .await
-            {
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
-            }
+        if RedstoneGateBlock::has_power(
+            self,
+            args.world,
+            *args.position,
+            get_state_by_state_id(args.state_id),
+            args.block,
+        )
+        .await
+        {
+            args.world
+                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
+                .await;
         }
     }
 
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        if args.moved
-            || Block::from_state_id(args.old_state_id)
-                .is_some_and(|old_block| old_block == args.block)
-        {
+        if args.moved || Block::from_state_id(args.old_state_id) == args.block {
             return;
         }
-        if let Some(old_state) = get_state_by_state_id(args.old_state_id) {
-            RedstoneGateBlock::update_target(
-                self,
-                args.world,
-                *args.position,
-                old_state.id,
-                args.block,
-            )
-            .await;
-        }
+        RedstoneGateBlock::update_target(
+            self,
+            args.world,
+            *args.position,
+            get_state_by_state_id(args.old_state_id).id,
+            args.block,
+        )
+        .await;
     }
 
     async fn is_target_not_aligned(

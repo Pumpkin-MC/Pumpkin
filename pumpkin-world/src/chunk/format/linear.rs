@@ -1,4 +1,4 @@
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Read};
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -9,8 +9,9 @@ use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use async_trait::async_trait;
 use bytes::{Buf, BufMut, Bytes};
 use log::error;
-use pumpkin_config::advanced_config;
 use pumpkin_util::math::vector2::Vector2;
+use ruzstd::decoding::StreamingDecoder;
+use ruzstd::encoding::{CompressionLevel, compress_to_vec};
 use tokio::io::{AsyncWriteExt, BufWriter};
 
 use super::anvil::CHUNK_COUNT;
@@ -201,17 +202,13 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
             data_buffer.extend_from_slice(chunk);
         }
 
-        // TODO: maybe zstd lib has memory leaks
-        let compressed_buffer = zstd::bulk::compress(
-            data_buffer.as_slice(),
-            advanced_config().chunk.compression.level as i32,
-        )
-        .expect("Failed to compress the data buffer")
-        .into_boxed_slice();
+        // TODO: Currently ruzstd only supports fastest
+        let compressed_buffer =
+            compress_to_vec(data_buffer.as_slice(), CompressionLevel::Fastest).into_boxed_slice();
 
         let file_header = LinearFileHeader {
             chunks_bytes: compressed_buffer.len(),
-            compression_level: advanced_config().chunk.compression.level as u8,
+            compression_level: 1, // TODO: Currently ruzstd only supports fastest
             chunks_count: self
                 .chunks_headers
                 .iter()
@@ -260,7 +257,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         let file_header = LinearFileHeader::from_bytes(header_bytes);
         file_header.check_version()?;
 
-        let Some((raw_file_bytes, signature)) =
+        let Some((mut raw_file_bytes, signature)) =
             raw_file_bytes.split_at_checked(file_header.chunks_bytes)
         else {
             return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
@@ -268,10 +265,14 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
 
         Self::check_signature(signature)?;
 
-        // TODO: Review the buffer size limit or find ways to improve performance (maybe zstd lib has memory leaks)
-        let mut buffer: Bytes = zstd::bulk::decompress(raw_file_bytes, 200 * 1024 * 1024) // 200MB limit for the decompression buffer size
-            .map_err(|err| ChunkReadingError::IoError(err.kind()))?
-            .into();
+        let mut decoder = StreamingDecoder::new(&mut raw_file_bytes)
+            .map_err(|_| ChunkReadingError::RegionIsInvalid)?;
+
+        let mut buffer = Vec::new();
+        decoder
+            .read_to_end(&mut buffer)
+            .map_err(|err| ChunkReadingError::IoError(err.kind()))?;
+        let mut buffer: Bytes = buffer.into();
 
         let headers_buffer = buffer.split_to(LinearChunkHeader::CHUNK_HEADER_SIZE * CHUNK_COUNT);
 
@@ -394,7 +395,7 @@ mod tests {
 
     #[async_trait]
     impl BlockRegistryExt for BlockRegistry {
-        async fn can_place_at(
+        fn can_place_at(
             &self,
             _block: &pumpkin_data::Block,
             _block_accessor: &dyn BlockAccessor,
@@ -458,9 +459,7 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator
-                    .generate_chunk(&level, block_registry.as_ref(), &position)
-                    .await;
+                let chunk = generator.generate_chunk(&level, block_registry.as_ref(), &position);
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }

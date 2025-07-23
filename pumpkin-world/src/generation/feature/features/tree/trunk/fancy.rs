@@ -24,7 +24,7 @@ pub struct FancyTrunkPlacer;
 
 impl FancyTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
@@ -69,8 +69,7 @@ impl FancyTrunkPlacer {
                     block_pos_2.0,
                     trunk_block,
                     false,
-                )
-                .await;
+                );
                 logs.extend_from_slice(&new_logs);
 
                 if !i {
@@ -91,8 +90,7 @@ impl FancyTrunkPlacer {
                     block_pos.0,
                     trunk_block,
                     false,
-                )
-                .await;
+                );
                 logs.extend_from_slice(&new_logs);
 
                 if !i {
@@ -109,9 +107,8 @@ impl FancyTrunkPlacer {
             start_pos.up_height(k).0,
             trunk_block,
             true,
-        )
-        .await;
-        Self::make_branches(chunk, level, j, start_pos.0, trunk_block, &list).await;
+        );
+        Self::make_branches(chunk, level, j, start_pos.0, trunk_block, &list);
 
         let mut list_2: Vec<TreeNode> = Vec::new();
         for branch_position in list {
@@ -122,7 +119,7 @@ impl FancyTrunkPlacer {
         (list_2, logs)
     }
 
-    async fn make_or_check_branch(
+    fn make_or_check_branch(
         chunk: &mut ProtoChunk<'_>,
         _level: &Arc<Level>,
         start_pos: Vector3<i32>,
@@ -159,7 +156,7 @@ impl FancyTrunkPlacer {
                 let axis = Self::get_log_axis(start_pos, block_pos_2.0);
 
                 if TreeFeature::can_replace(block.to_state(), block.to_block()) {
-                    let block = get_block_by_state_id(trunk_provider.id).unwrap();
+                    let block = get_block_by_state_id(trunk_provider.id);
                     let original_props = &block.properties(trunk_provider.id).unwrap().to_props();
                     let axis = axis.to_value();
                     // Set the right Axis
@@ -175,8 +172,7 @@ impl FancyTrunkPlacer {
                         .collect();
                     let state = block.from_properties(props).unwrap().to_state_id(block);
                     if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
-                        chunk
-                            .set_block_state(&block_pos_2.0, get_state_by_state_id(state).unwrap());
+                        chunk.set_block_state(&block_pos_2.0, get_state_by_state_id(state));
                     } else {
                         // level.set_block_state(&block_pos_2, state).await;
                     }
@@ -193,7 +189,7 @@ impl FancyTrunkPlacer {
         (true, logs)
     }
 
-    async fn make_branches(
+    fn make_branches(
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
         tree_height: i32,
@@ -216,8 +212,7 @@ impl FancyTrunkPlacer {
                 branch_position.node.center.0,
                 trunk_provider,
                 true,
-            )
-            .await;
+            );
         }
     }
 

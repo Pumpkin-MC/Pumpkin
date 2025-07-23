@@ -3,11 +3,11 @@ use std::{collections::HashMap, net::IpAddr};
 use base64::{Engine, engine::general_purpose};
 use pumpkin_config::{advanced_config, networking::auth::TextureConfig};
 use pumpkin_protocol::Property;
-use reqwest::{StatusCode, Url};
 use rsa::RsaPublicKey;
 use rsa::pkcs8::DecodePublicKey;
 use serde::Deserialize;
 use thiserror::Error;
+use ureq::http::{StatusCode, Uri};
 use uuid::Uuid;
 
 use super::GameProfile;
@@ -60,11 +60,10 @@ const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
 /// 3. Now our server will send a Request to the Session servers and check if the Player has joined the Session Server .
 ///
 /// See <https://pumpkinmc.org/developer/networking/authentication>
-pub async fn authenticate(
+pub fn authenticate(
     username: &str,
     server_hash: &str,
     ip: &IpAddr,
-    auth_client: &reqwest::Client,
 ) -> Result<GameProfile, AuthError> {
     let address = if advanced_config()
         .networking
@@ -95,17 +94,18 @@ pub async fn authenticate(
             .replace("{server_hash}", server_hash)
     };
 
-    let response = auth_client
-        .get(address)
-        .send()
-        .await
+    let mut response = ureq::get(address)
+        .call()
         .map_err(|_| AuthError::FailedResponse)?;
     match response.status() {
         StatusCode::OK => {}
         StatusCode::NO_CONTENT => Err(AuthError::UnverifiedUsername)?,
         other => Err(AuthError::UnknownStatusCode(other))?,
     }
-    let profile: GameProfile = response.json().await.map_err(|_| AuthError::FailedParse)?;
+    let profile: GameProfile = response
+        .body_mut()
+        .read_json()
+        .map_err(|_| AuthError::FailedParse)?;
     Ok(profile)
 }
 
@@ -116,36 +116,37 @@ pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<
     let textures: ProfileTextures =
         serde_json::from_slice(&from64).map_err(|e| TextureError::JSONError(e.to_string()))?;
     for texture in textures.textures {
-        let url =
-            Url::parse(&texture.1.url).map_err(|e| TextureError::InvalidURL(e.to_string()))?;
+        let url = texture
+            .1
+            .url
+            .parse()
+            .map_err(|_| TextureError::InvalidURL)?;
         is_texture_url_valid(&url, config)?;
     }
     Ok(())
 }
 
-pub fn is_texture_url_valid(url: &Url, config: &TextureConfig) -> Result<(), TextureError> {
-    let scheme = url.scheme();
+pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), TextureError> {
+    let scheme = url.scheme().unwrap();
     if !config
         .allowed_url_schemes
         .iter()
-        .any(|allowed_scheme| scheme.ends_with(allowed_scheme))
+        .any(|allowed_scheme| scheme.as_str().ends_with(allowed_scheme))
     {
         return Err(TextureError::DisallowedUrlScheme(scheme.to_string()));
     }
-    let domain = url.domain().unwrap_or("");
+    let domain = url.authority().unwrap();
     if !config
         .allowed_url_domains
         .iter()
-        .any(|allowed_domain| domain.ends_with(allowed_domain))
+        .any(|allowed_domain| domain.as_str().ends_with(allowed_domain))
     {
         return Err(TextureError::DisallowedUrlDomain(domain.to_string()));
     }
     Ok(())
 }
 
-pub async fn fetch_mojang_public_keys(
-    auth_client: &reqwest::Client,
-) -> Result<Vec<RsaPublicKey>, AuthError> {
+pub fn fetch_mojang_public_keys() -> Result<Vec<RsaPublicKey>, AuthError> {
     let services_url = advanced_config()
         .networking
         .authentication
@@ -155,10 +156,8 @@ pub async fn fetch_mojang_public_keys(
 
     let url = format!("{services_url}/publickeys");
 
-    let response = auth_client
-        .get(url)
-        .send()
-        .await
+    let mut response = ureq::get(url)
+        .call()
         .map_err(|_| AuthError::FailedResponse)?;
 
     match response.status() {
@@ -167,8 +166,10 @@ pub async fn fetch_mojang_public_keys(
         other => Err(AuthError::UnknownStatusCode(other))?,
     }
 
-    let public_keys: MojangPublicKeys =
-        response.json().await.map_err(|_| AuthError::FailedParse)?;
+    let public_keys: MojangPublicKeys = response
+        .body_mut()
+        .read_json()
+        .map_err(|_| AuthError::FailedParse)?;
 
     let as_rsa_keys = public_keys
         .player_certificate_keys
@@ -186,8 +187,6 @@ pub async fn fetch_mojang_public_keys(
 
 #[derive(Error, Debug)]
 pub enum AuthError {
-    #[error("Missing auth client")]
-    MissingAuthClient,
     #[error("Authentication servers are down")]
     FailedResponse,
     #[error("Failed to verify username")]
@@ -206,8 +205,8 @@ pub enum AuthError {
 
 #[derive(Error, Debug)]
 pub enum TextureError {
-    #[error("Invalid URL {0}")]
-    InvalidURL(String),
+    #[error("Invalid URL")]
+    InvalidURL,
     #[error("Invalid URL scheme for player texture: {0}")]
     DisallowedUrlScheme(String),
     #[error("Invalid URL domain for player texture: {0}")]

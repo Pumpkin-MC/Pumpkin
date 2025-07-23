@@ -9,7 +9,6 @@ phf = { version = "0.12.1", features = ["macros"] }
 pumpkin-util = { path = "../pumpkin-util" }
 
 serde.workspace = true
-serde_json.workspace = true
 
 [build-dependencies]
 pumpkin-util = { path = "../pumpkin-util" }
@@ -22,3 +21,4 @@ heck = "0.5"
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = "2.0"
+rayon.workspace = true

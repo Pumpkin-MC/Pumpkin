@@ -96,13 +96,14 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
 });
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-const GIT_VERSION: &str = env!("GIT_VERSION");
 
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
 // runtime with a channel! See `Level::fetch_chunks` as an example!
 #[tokio::main]
 async fn main() {
+    #[cfg(feature = "console-subscriber")]
+    console_subscriber::init();
     #[cfg(feature = "dhat-heap")]
     {
         let profiler = dhat::Profiler::new_heap();
@@ -121,13 +122,8 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-
-    rayon::ThreadPoolBuilder::new()
-        .thread_name(|_| "rayon-worker".to_string())
-        .build_global()
-        .expect("Rayon thread pool can only be initialized once");
     log::info!(
-        "Starting Pumpkin {CARGO_PKG_VERSION} ({GIT_VERSION}) for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
+        "Starting Pumpkin {CARGO_PKG_VERSION} for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
     );
 
     log::debug!(

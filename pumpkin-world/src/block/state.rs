@@ -17,12 +17,12 @@ impl RawBlockState {
 
     #[inline]
     pub fn to_state(&self) -> &'static pumpkin_data::BlockState {
-        get_state_by_state_id(self.0).unwrap()
+        get_state_by_state_id(self.0)
     }
 
     #[inline]
     pub fn to_block(&self) -> &'static pumpkin_data::Block {
-        get_block_by_state_id(self.0).unwrap()
+        get_block_by_state_id(self.0)
     }
 }
 

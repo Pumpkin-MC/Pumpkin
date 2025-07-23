@@ -29,6 +29,7 @@ pub mod turbo;
 
 // abstruct
 pub mod abstruct_redstone_gate;
+pub mod dispenser;
 
 pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
     for direction in BlockDirection::all() {
@@ -169,10 +170,10 @@ async fn get_strong_power(
 }
 
 pub async fn block_receives_redstone_power(world: &World, pos: &BlockPos) -> bool {
-    for face in BlockDirection::all() {
-        let neighbor_pos = pos.offset(face.to_offset());
+    for facing in BlockDirection::all() {
+        let neighbor_pos = pos.offset(facing.to_offset());
         let (block, state) = world.get_block_and_block_state(&neighbor_pos).await;
-        if is_emitting_redstone_power(block, state, world, &neighbor_pos, face).await {
+        if is_emitting_redstone_power(block, state, world, &neighbor_pos, facing).await {
             return true;
         }
     }

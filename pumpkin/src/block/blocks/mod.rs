@@ -8,7 +8,7 @@ pub mod campfire;
 pub mod candle_cakes;
 pub mod candles;
 pub mod carpet;
-pub mod chest;
+pub mod chests;
 pub mod chiseled_bookshelf;
 pub mod command;
 pub mod composter;
@@ -35,7 +35,6 @@ pub mod piston;
 pub mod plant;
 pub mod pumpkin;
 pub mod redstone;
-pub mod sea_pickles;
 pub mod signs;
 pub mod skull_block;
 pub mod slabs;
@@ -47,5 +46,14 @@ pub mod trapdoor;
 pub mod vine;
 pub mod walls;
 
+pub mod banners;
+
+pub mod blast_furnace;
+
+pub mod smoker;
+
+pub mod ender_chest;
+
 // abstruct
 pub mod abstruct_wall_mounting;
+pub mod lectern;

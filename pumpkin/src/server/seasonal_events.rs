@@ -1,13 +1,13 @@
-use chrono::{Datelike, Local};
 use pumpkin_config::advanced_config;
 use rand::{rng, seq::SliceRandom};
+use time::{Month, OffsetDateTime};
 
 // In fact Mojang also has some Seasonal Events, so we can use that later to match Vanilla :D
 
 #[must_use]
 pub fn is_april() -> bool {
-    let data = Local::now();
-    data.day() == 1 && data.month() == 4
+    let data = OffsetDateTime::now_utc();
+    data.day() == 1 && data.month() == Month::April
 }
 
 #[must_use]

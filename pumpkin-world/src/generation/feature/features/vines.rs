@@ -44,7 +44,7 @@ impl VinesFeature {
             vine.up = dir == BlockDirection::Up;
             chunk.set_block_state(
                 &pos.0,
-                get_state_by_state_id(vine.to_state_id(&Block::VINE)).unwrap(),
+                get_state_by_state_id(vine.to_state_id(&Block::VINE)),
             );
             return true;
         }

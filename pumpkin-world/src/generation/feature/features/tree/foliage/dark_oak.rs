@@ -13,7 +13,7 @@ pub struct DarkOakFoliagePlacer;
 
 impl DarkOakFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -37,8 +37,7 @@ impl DarkOakFoliagePlacer {
                 -1,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
             FoliagePlacer::generate_square(
                 self,
                 chunk,
@@ -49,8 +48,7 @@ impl DarkOakFoliagePlacer {
                 0,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
             FoliagePlacer::generate_square(
                 self,
                 chunk,
@@ -61,8 +59,7 @@ impl DarkOakFoliagePlacer {
                 1,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
             if random.next_bool() {
                 FoliagePlacer::generate_square(
                     self,
@@ -74,8 +71,7 @@ impl DarkOakFoliagePlacer {
                     2,
                     node.giant_trunk,
                     foliage_provider,
-                )
-                .await;
+                );
             }
         } else {
             FoliagePlacer::generate_square(
@@ -88,8 +84,7 @@ impl DarkOakFoliagePlacer {
                 -1,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
             FoliagePlacer::generate_square(
                 self,
                 chunk,
@@ -100,8 +95,7 @@ impl DarkOakFoliagePlacer {
                 0,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
         }
     }
 

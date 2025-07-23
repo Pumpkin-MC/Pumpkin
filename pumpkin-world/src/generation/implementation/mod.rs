@@ -28,7 +28,7 @@ pub trait GeneratorInit {
 
 #[async_trait]
 pub trait WorldGenerator: Sync + Send {
-    async fn generate_chunk(
+    fn generate_chunk(
         &self,
         level: &Arc<Level>,
         block_registry: &dyn BlockRegistryExt,
@@ -63,7 +63,7 @@ impl GeneratorInit for VanillaGenerator {
 
 #[async_trait]
 impl WorldGenerator for VanillaGenerator {
-    async fn generate_chunk(
+    fn generate_chunk(
         &self,
         level: &Arc<Level>,
         block_registry: &dyn BlockRegistryExt,
@@ -88,7 +88,7 @@ impl WorldGenerator for VanillaGenerator {
         proto_chunk.populate_biomes(self.dimension);
         proto_chunk.populate_noise();
         proto_chunk.build_surface();
-        proto_chunk.generate_features(level, block_registry).await;
+        proto_chunk.generate_features(level, block_registry);
 
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
             for z in 0..BiomePalette::SIZE {
