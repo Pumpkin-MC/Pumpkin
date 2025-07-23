@@ -9,6 +9,7 @@ use crate::command::{
     tree::{CommandTree, builder::argument},
 };
 use async_trait::async_trait;
+use log::info;
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::text::TextComponent;
 
@@ -39,12 +40,27 @@ impl CommandExecutor for DefaultWorldSpawnExecutor {
                 "Failed to get world.",
             ))));
         };
+        info!("{:?}", block_pos);
 
         let mut level_info_guard = world.level_info.write().await;
         level_info_guard.spawn_x = block_pos.0.x;
         level_info_guard.spawn_y = block_pos.0.y;
         level_info_guard.spawn_z = block_pos.0.z;
+        
+        let yaw = level_info_guard.spawn_angle;
         drop(level_info_guard);
+
+        sender
+            .send_message(TextComponent::translate(
+                "commands.setworldspawn.success",
+                [
+                    TextComponent::text(block_pos.0.x.to_string()),
+                    TextComponent::text(block_pos.0.y.to_string()),
+                    TextComponent::text(block_pos.0.z.to_string()),
+                    TextComponent::text(yaw.to_string())
+                ],
+            ))
+            .await;
 
         Ok(())
     }
@@ -91,6 +107,8 @@ impl CommandExecutor for AngleWorldSpawnExecutor {
         level_info_guard.spawn_y = block_pos.0.y;
         level_info_guard.spawn_z = block_pos.0.z;
 
+        // FIXME: not being saved
+        
         level_info_guard.spawn_angle = *yaw;
 
         drop(level_info_guard);
@@ -102,6 +120,7 @@ impl CommandExecutor for AngleWorldSpawnExecutor {
                     TextComponent::text(block_pos.0.x.to_string()),
                     TextComponent::text(block_pos.0.y.to_string()),
                     TextComponent::text(block_pos.0.z.to_string()),
+                    TextComponent::text(yaw.to_string())
                 ],
             ))
             .await;

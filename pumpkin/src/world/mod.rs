@@ -897,9 +897,9 @@ impl World {
             let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
 
             let position = Vector3::new(
-                f64::from(info.spawn_x),
+                f64::from(info.spawn_x) + 0.5,
                 f64::from(pos_y),
-                f64::from(info.spawn_z),
+                f64::from(info.spawn_z) + 0.5,
             );
             let yaw = info.spawn_angle;
             let pitch = 0.0;
@@ -1276,7 +1276,7 @@ impl World {
                 .await;
 
             (
-                Vector3::new(info.spawn_x.into(), (top + 1).into(), info.spawn_z.into()),
+                Vector3::new(f64::from(info.spawn_x) + 0.5, (top + 1).into(), f64::from(info.spawn_z) + 0.5),
                 info.spawn_angle,
             )
         };
