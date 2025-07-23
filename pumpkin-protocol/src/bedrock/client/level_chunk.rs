@@ -2,7 +2,7 @@ use std::io::{Error, Write};
 
 use pumpkin_macros::packet;
 use pumpkin_util::encompassing_bits;
-use pumpkin_world::chunk::{palette::NetworkPalette, ChunkData};
+use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
@@ -58,13 +58,15 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
                 NetworkPalette::Indirect(palette) => {
                     VarInt(palette.len() as i32).write(data_write)?;
                     for mut id in palette {
-                        if id == 0 { id = u16::MAX;} else {
-                            id = id;
+                        if id == 0 {
+                            id = u16::MAX;
+                        } else {
+                            id = 1;
                         }
                         VarInt(id as i32).write(data_write)?;
                     }
                 }
-                NetworkPalette::Direct => ()
+                NetworkPalette::Direct => (),
             }
         }
 
@@ -95,7 +97,7 @@ fn encode_storage<W: Write>(
         VarInt(0).write(writer)?;
         return Ok(());
     }
-    
+
     let bits_per_index: u8 = encompassing_bits(palette_size as _);
 
     let format = bits_per_index << 1 | 1;

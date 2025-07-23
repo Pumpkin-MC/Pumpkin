@@ -388,23 +388,23 @@ impl BlockPalette {
                     .collect();
 
                 let blocks_per_word = 32 / bits_per_entry;
-    
+
                 // Direktes Verarbeiten in der Reihenfolge [x][y][z] ohne Kopie
                 let mut packed_data = Vec::new();
                 let mut current_word = 0;
                 let mut current_index = 0;
-    
+
                 for x in 0..16 {
                     for y in 0..16 {
                         for z in 0..16 {
                             let key = data.cube[z][y][x]; // Zugriff in [x][y][z]-Reihenfolge
                             let key_index = key_to_index_map.get(&key).unwrap();
                             debug_assert!((1 << bits_per_entry) > *key_index);
-    
-                            let packed_offset_index =
-                                (*key_index as u32) << (bits_per_entry as u32 * current_index as u32);
+
+                            let packed_offset_index = (*key_index as u32)
+                                << (bits_per_entry as u32 * current_index as u32);
                             current_word |= packed_offset_index;
-    
+
                             current_index += 1;
                             if current_index == blocks_per_word {
                                 packed_data.push(current_word);
