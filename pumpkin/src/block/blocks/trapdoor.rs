@@ -1,7 +1,5 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::{
-    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock,
-};
+use crate::block::pumpkin_block::{NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::world::World;

@@ -13,8 +13,8 @@ use crate::{
     block::{
         BlockIsReplacing,
         pumpkin_block::{
-            CanPlaceAtArgs, CanUpdateAtArgs, NormalUseArgs, OnPlaceArgs,
-            PumpkinBlock, UseWithItemArgs,
+            CanPlaceAtArgs, CanUpdateAtArgs, NormalUseArgs, OnPlaceArgs, PumpkinBlock,
+            UseWithItemArgs,
         },
         registry::BlockActionResult,
     },

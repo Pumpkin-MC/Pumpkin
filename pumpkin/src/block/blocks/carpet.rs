@@ -12,7 +12,6 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 #[pumpkin_block_from_tag("minecraft:wool_carpets")]
 pub struct CarpetBlock;
 
-
 #[async_trait]
 impl PumpkinBlock for CarpetBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
