@@ -112,9 +112,9 @@ impl<T: PacketRead, const N: usize> PacketRead for [T; N] {
 impl PacketRead for String {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let len = VarUInt::read(reader)?.0 as _;
-        #[allow(clippy::uninit_vec)]
         let mut buf = Vec::with_capacity(len);
         unsafe {
+            #[allow(clippy::uninit_vec)]
             buf.set_len(len);
         }
         reader.read_exact(&mut buf)?;
