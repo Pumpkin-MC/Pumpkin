@@ -333,8 +333,7 @@ impl Slot for ResultSlot {
     }
 
     fn set_id(&self, id: usize) {
-        self.id
-            .store(id as u8, Ordering::Relaxed);
+        self.id.store(id as u8, Ordering::Relaxed);
     }
 
     async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {

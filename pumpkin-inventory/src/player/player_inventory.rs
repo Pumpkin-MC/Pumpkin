@@ -417,15 +417,13 @@ impl Inventory for PlayerInventory {
 impl PlayerInventory {
     pub fn set_selected_slot(&self, slot: u8) {
         if Self::is_valid_hotbar_index(slot as usize) {
-            self.selected_slot
-                .store(slot, Ordering::Relaxed);
+            self.selected_slot.store(slot, Ordering::Relaxed);
         } else {
             panic!("Invalid hotbar slot: {slot}");
         }
     }
 
     pub fn get_selected_slot(&self) -> u8 {
-        self.selected_slot
-            .load(Ordering::Relaxed)
+        self.selected_slot.load(Ordering::Relaxed)
     }
 }

@@ -1,4 +1,7 @@
-use std::{f32::{self}, sync::atomic::Ordering};
+use std::{
+    f32::{self},
+    sync::atomic::Ordering,
+};
 
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;

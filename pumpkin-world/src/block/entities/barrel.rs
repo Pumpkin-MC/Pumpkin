@@ -1,6 +1,9 @@
 use std::{
     array::from_fn,
-    sync::{atomic::{AtomicBool, Ordering}, Arc},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use async_trait::async_trait;

@@ -93,10 +93,7 @@ impl Navigator {
                         pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
                         pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
                     ),
-                    entity
-                        .entity
-                        .on_ground
-                        .load(Ordering::Relaxed),
+                    entity.entity.on_ground.load(Ordering::Relaxed),
                 ))
                 .await;
         }
