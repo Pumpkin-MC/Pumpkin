@@ -13,25 +13,18 @@ use pumpkin_data::block_properties::WestWallShape;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Tagable;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::pumpkin_block::PumpkinBlock;
 use crate::world::World;
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 type FenceLikeProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 type WallProperties = pumpkin_data::block_properties::ResinBrickWallLikeProperties;
 
+#[pumpkin_block_from_tag("minecraft:walls")]
 pub struct WallBlock;
-impl BlockMetadata for WallBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:walls").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for WallBlock {

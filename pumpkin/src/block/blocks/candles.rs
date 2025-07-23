@@ -6,13 +6,14 @@ use pumpkin_data::{
     item::Item,
     tag::{RegistryKey, get_tag_values},
 };
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::{
         BlockIsReplacing,
         pumpkin_block::{
-            BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs, NormalUseArgs, OnPlaceArgs,
+            CanPlaceAtArgs, CanUpdateAtArgs, NormalUseArgs, OnPlaceArgs,
             PumpkinBlock, UseWithItemArgs,
         },
         registry::BlockActionResult,
@@ -20,17 +21,8 @@ use crate::{
     entity::EntityBase,
 };
 
+#[pumpkin_block_from_tag("minecraft:candles")]
 pub struct CandleBlock;
-
-impl BlockMetadata for CandleBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:candles").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for CandleBlock {

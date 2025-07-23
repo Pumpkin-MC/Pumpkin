@@ -80,6 +80,7 @@ impl BlockRegistry {
         let val = Arc::new(block);
         self.blocks.reserve(names.len());
         for i in names {
+            log::info!("{i}");
             self.blocks.insert(
                 block_properties::get_block(i.as_str()).unwrap(),
                 val.clone(),

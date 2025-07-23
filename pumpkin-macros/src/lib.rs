@@ -205,6 +205,35 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
     code.into()
 }
 
+#[proc_macro_attribute]
+pub fn pumpkin_block_from_tag(input: TokenStream, item: TokenStream) -> TokenStream {
+    let ast: syn::DeriveInput = syn::parse(item.clone()).unwrap();
+    let name = &ast.ident;
+    let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
+
+    let input_string = input.to_string();
+    let packet_name = input_string.trim_matches('"');
+    let packet_name_split: Vec<&str> = packet_name.split(":").collect();
+
+    let namespace = packet_name_split[0];
+
+    let item: proc_macro2::TokenStream = item.into();
+
+    let code = quote! {
+        #item
+        impl #impl_generics crate::block::pumpkin_block::BlockMetadata for #name #ty_generics {
+            fn namespace(&self) -> &'static str {
+                #namespace
+            }
+            fn ids(&self) -> &'static [&'static str] {
+                get_tag_values(RegistryKey::Block, #packet_name).unwrap()
+            }
+        }
+    };
+
+    code.into()
+}
+
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
