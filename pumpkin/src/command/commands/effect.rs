@@ -11,6 +11,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
 use crate::server::Server;
 use async_trait::async_trait;
+use pumpkin_data::potion::Effect;
 use pumpkin_util::text::color::{Color, NamedColor};
 
 const NAMES: [&str; 1] = ["effect"];
@@ -90,20 +91,20 @@ impl CommandExecutor for GiveExecutor {
         let mut failed = 0;
 
         for target in targets {
-            if target.living_entity.has_effect(*effect).await
+            if target.living_entity.has_effect(effect).await
                 && target
-                    .living_entity
-                    .get_effect(*effect)
-                    .await
-                    .unwrap()
-                    .amplifier
-                    > amplifier as u8
+                .living_entity
+                .get_effect(effect)
+                .await
+                .unwrap()
+                .amplifier
+                > amplifier as u8
             {
                 failed += 1;
             } else {
                 target
-                    .add_effect(crate::entity::effect::Effect {
-                        r#type: *effect,
+                    .add_effect(Effect {
+                        effect_type: effect,
                         duration: second,
                         amplifier: amplifier as u8,
                         ambient: false, //this is not a beacon effect
@@ -115,8 +116,7 @@ impl CommandExecutor for GiveExecutor {
             }
         }
 
-        let translation_name =
-            TextComponent::translate(format!("effect.minecraft.{}", effect.to_name()), []);
+        let translation_name = TextComponent::translate(effect.translation_key.to_string(), []);
 
         if failed == targets.len() {
             sender
@@ -233,7 +233,7 @@ impl CommandExecutor for ClearExecutor {
                         .send_message(TextComponent::translate(
                             "commands.effect.clear.specific.success.single",
                             [
-                                TextComponent::text(effect.to_name()),
+                                TextComponent::translate(effect.translation_key, []),
                                 TextComponent::text(targets[0].gameprofile.name.to_string()),
                             ],
                         ))
@@ -245,7 +245,7 @@ impl CommandExecutor for ClearExecutor {
                         .send_message(TextComponent::translate(
                             "commands.effect.clear.specific.success.multiple",
                             [
-                                TextComponent::text(effect.to_name()),
+                                TextComponent::translate(effect.translation_key, []),
                                 TextComponent::text(targets.len().to_string()),
                             ],
                         ))
@@ -285,22 +285,22 @@ pub fn init_command_tree() -> CommandTree {
                                     .min(0)
                                     .max(1_000_000),
                             )
-                            .execute(GiveExecutor(Time::Specified, Amplifier::Base, true))
-                            .then(
-                                argument(
-                                    ARG_AMPLIFIER,
-                                    BoundedNumArgumentConsumer::new()
-                                        .name("amplifier")
-                                        .min(1)
-                                        .max(255),
-                                )
-                                .execute(GiveExecutor(Time::Specified, Amplifier::Specified, true))
+                                .execute(GiveExecutor(Time::Specified, Amplifier::Base, true))
                                 .then(
-                                    argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
-                                        GiveExecutor(Time::Specified, Amplifier::Specified, false),
-                                    ),
+                                    argument(
+                                        ARG_AMPLIFIER,
+                                        BoundedNumArgumentConsumer::new()
+                                            .name("amplifier")
+                                            .min(1)
+                                            .max(255),
+                                    )
+                                        .execute(GiveExecutor(Time::Specified, Amplifier::Specified, true))
+                                        .then(
+                                            argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
+                                                GiveExecutor(Time::Specified, Amplifier::Specified, false),
+                                            ),
+                                        ),
                                 ),
-                            ),
                         )
                         .then(
                             literal(ARG_INFINITE)
@@ -313,20 +313,20 @@ pub fn init_command_tree() -> CommandTree {
                                             .min(1)
                                             .max(255),
                                     )
-                                    .execute(GiveExecutor(
-                                        Time::Infinite,
-                                        Amplifier::Specified,
-                                        true,
-                                    ))
-                                    .then(
-                                        argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
-                                            GiveExecutor(
-                                                Time::Infinite,
-                                                Amplifier::Specified,
-                                                false,
+                                        .execute(GiveExecutor(
+                                            Time::Infinite,
+                                            Amplifier::Specified,
+                                            true,
+                                        ))
+                                        .then(
+                                            argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
+                                                GiveExecutor(
+                                                    Time::Infinite,
+                                                    Amplifier::Specified,
+                                                    false,
+                                                ),
                                             ),
                                         ),
-                                    ),
                                 ),
                         ),
                 ),

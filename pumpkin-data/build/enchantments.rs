@@ -52,7 +52,7 @@ pub(crate) fn build() -> TokenStream {
 
     let enchantments: HashMap<String, Enchantment> =
         serde_json::from_str(&fs::read_to_string("../assets/enchantments.json").unwrap())
-            .expect("Failed to parse biome.json");
+            .expect("Failed to parse enchantments.json");
 
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
