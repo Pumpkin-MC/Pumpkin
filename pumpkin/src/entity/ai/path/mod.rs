@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use pumpkin_protocol::java::client::play::CUpdateEntityPos;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
@@ -94,7 +96,7 @@ impl Navigator {
                     entity
                         .entity
                         .on_ground
-                        .load(std::sync::atomic::Ordering::Relaxed),
+                        .load(Ordering::Relaxed),
                 ))
                 .await;
         }

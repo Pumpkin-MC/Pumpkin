@@ -1,4 +1,4 @@
-use std::sync::{Arc, atomic::AtomicU32};
+use std::sync::{atomic::{AtomicU32, Ordering}, Arc};
 
 use async_trait::async_trait;
 use pumpkin_data::{damage::DamageType, entity::EntityType};
@@ -76,7 +76,7 @@ impl EntityBase for ExperienceOrbEntity {
 
         let age = self
             .orb_age
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            .fetch_add(1, Ordering::Relaxed);
         if age >= 6000 {
             self.entity.remove().await;
         }

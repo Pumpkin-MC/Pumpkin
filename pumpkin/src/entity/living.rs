@@ -1,3 +1,4 @@
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
@@ -336,7 +337,7 @@ impl EntityBase for LivingEntity {
         if self.health.load() <= 0.0 {
             let time = self
                 .death_time
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                .fetch_add(1, Ordering::Relaxed);
             if time == 20 {
                 // Spawn Death particles
                 self.entity

@@ -9,7 +9,7 @@ use pumpkin_world::item::ItemStack;
 use std::array::from_fn;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicU8, Ordering};
 use tokio::sync::Mutex;
 
 #[derive(Debug)]
@@ -418,7 +418,7 @@ impl PlayerInventory {
     pub fn set_selected_slot(&self, slot: u8) {
         if Self::is_valid_hotbar_index(slot as usize) {
             self.selected_slot
-                .store(slot, std::sync::atomic::Ordering::Relaxed);
+                .store(slot, Ordering::Relaxed);
         } else {
             panic!("Invalid hotbar slot: {slot}");
         }
@@ -426,6 +426,6 @@ impl PlayerInventory {
 
     pub fn get_selected_slot(&self) -> u8 {
         self.selected_slot
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .load(Ordering::Relaxed)
     }
 }
