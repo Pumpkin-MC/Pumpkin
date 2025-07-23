@@ -2074,7 +2074,6 @@ name = "pumpkin-data"
 version = "0.1.0-dev+1.21.7"
 dependencies = [
  "heck",
- "lazy_static",
  "phf",
  "proc-macro2",
  "pumpkin-util",
