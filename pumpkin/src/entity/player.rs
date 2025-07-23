@@ -17,8 +17,9 @@ use uuid::Uuid;
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
-use pumpkin_data::item::Operation;
+use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Tagable;
@@ -78,11 +79,11 @@ use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
 
 use super::combat::{self, AttackType, player_attack_sound};
-use super::effect::Effect;
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, EntityId, NBTStorage};
+use pumpkin_data::potion::Effect;
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -511,7 +512,7 @@ impl Player {
                     victim_entity,
                     knockback_strength,
                 )
-                .await;
+                    .await;
             }
         }
 
@@ -775,7 +776,7 @@ impl Player {
                     block.name,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
-                .await;
+                    .await;
             }
         }
 
@@ -1329,11 +1330,11 @@ impl Player {
     pub async fn can_harvest(&self, block: &BlockState, block_name: &str) -> bool {
         !block.tool_required()
             || self
-                .inventory
-                .held_item()
-                .lock()
-                .await
-                .is_correct_for_drops(block_name)
+            .inventory
+            .held_item()
+            .lock()
+            .await
+            .is_correct_for_drops(block)
     }
 
     pub async fn get_mining_speed(&self, block_name: &str) -> f32 {
@@ -1344,18 +1345,18 @@ impl Player {
             .await
             .get_speed(block_name);
         // Haste
-        if self.living_entity.has_effect(EffectType::Haste).await
+        if self.living_entity.has_effect(&StatusEffect::HASTE).await
             || self
-                .living_entity
-                .has_effect(EffectType::ConduitPower)
-                .await
+            .living_entity
+            .has_effect(&StatusEffect::CONDUIT_POWER)
+            .await
         {
             speed *= 1.0 + (self.get_haste_amplifier().await + 1) as f32 * 0.2;
         }
         // Fatigue
         if let Some(fatigue) = self
             .living_entity
-            .get_effect(EffectType::MiningFatigue)
+            .get_effect(&StatusEffect::MINING_FATIGUE)
             .await
         {
             let fatigue_speed = match fatigue.amplifier {
@@ -1376,12 +1377,12 @@ impl Player {
     async fn get_haste_amplifier(&self) -> u32 {
         let mut i = 0;
         let mut j = 0;
-        if let Some(effect) = self.living_entity.get_effect(EffectType::Haste).await {
+        if let Some(effect) = self.living_entity.get_effect(&StatusEffect::HASTE).await {
             i = effect.amplifier;
         }
         if let Some(effect) = self
             .living_entity
-            .get_effect(EffectType::ConduitPower)
+            .get_effect(&StatusEffect::CONDUIT_POWER)
             .await
         {
             j = effect.amplifier;
@@ -1567,7 +1568,7 @@ impl Player {
             flag |= 8;
         }
 
-        let effect_id = VarInt(effect.r#type as i32);
+        let effect_id = VarInt(i32::from(effect.effect_type.id));
         self.client
             .enqueue_packet(&CUpdateMobEffect::new(
                 self.entity_id().into(),
@@ -1579,8 +1580,8 @@ impl Player {
             .await;
     }
 
-    pub async fn remove_effect(&self, effect_type: EffectType) {
-        let effect_id = VarInt(effect_type as i32);
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
+        let effect_id = VarInt(i32::from(effect_type.id));
         self.client
             .enqueue_packet(
                 &pumpkin_protocol::java::client::play::CRemoveMobEffect::new(
@@ -1599,7 +1600,7 @@ impl Player {
         let mut effect_list = vec![];
         for effect in self.living_entity.active_effects.lock().await.keys() {
             effect_list.push(*effect);
-            let effect_id = VarInt(*effect as i32);
+            let effect_id = VarInt(i32::from(effect.id));
             self.client
                 .enqueue_packet(
                     &pumpkin_protocol::java::client::play::CRemoveMobEffect::new(

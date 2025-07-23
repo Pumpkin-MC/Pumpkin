@@ -36,7 +36,6 @@ use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::entity::EffectType;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
     Block,
@@ -120,6 +119,7 @@ pub mod custom_bossbar;
 pub mod scoreboard;
 pub mod weather;
 
+use pumpkin_data::effect::StatusEffect;
 use uuid::Uuid;
 use weather::Weather;
 
@@ -277,13 +277,17 @@ impl World {
             .await;
     }
 
-    pub async fn send_remove_mob_effect(&self, entity: &Entity, effect_type: EffectType) {
+    pub async fn send_remove_mob_effect(
+        &self,
+        entity: &Entity,
+        effect_type: &'static StatusEffect,
+    ) {
         // TODO: only nearby
         self.broadcast_packet_all(&CRemoveMobEffect::new(
             entity.entity_id.into(),
-            VarInt(effect_type as i32),
+            VarInt(i32::from(effect_type.id)),
         ))
-        .await;
+            .await;
     }
 
     pub async fn set_difficulty(&self, difficulty: Difficulty) {
@@ -319,7 +323,7 @@ impl World {
                 event.data,
                 VarInt(i32::from(block.id)),
             ))
-            .await;
+                .await;
         }
     }
 
@@ -348,7 +352,7 @@ impl World {
             sender_name,
             target_name,
         ))
-        .await;
+            .await;
     }
 
     pub async fn broadcast_secure_player_chat(
@@ -608,7 +612,7 @@ impl World {
                     block_pos,
                     i32::from(block_state_id).into(),
                 ))
-                .await;
+                    .await;
             } else {
                 self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section.clone()))
                     .await;
@@ -935,7 +939,7 @@ impl World {
                 ],
             }],
         ))
-        .await;
+            .await;
 
         // Here, we send all the infos of players who already joined.
         {
@@ -1009,7 +1013,7 @@ impl World {
                 velocity,
             ),
         )
-        .await;
+            .await;
 
         // Spawn players for our client.
         let id = player.gameprofile.id;
@@ -1150,7 +1154,7 @@ impl World {
             &[from.get_entity().entity_uuid],
             &CSetEquipment::new(from.entity_id().into(), equipment),
         )
-        .await;
+            .await;
     }
 
     pub async fn send_world_info(
@@ -1190,7 +1194,7 @@ impl World {
                 Vector3::new(0.0, 0.0, 0.0),
             ),
         )
-        .await;
+            .await;
         player.send_client_information().await;
 
         chunker::player_join(player).await;
@@ -1669,7 +1673,7 @@ impl World {
                 "multiplayer.player.joined",
                 [TextComponent::text(player.gameprofile.name.clone())],
             )
-            .color_named(NamedColor::Yellow);
+                .color_named(NamedColor::Yellow);
             let event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
             let event = PLUGIN_MANAGER.read().await.fire(event).await;
@@ -1722,7 +1726,7 @@ impl World {
                 "multiplayer.player.left",
                 [TextComponent::text(player.gameprofile.name.clone())],
             )
-            .color_named(NamedColor::Yellow);
+                .color_named(NamedColor::Yellow);
             let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
             let event = PLUGIN_MANAGER.read().await.fire(event).await;
@@ -1772,7 +1776,7 @@ impl World {
             &[from.entity_uuid],
             &CSetBlockDestroyStage::new(from.entity_id.into(), location, progress as i8),
         )
-        .await;
+            .await;
     }
 
     /// Sets a block and returns the old block id
@@ -2215,7 +2219,7 @@ impl World {
                 VarInt(block_entity.get_id() as i32),
                 bytes.into_boxed_slice(),
             ))
-            .await;
+                .await;
         }
 
         chunk.block_entities.insert(block_pos, block_entity);
@@ -2368,22 +2372,22 @@ impl World {
         let mut next = Vector3::new(
             delta.x
                 * (if step.x > 0 {
-                    1.0 - (from.x - from.x.floor())
-                } else {
-                    from.x - from.x.floor()
-                }),
+                1.0 - (from.x - from.x.floor())
+            } else {
+                from.x - from.x.floor()
+            }),
             delta.y
                 * (if step.y > 0 {
-                    1.0 - (from.y - from.y.floor())
-                } else {
-                    from.y - from.y.floor()
-                }),
+                1.0 - (from.y - from.y.floor())
+            } else {
+                from.y - from.y.floor()
+            }),
             delta.z
                 * (if step.z > 0 {
-                    1.0 - (from.z - from.z.floor())
-                } else {
-                    from.z - from.z.floor()
-                }),
+                1.0 - (from.z - from.z.floor())
+            } else {
+                from.z - from.z.floor()
+            }),
         );
 
         while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {

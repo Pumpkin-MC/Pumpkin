@@ -76,10 +76,6 @@ mod entity_type;
 mod spawn_egg;
 
 #[rustfmt::skip]
-#[path = "generated/status_effect.rs"]
-mod status_effect;
-
-#[rustfmt::skip]
 #[path = "generated/enchantment.rs"]
 mod enchantment;
 pub use enchantment::*;
@@ -89,7 +85,6 @@ pub mod entity {
     pub use super::entity_status::*;
     pub use super::entity_type::*;
     pub use super::spawn_egg::*;
-    pub use super::status_effect::*;
 }
 
 #[rustfmt::skip]
@@ -140,6 +135,18 @@ pub mod flower_pot_transformations;
 #[rustfmt::skip]
 #[path = "generated/fuels.rs"]
 pub mod fuels;
+
+#[rustfmt::skip]
+#[path = "generated/effect.rs"]
+pub mod effect;
+
+#[rustfmt::skip]
+#[path = "generated/potion.rs"]
+pub mod potion;
+
+#[rustfmt::skip]
+#[path = "generated/potion_brewing.rs"]
+pub mod potion_brewing;
 
 mod block_direction;
 pub mod block_state;
