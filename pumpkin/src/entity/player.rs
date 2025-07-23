@@ -515,7 +515,7 @@ impl Player {
                     victim_entity,
                     knockback_strength,
                 )
-                    .await;
+                .await;
             }
         }
 
@@ -777,7 +777,7 @@ impl Player {
                     state,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
-                    .await;
+                .await;
             }
         }
 
@@ -1343,9 +1343,9 @@ impl Player {
         // Haste
         if self.living_entity.has_effect(&StatusEffect::HASTE).await
             || self
-            .living_entity
-            .has_effect(&StatusEffect::CONDUIT_POWER)
-            .await
+                .living_entity
+                .has_effect(&StatusEffect::CONDUIT_POWER)
+                .await
         {
             speed *= 1.0 + (self.get_haste_amplifier().await + 1) as f32 * 0.2;
         }

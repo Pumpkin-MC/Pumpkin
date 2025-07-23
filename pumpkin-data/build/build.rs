@@ -29,6 +29,7 @@ mod noise_router;
 mod packet;
 mod particle;
 mod potion;
+mod potion_brewing;
 mod recipes;
 mod scoreboard_slot;
 mod screen;
@@ -37,7 +38,6 @@ mod sound_category;
 mod spawn_egg;
 mod tag;
 mod world_event;
-mod potion_brewing;
 
 pub const OUT_DIR: &str = "src/generated";
 

@@ -1,7 +1,7 @@
-use std::fs;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
+use std::fs;
 
 #[derive(Deserialize, Clone, Hash, Eq, PartialEq)]
 struct PotionBrewing {
@@ -21,24 +21,20 @@ impl Recipes {
     pub fn to_tokens_potion(&self) -> TokenStream {
         let from = format_ident!(
             "{}",
-            self.from
-                .strip_prefix("minecraft:")
-                .unwrap()
-                .to_uppercase()
+            self.from.strip_prefix("minecraft:").unwrap().to_uppercase()
         );
         let to = format_ident!(
             "{}",
-            self.to
-                .strip_prefix("minecraft:")
-                .unwrap()
-                .to_uppercase()
+            self.to.strip_prefix("minecraft:").unwrap().to_uppercase()
         );
 
         let slots = self.ingredient.clone();
-        let slots = slots.iter().map(|slot| format_ident!("{}", slot
-                .strip_prefix("minecraft:")
-                .unwrap()
-                .to_uppercase()));
+        let slots = slots.iter().map(|slot| {
+            format_ident!(
+                "{}",
+                slot.strip_prefix("minecraft:").unwrap().to_uppercase()
+            )
+        });
 
         quote! {
             PotionRecipe {
@@ -52,24 +48,20 @@ impl Recipes {
     pub fn to_tokens_item(&self) -> TokenStream {
         let from = format_ident!(
             "{}",
-            self.from
-                .strip_prefix("minecraft:")
-                .unwrap()
-                .to_uppercase()
+            self.from.strip_prefix("minecraft:").unwrap().to_uppercase()
         );
         let to = format_ident!(
             "{}",
-            self.to
-                .strip_prefix("minecraft:")
-                .unwrap()
-                .to_uppercase()
+            self.to.strip_prefix("minecraft:").unwrap().to_uppercase()
         );
 
         let slots = self.ingredient.clone();
-        let slots = slots.iter().map(|slot| format_ident!("{}", slot
-                .strip_prefix("minecraft:")
-                .unwrap()
-                .to_uppercase()));
+        let slots = slots.iter().map(|slot| {
+            format_ident!(
+                "{}",
+                slot.strip_prefix("minecraft:").unwrap().to_uppercase()
+            )
+        });
 
         quote! {
             ItemRecipe {

@@ -93,12 +93,12 @@ impl CommandExecutor for GiveExecutor {
         for target in targets {
             if target.living_entity.has_effect(effect).await
                 && target
-                .living_entity
-                .get_effect(effect)
-                .await
-                .unwrap()
-                .amplifier
-                > amplifier as u8
+                    .living_entity
+                    .get_effect(effect)
+                    .await
+                    .unwrap()
+                    .amplifier
+                    > amplifier as u8
             {
                 failed += 1;
             } else {
@@ -285,22 +285,22 @@ pub fn init_command_tree() -> CommandTree {
                                     .min(0)
                                     .max(1_000_000),
                             )
-                                .execute(GiveExecutor(Time::Specified, Amplifier::Base, true))
+                            .execute(GiveExecutor(Time::Specified, Amplifier::Base, true))
+                            .then(
+                                argument(
+                                    ARG_AMPLIFIER,
+                                    BoundedNumArgumentConsumer::new()
+                                        .name("amplifier")
+                                        .min(1)
+                                        .max(255),
+                                )
+                                .execute(GiveExecutor(Time::Specified, Amplifier::Specified, true))
                                 .then(
-                                    argument(
-                                        ARG_AMPLIFIER,
-                                        BoundedNumArgumentConsumer::new()
-                                            .name("amplifier")
-                                            .min(1)
-                                            .max(255),
-                                    )
-                                        .execute(GiveExecutor(Time::Specified, Amplifier::Specified, true))
-                                        .then(
-                                            argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
-                                                GiveExecutor(Time::Specified, Amplifier::Specified, false),
-                                            ),
-                                        ),
+                                    argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
+                                        GiveExecutor(Time::Specified, Amplifier::Specified, false),
+                                    ),
                                 ),
+                            ),
                         )
                         .then(
                             literal(ARG_INFINITE)
@@ -313,20 +313,20 @@ pub fn init_command_tree() -> CommandTree {
                                             .min(1)
                                             .max(255),
                                     )
-                                        .execute(GiveExecutor(
-                                            Time::Infinite,
-                                            Amplifier::Specified,
-                                            true,
-                                        ))
-                                        .then(
-                                            argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
-                                                GiveExecutor(
-                                                    Time::Infinite,
-                                                    Amplifier::Specified,
-                                                    false,
-                                                ),
+                                    .execute(GiveExecutor(
+                                        Time::Infinite,
+                                        Amplifier::Specified,
+                                        true,
+                                    ))
+                                    .then(
+                                        argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
+                                            GiveExecutor(
+                                                Time::Infinite,
+                                                Amplifier::Specified,
+                                                false,
                                             ),
                                         ),
+                                    ),
                                 ),
                         ),
                 ),
