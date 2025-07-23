@@ -6,8 +6,7 @@ use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    io::Read,
-    ops::AddAssign,
+    io::{Cursor, Read},
     panic,
 };
 use syn::{Ident, LitInt, LitStr};
@@ -640,10 +639,10 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/properties.json");
 
     let be_blocks_data = fs::read("../assets/bedrock_block_states.nbt").unwrap();
-    let mut be_blocks = std::io::Cursor::new(be_blocks_data);
+    let mut be_blocks = Cursor::new(be_blocks_data);
     let be_blocks = get_be_data_from_nbt(&mut be_blocks);
 
-    fs::write("lolo.txt", format!("{:?}", be_blocks)).unwrap();
+    fs::write("lolo.txt", format!("{be_blocks:#?}")).unwrap();
 
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
@@ -927,7 +926,7 @@ pub(crate) fn build() -> TokenStream {
 
         impl BlockState {
             #[doc = r" Try to parse a block state from a state id."]
-            #[doc = r" This should only be used if you dont need to have acces to the block."]
+            #[doc = r" This should only be used if you dont need to have access to the block."]
             pub fn from_id(id: u16) -> &'static Self {
                 let state: &Self = Block::from_state_id(id).states.iter().find(|state| state.id == id).unwrap();
                 state
@@ -1111,13 +1110,13 @@ fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> HashMap<String, u32> {
                 "states" => {
                     let mut byte = read_byte(reader);
                     while byte != 0 {
-                        let mut b = &mut vec![0; read_varint(reader) as usize];
-                        reader.read_exact(&mut b).unwrap();
+                        let b = &mut vec![0; read_varint(reader) as usize];
+                        reader.read_exact(b).unwrap();
 
                         match byte {
                             8 => {
-                                let mut b = &mut vec![0; read_varint(reader) as usize];
-                                reader.read_exact(&mut b).unwrap();
+                                let b = &mut vec![0; read_varint(reader) as usize];
+                                reader.read_exact(b).unwrap();
                             }
                             3 => {
                                 read_varint(reader);
@@ -1138,11 +1137,7 @@ fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> HashMap<String, u32> {
             byte = read_byte(reader);
         }
 
-        if block_data.contains_key(&name) {
-            block_data.get_mut(&name).unwrap().add_assign(1);
-        } else {
-            block_data.insert(name, 0);
-        }
+        block_data.entry(name).and_modify(|v| *v += 1).or_insert(0);
     }
     block_data
 }
@@ -1150,8 +1145,8 @@ fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> HashMap<String, u32> {
 fn read_varint<W: Read>(reader: &mut W) -> u32 {
     let mut val = 0;
     for i in 0..5u32 {
-        let mut byte = [0];
-        reader.read(&mut byte).unwrap();
+        let byte = &mut [0];
+        reader.read_exact(byte).unwrap();
         val |= (u32::from(byte[0]) & 0x7F) << (i * 7);
         if byte[0] & 0x80 == 0 {
             return val;
@@ -1161,7 +1156,7 @@ fn read_varint<W: Read>(reader: &mut W) -> u32 {
 }
 
 fn read_byte<W: Read>(reader: &mut W) -> u8 {
-    let mut byte = [0];
-    reader.read_exact(&mut byte).unwrap_or_default();
+    let byte = &mut [0];
+    reader.read_exact(byte).unwrap_or_default();
     byte[0]
 }

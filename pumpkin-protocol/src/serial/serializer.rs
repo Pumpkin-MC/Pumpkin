@@ -122,13 +122,6 @@ impl PacketWrite for BlockPos {
     }
 }
 
-//impl PacketWrite for ChunkPos {
-//    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-//        VarInt(self.0.x).write(writer)?;
-//        VarInt(self.0.y).write(writer)
-//    }
-//}
-
 impl<T: PacketWrite> PacketWrite for Option<T> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
