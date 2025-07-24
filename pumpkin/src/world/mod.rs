@@ -179,7 +179,7 @@ impl World {
     #[must_use]
     pub fn load(
         level: Level,
-        level_info: LevelData,
+        level_info: Arc<RwLock<LevelData>>,
         dimension_type: VanillaDimensionType,
         block_registry: Arc<BlockRegistry>,
     ) -> Self {
@@ -199,7 +199,7 @@ impl World {
 
         Self {
             level: Arc::new(level),
-            level_info: Arc::new(RwLock::new(level_info)),
+            level_info,
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
@@ -1276,7 +1276,11 @@ impl World {
                 .await;
 
             (
-                Vector3::new(f64::from(info.spawn_x) + 0.5, (top + 1).into(), f64::from(info.spawn_z) + 0.5),
+                Vector3::new(
+                    f64::from(info.spawn_x) + 0.5,
+                    (top + 1).into(),
+                    f64::from(info.spawn_z) + 0.5,
+                ),
                 info.spawn_angle,
             )
         };
