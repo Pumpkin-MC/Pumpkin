@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicBool, AtomicI8, Ordering};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, AtomicI8, Ordering},
+};
 
 use super::BlockEntity;
 use async_trait::async_trait;
@@ -113,11 +116,10 @@ pub struct SignBlockEntity {
     position: BlockPos,
 }
 
-#[derive(Default)]
 pub struct Text {
     pub has_glowing_text: AtomicBool,
     color: AtomicI8,
-    pub messages: [String; 4],
+    pub messages: Arc<Mutex<[String; 4]>>,
 }
 
 impl Clone for Text {
@@ -126,6 +128,16 @@ impl Clone for Text {
             has_glowing_text: AtomicBool::new(self.has_glowing_text.load(Ordering::Relaxed)),
             color: AtomicI8::new(self.color.load(Ordering::Relaxed)),
             messages: self.messages.clone(),
+        }
+    }
+}
+
+impl Default for Text {
+    fn default() -> Self {
+        Self {
+            has_glowing_text: AtomicBool::new(false),
+            color: AtomicI8::new(DyeColor::default() as i8),
+            messages: Default::default(),
         }
     }
 }
@@ -140,7 +152,13 @@ impl From<Text> for NbtTag {
         nbt.put_string("color", value.get_color().into());
         nbt.put_list(
             "messages",
-            value.messages.into_iter().map(NbtTag::String).collect(),
+            value
+                .messages
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|s| NbtTag::String(s.clone()))
+                .collect(),
         );
         NbtTag::Compound(nbt)
     }
@@ -160,13 +178,13 @@ impl From<NbtTag> for Text {
         Self {
             has_glowing_text: AtomicBool::new(has_glowing_text),
             color: AtomicI8::new(DyeColor::from(color.clone()) as i8),
-            messages: [
+            messages: Arc::new(Mutex::new([
                 // its important that we use unwrap_or since otherwise we may crash on older versions
                 messages.first().unwrap_or(&"".to_string()).clone(),
                 messages.get(1).unwrap_or(&"".to_string()).clone(),
                 messages.get(2).unwrap_or(&"".to_string()).clone(),
                 messages.get(3).unwrap_or(&"".to_string()).clone(),
-            ],
+            ])),
         }
     }
 }
@@ -176,7 +194,7 @@ impl Text {
         Self {
             has_glowing_text: AtomicBool::new(false),
             color: AtomicI8::new(DyeColor::default() as i8),
-            messages,
+            messages: Arc::new(Mutex::new(messages)),
         }
     }
 

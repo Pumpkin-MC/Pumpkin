@@ -1549,22 +1549,22 @@ impl JavaClientPlatform {
         };
         if sign_entity.is_waxed.load(Ordering::Relaxed) {
             return;
-        };
-        
+        }
+
         let text = if sign_data.is_front_text {
             &sign_entity.front_text
         } else {
             &sign_entity.back_text
         };
 
-        text.messages = [
+        *text.messages.lock().unwrap() = [
             sign_data.line_1,
             sign_data.line_2,
             sign_data.line_3,
             sign_data.line_4,
         ];
 
-        world.update_block_entity(&sign_data.location);
+        world.update_block_entity(block_entity).await;
     }
 
     pub async fn handle_use_item(

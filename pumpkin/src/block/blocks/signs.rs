@@ -118,11 +118,13 @@ impl PumpkinBlock for SignBlock {
 
         if item.item.id == pumpkin_data::item::Item::HONEYCOMB.id {
             sign_entity.is_waxed.store(true, Ordering::Relaxed);
+
             if !args.player.has_infinite_materials() {
                 item.decrement(1);
             }
             drop(item);
 
+            args.world.update_block_entity(block_entity).await;
             args.world
                 .sync_world_event(WorldEvent::BlockWaxed, *args.position, 0)
                 .await;
@@ -151,6 +153,7 @@ impl PumpkinBlock for SignBlock {
             }
             drop(item);
 
+            args.world.update_block_entity(block_entity).await;
             args.world
                 .play_block_sound(
                     pumpkin_data::sound::Sound::ItemGlowInkSacUse,
@@ -164,7 +167,7 @@ impl PumpkinBlock for SignBlock {
         if item.item.id == pumpkin_data::item::Item::INK_SAC.id {
             let changed = text.has_glowing_text.swap(false, Ordering::Relaxed);
 
-            if changed {
+            if !changed {
                 return BlockActionResult::PassToDefault;
             }
 
@@ -173,6 +176,7 @@ impl PumpkinBlock for SignBlock {
             }
             drop(item);
 
+            args.world.update_block_entity(block_entity).await;
             args.world
                 .play_block_sound(
                     pumpkin_data::sound::Sound::ItemInkSacUse,
@@ -193,6 +197,7 @@ impl PumpkinBlock for SignBlock {
             }
             drop(item);
 
+            args.world.update_block_entity(block_entity).await;
             args.world
                 .play_block_sound(
                     pumpkin_data::sound::Sound::ItemDyeUse,
