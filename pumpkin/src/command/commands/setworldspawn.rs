@@ -104,16 +104,17 @@ async fn setworldspawn(
         ))));
     };
 
-    if world.dimension_type != VanillaDimensionType::Overworld
-        && world.dimension_type != VanillaDimensionType::OverworldCaves
-    {
-        sender
-            .send_message(TextComponent::translate(
-                "commands.setworldspawn.failure.not_overworld",
-                [],
-            ))
-            .await;
-        return Ok(());
+    match world.dimension_type {
+        VanillaDimensionType::Overworld | VanillaDimensionType::OverworldCaves => {},
+        _ => {
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.setworldspawn.failure.not_overworld",
+                    [],
+                ))
+                .await;
+            return Ok(());
+        }
     }
 
     let mut level_info_guard = server.level_info.write().await;
