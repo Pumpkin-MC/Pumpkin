@@ -584,11 +584,7 @@ impl Player {
             )])
             .await;
         self.get_entity()
-            .set_velocity(Vector3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-            })
+            .set_velocity(Vector3::default())
             .await;
 
         self.sleeping_since.store(Some(0));
@@ -726,10 +722,15 @@ impl Player {
 
         let chunk_of_chunks = {
             let mut chunk_manager = self.chunk_manager.lock().await;
-            //chunk_manager
-            //    .can_send_chunk()
-            //    .then(|| chunk_manager.next_chunk())
-            Some(chunk_manager.next_chunk())
+            if let ClientPlatform::Java(_) = &self.client {
+                // Java clients can only send a limited amount of chunks per tick.
+                // If we have sent too many chunks without receiving an ack, we stop sending chunks.
+                chunk_manager
+                    .can_send_chunk()
+                    .then(|| chunk_manager.next_chunk())
+            } else {
+                Some(chunk_manager.next_chunk())
+            }
         };
 
         if let Some(chunk_of_chunks) = chunk_of_chunks {

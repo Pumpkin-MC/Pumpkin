@@ -638,9 +638,9 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/bedrock_block_states.nbt");
     println!("cargo:rerun-if-changed=../assets/properties.json");
 
-    let be_blocks_data = fs::read("../assets/bedrock_block_states.nbt").unwrap();
-    let mut be_blocks = Cursor::new(be_blocks_data);
-    let _be_blocks = get_be_data_from_nbt(&mut be_blocks);
+    let be_blocks = fs::read("../assets/bedrock_block_states.nbt").unwrap();
+    let mut be_blocks = Cursor::new(be_blocks);
+    let be_blocks = get_be_data_from_nbt(&mut be_blocks);
 
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
@@ -659,24 +659,7 @@ pub(crate) fn build() -> TokenStream {
     let mut block_properties_from_props_and_name = TokenStream::new();
     let mut existing_item_ids: Vec<u16> = Vec::new();
     let mut constants = TokenStream::new();
-
-    // Collect unique block states to create partial block states to save memory.
-    let mut unique_states = Vec::new();
-    for block in blocks_assets.blocks.clone() {
-        for state in block.states.clone() {
-            // Check if this state is already in `unique_states` by comparing all fields except `id`.
-            let already_exists = unique_states.iter().any(|s: &BlockState| {
-                s.state_flags == state.state_flags
-                    && s.luminance == state.luminance
-                    && s.hardness == state.hardness
-                    && s.collision_shapes == state.collision_shapes
-            });
-
-            if !already_exists {
-                unique_states.push(state);
-            }
-        }
-    }
+    let mut block_state_to_bedrock = Vec::new();
 
     // Used to create property `enum`s.
     let mut property_enums: HashMap<String, PropertyStruct> = HashMap::new();
@@ -817,7 +800,13 @@ pub(crate) fn build() -> TokenStream {
             #name => Self::#const_ident,
         });
 
-        for state in &block.states {
+        let (state_count, id) = *be_blocks.get(&block.name).unwrap_or(&(0, 0));
+
+        for (i, state) in block.states.iter().enumerate() {
+            if state_count > i as u32 {
+                let start_id = id as u16 + i as u16 - 1;
+                block_state_to_bedrock.push((state.id, start_id))
+            }
             raw_id_from_state_id_array.push((state.id, id_lit.clone()));
         }
 
@@ -836,6 +825,21 @@ pub(crate) fn build() -> TokenStream {
             #id_lit,
         });
     }
+
+    let max_index = block_state_to_bedrock.iter().map(|(index, _)| index).max().unwrap();
+    let mut state_to_bedrock_id = vec![quote! { 1 }; (max_index + 1) as usize];
+    let mut block_state_to_bedrock_t = TokenStream::new();
+
+    for (state_id, id_lit) in block_state_to_bedrock {
+        state_to_bedrock_id[state_id as usize] = quote! { #id_lit };
+    }
+
+    for id_lit in state_to_bedrock_id {
+        block_state_to_bedrock_t.extend(quote! {
+            #id_lit,
+        });
+    }
+
     let type_from_raw_id_array = fill_array(type_from_raw_id_array);
     let max_type_id = type_from_raw_id_array.len();
     for type_lit in type_from_raw_id_array {
@@ -917,6 +921,10 @@ pub(crate) fn build() -> TokenStream {
         }
 
         impl BlockState {
+            const STATE_ID_TO_BEDROCK: &[u16] = &[
+                #block_state_to_bedrock_t
+            ];
+
             #[doc = r" Get a block state from a state id."]
             #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
             pub fn from_id(id: u16) -> &'static Self {
@@ -929,6 +937,10 @@ pub(crate) fn build() -> TokenStream {
                 let block = Block::from_state_id(id);
                 let state: &Self = block.states.iter().find(|state| state.id == id).unwrap();
                 (block, state)
+            }
+
+            pub fn to_be_network_id(id: u16) -> u16 {
+                Self::STATE_ID_TO_BEDROCK[id as usize]
             }
         }
 
@@ -1084,34 +1096,36 @@ pub(crate) fn build() -> TokenStream {
     }
 }
 
-fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> HashMap<String, u32> {
-    let mut block_data: HashMap<String, u32> = HashMap::new();
+fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> HashMap<String, (u32, u32)> {
+    let mut block_data: HashMap<String, (u32, u32)> = HashMap::new();
+    let mut current_id = 0;
 
     while read_byte(reader) == 10 {
+        current_id += 1;
         let len = read_varint(reader);
         let mut buf = vec![0; len as usize];
         reader.read_exact(&mut buf).unwrap();
-
+        
         let mut name = String::new();
         let mut byte = read_byte(reader);
-
+        
         while byte != 0 {
             let mut name_buf = vec![0; read_varint(reader) as usize];
             reader.read_exact(&mut name_buf).unwrap();
             let cp_name = String::from_utf8(name_buf).unwrap();
-
+            
             match cp_name.as_str() {
                 "name" => {
                     let mut name_buf = vec![0; read_varint(reader) as usize];
                     reader.read_exact(&mut name_buf).unwrap();
-                    name = String::from_utf8(name_buf).unwrap();
+                    name = String::from_utf8(name_buf).unwrap().strip_prefix("minecraft:").unwrap().to_string();
                 }
                 "states" => {
                     let mut byte = read_byte(reader);
                     while byte != 0 {
                         let b = &mut vec![0; read_varint(reader) as usize];
                         reader.read_exact(b).unwrap();
-
+                        
                         match byte {
                             8 => {
                                 let b = &mut vec![0; read_varint(reader) as usize];
@@ -1135,8 +1149,8 @@ fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> HashMap<String, u32> {
             }
             byte = read_byte(reader);
         }
-
-        block_data.entry(name).and_modify(|v| *v += 1).or_insert(0);
+        
+        block_data.entry(name).and_modify(|(v, _)| *v += 1).or_insert((1, current_id));
     }
     block_data
 }

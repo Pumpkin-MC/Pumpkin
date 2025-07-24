@@ -1376,7 +1376,7 @@ impl JavaClient {
         player: &Player,
         use_item_on: SUseItemOn,
         server: &Arc<Server>,
-    ) -> Result<(), Box<dyn PumpkinError>> {
+    ) -> Result<(), BlockPlacingError> {
         if !player.has_client_loaded() {
             return Ok(());
         }
@@ -1389,11 +1389,11 @@ impl JavaClient {
 
         if !player.can_interact_with_block_at(&position, 1.0) {
             // TODO: maybe log?
-            return Err(BlockPlacingError::BlockOutOfReach.into());
+            return Err(BlockPlacingError::BlockOutOfReach);
         }
 
         let Ok(face) = BlockDirection::try_from(use_item_on.face.0) else {
-            return Err(BlockPlacingError::InvalidBlockFace.into());
+            return Err(BlockPlacingError::InvalidBlockFace);
         };
         //TODO this.player.resetLastActionTime();
         //TODO this.gameModeForPlayer == GameType.SPECTATOR
@@ -1402,7 +1402,7 @@ impl JavaClient {
         let off_hand_item = inventory.off_hand_item().await;
         let held_item_empty = held_item.lock().await.is_empty();
         let off_hand_item_empty = off_hand_item.lock().await.is_empty();
-        let item = if use_item_on.hand == VarInt::from(0) {
+        let item = if use_item_on.hand.0 == 0 {
             held_item
         } else {
             off_hand_item
@@ -1730,13 +1730,13 @@ impl JavaClient {
         use_item_on: SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
-    ) -> Result<bool, Box<dyn PumpkinError>> {
+    ) -> Result<bool, BlockPlacingError> {
         let entity = &player.living_entity.entity;
         let world = &entity.world.read().await;
 
         // Check if the block is under the world
         if location.0.y + face.to_offset().y < i32::from(Self::WORLD_LOWEST_Y) {
-            return Err(BlockPlacingError::BlockOutOfWorld.into());
+            return Err(BlockPlacingError::BlockOutOfWorld);
         }
 
         // Check the world's max build height
@@ -1751,12 +1751,12 @@ impl JavaClient {
                     true,
                 )
                 .await;
-            return Err(BlockPlacingError::BlockOutOfWorld.into());
+            return Err(BlockPlacingError::BlockOutOfWorld);
         }
 
         match player.gamemode.load() {
             GameMode::Spectator | GameMode::Adventure => {
-                return Err(BlockPlacingError::InvalidGamemode.into());
+                return Err(BlockPlacingError::InvalidGamemode);
             }
             _ => {}
         }
