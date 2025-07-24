@@ -105,7 +105,7 @@ async fn setworldspawn(
     };
 
     match world.dimension_type {
-        VanillaDimensionType::Overworld | VanillaDimensionType::OverworldCaves => {},
+        VanillaDimensionType::Overworld | VanillaDimensionType::OverworldCaves => {}
         _ => {
             sender
                 .send_message(TextComponent::translate(
