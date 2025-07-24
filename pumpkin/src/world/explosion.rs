@@ -24,6 +24,7 @@ impl Explosion {
         &self,
         world: &World,
     ) -> HashMap<BlockPos, (&'static Block, &'static BlockState)> {
+        // The hashmap will prevent position duplicates.
         let mut map = HashMap::new();
         for x in 0..16 {
             for y in 0..16 {

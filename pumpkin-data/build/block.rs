@@ -640,9 +640,7 @@ pub(crate) fn build() -> TokenStream {
 
     let be_blocks_data = fs::read("../assets/bedrock_block_states.nbt").unwrap();
     let mut be_blocks = Cursor::new(be_blocks_data);
-    let be_blocks = get_be_data_from_nbt(&mut be_blocks);
-
-    fs::write("lolo.txt", format!("{be_blocks:#?}")).unwrap();
+    let _be_blocks = get_be_data_from_nbt(&mut be_blocks);
 
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
