@@ -70,7 +70,7 @@ impl Block {
         self.properties(state_id).is_some_and(|properties| {
             properties
                 .to_props()
-                .iter()
+                .into_iter()
                 .any(|(key, value)| key == "waterlogged" && value == "true")
         })
     }

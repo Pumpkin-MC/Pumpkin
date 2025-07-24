@@ -151,7 +151,7 @@ impl ToTokens for PropertyStruct {
                 fn from_value(value: &str) -> Self {
                     match value {
                         #(#from_values),*,
-                        _ => panic!("Invalid value: {value:?}"),
+                        _ => panic!("Invalid value: {value}"),
                     }
                 }
 
@@ -326,7 +326,7 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn to_props(&self) -> Box<[(String, String)]> {
-                   vec![#(#to_props_values)*].into_boxed_slice()
+                   [#(#to_props_values)*].into()
                 }
                 fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {

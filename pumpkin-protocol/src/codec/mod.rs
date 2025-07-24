@@ -3,7 +3,6 @@ pub mod bedrock_block_pos;
 pub mod bit_set;
 pub mod item_stack_seralizer;
 pub mod little_endian;
-pub mod socket_address;
 mod u24_type;
 pub mod uuid;
 pub mod var_int;

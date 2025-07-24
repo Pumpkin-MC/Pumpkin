@@ -1,4 +1,7 @@
-use std::io::{Error, Write};
+use std::{
+    io::{Error, Write},
+    net::SocketAddr,
+};
 
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
@@ -55,11 +58,19 @@ impl PacketWrite for u16 {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write(&self.to_le_bytes()).map(|_| ())
     }
+
+    fn write_be<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write(&self.to_be_bytes()).map(|_| ())
+    }
 }
 
 impl PacketWrite for u32 {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write(&self.to_le_bytes()).map(|_| ())
+    }
+
+    fn write_be<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write(&self.to_be_bytes()).map(|_| ())
     }
 }
 
@@ -131,5 +142,22 @@ impl<T: PacketWrite> PacketWrite for Option<T> {
             }
             Self::None => false.write(writer),
         }
+    }
+}
+
+impl PacketWrite for SocketAddr {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        match self {
+            SocketAddr::V4(addr) => {
+                writer.write_all(&[4])?;
+                writer.write_all(&addr.ip().octets())?;
+            }
+            SocketAddr::V6(addr) => {
+                writer.write_all(&[6])?;
+                writer.write_all(&addr.ip().octets())?;
+            }
+        };
+
+        writer.write_all(&self.port().to_be_bytes())
     }
 }

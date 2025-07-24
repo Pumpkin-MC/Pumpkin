@@ -1,4 +1,7 @@
-use std::io::{Error, Read};
+use std::{
+    io::{Error, Read},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+};
 
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
@@ -64,6 +67,12 @@ impl PacketRead for u16 {
         reader.read_exact(&mut buf)?;
         Ok(Self::from_le_bytes(buf))
     }
+
+    fn read_be<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let mut buf = [0; size_of::<Self>()];
+        reader.read_exact(&mut buf)?;
+        Ok(Self::from_be_bytes(buf))
+    }
 }
 
 impl PacketRead for u32 {
@@ -72,6 +81,12 @@ impl PacketRead for u32 {
         reader.read_exact(&mut buf)?;
         Ok(Self::from_le_bytes(buf))
     }
+
+    fn read_be<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let mut buf = [0; size_of::<Self>()];
+        reader.read_exact(&mut buf)?;
+        Ok(Self::from_be_bytes(buf))
+    }
 }
 
 impl PacketRead for u64 {
@@ -79,6 +94,12 @@ impl PacketRead for u64 {
         let mut buf = [0; size_of::<Self>()];
         reader.read_exact(&mut buf)?;
         Ok(Self::from_le_bytes(buf))
+    }
+
+    fn read_be<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let mut buf = [0; size_of::<Self>()];
+        reader.read_exact(&mut buf)?;
+        Ok(Self::from_be_bytes(buf))
     }
 }
 
@@ -147,5 +168,30 @@ impl<T: PacketRead> PacketRead for Vector2<T> {
             x: T::read(reader)?,
             y: T::read(reader)?,
         })
+    }
+}
+
+impl PacketRead for SocketAddr {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        match u8::read(reader)? {
+            4 => {
+                let mut ip = [0; 4];
+                reader.read_exact(&mut ip)?;
+                let port = u16::read_be(reader)?;
+                Ok(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from(ip), port)))
+            }
+            6 => {
+                let mut ip = [0; 16];
+                reader.read_exact(&mut ip)?;
+                let port = u16::read_be(reader)?;
+                Ok(SocketAddr::V6(SocketAddrV6::new(
+                    Ipv6Addr::from(ip),
+                    port,
+                    0, // flowinfo
+                    0, // scope_id
+                )))
+            }
+            _ => Err(Error::other("Invalid socket address version")),
+        }
     }
 }

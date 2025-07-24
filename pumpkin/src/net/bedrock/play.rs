@@ -60,7 +60,6 @@ impl BedrockClient {
     }
 
     pub async fn handle_interaction(&self, _player: &Arc<Player>, packet: SInteraction) {
-        dbg!(&packet);
         if matches!(packet.action, Action::OpenInventory) {
             self.send_game_packet(&CContainerOpen {
                 container_id: 0,
@@ -73,7 +72,6 @@ impl BedrockClient {
     }
 
     pub async fn handle_container_close(&self, _player: &Arc<Player>, packet: SContainerClose) {
-        dbg!(&packet);
         if packet.container_id == 0 {
             self.send_game_packet(&SContainerClose {
                 container_id: 0,

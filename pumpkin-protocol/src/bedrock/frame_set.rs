@@ -1,8 +1,8 @@
-use std::io::{Read, Write};
+use std::io::{Error, Read, Write};
 
 use crate::bedrock::{RAKNET_SPLIT, RakReliability};
 use crate::codec::u24;
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
+use crate::serial::{PacketRead, PacketWrite};
 
 pub struct FrameSet {
     pub sequence: u24,
@@ -10,18 +10,18 @@ pub struct FrameSet {
 }
 
 impl FrameSet {
-    pub fn read(mut read: impl Read) -> Result<Self, ReadingError> {
+    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         Ok(Self {
-            sequence: read.get_u24()?,
-            frames: Frame::read(read)?,
+            sequence: u24::read(reader)?,
+            frames: Frame::read(reader)?,
         })
     }
 
-    pub fn write_packet_data(&self, mut write: impl Write, id: u8) -> Result<(), WritingError> {
-        write.write_u8(id)?;
-        self.sequence.encode(&mut write)?;
+    pub fn write_packet_data<W: Write>(&self, writer: &mut W, id: u8) -> Result<(), Error> {
+        id.write(writer)?;
+        self.sequence.write(writer)?;
         for frame in &self.frames {
-            frame.write(&mut write)?;
+            frame.write(writer)?;
         }
         Ok(())
     }
@@ -42,77 +42,72 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn read(mut read: impl Read) -> Result<Vec<Self>, ReadingError> {
+    pub fn read<R: Read>(reader: &mut R) -> Result<Vec<Self>, Error> {
         let mut frames = Vec::new();
 
-        while let Ok(header) = read.get_u8() {
+        while let Ok(header) = u8::read(reader) {
             let mut frame = Self::default();
             let reliability_id = (header & 0xE0) >> 5;
             let reliability = match RakReliability::from_id(reliability_id) {
                 Some(reliability) => reliability,
-                None => {
-                    return Err(ReadingError::Message(format!(
-                        "Invalid RakReliability {reliability_id}"
-                    )));
-                }
+                None => return Err(Error::other("Invalid reliability")),
             };
             let split = (header & RAKNET_SPLIT) != 0;
-            let length = read.get_u16_be()? >> 3;
+            let length = u16::read_be(reader)? >> 3;
 
             if reliability.is_reliable() {
-                frame.reliable_number = read.get_u24()?.0
+                frame.reliable_number = u24::read(reader)?.0
             }
 
             if reliability.is_sequenced() {
-                frame.sequence_index = read.get_u24()?.0
+                frame.sequence_index = u24::read(reader)?.0
             }
 
             if reliability.is_ordered() {
-                frame.order_index = read.get_u24()?.0;
-                frame.order_channel = read.get_u8()?;
+                frame.order_index = u24::read(reader)?.0;
+                frame.order_channel = u8::read(reader)?;
             }
 
             if split {
-                frame.split_size = read.get_u32_be()?;
-                frame.split_id = read.get_u16_be()?;
-                frame.split_index = read.get_u32_be()?;
+                frame.split_size = u32::read_be(reader)?;
+                frame.split_id = u16::read_be(reader)?;
+                frame.split_index = u32::read_be(reader)?;
             }
 
             frame.reliability = reliability;
-            frame.payload = read.read_boxed_slice(length as usize)?.into();
+            frame.payload = vec![0; length as usize];
+            reader.read_exact(&mut frame.payload)?;
             frames.push(frame);
         }
 
         Ok(frames)
     }
 
-    pub fn write(&self, mut write: impl Write) -> Result<(), WritingError> {
+    pub fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let is_split = self.split_size > 0;
         let mut flags = self.reliability.to_id() << 5;
         if is_split {
             flags |= RAKNET_SPLIT;
         }
-        write.write_u8(flags)?;
+        flags.write(writer)?;
         // Size
-        write.write_u16_be((self.payload.len() << 3) as u16)?;
+        ((self.payload.len() as u16) << 3).write_be(writer)?;
         if self.reliability.is_reliable() {
-            write.write_u24_be(self.reliable_number)?;
+            u24(self.reliable_number).write(writer)?;
         }
         if self.reliability.is_sequenced() {
-            write.write_u24_be(self.sequence_index)?;
+            u24(self.sequence_index).write(writer)?;
         }
         if self.reliability.is_ordered() {
-            write.write_u24_be(self.order_index)?;
-            write.write_u8(self.order_channel)?;
+            u24(self.order_index).write(writer)?;
+            self.order_channel.write(writer)?;
         }
         if is_split {
-            write.write_u32_be(self.split_size)?;
-            write.write_u16_be(self.split_id)?;
-            write.write_u32_be(self.split_index)?;
+            self.split_size.write_be(writer)?;
+            self.split_id.write_be(writer)?;
+            self.split_index.write_be(writer)?;
         }
 
-        write.write_slice(&self.payload).unwrap();
-
-        Ok(())
+        writer.write_all(&self.payload)
     }
 }

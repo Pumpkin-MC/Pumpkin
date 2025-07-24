@@ -1,10 +1,10 @@
-use std::io::{Read, Write};
+use std::io::{Error, Read, Write};
 
 use pumpkin_macros::packet;
 
 use crate::{
     codec::u24,
-    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
+    serial::{PacketRead, PacketWrite},
 };
 
 #[packet(0xC0)]
@@ -17,30 +17,29 @@ impl Ack {
         Self { sequences }
     }
 
-    fn write_range(start: u32, end: u32, mut write: impl Write) -> Result<(), WritingError> {
+    fn write_range<W: Write>(start: u32, end: u32, writer: &mut W) -> Result<(), Error> {
         if start == end {
-            write.write_u8(1)?;
-            u24::encode(&u24(start), &mut write)?;
+            1u8.write(writer)?;
+            u24(start).write(writer)
         } else {
-            write.write_u8(0)?;
-            u24::encode(&u24(start), &mut write)?;
-            u24::encode(&u24(end), &mut write)?;
+            0u8.write(writer)?;
+            u24(start).write(writer)?;
+            u24(end).write(writer)
         }
-        Ok(())
     }
 
-    pub fn read(mut read: impl Read) -> Result<Self, ReadingError> {
-        let size = read.get_u16_be()?;
+    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let size = u16::read_be(reader)?;
         // TODO: check size
         let mut sequences = Vec::with_capacity(size as usize);
         for _ in 0..size {
-            let single = read.get_bool()?;
+            let single = bool::read(reader)?;
             if single {
-                sequences.push(u24::decode(&mut read)?.0);
+                sequences.push(u24::read(reader)?.0);
             } else {
-                let start = u24::decode(&mut read)?;
-                let end = u24::decode(&mut read)?;
-                for i in start.0..end.0 {
+                let start = u24::read(reader)?.0;
+                let end = u24::read(reader)?.0;
+                for i in start..end {
                     sequences.push(i);
                 }
             }
@@ -48,9 +47,9 @@ impl Ack {
         Ok(Self { sequences })
     }
 
-    pub fn write(&self, mut writer: impl Write) -> Result<(), WritingError> {
-        writer.write_u8(0xC0).unwrap();
-        let mut count = 0;
+    pub fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        0xC0u8.write(writer)?;
+        let mut count: u16 = 0;
 
         let mut buf = Vec::new();
 
@@ -68,8 +67,7 @@ impl Ack {
         }
         Self::write_range(start, end, &mut buf)?;
         count += 1;
-
-        writer.write_u16_be(count)?;
-        writer.write_slice(&buf)
+        count.write_be(writer)?;
+        writer.write_all(&buf)
     }
 }

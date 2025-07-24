@@ -11,7 +11,7 @@ use std::{
 use bytes::Bytes;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
-    BClientPacket, PacketDecodeError, RawPacket, ServerPacket,
+    BClientPacket, PacketDecodeError, RawPacket,
     bedrock::{
         RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RAKNET_VALID, RakReliability, SubClient,
         ack::Ack,
@@ -39,7 +39,6 @@ use pumpkin_protocol::{
     },
     codec::u24,
     packet::Packet,
-    ser::{NetworkReadExt, ReadingError},
     serial::PacketRead,
 };
 use pumpkin_util::text::TextComponent;
@@ -407,12 +406,10 @@ impl BedrockClient {
         self: &Arc<Self>,
         server: &Server,
         packet: Bytes,
-    ) -> Result<(), ReadingError> {
-        let mut payload = &packet[..];
+    ) -> Result<(), Error> {
+        let payload = &mut Cursor::new(packet);
 
-        let Ok(id) = payload.get_u8() else {
-            return Err(ReadingError::CleanEOF(String::new()));
-        };
+        let id = u8::read(payload)?;
 
         let is_valid = id & RAKNET_VALID == RAKNET_VALID;
         if !is_valid {
@@ -456,7 +453,7 @@ impl BedrockClient {
         self: &Arc<Self>,
         server: &Server,
         mut frame: Frame,
-    ) -> Result<(), ReadingError> {
+    ) -> Result<(), Error> {
         if frame.split_size > 0 {
             let fragment_index = frame.split_index as usize;
             let compound_id = frame.split_id;
@@ -495,8 +492,8 @@ impl BedrockClient {
             frame.split_size = 0;
         }
 
-        let mut payload = &frame.payload[..];
-        let id = payload.get_u8()?;
+        let mut payload = Cursor::new(frame.payload);
+        let id = u8::read(&mut payload)?;
         self.handle_raknet_packet(server, i32::from(id), payload)
             .await
     }
@@ -505,16 +502,15 @@ impl BedrockClient {
         self: &Arc<Self>,
         server: &Server,
         packet: RawPacket,
-    ) -> Result<(), ReadingError> {
-        let payload = &packet.payload[..];
+    ) -> Result<(), Error> {
+        let payload = &mut Cursor::new(&packet.payload);
         match packet.id {
             SRequestNetworkSettings::PACKET_ID => {
                 self.handle_request_network_settings(SRequestNetworkSettings::read(payload)?)
                     .await;
             }
             SLogin::PACKET_ID => {
-                self.handle_login(SLogin::read(&mut &packet.payload[..]).unwrap(), server)
-                    .await;
+                self.handle_login(SLogin::read(payload)?, server).await;
             }
             SClientCacheStatus::PACKET_ID | SResourcePackResponse::PACKET_ID => {
                 // TODO
@@ -570,18 +566,19 @@ impl BedrockClient {
         self: &Arc<Self>,
         server: &Server,
         packet_id: i32,
-        payload: &[u8],
-    ) -> Result<(), ReadingError> {
+        mut payload: Cursor<Vec<u8>>,
+    ) -> Result<(), Error> {
+        let reader = &mut payload;
         match packet_id {
             SConnectionRequest::PACKET_ID => {
-                self.handle_connection_request(SConnectionRequest::read(payload)?)
+                self.handle_connection_request(SConnectionRequest::read(reader)?)
                     .await;
             }
             SNewIncomingConnection::PACKET_ID => {
-                self.handle_new_incoming_connection(&SNewIncomingConnection::read(payload)?);
+                self.handle_new_incoming_connection(&SNewIncomingConnection::read(reader)?);
             }
             SConnectedPing::PACKET_ID => {
-                self.handle_connected_ping(SConnectedPing::read(payload)?)
+                self.handle_connected_ping(SConnectedPing::read(reader)?)
                     .await;
             }
             SDisconnect::PACKET_ID => {
@@ -594,7 +591,7 @@ impl BedrockClient {
                     .network_reader
                     .lock()
                     .await
-                    .get_game_packet(Cursor::new(payload.to_vec()))
+                    .get_game_packet(payload)
                     .await
                     .unwrap();
 
@@ -611,8 +608,8 @@ impl BedrockClient {
         &self,
         server: &Server,
         packet_id: i32,
-        payload: &[u8],
-    ) -> Result<(), ReadingError> {
+        payload: &mut Cursor<Bytes>,
+    ) -> Result<(), Error> {
         match packet_id {
             SUnconnectedPing::PACKET_ID => {
                 self.handle_unconnected_ping(server, SUnconnectedPing::read(payload)?)
