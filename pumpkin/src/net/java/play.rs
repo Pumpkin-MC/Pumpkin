@@ -1187,7 +1187,7 @@ impl JavaClient {
                     let position = player_action.position;
                     let entity = &player.living_entity.entity;
                     let world = &entity.world.read().await;
-                    let (block, state) = world.get_block_and_block_state(&position).await;
+                    let (block, state) = world.get_block_and_state(&position).await;
 
                     let inventory = player.inventory();
                     let held = inventory.held_item();
@@ -1290,7 +1290,7 @@ impl JavaClient {
                     player.mining.store(false, Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
 
-                    let (block, state) = world.get_block_and_block_state(&location).await;
+                    let (block, state) = world.get_block_and_state(&location).await;
                     let drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block.name).await;
 
@@ -1763,7 +1763,7 @@ impl JavaClient {
 
         let clicked_block_pos = BlockPos(location.0);
         let (clicked_block, clicked_block_state) =
-            world.get_block_and_block_state(&clicked_block_pos).await;
+            world.get_block_and_state(&clicked_block_pos).await;
 
         let replace_clicked_block = if clicked_block == block {
             world
@@ -1797,7 +1797,7 @@ impl JavaClient {
             } else {
                 let block_pos = BlockPos(location.0 + face.to_offset());
                 let (previous_block, previous_block_state) =
-                    world.get_block_and_block_state(&block_pos).await;
+                    world.get_block_and_state(&block_pos).await;
 
                 let replace_previous_block = if previous_block == block {
                     world

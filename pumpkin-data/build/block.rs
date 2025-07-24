@@ -906,12 +906,6 @@ pub(crate) fn build() -> TokenStream {
             #(#block_entity_types),*
         ];
 
-        pub fn get_block_and_state_from_state_id(id: u16) -> (&'static Block, &'static BlockState) {
-            let block = Block::from_state_id(id);
-            let state: &BlockState = block.states.iter().find(|state| state.id == id).unwrap();
-            (block, state)
-        }
-
         pub fn has_random_ticks(state_id: u16) -> bool {
             matches!(state_id, #random_tick_state_ids)
         }
@@ -925,11 +919,18 @@ pub(crate) fn build() -> TokenStream {
         }
 
         impl BlockState {
-            #[doc = r" Try to parse a block state from a state id."]
-            #[doc = r" This should only be used if you dont need to have access to the block."]
+            #[doc = r" Get a block state from a state id."]
+            #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
             pub fn from_id(id: u16) -> &'static Self {
                 let state: &Self = Block::from_state_id(id).states.iter().find(|state| state.id == id).unwrap();
                 state
+            }
+
+            #[doc = r" Get a block state from a state id and the corresponding block."]
+            pub fn from_id_with_block(id: u16) -> (&'static Block, &'static BlockState) {
+                let block = Block::from_state_id(id);
+                let state: &Self = block.states.iter().find(|state| state.id == id).unwrap();
+                (block, state)
             }
         }
 

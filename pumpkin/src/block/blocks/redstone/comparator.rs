@@ -217,7 +217,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
         let props = ComparatorLikeProperties::from_state_id(state.id, block);
         let facing = props.facing;
         let source_pos = pos.offset(facing.to_offset());
-        let (source_block, source_state) = world.get_block_and_block_state(&source_pos).await;
+        let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
 
         if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(source_block) {
             if let Some(level) = pumpkin_block
@@ -235,7 +235,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
 
         if redstone_level < 15 && source_state.is_solid() {
             let source_pos = source_pos.offset(facing.to_offset());
-            let (source_block, source_state) = world.get_block_and_block_state(&source_pos).await;
+            let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
 
             let itemframe_level = self
                 .get_attached_itemframe_level(world, facing, source_pos)

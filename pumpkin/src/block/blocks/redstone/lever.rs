@@ -25,9 +25,9 @@ use crate::{
 };
 
 async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_block_state(block_pos).await;
+    let (block, state) = world.get_block_and_state_id(block_pos).await;
 
-    let mut lever_props = LeverLikeProperties::from_state_id(state.id, block);
+    let mut lever_props = LeverLikeProperties::from_state_id(state, block);
     lever_props.powered = !lever_props.powered;
     world
         .set_block_state(

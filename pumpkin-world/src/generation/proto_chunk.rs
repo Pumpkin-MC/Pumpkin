@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockState,
-    block_properties::{blocks_movement, get_block_and_state_from_state_id},
-    chunk::Biome,
-    tag::Tagable,
+    Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Tagable,
 };
 use pumpkin_util::{
     HeightMap,
@@ -765,12 +762,12 @@ impl BlockAccessor for ProtoChunk<'_> {
         self.get_block_state(&position.0).to_state()
     }
 
-    async fn get_block_and_block_state(
+    async fn get_block_and_state(
         &self,
         position: &BlockPos,
     ) -> (&'static Block, &'static BlockState) {
         let id = self.get_block_state(&position.0);
-        get_block_and_state_from_state_id(id.0)
+        BlockState::from_id_with_block(id.0)
     }
 }
 

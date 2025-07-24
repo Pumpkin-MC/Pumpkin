@@ -548,11 +548,7 @@ impl Player {
     pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32)> {
         let respawn_point = self.respawn_point.load()?;
 
-        let (block, _block_state) = self
-            .world()
-            .await
-            .get_block_and_block_state(&respawn_point.position)
-            .await;
+        let block = self.world().await.get_block(&respawn_point.position).await;
 
         if respawn_point.dimension == VanillaDimensionType::Overworld
             && block.is_tagged_with("#minecraft:beds").unwrap()
@@ -605,10 +601,8 @@ impl Player {
             .load()
             .expect("Player waking up should have it's respawn point set on the bed.");
 
-        let (bed, bed_state) = world
-            .get_block_and_block_state(&respawn_point.position)
-            .await;
-        BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state.id).await;
+        let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position).await;
+        BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
 
         self.living_entity
             .entity

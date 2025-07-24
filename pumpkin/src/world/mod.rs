@@ -45,9 +45,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
 };
-use pumpkin_data::{
-    BlockDirection, BlockState, block_properties::get_block_and_state_from_state_id,
-};
+use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_inventory::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
@@ -2026,7 +2024,7 @@ impl World {
         cause: Option<Arc<Player>>,
         flags: BlockFlags,
     ) {
-        let (broken_block, broken_block_state) = self.get_block_and_block_state(position).await;
+        let (broken_block, broken_block_state) = self.get_block_and_state_id(position).await;
         let event = BlockBreakEvent::new(cause.clone(), broken_block, *position, 0, false);
 
         let event = PLUGIN_MANAGER
@@ -2037,7 +2035,7 @@ impl World {
 
         if !event.cancelled {
             let new_state_id = if broken_block
-                .properties(broken_block_state.id)
+                .properties(broken_block_state)
                 .and_then(|properties| {
                     properties
                         .to_props()
@@ -2154,13 +2152,19 @@ impl World {
         BlockState::from_id(id)
     }
 
-    /// Gets the Block + Block state from the Block Registry, Returns None if the Block state has not been found
-    pub async fn get_block_and_block_state(
+    /// Gets the Block + Block state from the Block Registry, Returns Air if the Block state has not been found
+    pub async fn get_block_and_state(
         &self,
         position: &BlockPos,
     ) -> (&'static Block, &'static BlockState) {
         let id = self.get_block_state_id(position).await;
-        get_block_and_state_from_state_id(id)
+        BlockState::from_id_with_block(id)
+    }
+
+    /// Gets the Block + state id from the Block Registry, Returns Air if the Block state has not been found
+    pub async fn get_block_and_state_id(&self, position: &BlockPos) -> (&'static Block, u16) {
+        let id = self.get_block_state_id(position).await;
+        (Block::from_state_id(id), id)
     }
 
     /// Updates neighboring blocks of a block
@@ -2230,10 +2234,10 @@ impl World {
         direction: BlockDirection,
         flags: BlockFlags,
     ) {
-        let (block, block_state) = self.get_block_and_block_state(block_pos).await;
+        let (block, block_state) = self.get_block_and_state(block_pos).await;
 
         if flags.contains(BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT)
-            && block.id == Block::REDSTONE_WIRE.id
+            && *block == Block::REDSTONE_WIRE
         {
             return;
         }
@@ -2545,11 +2549,10 @@ impl BlockAccessor for World {
         Self::get_block_state(self, position).await
     }
 
-    async fn get_block_and_block_state(
+    async fn get_block_and_state(
         &self,
         position: &BlockPos,
     ) -> (&'static Block, &'static BlockState) {
-        let id = self.get_block_state(position).await.id;
-        get_block_and_state_from_state_id(id)
+        self.get_block_and_state(position).await
     }
 }

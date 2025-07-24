@@ -69,7 +69,7 @@ impl PumpkinItem for EnderEyeItem {
             return;
         };
 
-        let (block, _) = world.get_block_and_block_state(&block_pos).await;
+        let block = world.get_block(&block_pos).await;
 
         if block == &Block::END_PORTAL_FRAME {
             return;
