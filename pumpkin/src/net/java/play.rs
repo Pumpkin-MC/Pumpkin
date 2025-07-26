@@ -1381,7 +1381,7 @@ impl JavaClient {
         };
 
         let Ok(hand) = Hand::try_from(use_item_on.hand.0) else {
-            return Err(BlockPlacingError::InvalidHand.into());
+            return Err(BlockPlacingError::InvalidHand);
         };
 
         //TODO this.player.resetLastActionTime();
@@ -1479,7 +1479,7 @@ impl JavaClient {
         player: &Player,
         position: &BlockPos,
         cursor_pos: &Vector3<f32>,
-        side: &BlockDirection,
+        face: &BlockDirection,
         held_item: &Arc<Mutex<ItemStack>>,
         world: &Arc<World>,
         block: &Block,
@@ -1491,7 +1491,7 @@ impl JavaClient {
                 block,
                 player,
                 position,
-                &BlockHitResult { side, cursor_pos },
+                &BlockHitResult { face, cursor_pos },
                 held_item,
                 server,
                 world,
@@ -1510,7 +1510,7 @@ impl JavaClient {
                     block,
                     player,
                     position,
-                    &BlockHitResult { side, cursor_pos },
+                    &BlockHitResult { face, cursor_pos },
                     server,
                     world,
                 )
