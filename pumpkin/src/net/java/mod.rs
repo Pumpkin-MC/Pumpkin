@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
@@ -68,8 +68,6 @@ pub struct JavaClient {
     pub gameprofile: Mutex<Option<GameProfile>>,
     /// The client's configuration settings, Optional
     pub config: Mutex<Option<PlayerConfig>>,
-    /// The minecraft protocol version used by the client.
-    pub protocol_version: AtomicI32,
     /// The Address used to connect to the Server, Send in the Handshake
     pub server_address: Mutex<String>,
     /// The current connection state of the client (e.g., Handshaking, Status, Play).
@@ -102,7 +100,6 @@ impl JavaClient {
         let (send, recv) = tokio::sync::mpsc::channel(128);
         Self {
             id,
-            protocol_version: AtomicI32::new(0),
             gameprofile: Mutex::new(None),
             config: Mutex::new(None),
             server_address: Mutex::new(String::new()),
@@ -375,15 +372,13 @@ impl JavaClient {
         match packet.id {
             0 => {
                 self.handle_handshake(SHandShake::read(payload)?).await;
+                Ok(())
             }
-            _ => {
-                log::error!(
-                    "Failed to handle java packet id {} in Handshake state",
-                    packet.id
-                );
-            }
+            _ => Err(ReadingError::Message(format!(
+                "Failed to handle packet id {} in Handshake State",
+                packet.id
+            ))),
         }
-        Ok(())
     }
 
     async fn handle_status_packet(
@@ -396,20 +391,18 @@ impl JavaClient {
         match packet.id {
             SStatusRequest::PACKET_ID => {
                 self.handle_status_request(server).await;
+                Ok(())
             }
             SStatusPingRequest::PACKET_ID => {
                 self.handle_ping_request(SStatusPingRequest::read(payload)?)
                     .await;
+                Ok(())
             }
-            _ => {
-                log::error!(
-                    "Failed to handle java client packet id {} in Status State",
-                    packet.id
-                );
-            }
+            _ => Err(ReadingError::Message(format!(
+                "Failed to handle java client packet id {} in Status State",
+                packet.id
+            ))),
         }
-
-        Ok(())
     }
 
     pub fn start_outgoing_packet_task(&mut self) {

@@ -78,6 +78,10 @@ impl PacketWrite for u64 {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write(&self.to_le_bytes()).map(|_| ())
     }
+
+    fn write_be<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write(&self.to_be_bytes()).map(|_| ())
+    }
 }
 
 impl PacketWrite for f32 {

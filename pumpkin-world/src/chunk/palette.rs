@@ -420,7 +420,12 @@ impl BlockPalette {
 
                 BeNetworkSerialization {
                     bits_per_entry,
-                    palette: NetworkPalette::Indirect(palette.into_iter().map(BlockState::to_be_network_id).collect()),
+                    palette: NetworkPalette::Indirect(
+                        palette
+                            .into_iter()
+                            .map(BlockState::to_be_network_id)
+                            .collect(),
+                    ),
                     packed_data: packed_data.into_boxed_slice(),
                 }
             }

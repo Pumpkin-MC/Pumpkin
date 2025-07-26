@@ -6,7 +6,7 @@ use std::{
 
 use async_compression::tokio::bufread::ZlibDecoder;
 use bytes::Bytes;
-use tokio::io::{AsyncRead, AsyncReadExt, BufReader, ReadBuf};
+use tokio::io::{AsyncRead, BufReader, ReadBuf};
 
 use crate::{
     Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, RawPacket, StreamDecryptor,
@@ -107,15 +107,15 @@ impl UDPNetworkDecoder {
 
     pub async fn get_packet_payload(
         &mut self,
-        mut reader: Cursor<Vec<u8>>,
+        reader: Cursor<Vec<u8>>,
     ) -> Result<Bytes, PacketDecodeError> {
-        let mut payload = Vec::new();
-        reader
-            .read_to_end(&mut payload)
-            .await
-            .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
+        //let mut payload = Vec::new();
+        //reader
+        //    .read_to_end(&mut payload)
+        //    .await
+        //    .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
-        Ok(payload.into())
+        Ok(reader.into_inner().into())
     }
 
     pub async fn get_game_packet(

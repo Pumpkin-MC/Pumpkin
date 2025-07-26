@@ -1,11 +1,11 @@
+use std::net::SocketAddr;
+
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_protocol::{
-    bedrock::{
-        client::raknet::unconnected_pong::{CUnconnectedPong, ServerInfo},
-        server::raknet::unconnected_ping::SUnconnectedPing,
-    },
-    codec::ascii_string::AsciiString,
+use pumpkin_protocol::bedrock::{
+    client::raknet::unconnected_pong::{CUnconnectedPong, ServerInfo},
+    server::raknet::unconnected_ping::SUnconnectedPing,
 };
+use tokio::net::UdpSocket;
 
 use crate::{
     net::bedrock::BedrockClient,
@@ -13,7 +13,12 @@ use crate::{
 };
 
 impl BedrockClient {
-    pub async fn handle_unconnected_ping(&self, server: &Server, packet: SUnconnectedPing) {
+    pub async fn handle_unconnected_ping(
+        server: &Server,
+        packet: SUnconnectedPing,
+        addr: SocketAddr,
+        socket: &UdpSocket,
+    ) {
         // TODO
         let player_count = server
             .get_status()
@@ -32,6 +37,7 @@ impl BedrockClient {
             protocol_version: 819,
             version_name: CURRENT_BEDROCK_MC_VERSION,
             player_count,
+            // A large number looks wreird on the client worlds window
             max_player_count: BASIC_CONFIG.max_players,
             server_unique_id: server.server_guid,
             motd_line_2: &BASIC_CONFIG.default_level_name,
@@ -40,12 +46,16 @@ impl BedrockClient {
             port_ipv4: 19132,
             port_ipv6: 19133,
         };
-        self.send_raknet_packet_now(&CUnconnectedPong::new(
-            packet.time,
-            server.server_guid,
-            packet.magic,
-            AsciiString(format!("{motd_string}")),
-        ))
+        Self::send_offline_packet(
+            &CUnconnectedPong::new(
+                packet.time,
+                server.server_guid,
+                packet.magic,
+                format!("{motd_string}"),
+            ),
+            addr,
+            socket,
+        )
         .await;
     }
 }

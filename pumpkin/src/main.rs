@@ -150,9 +150,9 @@ async fn main() {
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());
     log::info!(
-        "Server is now running. Connect using: {}{}{}",
+        "Server is now running. Connect using port: {}{}{}",
         if BASIC_CONFIG.java_edition {
-            format!("Java Edition: 0.0.0.0:{}", BASIC_CONFIG.java_edition_port)
+            format!("Java Edition: {}", BASIC_CONFIG.java_edition_port)
         } else {
             String::new()
         },
@@ -162,10 +162,7 @@ async fn main() {
             ""
         },
         if BASIC_CONFIG.bedrock_edition {
-            format!(
-                "Bedrock Edition: 0.0.0.0:{}",
-                BASIC_CONFIG.bedrock_edition_port
-            )
+            format!("Bedrock Edition: {}", BASIC_CONFIG.bedrock_edition_port)
         } else {
             String::new()
         }

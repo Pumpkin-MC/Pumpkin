@@ -32,6 +32,7 @@ impl BedrockClient {
         player: &Arc<Player>,
         packet: SRequestChunkRadius,
     ) {
+        dbg!(&packet);
         player.config.write().await.view_distance =
             NonZero::new(packet.chunk_radius.0 as u8).unwrap();
         self.send_game_packet(&CChunkRadiusUpdate {

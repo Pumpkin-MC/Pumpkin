@@ -70,8 +70,8 @@ use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
 use crate::data::op_data::OPERATOR_CONFIG;
-use crate::net::PlayerConfig;
 use crate::net::{ClientPlatform, GameProfile};
+use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
@@ -583,9 +583,7 @@ impl Player {
                 Some(bed_head_pos),
             )])
             .await;
-        self.get_entity()
-            .set_velocity(Vector3::default())
-            .await;
+        self.get_entity().set_velocity(Vector3::default()).await;
 
         self.sleeping_since.store(Some(0));
     }
@@ -808,12 +806,19 @@ impl Player {
         // Timeout/keep alive handling
         self.tick_client_load_timeout();
 
+        // TODO This should only be handled by the ClientPlatform
         let now = Instant::now();
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
+            if matches!(self.client, ClientPlatform::Bedrock(_)) {
+                return;
+            }
             // We never got a response from the last keep alive we sent.
             if self.wait_for_keep_alive.load(Ordering::Relaxed) {
-                self.kick(TextComponent::translate("disconnect.timeout", []))
-                    .await;
+                self.kick(
+                    DisconnectReason::Timeout,
+                    TextComponent::translate("disconnect.timeout", []),
+                )
+                .await;
                 return;
             }
             self.wait_for_keep_alive.store(true, Ordering::Relaxed);
@@ -1200,8 +1205,8 @@ impl Player {
         }) < d * d
     }
 
-    pub async fn kick(&self, reason: TextComponent) {
-        self.client.kick(reason).await;
+    pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
+        self.client.kick(reason, message).await;
     }
 
     pub fn can_food_heal(&self) -> bool {

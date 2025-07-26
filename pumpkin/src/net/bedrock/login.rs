@@ -5,10 +5,8 @@ use pumpkin_config::{BASIC_CONFIG, networking::compression::CompressionInfo};
 use pumpkin_protocol::{
     bedrock::{
         client::{
-            network_settings::CNetworkSettings,
-            play_status::{CPlayStatus, PlayStatus},
-            resource_pack_stack::CResourcePackStackPacket,
-            resource_packs_info::CResourcePacksInfo,
+            network_settings::CNetworkSettings, play_status::CPlayStatus,
+            resource_pack_stack::CResourcePackStackPacket, resource_packs_info::CResourcePacksInfo,
             start_game::Experiments,
         },
         server::{login::SLogin, request_network_settings::SRequestNetworkSettings},
@@ -18,7 +16,7 @@ use pumpkin_protocol::{
 use serde_json::Value;
 
 use crate::{
-    net::{ClientPlatform, GameProfile, bedrock::BedrockClient},
+    net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
     server::{CURRENT_BEDROCK_MC_VERSION, Server},
 };
 
@@ -29,6 +27,9 @@ impl BedrockClient {
         self.set_compression(CompressionInfo::default()).await;
     }
     pub async fn handle_login(self: &Arc<Self>, packet: SLogin, server: &Server) -> Option<()> {
+        // This is a mess to extract the PlayerName
+        // TODO Verify Player
+        // This also contains the public key for encryption!
         let jwt = unsafe { String::from_utf8_unchecked(packet.jwt) };
         let i = jwt
             .split_once('[')
@@ -38,13 +39,19 @@ impl BedrockClient {
             .unwrap()
             .0
             .split(',')
-            .collect::<Vec<&str>>()[2]
-            .split_once('\"')
-            .unwrap()
-            .1
-            .split_once('\"')
-            .unwrap()
-            .0;
+            .collect::<Vec<&str>>();
+
+        // TODO Make this right!!!
+        if i.len() != 3 {
+            self.kick(
+                DisconnectReason::LoginPacketNoRequest,
+                "Something went wrong try again".to_string(),
+            )
+            .await;
+            return None;
+        }
+
+        let i = i[2].split_once('\"').unwrap().1.split_once('\"').unwrap().0;
         let parts: Vec<&str> = i.split('.').collect();
 
         let payload = unsafe {
@@ -71,8 +78,7 @@ impl BedrockClient {
         //};
 
         // TODO: Batch these
-        self.send_game_packet(&CPlayStatus::new(PlayStatus::LoginSuccess))
-            .await;
+        self.send_game_packet(&CPlayStatus::LoginSuccess).await;
         self.send_game_packet(&CResourcePacksInfo::new(
             false,
             false,

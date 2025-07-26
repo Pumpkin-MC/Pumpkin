@@ -39,10 +39,11 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     });
 
     log::info!(
-        "Server query running on {}",
+        "Server query running on port {}",
         socket
             .local_addr()
             .expect("Unable to find running address!")
+            .port()
     );
 
     while !SHOULD_STOP.load(Ordering::Relaxed) {

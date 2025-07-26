@@ -54,14 +54,15 @@ use pumpkin_protocol::{
     bedrock::{
         client::{
             chunk_radius_update::CChunkRadiusUpdate,
-            creative_content::{CreativeContent, Entry, Group},
+            creative_content::{CreativeContent, Group},
             gamerules_changed::GameRules,
             inventory_content::CInventoryContent,
-            play_status::{CPlayStatus, PlayStatus},
+            play_status::CPlayStatus,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_artributes::{Attribute, CUpdateAttributes},
         },
         network_item::{ItemInstanceUserData, NetworkItemDescriptor, NetworkItemStackDescriptor},
+        server::text::SText,
     },
     codec::{
         bedrock_block_pos::NetworkPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
@@ -301,12 +302,15 @@ impl World {
     }
 
     pub async fn flush_synced_block_events(self: &Arc<Self>) {
-        let mut queue = self.synced_block_event_queue.lock().await;
-        let events: Vec<BlockEvent> = queue.clone();
-        queue.clear();
+        let events;
         // THIS IS IMPORTANT
         // it prevents deadlocks and also removes the need to wait for a lock when adding a new synced block
-        drop(queue);
+        {
+            let mut queue = self.synced_block_event_queue.lock().await;
+            events = queue.clone();
+            queue.clear();
+        };
+
         for event in events {
             let block = self.get_block(&event.pos).await; // TODO
             if !self
@@ -327,6 +331,7 @@ impl World {
     }
 
     /// Broadcasts a packet to all connected players within the world.
+    /// Please avoid this as we want to replace it with `broadcast_editioned`
     ///
     /// Sends the specified packet to every player currently logged in to the world.
     ///
@@ -346,15 +351,14 @@ impl World {
         chat_type: u8,
         target_name: Option<&TextComponent>,
     ) {
-        self.broadcast_packet_all(&CDisguisedChatMessage::new(
-            message,
-            (chat_type + 1).into(),
-            sender_name,
-            target_name,
-        ))
-        .await;
+        let be_packet = SText::new(message.clone().get_text(), sender_name.clone().get_text());
+        let je_packet =
+            CDisguisedChatMessage::new(message, (chat_type + 1).into(), sender_name, target_name);
+
+        self.broadcast_editioned(&je_packet, &be_packet).await;
     }
 
+    // This should replace broadcast_packet_all at some point
     pub async fn broadcast_editioned<J: ClientPacket, B: BClientPacket>(
         &self,
         je_packet: &J,
@@ -533,28 +537,28 @@ impl World {
         self.flush_synced_block_events().await;
 
         // world ticks
-        let mut level_time = self.level_time.lock().await;
-        level_time.tick_time();
-        let mut weather = self.weather.lock().await;
-        weather.tick_weather(self).await;
+        {
+            let mut level_time = self.level_time.lock().await;
+            level_time.tick_time();
+            let mut weather = self.weather.lock().await;
+            weather.tick_weather(self).await;
 
-        if self.should_skip_night().await {
-            let time = level_time.time_of_day + 24000;
-            level_time.set_time(time - time % 24000);
-            level_time.send_time(self).await;
+            if self.should_skip_night().await {
+                let time = level_time.time_of_day + 24000;
+                level_time.set_time(time - time % 24000);
+                level_time.send_time(self).await;
 
-            for player in self.players.read().await.values() {
-                player.wake_up().await;
+                for player in self.players.read().await.values() {
+                    player.wake_up().await;
+                }
+
+                if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
+                    weather.reset_weather_cycle(self).await;
+                }
+            } else if level_time.world_age % 20 == 0 {
+                level_time.send_time(self).await;
             }
-
-            if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
-                weather.reset_weather_cycle(self).await;
-            }
-        } else if level_time.world_age % 20 == 0 {
-            level_time.send_time(self).await;
         }
-        drop(level_time);
-        drop(weather);
 
         let chunk_start = tokio::time::Instant::now();
         log::debug!("Ticking chunks");
@@ -825,36 +829,13 @@ impl World {
                     name: String::new(),
                     icon_item: NetworkItemDescriptor::default(),
                 }],
-                entries: &[
-                    Entry {
-                        id: VarUInt(1),
-                        item: NetworkItemDescriptor {
-                            id: VarInt(257),
-                            stack_size: 64,
-                            aux_value: VarUInt(0),
-                            block_runtime_id: VarInt(0),
-                            user_data_buffer: ItemInstanceUserData::default(),
-                        },
-                        group_index: VarUInt(0),
-                    },
-                    Entry {
-                        id: VarUInt(2),
-                        item: NetworkItemDescriptor {
-                            id: VarInt(258),
-                            stack_size: 64,
-                            aux_value: VarUInt(0),
-                            block_runtime_id: VarInt(0),
-                            user_data_buffer: ItemInstanceUserData::default(),
-                        },
-                        group_index: VarUInt(0),
-                    },
-                ],
+                entries: &[],
             })
             .await;
 
         client
             .send_game_packet(&CChunkRadiusUpdate {
-                chunk_radius: VarInt(6),
+                chunk_radius: VarInt(16),
             })
             .await;
 
@@ -877,9 +858,7 @@ impl World {
             })
             .await;
 
-        client
-            .send_game_packet(&CPlayStatus::new(PlayStatus::PlayerSpawn))
-            .await;
+        client.send_game_packet(&CPlayStatus::PlayerSpawn).await;
 
         client
             .send_game_packet(&CInventoryContent {

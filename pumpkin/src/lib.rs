@@ -2,6 +2,7 @@
 #![allow(unused_labels)]
 
 use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
+use crate::net::DisconnectReason;
 use crate::net::bedrock::BedrockClient;
 use crate::net::java::JavaClient;
 use crate::net::{lan_broadcast, query, rcon::RCONServer};
@@ -301,7 +302,9 @@ impl PumpkinServer {
 
         let kick_message = TextComponent::text("Server stopped");
         for player in self.server.get_all_players().await {
-            player.kick(kick_message.clone()).await;
+            player
+                .kick(DisconnectReason::Shutdown, kick_message.clone())
+                .await;
         }
 
         log::info!("Ending player tasks");
@@ -330,7 +333,7 @@ impl PumpkinServer {
         &self,
         mut master_client_id_counter: u64,
         tasks: &Arc<TaskTracker>,
-        bedrock_clients: &Arc<tokio::sync::Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
+        bedrock_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
     ) -> bool {
         let mut udp_buf = [0; 1496]; // Buffer for UDP receive
 
@@ -393,33 +396,46 @@ impl PumpkinServer {
                     Ok((len, client_addr)) => {
                         if len == 0 {
                             log::warn!("Received empty UDP packet from {client_addr}");
+                        } else {
+                            let id = udp_buf[0];
+                            let is_online = id & 128 != 0;
+
+                            if is_online {
+                                let be_clients = bedrock_clients.clone();
+                                let mut clients_guard = bedrock_clients.lock().await;
+
+                                if let Some(client) = clients_guard.get(&client_addr) {
+                                    let client = client.clone();
+                                    let reader = Cursor::new(udp_buf[..len].to_vec());
+                                    let server = self.server.clone();
+
+                                    tasks.spawn(async move {
+                                        client.process_packet(&server, reader).await;
+                                    });
+                                } else if let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
+                                    master_client_id_counter += 1;
+
+                                    let mut platform = BedrockClient::new(self.udp_socket.clone(), client_addr, be_clients);
+                                    platform.handle_connection_request(packet).await;
+                                    platform.start_outgoing_packet_task();
+
+                                    clients_guard.insert(client_addr,
+                                    Arc::new(
+                                        platform
+                                    ));
+                                }
+                            } else {
+                                // Please keep the function as simple as possible!
+                                // We dont care about the result, the client just resends the packet
+                                // Since offline packets are very small we dont need to move and clone the data
+                                let _ = BedrockClient::handle_offline_packet(&self.server, id, &mut Cursor::new(&udp_buf[1..len]), client_addr, &self.udp_socket).await;
+                            }
+
                         }
-                        let received_data = udp_buf[..len].to_vec();
-
-
-                        let mut clients_guard = bedrock_clients.lock().await;
-                        // TODO: don't save clients for offline connections
-                        let client = clients_guard.entry(client_addr).or_insert_with(|| {
-                            master_client_id_counter += 1;
-                            let mut platform = BedrockClient::new(self.udp_socket.clone(), client_addr);
-                            platform.start_outgoing_packet_task();
-                            Arc::new(
-                                platform
-                            )
-                        });
-
-                        let server_clone = self.server.clone();
-
-                        let reader = Cursor::new(received_data);
-                        let client = client.clone();
-                        tasks.spawn(async move {
-                            client.process_packet(&server_clone, reader).await;
-                        });
                     }
+                    // Since all packets go over this match statement, there should be not waiting
                     Err(e) => {
-                        // TODO Close connection
-                        log::error!("Failed to receive UDP packet for Bedrock: {e}");
-                        sleep(Duration::from_millis(50)).await;
+                        log::error!("{e}");
                     }
                 }
             },

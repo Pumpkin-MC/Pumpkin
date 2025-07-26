@@ -22,7 +22,7 @@ impl CNetworkChunkPublisherUpdate {
     pub fn new(pos_for_view: BlockPos, new_radius: u32) -> Self {
         Self {
             pos_for_view,
-            new_radius: VarUInt((1 + new_radius) << 4),
+            new_radius: VarUInt(new_radius << 4),
             server_build_chunk_list: Vec::new(),
         }
     }

@@ -1,4 +1,3 @@
-pub mod ascii_string;
 pub mod bedrock_block_pos;
 pub mod bit_set;
 pub mod item_stack_seralizer;

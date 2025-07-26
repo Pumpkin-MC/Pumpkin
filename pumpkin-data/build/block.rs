@@ -779,6 +779,8 @@ pub(crate) fn build() -> TokenStream {
     let mut raw_id_from_state_id_array = vec![];
     let mut type_from_raw_id_array = vec![];
 
+    //let mut file = fs::File::create("../debug/debug.txt").unwrap();
+
     // Generate constants and `match` arms for each block.
     for block in optimized_blocks {
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
@@ -800,13 +802,35 @@ pub(crate) fn build() -> TokenStream {
             #name => Self::#const_ident,
         });
 
-        let (state_count, id) = *be_blocks.get(&block.name).unwrap_or(&(0, 0));
+        let be_name = match block.name.as_str() {
+            "dead_bush" => "deadbush",
+            "tripwire" => "trip_wire",
+            "note_block" => "noteblock",
+            "powered_rail" => "golden_rail",
+            "cobweb" => "web",
+            "tall_seagrass" => "seagrass",
+            "wall_torch" => "torch",
+            "spawner" => "mob_spawner",
+            "snow" => "snow_layer",
+            "snow_block" => "snow",
+            name => name,
+        };
+
+        let (state_count, id) = *be_blocks.get(be_name).unwrap_or(&(0, 1));
 
         for (i, state) in block.states.iter().enumerate() {
-            if state_count > i as u32 {
-                let start_id = id as u16 + i as u16 - 1;
-                block_state_to_bedrock.push((state.id, start_id))
+            if state_count != 0 {
+                if state_count > i as u32 {
+                    let start_id = id as u16 + i as u16;
+                    block_state_to_bedrock.push((state.id, start_id))
+                } else {
+                    let start_id = id as u16 + state_count as u16 - 1;
+                    block_state_to_bedrock.push((state.id, start_id))
+                }
             }
+            //else {
+            //file.write_all(format!("{be_name}\n").as_bytes()).unwrap();
+            //}
             raw_id_from_state_id_array.push((state.id, id_lit.clone()));
         }
 
@@ -826,7 +850,11 @@ pub(crate) fn build() -> TokenStream {
         });
     }
 
-    let max_index = block_state_to_bedrock.iter().map(|(index, _)| index).max().unwrap();
+    let max_index = block_state_to_bedrock
+        .iter()
+        .map(|(index, _)| index)
+        .max()
+        .unwrap();
     let mut state_to_bedrock_id = vec![quote! { 1 }; (max_index + 1) as usize];
     let mut block_state_to_bedrock_t = TokenStream::new();
 
@@ -1101,31 +1129,34 @@ fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> HashMap<String, (u32, u32)> 
     let mut current_id = 0;
 
     while read_byte(reader) == 10 {
-        current_id += 1;
         let len = read_varint(reader);
         let mut buf = vec![0; len as usize];
         reader.read_exact(&mut buf).unwrap();
-        
+
         let mut name = String::new();
         let mut byte = read_byte(reader);
-        
+
         while byte != 0 {
             let mut name_buf = vec![0; read_varint(reader) as usize];
             reader.read_exact(&mut name_buf).unwrap();
             let cp_name = String::from_utf8(name_buf).unwrap();
-            
+
             match cp_name.as_str() {
                 "name" => {
                     let mut name_buf = vec![0; read_varint(reader) as usize];
                     reader.read_exact(&mut name_buf).unwrap();
-                    name = String::from_utf8(name_buf).unwrap().strip_prefix("minecraft:").unwrap().to_string();
+                    name = String::from_utf8(name_buf)
+                        .unwrap()
+                        .strip_prefix("minecraft:")
+                        .unwrap()
+                        .to_string();
                 }
                 "states" => {
                     let mut byte = read_byte(reader);
                     while byte != 0 {
                         let b = &mut vec![0; read_varint(reader) as usize];
                         reader.read_exact(b).unwrap();
-                        
+
                         match byte {
                             8 => {
                                 let b = &mut vec![0; read_varint(reader) as usize];
@@ -1149,8 +1180,12 @@ fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> HashMap<String, (u32, u32)> 
             }
             byte = read_byte(reader);
         }
-        
-        block_data.entry(name).and_modify(|(v, _)| *v += 1).or_insert((1, current_id));
+
+        block_data
+            .entry(name)
+            .and_modify(|(v, _)| *v += 1)
+            .or_insert((1, current_id));
+        current_id += 1;
     }
     block_data
 }

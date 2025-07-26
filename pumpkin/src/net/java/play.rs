@@ -1336,7 +1336,10 @@ impl JavaClient {
         {
             player.wait_for_keep_alive.store(false, Ordering::Relaxed);
         } else {
-            self.kick(TextComponent::text("Timeout")).await;
+            self.kick(TextComponent::text(
+                "Timeout, The server probably has a deadlock!",
+            ))
+            .await;
         }
     }
 
