@@ -182,7 +182,7 @@ impl HopperBlockEntity {
                 return false;
             }
         }
-        let (block, state) = world.get_block_and_block_state(pos_up).await;
+        let (block, state) = world.get_block_and_state(pos_up).await;
         if !(state.is_solid()
             && block
                 .is_tagged_with("minecraft:does_not_block_hoppers")
