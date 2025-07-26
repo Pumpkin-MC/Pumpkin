@@ -1,10 +1,11 @@
 use pumpkin_data::potion::Effect;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::EntityBase;
-use super::{Entity, EntityId, NBTStorage};
+use super::{Entity, NBTStorage, effect::Effect};
 use crate::block::loot::{LootContextParameters, LootTableExt};
 use crate::server::Server;
 use async_trait::async_trait;
@@ -118,7 +119,7 @@ impl LivingEntity {
             .await;
     }
 
-    pub const fn entity_id(&self) -> EntityId {
+    pub const fn entity_id(&self) -> i32 {
         self.entity.entity_id
     }
 
@@ -341,9 +342,7 @@ impl EntityBase for LivingEntity {
             self.time_until_regen.fetch_sub(1, Relaxed);
         }
         if self.health.load() <= 0.0 {
-            let time = self
-                .death_time
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let time = self.death_time.fetch_add(1, Ordering::Relaxed);
             if time == 20 {
                 // Spawn Death particles
                 self.entity

@@ -171,14 +171,12 @@ impl Context {
     ///
     /// # Constraints
     /// The handler must implement the `EventHandler<E>` trait.
-    pub async fn register_event<E: Event + 'static, H>(
+    pub async fn register_event<E: Event + 'static, H: EventHandler<E> + 'static>(
         &self,
         handler: Arc<H>,
         priority: EventPriority,
         blocking: bool,
-    ) where
-        H: EventHandler<E> + 'static,
-    {
+    ) {
         let mut handlers = self.handlers.write().await;
 
         let handlers_vec = handlers

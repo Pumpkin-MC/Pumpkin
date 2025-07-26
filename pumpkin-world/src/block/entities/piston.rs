@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::get_block_by_state_id};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
@@ -38,7 +38,7 @@ impl PistonBlockEntity {
                     .set_block_state(&pos, state, BlockFlags::NOTIFY_ALL)
                     .await;
                 world
-                    .update_neighbor(&pos, get_block_by_state_id(state))
+                    .update_neighbor(&pos, Block::from_state_id(state))
                     .await;
             }
         }
@@ -87,7 +87,7 @@ impl BlockEntity for PistonBlockEntity {
                         .await;
                     world
                         .clone()
-                        .update_neighbor(&pos, get_block_by_state_id(self.pushed_block_state.id))
+                        .update_neighbor(&pos, Block::from_state_id(self.pushed_block_state.id))
                         .await;
                 }
             }

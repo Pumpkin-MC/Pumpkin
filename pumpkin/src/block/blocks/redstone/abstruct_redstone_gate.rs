@@ -5,7 +5,7 @@ use pumpkin_data::{
     Block, BlockDirection, BlockState, HorizontalFacingExt,
     block_properties::{
         BlockProperties, ComparatorLikeProperties, EnumVariants, HorizontalFacing,
-        RedstoneWireLikeProperties, RepeaterLikeProperties, get_state_by_state_id,
+        RedstoneWireLikeProperties, RepeaterLikeProperties,
     },
 };
 use pumpkin_util::math::position::BlockPos;
@@ -157,7 +157,7 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
             self,
             args.world,
             *args.position,
-            get_state_by_state_id(args.state_id),
+            BlockState::from_id(args.state_id),
             args.block,
         )
         .await
@@ -176,7 +176,7 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
             self,
             args.world,
             *args.position,
-            get_state_by_state_id(args.old_state_id).id,
+            BlockState::from_id(args.old_state_id).id,
             args.block,
         )
         .await;
@@ -192,7 +192,7 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
         let props = T::from_state_id(state.id, block);
         let facing = props.get_facing().opposite();
         let (target_block, target_state) = world
-            .get_block_and_block_state(&pos.offset(facing.to_offset()))
+            .get_block_and_state(&pos.offset(facing.to_offset()))
             .await;
         if target_block == &Block::COMPARATOR {
             let props = ComparatorLikeProperties::from_state_id(target_state.id, target_block);
@@ -217,7 +217,7 @@ pub async fn get_power<T: BlockProperties + RedstoneGateBlockProperties + Send>(
     let props = T::from_state_id(state_id, block);
     let facing = props.get_facing();
     let source_pos = pos.offset(facing.to_offset());
-    let (source_block, source_state) = world.get_block_and_block_state(&source_pos).await;
+    let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
     let source_level = get_redstone_power(
         source_block,
         source_state,
@@ -245,7 +245,7 @@ async fn get_power_on_side(
     only_gate: bool,
 ) -> u8 {
     let side_pos = pos.offset(side.to_block_direction().to_offset());
-    let (side_block, side_state) = world.get_block_and_block_state(&side_pos).await;
+    let (side_block, side_state) = world.get_block_and_state(&side_pos).await;
     if !only_gate || is_diode(side_block) {
         world
             .block_registry

@@ -4,7 +4,7 @@ use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::player_server_data::ServerPlayerData;
 use crate::entity::NBTStorage;
 use crate::item::registry::ItemRegistry;
-use crate::net::{ClientPlatform, EncryptionError, GameProfile, PlayerConfig};
+use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
@@ -49,8 +49,8 @@ pub mod seasonal_events;
 pub mod tick_rate_manager;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.7";
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.93";
+pub const CURRENT_MC_VERSION: &str = "1.21.8";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -146,14 +146,14 @@ impl Server {
             VanillaDimensionType::Overworld,
             block_registry.clone(),
         );
-        log::info!("Loading Nether: {seed}");
+        log::info!("Loading Nether");
         let nether = World::load(
             Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
             VanillaDimensionType::TheNether,
             block_registry.clone(),
         );
-        log::info!("Loading End: {seed}");
+        log::info!("Loading End");
         let end = World::load(
             Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
             level_info.clone(),
@@ -336,13 +336,6 @@ impl Server {
                         }
                     }
 
-                    // Send tick rate information to the new player
-                    if let ClientPlatform::Java(_) = &player.client {
-                        self.tick_rate_manager.update_joining_player(&player).await;
-                    } else {
-                        // Todo
-                    }
-
                     Some((player, world.clone()))
                 } else {
                     None
@@ -350,7 +343,7 @@ impl Server {
             }
 
             'cancelled: {
-                player.kick(event.kick_message).await;
+                player.kick(DisconnectReason::Kicked, event.kick_message).await;
                 None
             }
         }}
@@ -388,10 +381,7 @@ impl Server {
     /// # Arguments
     ///
     /// * `packet`: A reference to the packet to be broadcast. The packet must implement the `ClientPacket` trait.
-    pub async fn broadcast_packet_all<P>(&self, packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         for world in self.worlds.read().await.iter() {
             let current_players = world.players.read().await;
             for player in current_players.values() {
@@ -595,12 +585,11 @@ impl Server {
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub async fn tick(self: &Arc<Self>) {
-        // Always run player and network ticking, even when game is frozen
-        self.tick_players_and_network().await;
-
-        // Only run world/game logic if the tick rate manager allows it
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds().await;
+            // Always run player and network ticking, even when game is frozen
+        } else {
+            self.tick_players_and_network().await;
         }
     }
 

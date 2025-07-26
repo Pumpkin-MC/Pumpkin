@@ -24,8 +24,9 @@ impl PumpkinBlock for FlowerPotBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let item = args.item_stack.lock().await.item;
         //Place the flower inside the pot
+        let potted_block_id = get_potted_item(item.id);
         if args.block.eq(&Block::FLOWER_POT) {
-            if let Some(potted_block_id) = get_potted_item(item.id) {
+            if potted_block_id != 0 {
                 args.world
                     .set_block_state(
                         args.position,
@@ -35,10 +36,8 @@ impl PumpkinBlock for FlowerPotBlock {
                     .await;
             }
             return BlockActionResult::Success;
-        }
-
-        //if the player have an item that can be potted in his hand, nothing happens
-        if let Some(_potted_block_id) = get_potted_item(item.id) {
+        } else if potted_block_id != 0 {
+            //if the player have an item that can be potted in his hand, nothing happens
             return BlockActionResult::Consume;
         }
 

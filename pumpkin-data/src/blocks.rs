@@ -1,6 +1,5 @@
 use crate::{
     BlockState, BlockStateRef,
-    block_properties::get_state_by_state_id,
     tag::{RegistryKey, Taggable},
 };
 use pumpkin_util::{
@@ -76,7 +75,7 @@ impl Block {
         self.properties(state_id).is_some_and(|properties| {
             properties
                 .to_props()
-                .iter()
+                .into_iter()
                 .any(|(key, value)| key == "waterlogged" && value == "true")
         })
     }
