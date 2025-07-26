@@ -14,6 +14,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::block::entities::sign::DyeColor;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
+use uuid::Uuid;
 
 use crate::block::pumpkin_block::NormalUseArgs;
 use crate::block::pumpkin_block::OnStateReplacedArgs;
@@ -43,7 +44,6 @@ impl BlockMetadata for SignBlock {
 //TODO: Add support for Wall Signs
 //TODO: Add support for Hanging Signs
 //TODO: add support for click commands
-//TODO: Check if other people are already editing
 #[async_trait]
 impl PumpkinBlock for SignBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> u16 {
@@ -73,44 +73,71 @@ impl PumpkinBlock for SignBlock {
     }
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() {
-                if sign_entity.is_waxed.load(Ordering::Relaxed) {
-                    args.world
-                        .play_block_sound(
-                            pumpkin_data::sound::Sound::BlockSignWaxedInteractFail,
-                            pumpkin_data::sound::SoundCategory::Blocks,
-                            *args.position,
-                        )
-                        .await;
-                    return BlockActionResult::Success;
-                }
+        let Some(block_entity) = args.world.get_block_entity(args.position).await else {
+            return BlockActionResult::Continue;
+        };
+        let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
+            return BlockActionResult::Continue;
+        };
 
-                let is_facing_front_text =
-                    is_facing_front_text(args.world, args.position, args.block, args.player).await;
-                match &args.player.client {
-                    crate::net::ClientPlatform::Java(java) => {
-                        java.send_sign_packet(*args.position, is_facing_front_text)
-                            .await;
-                    }
-                    crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
-                }
-
-                return BlockActionResult::Success;
-            }
+        if sign_entity.is_waxed.load(Ordering::Relaxed) {
+            args.world
+                .play_block_sound(
+                    pumpkin_data::sound::Sound::BlockSignWaxedInteractFail,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    *args.position,
+                )
+                .await;
+            return BlockActionResult::Success;
         }
-        BlockActionResult::Continue
+
+        let mut currently_editing = sign_entity.currently_editing_player.lock().await;
+        if !try_claim_sign(
+            &mut currently_editing,
+            &args.player.gameprofile.id,
+            args.world,
+            args.position,
+        )
+        .await
+        {
+            return BlockActionResult::Continue;
+        }
+
+        let is_facing_front_text =
+            is_facing_front_text(args.world, args.position, args.block, args.player).await;
+        match &args.player.client {
+            crate::net::ClientPlatform::Java(java) => {
+                java.send_sign_packet(*args.position, is_facing_front_text)
+                    .await;
+            }
+            crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
+        }
+
+        return BlockActionResult::Success;
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let Some(block_entity) = args.world.get_block_entity(args.position).await else {
-            return BlockActionResult::PassToDefault;
+            return BlockActionResult::Continue;
         };
         let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
-            return BlockActionResult::PassToDefault;
+            return BlockActionResult::Continue;
         };
 
         if sign_entity.is_waxed.load(Ordering::Relaxed) {
+            return BlockActionResult::PassToDefault;
+        }
+
+        let mut currently_editing = sign_entity.currently_editing_player.lock().await;
+        if !try_claim_sign(
+            &mut currently_editing,
+            &args.player.gameprofile.id,
+            args.world,
+            args.position,
+        )
+        .await
+        {
+            //TODO: I don't think that makes sense, since it will also just return in normal_use, but vanilla does it like this
             return BlockActionResult::PassToDefault;
         }
 
@@ -123,8 +150,10 @@ impl PumpkinBlock for SignBlock {
                 item.decrement(1);
             }
             drop(item);
+            *currently_editing = None;
+            drop(currently_editing);
 
-            args.world.update_block_entity(block_entity).await;
+            args.world.update_block_entity(&block_entity).await;
             args.world
                 .sync_world_event(WorldEvent::BlockWaxed, *args.position, 0)
                 .await;
@@ -152,8 +181,10 @@ impl PumpkinBlock for SignBlock {
                 item.decrement(1);
             }
             drop(item);
+            *currently_editing = None;
+            drop(currently_editing);
 
-            args.world.update_block_entity(block_entity).await;
+            args.world.update_block_entity(&block_entity).await;
             args.world
                 .play_block_sound(
                     pumpkin_data::sound::Sound::ItemGlowInkSacUse,
@@ -175,8 +206,10 @@ impl PumpkinBlock for SignBlock {
                 item.decrement(1);
             }
             drop(item);
+            *currently_editing = None;
+            drop(currently_editing);
 
-            args.world.update_block_entity(block_entity).await;
+            args.world.update_block_entity(&block_entity).await;
             args.world
                 .play_block_sound(
                     pumpkin_data::sound::Sound::ItemInkSacUse,
@@ -196,8 +229,10 @@ impl PumpkinBlock for SignBlock {
                 item.decrement(1);
             }
             drop(item);
+            *currently_editing = None;
+            drop(currently_editing);
 
-            args.world.update_block_entity(block_entity).await;
+            args.world.update_block_entity(&block_entity).await;
             args.world
                 .play_block_sound(
                     pumpkin_data::sound::Sound::ItemDyeUse,
@@ -236,4 +271,23 @@ fn get_yaw_from_rotation_16(rotation: Integer0To15) -> f32 {
     let index = rotation.to_index();
 
     f32::from(index) * 22.5
+}
+
+async fn try_claim_sign(
+    currently_editing: &mut Option<Uuid>,
+    uuid: &Uuid,
+    world: &World,
+    position: &BlockPos,
+) -> bool {
+    if let Some(editing_player_id) = *currently_editing {
+        if editing_player_id != *uuid {
+            if let Some(editing_player) = world.get_player_by_uuid(editing_player_id).await {
+                if editing_player.can_interact_with_block_at(position, 4.0) {
+                    return false;
+                }
+            }
+        }
+    }
+    *currently_editing = Some(*uuid);
+    true
 }

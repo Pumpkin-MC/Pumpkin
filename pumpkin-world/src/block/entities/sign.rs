@@ -1,5 +1,5 @@
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicBool, AtomicI8, Ordering},
 };
 
@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use num_derive::FromPrimitive;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
+use tokio::sync::Mutex;
 
 #[derive(Clone, Default, FromPrimitive)]
 #[repr(i8)]
@@ -108,18 +109,18 @@ impl From<DyeColor> for NbtTag {
     }
 }
 
-// NBT data structure
 pub struct SignBlockEntity {
     pub front_text: Text,
     pub back_text: Text,
     pub is_waxed: AtomicBool,
     position: BlockPos,
+    pub currently_editing_player: Arc<Mutex<Option<uuid::Uuid>>>,
 }
 
 pub struct Text {
     pub has_glowing_text: AtomicBool,
     color: AtomicI8,
-    pub messages: Arc<Mutex<[String; 4]>>,
+    pub messages: Arc<std::sync::Mutex<[String; 4]>>,
 }
 
 impl Clone for Text {
@@ -178,7 +179,7 @@ impl From<NbtTag> for Text {
         Self {
             has_glowing_text: AtomicBool::new(has_glowing_text),
             color: AtomicI8::new(DyeColor::from(color.clone()) as i8),
-            messages: Arc::new(Mutex::new([
+            messages: Arc::new(std::sync::Mutex::new([
                 // its important that we use unwrap_or since otherwise we may crash on older versions
                 messages.first().unwrap_or(&"".to_string()).clone(),
                 messages.get(1).unwrap_or(&"".to_string()).clone(),
@@ -194,7 +195,7 @@ impl Text {
         Self {
             has_glowing_text: AtomicBool::new(false),
             color: AtomicI8::new(DyeColor::default() as i8),
-            messages: Arc::new(Mutex::new(messages)),
+            messages: Arc::new(std::sync::Mutex::new(messages)),
         }
     }
 
@@ -229,6 +230,7 @@ impl BlockEntity for SignBlockEntity {
             front_text,
             back_text,
             is_waxed: AtomicBool::new(is_waxed),
+            currently_editing_player: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -267,6 +269,7 @@ impl SignBlockEntity {
             } else {
                 Text::default()
             },
+            currently_editing_player: Arc::new(Mutex::new(None)),
         }
     }
     pub fn empty(position: BlockPos) -> Self {
@@ -275,6 +278,7 @@ impl SignBlockEntity {
             is_waxed: AtomicBool::new(false),
             front_text: Text::default(),
             back_text: Text::default(),
+            currently_editing_player: Arc::new(Mutex::new(None)),
         }
     }
 }

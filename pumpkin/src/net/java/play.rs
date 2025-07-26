@@ -1563,8 +1563,8 @@ impl JavaClientPlatform {
             sign_data.line_3,
             sign_data.line_4,
         ];
-
-        world.update_block_entity(block_entity).await;
+        *sign_entity.currently_editing_player.lock().await = None;
+        world.update_block_entity(&block_entity).await;
     }
 
     pub async fn handle_use_item(

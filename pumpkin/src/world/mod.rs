@@ -2232,7 +2232,7 @@ impl World {
         chunk.mark_dirty(true);
     }
 
-    pub async fn update_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
+    pub async fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk = self
             .level
