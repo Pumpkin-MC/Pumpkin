@@ -37,8 +37,7 @@ impl FireBlock {
     }
 
     fn is_flammable(block_state: &BlockState) -> bool {
-        if block_state
-            .block()
+        if Block::from_state_id(block_state.id)
             .properties(block_state.id)
             .and_then(|props| {
                 props
@@ -51,8 +50,7 @@ impl FireBlock {
         {
             return false;
         }
-        block_state
-            .block()
+        Block::from_state_id(block_state.id)
             .flammable
             .as_ref()
             .is_some_and(|f| f.burn_chance > 0)

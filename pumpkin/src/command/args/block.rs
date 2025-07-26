@@ -1,6 +1,6 @@
 use async_trait::async_trait;
+use pumpkin_data::Block;
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use pumpkin_data::{Block, block_properties::get_block};
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
@@ -59,7 +59,7 @@ impl<'a> FindArg<'a> for BlockArgumentConsumer {
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::Block(name)) => get_block(name).map_or_else(
+            Some(Arg::Block(name)) => Block::from_name(name).map_or_else(
                 || {
                     if name.starts_with("minecraft:") {
                         Err(CommandError::CommandFailed(Box::new(
@@ -136,7 +136,7 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
         match args.get(name) {
             Some(Arg::BlockPredicate(name)) => name.strip_prefix("#").map_or_else(
                 || {
-                    get_block(name).map_or_else(
+                    Block::from_name(name).map_or_else(
                         || {
                             if name.starts_with("minecraft:") {
                                 Err(CommandError::CommandFailed(Box::new(

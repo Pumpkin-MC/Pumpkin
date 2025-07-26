@@ -36,10 +36,7 @@ impl BitSet {
 }
 
 impl Serialize for BitSet {
-    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
         todo!()
     }
 }

@@ -57,12 +57,11 @@ pub async fn compute_wall_state(
     block: &Block,
     block_pos: &BlockPos,
 ) -> u16 {
-    let (block_above, block_above_state) = world.get_block_and_block_state(&block_pos.up()).await;
+    let (block_above, block_above_state) = world.get_block_and_state(&block_pos.up()).await;
 
     for direction in HorizontalFacing::all() {
         let other_block_pos = block_pos.offset(direction.to_offset());
-        let (other_block, other_block_state) =
-            world.get_block_and_block_state(&other_block_pos).await;
+        let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos).await;
 
         let connected = is_connected(block, direction, other_block, other_block_state);
 

@@ -1,6 +1,9 @@
 use std::{
     array::from_fn,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use async_trait::async_trait;
@@ -59,7 +62,7 @@ impl BlockEntity for BarrelBlockEntity {
     }
 
     fn is_dirty(&self) -> bool {
-        self.dirty.load(std::sync::atomic::Ordering::Relaxed)
+        self.dirty.load(Ordering::Relaxed)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -114,7 +117,7 @@ impl Inventory for BarrelBlockEntity {
     }
 
     fn mark_dirty(&self) {
-        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.dirty.store(true, Ordering::Relaxed);
     }
 }
 

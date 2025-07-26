@@ -12,10 +12,7 @@ use serde::{
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
 
 impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
+    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
             type Value = ItemStackSerializer<'static>;
@@ -24,10 +21,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                 formatter.write_str("a valid Slot encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let item_count = seq
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
@@ -72,10 +66,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
 }
 
 impl Serialize for ItemStackSerializer<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if self.0.is_empty() {
             VarInt(0).serialize(serializer)
         } else {
@@ -150,10 +141,7 @@ impl OptionalItemStackHash {
 pub struct OptionalItemStackHash(pub Option<ItemStackHash>);
 
 impl<'de> Deserialize<'de> for OptionalItemStackHash {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
+    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
             type Value = OptionalItemStackHash;
@@ -162,10 +150,7 @@ impl<'de> Deserialize<'de> for OptionalItemStackHash {
                 formatter.write_str("a valid Slot encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let is_some = seq
                     .next_element::<bool>()?
                     .ok_or(de::Error::custom("No is some bool!"))?;
@@ -198,10 +183,7 @@ impl<'de> Deserialize<'de> for OptionalItemStackHash {
 }
 
 impl<'de> Deserialize<'de> for ItemComponentHash {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
+    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
             type Value = ItemComponentHash;
@@ -210,10 +192,7 @@ impl<'de> Deserialize<'de> for ItemComponentHash {
                 formatter.write_str("a valid Slot encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let mut added = Vec::new();
                 let mut removed = Vec::new();
 

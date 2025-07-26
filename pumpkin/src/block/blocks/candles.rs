@@ -115,7 +115,7 @@ impl PumpkinBlock for CandleBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let (support_block, state) = args
             .block_accessor
-            .get_block_and_block_state(&args.position.down())
+            .get_block_and_state(&args.position.down())
             .await;
         !support_block.is_waterlogged(state.id) && state.is_center_solid(BlockDirection::Up)
     }
