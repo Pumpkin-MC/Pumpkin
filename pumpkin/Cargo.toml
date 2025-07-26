@@ -50,7 +50,7 @@ num-bigint = "0.4"
 rustyline-async = "0.4.6"
 
 # encryption
-rsa = { version = "=0.10.0-rc.1", features = ["sha1"] }
+rsa = { version = "=0.10.0-rc.3", features = ["sha1"] }
 rsa-der = "0.3"
 
 # authentication
