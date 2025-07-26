@@ -180,7 +180,6 @@ impl Executor {
                 if mode == Mode::Add {
                     target.add_experience_points(amount).await;
                 } else {
-                    // target.set_experience_points(amount).await; This could
                     let current_level = target.experience_level.load(Ordering::Relaxed);
                     let current_max_points = experience::points_in_level(current_level);
 
