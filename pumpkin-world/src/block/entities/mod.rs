@@ -89,7 +89,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         BarrelBlockEntity::ID => Arc::new(block_entity_from_generic::<BarrelBlockEntity>(nbt)),
         HopperBlockEntity::ID => Arc::new(block_entity_from_generic::<HopperBlockEntity>(nbt)),
         DropperBlockEntity::ID => Arc::new(block_entity_from_generic::<DropperBlockEntity>(nbt)),
-        ShulkerBoxBlockEntity::ID => Arc::new(block_entity_from_generic::<ShulkerBoxBlockEntity>(nbt)),
+        ShulkerBoxBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<ShulkerBoxBlockEntity>(nbt))
+        }
         PistonBlockEntity::ID => Arc::new(block_entity_from_generic::<PistonBlockEntity>(nbt)),
         EndPortalBlockEntity::ID => {
             Arc::new(block_entity_from_generic::<EndPortalBlockEntity>(nbt))
