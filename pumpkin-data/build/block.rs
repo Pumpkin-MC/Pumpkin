@@ -986,7 +986,7 @@ pub(crate) fn build() -> TokenStream {
             pub fn from_id(id: u16) -> &'static Self {
                 Block::STATE_FROM_STATE_ID[id as usize]
             }
-            
+
             #[doc = r" Get a block state from a state id and the corresponding block."]
             #[inline]
             pub fn from_id_with_block(id: u16) -> (&'static Block, &'static Self) {

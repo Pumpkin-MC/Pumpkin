@@ -1,7 +1,8 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties},
-    tag::{RegistryKey, Tagable, get_tag_values},
+    tag,
+    tag::{RegistryKey, Taggable, get_tag_values},
 };
 use pumpkin_util::{
     math::position::BlockPos,

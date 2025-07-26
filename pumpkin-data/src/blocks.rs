@@ -1,6 +1,6 @@
 use crate::{
     BlockState, BlockStateRef,
-    tag::{RegistryKey, Tagable},
+    tag::{RegistryKey, Taggable},
 };
 use pumpkin_util::{
     loot_table::LootTable,

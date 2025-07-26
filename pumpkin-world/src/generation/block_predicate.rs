@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use pumpkin_data::{Block, BlockDirection, BlockState, tag::Tagable};
+use pumpkin_data::{Block, BlockDirection, BlockState, tag::Taggable};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
 

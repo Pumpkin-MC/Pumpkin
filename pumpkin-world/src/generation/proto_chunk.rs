@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::tag;
 use pumpkin_data::{
-    Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Tagable,
+    Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Taggable,
 };
 use pumpkin_util::{
     HeightMap,

@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockDirection, tag::Tagable};
+use pumpkin_data::{Block, BlockDirection, tag, tag::Taggable};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 

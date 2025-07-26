@@ -1,7 +1,8 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1},
-    tag::Tagable,
+    tag,
+    tag::Taggable,
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2},
