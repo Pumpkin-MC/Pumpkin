@@ -1,5 +1,6 @@
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::{select, time};
@@ -48,7 +49,7 @@ pub async fn start_lan_broadcast(bound_addr: SocketAddr) {
             .expect("Unable to find running address!")
     );
 
-    while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+    while !SHOULD_STOP.load(Ordering::Relaxed) {
         let t1 = interval.tick();
         let t2 = STOP_INTERRUPT.notified();
 

@@ -18,9 +18,10 @@ pub fn get_biome_blend(
     let biome_z = biome_coords::from_block(offset_z);
     // &'ing 3 gives values of 0-3, it is also the data we removed when converting to biome coords
     // This is effectively "quarters" into the biome
-    let biome_x_quarters = (offset_x & 0b11) as f64 / 4.0;
-    let biome_y_quarters = (offset_y & 0b11) as f64 / 4.0;
-    let biome_z_quarters = (offset_z & 0b11) as f64 / 4.0;
+    // Original was "/ 4.0" but we use "* 0.25" as multiplication can be faster
+    let biome_x_quarters = (offset_x & 0b11) as f64 * 0.25;
+    let biome_y_quarters = (offset_y & 0b11) as f64 * 0.25;
+    let biome_z_quarters = (offset_z & 0b11) as f64 * 0.25;
 
     let mut best_permutation = 0;
     let mut best_score = f64::INFINITY;
@@ -148,12 +149,11 @@ fn salt_mix(seed: i64, salt: i64) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_util::{math::vector3::Vector3, read_data_from_file};
 
     use crate::{
         biome::hash_seed,
         generation::biome::{get_biome_blend, scale_mix, score_permutation},
-        read_data_from_file,
     };
 
     use super::salt_mix;

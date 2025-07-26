@@ -18,8 +18,8 @@ pub struct SaplingBlock;
 
 impl SaplingBlock {
     async fn generate(&self, world: &Arc<World>, pos: &BlockPos) {
-        let (block, state) = world.get_block_and_block_state(pos).await;
-        let mut props = SaplingProperties::from_state_id(state.id, block);
+        let (block, state) = world.get_block_and_state_id(pos).await;
+        let mut props = SaplingProperties::from_state_id(state, block);
         if props.stage == Integer0To1::L0 {
             props.stage = Integer0To1::L1;
             world

@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use super::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
 use crate::crafting::crafting_inventory::CraftingInventory;
@@ -333,8 +333,7 @@ impl Slot for ResultSlot {
     }
 
     fn set_id(&self, id: usize) {
-        self.id
-            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
+        self.id.store(id as u8, Ordering::Relaxed);
     }
 
     async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {

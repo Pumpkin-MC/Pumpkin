@@ -301,11 +301,6 @@ impl CommandDispatcher {
         }
     }
 
-    #[must_use]
-    pub fn get_permission(&self, key: &str) -> Option<&String> {
-        self.permissions.get(key)
-    }
-
     async fn try_is_fitting_path<'a>(
         src: &mut CommandSender,
         server: &'a Server,

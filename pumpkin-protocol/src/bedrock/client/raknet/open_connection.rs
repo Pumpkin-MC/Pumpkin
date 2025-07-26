@@ -1,9 +1,10 @@
+use std::net::SocketAddr;
+
 use pumpkin_macros::packet;
-use serde::Serialize;
 
-use crate::{bedrock::RAKNET_MAGIC, codec::socket_address::SocketAddress};
+use crate::{bedrock::RAKNET_MAGIC, serial::PacketWrite};
 
-#[derive(Serialize)]
+#[derive(PacketWrite)]
 #[packet(0x06)]
 pub struct COpenConnectionReply1 {
     magic: [u8; 16],
@@ -26,18 +27,18 @@ impl COpenConnectionReply1 {
     }
 }
 
-#[derive(Serialize)]
+#[derive(PacketWrite)]
 #[packet(0x08)]
 pub struct COpenConnectionReply2 {
     magic: [u8; 16],
     server_guid: u64,
-    client_address: SocketAddress,
+    client_address: SocketAddr,
     mtu: u16,
     security: bool,
 }
 
 impl COpenConnectionReply2 {
-    pub fn new(server_guid: u64, client_address: SocketAddress, mtu: u16, security: bool) -> Self {
+    pub fn new(server_guid: u64, client_address: SocketAddr, mtu: u16, security: bool) -> Self {
         Self {
             magic: RAKNET_MAGIC,
             server_guid,

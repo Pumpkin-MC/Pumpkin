@@ -2,8 +2,8 @@ use core::f32;
 use std::sync::Arc;
 
 use pumpkin_data::{
-    BlockState,
-    block_properties::{Axis, EnumVariants, get_block_by_state_id, get_state_by_state_id},
+    Block, BlockState,
+    block_properties::{Axis, EnumVariants},
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
@@ -156,11 +156,11 @@ impl FancyTrunkPlacer {
                 let axis = Self::get_log_axis(start_pos, block_pos_2.0);
 
                 if TreeFeature::can_replace(block.to_state(), block.to_block()) {
-                    let block = get_block_by_state_id(trunk_provider.id);
+                    let block = Block::from_state_id(trunk_provider.id);
                     let original_props = &block.properties(trunk_provider.id).unwrap().to_props();
                     let axis = axis.to_value();
                     // Set the right Axis
-                    let props = original_props
+                    let props: Vec<(&str, &str)> = original_props
                         .iter()
                         .map(|(key, value)| {
                             if key == "axis" {
@@ -170,9 +170,9 @@ impl FancyTrunkPlacer {
                             }
                         })
                         .collect();
-                    let state = block.from_properties(props).unwrap().to_state_id(block);
+                    let state = block.from_properties(&props).to_state_id(block);
                     if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
-                        chunk.set_block_state(&block_pos_2.0, get_state_by_state_id(state));
+                        chunk.set_block_state(&block_pos_2.0, BlockState::from_id(state));
                     } else {
                         // level.set_block_state(&block_pos_2, state).await;
                     }
@@ -195,7 +195,7 @@ impl FancyTrunkPlacer {
         tree_height: i32,
         start_pos: Vector3<i32>,
         trunk_provider: &BlockState,
-        branch_positions: &Vec<BranchPosition>,
+        branch_positions: &[BranchPosition],
     ) {
         for branch_position in branch_positions {
             let i = branch_position.get_end_y();

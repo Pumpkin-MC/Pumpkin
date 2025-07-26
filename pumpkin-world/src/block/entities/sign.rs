@@ -49,9 +49,9 @@ impl From<DyeColor> for String {
     }
 }
 
-impl From<String> for DyeColor {
-    fn from(s: String) -> Self {
-        match s.as_str() {
+impl From<&str> for DyeColor {
+    fn from(s: &str) -> Self {
+        match s {
             "white" => DyeColor::White,
             "orange" => DyeColor::Orange,
             "magenta" => DyeColor::Magenta,
@@ -116,11 +116,11 @@ impl From<NbtTag> for Text {
             .get_list("messages")
             .unwrap()
             .iter()
-            .filter_map(|tag| tag.extract_string().cloned())
+            .filter_map(|tag| tag.extract_string().map(|s| s.to_string()))
             .collect();
         Self {
             has_glowing_text,
-            color: DyeColor::from(color.clone()),
+            color: DyeColor::from(color),
             messages: [
                 // its important that we use unwrap_or since otherwise we may crash on older versions
                 messages.first().unwrap_or(&"".to_string()).clone(),
