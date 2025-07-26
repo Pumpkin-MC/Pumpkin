@@ -1419,6 +1419,8 @@ impl Player {
 
         drop(level_info);
 
+        let mut rng = Xoroshiro::from_seed(get_seed());
+
         for slot in 0..self.inventory.size() {
             let item_stack = self.inventory.remove_stack(slot).await;
             let item_pos = self.living_entity.entity.pos.load()
@@ -1431,8 +1433,6 @@ impl Player {
                     EntityType::ITEM,
                     false,
                 );
-
-                let mut rng = Xoroshiro::from_seed(get_seed());
 
                 let mag = rng.next_f32() * 0.5;
                 let ang = rng.next_f32() * std::f32::consts::TAU;
