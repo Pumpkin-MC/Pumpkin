@@ -15,7 +15,7 @@ pub struct LargeOakFoliagePlacer {
 
 impl LargeOakFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -43,8 +43,7 @@ impl LargeOakFoliagePlacer {
                 y,
                 node.giant_trunk,
                 foliage_provider,
-            )
-            .await;
+            );
         }
     }
 

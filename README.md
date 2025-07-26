@@ -105,7 +105,7 @@ Check out our [Github Project](https://github.com/orgs/Pumpkin-MC/projects/3) to
 
 ## How to run
 
-See our [Quick Start](https://pumpkinmc.org/about/quick-start.html) guide to get Pumpkin running.
+See our [Quick Start](https://docs.pumpkinmc.org/#quick-start) guide to get Pumpkin running.
 
 ## Contributions
 

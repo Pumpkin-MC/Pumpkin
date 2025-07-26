@@ -61,7 +61,7 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
 
 #[async_trait]
 pub trait BlockRegistryExt: Send + Sync {
-    async fn can_place_at(
+    fn can_place_at(
         &self,
         block: &pumpkin_data::Block,
         block_accessor: &dyn BlockAccessor,
