@@ -4,10 +4,7 @@
 
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
-    block_properties::{
-        BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties,
-        get_state_by_state_id,
-    },
+    block_properties::{BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
@@ -332,7 +329,7 @@ impl RedstoneWireTurbo {
             let node = &mut self.nodes[upd1.index];
             let mut wire = unwrap_wire(node.state);
             wire.power = new_wire.power;
-            node.state = get_state_by_state_id(wire.to_state_id(&Block::REDSTONE_WIRE));
+            node.state = BlockState::from_id(wire.to_state_id(&Block::REDSTONE_WIRE));
 
             self.propagate_changes(world, upd1, layer).await;
         }

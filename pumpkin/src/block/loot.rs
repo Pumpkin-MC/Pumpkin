@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use pumpkin_data::{Block, BlockState, block_properties::get_block_by_state_id, item::Item};
+use pumpkin_data::{Block, BlockState, item::Item};
 use pumpkin_util::{
     loot_table::{
         LootCondition, LootFunctionNumberProvider, LootFunctionTypes, LootPoolEntry,
@@ -171,18 +169,21 @@ impl LootConditionExt for LootCondition {
                 properties,
             } => {
                 if let Some(state) = &params.block_state {
-                    let block_actual_properties: HashMap<String, String> =
-                        match Block::properties(get_block_by_state_id(state.id), state.id) {
+                    let block_actual_properties: Box<[(String, String)]> =
+                        match Block::properties(Block::from_state_id(state.id), state.id) {
                             Some(props_data) => props_data.to_props(), // Assuming to_props() returns HashMap<String, String>
                             None => {
                                 return properties.is_empty();
                             }
                         };
 
-                    return properties.iter().all(|&(expected_key, expected_value)| {
-                        block_actual_properties.get(expected_key).is_some_and(
-                            |actual_value_string| actual_value_string.as_str() == expected_value,
-                        )
+                    return properties.iter().all(|(expected_key, expected_value)| {
+                        block_actual_properties
+                            .iter()
+                            .find(|(actual_key, _)| actual_key == expected_key)
+                            .is_some_and(|(_, actual_value_string)| {
+                                actual_value_string == expected_value
+                            })
                     });
                 }
                 false

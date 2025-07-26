@@ -9,6 +9,7 @@ use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::argument;
 use crate::command::{CommandExecutor, CommandSender};
+use crate::net::DisconnectReason;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["kick"];
@@ -38,7 +39,7 @@ impl CommandExecutor for Executor {
         };
 
         for target in targets {
-            target.kick(reason.clone()).await;
+            target.kick(DisconnectReason::Kicked, reason.clone()).await;
             let name = &target.gameprofile.name;
             let msg = TextComponent::text(format!("Kicked: {name}"));
             sender.send_message(msg.color_named(NamedColor::Blue)).await;

@@ -1,10 +1,7 @@
 use pumpkin_data::{
-    Block, BlockDirection,
-    block_properties::{
-        BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1, get_state_by_state_id,
-    },
-    tag,
-    tag::Taggable,
+    Block, BlockDirection, BlockState,
+    block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1},
+    tag::Tagable,
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2},
@@ -41,7 +38,7 @@ impl BambooFeature {
                         for z in pos.0.z - rnd..pos.0.z + rnd {
                             let block_below = BlockPos::new(
                                 x,
-                                chunk.top_block_height_exclusive(&Vector2::new(x, z)) as i32 - 1,
+                                chunk.top_block_height_exclusive(&Vector2::new(x, z)) - 1,
                                 z,
                             );
                             let block = chunk.get_block_state(&block_below.0);
@@ -73,19 +70,19 @@ impl BambooFeature {
 
                     chunk.set_block_state(
                         &bpos.0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
+                        BlockState::from_id(props.to_state_id(&Block::BAMBOO)),
                     );
                     props.stage = Integer0To1::L0;
 
                     chunk.set_block_state(
                         &bpos.down().0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
+                        BlockState::from_id(props.to_state_id(&Block::BAMBOO)),
                     );
                     props.leaves = BambooLeaves::Small;
 
                     chunk.set_block_state(
                         &bpos.down().down().0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
+                        BlockState::from_id(props.to_state_id(&Block::BAMBOO)),
                     );
                 }
             }

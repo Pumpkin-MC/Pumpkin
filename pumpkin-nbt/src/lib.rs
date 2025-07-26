@@ -83,10 +83,7 @@ impl Nbt {
         }
     }
 
-    pub fn read<R>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error>
-    where
-        R: Read,
-    {
+    pub fn read<R: Read>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error> {
         let tag_type_id = reader.get_u8_be()?;
 
         if tag_type_id != COMPOUND_ID {
@@ -100,10 +97,7 @@ impl Nbt {
     }
 
     /// Reads an NBT tag that doesn't contain the name of the root `Compound`.
-    pub fn read_unnamed<R>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error>
-    where
-        R: Read,
-    {
+    pub fn read_unnamed<R: Read>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error> {
         let tag_type_id = reader.get_u8_be()?;
 
         if tag_type_id != COMPOUND_ID {
@@ -195,11 +189,10 @@ pub(crate) const NBT_BYTE_ARRAY_TAG: &str = "__nbt_byte_array";
 
 macro_rules! impl_array {
     ($name:ident, $variant:expr) => {
-        pub fn $name<T, S>(input: T, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            T: serde::Serialize,
-            S: serde::Serializer,
-        {
+        pub fn $name<T: serde::Serialize, S: serde::Serializer>(
+            input: T,
+            serializer: S,
+        ) -> Result<S::Ok, S::Error> {
             serializer.serialize_newtype_variant(NBT_ARRAY_TAG, 0, $variant, &input)
         }
     };

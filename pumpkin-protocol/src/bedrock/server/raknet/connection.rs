@@ -1,32 +1,37 @@
+use std::net::SocketAddr;
+
 use pumpkin_macros::packet;
-use serde::{Deserialize, Serialize};
 
-use crate::codec::socket_address::SocketAddress;
+use crate::serial::PacketRead;
 
-#[derive(Serialize, Deserialize)]
+#[derive(PacketRead)]
 #[packet(0x00)]
 pub struct SConnectedPing {
     /// Time since start
+    #[serial(big_endian)]
     pub time: u64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(PacketRead)]
 #[packet(0x09)]
 pub struct SConnectionRequest {
+    #[serial(big_endian)]
     pub client_guid: u64,
+    #[serial(big_endian)]
     pub time: u64,
     pub security: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(PacketRead)]
 #[packet(0x13)]
 pub struct SNewIncomingConnection {
-    pub server_address: SocketAddress,
-    pub internal_address: SocketAddress,
+    pub server_address: SocketAddr,
+    pub internal_address: SocketAddr,
+    #[serial(big_endian)]
     pub ping_time: u64,
+    #[serial(big_endian)]
     pub pong_time: u64,
 }
 
-#[derive(Serialize, Deserialize)]
 #[packet(0x15)]
 pub struct SDisconnect;

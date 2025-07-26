@@ -1,7 +1,5 @@
 use itertools::Itertools;
-use pumpkin_data::{
-    Block, BlockDirection, BlockState, block_properties::get_block_by_state_id, tag::Taggable,
-};
+use pumpkin_data::{Block, BlockDirection, BlockState, tag::Tagable};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
 
@@ -222,7 +220,7 @@ impl WouldSurviveBlockPredicate {
         let state = self.state.get_state();
         let pos = self.offset.get(pos);
         block_registry.can_place_at(
-            get_block_by_state_id(state.id),
+            Block::from_state_id(state.id),
             chunk,
             &pos,
             BlockDirection::Up,

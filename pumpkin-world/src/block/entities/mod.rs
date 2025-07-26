@@ -74,31 +74,24 @@ pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
 }
 
 pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> {
-    let id = nbt.get_string("id").unwrap();
-    match id.as_str() {
-        ChestBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt))),
-        SignBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt))),
-        BedBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<BedBlockEntity>(nbt))),
-        ComparatorBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<
-            ComparatorBlockEntity,
-        >(nbt))),
-        BarrelBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<BarrelBlockEntity>(
-            nbt,
-        ))),
-        DropperBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<DropperBlockEntity>(
-            nbt,
-        ))),
-        PistonBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<PistonBlockEntity>(
-            nbt,
-        ))),
-        EndPortalBlockEntity::ID => Some(Arc::new(
-            block_entity_from_generic::<EndPortalBlockEntity>(nbt),
-        )),
-        ChiseledBookshelfBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<
+    Some(match nbt.get_string("id").unwrap() {
+        ChestBlockEntity::ID => Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt)),
+        SignBlockEntity::ID => Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt)),
+        BedBlockEntity::ID => Arc::new(block_entity_from_generic::<BedBlockEntity>(nbt)),
+        ComparatorBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<ComparatorBlockEntity>(nbt))
+        }
+        BarrelBlockEntity::ID => Arc::new(block_entity_from_generic::<BarrelBlockEntity>(nbt)),
+        DropperBlockEntity::ID => Arc::new(block_entity_from_generic::<DropperBlockEntity>(nbt)),
+        PistonBlockEntity::ID => Arc::new(block_entity_from_generic::<PistonBlockEntity>(nbt)),
+        EndPortalBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<EndPortalBlockEntity>(nbt))
+        }
+        ChiseledBookshelfBlockEntity::ID => Arc::new(block_entity_from_generic::<
             ChiseledBookshelfBlockEntity,
-        >(nbt))),
-        _ => None,
-    }
+        >(nbt)),
+        _ => return None,
+    })
 }
 
 pub fn has_block_block_entity(block: &Block) -> bool {

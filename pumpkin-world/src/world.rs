@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use bitflags::bitflags;
-use pumpkin_data::BlockDirection;
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
 
@@ -63,7 +63,7 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
 pub trait BlockRegistryExt: Send + Sync {
     fn can_place_at(
         &self,
-        block: &pumpkin_data::Block,
+        block: &Block,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
         face: BlockDirection,
@@ -72,15 +72,12 @@ pub trait BlockRegistryExt: Send + Sync {
 
 #[async_trait]
 pub trait BlockAccessor: Send + Sync {
-    async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block;
+    async fn get_block(&self, position: &BlockPos) -> &'static Block;
 
-    async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState;
+    async fn get_block_state(&self, position: &BlockPos) -> &'static BlockState;
 
-    async fn get_block_and_block_state(
+    async fn get_block_and_state(
         &self,
         position: &BlockPos,
-    ) -> (
-        &'static pumpkin_data::Block,
-        &'static pumpkin_data::BlockState,
-    );
+    ) -> (&'static Block, &'static BlockState);
 }
