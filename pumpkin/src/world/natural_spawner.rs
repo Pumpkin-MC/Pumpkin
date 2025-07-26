@@ -3,7 +3,7 @@ use crate::world::World;
 use pumpkin_data::biome::{Biome, Spawner};
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
 use pumpkin_data::tag::Tagable;
-use pumpkin_data::{BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::get_section_cord;
@@ -576,8 +576,7 @@ pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
         false
     } else {
         // TODO !entityType.isBlockDangerous(blockState);
-        !state
-            .block()
+        !Block::from_state_id(state.id)
             .is_tagged_with("minecraft:prevent_mob_spawning_inside")
             .unwrap()
     }
