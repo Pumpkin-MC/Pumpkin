@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::EntityBase;
-use super::{Entity, NBTStorage, effect::Effect};
+use super::{Entity, NBTStorage};
 use crate::block::loot::{LootContextParameters, LootTableExt};
 use crate::server::Server;
 use async_trait::async_trait;
