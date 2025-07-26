@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, block_properties::get_block_by_state_id};
+use pumpkin_data::Block;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::RandomGenerator,
@@ -30,7 +30,7 @@ impl ReplaceBlobsFeature {
         pos: BlockPos,
     ) -> bool {
         let target = self.target.get_state();
-        let target = get_block_by_state_id(target.id);
+        let target = Block::from_state_id(target.id);
         let state = self.state.get_state();
         let Some(pos) = Self::move_down_to_target(pos, chunk, target) else {
             return false;

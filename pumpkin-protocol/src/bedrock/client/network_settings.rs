@@ -1,7 +1,8 @@
 use pumpkin_macros::packet;
-use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+use crate::serial::PacketWrite;
+
+#[derive(PacketWrite)]
 #[packet(143)]
 pub struct CNetworkSettings {
     compression_threshold: u16,

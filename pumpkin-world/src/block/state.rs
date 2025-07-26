@@ -1,4 +1,4 @@
-use pumpkin_data::block_properties::{get_block, get_block_by_state_id, get_state_by_state_id};
+use pumpkin_data::{Block, BlockState};
 
 use crate::BlockStateId;
 
@@ -11,18 +11,18 @@ impl RawBlockState {
 
     /// Get a Block from the Vanilla Block registry at Runtime
     pub fn new(registry_id: &str) -> Option<Self> {
-        let block = get_block(registry_id);
+        let block = Block::from_name(registry_id);
         block.map(|block| Self(block.default_state.id))
     }
 
     #[inline]
-    pub fn to_state(&self) -> &'static pumpkin_data::BlockState {
-        get_state_by_state_id(self.0)
+    pub fn to_state(&self) -> &'static BlockState {
+        BlockState::from_id(self.0)
     }
 
     #[inline]
-    pub fn to_block(&self) -> &'static pumpkin_data::Block {
-        get_block_by_state_id(self.0)
+    pub fn to_block(&self) -> &'static Block {
+        Block::from_state_id(self.0)
     }
 }
 

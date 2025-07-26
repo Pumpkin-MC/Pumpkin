@@ -6,7 +6,6 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
-use pumpkin_data::block_properties;
 use pumpkin_data::fluid;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
@@ -89,10 +88,8 @@ impl BlockRegistry {
         let val = Arc::new(block);
         self.blocks.reserve(names.len());
         for i in names {
-            self.blocks.insert(
-                block_properties::get_block(i.as_str()).unwrap(),
-                val.clone(),
-            );
+            self.blocks
+                .insert(Block::from_name(i.as_str()).unwrap(), val.clone());
         }
     }
 

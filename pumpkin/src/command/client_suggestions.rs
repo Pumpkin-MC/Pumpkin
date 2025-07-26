@@ -18,7 +18,7 @@ pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &CommandDi
             continue;
         };
 
-        let Some(permission) = dispatcher.get_permission(key) else {
+        let Some(permission) = dispatcher.permissions.get(key) else {
             continue;
         };
 
