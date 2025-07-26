@@ -579,7 +579,7 @@ impl BedrockClient {
     ) -> Result<(), Error> {
         let reader = &mut payload;
         match packet_id {
-            // The client sends this muliple times and some arive after we already made the connection
+            // The client sends this multiple times and some arrive after we already made the connection
             SConnectionRequest::PACKET_ID => (),
             SNewIncomingConnection::PACKET_ID => {
                 self.handle_new_incoming_connection(&SNewIncomingConnection::read(reader)?);
