@@ -148,9 +148,9 @@ async fn get_stair_properties_if_exists(
     world: &World,
     block_pos: &BlockPos,
 ) -> Option<StairsProperties> {
-    let (block, block_state) = world.get_block_and_block_state(block_pos).await;
+    let (block, block_state) = world.get_block_and_state_id(block_pos).await;
     block
         .is_tagged_with("#minecraft:stairs")
         .unwrap()
-        .then(|| StairsProperties::from_state_id(block_state.id, block))
+        .then(|| StairsProperties::from_state_id(block_state, block))
 }

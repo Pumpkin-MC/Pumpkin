@@ -16,7 +16,7 @@ use jukebox_song::JukeboxSong;
 use paint::Painting;
 use pig::PigVariant;
 use pumpkin_protocol::java::client::config::RegistryEntry;
-use pumpkin_util::resource_location::ResourceLocation;
+use pumpkin_util::{read_data_from_file, resource_location::ResourceLocation};
 use serde::{Deserialize, Serialize};
 use trim_material::TrimMaterial;
 use trim_pattern::TrimPattern;
@@ -40,10 +40,8 @@ mod trim_material;
 mod trim_pattern;
 mod wolf;
 
-pub static SYNCED_REGISTRIES: LazyLock<SyncedRegistry> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../assets/synced_registries.json"))
-        .expect("Could not parse synced_registries.json registry.")
-});
+pub static SYNCED_REGISTRIES: LazyLock<SyncedRegistry> =
+    LazyLock::new(|| read_data_from_file!("../../assets/synced_registries.json"));
 
 pub struct Registry {
     pub registry_id: ResourceLocation,

@@ -35,8 +35,8 @@ use crate::world::World;
 type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 
 async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, block_state) = world.get_block_and_block_state(block_pos).await;
-    let mut door_props = DoorProperties::from_state_id(block_state.id, block);
+    let (block, block_state) = world.get_block_and_state_id(block_pos).await;
+    let mut door_props = DoorProperties::from_state_id(block_state, block);
     door_props.open = !door_props.open;
 
     let other_half = match door_props.half {
@@ -45,8 +45,8 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
     };
     let other_pos = block_pos.offset(other_half.to_offset());
 
-    let (other_block, other_state_id) = world.get_block_and_block_state(&other_pos).await;
-    let mut other_door_props = DoorProperties::from_state_id(other_state_id.id, other_block);
+    let (other_block, other_state_id) = world.get_block_and_state_id(&other_pos).await;
+    let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
     other_door_props.open = door_props.open;
 
     world
@@ -112,12 +112,12 @@ async fn get_hinge(
     let top_pos = pos.up();
     let left_dir = facing.rotate_counter_clockwise();
     let left_pos = pos.offset(left_dir.to_block_direction().to_offset());
-    let (left_block, left_state) = world.get_block_and_block_state(&left_pos).await;
+    let (left_block, left_state) = world.get_block_and_state(&left_pos).await;
     let top_facing = top_pos.offset(facing.to_block_direction().to_offset());
     let top_state = world.get_block_state(&top_facing).await;
     let right_dir = facing.rotate_clockwise();
     let right_pos = pos.offset(right_dir.to_block_direction().to_offset());
-    let (right_block, right_state) = world.get_block_and_block_state(&right_pos).await;
+    let (right_block, right_state) = world.get_block_and_state(&right_pos).await;
     let top_right = top_pos.offset(facing.to_block_direction().to_offset());
     let top_right_state = world.get_block_state(&top_right).await;
 
@@ -227,14 +227,13 @@ impl PumpkinBlock for DoorBlock {
             DoubleBlockHalf::Lower => BlockDirection::Up,
         };
         let other_pos = args.position.offset(other_half.to_offset());
-        let (other_block, other_state_id) = args.world.get_block_and_block_state(&other_pos).await;
+        let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_pos).await;
 
         let powered = block_receives_redstone_power(args.world, args.position).await
             || block_receives_redstone_power(args.world, &other_pos).await;
 
         if args.block.id == other_block.id && powered != door_props.powered {
-            let mut other_door_props =
-                DoorProperties::from_state_id(other_state_id.id, other_block);
+            let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
             door_props.powered = !door_props.powered;
             other_door_props.powered = door_props.powered;
 

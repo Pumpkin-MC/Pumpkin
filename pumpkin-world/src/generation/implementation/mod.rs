@@ -61,7 +61,6 @@ impl GeneratorInit for VanillaGenerator {
     }
 }
 
-#[async_trait]
 impl WorldGenerator for VanillaGenerator {
     fn generate_chunk(
         &self,

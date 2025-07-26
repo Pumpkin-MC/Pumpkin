@@ -5,7 +5,6 @@ use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{
         BlockProperties, ComparatorLikeProperties, ComparatorMode, HorizontalFacing,
-        get_state_by_state_id,
     },
     entity::EntityType,
 };
@@ -65,7 +64,7 @@ impl PumpkinBlock for ComparatorBlock {
             self,
             args.world,
             *args.position,
-            get_state_by_state_id(args.state_id).id,
+            BlockState::from_id(args.state_id).id,
             args.block,
         )
         .await;
@@ -88,7 +87,7 @@ impl PumpkinBlock for ComparatorBlock {
                 self,
                 args.world,
                 *args.neighbor_position,
-                get_state_by_state_id(args.neighbor_state_id),
+                BlockState::from_id(args.neighbor_state_id),
             )
             .await
         {
@@ -218,7 +217,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
         let props = ComparatorLikeProperties::from_state_id(state.id, block);
         let facing = props.facing;
         let source_pos = pos.offset(facing.to_offset());
-        let (source_block, source_state) = world.get_block_and_block_state(&source_pos).await;
+        let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
 
         if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(source_block) {
             if let Some(level) = pumpkin_block
@@ -236,7 +235,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
 
         if redstone_level < 15 && source_state.is_solid() {
             let source_pos = source_pos.offset(facing.to_offset());
-            let (source_block, source_state) = world.get_block_and_block_state(&source_pos).await;
+            let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
 
             let itemframe_level = self
                 .get_attached_itemframe_level(world, facing, source_pos)
@@ -283,7 +282,7 @@ impl ComparatorBlock {
             .set_block_state(&block_pos, state_id, BlockFlags::empty())
             .await;
 
-        self.update(world, block_pos, get_state_by_state_id(state_id), block)
+        self.update(world, block_pos, BlockState::from_id(state_id), block)
             .await;
     }
 

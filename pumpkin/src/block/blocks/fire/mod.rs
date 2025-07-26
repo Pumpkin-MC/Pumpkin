@@ -23,7 +23,7 @@ pub struct FireBlockBase;
 
 impl FireBlockBase {
     pub async fn get_fire_type(world: &World, pos: &BlockPos) -> Block {
-        let (block, _block_state) = world.get_block_and_block_state(&pos.down()).await;
+        let block = world.get_block(&pos.down()).await;
         if SoulFireBlock::is_soul_base(block) {
             return Block::SOUL_FIRE;
         }

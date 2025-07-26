@@ -95,8 +95,8 @@ impl SimplexNoiseSampler {
 
         let n = h - l as f64 + Self::UNSKEW_FACTOR_2D;
         let o = k - m as f64 + Self::UNSKEW_FACTOR_2D;
-        let p = 2f64 * Self::UNSKEW_FACTOR_2D + (h - 1f64);
-        let q = 2f64 * Self::UNSKEW_FACTOR_2D + (k - 1f64);
+        let p = 2.0 * Self::UNSKEW_FACTOR_2D + (h - 1.0);
+        let q = 2.0 * Self::UNSKEW_FACTOR_2D + (k - 1.0);
 
         let r = i & 0xFF;
         let s = j & 0xFF;
@@ -105,21 +105,21 @@ impl SimplexNoiseSampler {
         let u = self.map(r.wrapping_add(l).wrapping_add(self.map(s.wrapping_add(m)))) % 12;
         let v = self.map(r.wrapping_add(1).wrapping_add(self.map(s.wrapping_add(1)))) % 12;
 
-        let w = Self::grad(t as usize, h, k, 0f64, 0.5f64);
-        let z = Self::grad(u as usize, n, o, 0f64, 0.5f64);
-        let aa = Self::grad(v as usize, p, q, 0f64, 0.5f64);
+        let w = Self::grad(t as usize, h, k, 0.0, 0.5);
+        let z = Self::grad(u as usize, n, o, 0.0, 0.5);
+        let aa = Self::grad(v as usize, p, q, 0.0, 0.5);
 
-        70f64 * (w + z + aa)
+        70.0 * (w + z + aa)
     }
 
     pub fn sample_3d(&self, x: f64, y: f64, z: f64) -> f64 {
-        let e = (x + y + z) * 0.3333333333333333f64;
+        let e = (x + y + z) * 0.3333333333333333;
 
         let i = (x + e).floor() as i32;
         let j = (y + e).floor() as i32;
         let k = (z + e).floor() as i32;
 
-        let g = (i.wrapping_add(j).wrapping_add(k)) as f64 * 0.16666666666666666f64;
+        let g = (i.wrapping_add(j).wrapping_add(k)) as f64 * 0.16666666666666666;
         let h = i as f64 - g;
         let l = j as f64 - g;
         let m = k as f64 - g;
@@ -144,17 +144,17 @@ impl SimplexNoiseSampler {
             (0, 1, 0, 1, 1, 0)
         };
 
-        let w = n - q as f64 + 0.16666666666666666f64;
-        let aa = o - r as f64 + 0.16666666666666666f64;
-        let ab = p - s as f64 + 0.16666666666666666f64;
+        let w = n - q as f64 + 0.16666666666666666;
+        let aa = o - r as f64 + 0.16666666666666666;
+        let ab = p - s as f64 + 0.16666666666666666;
 
-        let ac = n - t as f64 + 0.3333333333333333f64;
-        let ad = o - u as f64 + 0.3333333333333333f64;
-        let ae = p - v as f64 + 0.3333333333333333f64;
+        let ac = n - t as f64 + 0.3333333333333333;
+        let ad = o - u as f64 + 0.3333333333333333;
+        let ae = p - v as f64 + 0.3333333333333333;
 
-        let af = n - 1f64 + 0.5f64;
-        let ag = o - 1f64 + 0.5f64;
-        let ah = p - 1f64 + 0.5f64;
+        let af = n - 1.0 + 0.5;
+        let ag = o - 1.0 + 0.5;
+        let ah = p - 1.0 + 0.5;
 
         let ai = i & 0xFF;
         let aj = j & 0xFF;
@@ -186,12 +186,12 @@ impl SimplexNoiseSampler {
             ),
         ) % 12;
 
-        let ap = Self::grad(al as usize, n, o, p, 0.6f64);
-        let aq = Self::grad(am as usize, w, aa, ab, 0.6f64);
-        let ar = Self::grad(an as usize, ac, ad, ae, 0.6f64);
-        let az = Self::grad(ao as usize, af, ag, ah, 0.6f64);
+        let ap = Self::grad(al as usize, n, o, p, 0.6);
+        let aq = Self::grad(am as usize, w, aa, ab, 0.6);
+        let ar = Self::grad(an as usize, ac, ad, ae, 0.6);
+        let az = Self::grad(ao as usize, af, ag, ah, 0.6);
 
-        32f64 * (ap + aq + ar + az)
+        32.0 * (ap + aq + ar + az)
     }
 }
 
@@ -247,26 +247,26 @@ impl OctaveSimplexNoiseSampler {
 
         Self {
             octave_samplers: samplers,
-            persistence: 1f64 / (2f64.pow(k) - 1f64),
-            lacunarity: 2f64.pow(j),
+            persistence: 1.0 / (2.0.pow(k) - 1.0),
+            lacunarity: 2.0.pow(j),
         }
     }
 
     pub fn sample(&self, x: f64, y: f64, use_origin: bool) -> f64 {
-        let mut d = 0f64;
+        let mut d = 0.0;
         let mut e = self.lacunarity;
         let mut f = self.persistence;
 
         for sampler in self.octave_samplers.iter() {
             if let Some(sampler) = sampler {
                 d += sampler.sample_2d(
-                    x * e + if use_origin { sampler.x_origin } else { 0f64 },
-                    y * e + if use_origin { sampler.y_origin } else { 0f64 },
+                    x * e + if use_origin { sampler.x_origin } else { 0.0 },
+                    y * e + if use_origin { sampler.y_origin } else { 0.0 },
                 ) * f;
             }
 
-            e /= 2f64;
-            f *= 2f64;
+            e /= 2.0;
+            f *= 2.0;
         }
 
         d
@@ -286,7 +286,7 @@ mod octave_simplex_noise_sampler_test {
         assert_eq!(rand.next_i32(), 1394613419);
         let sampler = OctaveSimplexNoiseSampler::new(&mut rand, &[-1, 1, 0]);
 
-        assert_eq!(sampler.lacunarity, 2f64);
+        assert_eq!(sampler.lacunarity, 2.0);
         assert_eq!(sampler.persistence, 0.14285714285714285);
 
         let values = [
@@ -421,9 +421,9 @@ mod simplex_noise_sampler_test {
         let mut rand = Xoroshiro::from_seed(111);
         assert_eq!(rand.next_i32(), -1467508761);
         let sampler = SimplexNoiseSampler::new(&mut rand);
-        assert_eq!(sampler.x_origin, 48.58072036717974f64);
-        assert_eq!(sampler.y_origin, 110.73235882678037f64);
-        assert_eq!(sampler.z_origin, 65.26438852860176f64);
+        assert_eq!(sampler.x_origin, 48.58072036717974);
+        assert_eq!(sampler.y_origin, 110.73235882678037);
+        assert_eq!(sampler.z_origin, 65.26438852860176);
 
         let permutation: [u8; 256] = [
             159, 113, 41, 143, 203, 123, 95, 177, 25, 79, 229, 219, 194, 60, 130, 14, 83, 99, 24,

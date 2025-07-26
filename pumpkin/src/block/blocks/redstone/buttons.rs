@@ -29,9 +29,9 @@ use crate::block::registry::BlockActionResult;
 use crate::world::World;
 
 async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_block_state(block_pos).await;
+    let (block, state) = world.get_block_and_state_id(block_pos).await;
 
-    let mut button_props = ButtonLikeProperties::from_state_id(state.id, block);
+    let mut button_props = ButtonLikeProperties::from_state_id(state, block);
     if !button_props.powered {
         button_props.powered = true;
         world

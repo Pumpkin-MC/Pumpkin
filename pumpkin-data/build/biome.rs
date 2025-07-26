@@ -336,7 +336,7 @@ pub(crate) fn build() -> TokenStream {
         impl Eq for Biome {}
 
         impl Hash for Biome {
-            fn hash<H>(&self, state: &mut H) where H: Hasher {
+            fn hash<H: Hasher>(&self, state: &mut H) {
                 self.id.hash(state);
             }
         }
@@ -348,10 +348,7 @@ pub(crate) fn build() -> TokenStream {
         }
 
         impl<'de> Deserialize<'de> for &'static Biome {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
+            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
                 struct BiomeVisitor;
 
                 impl de::Visitor<'_> for BiomeVisitor {
@@ -361,17 +358,11 @@ pub(crate) fn build() -> TokenStream {
                         formatter.write_str("a biome name as a string")
                     }
 
-                    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-                    where
-                        E: serde::de::Error,
-                    {
+                    fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
                         self.visit_str(&v)
                     }
 
-                    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-                    where
-                        E: de::Error,
-                    {
+                    fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
                         let biome = Biome::from_name(value.strip_prefix("minecraft:").unwrap_or(value));
                         biome.ok_or_else(|| E::unknown_variant(value, &["unknown biome"]))
                     }

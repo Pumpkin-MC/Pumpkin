@@ -1,4 +1,6 @@
-use pumpkin_protocol::java::client::play::CUpdateTime;
+use pumpkin_protocol::{bedrock::client::set_time::CSetTime, java::client::play::CUpdateTime};
+
+use crate::net::ClientPlatform;
 
 use super::World;
 
@@ -31,9 +33,21 @@ impl LevelTime {
     }
 
     pub async fn send_time(&self, world: &World) {
-        world
-            .broadcast_packet_all(&CUpdateTime::new(self.world_age, self.time_of_day, true))
-            .await;
+        let current_players = world.players.read().await;
+        for player in current_players.values() {
+            match &player.client {
+                ClientPlatform::Java(java_client) => {
+                    java_client
+                        .enqueue_packet(&CUpdateTime::new(self.world_age, self.time_of_day, true))
+                        .await;
+                }
+                ClientPlatform::Bedrock(bedrock_client) => {
+                    bedrock_client
+                        .send_game_packet(&CSetTime::new(self.time_of_day as _))
+                        .await;
+                }
+            }
+        }
     }
 
     pub fn add_time(&mut self, time: i64) {
