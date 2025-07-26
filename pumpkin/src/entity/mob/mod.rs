@@ -72,14 +72,6 @@ pub trait Mob: EntityBase + Send + Sync {
         75
     }
 
-    fn on_start_pathfinding(&self) {
-
-    }
-
-    fn on_finish_pathfinding(&self) {
-
-    }
-
     fn get_mob_entity(&self) -> &MobEntity;
 
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {

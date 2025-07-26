@@ -1,12 +1,3 @@
-pub mod path_node;
-mod path;
-mod entity_navigation;
-mod path_node_maker;
-mod path_context;
-pub mod path_node_type_cache;
-mod land_path_node_maker;
-mod target_path_node;
-
 use pumpkin_protocol::java::client::play::CUpdateEntityPos;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
@@ -113,5 +104,23 @@ impl Navigator {
     pub fn is_idle(&self) -> bool {
         // TODO: implement
         true
+    }
+}
+
+pub struct Node {
+    pub location: Vector3<f64>,
+}
+
+impl Node {
+    #[must_use]
+    pub fn new(location: Vector3<f64>) -> Self {
+        Self { location }
+    }
+    /// How expensive is it to go to a location?
+    ///
+    /// Returns an `f64`; higher means more expensive.
+    #[must_use]
+    pub fn get_expense(&self, end: Vector3<f64>) -> f64 {
+        self.location.squared_distance_to_vec(end).sqrt()
     }
 }
