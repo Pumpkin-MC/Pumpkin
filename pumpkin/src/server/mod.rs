@@ -137,28 +137,37 @@ impl Server {
             }
         }
 
-        let level_info = level_info.unwrap_or_default(); // TODO: Improve error handling
+        let level_info = match level_info {
+            Ok(level_info) => level_info,
+            Err(err) => {
+                log::warn!("Failed to get level_info, using default instead: {err}");
+                LevelData::default()
+            }
+        };
+
         let seed = level_info.world_gen_settings.seed;
         log::info!("Loading Overworld: {seed}");
+
+        let level_info = Arc::new(RwLock::new(level_info));
         let overworld = World::load(
             Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
+            Arc::clone(&level_info),
             VanillaDimensionType::Overworld,
-            block_registry.clone(),
+            Arc::clone(&block_registry),
         );
         log::info!("Loading Nether");
         let nether = World::load(
             Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
+            Arc::clone(&level_info),
             VanillaDimensionType::TheNether,
-            block_registry.clone(),
+            Arc::clone(&block_registry),
         );
         log::info!("Loading End");
         let end = World::load(
             Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
+            Arc::clone(&level_info),
             VanillaDimensionType::TheEnd,
-            block_registry.clone(),
+            Arc::clone(&block_registry),
         );
 
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
@@ -200,7 +209,7 @@ impl Server {
             server_guid: rand::random(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
-            level_info: Arc::new(RwLock::new(level_info)),
+            level_info,
             _locker: Arc::new(locker),
         }
     }
@@ -364,11 +373,13 @@ impl Server {
         for world in self.worlds.read().await.iter() {
             world.shutdown().await;
         }
+        let level_data = self.level_info.read().await;
         // then lets save the world info
-        if let Err(err) = self.world_info_writer.write_world_info(
-            &*self.level_info.read().await,
-            &BASIC_CONFIG.get_world_path(),
-        ) {
+
+        if let Err(err) = self
+            .world_info_writer
+            .write_world_info(&level_data, &BASIC_CONFIG.get_world_path())
+        {
             log::error!("Failed to save level.dat: {err}");
         }
         log::info!("Completed worlds");

@@ -10,11 +10,12 @@ use pumpkin_data::tag;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
 use crate::world::World;
 
@@ -53,16 +54,8 @@ pub async fn toggle_fence_gate(
     fence_gate_props.to_state_id(block)
 }
 
+#[pumpkin_block_from_tag("minecraft:fence_gates")]
 pub struct FenceGateBlock;
-impl BlockMetadata for FenceGateBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "c:fence_gates").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for FenceGateBlock {
