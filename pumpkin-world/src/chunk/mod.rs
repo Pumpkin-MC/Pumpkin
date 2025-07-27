@@ -1,8 +1,9 @@
 use crate::block::entities::BlockEntity;
 use palette::{BiomePalette, BlockPalette};
-use pumpkin_data::block_properties::{blocks_movement, get_block_and_state_by_state_id};
+use pumpkin_data::block_properties::blocks_movement;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Tagable;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
@@ -584,7 +585,8 @@ impl ChunkData {
         for y in (self.section.min_y..=start_height).rev() {
             let pos = BlockPos::new(x as i32, y, z as i32);
             let state_id = self.section.get_block_absolute_y(x, y, z).unwrap();
-            let (block, block_state) = get_block_and_state_by_state_id(state_id);
+            let block_state = BlockState::from_id(state_id);
+            let block = Block::from_state_id(state_id);
 
             if !block_state.is_air() && !has_found[ChunkHeightmapType::WorldSurface as usize] {
                 heightmaps.set(ChunkHeightmapType::WorldSurface, pos, self.section.min_y);
