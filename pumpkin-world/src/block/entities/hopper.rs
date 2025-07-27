@@ -6,7 +6,7 @@ use crate::world::SimpleWorld;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, HopperFacing, HopperLikeProperties};
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -34,7 +34,7 @@ pub fn to_offset(facing: &HopperFacing) -> Vector3<i32> {
         HopperFacing::West => (-1, 0, 0),
         HopperFacing::East => (1, 0, 0),
     }
-    .into()
+        .into()
 }
 
 #[async_trait]
@@ -185,8 +185,8 @@ impl HopperBlockEntity {
         let (block, state) = world.get_block_and_state(pos_up).await;
         if !(state.is_solid()
             && block
-                .is_tagged_with("minecraft:does_not_block_hoppers")
-                .unwrap())
+            .is_tagged_with("minecraft:does_not_block_hoppers")
+            .unwrap())
         {
             // TODO getItemsAtAndAbove(level, hopper)
             return false;
@@ -261,8 +261,8 @@ impl HopperBlockEntity {
                                         .cooldown_time
                                         .load(std::sync::atomic::Ordering::Relaxed)
                                         >= hopper
-                                            .cooldown_time
-                                            .load(std::sync::atomic::Ordering::Relaxed)
+                                        .cooldown_time
+                                        .load(std::sync::atomic::Ordering::Relaxed)
                                     {
                                         hopper
                                             .cooldown_time
