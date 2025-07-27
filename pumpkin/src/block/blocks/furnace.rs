@@ -75,18 +75,9 @@ impl PumpkinBlock for FurnaceBlock {
     //Same to normal_use
     async fn use_with_item(
         &self,
-        args: crate::block::pumpkin_block::UseWithItemArgs<'_>,
+        _args: crate::block::pumpkin_block::UseWithItemArgs<'_>,
     ) -> crate::block::registry::BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(inventory) = block_entity.clone().get_inventory() {
-                let furnace_screen_factory = FurnaceScreenFactory::new(inventory, block_entity);
-                args.player
-                    .open_handled_screen(&furnace_screen_factory)
-                    .await;
-            }
-        }
-
-        crate::block::registry::BlockActionResult::Consume
+        crate::block::registry::BlockActionResult::PassToDefaultBlockAction
     }
 
     async fn on_entity_collision(
