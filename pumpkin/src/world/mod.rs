@@ -34,7 +34,6 @@ use async_trait::async_trait;
 use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
-use log::info;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::fluid::{Falling, FluidProperties};
@@ -676,7 +675,7 @@ impl World {
 
         for block_entity in tick_data.block_entities {
             let world: Arc<dyn SimpleWorld> = self.clone();
-            block_entity.tick(&world).await;
+            block_entity.tick(world).await;
         }
     }
 
@@ -1891,11 +1890,10 @@ impl World {
         if is_new_block && self.block_registry.has_block_entity(old_block) {
             if let Some(entity) = self.get_block_entity(position).await {
                 let world: Arc<dyn SimpleWorld> = self.clone();
-                entity.on_block_replaced(&world, *position).await;
+                entity.on_block_replaced(world, *position).await;
             }
 
             self.remove_block_entity(position).await;
-            info!("Removed BlockEntity at {position}");
         }
 
         // WorldChunk.java line 317
@@ -2090,7 +2088,7 @@ impl World {
     /* ItemScatterer.java */
     pub async fn scatter_inventory(
         self: &Arc<Self>,
-        position: BlockPos,
+        position: &BlockPos,
         inventory: &Arc<dyn Inventory>,
     ) {
         for i in 0..inventory.size() {
@@ -2136,7 +2134,7 @@ impl World {
                 EntityType::ITEM,
                 false,
             );
-            let entity = Arc::new(ItemEntity::new_with_velocity(entity, item, velocity, 40).await);
+            let entity = Arc::new(ItemEntity::new_with_velocity(entity, item, velocity, 10).await);
             self.spawn_entity(entity).await;
         }
     }
@@ -2627,8 +2625,12 @@ impl pumpkin_world::world::SimpleWorld for World {
         self.level_time.lock().await.world_age
     }
 
-    async fn scatter_inventory(&self, position: BlockPos, inventory: &Arc<dyn Inventory>) {
-        self.scatter_inventory(position, inventory).await;
+    async fn scatter_inventory(
+        self: Arc<Self>,
+        position: &BlockPos,
+        inventory: &Arc<dyn Inventory>,
+    ) {
+        Self::scatter_inventory(&self, position, inventory).await;
     }
 }
 

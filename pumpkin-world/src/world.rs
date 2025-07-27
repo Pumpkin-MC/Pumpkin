@@ -61,7 +61,11 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
     async fn get_world_age(&self) -> i64;
 
     /* ItemScatterer */
-    async fn scatter_inventory(&self, position: BlockPos, inventory: &Arc<dyn Inventory>);
+    async fn scatter_inventory(
+        self: Arc<Self>,
+        position: &BlockPos,
+        inventory: &Arc<dyn Inventory>,
+    );
 }
 
 #[async_trait]

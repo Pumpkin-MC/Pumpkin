@@ -70,7 +70,7 @@ impl BlockEntity for HopperBlockEntity {
         hopper
     }
 
-    async fn tick(&self, world: &Arc<dyn SimpleWorld>) {
+    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
         self.ticked_game_time.store(
             world.get_world_age().await,
             std::sync::atomic::Ordering::Relaxed,
@@ -86,7 +86,7 @@ impl BlockEntity for HopperBlockEntity {
                 world.get_block_state(&self.position).await.id,
                 &Block::HOPPER,
             );
-            self.try_move_items(&state, world).await;
+            self.try_move_items(&state, &world).await;
         }
     }
 
