@@ -2525,6 +2525,14 @@ impl pumpkin_world::world::SimpleWorld for World {
     async fn remove_block_entity(&self, block_pos: &BlockPos) {
         self.remove_block_entity(block_pos).await;
     }
+
+    async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
+        self.get_block_entity(block_pos).await
+    }
+
+    async fn get_world_age(&self) -> i64 {
+        self.level_time.lock().await.world_age
+    }
 }
 
 #[async_trait]
