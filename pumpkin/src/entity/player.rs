@@ -1864,13 +1864,12 @@ impl Player {
         perm_manager
             .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
             .await
-    }more
-
+    }
 
     pub fn is_creative(&self) -> bool {
         self.gamemode.load() == GameMode::Creative
     }
-  
+
     /// Swing the hand of the player
     pub async fn swing_hand(&self, hand: Hand, all: bool) {
         let world = self.world().await;
