@@ -90,6 +90,10 @@ pub trait PumpkinBlock: Send + Sync {
 
     async fn on_state_replaced(&self, _args: OnStateReplacedArgs<'_>) {}
 
+    fn has_block_entity(&self) -> bool {
+        false
+    }
+
     /// Sides where redstone connects to
     async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
         false

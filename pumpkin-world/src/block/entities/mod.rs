@@ -65,6 +65,11 @@ pub trait BlockEntity: Send + Sync {
         None
     }
     fn set_block_state(&mut self, _block_state: BlockStateId) {}
+    async fn on_block_replaced(self: Arc<Self>, world: &Arc<dyn SimpleWorld>, position: BlockPos) {
+        if let Some(inventory) = self.get_inventory() {
+            world.scatter_inventory(position, &inventory).await;
+        }
+    }
     fn is_dirty(&self) -> bool {
         false
     }

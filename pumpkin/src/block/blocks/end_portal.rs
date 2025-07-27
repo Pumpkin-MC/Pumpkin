@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::block::pumpkin_block::OnEntityCollisionArgs;
-use crate::block::pumpkin_block::OnStateReplacedArgs;
 use crate::block::pumpkin_block::PlacedArgs;
 use crate::block::pumpkin_block::PumpkinBlock;
 use async_trait::async_trait;
@@ -36,7 +35,7 @@ impl PumpkinBlock for EndPortalBlock {
             .await;
     }
 
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
+    fn has_block_entity(&self) -> bool {
+        true
     }
 }

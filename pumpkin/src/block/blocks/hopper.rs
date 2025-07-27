@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::{
-    OnNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs,
-};
+use crate::block::pumpkin_block::{OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs};
 use crate::block::{
     pumpkin_block::{NormalUseArgs, PumpkinBlock},
     registry::BlockActionResult,
@@ -99,8 +97,8 @@ impl PumpkinBlock for HopperBlock {
         .await;
     }
 
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
+    fn has_block_entity(&self) -> bool {
+        true
     }
 }
 

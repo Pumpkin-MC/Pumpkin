@@ -1,7 +1,6 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::pumpkin_block::{
-    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-    PlacedArgs, PumpkinBlock,
+    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs, PumpkinBlock,
 };
 use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
@@ -107,8 +106,8 @@ impl PumpkinBlock for DropperBlock {
             .await;
     }
 
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
+    fn has_block_entity(&self) -> bool {
+        true
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {

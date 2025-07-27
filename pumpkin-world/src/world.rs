@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::BlockStateId;
 use crate::block::entities::BlockEntity;
+use crate::{BlockStateId, inventory::Inventory};
 use async_trait::async_trait;
 use bitflags::bitflags;
 use pumpkin_data::{Block, BlockDirection, BlockState};
@@ -59,6 +59,9 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
     async fn remove_block_entity(&self, block_pos: &BlockPos);
     async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>>;
     async fn get_world_age(&self) -> i64;
+
+    /* ItemScatterer */
+    async fn scatter_inventory(&self, position: BlockPos, inventory: &Arc<dyn Inventory>);
 }
 
 #[async_trait]

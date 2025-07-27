@@ -20,8 +20,8 @@ use tokio::sync::Mutex;
 use crate::{
     block::{
         pumpkin_block::{
-            BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
-            OnStateReplacedArgs, PlacedArgs, PumpkinBlock, UseWithItemArgs,
+            BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
+            PumpkinBlock, UseWithItemArgs,
         },
         registry::BlockActionResult,
     },
@@ -117,8 +117,8 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
         args.world.add_block_entity(Arc::new(block_entity)).await;
     }
 
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
+    fn has_block_entity(&self) -> bool {
+        true
     }
 
     async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
