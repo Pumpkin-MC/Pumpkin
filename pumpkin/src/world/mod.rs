@@ -1895,7 +1895,6 @@ impl World {
             let world: Arc<dyn SimpleWorld> = self.clone();
             entity.on_block_replaced(world, *position).await;
             self.remove_block_entity(position).await;
-            info!("Removed blockentity at {position}");
         }
 
         // WorldChunk.java line 317
