@@ -97,6 +97,9 @@ where
                 }
             } else {
                 *running = goal.can_start(self).await;
+                if *running {
+                    goal.start(self).await;
+                }
             }
         }
         let mut navigator = mob_entity.navigator.lock().await;

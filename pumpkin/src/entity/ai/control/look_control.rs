@@ -7,6 +7,7 @@ use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
+use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot};
 
 #[derive(Default)]
 pub struct LookControl {
@@ -70,7 +71,9 @@ impl LookControl {
             entity.set_pitch(0.0);
         }
 
+        let mut send_packets: bool = false;
         if self.look_at_timer.load(Relaxed) > 0 {
+            send_packets = true;
             self.look_at_timer.fetch_sub(1, Relaxed);
             if let Some(yaw) = self.get_target_yaw(mob.get_mob_entity()) {
                 entity.head_yaw.store(self.change_angle(
@@ -95,6 +98,20 @@ impl LookControl {
         }
 
         self.clamp_head_yaw(mob).await;
+
+        if send_packets {
+            let world = entity.world.read().await;
+            let yaw = (entity.head_yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
+            let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
+            world.broadcast_packet_all(&CUpdateEntityRot::new(
+                entity.entity_id.into(),
+                yaw as u8,
+                pitch as u8,
+                entity.on_ground.load(Relaxed),
+            ))
+                .await;
+            world.broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), yaw as u8)).await;
+        }
     }
 
     fn should_stay_horizontal() -> bool {

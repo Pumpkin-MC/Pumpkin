@@ -5,7 +5,6 @@ use crate::entity::predicate::EntityPredicate;
 use crate::entity::{EntityBase, player::Player};
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
-use pumpkin_util::math::vector3::Vector3;
 use rand::Rng;
 use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
@@ -138,15 +137,10 @@ impl Goal for LookAtEntityGoal {
         let mob = mob.get_mob_entity();
         if let Some(target) = self.target.lock().await.as_ref() {
             if target.get_entity().is_alive() {
-                let d = if self.look_forward {
-                    mob.living_entity.entity.get_eye_y()
-                } else {
-                    target.get_entity().get_eye_y()
-                };
                 let target_pos = target.get_entity().pos.load();
                 mob.living_entity
                     .entity
-                    .look_at(Vector3::new(target_pos.x, d, target_pos.y))
+                    .look_at(target_pos)
                     .await;
                 self.look_time.fetch_sub(1, Relaxed);
             }
