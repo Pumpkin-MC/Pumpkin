@@ -8,7 +8,7 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{BlockStateId, chunk::TickPriority, world::BlockFlags};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{
     block::pumpkin_block::{
@@ -160,17 +160,15 @@ impl TripwireBlock {
             for i in 1..42 {
                 let current_pos = pos.offset_dir(dir.to_offset(), i);
                 let (current_block, current_state) =
-                    world.get_block_and_block_state(&current_pos).await;
+                    world.get_block_and_state_id(&current_pos).await;
                 if current_block == &Block::TRIPWIRE_HOOK {
-                    let current_props = TripwireHookProperties::from_state_id(
-                        current_state.id,
-                        &Block::TRIPWIRE_HOOK,
-                    );
+                    let current_props =
+                        TripwireHookProperties::from_state_id(current_state, &Block::TRIPWIRE_HOOK);
                     if current_props.facing == dir.opposite().to_horizontal_facing().unwrap() {
                         TripwireHookBlock::update(
                             world,
                             current_pos,
-                            current_state.id,
+                            current_state,
                             false,
                             true,
                             i,

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
@@ -310,7 +310,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/recipes.json");
 
     let recipes_assets: Vec<RecipeTypes> =
-        serde_json::from_str(include_str!("../../assets/recipes.json"))
+        serde_json::from_str(&fs::read_to_string("../assets/recipes.json").unwrap())
             .expect("Failed to parse recipes.json");
 
     let mut crafting_recipes = Vec::new();
@@ -374,7 +374,7 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use crate::tag::Tagable;
+        use crate::tag::Taggable;
         use crate::item::Item;
 
         #[derive(Clone, Debug)]

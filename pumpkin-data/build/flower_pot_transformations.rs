@@ -12,15 +12,15 @@ pub(crate) fn build() -> TokenStream {
 
     for (item_id, potted_block_id) in flower_pot_transformation {
         variants.extend(quote! {
-            #item_id => Some(#potted_block_id),
+            #item_id => #potted_block_id,
         });
     }
     quote! {
         #[must_use]
-        pub const fn get_potted_item(item_id: u16) -> Option<u16> {
+        pub const fn get_potted_item(item_id: u16) -> u16 {
             match item_id {
                 #variants
-                _ => None,
+                _ => 0,
             }
         }
     }

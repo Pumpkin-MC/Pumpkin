@@ -1,6 +1,8 @@
 pub mod context;
 pub mod events;
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 pub use context::*;
 pub use events::*;
@@ -38,7 +40,7 @@ pub trait Plugin: Send + Sync + 'static {
     ///
     /// # Returns
     /// - `Ok(())` on success, or `Err(String)` on failure.
-    async fn on_load(&mut self, _server: &Context) -> Result<(), String> {
+    async fn on_load(&mut self, _server: Arc<Context>) -> Result<(), String> {
         Ok(())
     }
 
@@ -51,7 +53,7 @@ pub trait Plugin: Send + Sync + 'static {
     ///
     /// # Returns
     /// - `Ok(())` on success, or `Err(String)` on failure.
-    async fn on_unload(&mut self, _server: &Context) -> Result<(), String> {
+    async fn on_unload(&mut self, _server: Arc<Context>) -> Result<(), String> {
         Ok(())
     }
 }

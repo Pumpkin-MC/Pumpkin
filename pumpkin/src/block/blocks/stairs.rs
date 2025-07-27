@@ -1,34 +1,26 @@
 use async_trait::async_trait;
-use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockHalf;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::StairShape;
 use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::{BlockDirection, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::pumpkin_block::OnNeighborUpdateArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::pumpkin_block::PumpkinBlock;
 use crate::world::World;
 
 type StairsProperties = pumpkin_data::block_properties::OakStairsLikeProperties;
 
+#[pumpkin_block_from_tag("minecraft:stairs")]
 pub struct StairBlock;
-
-impl BlockMetadata for StairBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:stairs").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for StairBlock {
@@ -148,9 +140,8 @@ async fn get_stair_properties_if_exists(
     world: &World,
     block_pos: &BlockPos,
 ) -> Option<StairsProperties> {
-    let (block, block_state) = world.get_block_and_block_state(block_pos).await;
+    let (block, block_state) = world.get_block_and_state_id(block_pos).await;
     block
-        .is_tagged_with("#minecraft:stairs")
-        .unwrap()
-        .then(|| StairsProperties::from_state_id(block_state.id, block))
+        .is_tagged_with_by_tag(&tag::Block::MINECRAFT_STAIRS)
+        .then(|| StairsProperties::from_state_id(block_state, block))
 }

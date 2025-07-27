@@ -4,9 +4,10 @@ use crate::item::ItemStack;
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 use rand::{Rng, rng};
+use std::any::Any;
 use std::array::from_fn;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{Mutex, MutexGuard};
 
 #[derive(Debug)]
@@ -52,7 +53,7 @@ impl BlockEntity for DropperBlockEntity {
     }
 
     fn is_dirty(&self) -> bool {
-        self.dirty.load(std::sync::atomic::Ordering::Relaxed)
+        self.dirty.load(Ordering::Relaxed)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -122,7 +123,11 @@ impl Inventory for DropperBlockEntity {
     }
 
     fn mark_dirty(&self) {
-        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

@@ -13,7 +13,7 @@ use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::pumpkin_block::{
@@ -37,8 +37,7 @@ impl FireBlock {
     }
 
     fn is_flammable(block_state: &BlockState) -> bool {
-        if block_state
-            .block()
+        if Block::from_state_id(block_state.id)
             .properties(block_state.id)
             .and_then(|props| {
                 props
@@ -51,8 +50,7 @@ impl FireBlock {
         {
             return false;
         }
-        block_state
-            .block()
+        Block::from_state_id(block_state.id)
             .flammable
             .as_ref()
             .is_some_and(|f| f.burn_chance > 0)
@@ -192,7 +190,7 @@ impl PumpkinBlock for FireBlock {
             .schedule_block_tick(
                 args.block,
                 *args.position,
-                Self::get_fire_tick_delay() as u16,
+                Self::get_fire_tick_delay() as u8,
                 TickPriority::Normal,
             )
             .await;
@@ -263,7 +261,7 @@ impl PumpkinBlock for FireBlock {
             .schedule_block_tick(
                 block,
                 *pos,
-                Self::get_fire_tick_delay() as u16,
+                Self::get_fire_tick_delay() as u8,
                 TickPriority::Normal,
             )
             .await;

@@ -19,7 +19,7 @@ pub struct RandomBooleanFeature {
 
 impl RandomBooleanFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -36,7 +36,7 @@ impl RandomBooleanFeature {
         } else {
             &self.feature_false
         };
-        Box::pin(feature.get().generate(
+        feature.get().generate(
             chunk,
             level,
             block_registry,
@@ -45,7 +45,6 @@ impl RandomBooleanFeature {
             feature_name,
             random,
             pos,
-        ))
-        .await
+        )
     }
 }

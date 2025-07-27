@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
@@ -45,7 +45,7 @@ impl BlockEntity for CommandBlockEntity {
     async fn write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {}
 
     fn is_dirty(&self) -> bool {
-        self.dirty.load(std::sync::atomic::Ordering::Relaxed)
+        self.dirty.load(Ordering::Relaxed)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

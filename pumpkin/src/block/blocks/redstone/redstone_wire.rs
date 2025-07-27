@@ -140,7 +140,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         if on_use(wire, args.world, args.position).await {
             BlockActionResult::Success
         } else {
-            BlockActionResult::Continue
+            BlockActionResult::Pass
         }
     }
 
@@ -269,7 +269,7 @@ fn can_connect_diagonal_to(block: &Block) -> bool {
 
 pub async fn get_side(world: &World, pos: &BlockPos, side: BlockDirection) -> WireConnection {
     let neighbor_pos: BlockPos = pos.offset(side.to_offset());
-    let (neighbor, state) = world.get_block_and_block_state(&neighbor_pos).await;
+    let (neighbor, state) = world.get_block_and_state(&neighbor_pos).await;
 
     if can_connect_to(world, neighbor, side, state).await {
         return WireConnection::Side;
@@ -496,7 +496,7 @@ impl CardinalWireConnectionExt for WestWireConnection {
 }
 
 async fn max_wire_power(wire_power: u8, world: &World, pos: BlockPos) -> u8 {
-    let (block, block_state) = world.get_block_and_block_state(&pos).await;
+    let (block, block_state) = world.get_block_and_state(&pos).await;
     if block == &Block::REDSTONE_WIRE {
         let wire = RedstoneWireProperties::from_state_id(block_state.id, block);
         wire_power.max(wire.power.to_index() as u8)
@@ -510,12 +510,12 @@ async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
     let mut wire_power: u8 = 0;
 
     let up_pos = pos.offset(BlockDirection::Up.to_offset());
-    let (_up_block, up_state) = world.get_block_and_block_state(&up_pos).await;
+    let (_up_block, up_state) = world.get_block_and_state(&up_pos).await;
 
     for side in BlockDirection::all() {
         let neighbor_pos = pos.offset(side.to_offset());
         wire_power = max_wire_power(wire_power, world, neighbor_pos).await;
-        let (neighbor, neighbor_state) = world.get_block_and_block_state(&neighbor_pos).await;
+        let (neighbor, neighbor_state) = world.get_block_and_state(&neighbor_pos).await;
         block_power = block_power.max(
             get_redstone_power_no_dust(neighbor, neighbor_state, world, neighbor_pos, side).await,
         );

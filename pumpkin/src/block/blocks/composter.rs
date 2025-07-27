@@ -11,7 +11,7 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, chunk::TickPriority, item::ItemStack, world::BlockFlags};
+use pumpkin_world::{BlockStateId, item::ItemStack, tick::TickPriority, world::BlockFlags};
 use rand::Rng;
 use uuid::Uuid;
 
@@ -40,7 +40,7 @@ impl PumpkinBlock for ComposterBlock {
                 .await;
         }
 
-        BlockActionResult::Continue
+        BlockActionResult::Pass
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {

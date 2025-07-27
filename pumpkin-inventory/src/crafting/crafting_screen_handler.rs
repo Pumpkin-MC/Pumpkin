@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use super::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
 use crate::crafting::crafting_inventory::CraftingInventory;
@@ -13,7 +13,8 @@ use async_trait::async_trait;
 use crossbeam_utils::atomic::AtomicCell;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING, RecipeResultStruct};
 use pumpkin_data::screen::WindowType;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag;
+use pumpkin_data::tag::Taggable;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
@@ -215,8 +216,7 @@ async fn recipe_matches<'a>(
                 if slot.is_empty()
                     || !slot
                         .item
-                        .is_tagged_with("#minecraft:decorated_pot_ingredients")
-                        .unwrap()
+                        .is_tagged_with_by_tag(&tag::Item::MINECRAFT_DECORATED_POT_INGREDIENTS)
                 {
                     return None;
                 }
@@ -333,8 +333,7 @@ impl Slot for ResultSlot {
     }
 
     fn set_id(&self, id: usize) {
-        self.id
-            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
+        self.id.store(id as u8, Ordering::Relaxed);
     }
 
     async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {

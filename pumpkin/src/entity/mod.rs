@@ -58,8 +58,6 @@ pub mod r#type;
 
 mod combat;
 
-pub type EntityId = i32;
-
 #[async_trait]
 pub trait EntityBase: Send + Sync {
     /// Called every tick for this entity.
@@ -150,7 +148,7 @@ static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
     /// A unique identifier for the entity
-    pub entity_id: EntityId,
+    pub entity_id: i32,
     /// A persistent, unique identifier for the entity
     pub entity_uuid: uuid::Uuid,
     /// The type of entity (e.g., player, zombie, item)
@@ -707,10 +705,7 @@ impl Entity {
             .await;
     }
 
-    pub async fn send_meta_data<T>(&self, meta: &[Metadata<T>])
-    where
-        T: Serialize,
-    {
+    pub async fn send_meta_data<T: Serialize>(&self, meta: &[Metadata<T>]) {
         let mut buf = Vec::new();
         for meta in meta {
             let mut serializer_buf = Vec::new();
@@ -774,7 +769,7 @@ impl Entity {
             for y in blockpos.0.y..=blockpos1.0.y {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
-                    let (block, state) = world.get_block_and_block_state(&pos).await;
+                    let (block, state) = world.get_block_and_state(&pos).await;
                     let block_outlines = state.get_block_outline_shapes();
 
                     if let Some(outlines) = block_outlines {

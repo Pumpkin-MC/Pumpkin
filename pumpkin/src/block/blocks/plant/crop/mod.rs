@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockState,
+    Block,
     block_properties::{BlockProperties, EnumVariants, Integer0To7, WheatLikeProperties},
 };
 use pumpkin_util::math::position::BlockPos;
@@ -31,19 +31,19 @@ trait CropBlockBase: PlantBlockBase {
         7
     }
 
-    fn get_age(&self, state: &BlockState, block: &Block) -> i32 {
-        let props = CropProperties::from_state_id(state.id, block);
+    fn get_age(&self, state: u16, block: &Block) -> i32 {
+        let props = CropProperties::from_state_id(state, block);
         i32::from(props.age.to_index())
     }
 
-    fn state_with_age(&self, block: &Block, state: &BlockState, age: i32) -> BlockStateId {
-        let mut props = CropProperties::from_state_id(state.id, block);
+    fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
+        let mut props = CropProperties::from_state_id(state, block);
         props.age = Integer0To7::from_index(age as u16);
         props.to_state_id(block)
     }
 
     async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
-        let (block, state) = world.get_block_and_block_state(pos).await;
+        let (block, state) = world.get_block_and_state_id(pos).await;
         let age = self.get_age(state, block);
         if age < self.max_age() {
             //TODO add moisture check

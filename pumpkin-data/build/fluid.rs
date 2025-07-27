@@ -316,9 +316,9 @@ struct Property {
 }
 
 #[derive(Deserialize, Clone)]
-struct Fluid {
-    name: String,
-    id: u16,
+pub struct Fluid {
+    pub name: String,
+    pub id: u16,
     properties: Vec<Property>,
     default_state_index: u16,
     states: Vec<FluidState>,
@@ -577,11 +577,11 @@ pub(crate) fn build() -> TokenStream {
             );
 
             fluid_properties_from_state_and_name.extend(quote! {
-                #fluid_name => Some(Box::new(#property_name::from_state_id(state_id, &Fluid::#const_fluid_name))),
+                #fluid_name => Box::new(#property_name::from_state_id(state_id, &Fluid::#const_fluid_name)),
             });
 
             fluid_properties_from_props_and_name.extend(quote! {
-                #fluid_name => Some(Box::new(#property_name::from_props(props, &Fluid::#const_fluid_name))),
+                #fluid_name => Box::new(#property_name::from_props(props, &Fluid::#const_fluid_name)),
             });
         }
 
@@ -595,7 +595,7 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use std::hash::{Hash, Hasher};
-        use crate::tag::{Tagable, RegistryKey};
+        use crate::tag::{Taggable, RegistryKey};
         use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 
         #[derive(Clone, Debug)]
@@ -723,19 +723,21 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
+            #[track_caller]
             #[doc = r" Get the properties of the fluid."]
-            pub fn properties(&self, state_id: u16) -> Option<Box<dyn FluidProperties>> {
+            pub fn properties(&self, state_id: u16) -> Box<dyn FluidProperties> {
                 match self.name {
                     #fluid_properties_from_state_and_name
-                    _ => None
+                    _ => panic!("Invalid state_id")
                 }
             }
 
+            #[track_caller]
             #[doc = r" Get the properties of the fluid."]
-            pub fn from_properties(&self, props: Vec<(String, String)>) -> Option<Box<dyn FluidProperties>> {
+            pub fn from_properties(&self, props: Vec<(String, String)>) -> Box<dyn FluidProperties> {
                 match self.name {
                     #fluid_properties_from_props_and_name
-                    _ => None
+                    _ => panic!("Invalid props")
                 }
             }
 
@@ -789,7 +791,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        impl Tagable for Fluid {
+        impl Taggable for Fluid {
             #[inline]
             fn tag_key() -> RegistryKey {
                 RegistryKey::Fluid
@@ -798,6 +800,11 @@ pub(crate) fn build() -> TokenStream {
             #[inline]
             fn registry_key(&self) -> &str {
                 self.name
+            }
+
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id
             }
         }
 

@@ -8,7 +8,7 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{block::pumpkin_fluid::PumpkinFluid, entity::EntityBase, world::World};
 
@@ -70,7 +70,7 @@ impl FlowingLava {
     }
 }
 
-const LAVA_FLOW_SPEED: u16 = 30;
+const LAVA_FLOW_SPEED: u8 = 30;
 
 #[async_trait]
 impl PumpkinFluid for FlowingLava {
@@ -85,7 +85,7 @@ impl PumpkinFluid for FlowingLava {
     ) {
         if old_state_id != state_id && self.receive_neighbor_fluids(world, fluid, block_pos).await {
             world
-                .schedule_fluid_tick(fluid.id, *block_pos, LAVA_FLOW_SPEED)
+                .schedule_fluid_tick(fluid, *block_pos, LAVA_FLOW_SPEED, TickPriority::Normal)
                 .await;
         }
     }
@@ -103,7 +103,7 @@ impl PumpkinFluid for FlowingLava {
     ) {
         if self.receive_neighbor_fluids(world, fluid, block_pos).await {
             world
-                .schedule_fluid_tick(fluid.id, *block_pos, LAVA_FLOW_SPEED)
+                .schedule_fluid_tick(fluid, *block_pos, LAVA_FLOW_SPEED, TickPriority::Normal)
                 .await;
         }
     }

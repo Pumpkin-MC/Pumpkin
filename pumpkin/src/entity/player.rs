@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
+use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
+use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
@@ -21,8 +23,8 @@ use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item::Operation;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::Tagable;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockState, tag};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
@@ -69,8 +71,8 @@ use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
 use crate::data::op_data::OPERATOR_CONFIG;
-use crate::net::PlayerConfig;
 use crate::net::{ClientPlatform, GameProfile};
+use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
@@ -83,7 +85,7 @@ use super::effect::Effect;
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
-use super::{Entity, EntityBase, EntityId, NBTStorage};
+use super::{Entity, EntityBase, NBTStorage};
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -151,7 +153,7 @@ impl ChunkManager {
                 count.add_assign(1);
             }
             state @ BatchState::Initial => *state = BatchState::Waiting,
-            BatchState::Waiting => unreachable!(),
+            BatchState::Waiting => (),
         }
 
         chunks.into_boxed_slice()
@@ -553,14 +555,10 @@ impl Player {
     pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32)> {
         let respawn_point = self.respawn_point.load()?;
 
-        let (block, _block_state) = self
-            .world()
-            .await
-            .get_block_and_block_state(&respawn_point.position)
-            .await;
+        let block = self.world().await.get_block(&respawn_point.position).await;
 
         if respawn_point.dimension == VanillaDimensionType::Overworld
-            && block.is_tagged_with("#minecraft:beds").unwrap()
+            && block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BEDS)
         {
             // TODO: calculate respawn position
             Some((respawn_point.position.to_f64(), respawn_point.yaw))
@@ -592,13 +590,7 @@ impl Player {
                 Some(bed_head_pos),
             )])
             .await;
-        self.get_entity()
-            .set_velocity(Vector3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-            })
-            .await;
+        self.get_entity().set_velocity(Vector3::default()).await;
 
         self.sleeping_since.store(Some(0));
     }
@@ -610,10 +602,8 @@ impl Player {
             .load()
             .expect("Player waking up should have it's respawn point set on the bed.");
 
-        let (bed, bed_state) = world
-            .get_block_and_block_state(&respawn_point.position)
-            .await;
-        BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state.id).await;
+        let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position).await;
+        BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
 
         self.living_entity
             .entity
@@ -706,6 +696,8 @@ impl Player {
             .await;
     }
 
+    // TODO Abstract the chunk sending
+    #[allow(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.current_screen_handler
             .lock()
@@ -735,23 +727,46 @@ impl Player {
 
         let chunk_of_chunks = {
             let mut chunk_manager = self.chunk_manager.lock().await;
-            chunk_manager
-                .can_send_chunk()
-                .then(|| chunk_manager.next_chunk())
+            if let ClientPlatform::Java(_) = &self.client {
+                // Java clients can only send a limited amount of chunks per tick.
+                // If we have sent too many chunks without receiving an ack, we stop sending chunks.
+                chunk_manager
+                    .can_send_chunk()
+                    .then(|| chunk_manager.next_chunk())
+            } else {
+                Some(chunk_manager.next_chunk())
+            }
         };
 
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             let chunk_count = chunk_of_chunks.len();
-            self.client.send_packet_now(&CChunkBatchStart).await;
-            for chunk in chunk_of_chunks {
-                let chunk = chunk.read().await;
-                // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
-                // player or something.
-                self.client.send_packet_now(&CChunkData(&chunk)).await;
+            match &self.client {
+                ClientPlatform::Java(java_client) => {
+                    java_client.send_packet_now(&CChunkBatchStart).await;
+                    for chunk in chunk_of_chunks {
+                        let chunk = chunk.read().await;
+                        // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
+                        // player or something.
+                        java_client.send_packet_now(&CChunkData(&chunk)).await;
+                    }
+                    java_client
+                        .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))
+                        .await;
+                }
+                ClientPlatform::Bedrock(bedrock_client) => {
+                    for chunk in chunk_of_chunks {
+                        let chunk = chunk.read().await;
+
+                        bedrock_client
+                            .send_game_packet(&CLevelChunk {
+                                dimension: 0,
+                                cache_enabled: false,
+                                chunk: &chunk,
+                            })
+                            .await;
+                    }
+                }
             }
-            self.client
-                .send_packet_now(&CChunkBatchEnd::new(chunk_count as u16))
-                .await;
         }
 
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
@@ -798,12 +813,19 @@ impl Player {
         // Timeout/keep alive handling
         self.tick_client_load_timeout();
 
+        // TODO This should only be handled by the ClientPlatform
         let now = Instant::now();
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
+            if matches!(self.client, ClientPlatform::Bedrock(_)) {
+                return;
+            }
             // We never got a response from the last keep alive we sent.
             if self.wait_for_keep_alive.load(Ordering::Relaxed) {
-                self.kick(TextComponent::translate("disconnect.timeout", []))
-                    .await;
+                self.kick(
+                    DisconnectReason::Timeout,
+                    TextComponent::translate("disconnect.timeout", []),
+                )
+                .await;
                 return;
             }
             self.wait_for_keep_alive.store(true, Ordering::Relaxed);
@@ -877,7 +899,7 @@ impl Player {
         progress.clamp(0.0, 1.0)
     }
 
-    pub const fn entity_id(&self) -> EntityId {
+    pub const fn entity_id(&self) -> i32 {
         self.living_entity.entity.entity_id
     }
 
@@ -976,13 +998,24 @@ impl Player {
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
-        self.client
-            .enqueue_packet(&CUpdateTime::new(
-                l_world.world_age,
-                l_world.time_of_day,
-                true,
-            ))
-            .await;
+        match &self.client {
+            ClientPlatform::Java(java_client) => {
+                java_client
+                    .enqueue_packet(&CUpdateTime::new(
+                        l_world.world_age,
+                        l_world.time_of_day,
+                        true,
+                    ))
+                    .await;
+            }
+            ClientPlatform::Bedrock(bedrock_client) => {
+                bedrock_client
+                    .send_game_packet(&CSetTime {
+                        time: VarInt(l_world.query_daytime() as _),
+                    })
+                    .await;
+            }
+        }
     }
 
     async fn unload_watched_chunks(&self, world: &World) {
@@ -1016,7 +1049,7 @@ impl Player {
             pos
         } else {
             Vector3::new(
-                f64::from(info.spawn_x),
+                f64::from(info.spawn_x) + 0.5,
                 f64::from(
                     new_world
                         .get_top_block(Vector2::new(
@@ -1026,7 +1059,7 @@ impl Player {
                         .await
                         + 1,
                 ),
-                f64::from(info.spawn_z),
+                f64::from(info.spawn_z) + 0.5,
             )
         };
         let yaw = yaw.unwrap_or(info.spawn_angle);
@@ -1179,8 +1212,8 @@ impl Player {
         }) < d * d
     }
 
-    pub async fn kick(&self, reason: TextComponent) {
-        self.client.kick(reason).await;
+    pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
+        self.client.kick(reason, message).await;
     }
 
     pub fn can_food_heal(&self) -> bool {
@@ -1838,6 +1871,26 @@ impl Player {
         perm_manager
             .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
             .await
+    }
+
+    /// Swing the hand of the player
+    pub async fn swing_hand(&self, hand: Hand, all: bool) {
+        let world = self.world().await;
+        let entity_id = VarInt(self.entity_id());
+
+        let animation = match hand {
+            Hand::Left => Animation::SwingMainArm,
+            Hand::Right => Animation::SwingOffhand,
+        };
+
+        let packet = CEntityAnimation::new(entity_id, animation);
+        if all {
+            world.broadcast_packet_all(&packet).await;
+        } else {
+            world
+                .broadcast_packet_except(&[self.gameprofile.id], &packet)
+                .await;
+        }
     }
 }
 
