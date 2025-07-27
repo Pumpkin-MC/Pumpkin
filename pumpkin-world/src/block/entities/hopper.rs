@@ -6,7 +6,7 @@ use crate::world::SimpleWorld;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, HopperFacing, HopperLikeProperties};
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;

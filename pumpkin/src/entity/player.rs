@@ -23,8 +23,8 @@ use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item::Operation;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::Tagable;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockState, tag};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
@@ -551,7 +551,7 @@ impl Player {
         let block = self.world().await.get_block(&respawn_point.position).await;
 
         if respawn_point.dimension == VanillaDimensionType::Overworld
-            && block.is_tagged_with("#minecraft:beds").unwrap()
+            && block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BEDS)
         {
             // TODO: calculate respawn position
             Some((respawn_point.position.to_f64(), respawn_point.yaw))
