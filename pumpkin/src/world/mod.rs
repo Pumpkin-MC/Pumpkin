@@ -1888,7 +1888,10 @@ impl World {
         let is_new_block = old_block != new_block;
 
         // WorldChunk.java line 305-314
-        if is_new_block && old_block.default_state.block_entity_type > 0 && let Some(entity) = self.get_block_entity(position).await {
+        if is_new_block
+            && old_block.default_state.block_entity_type > 0
+            && let Some(entity) = self.get_block_entity(position).await
+        {
             let world: Arc<dyn SimpleWorld> = self.clone();
             entity.on_block_replaced(world, *position).await;
             self.remove_block_entity(position).await;
