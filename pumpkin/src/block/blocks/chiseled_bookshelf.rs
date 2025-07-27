@@ -69,7 +69,7 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
                 return BlockActionResult::Consume;
             }
         }
-        BlockActionResult::Continue
+        BlockActionResult::Pass
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
@@ -84,11 +84,11 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
             .is_tagged_with("minecraft:bookshelf_books")
             .unwrap_or(false)
         {
-            return BlockActionResult::PassToDefault;
+            return BlockActionResult::PassToDefaultBlockAction;
         }
         if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
             if Self::is_slot_used(properties, slot) {
-                return BlockActionResult::PassToDefault;
+                return BlockActionResult::PassToDefaultBlockAction;
             } else if let Some(block_entity) = args.world.get_block_entity(args.position).await {
                 if let Some(block_entity) = block_entity
                     .as_any()
@@ -109,7 +109,7 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
             }
         }
 
-        BlockActionResult::Continue
+        BlockActionResult::Pass
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
@@ -207,7 +207,7 @@ impl ChiseledBookshelfBlock {
 
     fn get_hit_pos(hit: &BlockHitResult<'_>, facing: HorizontalFacing) -> Option<Vector2<f32>> {
         // If the direction is not horizontal, we cannot hit a slot
-        let direction = hit.side.to_horizontal_facing()?;
+        let direction = hit.face.to_horizontal_facing()?;
 
         // If the facing direction does not match the block's facing, we cannot hit a slot
         if facing != direction {

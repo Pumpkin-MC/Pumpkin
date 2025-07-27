@@ -12,8 +12,10 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
+use crate::block::entities::hopper::HopperBlockEntity;
+use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::{
-    block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
+    BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
     block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
 };
 
@@ -25,7 +27,9 @@ pub mod command_block;
 pub mod comparator;
 pub mod dropper;
 pub mod end_portal;
+pub mod hopper;
 pub mod piston;
+pub mod shulker_box;
 pub mod sign;
 
 //TODO: We need a mark_dirty for chests
@@ -60,6 +64,7 @@ pub trait BlockEntity: Send + Sync {
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
     }
+    fn set_block_state(&mut self, _block_state: BlockStateId) {}
     fn is_dirty(&self) -> bool {
         false
     }
@@ -82,7 +87,11 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             Arc::new(block_entity_from_generic::<ComparatorBlockEntity>(nbt))
         }
         BarrelBlockEntity::ID => Arc::new(block_entity_from_generic::<BarrelBlockEntity>(nbt)),
+        HopperBlockEntity::ID => Arc::new(block_entity_from_generic::<HopperBlockEntity>(nbt)),
         DropperBlockEntity::ID => Arc::new(block_entity_from_generic::<DropperBlockEntity>(nbt)),
+        ShulkerBoxBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<ShulkerBoxBlockEntity>(nbt))
+        }
         PistonBlockEntity::ID => Arc::new(block_entity_from_generic::<PistonBlockEntity>(nbt)),
         EndPortalBlockEntity::ID => {
             Arc::new(block_entity_from_generic::<EndPortalBlockEntity>(nbt))

@@ -20,7 +20,7 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Facing;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 

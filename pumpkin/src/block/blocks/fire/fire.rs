@@ -13,7 +13,7 @@ use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::pumpkin_block::{
@@ -190,7 +190,7 @@ impl PumpkinBlock for FireBlock {
             .schedule_block_tick(
                 args.block,
                 *args.position,
-                Self::get_fire_tick_delay() as u16,
+                Self::get_fire_tick_delay() as u8,
                 TickPriority::Normal,
             )
             .await;
@@ -261,7 +261,7 @@ impl PumpkinBlock for FireBlock {
             .schedule_block_tick(
                 block,
                 *pos,
-                Self::get_fire_tick_delay() as u16,
+                Self::get_fire_tick_delay() as u8,
                 TickPriority::Normal,
             )
             .await;

@@ -140,7 +140,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         if on_use(wire, args.world, args.position).await {
             BlockActionResult::Success
         } else {
-            BlockActionResult::Continue
+            BlockActionResult::Pass
         }
     }
 

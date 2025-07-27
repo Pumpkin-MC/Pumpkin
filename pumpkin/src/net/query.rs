@@ -14,7 +14,7 @@ use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
 use crate::{
-    SHOULD_STOP, STOP_INTERRUPT,
+    PLUGIN_MANAGER, SHOULD_STOP, STOP_INTERRUPT,
     server::{CURRENT_MC_VERSION, Server},
 };
 
@@ -140,9 +140,9 @@ async fn handle_packet(
                                 }
                             }
 
-                            let plugin_manager = crate::PLUGIN_MANAGER.read().await;
-                            let plugins = plugin_manager
+                            let plugins = PLUGIN_MANAGER
                                 .active_plugins()
+                                .await
                                 .into_iter()
                                 .map(|meta| meta.name.to_string())
                                 .reduce(|acc, name| format!("{acc}, {name}"))
