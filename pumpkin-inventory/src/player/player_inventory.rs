@@ -6,6 +6,7 @@ use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_world::inventory::split_stack;
 use pumpkin_world::inventory::{Clearable, Inventory};
 use pumpkin_world::item::ItemStack;
+use std::any::Any;
 use std::array::from_fn;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -414,6 +415,10 @@ impl Inventory for PlayerInventory {
     }
 
     fn mark_dirty(&self) {}
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl PlayerInventory {

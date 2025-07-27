@@ -3,10 +3,7 @@ use pumpkin_util::math::position::BlockPos;
 use std::any::Any;
 use std::{
     array::from_fn,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, atomic::AtomicBool},
 };
 use tokio::sync::Mutex;
 
@@ -20,14 +17,14 @@ use crate::{
 use super::BlockEntity;
 
 #[derive(Debug)]
-pub struct BarrelBlockEntity {
+pub struct ShulkerBoxBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; 27],
     pub dirty: AtomicBool,
 }
 
 #[async_trait]
-impl BlockEntity for BarrelBlockEntity {
+impl BlockEntity for ShulkerBoxBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
@@ -42,7 +39,7 @@ impl BlockEntity for BarrelBlockEntity {
     {
         let barrel = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
             dirty: AtomicBool::new(false),
         };
 
@@ -62,7 +59,7 @@ impl BlockEntity for BarrelBlockEntity {
     }
 
     fn is_dirty(&self) -> bool {
-        self.dirty.load(Ordering::Relaxed)
+        self.dirty.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -70,19 +67,19 @@ impl BlockEntity for BarrelBlockEntity {
     }
 }
 
-impl BarrelBlockEntity {
-    pub const ID: &'static str = "minecraft:barrel";
+impl ShulkerBoxBlockEntity {
+    pub const ID: &'static str = "minecraft:shulker_box"; // TODO support multi IDs
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
             dirty: AtomicBool::new(false),
         }
     }
 }
 
 #[async_trait]
-impl Inventory for BarrelBlockEntity {
+impl Inventory for ShulkerBoxBlockEntity {
     fn size(&self) -> usize {
         self.items.len()
     }
@@ -102,7 +99,7 @@ impl Inventory for BarrelBlockEntity {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY.clone();
+        let mut removed = ItemStack::EMPTY;
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -117,7 +114,7 @@ impl Inventory for BarrelBlockEntity {
     }
 
     fn mark_dirty(&self) {
-        self.dirty.store(true, Ordering::Relaxed);
+        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -126,10 +123,10 @@ impl Inventory for BarrelBlockEntity {
 }
 
 #[async_trait]
-impl Clearable for BarrelBlockEntity {
+impl Clearable for ShulkerBoxBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY.clone();
+            *slot.lock().await = ItemStack::EMPTY;
         }
     }
 }
