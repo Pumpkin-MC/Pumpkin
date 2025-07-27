@@ -10,6 +10,8 @@ use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
+use pumpkin_protocol::java::client::play::{CPlayDisconnect, CPlayerPosition, CUpdateEntityPos};
+use pumpkin_protocol::java::server::play::SPlayerPosition;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::CEntityVelocity};
 use pumpkin_util::math::square;
 use pumpkin_util::math::vector3::Vector3;
@@ -72,6 +74,23 @@ pub async fn handle_knockback(attacker: &Entity, world: &World, victim: &Entity,
 
     let saved_velo = victim.velocity.load();
     combat_profile.apply_attack_knockback(attacker, victim, strength);
+
+    // TODO: Call this on every hit, even if no knockback is applied
+    if combat_profile.combat_type() == CombatType::Classic {
+        if let Some(attacker) = attacker.get_living_entity() {
+            let current_pos = attacker.entity.pos.load();
+            let correction_packet = CUpdateEntityPos::new(
+                attacker.entity_id().into(),
+                Vector3::new(
+                    current_pos.x as i16,
+                    current_pos.y as i16,
+                    current_pos.z as i16,
+                ),
+                true,
+            );
+            world.broadcast_packet_all(&correction_packet).await;
+        }
+    }
 
     let entity_id = VarInt(victim.entity_id);
     let victim_velocity = victim.velocity.load();
@@ -254,6 +273,8 @@ impl CombatProfile for ClassicProfile {
             //let mut velocity_multiplier = magnitude_3d / 5.6;
             //velocity_multiplier = velocity_multiplier.clamp(0.1, 1.0);
 
+            //send_packet(&CPlayDisconnect::new(&reason)).await;
+            // TODO: This needs to go away, I think
             target.knockback(
                 (strength + magnitude_3d / 5.6) * 0.5,
                 knockback_x,
