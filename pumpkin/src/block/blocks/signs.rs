@@ -10,6 +10,7 @@ use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::block::entities::sign::DyeColor;
@@ -21,7 +22,7 @@ use crate::block::pumpkin_block::OnStateReplacedArgs;
 use crate::block::pumpkin_block::PlacedArgs;
 use crate::block::pumpkin_block::PlayerPlacedArgs;
 use crate::block::pumpkin_block::UseWithItemArgs;
-use crate::block::pumpkin_block::{BlockMetadata, OnPlaceArgs, PumpkinBlock};
+use crate::block::pumpkin_block::{OnPlaceArgs, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -29,17 +30,8 @@ use crate::world::World;
 
 type SignProperties = pumpkin_data::block_properties::OakSignLikeProperties;
 
+#[pumpkin_block_from_tag("minecraft:signs")]
 pub struct SignBlock;
-
-impl BlockMetadata for SignBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:signs").unwrap()
-    }
-}
 
 //TODO: Add support for Wall Signs
 //TODO: Add support for Hanging Signs
@@ -221,7 +213,7 @@ impl PumpkinBlock for SignBlock {
         }
 
         if let Some(color_name) = item.item.registry_key.strip_suffix("_dye") {
-            let dye_color = DyeColor::from(color_name.to_string());
+            let dye_color = DyeColor::from(color_name);
 
             text.set_color(dye_color);
 

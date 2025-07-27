@@ -24,10 +24,7 @@ impl Visitor<'_> for TagVisitor {
     fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
         write!(formatter, "valid tag")
     }
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
+    fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
         match v.strip_prefix('#') {
             Some(v) => Ok(TagType::Tag(v.to_string())),
             None => Ok(TagType::Item(v.to_string())),
@@ -36,10 +33,7 @@ impl Visitor<'_> for TagVisitor {
 }
 
 impl<'de> Deserialize<'de> for TagType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         deserializer.deserialize_str(TagVisitor)
     }
 }
@@ -70,10 +64,7 @@ impl PartialEq<TagType> for RegistryEntryList {
 }
 
 impl<'de> Deserialize<'de> for RegistryEntryList {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct SlotTypeVisitor;
         impl<'de> Visitor<'de> for SlotTypeVisitor {
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
@@ -82,17 +73,11 @@ impl<'de> Deserialize<'de> for RegistryEntryList {
 
             type Value = RegistryEntryList;
 
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
+            fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(RegistryEntryList::Single(TagVisitor.visit_str(v)?))
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let mut ingredients: Vec<TagType> = vec![];
                 while let Some(element) = seq.next_element()? {
                     ingredients.push(element)

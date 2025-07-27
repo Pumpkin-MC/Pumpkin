@@ -6,13 +6,14 @@ use pumpkin_data::{
     item::Item,
     tag::{RegistryKey, get_tag_values},
 };
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{item::ItemStack, world::BlockFlags};
 
 use crate::{
     block::{
         blocks::cake::CakeBlock,
-        pumpkin_block::{BlockMetadata, NormalUseArgs, PumpkinBlock, UseWithItemArgs},
+        pumpkin_block::{NormalUseArgs, PumpkinBlock, UseWithItemArgs},
         registry::BlockActionResult,
     },
     entity::player::Player,
@@ -59,17 +60,8 @@ pub fn candle_from_cake(block: &Block) -> &'static Item {
         )
 }
 
+#[pumpkin_block_from_tag("minecraft:candle_cakes")]
 pub struct CandleCakeBlock;
-
-impl BlockMetadata for CandleCakeBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:candle_cakes").unwrap()
-    }
-}
 
 impl CandleCakeBlock {
     async fn consume_and_drop_candle(
@@ -102,9 +94,9 @@ impl CandleCakeBlock {
             )
             .await;
 
-        let (block, state) = world.get_block_and_block_state(location).await;
+        let (block, state) = world.get_block_and_state_id(location).await;
 
-        CakeBlock::consume_if_hungry(world, player, block, location, state.id).await
+        CakeBlock::consume_if_hungry(world, player, block, location, state).await
     }
 }
 

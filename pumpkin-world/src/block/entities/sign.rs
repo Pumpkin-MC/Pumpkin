@@ -55,9 +55,9 @@ impl From<DyeColor> for String {
     }
 }
 
-impl From<String> for DyeColor {
-    fn from(s: String) -> Self {
-        match s.as_str() {
+impl From<&str> for DyeColor {
+    fn from(s: &str) -> Self {
+        match s {
             "white" => DyeColor::White,
             "orange" => DyeColor::Orange,
             "magenta" => DyeColor::Magenta,
@@ -174,11 +174,11 @@ impl From<NbtTag> for Text {
             .get_list("messages")
             .unwrap()
             .iter()
-            .filter_map(|tag| tag.extract_string().cloned())
+            .filter_map(|tag| tag.extract_string().map(|s| s.to_string()))
             .collect();
         Self {
             has_glowing_text: AtomicBool::new(has_glowing_text),
-            color: AtomicI8::new(DyeColor::from(color.clone()) as i8),
+            color: AtomicI8::new(DyeColor::from(color) as i8),
             messages: Arc::new(std::sync::Mutex::new([
                 // its important that we use unwrap_or since otherwise we may crash on older versions
                 messages.first().unwrap_or(&"".to_string()).clone(),
