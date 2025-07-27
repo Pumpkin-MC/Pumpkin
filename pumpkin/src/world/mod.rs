@@ -34,7 +34,6 @@ use async_trait::async_trait;
 use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
-use log::info;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::entity::EffectType;
 use pumpkin_data::fluid::{Falling, FluidProperties};
