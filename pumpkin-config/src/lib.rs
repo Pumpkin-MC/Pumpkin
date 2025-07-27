@@ -208,19 +208,30 @@ trait LoadConfiguration {
             let file_content = fs::read_to_string(&path)
                 .unwrap_or_else(|_| panic!("Couldn't read configuration file at {:?}", &path));
 
-            toml::from_str(&file_content).unwrap_or_else(|err| {
-                panic!(
-                    "Couldn't parse config at {:?}. Reason: {}. This is probably caused by a config update; just delete the old config and start Pumpkin again",
-                    &path,
-                    err.message()
-                )
-            })
+            let parsed_toml_value: toml::Value = toml::from_str(&file_content)
+                .unwrap_or_else(|err| {
+                    panic!(
+                        "Couldn't parse TOML at {:?}. Reason: {}. This is probably caused by invalid TOML syntax",
+                        &path, err
+                    )
+                });
+
+            let merged_config = Self::merge_with_default_toml(parsed_toml_value);
+
+            if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
+                warn!(
+                    "Couldn't write merged config to {:?}. Reason: {}",
+                    &path, err
+                );
+            }
+
+            merged_config
         } else {
             let content = Self::default();
 
             if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
                 warn!(
-                    "Couldn't write default config to {:?}. Reason: {}. This is probably caused by a config update; just delete the old config and start Pumpkin again",
+                    "Couldn't write default config to {:?}. Reason: {}",
                     &path, err
                 );
             }
@@ -230,6 +241,42 @@ trait LoadConfiguration {
 
         config.validate();
         config
+    }
+
+    fn merge_with_default_toml(parsed_toml: toml::Value) -> Self
+    where
+        Self: Sized + Default + Serialize + DeserializeOwned,
+    {
+        let default_config = Self::default();
+
+        let default_toml_str = toml::to_string(&default_config)
+            .expect("Failed to serialize default config");
+        let default_toml_value: toml::Value = toml::from_str(&default_toml_str)
+            .expect("Failed to parse default config as TOML");
+
+        let merged_value = Self::merge_toml_values(default_toml_value, parsed_toml);
+
+        let merged_toml_str = toml::to_string(&merged_value)
+            .expect("Failed to serialize merged TOML");
+
+        toml::from_str(&merged_toml_str)
+            .expect("Failed to deserialize merged config - this shouldn't happen")
+    }
+
+    fn merge_toml_values(base: toml::Value, overlay: toml::Value) -> toml::Value {
+        match (base, overlay) {
+            (toml::Value::Table(mut base_table), toml::Value::Table(overlay_table)) => {
+                for (key, overlay_value) in overlay_table {
+                    if let Some(base_value) = base_table.get(&key).cloned() {
+                        base_table.insert(key, Self::merge_toml_values(base_value, overlay_value));
+                    } else {
+                        base_table.insert(key, overlay_value);
+                    }
+                }
+                toml::Value::Table(base_table)
+            }
+            (_, overlay) => overlay,
+        }
     }
 
     fn get_path() -> &'static Path;
