@@ -37,7 +37,7 @@ impl CakeBlock {
             GameMode::Survival | GameMode::Adventure => {
                 let hunger_level = player.hunger_manager.level.load();
                 if hunger_level >= 20 {
-                    return BlockActionResult::Continue;
+                    return BlockActionResult::Pass;
                 }
                 player.hunger_manager.level.store(20.min(hunger_level + 2));
                 player

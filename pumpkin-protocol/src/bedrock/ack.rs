@@ -1,9 +1,10 @@
+use std::io::{Error, Read, Write};
+
 use pumpkin_macros::packet;
 
 use crate::{
-    ClientPacket, ServerPacket,
-    codec::u24::U24,
-    ser::{NetworkReadExt, NetworkWriteExt},
+    codec::u24,
+    serial::{PacketRead, PacketWrite},
 };
 
 #[packet(0xC0)]
@@ -15,54 +16,42 @@ impl Ack {
     pub fn new(sequences: Vec<u32>) -> Self {
         Self { sequences }
     }
-}
 
-impl Ack {
-    fn write_range(
-        start: u32,
-        end: u32,
-        mut write: impl std::io::Write,
-    ) -> Result<(), crate::ser::WritingError> {
+    fn write_range<W: Write>(start: u32, end: u32, writer: &mut W) -> Result<(), Error> {
         if start == end {
-            write.write_u8(1)?;
-            U24::encode(&U24(start), &mut write)?;
+            1u8.write(writer)?;
+            u24(start).write(writer)
         } else {
-            write.write_u8(0)?;
-            U24::encode(&U24(start), &mut write)?;
-            U24::encode(&U24(end), &mut write)?;
+            0u8.write(writer)?;
+            u24(start).write(writer)?;
+            u24(end).write(writer)
         }
-        Ok(())
     }
-}
 
-impl ServerPacket for Ack {
-    fn read(mut read: impl std::io::Read) -> Result<Self, crate::ser::ReadingError> {
-        let size = read.get_u16_be()?;
+    pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let size = u16::read_be(reader)?;
         // TODO: check size
         let mut sequences = Vec::with_capacity(size as usize);
         for _ in 0..size {
-            let single = read.get_bool()?;
+            let single = bool::read(reader)?;
             if single {
-                sequences.push(U24::decode(&mut read)?.0);
+                sequences.push(u24::read(reader)?.0);
             } else {
-                let start = U24::decode(&mut read)?;
-                let end = U24::decode(&mut read)?;
-                for i in start.0..end.0 {
+                let start = u24::read(reader)?.0;
+                let end = u24::read(reader)?.0;
+                for i in start..end {
                     sequences.push(i);
                 }
             }
         }
         Ok(Self { sequences })
     }
-}
 
-impl ClientPacket for Ack {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-    ) -> Result<(), crate::ser::WritingError> {
-        let mut buffer = Vec::new();
-        let mut count = 0;
+    pub fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        0xC0u8.write(writer)?;
+        let mut count: u16 = 0;
+
+        let mut buf = Vec::new();
 
         let mut start = self.sequences[0];
         let mut end = start;
@@ -70,18 +59,15 @@ impl ClientPacket for Ack {
             if seq == end + 1 {
                 end = seq
             } else {
-                Self::write_range(start, end, &mut buffer)?;
+                Self::write_range(start, end, &mut buf)?;
                 count += 1;
                 start = seq;
                 end = seq;
             }
         }
-        Self::write_range(start, end, &mut buffer)?;
+        Self::write_range(start, end, &mut buf)?;
         count += 1;
-
-        write.write_u16_be(count)?;
-        write.write_slice(&buffer)?;
-
-        Ok(())
+        count.write_be(writer)?;
+        writer.write_all(&buf)
     }
 }

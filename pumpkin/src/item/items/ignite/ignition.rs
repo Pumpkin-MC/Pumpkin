@@ -7,7 +7,6 @@ use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct Ignition;
@@ -55,20 +54,20 @@ fn can_be_lit(block: &Block, state_id: u16) -> Option<u16> {
         None => return None,
     };
 
-    if props.contains_key("extinguished") {
-        props.insert("extinguished".into(), "false".into());
-    } else if props.contains_key("lit") {
-        props.insert("lit".into(), "true".into());
+    if let Some((_, value)) = props.iter_mut().find(|(k, _)| k == "extinguished") {
+        *value = "false".into();
+    } else if let Some((_, value)) = props.iter_mut().find(|(k, _)| k == "lit") {
+        *value = "true".into();
     } else {
         return None;
     }
 
-    let props: HashMap<&str, &str> = props
+    let props: Vec<(&str, &str)> = props
         .iter()
         .map(|(k, v)| (k.as_str(), v.as_str()))
         .collect();
 
-    let new_state_id = block.from_properties(props)?.to_state_id(block);
+    let new_state_id = block.from_properties(&props).to_state_id(block);
 
     (new_state_id != state_id).then_some(new_state_id)
 }

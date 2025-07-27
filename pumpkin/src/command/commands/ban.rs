@@ -9,6 +9,7 @@ use crate::{
         banned_player_data::BANNED_PLAYER_LIST,
     },
     entity::player::Player,
+    net::DisconnectReason,
 };
 use CommandError::InvalidConsumption;
 use async_trait::async_trait;
@@ -97,10 +98,10 @@ async fn ban_player(sender: &CommandSender, player: &Player, reason: Option<Stri
         .await;
 
     player
-        .kick(TextComponent::translate(
-            "multiplayer.disconnect.banned",
-            [],
-        ))
+        .kick(
+            DisconnectReason::Kicked,
+            TextComponent::translate("multiplayer.disconnect.banned", []),
+        )
         .await;
 }
 

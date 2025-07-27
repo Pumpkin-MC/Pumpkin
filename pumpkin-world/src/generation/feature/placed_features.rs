@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_util::HeightMap;
+use pumpkin_util::{HeightMap, read_data_from_file};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter;
@@ -24,10 +24,8 @@ use crate::world::BlockRegistryExt;
 
 use super::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
 
-pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../../assets/placed_feature.json"))
-        .expect("Could not parse placed_feature.json registry.")
-});
+pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> =
+    LazyLock::new(|| read_data_from_file!("../../../../assets/placed_feature.json"));
 
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -333,7 +331,7 @@ impl CountOnEveryLayerPlacementModifier {
                 let z = random.next_bounded_i32(16) + pos.0.z;
                 let y = chunk.top_motion_blocking_block_height_exclusive(&Vector2::new(x, z));
 
-                let n = Self::find_pos(chunk, x, y as i32, z, i);
+                let n = Self::find_pos(chunk, x, y, z, i);
 
                 if n == i32::MAX {
                     continue;
@@ -415,9 +413,9 @@ impl ConditionalPlacementModifier for SurfaceThresholdFilterPlacementModifier {
         pos: BlockPos,
     ) -> bool {
         let y = chunk.get_top_y(&self.heightmap, &pos.0.to_vec2_i32());
-        let min = y.saturating_add(self.min_inclusive.unwrap_or(i32::MIN) as i64);
-        let max = y.saturating_add(self.max_inclusive.unwrap_or(i32::MAX) as i64);
-        min <= pos.0.y as i64 && pos.0.y as i64 <= max
+        let min = y.saturating_add(self.min_inclusive.unwrap_or(i32::MIN));
+        let max = y.saturating_add(self.max_inclusive.unwrap_or(i32::MAX));
+        min <= pos.0.y && pos.0.y <= max
     }
 }
 
@@ -480,8 +478,8 @@ impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let world_top = chunk.top_block_height_exclusive(&Vector2::new(pos.0.x, pos.0.z)) as i32;
-        let ocean = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x, pos.0.z)) as i32;
+        let world_top = chunk.top_block_height_exclusive(&Vector2::new(pos.0.x, pos.0.z));
+        let ocean = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x, pos.0.z));
         world_top - ocean <= self.max_water_depth
     }
 }
@@ -547,7 +545,7 @@ impl HeightmapPlacementModifier {
     ) -> Box<dyn Iterator<Item = BlockPos>> {
         let x = pos.0.x;
         let z = pos.0.z;
-        let top = chunk.get_top_y(&self.heightmap, &Vector2::new(x, z)) as i32;
+        let top = chunk.get_top_y(&self.heightmap, &Vector2::new(x, z));
         if top > min_y as i32 {
             return Box::new(iter::once(BlockPos(Vector3::new(x, top, z))));
         }

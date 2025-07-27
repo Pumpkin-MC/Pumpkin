@@ -47,8 +47,11 @@ pub mod vine;
 pub mod walls;
 
 pub mod banners;
+pub mod shulker_box;
 
 pub mod blast_furnace;
+
+pub mod hopper;
 
 pub mod smoker;
 

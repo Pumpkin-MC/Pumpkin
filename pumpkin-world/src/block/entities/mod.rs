@@ -13,12 +13,11 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
+use crate::block::entities::hopper::HopperBlockEntity;
+use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::{
-    block::entities::{
-        chiseled_bookshelf::ChiseledBookshelfBlockEntity, dropper::DropperBlockEntity,
-    },
-    inventory::Inventory,
-    world::SimpleWorld,
+    BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
+    block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
 };
 
 pub mod barrel;
@@ -30,7 +29,9 @@ pub mod comparator;
 pub mod dropper;
 pub mod end_portal;
 pub mod furnace;
+pub mod hopper;
 pub mod piston;
+pub mod shulker_box;
 pub mod sign;
 
 //TODO: We need a mark_dirty for chests
@@ -65,6 +66,7 @@ pub trait BlockEntity: Send + Sync {
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
     }
+    fn set_block_state(&mut self, _block_state: BlockStateId) {}
     fn is_dirty(&self) -> bool {
         false
     }
@@ -82,34 +84,29 @@ pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
 }
 
 pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> {
-    let id = nbt.get_string("id").unwrap();
-    match id.as_str() {
-        ChestBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt))),
-        SignBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt))),
-        BedBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<BedBlockEntity>(nbt))),
-        ComparatorBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<
-            ComparatorBlockEntity,
-        >(nbt))),
-        BarrelBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<BarrelBlockEntity>(
-            nbt,
-        ))),
-        DropperBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<DropperBlockEntity>(
-            nbt,
-        ))),
-        PistonBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<PistonBlockEntity>(
-            nbt,
-        ))),
-        EndPortalBlockEntity::ID => Some(Arc::new(
-            block_entity_from_generic::<EndPortalBlockEntity>(nbt),
-        )),
-        ChiseledBookshelfBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<
+    Some(match nbt.get_string("id").unwrap() {
+        ChestBlockEntity::ID => Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt)),
+        SignBlockEntity::ID => Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt)),
+        BedBlockEntity::ID => Arc::new(block_entity_from_generic::<BedBlockEntity>(nbt)),
+        ComparatorBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<ComparatorBlockEntity>(nbt))
+        }
+        BarrelBlockEntity::ID => Arc::new(block_entity_from_generic::<BarrelBlockEntity>(nbt)),
+        HopperBlockEntity::ID => Arc::new(block_entity_from_generic::<HopperBlockEntity>(nbt)),
+        DropperBlockEntity::ID => Arc::new(block_entity_from_generic::<DropperBlockEntity>(nbt)),
+        ShulkerBoxBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<ShulkerBoxBlockEntity>(nbt))
+        }
+        PistonBlockEntity::ID => Arc::new(block_entity_from_generic::<PistonBlockEntity>(nbt)),
+        EndPortalBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<EndPortalBlockEntity>(nbt))
+        }
+        ChiseledBookshelfBlockEntity::ID => Arc::new(block_entity_from_generic::<
             ChiseledBookshelfBlockEntity,
-        >(nbt))),
-        FurnaceBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<FurnaceBlockEntity>(
-            nbt,
-        ))),
-        _ => None,
-    }
+        >(nbt)),
+        FurnaceBlockEntity::ID => Arc::new(block_entity_from_generic::<FurnaceBlockEntity>(nbt)),
+        _ => return None,
+    })
 }
 
 pub fn has_block_block_entity(block: &Block) -> bool {
