@@ -107,7 +107,7 @@ impl PrioritizedGoal {
         }
     }
 
-    fn can_be_replaced_by(&self, goal: Arc<PrioritizedGoal>) -> bool {
+    fn can_be_replaced_by(&self, goal: &Arc<Self>) -> bool {
         self.can_stop() && goal.priority < self.priority
     }
 }

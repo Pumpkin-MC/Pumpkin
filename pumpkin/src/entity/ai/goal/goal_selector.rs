@@ -21,7 +21,14 @@ pub struct GoalSelector {
     disabled_controls: Mutex<HashSet<Control>>,
 }
 
+impl Default for GoalSelector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GoalSelector {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             goals_by_control: Mutex::new(HashMap::new()),
@@ -71,7 +78,7 @@ impl GoalSelector {
             let existing: &Arc<PrioritizedGoal> =
                 goals_by_control.get(control).unwrap_or(&*REPLACEABLE_GOAL);
 
-            if !existing.can_be_replaced_by(goal.clone()) {
+            if !existing.can_be_replaced_by(&goal) {
                 return false;
             }
         }
@@ -103,7 +110,7 @@ impl GoalSelector {
                 for control in controls.iter() {
                     let goal = goals_by_control.get(control).unwrap_or(&*REPLACEABLE_GOAL);
                     goal.stop(mob).await;
-                    goals_by_control.insert(control.clone(), prioritized_goal.clone());
+                    goals_by_control.insert(*control, prioritized_goal.clone());
                 }
                 drop(controls); // Drop lock
                 prioritized_goal.start(mob).await;

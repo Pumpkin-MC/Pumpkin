@@ -29,8 +29,8 @@ impl MobEntity {
     pub fn new(entity: Entity) -> Self {
         Self {
             living_entity: LivingEntity::new(entity),
-            goals_selector: GoalSelector::new(),
-            target_selector: GoalSelector::new(),
+            goals_selector: GoalSelector::default(),
+            target_selector: GoalSelector::default(),
             navigator: Mutex::new(Navigator::default()),
             target: Mutex::new(None),
             look_control: Mutex::new(LookControl::default()),
