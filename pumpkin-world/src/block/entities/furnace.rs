@@ -236,7 +236,7 @@ impl BlockEntity for FurnaceBlockEntity {
             let world = world.clone();
 
             let (furnace_block, furnace_block_state) =
-                world.get_block_and_block_state(&self.position).await;
+                world.get_block_and_state(&self.position).await;
             let mut props =
                 FurnaceLikeProperties::from_state_id(furnace_block_state.id, furnace_block);
 
@@ -418,6 +418,10 @@ impl Inventory for FurnaceBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
