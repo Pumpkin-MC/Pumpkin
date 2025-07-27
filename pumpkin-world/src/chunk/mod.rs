@@ -397,9 +397,9 @@ impl ChunkHeightmaps {
 impl Default for ChunkHeightmaps {
     fn default() -> Self {
         Self {
-            motion_blocking: vec![-1; 37].into_boxed_slice(),
-            motion_blocking_no_leaves: vec![-1; 37].into_boxed_slice(),
-            world_surface: vec![-1; 37].into_boxed_slice(),
+            motion_blocking: vec![0; 37].into_boxed_slice(),
+            motion_blocking_no_leaves: vec![0; 37].into_boxed_slice(),
+            world_surface: vec![0; 37].into_boxed_slice(),
         }
     }
 }
