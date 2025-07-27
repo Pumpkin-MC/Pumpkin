@@ -216,13 +216,15 @@ trait LoadConfiguration {
                     )
                 });
 
-            let merged_config = Self::merge_with_default_toml(parsed_toml_value);
+            let (merged_config, changed) = Self::merge_with_default_toml(parsed_toml_value);
 
-            if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
-                warn!(
-                    "Couldn't write merged config to {:?}. Reason: {}",
-                    &path, err
-                );
+            if changed {
+                if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
+                    warn!(
+                        "Couldn't write merged config to {:?}. Reason: {}",
+                        &path, err
+                    );
+                }
             }
 
             merged_config
@@ -243,39 +245,50 @@ trait LoadConfiguration {
         config
     }
 
-    fn merge_with_default_toml(parsed_toml: toml::Value) -> Self
+    fn merge_with_default_toml(parsed_toml: toml::Value) -> (Self, bool)
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
     {
         let default_config = Self::default();
 
-        let default_toml_str = toml::to_string(&default_config)
-            .expect("Failed to serialize default config");
-        let default_toml_value: toml::Value = toml::from_str(&default_toml_str)
-            .expect("Failed to parse default config as TOML");
+        let default_toml_value = toml::Value::try_from(default_config).expect("Failed to parse default config");
 
-        let merged_value = Self::merge_toml_values(default_toml_value, parsed_toml);
+        let (merged_value, changed) =
+            Self::merge_toml_values(default_toml_value, parsed_toml.clone());
 
-        let merged_toml_str = toml::to_string(&merged_value)
-            .expect("Failed to serialize merged TOML");
+        let config = merged_value.try_into()
+            .expect("Failed to convert merged config");
 
-        toml::from_str(&merged_toml_str)
-            .expect("Failed to deserialize merged config - this shouldn't happen")
+        (config, changed)
     }
 
-    fn merge_toml_values(base: toml::Value, overlay: toml::Value) -> toml::Value {
+    fn merge_toml_values(base: toml::Value, overlay: toml::Value) -> (toml::Value, bool) {
         match (base, overlay) {
             (toml::Value::Table(mut base_table), toml::Value::Table(overlay_table)) => {
+                let mut changed = false;
+
+                for key in base_table.keys() {
+                    if !overlay_table.contains_key(key) {
+                        changed = true;
+                        break;
+                    }
+                }
+
                 for (key, overlay_value) in overlay_table {
                     if let Some(base_value) = base_table.get(&key).cloned() {
-                        base_table.insert(key, Self::merge_toml_values(base_value, overlay_value));
+                        let (merged_value, value_changed) =
+                            Self::merge_toml_values(base_value, overlay_value);
+                        base_table.insert(key, merged_value);
+                        if value_changed {
+                            changed = true;
+                        }
                     } else {
                         base_table.insert(key, overlay_value);
                     }
                 }
-                toml::Value::Table(base_table)
+                (toml::Value::Table(base_table), changed)
             }
-            (_, overlay) => overlay,
+            (_, overlay) => (overlay, false),
         }
     }
 
