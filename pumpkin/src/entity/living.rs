@@ -191,11 +191,13 @@ impl LivingEntity {
             damage = damage.ceil();
 
             // TODO: Play block fall sound
-            let check_damage = self.damage(damage, DamageType::FALL).await; // Fall
-            if check_damage {
-                self.entity
-                    .play_sound(Self::get_fall_sound(fall_distance as i32))
-                    .await;
+            if damage > 0.0 {
+                let check_damage = self.damage(damage, DamageType::FALL).await; // Fall
+                if check_damage {
+                    self.entity
+                        .play_sound(Self::get_fall_sound(fall_distance as i32))
+                        .await;
+                }
             }
         } else if height_difference < 0.0 {
             let new_fall_distance = if !self.is_in_water().await && !self.is_in_powder_snow().await
