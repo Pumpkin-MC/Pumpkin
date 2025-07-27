@@ -1,3 +1,6 @@
+use async_trait::async_trait;
+use pumpkin_util::math::position::BlockPos;
+use std::any::Any;
 use std::{
     array::from_fn,
     sync::{
@@ -5,9 +8,6 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
-
-use async_trait::async_trait;
-use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
 
 use crate::{
@@ -118,6 +118,10 @@ impl Inventory for BarrelBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
