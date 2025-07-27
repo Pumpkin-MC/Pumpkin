@@ -137,15 +137,19 @@ impl Server {
                 fs::copy(dat_path, backup_path).unwrap();
             }
         }
-
-        let level_info = level_info.unwrap_or_default(); // TODO: Improve error handling
-        let seed = level_info.world_gen_settings.seed;
-
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
         let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
 
         let world_name = world_path.to_str().unwrap();
+
+        let level_info = level_info.unwrap_or_else(|err| {
+            log::warn!("Failed to get level_info, using default instead: {err}");
+            LevelData::default()
+        });
+
+        let seed = level_info.world_gen_settings.seed;
+        let level_info = Arc::new(RwLock::new(level_info));
 
         let server = Self {
             cached_registry: Registry::get_synced(),
@@ -180,21 +184,9 @@ impl Server {
             server_guid: rand::random(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
-            level_info,
+            level_info: level_info.clone(),
             _locker: Arc::new(locker),
         };
-        let level_info = match level_info {
-            Ok(level_info) => level_info,
-            Err(err) => {
-                log::warn!("Failed to get level_info, using default instead: {err}");
-                LevelData::default()
-            }
-        };
-
-        let seed = level_info.world_gen_settings.seed;
-        log::info!("Loading Overworld: {seed}");
-
-        let level_info = Arc::new(RwLock::new(level_info));
 
         let server = Arc::new(server);
         let weak = Arc::downgrade(&server);
