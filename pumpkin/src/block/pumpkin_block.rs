@@ -130,7 +130,7 @@ pub struct UseWithItemArgs<'a> {
 }
 
 pub struct BlockHitResult<'a> {
-    pub side: &'a BlockDirection,
+    pub face: &'a BlockDirection,
     pub cursor_pos: &'a Vector3<f32>,
 }
 

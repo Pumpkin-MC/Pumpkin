@@ -1,7 +1,10 @@
 #![warn(unused)]
 use std::{
     fmt::Debug,
-    sync::{Arc, atomic::AtomicU8},
+    sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+    },
     time::Duration,
 };
 
@@ -219,8 +222,7 @@ impl Slot for NormalSlot {
     }
 
     fn set_id(&self, id: usize) {
-        self.id
-            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
+        self.id.store(id as u8, Ordering::Relaxed);
     }
 
     async fn mark_dirty(&self) {
@@ -259,8 +261,7 @@ impl Slot for ArmorSlot {
     }
 
     fn set_id(&self, id: usize) {
-        self.id
-            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
+        self.id.store(id as u8, Ordering::Relaxed);
     }
 
     async fn get_max_item_count(&self) -> u8 {

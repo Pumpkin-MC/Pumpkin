@@ -1,7 +1,4 @@
-use pumpkin_data::{
-    Block, BlockDirection,
-    block_properties::{BlockProperties, get_state_by_state_id},
-};
+use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::BlockProperties};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
@@ -42,10 +39,7 @@ impl VinesFeature {
             vine.south = dir == BlockDirection::South;
             vine.west = dir == BlockDirection::West;
             vine.up = dir == BlockDirection::Up;
-            chunk.set_block_state(
-                &pos.0,
-                get_state_by_state_id(vine.to_state_id(&Block::VINE)),
-            );
+            chunk.set_block_state(&pos.0, BlockState::from_id(vine.to_state_id(&Block::VINE)));
             return true;
         }
         false

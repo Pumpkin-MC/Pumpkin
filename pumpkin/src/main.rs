@@ -49,7 +49,6 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
-use crate::server::CURRENT_MC_VERSION;
 use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
@@ -122,9 +121,7 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-    log::info!(
-        "Starting Pumpkin {CARGO_PKG_VERSION} for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
-    );
+    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
 
     log::debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
@@ -153,9 +150,9 @@ async fn main() {
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());
     log::info!(
-        "Server is now running. Connect using: {}{}{}",
+        "Server is now running. Connect using port: {}{}{}",
         if BASIC_CONFIG.java_edition {
-            format!("Java Edition: {}", BASIC_CONFIG.java_edition_address)
+            format!("Java Edition: {}", BASIC_CONFIG.java_edition_port)
         } else {
             String::new()
         },
@@ -165,10 +162,7 @@ async fn main() {
             ""
         },
         if BASIC_CONFIG.bedrock_edition {
-            format!(
-                "Bedrock/Pocket Edition: {}",
-                BASIC_CONFIG.bedrock_edition_address
-            )
+            format!("Bedrock Edition: {}", BASIC_CONFIG.bedrock_edition_port)
         } else {
             String::new()
         }

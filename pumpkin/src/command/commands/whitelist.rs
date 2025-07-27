@@ -18,6 +18,7 @@ use crate::{
         LoadJSONConfiguration, SaveJSONConfiguration,
         whitelist_data::{WHITELIST_CONFIG, WhitelistConfig},
     },
+    net::DisconnectReason,
     server::Server,
 };
 
@@ -33,10 +34,10 @@ async fn kick_non_whitelisted_players(server: &Server) {
                 continue;
             }
             player
-                .kick(TextComponent::translate(
-                    "multiplayer.disconnect.not_whitelisted",
-                    &[],
-                ))
+                .kick(
+                    DisconnectReason::Kicked,
+                    TextComponent::translate("multiplayer.disconnect.not_whitelisted", &[]),
+                )
                 .await;
         }
     }

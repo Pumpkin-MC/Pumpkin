@@ -6,6 +6,7 @@ use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
@@ -15,7 +16,7 @@ use pumpkin_world::block::entities::bed::BedBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::pumpkin_block::{
-    BlockMetadata, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs, PumpkinBlock,
+    BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs, PumpkinBlock,
 };
 use crate::block::registry::BlockActionResult;
 use crate::entity::{Entity, EntityBase};
@@ -61,16 +62,8 @@ const NO_SLEEP_IDS: &[u16] = &[
     EntityType::ZOMBIFIED_PIGLIN.id,
 ];
 
+#[pumpkin_block_from_tag("minecraft:beds")]
 pub struct BedBlock;
-impl BlockMetadata for BedBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:beds").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for BedBlock {

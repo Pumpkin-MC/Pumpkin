@@ -207,7 +207,7 @@ impl ChiseledBookshelfBlock {
 
     fn get_hit_pos(hit: &BlockHitResult<'_>, facing: HorizontalFacing) -> Option<Vector2<f32>> {
         // If the direction is not horizontal, we cannot hit a slot
-        let direction = hit.side.to_horizontal_facing()?;
+        let direction = hit.face.to_horizontal_facing()?;
 
         // If the facing direction does not match the block's facing, we cannot hit a slot
         if facing != direction {

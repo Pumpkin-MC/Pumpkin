@@ -47,7 +47,7 @@ rand = "0.9"
 num-bigint = "0.4"
 
 # Console line reading
-rustyline-async = "0.4.6"
+rustyline-async = "0.4.7"
 
 # encryption
 rsa = { version = "=0.10.0-rc.3", features = ["sha1"] }
@@ -64,7 +64,7 @@ sha1 = "=0.11.0-rc.0"
 hmac = "=0.13.0-rc.0"
 sha2 = "=0.11.0-rc.0"
 
-base64 = "0.22"
+base64 = "0.22.1"
 
 # logging
 simplelog = { version = "0.12.2", features = ["ansi_term"] }
