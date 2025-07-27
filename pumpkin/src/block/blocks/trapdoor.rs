@@ -1,7 +1,5 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::{
-    BlockMetadata, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock,
-};
+use crate::block::pumpkin_block::{NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::world::World;
@@ -11,6 +9,7 @@ use pumpkin_data::block_properties::{BlockHalf, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{RegistryKey, Taggable, get_tag_values};
 use pumpkin_data::{Block, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
@@ -66,22 +65,15 @@ fn get_sound(block: &Block, open: bool) -> Sound {
         Sound::BlockCopperTrapdoorClose
     }
 }
-pub struct TrapDoorBlock;
-impl BlockMetadata for TrapDoorBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
 
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:trapdoors").unwrap()
-    }
-}
+#[pumpkin_block_from_tag("minecraft:trapdoors")]
+pub struct TrapDoorBlock;
 
 #[async_trait]
 impl PumpkinBlock for TrapDoorBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !can_open_trapdoor(args.block) {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
 
         toggle_trapdoor(args.player, args.world, args.position).await;

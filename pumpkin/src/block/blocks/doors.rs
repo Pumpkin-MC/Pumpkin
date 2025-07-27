@@ -12,6 +12,7 @@ use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::{Block, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
@@ -25,7 +26,7 @@ use crate::block::pumpkin_block::NormalUseArgs;
 use crate::block::pumpkin_block::OnNeighborUpdateArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
 use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use pumpkin_protocol::java::server::play::SUseItemOn;
@@ -159,16 +160,8 @@ async fn get_hinge(
     }
 }
 
+#[pumpkin_block_from_tag("minecraft:doors")]
 pub struct DoorBlock;
-impl BlockMetadata for DoorBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:doors").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for DoorBlock {
@@ -208,7 +201,7 @@ impl PumpkinBlock for DoorBlock {
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !can_open_door(args.block) {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
 
         toggle_door(args.player, args.world, args.position).await;

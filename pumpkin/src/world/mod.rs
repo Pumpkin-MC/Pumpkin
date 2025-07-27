@@ -183,7 +183,7 @@ impl World {
     #[must_use]
     pub fn load(
         level: Level,
-        level_info: LevelData,
+        level_info: Arc<RwLock<LevelData>>,
         dimension_type: VanillaDimensionType,
         block_registry: Arc<BlockRegistry>,
     ) -> Self {
@@ -203,7 +203,7 @@ impl World {
 
         Self {
             level: Arc::new(level),
-            level_info: Arc::new(RwLock::new(level_info)),
+            level_info,
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::new()),
@@ -972,9 +972,9 @@ impl World {
             let pos_y = self.get_top_block(spawn_position).await + 1; // +1 to spawn on top of the block
 
             let position = Vector3::new(
-                f64::from(info.spawn_x),
+                f64::from(info.spawn_x) + 0.5,
                 f64::from(pos_y),
-                f64::from(info.spawn_z),
+                f64::from(info.spawn_z) + 0.5,
             );
             let yaw = info.spawn_angle;
             let pitch = 0.0;
@@ -1336,7 +1336,11 @@ impl World {
                 .await;
 
             (
-                Vector3::new(info.spawn_x.into(), (top + 1).into(), info.spawn_z.into()),
+                Vector3::new(
+                    f64::from(info.spawn_x) + 0.5,
+                    (top + 1).into(),
+                    f64::from(info.spawn_z) + 0.5,
+                ),
                 info.spawn_angle,
             )
         };
