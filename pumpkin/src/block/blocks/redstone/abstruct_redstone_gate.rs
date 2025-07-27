@@ -11,7 +11,7 @@ use pumpkin_data::{
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     BlockStateId,
-    chunk::TickPriority,
+    tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };
 
@@ -205,7 +205,7 @@ pub trait RedstoneGateBlock<T: Send + BlockProperties + RedstoneGateBlockPropert
         }
     }
 
-    fn get_update_delay_internal(&self, state_id: BlockStateId, block: &Block) -> u16;
+    fn get_update_delay_internal(&self, state_id: BlockStateId, block: &Block) -> u8;
 }
 
 pub async fn get_power<T: BlockProperties + RedstoneGateBlockProperties + Send>(
