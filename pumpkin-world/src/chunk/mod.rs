@@ -1,8 +1,8 @@
 use crate::block::entities::BlockEntity;
 use palette::{BiomePalette, BlockPalette};
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::{blocks_movement, get_block_and_state_by_state_id};
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::tag::Tagable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
@@ -264,9 +264,21 @@ pub struct ChunkLight {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ChunkHeightmapType {
-    WorldSurface,
-    MotionBlocking,
-    MotionBlockingNoLeaves,
+    WorldSurface = 0,
+    MotionBlocking = 1,
+    MotionBlockingNoLeaves = 2,
+}
+impl TryFrom<usize> for ChunkHeightmapType {
+    type Error = &'static str;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ChunkHeightmapType::WorldSurface),
+            1 => Ok(ChunkHeightmapType::MotionBlocking),
+            2 => Ok(ChunkHeightmapType::MotionBlockingNoLeaves),
+            _ => Err("Invalid usize value for ChunkHeightmapType. The value should be 0~2."),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -287,12 +299,11 @@ impl ChunkHeightmaps {
             ChunkHeightmapType::MotionBlocking => &mut self.motion_blocking,
             ChunkHeightmapType::MotionBlockingNoLeaves => &mut self.motion_blocking_no_leaves,
         };
-        let min_y = min_y.abs();
 
         let local_x = (pos.0.x & 15) as usize;
         let local_z = (pos.0.z & 15) as usize;
 
-        let adjust_height = (pos.0.y + min_y) as usize; //Chunk Bottom
+        let adjust_height = (pos.0.y + min_y.abs()) as usize;
 
         assert!(adjust_height <= 2 << 9);
 
@@ -332,7 +343,6 @@ impl ChunkHeightmaps {
             ChunkHeightmapType::MotionBlocking => &self.motion_blocking,
             ChunkHeightmapType::MotionBlockingNoLeaves => &self.motion_blocking_no_leaves,
         };
-        let min_y = min_y.abs();
 
         let local_x = (x & 15) as usize;
         let local_z = (z & 15) as usize;
@@ -357,7 +367,7 @@ impl ChunkHeightmaps {
 
         (u64::from_ne_bytes(height_bit_bytes_i64)
             .wrapping_shr(64 - (packed_array_bit_start_idx + 9)) as i32)
-            - min_y
+            - min_y.abs()
     }
 
     pub fn log_heightmap(&self, _type: ChunkHeightmapType, min_y: i32) {
@@ -572,39 +582,39 @@ impl ChunkData {
         x: usize,
         z: usize,
     ) {
-        for y in (0..16).rev() {
-            let state_id = self.section.sections[start_sub_chunk]
-                .block_states
-                .get(x, y, z);
+        let start_height = (start_sub_chunk as i32) * 16 - self.section.min_y.abs() + 15;
+        let mut has_found = [false, false];
 
-            let y = y as i32;
-            if state_id != Block::AIR.default_state.id {
-                let height = (start_sub_chunk as i32) * 16 - self.section.min_y.abs() + y;
-                let pos = BlockPos::new(x as i32, height, z as i32);
+        for y in (self.section.min_y..=start_height).rev() {
+            let pos = BlockPos::new(x as i32, y, z as i32);
+            let state_id = self.section.get_block_absolute_y(x, y, z).unwrap();
+            let (block, block_state) = get_block_and_state_by_state_id(state_id);
+
+            if !block_state.is_air() && !has_found[ChunkHeightmapType::WorldSurface as usize] {
                 heightmaps.set(ChunkHeightmapType::WorldSurface, pos, self.section.min_y);
+                has_found[ChunkHeightmapType::WorldSurface as usize] = true;
+            }
 
-                let (_, block_state) = get_block_and_state_by_state_id(state_id);
-                if blocks_movement(block_state)
-                    || Fluid::from_state_id(state_id).is_some_and(|fluid| !fluid.states.is_empty())
-                {
-                    heightmaps.set(ChunkHeightmapType::MotionBlocking, pos, self.section.min_y);
+            if !has_found[ChunkHeightmapType::MotionBlocking as usize]
+                && (blocks_movement(block_state)
+                    || Fluid::from_registry_key(block.registry_key())
+                        .is_some_and(|fluid| !fluid.states.is_empty()))
+            {
+                heightmaps.set(ChunkHeightmapType::MotionBlocking, pos, self.section.min_y);
+                has_found[ChunkHeightmapType::MotionBlocking as usize] = true;
+            }
+            //TODO: MotionBlockingNoLeaves
 
-                    //TODO: MotionBlockingNoLeaves
-                }
+            if !has_found.contains(&false) {
                 return;
             }
         }
 
-        if start_sub_chunk != 0 {
-            self.populate_heightmaps(heightmaps, start_sub_chunk - 1, x, z);
-        }
-
-        if start_sub_chunk == 0 {
-            heightmaps.set(
-                ChunkHeightmapType::WorldSurface,
-                BlockPos::new(x as i32, self.section.min_y, z as i32),
-                self.section.min_y,
-            );
+        let pos = BlockPos::new(x as i32, self.section.min_y, z as i32);
+        for (idx, is_set) in has_found.iter().enumerate() {
+            if !(*is_set) {
+                heightmaps.set(idx.try_into().unwrap(), pos, self.section.min_y);
+            }
         }
     }
 
