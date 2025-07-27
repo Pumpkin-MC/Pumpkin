@@ -440,12 +440,6 @@ impl BlockRegistry {
         }
     }
 
-    #[must_use]
-    pub fn has_block_entity(&self, block: &Block) -> bool {
-        self.get_pumpkin_block(block)
-            .is_some_and(|block| block.has_block_entity())
-    }
-
     /// Updates state of all neighbors of the block
     pub async fn post_process_state(
         &self,

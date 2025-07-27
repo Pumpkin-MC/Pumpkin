@@ -68,8 +68,4 @@ impl PumpkinBlock for BarrelBlock {
             .add_block_entity(Arc::new(barrel_block_entity))
             .await;
     }
-
-    fn has_block_entity(&self) -> bool {
-        true
-    }
 }

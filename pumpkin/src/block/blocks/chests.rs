@@ -88,10 +88,6 @@ impl PumpkinBlock for ChestBlock {
         }
     }
 
-    fn has_block_entity(&self) -> bool {
-        true
-    }
-
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
         BlockActionResult::Consume
     }

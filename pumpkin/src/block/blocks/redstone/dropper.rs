@@ -106,10 +106,6 @@ impl PumpkinBlock for DropperBlock {
             .await;
     }
 
-    fn has_block_entity(&self) -> bool {
-        true
-    }
-
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         let powered = block_receives_redstone_power(args.world, args.position).await
             || block_receives_redstone_power(args.world, &args.position.up()).await;

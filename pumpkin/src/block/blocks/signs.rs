@@ -39,8 +39,4 @@ impl PumpkinBlock for SignBlock {
             crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
         }
     }
-
-    fn has_block_entity(&self) -> bool {
-        true
-    }
 }

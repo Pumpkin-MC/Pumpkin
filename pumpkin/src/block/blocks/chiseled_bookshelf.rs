@@ -117,10 +117,6 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
         args.world.add_block_entity(Arc::new(block_entity)).await;
     }
 
-    fn has_block_entity(&self) -> bool {
-        true
-    }
-
     async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(block_entity) = block_entity

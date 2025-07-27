@@ -96,10 +96,6 @@ impl PumpkinBlock for HopperBlock {
         )
         .await;
     }
-
-    fn has_block_entity(&self) -> bool {
-        true
-    }
 }
 
 async fn check_powered_state(

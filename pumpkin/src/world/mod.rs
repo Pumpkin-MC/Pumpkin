@@ -1887,12 +1887,9 @@ impl World {
         let is_new_block = old_block != new_block;
 
         // WorldChunk.java line 305-314
-        if is_new_block && self.block_registry.has_block_entity(old_block) {
-            if let Some(entity) = self.get_block_entity(position).await {
-                let world: Arc<dyn SimpleWorld> = self.clone();
-                entity.on_block_replaced(world, *position).await;
-            }
-
+        if is_new_block && let Some(entity) = self.get_block_entity(position).await {
+            let world: Arc<dyn SimpleWorld> = self.clone();
+            entity.on_block_replaced(world, *position).await;
             self.remove_block_entity(position).await;
         }
 

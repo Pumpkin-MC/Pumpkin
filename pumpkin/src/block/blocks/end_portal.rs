@@ -34,8 +34,4 @@ impl PumpkinBlock for EndPortalBlock {
             .add_block_entity(Arc::new(EndPortalBlockEntity::new(*args.position)))
             .await;
     }
-
-    fn has_block_entity(&self) -> bool {
-        true
-    }
 }
