@@ -361,7 +361,7 @@ impl ChunkHeightmaps {
     }
 
     pub fn log_heightmap(&self, _type: ChunkHeightmapType, min_y: i32) {
-        let mut header = "X/Z".to_string();
+        let mut header = "Z/X".to_string();
         for x in 0..16 {
             header.push_str(&format!("{x:4}"));
         }
