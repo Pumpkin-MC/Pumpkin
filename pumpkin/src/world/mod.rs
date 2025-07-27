@@ -104,11 +104,11 @@ use pumpkin_world::{
     chunk::io::Dirtiable, item::ItemStack, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
-use pumpkin_world::{chunk::TickPriority, level::Level};
 use pumpkin_world::{
     entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION},
     world::GetBlockError,
 };
+use pumpkin_world::{level::Level, tick::TickPriority};
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::{Rng, rng};
 use scoreboard::Scoreboard;
@@ -640,22 +640,22 @@ impl World {
     pub async fn tick_chunks(self: &Arc<Self>) {
         let tick_data = self.level.get_tick_data().await;
         for scheduled_tick in tick_data.block_ticks {
-            let block = self.get_block(&scheduled_tick.block_pos).await;
+            let block = self.get_block(&scheduled_tick.position).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
                     .on_scheduled_tick(OnScheduledTickArgs {
                         world: self,
                         block,
-                        position: &scheduled_tick.block_pos,
+                        position: &scheduled_tick.position,
                     })
                     .await;
             }
         }
         for scheduled_tick in tick_data.fluid_ticks {
-            let fluid = self.get_fluid(&scheduled_tick.block_pos).await;
+            let fluid = self.get_fluid(&scheduled_tick.position).await;
             if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid) {
                 pumpkin_fluid
-                    .on_scheduled_tick(self, fluid, &scheduled_tick.block_pos)
+                    .on_scheduled_tick(self, fluid, &scheduled_tick.position)
                     .await;
             }
         }
@@ -1736,7 +1736,7 @@ impl World {
             .color_named(NamedColor::Yellow);
             let event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
-            let event = PLUGIN_MANAGER.read().await.fire(event).await;
+            let event = PLUGIN_MANAGER.fire(event).await;
 
             if !event.cancelled {
                 let current_players = current_players.clone();
@@ -1789,7 +1789,7 @@ impl World {
             .color_named(NamedColor::Yellow);
             let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
-            let event = PLUGIN_MANAGER.read().await.fire(event).await;
+            let event = PLUGIN_MANAGER.fire(event).await;
 
             if !event.cancelled {
                 let players = self.players.read().await;
@@ -1898,9 +1898,6 @@ impl World {
                 .await;
         }
 
-        let block_state = self.get_block_state(position).await;
-        let new_fluid = self.get_fluid(position).await;
-
         // WorldChunk.java line 318
         if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && new_block != old_block {
             self.block_registry
@@ -1913,6 +1910,7 @@ impl World {
                     block_moved,
                 )
                 .await;
+            let new_fluid = self.get_fluid(position).await;
             self.block_registry
                 .on_placed_fluid(
                     self,
@@ -1926,7 +1924,7 @@ impl World {
         }
 
         // Ig they do this cause it could be modified in chunkPos.setBlockState?
-        if block_state.id == block_state_id {
+        if self.get_block_state_id(position).await == block_state_id {
             if flags.contains(BlockFlags::NOTIFY_LISTENERS) {
                 // Mob AI update
             }
@@ -1976,33 +1974,32 @@ impl World {
         &self,
         block: &Block,
         block_pos: BlockPos,
-        delay: u16,
+        delay: u8,
         priority: TickPriority,
     ) {
-        let chunk = self
-            .level
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+        self.level
+            .schedule_block_tick(block, block_pos, delay, priority)
             .await;
-        let mut chunk = chunk.write().await;
-        chunk.schedule_block_tick(block.id, block_pos, delay, priority);
     }
 
-    pub async fn schedule_fluid_tick(&self, block_id: u16, block_pos: BlockPos, delay: u16) {
-        let chunk = self
-            .level
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+    pub async fn schedule_fluid_tick(
+        &self,
+        fluid: &Fluid,
+        block_pos: BlockPos,
+        delay: u8,
+        priority: TickPriority,
+    ) {
+        self.level
+            .schedule_fluid_tick(fluid, block_pos, delay, priority)
             .await;
-        let mut chunk = chunk.write().await;
-        chunk.schedule_fluid_tick(block_id, &block_pos, delay);
     }
 
     pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block: &Block) -> bool {
-        let chunk = self
-            .level
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
-        let chunk = chunk.read().await;
-        chunk.is_block_tick_scheduled(block_pos, block.id)
+        self.level.is_block_tick_scheduled(block_pos, block).await
+    }
+
+    pub async fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
+        self.level.is_fluid_tick_scheduled(block_pos, fluid).await
     }
 
     pub async fn break_block(
@@ -2014,11 +2011,7 @@ impl World {
         let (broken_block, broken_block_state) = self.get_block_and_state_id(position).await;
         let event = BlockBreakEvent::new(cause.clone(), broken_block, *position, 0, false);
 
-        let event = PLUGIN_MANAGER
-            .read()
-            .await
-            .fire::<BlockBreakEvent>(event)
-            .await;
+        let event = PLUGIN_MANAGER.fire::<BlockBreakEvent>(event).await;
 
         if !event.cancelled {
             let new_state_id = if broken_block
@@ -2129,6 +2122,39 @@ impl World {
             .unwrap_or(&Fluid::EMPTY)
     }
 
+    pub async fn get_block_and_fluid(
+        &self,
+        position: &BlockPos,
+    ) -> (
+        &'static pumpkin_data::Block,
+        &'static pumpkin_data::fluid::Fluid,
+    ) {
+        let id = self.get_block_state_id(position).await;
+        let block = Block::from_state_id(id);
+
+        let fluid = Fluid::from_state_id(id)
+            .ok_or(&Fluid::EMPTY)
+            .unwrap_or_else(|_| {
+                block
+                    .properties(id)
+                    .and_then(|props| {
+                        props
+                            .to_props()
+                            .into_iter()
+                            .find(|p| p.0 == "waterlogged")
+                            .map(|(_, value)| {
+                                if value == true.to_string() {
+                                    &Fluid::FLOWING_WATER
+                                } else {
+                                    &Fluid::EMPTY
+                                }
+                            })
+                    })
+                    .unwrap_or(&Fluid::EMPTY)
+            });
+        (block, fluid)
+    }
+
     pub async fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
         self.level.get_block_state(position).await.0
     }
@@ -2167,8 +2193,7 @@ impl World {
             }
 
             let neighbor_pos = block_pos.offset(direction.to_offset());
-            let neighbor_block = self.get_block(&neighbor_pos).await;
-            let neighbor_fluid = self.get_fluid(&neighbor_pos).await;
+            let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos).await;
 
             if let Some(neighbor_pumpkin_block) =
                 self.block_registry.get_pumpkin_block(neighbor_block)
@@ -2221,7 +2246,7 @@ impl World {
         direction: BlockDirection,
         flags: BlockFlags,
     ) {
-        let (block, block_state) = self.get_block_and_state(block_pos).await;
+        let (block, block_state_id) = self.get_block_and_state_id(block_pos).await;
 
         if flags.contains(BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT)
             && *block == Block::REDSTONE_WIRE
@@ -2237,7 +2262,7 @@ impl World {
             .get_state_for_neighbor_update(
                 self,
                 block,
-                block_state.id,
+                block_state_id,
                 block_pos,
                 direction,
                 &neighbor_pos,
@@ -2245,7 +2270,7 @@ impl World {
             )
             .await;
 
-        if new_state_id != block_state.id {
+        if new_state_id != block_state_id {
             let flags = flags & !BlockFlags::SKIP_DROPS;
             if BlockState::from_id(new_state_id).is_air() {
                 self.break_block(block_pos, None, flags).await;

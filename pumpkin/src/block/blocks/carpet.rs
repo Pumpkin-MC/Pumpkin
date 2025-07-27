@@ -6,7 +6,7 @@ use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 #[pumpkin_block_from_tag("minecraft:wool_carpets")]
