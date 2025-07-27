@@ -1,4 +1,4 @@
-use super::{Goal, to_goal_ticks};
+use super::{Goal, GoalControl, to_goal_ticks};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
@@ -18,6 +18,7 @@ const CANNOT_TRACK: i32 = 2;
 
 #[allow(dead_code)]
 pub struct TrackTargetGoal {
+    goal_control: GoalControl,
     target: Mutex<Option<Arc<dyn EntityBase>>>,
     check_visibility: bool,
     check_can_navigate: bool,
@@ -32,6 +33,7 @@ impl TrackTargetGoal {
     #[must_use]
     pub fn new(check_visibility: bool, check_can_navigate: bool) -> Self {
         Self {
+            goal_control: GoalControl::default(),
             target: Mutex::new(None),
             check_visibility,
             check_can_navigate,
@@ -143,4 +145,8 @@ impl Goal for TrackTargetGoal {
     }
 
     async fn tick(&self, _mob: &dyn Mob) {}
+
+    fn get_goal_control(&self) -> &GoalControl {
+        &self.goal_control
+    }
 }

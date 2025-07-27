@@ -1,4 +1,4 @@
-use super::{Goal, to_goal_ticks};
+use super::{Goal, GoalControl, to_goal_ticks};
 use crate::entity::ai::goal::move_to_target_pos_goal::{MoveToTargetPos, MoveToTargetPosGoal};
 use crate::entity::mob::Mob;
 use crate::world::World;
@@ -185,6 +185,10 @@ impl Goal for StepAndDestroyBlockGoal {
 
     fn should_run_every_tick(&self) -> bool {
         self.move_to_target_pos_goal.should_run_every_tick()
+    }
+
+    fn get_goal_control(&self) -> &GoalControl {
+        self.move_to_target_pos_goal.get_goal_control()
     }
 }
 

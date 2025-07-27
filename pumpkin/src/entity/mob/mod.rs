@@ -1,9 +1,6 @@
-use super::{
-    Entity, EntityBase,
-    ai::{goal::Goal, path::Navigator},
-    living::LivingEntity,
-};
+use super::{Entity, EntityBase, ai::path::Navigator, living::LivingEntity};
 use crate::entity::ai::control::look_control::LookControl;
+use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
@@ -18,7 +15,8 @@ pub mod zombie;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
-    pub goals: Mutex<Vec<(Arc<dyn Goal>, bool)>>,
+    pub goals_selector: GoalSelector, // Mutex isn't needed because all fields of GoalSelector are thread safe
+    pub target_selector: GoalSelector,
     pub navigator: Mutex<Navigator>,
     pub target: Mutex<Option<Arc<dyn EntityBase>>>,
     pub look_control: Mutex<LookControl>,
@@ -31,7 +29,8 @@ impl MobEntity {
     pub fn new(entity: Entity) -> Self {
         Self {
             living_entity: LivingEntity::new(entity),
-            goals: Mutex::new(vec![]),
+            goals_selector: GoalSelector::new(),
+            target_selector: GoalSelector::new(),
             navigator: Mutex::new(Navigator::default()),
             target: Mutex::new(None),
             look_control: Mutex::new(LookControl::default()),
@@ -87,21 +86,9 @@ where
     async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
         let mob_entity = self.get_mob_entity();
         mob_entity.living_entity.tick(caller, server).await;
-        let mut goals = mob_entity.goals.lock().await;
-        for (goal, running) in goals.iter_mut() {
-            if *running {
-                if goal.should_continue(self).await {
-                    goal.tick(self).await;
-                } else {
-                    *running = false;
-                }
-            } else {
-                *running = goal.can_start(self).await;
-                if *running {
-                    goal.start(self).await;
-                }
-            }
-        }
+        mob_entity.target_selector.tick(self).await;
+        mob_entity.goals_selector.tick(self).await;
+
         let mut navigator = mob_entity.navigator.lock().await;
         navigator.tick(&mob_entity.living_entity).await;
         drop(navigator);

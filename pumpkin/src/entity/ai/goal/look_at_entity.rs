@@ -1,4 +1,4 @@
-use super::Goal;
+use super::{Control, Goal, GoalControl};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 
 #[allow(dead_code)]
 pub struct LookAtEntityGoal {
+    goal_control: GoalControl,
     target: Mutex<Option<Arc<dyn EntityBase>>>,
     range: f64,
     look_time: AtomicI32,
@@ -33,6 +34,7 @@ impl LookAtEntityGoal {
     ) -> Self {
         let target_predicate = Self::create_target_predicate(mob_weak, target_type, range);
         Self {
+            goal_control: GoalControl::from_array(&[Control::Look]),
             target: Mutex::new(None),
             range,
             look_time: AtomicI32::new(0),
@@ -142,5 +144,9 @@ impl Goal for LookAtEntityGoal {
                 self.look_time.fetch_sub(1, Relaxed);
             }
         }
+    }
+
+    fn get_goal_control(&self) -> &GoalControl {
+        &self.goal_control
     }
 }

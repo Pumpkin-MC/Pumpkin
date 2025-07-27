@@ -1,6 +1,5 @@
-use std::sync::Arc;
-
-use super::{Goal, to_goal_ticks};
+use super::{Goal, GoalControl, to_goal_ticks};
+use crate::entity::ai::goal::Control;
 use crate::entity::ai::goal::track_target_goal::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
@@ -10,6 +9,7 @@ use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use rand::Rng;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
@@ -24,7 +24,7 @@ pub struct ActiveTargetGoal {
 }
 
 impl ActiveTargetGoal {
-    pub fn new<F, Fut>(
+    pub async fn new<F, Fut>(
         mob: &MobEntity,
         target_type: EntityType,
         reciprocal_chance: i32,
@@ -37,6 +37,7 @@ impl ActiveTargetGoal {
         Fut: Future<Output = bool> + Send + 'static,
     {
         let track_target_goal = TrackTargetGoal::new(check_visibility, check_can_navigate);
+        track_target_goal.set_controls(&[Control::Target]).await;
         let mut target_predicate = TargetPredicate::attackable();
         target_predicate.base_max_distance = TrackTargetGoal::get_follow_range(mob);
         if let Some(predicate) = predicate {
@@ -52,8 +53,13 @@ impl ActiveTargetGoal {
     }
 
     #[must_use]
-    pub fn with_default(mob: &MobEntity, target_type: EntityType) -> Self {
-        let track_target_goal = TrackTargetGoal::with_default(true);
+    pub async fn with_default(
+        mob: &MobEntity,
+        target_type: EntityType,
+        check_visibility: bool,
+    ) -> Self {
+        let track_target_goal = TrackTargetGoal::with_default(check_visibility);
+        track_target_goal.set_controls(&[Control::Target]).await;
         let mut target_predicate = TargetPredicate::attackable();
         target_predicate.base_max_distance = TrackTargetGoal::get_follow_range(mob);
         Self {
@@ -117,4 +123,8 @@ impl Goal for ActiveTargetGoal {
     }
 
     async fn tick(&self, _mob: &dyn Mob) {}
+
+    fn get_goal_control(&self) -> &GoalControl {
+        self.track_target_goal.get_goal_control()
+    }
 }

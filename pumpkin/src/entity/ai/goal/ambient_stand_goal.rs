@@ -1,4 +1,4 @@
-use super::Goal;
+use super::{Goal, GoalControl};
 use crate::entity::mob::Mob;
 use async_trait::async_trait;
 use rand::Rng;
@@ -7,12 +7,14 @@ use std::sync::atomic::Ordering::Relaxed;
 
 #[allow(dead_code)]
 pub struct AmbientStandGoal {
+    goal_control: GoalControl,
     cooldown: AtomicI32,
 }
 
 impl Default for AmbientStandGoal {
     fn default() -> Self {
         let entity = Self {
+            goal_control: GoalControl::default(),
             cooldown: AtomicI32::new(0),
         };
         entity.reset_cooldown();
@@ -48,4 +50,8 @@ impl Goal for AmbientStandGoal {
     async fn stop(&self, _mob: &dyn Mob) {}
 
     async fn tick(&self, _mob: &dyn Mob) {}
+
+    fn get_goal_control(&self) -> &GoalControl {
+        &self.goal_control
+    }
 }

@@ -1,4 +1,4 @@
-use super::{Goal, to_goal_ticks};
+use super::{Control, Goal, GoalControl, to_goal_ticks};
 use crate::entity::mob::Mob;
 use crate::world::World;
 use async_trait::async_trait;
@@ -16,6 +16,7 @@ const MIN_INTERVAL: i32 = 200;
 
 #[allow(dead_code)]
 pub struct MoveToTargetPosGoal {
+    goal_control: GoalControl,
     move_to_target_pos: Weak<dyn MoveToTargetPos>,
     pub speed: f64,
     pub cooldown: AtomicI32,
@@ -37,6 +38,7 @@ impl MoveToTargetPosGoal {
         max_y_difference: i32,
     ) -> Self {
         Self {
+            goal_control: GoalControl::from_array(&[Control::Move, Control::Jump]),
             move_to_target_pos,
             speed,
             cooldown: AtomicI32::new(0),
@@ -189,5 +191,9 @@ impl Goal for MoveToTargetPosGoal {
 
     fn should_run_every_tick(&self) -> bool {
         true
+    }
+
+    fn get_goal_control(&self) -> &GoalControl {
+        &self.goal_control
     }
 }

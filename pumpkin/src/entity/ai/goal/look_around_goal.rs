@@ -1,4 +1,4 @@
-use super::Goal;
+use super::{Control, Goal, GoalControl};
 use crate::entity::mob::Mob;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -8,6 +8,7 @@ use std::sync::atomic::Ordering::Relaxed;
 
 #[allow(dead_code)]
 pub struct LookAroundGoal {
+    goal_control: GoalControl,
     delta_x: AtomicCell<f64>,
     delta_z: AtomicCell<f64>,
     look_time: AtomicI32,
@@ -16,6 +17,7 @@ pub struct LookAroundGoal {
 impl Default for LookAroundGoal {
     fn default() -> Self {
         Self {
+            goal_control: GoalControl::from_array(&[Control::Move, Control::Look]),
             delta_x: AtomicCell::new(0.0),
             delta_z: AtomicCell::new(0.0),
             look_time: AtomicI32::new(0),
@@ -54,5 +56,9 @@ impl Goal for LookAroundGoal {
             mob_entity.living_entity.entity.get_eye_y(),
             pos.z + self.delta_z.load(),
         );
+    }
+
+    fn get_goal_control(&self) -> &GoalControl {
+        &self.goal_control
     }
 }
