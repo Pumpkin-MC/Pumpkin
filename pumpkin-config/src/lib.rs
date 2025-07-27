@@ -251,12 +251,14 @@ trait LoadConfiguration {
     {
         let default_config = Self::default();
 
-        let default_toml_value = toml::Value::try_from(default_config).expect("Failed to parse default config");
+        let default_toml_value =
+            toml::Value::try_from(default_config).expect("Failed to parse default config");
 
         let (merged_value, changed) =
             Self::merge_toml_values(default_toml_value, parsed_toml.clone());
 
-        let config = merged_value.try_into()
+        let config = merged_value
+            .try_into()
             .expect("Failed to convert merged config");
 
         (config, changed)
