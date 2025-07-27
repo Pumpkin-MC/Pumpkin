@@ -28,10 +28,7 @@ impl BlockMetadata for TallPlantBlock {
 #[async_trait]
 impl PumpkinBlock for TallPlantBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let (block, state) = args
-            .block_accessor
-            .get_block_and_block_state(args.position)
-            .await;
+        let (block, state) = args.block_accessor.get_block_and_state(args.position).await;
         if let Some(props) = block.properties(state.id).map(|s| s.to_props()) {
             if props
                 .iter()
@@ -39,7 +36,7 @@ impl PumpkinBlock for TallPlantBlock {
             {
                 let (block, below_state) = args
                     .block_accessor
-                    .get_block_and_block_state(&args.position.down())
+                    .get_block_and_state(&args.position.down())
                     .await;
                 if let Some(props) = block.properties(below_state.id).map(|s| s.to_props()) {
                     let is_lower = props

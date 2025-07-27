@@ -1,22 +1,12 @@
+use std::io::{Error, Write};
+
 use pumpkin_macros::packet;
-use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize)]
-#[packet(0x02)]
-pub struct CPlayStatus {
-    status: i32,
-}
+use crate::serial::PacketWrite;
 
-impl CPlayStatus {
-    pub fn new(status: PlayStatus) -> Self {
-        Self {
-            status: status as i32,
-        }
-    }
-}
-
-#[repr(i32)]
-pub enum PlayStatus {
+#[derive(Clone, Copy)]
+#[packet(2)]
+pub enum CPlayStatus {
     LoginSuccess = 0,
     OutdatedClient = 1,
     OutdatedServer = 2,
@@ -27,4 +17,10 @@ pub enum PlayStatus {
     ServerFullSubClient = 7,
     EditorMismatchEditorToVanilla = 8,
     EditorMismatchVanillaToEditor = 9,
+}
+
+impl PacketWrite for CPlayStatus {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        (*self as i32).write_be(writer)
+    }
 }

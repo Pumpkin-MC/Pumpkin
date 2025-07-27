@@ -52,18 +52,13 @@ impl CropBlockBase for BeetrootBlock {
         3
     }
 
-    fn get_age(&self, state: &pumpkin_data::BlockState, block: &Block) -> i32 {
-        let props = BeetrootProperties::from_state_id(state.id, block);
+    fn get_age(&self, state: u16, block: &Block) -> i32 {
+        let props = BeetrootProperties::from_state_id(state, block);
         i32::from(props.age.to_index())
     }
 
-    fn state_with_age(
-        &self,
-        block: &Block,
-        state: &pumpkin_data::BlockState,
-        age: i32,
-    ) -> BlockStateId {
-        let mut props = BeetrootProperties::from_state_id(state.id, block);
+    fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
+        let mut props = BeetrootProperties::from_state_id(state, block);
         props.age = Integer0To3::from_index(age as u16);
         props.to_state_id(block)
     }

@@ -1,9 +1,9 @@
+use std::net::SocketAddr;
+
 use pumpkin_macros::packet;
-use serde::{Deserialize, Serialize};
 
-use crate::codec::socket_address::SocketAddress;
-
-#[derive(Serialize, Deserialize)]
+use crate::serial::PacketWrite;
+#[derive(PacketWrite)]
 #[packet(0x03)]
 pub struct CConnectedPong {
     ping_time: u64,
@@ -19,21 +19,21 @@ impl CConnectedPong {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(PacketWrite)]
 #[packet(0x10)]
 pub struct CConnectionRequestAccepted {
-    client_address: SocketAddress,
+    client_address: SocketAddr,
     system_index: u16,
-    system_addresses: [SocketAddress; 10],
+    system_addresses: [SocketAddr; 10],
     requested_timestamp: u64,
     timestamp: u64,
 }
 
 impl CConnectionRequestAccepted {
     pub fn new(
-        client_address: SocketAddress,
+        client_address: SocketAddr,
         system_index: u16,
-        system_addresses: [SocketAddress; 10],
+        system_addresses: [SocketAddr; 10],
         requested_timestamp: u64,
         timestamp: u64,
     ) -> Self {

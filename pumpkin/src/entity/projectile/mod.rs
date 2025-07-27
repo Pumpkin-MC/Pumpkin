@@ -1,4 +1,7 @@
-use std::f32::{self};
+use std::{
+    f32::{self},
+    sync::atomic::Ordering,
+};
 
 use super::{Entity, EntityBase, living::LivingEntity};
 use async_trait::async_trait;
@@ -44,7 +47,7 @@ impl ThrownItemEntity {
             .velocity
             .store(self.entity.velocity.load().add_raw(
                 shooter_vel.x,
-                if shooter.on_ground.load(std::sync::atomic::Ordering::Relaxed) {
+                if shooter.on_ground.load(Ordering::Relaxed) {
                     0.0
                 } else {
                     shooter_vel.y

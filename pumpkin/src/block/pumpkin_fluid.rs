@@ -32,7 +32,7 @@ pub trait PumpkinFluid: Send + Sync {
         _server: &Server,
         _world: &Arc<World>,
     ) -> BlockActionResult {
-        BlockActionResult::Continue
+        BlockActionResult::Pass
     }
 
     async fn placed(

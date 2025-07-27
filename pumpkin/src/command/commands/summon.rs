@@ -44,9 +44,9 @@ impl CommandExecutor for Executor {
                     let info = &world.level_info.read().await;
                     // default position for spawning a player, in this case for mob
                     pos.unwrap_or(Vector3::new(
-                        f64::from(info.spawn_x),
+                        f64::from(info.spawn_x) + 0.5,
                         f64::from(info.spawn_y) + 1.0,
-                        f64::from(info.spawn_z),
+                        f64::from(info.spawn_z) + 0.5,
                     ))
                 };
 

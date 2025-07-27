@@ -6,31 +6,23 @@ use pumpkin_data::{
     item::Item,
     tag::{RegistryKey, get_tag_values},
 };
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::{
         BlockIsReplacing,
         pumpkin_block::{
-            BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs, NormalUseArgs, OnPlaceArgs,
-            PumpkinBlock, UseWithItemArgs,
+            CanPlaceAtArgs, CanUpdateAtArgs, NormalUseArgs, OnPlaceArgs, PumpkinBlock,
+            UseWithItemArgs,
         },
         registry::BlockActionResult,
     },
     entity::EntityBase,
 };
 
+#[pumpkin_block_from_tag("minecraft:candles")]
 pub struct CandleBlock;
-
-impl BlockMetadata for CandleBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:candles").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for CandleBlock {
@@ -78,7 +70,7 @@ impl PumpkinBlock for CandleBlock {
                 if properties.lit {
                     properties.lit = false;
                 } else {
-                    return BlockActionResult::Continue;
+                    return BlockActionResult::Pass;
                 }
 
                 args.world
@@ -115,7 +107,7 @@ impl PumpkinBlock for CandleBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let (support_block, state) = args
             .block_accessor
-            .get_block_and_block_state(&args.position.down())
+            .get_block_and_state(&args.position.down())
             .await;
         !support_block.is_waterlogged(state.id) && state.is_center_solid(BlockDirection::Up)
     }

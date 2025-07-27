@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     ffi::{CString, NulError},
     net::SocketAddr,
-    sync::Arc,
+    sync::{Arc, atomic::Ordering},
     time::Duration,
 };
 
@@ -39,13 +39,14 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     });
 
     log::info!(
-        "Server query running on {}",
+        "Server query running on port {}",
         socket
             .local_addr()
             .expect("Unable to find running address!")
+            .port()
     );
 
-    while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+    while !SHOULD_STOP.load(Ordering::Relaxed) {
         let socket = socket.clone();
         let valid_challenge_tokens = valid_challenge_tokens.clone();
         let server = server.clone();
