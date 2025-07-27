@@ -1,24 +1,16 @@
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::BlockStateId;
 
 use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::pumpkin_block::PumpkinBlock;
 
 type LogProperties = pumpkin_data::block_properties::PaleOakWoodLikeProperties;
 
+#[pumpkin_block_from_tag("minecraft:logs")]
 pub struct LogBlock;
-impl BlockMetadata for LogBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:logs").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for LogBlock {

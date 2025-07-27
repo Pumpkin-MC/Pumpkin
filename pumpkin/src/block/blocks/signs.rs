@@ -4,28 +4,20 @@ use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 
 use crate::block::pumpkin_block::OnPlaceArgs;
 use crate::block::pumpkin_block::OnStateReplacedArgs;
 use crate::block::pumpkin_block::PlacedArgs;
 use crate::block::pumpkin_block::PlayerPlacedArgs;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::pumpkin_block::PumpkinBlock;
 use crate::entity::EntityBase;
 
 type SignProperties = pumpkin_data::block_properties::OakSignLikeProperties;
 
+#[pumpkin_block_from_tag("minecraft:signs")]
 pub struct SignBlock;
-
-impl BlockMetadata for SignBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:signs").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for SignBlock {

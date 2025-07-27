@@ -3,9 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, HorizontalFacingExt,
-    block_properties::{
-        BlockProperties, EnumVariants, HorizontalFacing, Integer1To4, get_state_by_state_id,
-    },
+    block_properties::{BlockProperties, EnumVariants, HorizontalFacing, Integer1To4},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -146,7 +144,7 @@ impl PumpkinBlock for RepeaterBlock {
             self,
             args.world,
             *args.position,
-            get_state_by_state_id(args.state_id).id,
+            BlockState::from_id(args.state_id).id,
             args.block,
         )
         .await;
@@ -161,7 +159,7 @@ impl PumpkinBlock for RepeaterBlock {
                 self,
                 args.world,
                 *args.neighbor_position,
-                get_state_by_state_id(args.neighbor_state_id),
+                BlockState::from_id(args.neighbor_state_id),
             )
             .await
         {

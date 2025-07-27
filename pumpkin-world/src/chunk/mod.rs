@@ -187,11 +187,7 @@ impl ChunkData {
     }
 
     pub fn schedule_fluid_tick(&mut self, block_id: u16, block_pos: &BlockPos, delay: u16) {
-        if self
-            .fluid_ticks
-            .iter()
-            .any(|tick| tick.block_pos == *block_pos && tick.target_block_id == block_id)
-        {
+        if self.is_fluid_tick_scheduled(block_pos) {
             // If a fluid tick is already scheduled for this block, we don't need to schedule it again
             return;
         }
