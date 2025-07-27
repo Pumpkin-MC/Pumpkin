@@ -1,6 +1,8 @@
 use async_trait::async_trait;
+use pumpkin_data::block_properties::{
+    BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
+};
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_data::block_properties::{BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties};
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
