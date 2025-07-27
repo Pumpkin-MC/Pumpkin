@@ -1889,12 +1889,13 @@ impl World {
 
         // WorldChunk.java line 305-314
         if is_new_block
-            && old_block.default_state.block_entity_type > 0
+            && old_block.default_state.block_entity_type != u16::MAX
             && let Some(entity) = self.get_block_entity(position).await
         {
             let world: Arc<dyn SimpleWorld> = self.clone();
             entity.on_block_replaced(world, *position).await;
             self.remove_block_entity(position).await;
+            info!("Removed blockentity at {position}");
         }
 
         // WorldChunk.java line 317
