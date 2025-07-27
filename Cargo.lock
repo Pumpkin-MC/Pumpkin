@@ -2014,7 +2014,6 @@ dependencies = [
  "flate2",
  "futures",
  "hmac",
- "lazy_static",
  "libloading",
  "log",
  "num-bigint",
