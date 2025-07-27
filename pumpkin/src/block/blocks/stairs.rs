@@ -7,28 +7,20 @@ use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::{BlockDirection, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::pumpkin_block::OnNeighborUpdateArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::pumpkin_block::PumpkinBlock;
 use crate::world::World;
 
 type StairsProperties = pumpkin_data::block_properties::OakStairsLikeProperties;
 
+#[pumpkin_block_from_tag("minecraft:stairs")]
 pub struct StairBlock;
-
-impl BlockMetadata for StairBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:stairs").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for StairBlock {

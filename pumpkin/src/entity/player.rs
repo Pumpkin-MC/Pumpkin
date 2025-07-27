@@ -1042,7 +1042,7 @@ impl Player {
             pos
         } else {
             Vector3::new(
-                f64::from(info.spawn_x),
+                f64::from(info.spawn_x) + 0.5,
                 f64::from(
                     new_world
                         .get_top_block(Vector2::new(
@@ -1052,7 +1052,7 @@ impl Player {
                         .await
                         + 1,
                 ),
-                f64::from(info.spawn_z),
+                f64::from(info.spawn_z) + 0.5,
             )
         };
         let yaw = yaw.unwrap_or(info.spawn_angle);
