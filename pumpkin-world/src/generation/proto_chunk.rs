@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::tag;
 use pumpkin_data::{
-    Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Tagable,
+    Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Taggable,
 };
 use pumpkin_util::{
     HeightMap,
@@ -376,7 +377,7 @@ impl<'a> ProtoChunk<'a> {
         if blocks_movement(block_state) || block_state.is_liquid() {
             self.maybe_update_motion_blocking_height_map(pos);
             let block = Block::from_state_id(block_state.id);
-            if !block.is_tagged_with("minecraft:leaves").unwrap() {
+            if !block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LEAVES) {
                 {
                     self.maybe_update_motion_blocking_no_leaves_height_map(pos);
                 }

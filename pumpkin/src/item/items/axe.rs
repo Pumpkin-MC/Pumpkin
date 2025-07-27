@@ -2,12 +2,12 @@ use crate::entity::player::Player;
 use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::{OakDoorLikeProperties, PaleOakWoodLikeProperties};
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
@@ -15,15 +15,7 @@ pub struct AxeItem;
 
 impl ItemMetadata for AxeItem {
     fn ids() -> Box<[u16]> {
-        Item::get_tag_values("#minecraft:axes")
-            .unwrap()
-            .iter()
-            .map(|key| {
-                Item::from_registry_key(key)
-                    .expect("We just got this key from the registry")
-                    .id
-            })
-            .collect()
+        tag::Item::MINECRAFT_AXES.1.to_vec().into_boxed_slice()
     }
 }
 
@@ -46,8 +38,8 @@ impl PumpkinItem for AxeItem {
 
         // If there is a strip equivalent.
         if replacement_block != 0 {
-            let new_block = Block::from_id(replacement_block);
-            let new_state_id = if block.is_tagged_with("#minecraft:logs") == Some(true) {
+            let new_block = &Block::from_id(replacement_block);
+            let new_state_id = if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LOGS) {
                 let log_information = world.get_block_state_id(&location).await;
                 let log_props = PaleOakWoodLikeProperties::from_state_id(log_information, block);
                 // create new properties for the new log.
@@ -61,7 +53,7 @@ impl PumpkinItem for AxeItem {
                 new_log_properties.to_state_id(new_block)
             }
             // Let's check if It's a door
-            else if block.is_tagged_with("#minecraft:doors") == Some(true) {
+            else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS) {
                 // get block state of the old log.
                 let door_information = world.get_block_state_id(&location).await;
                 // get the log properties

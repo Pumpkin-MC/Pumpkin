@@ -262,7 +262,7 @@ pub(crate) fn build() -> TokenStream {
     quote! {
         use std::hash::{Hash, Hasher};
         use pumpkin_util::text::TextComponent;
-        use crate::tag::{Tagable, RegistryKey};
+        use crate::tag::{Taggable, RegistryKey};
 
         #[derive(Clone, Debug)]
         pub struct Item {
@@ -359,7 +359,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        impl Tagable for Item {
+        impl Taggable for Item {
             #[inline]
             fn tag_key() -> RegistryKey {
                 RegistryKey::Item
@@ -368,6 +368,11 @@ pub(crate) fn build() -> TokenStream {
             #[inline]
             fn registry_key(&self) -> &str {
                 self.registry_key
+            }
+
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id
             }
         }
     }

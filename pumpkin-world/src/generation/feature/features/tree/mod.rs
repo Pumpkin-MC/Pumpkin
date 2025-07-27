@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
-use pumpkin_data::{Block, BlockState, tag::Tagable};
+use pumpkin_data::tag;
+use pumpkin_data::{Block, BlockState, tag::Taggable};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 use trunk::TrunkPlacer;
@@ -59,18 +60,15 @@ impl TreeFeature {
     }
 
     pub fn can_replace_or_log(state: &BlockState, block: &Block) -> bool {
-        Self::can_replace(state, block) || block.is_tagged_with("minecraft:logs").unwrap()
+        Self::can_replace(state, block) || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LOGS)
     }
 
     pub fn is_air_or_leaves(state: &BlockState, block: &Block) -> bool {
-        state.is_air() || block.is_tagged_with("minecraft:leaves").unwrap()
+        state.is_air() || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LEAVES)
     }
 
     pub fn can_replace(state: &BlockState, block: &Block) -> bool {
-        state.is_air()
-            || block
-                .is_tagged_with("minecraft:replaceable_by_trees")
-                .unwrap()
+        state.is_air() || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }
 
     #[expect(clippy::too_many_arguments)]

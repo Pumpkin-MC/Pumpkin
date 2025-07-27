@@ -1,7 +1,8 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1},
-    tag::Tagable,
+    tag,
+    tag::Taggable,
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2},
@@ -42,7 +43,10 @@ impl BambooFeature {
                                 z,
                             );
                             let block = chunk.get_block_state(&block_below.0);
-                            if !block.to_block().is_tagged_with("minecraft:dirt").unwrap() {
+                            if !block
+                                .to_block()
+                                .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)
+                            {
                                 continue;
                             }
                             chunk.set_block_state(&block_below.0, Block::PODZOL.default_state);
