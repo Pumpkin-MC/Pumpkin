@@ -11,7 +11,7 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{
-    BlockStateId, block::entities::comparator::ComparatorBlockEntity, chunk::TickPriority,
+    BlockStateId, block::entities::comparator::ComparatorBlockEntity, tick::TickPriority,
     world::BlockFlags,
 };
 
@@ -260,7 +260,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
         redstone_level
     }
 
-    fn get_update_delay_internal(&self, _state_id: BlockStateId, _block: &Block) -> u16 {
+    fn get_update_delay_internal(&self, _state_id: BlockStateId, _block: &Block) -> u8 {
         2
     }
 }
