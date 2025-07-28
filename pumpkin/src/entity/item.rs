@@ -1,3 +1,4 @@
+use core::f32;
 use std::sync::{
     Arc,
     atomic::{AtomicU32, Ordering::Relaxed},
@@ -96,8 +97,8 @@ impl EntityBase for ItemEntity {
         amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&Entity>,
-        _cause: Option<&Entity>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
     ) -> bool {
         //TODO: invulnerability, e.g. ancient debris
         self.health.store(self.health.load() - amount);

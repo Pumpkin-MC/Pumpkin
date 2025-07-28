@@ -1,3 +1,4 @@
+use core::f32;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
@@ -229,19 +230,22 @@ impl LivingEntity {
     pub async fn on_death(
         &self,
         damage_type: DamageType,
-        source: Option<&Entity>,
-        cause: Option<&Entity>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
     ) {
+        let world = self.entity.world.read().await;
+        let entities = world.entities.read().await;
+        let dyn_self = entities
+            .get(&self.entity.entity_uuid)
+            .expect("Entity not found in world")
+            .as_ref();
         if self
             .dead
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
             // Plays the death sound
-            self.entity
-                .world
-                .read()
-                .await
+            world
                 .send_entity_status(
                     &self.entity,
                     EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
@@ -250,7 +254,9 @@ impl LivingEntity {
             self.drop_loot().await;
             self.entity.pose.store(EntityPose::Dying);
 
-            if self.entity.entity_type == EntityType::PLAYER {
+            let level_info = world.level_info.read().await;
+            let game_rules = &level_info.game_rules;
+            if self.entity.entity_type == EntityType::PLAYER && game_rules.show_death_messages {
                 //TODO: KillCredit
                 let death_message = if let Some(death_message_type) = damage_type.death_message_type
                 {
@@ -260,14 +266,14 @@ impl LivingEntity {
                                 TextComponent::translate(
                                     format!("death.attack.{}.player", damage_type.message_id),
                                     [
-                                        self.entity.get_display_name().await,
+                                        dyn_self.get_display_name().await,
                                         cause.unwrap().get_display_name().await,
                                     ],
                                 )
                             } else {
                                 TextComponent::translate(
                                     format!("death.attack.{}", damage_type.message_id),
-                                    [self.entity.get_display_name().await],
+                                    [dyn_self.get_display_name().await],
                                 )
                             }
                         }
@@ -275,23 +281,23 @@ impl LivingEntity {
                             //TODO
                             TextComponent::translate(
                                 "death.fell.accident.generic",
-                                [self.entity.get_display_name().await],
+                                [dyn_self.get_display_name().await],
                             )
                         }
                         DeathMessageType::IntentionalGameDesign => TextComponent::text("[")
                             .add_child(TextComponent::translate(
                                 format!("death.attack.{}.message", damage_type.message_id),
-                                [self.entity.get_display_name().await],
+                                [dyn_self.get_display_name().await],
                             ))
                             .add_child(TextComponent::text("]")),
                     }
                 } else {
                     TextComponent::translate(
                         "death.attack.generic",
-                        [self.entity.get_display_name().await],
+                        [dyn_self.get_display_name().await],
                     )
                 };
-                if let Some(server) = self.entity.world.read().await.server.upgrade() {
+                if let Some(server) = world.server.upgrade() {
                     for player in server.get_all_players().await {
                         player.send_system_message(&death_message).await;
                     }
@@ -354,8 +360,8 @@ impl EntityBase for LivingEntity {
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
-        source: Option<&Entity>,
-        cause: Option<&Entity>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
     ) -> bool {
         // Check invulnerability before applying damage
         if self.entity.is_invulnerable_to(&damage_type) {
@@ -407,8 +413,8 @@ impl EntityBase for LivingEntity {
             .broadcast_packet_all(&CDamageEvent::new(
                 self.entity.entity_id.into(),
                 damage_type.id.into(),
-                source.map(|e| e.entity_id.into()),
-                cause.map(|e| e.entity_id.into()),
+                source.map(|e| e.get_entity().entity_id.into()),
+                cause.map(|e| e.get_entity().entity_id.into()),
                 position,
             ))
             .await;

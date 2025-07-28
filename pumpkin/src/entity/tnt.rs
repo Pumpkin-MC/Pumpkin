@@ -1,5 +1,6 @@
 use crate::server::Server;
 use async_trait::async_trait;
+use core::f32;
 use pumpkin_data::{Block, damage::DamageType};
 use pumpkin_protocol::{
     codec::var_int::VarInt,
@@ -76,8 +77,8 @@ impl EntityBase for TNTEntity {
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&Entity>,
-        _cause: Option<&Entity>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
     ) -> bool {
         false
     }

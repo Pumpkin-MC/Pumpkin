@@ -1,3 +1,4 @@
+use core::f32;
 use std::sync::Arc;
 
 use crate::server::Server;
@@ -45,8 +46,8 @@ impl EntityBase for MobEntity {
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
-        source: Option<&Entity>,
-        cause: Option<&Entity>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
     ) -> bool {
         self.living_entity
             .damage_with_context(amount, damage_type, position, source, cause)

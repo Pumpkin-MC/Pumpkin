@@ -116,22 +116,35 @@ pub trait EntityBase: Send + Sync {
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
-        source: Option<&Entity>,
-        cause: Option<&Entity>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
     ) -> bool;
 
     /// Called when a player collides with a entity
     async fn on_player_collision(&self, _player: &Arc<Player>) {}
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
-    /// Should return the translatable name of the entity without click or hover events.
-    /// Returns `None` for default. Do not call this directly.
-    fn get_name(&self) -> Option<TextComponent> {
-        None
+    /// Should return the name of the entity without click or hover events.
+    fn get_name(&self) -> TextComponent {
+        let entity = self.get_entity();
+        entity
+            .custom_name
+            .clone()
+            .unwrap_or(TextComponent::translate(
+                format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                [],
+            ))
     }
     async fn get_display_name(&self) -> TextComponent {
+        // TODO: team color
         let entity = self.get_entity();
-        let mut name = entity.get_plain_name().clone();
+        let mut name = entity
+            .custom_name
+            .clone()
+            .unwrap_or(TextComponent::translate(
+                format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                [],
+            ));
         let name_clone = name.clone();
         name = name.hover_event(HoverEvent::show_entity(
             entity.entity_uuid.to_string(),
@@ -140,6 +153,13 @@ pub trait EntityBase: Send + Sync {
         ));
         name = name.insertion(entity.entity_uuid.to_string());
         name
+    }
+
+    fn to_fat_ptr(&self) -> &dyn EntityBase
+    where
+        Self: Sized,
+    {
+        self as &dyn EntityBase
     }
 }
 
@@ -846,22 +866,6 @@ impl Entity {
             self.damage(4.0, DamageType::OUT_OF_WORLD).await;
         }
     }
-
-    /// Should return the translatable name of the entity without click or hover events.
-    #[allow(clippy::option_if_let_else)]
-    pub fn get_plain_name(&self) -> TextComponent {
-        // TODO: team color
-        if let Some(custom_name) = &self.custom_name {
-            custom_name.clone()
-        } else if let Some(type_name) = self.get_name() {
-            type_name
-        } else {
-            TextComponent::translate(
-                format!("entity.minecraft.{}", self.entity_type.resource_name),
-                [],
-            )
-        }
-    }
 }
 
 #[async_trait]
@@ -871,8 +875,8 @@ impl EntityBase for Entity {
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&Entity>,
-        _cause: Option<&Entity>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
     ) -> bool {
         false
     }

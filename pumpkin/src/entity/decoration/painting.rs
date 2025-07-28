@@ -1,3 +1,4 @@
+use core::f32;
 use std::sync::atomic::Ordering;
 
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
@@ -38,8 +39,8 @@ impl EntityBase for PaintingEntity {
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&Entity>,
-        _cause: Option<&Entity>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
     ) -> bool {
         // TODO
         self.entity.remove().await;

@@ -142,8 +142,8 @@ impl CommandExecutor for EntityExecutor {
                 amount,
                 damage_type,
                 None,
-                source.as_ref().map(|e| &e.living_entity.entity),
-                cause.as_ref().map(|e| &e.living_entity.entity),
+                source.as_ref().map(|e| e.as_ref() as &dyn EntityBase),
+                cause.as_ref().map(|e| e.as_ref() as &dyn EntityBase),
             )
             .await;
 
