@@ -3,6 +3,7 @@ use crate::tick::scheduler::ChunkTickScheduler;
 use palette::{BiomePalette, BlockPalette};
 use pumpkin_data::block_properties::blocks_movement;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
@@ -461,7 +462,7 @@ impl ChunkData {
         z: usize,
     ) {
         let start_height = (start_sub_chunk as i32) * 16 - self.section.min_y.abs() + 15;
-        let mut has_found = [false, false];
+        let mut has_found = [false, false, false];
 
         for y in (self.section.min_y..=start_height).rev() {
             let pos = BlockPos::new(x as i32, y, z as i32);
@@ -474,15 +475,26 @@ impl ChunkData {
                 has_found[ChunkHeightmapType::WorldSurface as usize] = true;
             }
 
-            if !has_found[ChunkHeightmapType::MotionBlocking as usize]
-                && (blocks_movement(block_state)
-                    || Fluid::from_registry_key(block.registry_key())
-                        .is_some_and(|fluid| !fluid.states.is_empty()))
-            {
+            let is_motion_blocking = blocks_movement(block_state)
+                || Fluid::from_registry_key(block.registry_key())
+                    .is_some_and(|fluid| !fluid.states.is_empty());
+
+            if !has_found[ChunkHeightmapType::MotionBlocking as usize] && is_motion_blocking {
                 heightmaps.set(ChunkHeightmapType::MotionBlocking, pos, self.section.min_y);
                 has_found[ChunkHeightmapType::MotionBlocking as usize] = true;
             }
-            //TODO: MotionBlockingNoLeaves
+
+            if !has_found[ChunkHeightmapType::MotionBlockingNoLeaves as usize]
+                && is_motion_blocking
+                && !block.is_tagged_with_by_tag(&MINECRAFT_LEAVES)
+            {
+                heightmaps.set(
+                    ChunkHeightmapType::MotionBlockingNoLeaves,
+                    pos,
+                    self.section.min_y,
+                );
+                has_found[ChunkHeightmapType::MotionBlockingNoLeaves as usize] = true;
+            }
 
             if !has_found.contains(&false) {
                 return;
