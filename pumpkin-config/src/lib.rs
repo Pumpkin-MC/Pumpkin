@@ -219,6 +219,10 @@ trait LoadConfiguration {
             let (merged_config, changed) = Self::merge_with_default_toml(parsed_toml_value);
 
             if changed {
+                println!(
+                    "{} changed because values were missing. The missing values were filled with default values.",
+                    path.file_name().unwrap().to_str().unwrap()
+                );
                 if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
                     warn!(
                         "Couldn't write merged config to {:?}. Reason: {}",
