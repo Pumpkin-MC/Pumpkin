@@ -6,9 +6,9 @@ use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::EntityBase;
-use super::{Entity, NBTStorage};
-use crate::block::loot::{LootContextParameters, LootTableExt};
+use super::{Entity, NBTStorage, effect::Effect};
 use crate::server::Server;
+use crate::world::loot::{LootContextParameters, LootTableExt};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
@@ -257,7 +257,12 @@ impl LivingEntity {
                     EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
                 )
                 .await;
-            self.drop_loot().await;
+            let params = LootContextParameters {
+                killed_by_player: cause.map(|c| c.get_entity().entity_type == EntityType::PLAYER),
+                ..Default::default()
+            };
+
+            self.drop_loot(params).await;
             self.entity.pose.store(EntityPose::Dying);
 
             let level_info = world.level_info.read().await;
@@ -312,13 +317,10 @@ impl LivingEntity {
         }
     }
 
-    async fn drop_loot(&self) {
+    async fn drop_loot(&self, params: LootContextParameters) {
         if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
             let world = self.entity.world.read().await;
             let pos = self.entity.block_pos.load();
-            let params = LootContextParameters {
-                ..Default::default()
-            };
             for stack in loot_table.get_loot(params) {
                 world.drop_stack(&pos, stack).await;
             }
