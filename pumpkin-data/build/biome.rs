@@ -290,7 +290,7 @@ pub(crate) fn build() -> TokenStream {
     quote! {
         use crate::biome::de::Deserialize;
         use crate::entity_type::EntityType;
-        use crate::tag::Tagable;
+        use crate::tag::Taggable;
         use crate::tag::RegistryKey;
         use pumpkin_util::biome::{TemperatureModifier, Weather};
         use serde::{Deserializer, de};

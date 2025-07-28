@@ -2,16 +2,16 @@ use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 use pumpkin_data::biome::{Biome, Spawner};
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
+use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState};
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::chunk::ChunkData;
-use pumpkin_world::{GENERATION_SETTINGS, GeneratorSetting};
 use rand::seq::IndexedRandom;
 use rand::{Rng, rng};
 use std::collections::HashMap;
@@ -39,8 +39,8 @@ impl MobCounts {
 
 pub struct LocalMobCapCalculator {
     world: Arc<World>,
-    player_mob_counts: HashMap<Uuid, MobCounts>,
-    players_near_chunk: HashMap<Vector2<i32>, Vec<Uuid>>,
+    player_mob_counts: HashMap<i32, MobCounts>,
+    players_near_chunk: HashMap<Vector2<i32>, Vec<i32>>,
 }
 
 impl fmt::Debug for LocalMobCapCalculator {
@@ -69,10 +69,10 @@ impl LocalMobCapCalculator {
     }
 
     async fn get_players_near<'b>(
-        players_near_chunk: &'b mut HashMap<Vector2<i32>, Vec<Uuid>>,
+        players_near_chunk: &'b mut HashMap<Vector2<i32>, Vec<i32>>,
         world: &Arc<World>,
         chunk_pos: &Vector2<i32>,
-    ) -> &'b Vec<Uuid> {
+    ) -> &'b Vec<i32> {
         match players_near_chunk.entry(*chunk_pos) {
             Entry::Occupied(value) => {
                 // debug!("chunk {chunk_pos:?} near player {:?}", value.get());
@@ -80,12 +80,12 @@ impl LocalMobCapCalculator {
             }
             Entry::Vacant(entry) => {
                 let mut players = Vec::new();
-                for (uuid, player) in world.players.read().await.iter() {
+                for (_uuid, player) in world.players.read().await.iter() {
                     if player.gamemode.load() == GameMode::Spectator {
                         continue;
                     }
                     if Self::calc_distance(*chunk_pos, &player.position()) < 16384. {
-                        players.push(*uuid);
+                        players.push(player.entity_id());
                     }
                 }
                 // debug!("chunk {chunk_pos:?} near player {:?}", players);
@@ -223,6 +223,7 @@ impl SpawnState {
             last_charge: 0.,
         }
     }
+    #[inline]
     fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
         self.mob_category_counts.0[category.id]
             < category.max * self.spawnable_chunk_count / MAGIC_NUMBER
@@ -321,33 +322,13 @@ pub async fn spawn_for_chunk(
         {
             let random_pos = get_random_pos_within(world, chunk_pos, chunk).await;
             // debug!("try random pos: {:?}", random_pos);
-            if random_pos.0.y > get_world_min_y(world) {
+            if random_pos.0.y > i32::from(world.min_y) {
                 spawn_category_for_position(category, world, random_pos, chunk_pos, spawn_state)
                     .await;
             }
         }
     }
 }
-
-pub fn get_world_min_y(world: &Arc<World>) -> i32 {
-    i32::from(
-        match world.dimension_type {
-            VanillaDimensionType::Overworld => GENERATION_SETTINGS
-                .get(&GeneratorSetting::Overworld)
-                .unwrap(),
-            VanillaDimensionType::OverworldCaves => todo!(),
-            VanillaDimensionType::TheEnd => {
-                GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap()
-            }
-            VanillaDimensionType::TheNether => {
-                GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
-            }
-        }
-        .shape
-        .min_y,
-    )
-}
-
 pub async fn get_random_pos_within(
     world: &Arc<World>,
     chunk_pos: &Vector2<i32>,
@@ -356,7 +337,7 @@ pub async fn get_random_pos_within(
     let x = (chunk_pos.x << 4) + rng().random_range(0..16);
     let z = (chunk_pos.y << 4) + rng().random_range(0..16);
     let temp_y = world.get_top_block(Vector2::new(x, z)).await + 1; // TODO chunk.getHeight(Heightmap.Types.WORLD_SURFACE, i, j) + 1
-    let min_y = get_world_min_y(world);
+    let min_y = i32::from(world.min_y);
     let y = rng().random_range(min_y..=temp_y);
     BlockPos::new(x, y, z)
 }
@@ -451,9 +432,7 @@ pub async fn spawn_category_for_position(
 pub async fn get_nearest_player(pos: &Vector3<f64>, world: &Arc<World>) -> f64 {
     let mut dst = f64::MAX;
     for (_uuid, player) in world.players.read().await.iter() {
-        if player.gamemode.load() == GameMode::Spectator
-            || player.gamemode.load() == GameMode::Creative
-        {
+        if player.gamemode.load() == GameMode::Spectator {
             continue;
         }
         let cur_dst = player.position().squared_distance_to_vec(*pos);
@@ -541,15 +520,13 @@ pub async fn is_spawn_position_ok(
         SpawnLocation::InLava => world
             .get_fluid(block_pos)
             .await
-            .is_tagged_with("minecraft:lava")
-            .unwrap(),
+            .is_tagged_with_by_tag(&MINECRAFT_LAVA),
         SpawnLocation::InWater => {
             // TODO !level.getBlockState(blockPos).isRedstoneConductor(level, blockPos)
             world
                 .get_fluid(block_pos)
                 .await
-                .is_tagged_with("minecraft:water")
-                .unwrap()
+                .is_tagged_with_by_tag(&MINECRAFT_WATER)
         }
         SpawnLocation::OnGround => {
             let down = world.get_block_state(&block_pos.down()).await;
@@ -577,7 +554,6 @@ pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
     } else {
         // TODO !entityType.isBlockDangerous(blockState);
         !Block::from_state_id(state.id)
-            .is_tagged_with("minecraft:prevent_mob_spawning_inside")
-            .unwrap()
+            .is_tagged_with_by_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE)
     }
 }

@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -173,6 +174,7 @@ pub struct World {
     /// The type of dimension the world is in.
     pub dimension_type: VanillaDimensionType,
     pub sea_level: i32,
+    pub min_y: i8,
     /// The world's weather, including rain and thunder levels.
     pub weather: Mutex<Weather>,
     /// Block Behaviour
@@ -216,6 +218,7 @@ impl World {
             weather: Mutex::new(Weather::new()),
             block_registry,
             sea_level: generation_settings.sea_level,
+            min_y: generation_settings.shape.min_y,
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
         }
@@ -673,6 +676,8 @@ impl World {
             }
         } */
 
+        let spawn_entity_clock_start = tokio::time::Instant::now();
+
         let mut spawning_chunks_map = HashMap::new();
         // TODO use FixedPlayerDistanceChunkTracker
         for i in self.players.read().await.values() {
@@ -683,7 +688,7 @@ impl World {
                     //     continue;
                     // }
                     let chunk_pos = center.add_raw(dx, dy);
-                    if let Some(chunk) = self.level.try_get_chunk(chunk_pos) {
+                    if let Some(chunk) = self.level.try_get_chunk(&chunk_pos) {
                         spawning_chunks_map
                             .entry(chunk_pos)
                             .or_insert(chunk.value().clone());
@@ -697,6 +702,7 @@ impl World {
             spawning_chunks.push(i);
         }
 
+        let get_chunks_clock = spawn_entity_clock_start.elapsed();
         // log::debug!("spawning chunks size {}", spawning_chunks.len());
 
         let mut spawn_state =
@@ -718,10 +724,20 @@ impl World {
         spawning_chunks.shuffle(&mut rng());
 
         // TODO i think it can be multithread
-        for (pos, chunk) in spawning_chunks {
-            self.tick_spawning_chunk(&pos, &chunk, &spawn_list, &mut spawn_state)
+        for (pos, chunk) in &spawning_chunks {
+            self.tick_spawning_chunk(pos, chunk, &spawn_list, &mut spawn_state)
                 .await;
         }
+        log::debug!(
+            "Spawning entity took {:?}, getting chunks {:?}, spawning chunks: {}, avg {:?} per chunk",
+            spawn_entity_clock_start.elapsed(),
+            get_chunks_clock,
+            spawning_chunks.len(),
+            spawn_entity_clock_start
+                .elapsed()
+                .checked_div(spawning_chunks.len() as u32)
+                .unwrap_or(Duration::new(0, 0))
+        );
 
         for block_entity in tick_data.block_entities {
             let world: Arc<dyn SimpleWorld> = self.clone();
