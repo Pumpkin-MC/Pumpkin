@@ -79,7 +79,7 @@ impl CommandExecutor for Executor {
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let Some(Arg::Entities(targets)) = args.get(&ARG_TARGET) else {
+        let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 

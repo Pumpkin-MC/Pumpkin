@@ -6,6 +6,7 @@ use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, Sugg
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 
@@ -45,13 +46,13 @@ impl ArgumentConsumer for EntityArgumentConsumer {
         let entity = match s {
             // @s is always valid when sender is a player
             "@s" => match src {
-                CommandSender::Player(p) => Some(p.clone()),
+                CommandSender::Player(p) => Some(p.clone() as Arc<dyn EntityBase>),
                 _ => None,
             },
             // @n/@p are always valid when sender is a player
             #[allow(clippy::match_same_arms)] // todo: implement for non-players
             "@n" | "@p" => match src {
-                CommandSender::Player(p) => Some(p.clone()),
+                CommandSender::Player(p) => Some(p.clone() as Arc<dyn EntityBase>),
                 // todo: implement for non-players: how should this behave when sender is console/rcon?
                 _ => None,
             },

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures::{FutureExt, SinkExt, StreamExt};
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
 use crate::command::CommandSender;
@@ -38,10 +39,34 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
         args: &mut RawArgs<'a>,
     ) -> Option<Arg<'a>> {
         // todo
-        match PlayersArgumentConsumer.consume(src, server, args).await {
-            Some(Arg::Players(p)) => Some(Arg::Entities(p)),
-            _ => None,
-        }
+
+        let s = args.pop()?;
+
+        let worlds = server.worlds.read().await;
+        let entities = match s {
+            "@s" => match src {
+                CommandSender::Player(p) => Some(vec![p.clone()]),
+                _ => None,
+            },
+            #[allow(clippy::match_same_arms)]
+            // todo: implement for non-players and remove this line
+            "@n" | "@p" => match src {
+                CommandSender::Player(p) => Some(vec![p.clone()]),
+                // todo: implement for non-players: how should this behave when sender is console/rcon?
+                _ => None,
+            },
+            "@r" => server
+                .get_random_player()
+                .await
+                .map_or_else(|| Some(vec![]), |p| Some(vec![p])),
+            "@a" => Some(server.get_all_players().await),
+            "@e" => Some(server.worlds.read().await.map(|world| {
+                world
+            })),
+            name => server.get_player_by_name(name).await.map(|p| vec![p]),
+        };
+
+        Arg::Entities(entities)
     }
 
     async fn suggest<'a>(

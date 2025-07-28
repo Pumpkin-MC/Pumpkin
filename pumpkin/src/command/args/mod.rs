@@ -20,6 +20,7 @@ use super::{
     dispatcher::CommandError,
     tree::{CommandTree, RawArgs},
 };
+use crate::entity::EntityBase;
 use crate::world::bossbar::{BossbarColor, BossbarDivisions};
 use crate::{entity::player::Player, server::Server};
 
@@ -83,8 +84,8 @@ pub trait DefaultNameArgConsumer: ArgumentConsumer {
 
 #[derive(Clone)]
 pub enum Arg<'a> {
-    Entities(Vec<Arc<Player>>),
-    Entity(Arc<Player>),
+    Entities(Vec<Arc<dyn EntityBase>>),
+    Entity(Arc<dyn EntityBase>),
     Players(Vec<Arc<Player>>),
     BlockPos(BlockPos),
     Pos3D(Vector3<f64>),
