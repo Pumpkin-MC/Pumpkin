@@ -1,45 +1,30 @@
-use crate::block::entities::BlockEntity;
-use crate::inventory::{Clearable, Inventory, split_stack};
-use crate::item::ItemStack;
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
-use rand::{Rng, rng};
 use std::any::Any;
-use std::array::from_fn;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::{Mutex, MutexGuard};
+use std::{
+    array::from_fn,
+    sync::{Arc, atomic::AtomicBool},
+};
+use tokio::sync::Mutex;
+
+use crate::{
+    inventory::{
+        split_stack, {Clearable, Inventory},
+    },
+    item::ItemStack,
+};
+
+use super::BlockEntity;
 
 #[derive(Debug)]
-pub struct DropperBlockEntity {
+pub struct ShulkerBoxBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; 9],
+    pub items: [Arc<Mutex<ItemStack>>; 27],
     pub dirty: AtomicBool,
 }
 
 #[async_trait]
-impl BlockEntity for DropperBlockEntity {
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        self.write_data(nbt, &self.items, true).await;
-        // Safety precaution
-        //self.clear().await;
-    }
-
-    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
-    where
-        Self: Sized,
-    {
-        let dropper = Self {
-            position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
-            dirty: AtomicBool::new(false),
-        };
-
-        dropper.read_data(nbt, &dropper.items);
-
-        dropper
-    }
-
+impl BlockEntity for ShulkerBoxBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
@@ -48,12 +33,33 @@ impl BlockEntity for DropperBlockEntity {
         self.position
     }
 
+    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
+    where
+        Self: Sized,
+    {
+        let barrel = Self {
+            position,
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            dirty: AtomicBool::new(false),
+        };
+
+        barrel.read_data(nbt, &barrel.items);
+
+        barrel
+    }
+
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        self.write_data(nbt, &self.items, true).await;
+        // Safety precaution
+        //self.clear().await;
+    }
+
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
     }
 
     fn is_dirty(&self) -> bool {
-        self.dirty.load(Ordering::Relaxed)
+        self.dirty.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -61,8 +67,8 @@ impl BlockEntity for DropperBlockEntity {
     }
 }
 
-impl DropperBlockEntity {
-    pub const ID: &'static str = "minecraft:dropper";
+impl ShulkerBoxBlockEntity {
+    pub const ID: &'static str = "minecraft:shulker_box"; // TODO support multi IDs
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -70,25 +76,10 @@ impl DropperBlockEntity {
             dirty: AtomicBool::new(false),
         }
     }
-    pub async fn get_random_slot(&self) -> Option<MutexGuard<ItemStack>> {
-        // this.unpackLootTable(null);
-        let mut ret = None;
-        let mut j = 0;
-        for i in &self.items {
-            let item = i.lock().await;
-            if !item.is_empty() {
-                if rng().random_range(0..j) == 0 {
-                    ret = Some(item);
-                }
-                j += 1;
-            }
-        }
-        ret
-    }
 }
 
 #[async_trait]
-impl Inventory for DropperBlockEntity {
+impl Inventory for ShulkerBoxBlockEntity {
     fn size(&self) -> usize {
         self.items.len()
     }
@@ -123,7 +114,7 @@ impl Inventory for DropperBlockEntity {
     }
 
     fn mark_dirty(&self) {
-        self.dirty.store(true, Ordering::Relaxed);
+        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -132,7 +123,7 @@ impl Inventory for DropperBlockEntity {
 }
 
 #[async_trait]
-impl Clearable for DropperBlockEntity {
+impl Clearable for ShulkerBoxBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
             *slot.lock().await = ItemStack::EMPTY;

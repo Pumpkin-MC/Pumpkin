@@ -70,7 +70,7 @@ impl PumpkinBlock for CandleBlock {
                 if properties.lit {
                     properties.lit = false;
                 } else {
-                    return BlockActionResult::Continue;
+                    return BlockActionResult::Pass;
                 }
 
                 args.world

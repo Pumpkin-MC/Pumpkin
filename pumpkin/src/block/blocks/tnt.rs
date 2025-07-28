@@ -56,7 +56,7 @@ impl PumpkinBlock for TNTBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let item = args.item_stack.lock().await.item;
         if item != &Item::FLINT_AND_STEEL || item == &Item::FIRE_CHARGE {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
         let world = args.player.world().await;
         Self::prime(&world, args.position).await;

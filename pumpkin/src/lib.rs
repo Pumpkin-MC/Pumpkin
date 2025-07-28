@@ -47,15 +47,8 @@ pub mod world;
 pub static HEAP_PROFILER: LazyLock<Mutex<Option<dhat::Profiler>>> =
     LazyLock::new(|| Mutex::new(None));
 
-pub static PLUGIN_MANAGER: LazyLock<Arc<RwLock<PluginManager>>> = LazyLock::new(|| {
-    let manager = PluginManager::new();
-    let arc_manager = Arc::new(RwLock::new(manager));
-    let clone = Arc::clone(&arc_manager);
-    let arc_manager_clone = arc_manager.clone();
-    let mut manager = futures::executor::block_on(arc_manager_clone.write());
-    manager.set_self_ref(clone);
-    arc_manager
-});
+pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
+    LazyLock::new(|| Arc::new(PluginManager::new()));
 
 pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
@@ -259,16 +252,15 @@ impl PumpkinServer {
     }
 
     pub async fn init_plugins(&self) {
-        let mut loader_lock = PLUGIN_MANAGER.write().await;
-        loader_lock.set_server(self.server.clone());
-        if let Err(err) = loader_lock.load_plugins().await {
+        PLUGIN_MANAGER.set_self_ref(PLUGIN_MANAGER.clone()).await;
+        PLUGIN_MANAGER.set_server(self.server.clone()).await;
+        if let Err(err) = PLUGIN_MANAGER.load_plugins().await {
             log::error!("{err}");
         };
     }
 
     pub async fn unload_plugins(&self) {
-        let mut loader_lock = PLUGIN_MANAGER.write().await;
-        if let Err(err) = loader_lock.unload_all_plugins().await {
+        if let Err(err) = PLUGIN_MANAGER.unload_all_plugins().await {
             log::error!("Error unloading plugins: {err}");
         } else {
             log::info!("All plugins unloaded successfully");

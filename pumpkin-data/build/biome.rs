@@ -7,7 +7,7 @@ use serde::Deserialize;
 use syn::LitInt;
 
 #[derive(Deserialize)]
-struct Biome {
+pub struct Biome {
     has_precipitation: bool,
     temperature: f32,
     downfall: f32,
@@ -17,7 +17,7 @@ struct Biome {
     creature_spawn_probability: Option<f32>,
     spawners: SpawnGroups,
     spawn_costs: HashMap<String, SpawnCosts>,
-    id: u8,
+    pub id: u8,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash)]
@@ -390,12 +390,15 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        impl Tagable for Biome {
+        impl Taggable for Biome {
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id as u16
+            }
             #[inline]
             fn tag_key() -> RegistryKey {
                 RegistryKey::WorldgenBiome
             }
-
             #[inline]
             fn registry_key(&self) -> &str {
                 self.registry_id

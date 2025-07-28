@@ -23,8 +23,8 @@ use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item::Operation;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::Tagable;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockState, tag};
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
@@ -551,7 +551,7 @@ impl Player {
         let block = self.world().await.get_block(&respawn_point.position).await;
 
         if respawn_point.dimension == VanillaDimensionType::Overworld
-            && block.is_tagged_with("#minecraft:beds").unwrap()
+            && block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BEDS)
         {
             // TODO: calculate respawn position
             Some((respawn_point.position.to_f64(), respawn_point.yaw))
@@ -1042,7 +1042,7 @@ impl Player {
             pos
         } else {
             Vector3::new(
-                f64::from(info.spawn_x),
+                f64::from(info.spawn_x) + 0.5,
                 f64::from(
                     new_world
                         .get_top_block(Vector2::new(
@@ -1052,7 +1052,7 @@ impl Player {
                         .await
                         + 1,
                 ),
-                f64::from(info.spawn_z),
+                f64::from(info.spawn_z) + 0.5,
             )
         };
         let yaw = yaw.unwrap_or(info.spawn_angle);
@@ -1864,6 +1864,26 @@ impl Player {
         perm_manager
             .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
             .await
+    }
+
+    /// Swing the hand of the player
+    pub async fn swing_hand(&self, hand: Hand, all: bool) {
+        let world = self.world().await;
+        let entity_id = VarInt(self.entity_id());
+
+        let animation = match hand {
+            Hand::Left => Animation::SwingMainArm,
+            Hand::Right => Animation::SwingOffhand,
+        };
+
+        let packet = CEntityAnimation::new(entity_id, animation);
+        if all {
+            world.broadcast_packet_all(&packet).await;
+        } else {
+            world
+                .broadcast_packet_except(&[self.gameprofile.id], &packet)
+                .await;
+        }
     }
 }
 
