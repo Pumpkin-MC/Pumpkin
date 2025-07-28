@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use pumpkin_protocol::java::client::play::CClearTitle;
 use pumpkin_util::text::TextComponent;
 
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -14,6 +15,7 @@ use crate::{
     },
     entity::player::TitleMode,
 };
+
 const NAMES: [&str; 1] = ["title"];
 
 const DESCRIPTION: &str = "Displays a title.";
@@ -48,10 +50,7 @@ impl CommandExecutor for ClearOrResetExecutor {
                 } else {
                     "commands.title.cleared.single"
                 };
-                TextComponent::translate(
-                    text,
-                    [TextComponent::text(targets[0].gameprofile.name.clone())],
-                )
+                TextComponent::translate(text, [targets[0].get_display_name().await])
             } else {
                 let text = if reset {
                     "commands.title.reset.multiple"
@@ -93,7 +92,7 @@ impl CommandExecutor for TitleExecutor {
             .send_message(if targets.len() == 1 {
                 TextComponent::translate(
                     format!("commands.title.show.{mode_name}.single"),
-                    [TextComponent::text(targets[0].gameprofile.name.clone())],
+                    [targets[0].get_display_name().await],
                 )
             } else {
                 TextComponent::translate(

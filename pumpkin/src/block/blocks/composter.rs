@@ -1,5 +1,16 @@
 use std::sync::Arc;
 
+use crate::{
+    block::{
+        pumpkin_block::{
+            GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs, PumpkinBlock,
+            UseWithItemArgs,
+        },
+        registry::BlockActionResult,
+    },
+    entity::{Entity, item::ItemEntity},
+    world::World,
+};
 use async_trait::async_trait;
 use pumpkin_data::{
     Block,
@@ -14,18 +25,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, item::ItemStack, tick::TickPriority, world::BlockFlags};
 use rand::Rng;
 use uuid::Uuid;
-
-use crate::{
-    block::{
-        pumpkin_block::{
-            GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs, PumpkinBlock,
-            UseWithItemArgs,
-        },
-        registry::BlockActionResult,
-    },
-    entity::{Entity, item::ItemEntity},
-    world::World,
-};
 
 #[pumpkin_block("minecraft:composter")]
 pub struct ComposterBlock;

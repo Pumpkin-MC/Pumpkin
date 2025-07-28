@@ -172,7 +172,7 @@ impl PumpkinBlock for DropperBlock {
                             return;
                         }
                         //TODO WorldlyContainer
-                        let backup = *item;
+                        let backup = item.clone();
                         let one_item = item.split(1);
                         if HopperBlockEntity::add_one_item(dropper, container.as_ref(), one_item)
                             .await
