@@ -1,11 +1,12 @@
 use core::f32;
+use pumpkin_data::potion::Effect;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::EntityBase;
-use super::{Entity, NBTStorage, effect::Effect};
+use super::{Entity, NBTStorage};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use async_trait::async_trait;
@@ -13,7 +14,8 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;
-use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
@@ -48,7 +50,7 @@ pub struct LivingEntity {
     pub dead: AtomicBool,
     /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
-    pub active_effects: Mutex<HashMap<EffectType, Effect>>,
+    pub active_effects: Mutex<HashMap<&'static StatusEffect, Effect>>,
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
 }
 
@@ -137,11 +139,11 @@ impl LivingEntity {
 
     pub async fn add_effect(&self, effect: Effect) {
         let mut effects = self.active_effects.lock().await;
-        effects.insert(effect.r#type, effect);
+        effects.insert(effect.effect_type, effect);
         // TODO broadcast metadata
     }
 
-    pub async fn remove_effect(&self, effect_type: EffectType) {
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
         let mut effects = self.active_effects.lock().await;
         effects.remove(&effect_type);
         self.entity
@@ -152,12 +154,12 @@ impl LivingEntity {
             .await;
     }
 
-    pub async fn has_effect(&self, effect: EffectType) -> bool {
+    pub async fn has_effect(&self, effect: &'static StatusEffect) -> bool {
         let effects = self.active_effects.lock().await;
         effects.contains_key(&effect)
     }
 
-    pub async fn get_effect(&self, effect: EffectType) -> Option<Effect> {
+    pub async fn get_effect(&self, effect: &'static StatusEffect) -> Option<Effect> {
         let effects = self.active_effects.lock().await;
         effects.get(&effect).cloned()
     }
@@ -345,7 +347,7 @@ impl LivingEntity {
             let mut effects = self.active_effects.lock().await;
             for effect in effects.values_mut() {
                 if effect.duration == 0 {
-                    effects_to_remove.push(effect.r#type);
+                    effects_to_remove.push(effect.effect_type);
                 }
                 effect.duration -= 1;
             }
@@ -383,7 +385,7 @@ impl EntityBase for LivingEntity {
         }
 
         if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
-            && self.has_effect(EffectType::FireResistance).await
+            && self.has_effect(&StatusEffect::FIRE_RESISTANCE).await
         {
             return false; // Fire resistance
         }
@@ -507,7 +509,7 @@ impl EntityBase for LivingEntity {
                         }
                         let mut effect = effect.unwrap();
                         effect.blend = true; // TODO: change, is taken from effect give command
-                        active_effects.insert(effect.r#type, effect);
+                        active_effects.insert(effect.effect_type, effect);
                     }
                 }
             }

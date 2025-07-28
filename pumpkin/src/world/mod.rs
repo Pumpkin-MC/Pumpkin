@@ -36,7 +36,7 @@ use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::entity::{EffectType, MobCategory};
+use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
     Block,
@@ -131,6 +131,7 @@ pub mod scoreboard;
 pub mod weather;
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
 use pumpkin_world::generation::settings::GenerationSettings;
 use uuid::Uuid;
@@ -295,11 +296,15 @@ impl World {
             .await;
     }
 
-    pub async fn send_remove_mob_effect(&self, entity: &Entity, effect_type: EffectType) {
+    pub async fn send_remove_mob_effect(
+        &self,
+        entity: &Entity,
+        effect_type: &'static StatusEffect,
+    ) {
         // TODO: only nearby
         self.broadcast_packet_all(&CRemoveMobEffect::new(
             entity.entity_id.into(),
-            VarInt(effect_type as i32),
+            VarInt(i32::from(effect_type.id)),
         ))
         .await;
     }
