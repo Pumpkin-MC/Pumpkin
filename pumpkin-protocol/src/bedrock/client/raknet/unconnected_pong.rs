@@ -1,21 +1,30 @@
 use core::fmt;
+use std::io::{Error, Write};
 
 use pumpkin_macros::packet;
-use serde::Serialize;
 
-use crate::codec::ascii_string::AsciiString;
+use crate::serial::PacketWrite;
 
-#[derive(Serialize)]
 #[packet(0x1c)]
 pub struct CUnconnectedPong {
     time: u64,
     server_guid: u64,
     magic: [u8; 16],
-    server_id: AsciiString,
+    server_id: String,
+}
+
+impl PacketWrite for CUnconnectedPong {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.time.write_be(writer)?;
+        self.server_guid.write_be(writer)?;
+        writer.write_all(&self.magic)?;
+        writer.write_all(&(self.server_id.len() as u16).to_be_bytes())?;
+        writer.write_all(self.server_id.as_bytes())
+    }
 }
 
 pub struct ServerInfo {
-    /// (MCPE or MCEE for Education Edition)
+    /// (BE or MCEE for Education Edition)
     pub edition: &'static str,
     pub motd_line_1: &'static str,
     pub protocol_version: u32,
@@ -52,7 +61,7 @@ impl fmt::Display for ServerInfo {
 }
 
 impl CUnconnectedPong {
-    pub fn new(time: u64, server_guid: u64, magic: [u8; 16], server_id: AsciiString) -> Self {
+    pub fn new(time: u64, server_guid: u64, magic: [u8; 16], server_id: String) -> Self {
         Self {
             time,
             server_guid,

@@ -8,9 +8,10 @@ use pumpkin_data::block_properties::BlockFace;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
 type ButtonLikeProperties = pumpkin_data::block_properties::LeverLikeProperties;
@@ -24,14 +25,14 @@ use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
 use crate::block::pumpkin_block::OnScheduledTickArgs;
 use crate::block::pumpkin_block::OnStateReplacedArgs;
-use crate::block::pumpkin_block::{BlockMetadata, NormalUseArgs, PumpkinBlock};
+use crate::block::pumpkin_block::{NormalUseArgs, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::world::World;
 
 async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_block_state(block_pos).await;
+    let (block, state) = world.get_block_and_state_id(block_pos).await;
 
-    let mut button_props = ButtonLikeProperties::from_state_id(state.id, block);
+    let mut button_props = ButtonLikeProperties::from_state_id(state, block);
     if !button_props.powered {
         button_props.powered = true;
         world
@@ -53,17 +54,8 @@ async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
     }
 }
 
+#[pumpkin_block_from_tag("minecraft:buttons")]
 pub struct ButtonBlock;
-
-impl BlockMetadata for ButtonBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:buttons").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for ButtonBlock {

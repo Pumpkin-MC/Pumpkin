@@ -1,14 +1,15 @@
 use async_trait::async_trait;
 use pumpkin_data::block_properties::HorizontalFacing;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15},
+    tag,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::pumpkin_block::{
@@ -91,8 +92,8 @@ async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) 
         return true;
     }
 
-    if block_below.is_tagged_with("minecraft:dirt").unwrap()
-        || block_below.is_tagged_with("minecraft:sand").unwrap()
+    if block_below.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)
+        || block_below.is_tagged_with_by_tag(&tag::Block::MINECRAFT_SAND)
     {
         for direction in HorizontalFacing::all() {
             let block = block_accessor

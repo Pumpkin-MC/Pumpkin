@@ -13,10 +13,7 @@ pub mod file_manager;
 ///
 /// It can be the data loaded successfully, the data not found or an error
 /// with the chunk coordinates and the error that occurred.
-pub enum LoadedData<D, Err: error::Error>
-where
-    D: Send,
-{
+pub enum LoadedData<D: Send, Err: error::Error> {
     /// The chunk data was loaded successfully
     Loaded(D),
 

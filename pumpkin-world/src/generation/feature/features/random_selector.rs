@@ -25,7 +25,7 @@ struct RandomFeatureEntry {
 
 impl RandomFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -40,7 +40,7 @@ impl RandomFeature {
             if random.next_f32() >= feature.chance {
                 continue;
             }
-            return Box::pin(feature.feature.get().generate(
+            return feature.feature.get().generate(
                 chunk,
                 level,
                 block_registry,
@@ -49,10 +49,9 @@ impl RandomFeature {
                 feature_name,
                 random,
                 pos,
-            ))
-            .await;
+            );
         }
-        Box::pin(self.default.get().generate(
+        self.default.get().generate(
             chunk,
             level,
             block_registry,
@@ -61,7 +60,6 @@ impl RandomFeature {
             feature_name,
             random,
             pos,
-        ))
-        .await
+        )
     }
 }

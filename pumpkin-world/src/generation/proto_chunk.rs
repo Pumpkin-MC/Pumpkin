@@ -1,11 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::tag;
 use pumpkin_data::{
-    Block, BlockState,
-    block_properties::{blocks_movement, get_block_and_state_by_state_id, get_block_by_state_id},
-    chunk::Biome,
-    tag::Tagable,
+    Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Taggable,
 };
 use pumpkin_util::{
     HeightMap,
@@ -117,10 +115,10 @@ pub struct ProtoChunk<'a> {
     /// HEIGHTMAPS
     ///
     /// Top block that is not air
-    pub flat_surface_height_map: Box<[i64]>,
-    flat_ocean_floor_height_map: Box<[i64]>,
-    pub flat_motion_blocking_height_map: Box<[i64]>,
-    pub flat_motion_blocking_no_leaves_height_map: Box<[i64]>,
+    pub flat_surface_height_map: Box<[i16]>,
+    flat_ocean_floor_height_map: Box<[i16]>,
+    pub flat_motion_blocking_height_map: Box<[i16]>,
+    pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
     // may want to use chunk status
 }
 
@@ -187,7 +185,7 @@ impl<'a> ProtoChunk<'a> {
             SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
         let default_block = settings.default_block.get_state();
-        let default_heightmap = vec![i64::MIN; CHUNK_AREA].into_boxed_slice();
+        let default_heightmap = vec![i16::MIN; CHUNK_AREA].into_boxed_slice();
         Self {
             chunk_pos,
             settings,
@@ -217,50 +215,50 @@ impl<'a> ProtoChunk<'a> {
     }
 
     fn maybe_update_surface_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_surface_height_map[index];
 
         if pos.y > current_height as i32 {
-            self.flat_surface_height_map[index] = pos.y as i64;
+            self.flat_surface_height_map[index] = pos.y as _;
         }
     }
 
     fn maybe_update_ocean_floor_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_ocean_floor_height_map[index];
 
         if pos.y > current_height as i32 {
-            self.flat_ocean_floor_height_map[index] = pos.y as i64;
+            self.flat_ocean_floor_height_map[index] = pos.y as _;
         }
     }
 
     fn maybe_update_motion_blocking_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_motion_blocking_height_map[index];
 
         if pos.y > current_height as i32 {
-            self.flat_motion_blocking_height_map[index] = pos.y as i64;
+            self.flat_motion_blocking_height_map[index] = pos.y as _;
         }
     }
 
     fn maybe_update_motion_blocking_no_leaves_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.z & 15) as usize;
+        let local_x = pos.x & 15;
+        let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_motion_blocking_no_leaves_height_map[index];
 
         if pos.y > current_height as i32 {
-            self.flat_motion_blocking_no_leaves_height_map[index] = pos.y as i64;
+            self.flat_motion_blocking_no_leaves_height_map[index] = pos.y as _;
         }
     }
 
-    pub fn get_top_y(&self, heightmap: &HeightMap, pos: &Vector2<i32>) -> i64 {
+    pub fn get_top_y(&self, heightmap: &HeightMap, pos: &Vector2<i32>) -> i32 {
         match heightmap {
             HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(pos),
             HeightMap::WorldSurface => self.top_block_height_exclusive(pos),
@@ -273,36 +271,37 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
-    pub fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.y & 15) as usize;
+    pub fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
+        let local_x = pos.x & 15;
+        let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_surface_height_map[index] + 1
+        self.flat_surface_height_map[index] as i32 + 1
     }
 
-    pub fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.y & 15) as usize;
+    pub fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
+        let local_x = pos.x & 15;
+        let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_ocean_floor_height_map[index] + 1
+        self.flat_ocean_floor_height_map[index] as i32 + 1
     }
 
-    pub fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.y & 15) as usize;
+    pub fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
+        let local_x = pos.x & 15;
+        let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_motion_blocking_height_map[index] + 1
+        self.flat_motion_blocking_height_map[index] as i32 + 1
     }
 
-    pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i64 {
-        let local_x = (pos.x & 15) as usize;
-        let local_z = (pos.y & 15) as usize;
+    pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
+        let local_x = pos.x & 15;
+        let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_motion_blocking_no_leaves_height_map[index] + 1
+        self.flat_motion_blocking_no_leaves_height_map[index] as i32 + 1
     }
 
-    fn local_position_to_height_map_index(x: usize, z: usize) -> usize {
-        x * CHUNK_DIM as usize + z
+    #[inline]
+    fn local_position_to_height_map_index(x: i32, z: i32) -> usize {
+        x as usize * CHUNK_DIM as usize + z as usize
     }
 
     #[inline]
@@ -377,8 +376,8 @@ impl<'a> ProtoChunk<'a> {
 
         if blocks_movement(block_state) || block_state.is_liquid() {
             self.maybe_update_motion_blocking_height_map(pos);
-            let block = get_block_by_state_id(block_state.id);
-            if !block.is_tagged_with("minecraft:leaves").unwrap() {
+            let block = Block::from_state_id(block_state.id);
+            if !block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LEAVES) {
                 {
                     self.maybe_update_motion_blocking_no_leaves_height_map(pos);
                 }
@@ -598,7 +597,7 @@ impl<'a> ProtoChunk<'a> {
                 let z = start_z + local_z;
 
                 let mut top_block =
-                    self.top_block_height_exclusive(&Vector2::new(local_x, local_z)) as i32;
+                    self.top_block_height_exclusive(&Vector2::new(local_x, local_z));
 
                 let biome_y = if self.settings.legacy_random_source {
                     0
@@ -611,8 +610,7 @@ impl<'a> ProtoChunk<'a> {
                     terrain_builder.place_badlands_pillar(self, x, z, top_block);
                     // Get the top block again if we placed a pillar!
 
-                    top_block =
-                        self.top_block_height_exclusive(&Vector2::new(local_x, local_z)) as i32;
+                    top_block = self.top_block_height_exclusive(&Vector2::new(local_x, local_z));
                 }
 
                 context.init_horizontal(x, z);
@@ -704,11 +702,7 @@ impl<'a> ProtoChunk<'a> {
     ///
     /// 1. First, we determine **whether** to generate a feature and **at which block positions** to place it.
     /// 2. Then, using the second file, we determine **how** to generate the feature.
-    pub async fn generate_features(
-        &mut self,
-        level: &Arc<Level>,
-        block_registry: &dyn BlockRegistryExt,
-    ) {
+    pub fn generate_features(&mut self, level: &Arc<Level>, block_registry: &dyn BlockRegistryExt) {
         let chunk_pos = self.chunk_pos;
         let min_y = self.noise_sampler.min_y();
         let height = self.noise_sampler.height();
@@ -729,18 +723,16 @@ impl<'a> ProtoChunk<'a> {
             // TODO: Properly set index and step
             let decorator_seed = get_decorator_seed(population_seed, 0, 0);
             let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
-            feature
-                .generate(
-                    self,
-                    level,
-                    block_registry,
-                    min_y,
-                    height,
-                    name,
-                    &mut random,
-                    block_pos,
-                )
-                .await;
+            feature.generate(
+                self,
+                level,
+                block_registry,
+                min_y,
+                height,
+                name,
+                &mut random,
+                block_pos,
+            );
         }
     }
 
@@ -771,15 +763,12 @@ impl BlockAccessor for ProtoChunk<'_> {
         self.get_block_state(&position.0).to_state()
     }
 
-    async fn get_block_and_block_state(
+    async fn get_block_and_state(
         &self,
         position: &BlockPos,
-    ) -> (
-        &'static pumpkin_data::Block,
-        &'static pumpkin_data::BlockState,
-    ) {
+    ) -> (&'static Block, &'static BlockState) {
         let id = self.get_block_state(&position.0);
-        get_block_and_state_by_state_id(id.0)
+        BlockState::from_id_with_block(id.0)
     }
 }
 
@@ -788,7 +777,7 @@ mod test {
     use std::sync::LazyLock;
 
     use pumpkin_data::noise_router::{OVERWORLD_BASE_NOISE_ROUTER, WrapperType};
-    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::{math::vector2::Vector2, read_data_from_file};
 
     use crate::{
         dimension::Dimension,
@@ -800,7 +789,6 @@ mod test {
             },
             settings::{GENERATION_SETTINGS, GeneratorSetting},
         },
-        read_data_from_file,
     };
 
     use super::ProtoChunk;
@@ -831,12 +819,12 @@ mod test {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
                     if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type() {
+                        match wrapper.wrapper_type {
                             WrapperType::CellCache => (),
                             _ => {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index(),
+                                        wrapper.input_index,
                                         wrapper.min(),
                                         wrapper.max(),
                                     ));
@@ -887,13 +875,13 @@ mod test {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
                     if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type() {
+                        match wrapper.wrapper_type {
                             WrapperType::CellCache => (),
                             WrapperType::Cache2D => (),
                             _ => {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index(),
+                                        wrapper.input_index,
                                         wrapper.min(),
                                         wrapper.max(),
                                     ));
@@ -944,13 +932,13 @@ mod test {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
                     if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type() {
+                        match wrapper.wrapper_type {
                             WrapperType::CellCache => (),
                             WrapperType::CacheFlat => (),
                             _ => {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index(),
+                                        wrapper.input_index,
                                         wrapper.min(),
                                         wrapper.max(),
                                     ));
@@ -1001,13 +989,13 @@ mod test {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
                     if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type() {
+                        match wrapper.wrapper_type {
                             WrapperType::CellCache => (),
                             WrapperType::CacheOnce => (),
                             _ => {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index(),
+                                        wrapper.input_index,
                                         wrapper.min(),
                                         wrapper.max(),
                                     ));
@@ -1058,13 +1046,13 @@ mod test {
             ($stack: expr) => {
                 $stack.iter_mut().for_each(|component| {
                     if let ProtoNoiseFunctionComponent::Wrapper(wrapper) = component {
-                        match wrapper.wrapper_type() {
+                        match wrapper.wrapper_type {
                             WrapperType::CellCache => (),
                             WrapperType::Interpolated => (),
                             _ => {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
-                                        wrapper.input_index(),
+                                        wrapper.input_index,
                                         wrapper.min(),
                                         wrapper.max(),
                                     ));

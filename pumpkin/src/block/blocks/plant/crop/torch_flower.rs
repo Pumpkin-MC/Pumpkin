@@ -52,19 +52,14 @@ impl CropBlockBase for TorchFlowerBlock {
         2
     }
 
-    fn get_age(&self, state: &pumpkin_data::BlockState, block: &Block) -> i32 {
-        let props = TorchFlowerProperties::from_state_id(state.id, block);
+    fn get_age(&self, state: u16, block: &Block) -> i32 {
+        let props = TorchFlowerProperties::from_state_id(state, block);
         i32::from(props.age.to_index())
     }
 
-    fn state_with_age(
-        &self,
-        block: &Block,
-        state: &pumpkin_data::BlockState,
-        age: i32,
-    ) -> BlockStateId {
+    fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
         if age == 1 {
-            let mut properties = TorchFlowerProperties::from_state_id(state.id, block);
+            let mut properties = TorchFlowerProperties::from_state_id(state, block);
             properties.age = Integer0To1::L1;
             properties.to_state_id(block)
         } else {

@@ -4,7 +4,7 @@ use std::{
     hash::Hash,
 };
 
-use pumpkin_data::{Block, block_properties::get_state_by_state_id, chunk::Biome};
+use pumpkin_data::{Block, BlockState, chunk::Biome};
 use pumpkin_util::encompassing_bits;
 
 use crate::block::BlockStateCodec;
@@ -12,7 +12,7 @@ use crate::block::BlockStateCodec;
 use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEntry};
 
 /// 3d array indexed by y,z,x
-type AbstractCube<T, const DIM: u64> = [[[T; DIM]; DIM]; DIM];
+type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
 
 #[derive(Debug, Clone)]
 pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
@@ -29,7 +29,8 @@ impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
         self.cube[y][z][x]
     }
 
-    fn set(&mut self, x: usize, y: usize, z: usize, value: V) {
+    /// Returns the Original
+    fn set(&mut self, x: usize, y: usize, z: usize, value: V) -> V {
         debug_assert!(x < DIM);
         debug_assert!(y < DIM);
         debug_assert!(z < DIM);
@@ -48,6 +49,7 @@ impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
             .entry(value)
             .and_modify(|count| *count += 1)
             .or_insert(1);
+        original
     }
 }
 
@@ -191,24 +193,27 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         }
     }
 
-    pub fn set(&mut self, x: usize, y: usize, z: usize, value: V) {
+    pub fn set(&mut self, x: usize, y: usize, z: usize, value: V) -> V {
         debug_assert!(x < Self::SIZE);
         debug_assert!(y < Self::SIZE);
         debug_assert!(z < Self::SIZE);
 
         match self {
             Self::Homogeneous(original) => {
-                if value != *original {
-                    let mut cube = Box::new([[[*original; DIM]; DIM]; DIM]);
+                let original = *original;
+                if value != original {
+                    let mut cube = Box::new([[[original; DIM]; DIM]; DIM]);
                     cube[y][z][x] = value;
                     *self = Self::from_cube(cube);
                 }
+                original
             }
             Self::Heterogeneous(data) => {
-                data.set(x, y, z, value);
+                let original = data.set(x, y, z, value);
                 if data.counts.len() == 1 {
                     *self = Self::Homogeneous(*data.counts.keys().next().unwrap());
                 }
+                original
             }
         }
     }
@@ -371,10 +376,71 @@ impl BlockPalette {
         }
     }
 
+    pub fn convert_be_network(&self) -> BeNetworkSerialization<u16> {
+        match self {
+            Self::Homogeneous(registry_id) => BeNetworkSerialization {
+                bits_per_entry: 0,
+                palette: NetworkPalette::Single(BlockState::to_be_network_id(*registry_id)),
+                packed_data: Box::new([]),
+            },
+            Self::Heterogeneous(data) => {
+                let bits_per_entry = encompassing_bits(data.counts.len());
+                let palette: Box<[u16]> = data.counts.keys().copied().collect();
+                let key_to_index_map: HashMap<_, usize> = palette
+                    .iter()
+                    .enumerate()
+                    .map(|(index, key)| (*key, index))
+                    .collect();
+
+                let blocks_per_word = 32 / bits_per_entry;
+
+                // Direktes Verarbeiten in der Reihenfolge [x][y][z] ohne Kopie
+                let mut packed_data = Vec::new();
+                let mut current_word = 0;
+                let mut current_index = 0;
+
+                for x in 0..16 {
+                    for y in 0..16 {
+                        for z in 0..16 {
+                            let key = data.cube[z][y][x]; // Zugriff in [x][y][z]-Reihenfolge
+                            let key_index = key_to_index_map.get(&key).unwrap();
+                            debug_assert!((1 << bits_per_entry) > *key_index);
+
+                            let packed_offset_index = (*key_index as u32)
+                                << (bits_per_entry as u32 * current_index as u32);
+                            current_word |= packed_offset_index;
+
+                            current_index += 1;
+                            if current_index == blocks_per_word {
+                                packed_data.push(current_word);
+                                current_word = 0;
+                                current_index = 0;
+                            }
+                        }
+                    }
+                }
+                if current_index > 0 {
+                    packed_data.push(current_word);
+                }
+
+                BeNetworkSerialization {
+                    bits_per_entry,
+                    palette: NetworkPalette::Indirect(
+                        palette
+                            .into_iter()
+                            .map(BlockState::to_be_network_id)
+                            .collect(),
+                    ),
+                    packed_data: packed_data.into_boxed_slice(),
+                }
+            }
+        }
+    }
+
     pub fn non_air_block_count(&self) -> u16 {
         match self {
             Self::Homogeneous(registry_id) => {
-                if !get_state_by_state_id(*registry_id).is_air() {
+                if !BlockState::from_id(*registry_id).is_air() {
                     Self::VOLUME as u16
                 } else {
                     0
@@ -384,7 +450,7 @@ impl BlockPalette {
                 .counts
                 .iter()
                 .map(|(registry_id, count)| {
-                    if !get_state_by_state_id(*registry_id).is_air() {
+                    if !BlockState::from_id(*registry_id).is_air() {
                         *count
                     } else {
                         0
@@ -429,7 +495,9 @@ impl BlockPalette {
 
         BlockStateCodec {
             name: block,
-            properties: block.properties(registry_id).map(|p| p.to_props()),
+            properties: block
+                .properties(registry_id)
+                .map(|p| p.to_props().into_iter().collect()),
         }
     }
 }
@@ -444,6 +512,12 @@ pub struct NetworkSerialization<V> {
     pub bits_per_entry: u8,
     pub palette: NetworkPalette<V>,
     pub packed_data: Box<[i64]>,
+}
+
+pub struct BeNetworkSerialization<V> {
+    pub bits_per_entry: u8,
+    pub palette: NetworkPalette<V>,
+    pub packed_data: Box<[u32]>,
 }
 
 // According to the wiki, palette serialization for disk and network is different. Disk

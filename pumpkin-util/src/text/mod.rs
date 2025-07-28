@@ -20,10 +20,7 @@ pub mod style;
 pub struct TextComponent(pub TextComponentBase);
 
 impl<'de> Deserialize<'de> for TextComponent {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct TextComponentVisitor;
 
         impl<'de> Visitor<'de> for TextComponentVisitor {
@@ -33,10 +30,7 @@ impl<'de> Deserialize<'de> for TextComponent {
                 formatter.write_str("a TextComponentBase or a sequence of TextComponentBase")
             }
 
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: Error,
-            {
+            fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(TextComponentBase {
                     content: TextContent::Text {
                         text: Cow::from(v.to_string()),
@@ -46,10 +40,7 @@ impl<'de> Deserialize<'de> for TextComponent {
                 })
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let mut bases = Vec::new();
                 while let Some(element) = seq.next_element::<TextComponent>()? {
                     bases.push(element.0);
@@ -62,10 +53,7 @@ impl<'de> Deserialize<'de> for TextComponent {
                 })
             }
 
-            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
+            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
                 TextComponentBase::deserialize(serde::de::value::MapAccessDeserializer::new(map))
             }
         }
@@ -97,7 +85,7 @@ impl TextComponentBase {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate { translate, with } => {
                 let translate = translate.into_owned();
-                get_translation_en_us(&translate, with)
+                get_translation_en_us(&translate, &with)
                     .unwrap_or(translate.to_string())
                     .clone()
             }
@@ -132,10 +120,7 @@ impl TextComponentBase {
 }
 
 impl TextComponent {
-    pub fn text<P>(plain: P) -> Self
-    where
-        P: Into<Cow<'static, str>>,
-    {
+    pub fn text<P: Into<Cow<'static, str>>>(plain: P) -> Self {
         Self(TextComponentBase {
             content: TextContent::Text { text: plain.into() },
             style: Style::default(),
@@ -143,11 +128,10 @@ impl TextComponent {
         })
     }
 
-    pub fn translate<K, W>(key: K, with: W) -> Self
-    where
-        K: Into<Cow<'static, str>>,
-        W: Into<Vec<TextComponent>>,
-    {
+    pub fn translate<K: Into<Cow<'static, str>>, W: Into<Vec<TextComponent>>>(
+        key: K,
+        with: W,
+    ) -> Self {
         Self(TextComponentBase {
             content: TextContent::Translate {
                 translate: key.into(),
@@ -171,10 +155,7 @@ impl TextComponent {
         })
     }
 
-    pub fn add_text<P>(mut self, text: P) -> Self
-    where
-        P: Into<Cow<'static, str>>,
-    {
+    pub fn add_text<P: Into<Cow<'static, str>>>(mut self, text: P) -> Self {
         self.0.extra.push(TextComponentBase {
             content: TextContent::Text { text: text.into() },
             style: Style::default(),
@@ -188,7 +169,7 @@ impl TextComponent {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate { translate, with } => {
                 let translate = translate.into_owned();
-                get_translation_en_us(&translate, with)
+                get_translation_en_us(&translate, &with)
                     .unwrap_or(translate.to_string())
                     .clone()
             }

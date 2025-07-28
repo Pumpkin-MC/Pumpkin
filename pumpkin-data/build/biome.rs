@@ -7,7 +7,7 @@ use serde::Deserialize;
 use syn::LitInt;
 
 #[derive(Deserialize)]
-struct Biome {
+pub struct Biome {
     has_precipitation: bool,
     temperature: f32,
     downfall: f32,
@@ -16,7 +16,7 @@ struct Biome {
     features: Vec<Vec<String>>,
     creature_spawn_probability: Option<f32>,
     spawners: SpawnGroups,
-    id: u8,
+    pub id: u8,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash)]
@@ -289,16 +289,13 @@ pub(crate) fn build() -> TokenStream {
             impl Eq for Biome {}
 
             impl Hash for Biome {
-                fn hash<H>(&self, state: &mut H) where H: Hasher {
+                fn hash<H: Hasher>(&self, state: &mut H)  {
                     self.id.hash(state);
                 }
             }
 
             impl<'de> Deserialize<'de> for &'static Biome {
-                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-                where
-                    D: Deserializer<'de>,
-                {
+                fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
                     struct BiomeVisitor;
 
                     impl de::Visitor<'_> for BiomeVisitor {
@@ -308,17 +305,11 @@ pub(crate) fn build() -> TokenStream {
                             formatter.write_str("a biome name as a string")
                         }
 
-                        fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-                        where
-                            E: serde::de::Error,
-                        {
+                        fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
                             self.visit_str(&v)
                         }
 
-                        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-                        where
-                            E: de::Error,
-                        {
+                        fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
                             let biome = Biome::from_name(value.strip_prefix("minecraft:").unwrap_or(value));
                             biome.ok_or_else(|| E::unknown_variant(value, &["unknown biome"]))
                         }

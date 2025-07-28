@@ -1,25 +1,16 @@
 use crate::block::pumpkin_block::{
-    BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs, PumpkinBlock,
+    CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs, PumpkinBlock,
 };
 use async_trait::async_trait;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
-use pumpkin_macros::pumpkin_block;
+use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
+#[pumpkin_block_from_tag("minecraft:wool_carpets")]
 pub struct CarpetBlock;
-
-impl BlockMetadata for CarpetBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:wool_carpets").unwrap()
-    }
-}
 
 #[async_trait]
 impl PumpkinBlock for CarpetBlock {

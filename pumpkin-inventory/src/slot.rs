@@ -1,7 +1,10 @@
 #![warn(unused)]
 use std::{
     fmt::Debug,
-    sync::{Arc, atomic::AtomicU8},
+    sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+    },
     time::Duration,
 };
 
@@ -54,7 +57,7 @@ pub trait Slot: Send + Sync + Debug {
             .await
             .expect("Timed out while trying to acquire lock");
 
-        *lock
+        lock.clone()
     }
 
     async fn has_stack(&self) -> bool {
@@ -135,7 +138,8 @@ pub trait Slot: Send + Sync + Debug {
             None
         } else {
             if self.get_cloned_stack().await.is_empty() {
-                self.set_stack_prev(ItemStack::EMPTY, stack).await;
+                self.set_stack_prev(ItemStack::EMPTY.clone(), stack.clone())
+                    .await;
             }
 
             Some(stack)
@@ -153,7 +157,7 @@ pub trait Slot: Send + Sync + Debug {
             self.on_take_item(player, stack).await;
         }
 
-        stack.unwrap_or(ItemStack::EMPTY)
+        stack.unwrap_or(ItemStack::EMPTY.clone())
     }
 
     async fn insert_stack(&self, stack: ItemStack) -> ItemStack {
@@ -178,7 +182,7 @@ pub trait Slot: Send + Sync + Debug {
                 } else if stack.are_items_and_components_equal(&stack_self) {
                     stack.decrement(min_count);
                     stack_self.increment(min_count);
-                    let cloned_stack = *stack_self;
+                    let cloned_stack = stack_self.clone();
                     drop(stack_self);
                     self.set_stack(cloned_stack).await;
                 }
@@ -219,8 +223,7 @@ impl Slot for NormalSlot {
     }
 
     fn set_id(&self, id: usize) {
-        self.id
-            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
+        self.id.store(id as u8, Ordering::Relaxed);
     }
 
     async fn mark_dirty(&self) {
@@ -259,8 +262,7 @@ impl Slot for ArmorSlot {
     }
 
     fn set_id(&self, id: usize) {
-        self.id
-            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
+        self.id.store(id as u8, Ordering::Relaxed);
     }
 
     async fn get_max_item_count(&self) -> u8 {

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use fancy::FancyTrunkPlacer;
-use pumpkin_data::{Block, BlockState, tag::Tagable};
+use pumpkin_data::tag;
+use pumpkin_data::{Block, BlockState, tag::Taggable};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -56,7 +57,7 @@ impl TrunkPlacer {
     ) {
         let block = chunk.get_block_state(&pos.0).to_block();
         if force_dirt
-            || !(block.is_tagged_with("minecraft:dirt").unwrap()
+            || !(block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)
                 && block != &Block::GRASS_BLOCK
                 && block != &Block::MYCELIUM)
         {
@@ -92,7 +93,7 @@ impl TrunkPlacer {
     }
 
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         height: u32,
         start_pos: BlockPos,
@@ -103,19 +104,17 @@ impl TrunkPlacer {
         dirt_state: &BlockState,
         trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        self.r#type
-            .generate(
-                self,
-                height,
-                start_pos,
-                chunk,
-                level,
-                random,
-                force_dirt,
-                dirt_state,
-                trunk_state,
-            )
-            .await
+        self.r#type.generate(
+            self,
+            height,
+            start_pos,
+            chunk,
+            level,
+            random,
+            force_dirt,
+            dirt_state,
+            trunk_state,
+        )
     }
 }
 
@@ -144,7 +143,7 @@ pub enum TrunkType {
 
 impl TrunkType {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         placer: &TrunkPlacer,
         height: u32,
@@ -167,77 +166,61 @@ impl TrunkType {
                 trunk_state,
             ),
             TrunkType::Forking(_) => (vec![], vec![]), // TODO
-            TrunkType::Giant(_) => {
-                GiantTrunkPlacer::generate(
-                    placer,
-                    height,
-                    start_pos,
-                    chunk,
-                    level,
-                    random,
-                    force_dirt,
-                    dirt_state,
-                    trunk_state,
-                )
-                .await
-            }
-            TrunkType::MegaJungle(_) => {
-                MegaJungleTrunkPlacer::generate(
-                    placer,
-                    height,
-                    start_pos,
-                    chunk,
-                    level,
-                    random,
-                    force_dirt,
-                    dirt_state,
-                    trunk_state,
-                )
-                .await
-            }
-            TrunkType::DarkOak(_) => {
-                DarkOakTrunkPlacer::generate(
-                    placer,
-                    height,
-                    start_pos,
-                    chunk,
-                    level,
-                    random,
-                    force_dirt,
-                    dirt_state,
-                    trunk_state,
-                )
-                .await
-            }
-            TrunkType::Fancy(_) => {
-                FancyTrunkPlacer::generate(
-                    placer,
-                    height,
-                    start_pos,
-                    chunk,
-                    level,
-                    random,
-                    force_dirt,
-                    dirt_state,
-                    trunk_state,
-                )
-                .await
-            }
-            TrunkType::Bending(bending) => {
-                bending
-                    .generate(
-                        placer,
-                        height,
-                        start_pos,
-                        chunk,
-                        level,
-                        random,
-                        force_dirt,
-                        dirt_state,
-                        trunk_state,
-                    )
-                    .await
-            }
+            TrunkType::Giant(_) => GiantTrunkPlacer::generate(
+                placer,
+                height,
+                start_pos,
+                chunk,
+                level,
+                random,
+                force_dirt,
+                dirt_state,
+                trunk_state,
+            ),
+            TrunkType::MegaJungle(_) => MegaJungleTrunkPlacer::generate(
+                placer,
+                height,
+                start_pos,
+                chunk,
+                level,
+                random,
+                force_dirt,
+                dirt_state,
+                trunk_state,
+            ),
+            TrunkType::DarkOak(_) => DarkOakTrunkPlacer::generate(
+                placer,
+                height,
+                start_pos,
+                chunk,
+                level,
+                random,
+                force_dirt,
+                dirt_state,
+                trunk_state,
+            ),
+            TrunkType::Fancy(_) => FancyTrunkPlacer::generate(
+                placer,
+                height,
+                start_pos,
+                chunk,
+                level,
+                random,
+                force_dirt,
+                dirt_state,
+                trunk_state,
+            ),
+            TrunkType::Bending(bending) => bending.generate(
+                placer,
+                height,
+                start_pos,
+                chunk,
+                level,
+                random,
+                force_dirt,
+                dirt_state,
+                trunk_state,
+            ),
             TrunkType::UpwardsBranching(_) => (vec![], vec![]), // TODO
             TrunkType::Cherry(_) => (vec![], vec![]),           // TODO
         }

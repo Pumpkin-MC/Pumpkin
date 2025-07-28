@@ -19,7 +19,7 @@ use crate::{
         GameProfile,
         authentication::{self, AuthError},
         is_valid_player_name,
-        java::JavaClientPlatform,
+        java::JavaClient,
         offline_uuid,
         proxy::{bungeecord, velocity},
     },
@@ -86,7 +86,7 @@ static LINKS: LazyLock<Vec<Link>> = LazyLock::new(|| {
     links
 });
 
-impl JavaClientPlatform {
+impl JavaClient {
     pub async fn handle_login_start(&self, server: &Server, login_start: SLoginStart) {
         log::debug!("login start");
 

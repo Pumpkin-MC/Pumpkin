@@ -142,29 +142,20 @@ impl<W: Write> Serializer<W> {
 }
 
 /// Serializes struct using Serde Serializer to unnamed (network) NBT
-pub fn to_bytes_unnamed<T>(value: &T, w: impl Write) -> Result<()>
-where
-    T: Serialize,
-{
+pub fn to_bytes_unnamed<T: Serialize>(value: &T, w: impl Write) -> Result<()> {
     let mut serializer = Serializer::new(w, None);
     value.serialize(&mut serializer)?;
     Ok(())
 }
 
 /// Serializes struct using Serde Serializer to normal NBT
-pub fn to_bytes_named<T>(value: &T, name: String, w: impl Write) -> Result<()>
-where
-    T: Serialize,
-{
+pub fn to_bytes_named<T: Serialize>(value: &T, name: String, w: impl Write) -> Result<()> {
     let mut serializer = Serializer::new(w, Some(name));
     value.serialize(&mut serializer)?;
     Ok(())
 }
 
-pub fn to_bytes<T>(value: &T, w: impl Write) -> Result<()>
-where
-    T: Serialize,
-{
+pub fn to_bytes<T: Serialize>(value: &T, w: impl Write) -> Result<()> {
     to_bytes_named(value, String::new(), w)
 }
 
@@ -287,10 +278,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         Ok(())
     }
 
-    fn serialize_some<T>(self, value: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
+    fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<()> {
         value.serialize(self)
     }
 
@@ -312,23 +300,21 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         Ok(())
     }
 
-    fn serialize_newtype_struct<T>(self, _name: &'static str, _value: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
+    fn serialize_newtype_struct<T: ?Sized + Serialize>(
+        self,
+        _name: &'static str,
+        _value: &T,
+    ) -> Result<()> {
         Err(Error::UnsupportedType("newtype struct".to_string()))
     }
 
-    fn serialize_newtype_variant<T>(
+    fn serialize_newtype_variant<T: ?Sized + Serialize>(
         self,
         name: &'static str,
         _variant_index: u32,
         variant: &'static str,
         value: &T,
-    ) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
+    ) -> Result<()> {
         if name == NBT_ARRAY_TAG {
             let name = match self.state {
                 State::Named(ref name) => name.clone(),
@@ -443,10 +429,10 @@ impl<W: Write> ser::SerializeTuple for &mut Serializer<W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_element<T>(&mut self, value: &T) -> std::result::Result<(), Self::Error>
-    where
-        T: ?Sized + Serialize,
-    {
+    fn serialize_element<T: ?Sized + Serialize>(
+        &mut self,
+        value: &T,
+    ) -> std::result::Result<(), Self::Error> {
         value.serialize(&mut **self)?;
         self.state = State::CheckedListElement;
         Ok(())
@@ -461,10 +447,7 @@ impl<W: Write> ser::SerializeSeq for &mut Serializer<W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_element<T>(&mut self, value: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
+    fn serialize_element<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<()> {
         value.serialize(&mut **self)?;
         self.state = State::ListElement;
         Ok(())
@@ -479,10 +462,11 @@ impl<W: Write> ser::SerializeStruct for &mut Serializer<W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
+    fn serialize_field<T: ?Sized + Serialize>(
+        &mut self,
+        key: &'static str,
+        value: &T,
+    ) -> Result<()> {
         self.state = State::Named(key.to_string());
         value.serialize(&mut **self)
     }
@@ -497,18 +481,18 @@ impl<W: Write> ser::SerializeMap for &mut Serializer<W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_key<T>(&mut self, key: &T) -> std::result::Result<(), Self::Error>
-    where
-        T: ?Sized + Serialize,
-    {
+    fn serialize_key<T: ?Sized + Serialize>(
+        &mut self,
+        key: &T,
+    ) -> std::result::Result<(), Self::Error> {
         self.state = State::MapKey;
         key.serialize(&mut **self)
     }
 
-    fn serialize_value<T>(&mut self, value: &T) -> std::result::Result<(), Self::Error>
-    where
-        T: ?Sized + Serialize,
-    {
+    fn serialize_value<T: ?Sized + Serialize>(
+        &mut self,
+        value: &T,
+    ) -> std::result::Result<(), Self::Error> {
         value.serialize(&mut **self)
     }
 
