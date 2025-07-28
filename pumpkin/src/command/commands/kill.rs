@@ -29,10 +29,8 @@ impl CommandExecutor for Executor {
         };
 
         let target_count = targets.len();
-        let mut name = String::new();
         for target in targets {
             target.kill().await;
-            name.clone_from(&target.gameprofile.name);
         }
 
         let msg = if target_count == 1 {

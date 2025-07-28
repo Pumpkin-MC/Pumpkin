@@ -11,6 +11,7 @@ use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 
 const NAMES: [&str; 2] = ["experience", "xp"];
@@ -52,7 +53,7 @@ impl Executor {
                     .send_message(TextComponent::translate(
                         "commands.experience.query.levels",
                         [
-                            TextComponent::text(target.gameprofile.name.clone()),
+                            target.get_display_name().await,
                             TextComponent::text(level.to_string()),
                         ],
                     ))
@@ -64,7 +65,7 @@ impl Executor {
                     .send_message(TextComponent::translate(
                         "commands.experience.query.points",
                         [
-                            TextComponent::text(target.gameprofile.name.clone()),
+                            target.get_display_name().await,
                             TextComponent::text(points.to_string()),
                         ],
                     ))
@@ -78,7 +79,7 @@ impl Executor {
         exp_type: ExpType,
         amount: i32,
         targets_len: usize,
-        target_name: Option<String>,
+        target_name: Option<TextComponent>,
     ) -> TextComponent {
         match (mode, exp_type) {
             (Mode::Add, ExpType::Points) => {
@@ -95,7 +96,7 @@ impl Executor {
                         "commands.experience.add.points.success.single",
                         [
                             TextComponent::text(amount.to_string()),
-                            TextComponent::text(target_name.unwrap()),
+                            target_name.unwrap(),
                         ],
                     )
                 }
@@ -114,7 +115,7 @@ impl Executor {
                         "commands.experience.add.levels.success.single",
                         [
                             TextComponent::text(amount.to_string()),
-                            TextComponent::text(target_name.unwrap()),
+                            target_name.unwrap(),
                         ],
                     )
                 }
@@ -133,7 +134,7 @@ impl Executor {
                         "commands.experience.set.points.success.single",
                         [
                             TextComponent::text(amount.to_string()),
-                            TextComponent::text(target_name.unwrap()),
+                            target_name.unwrap(),
                         ],
                     )
                 }
@@ -152,7 +153,7 @@ impl Executor {
                         "commands.experience.set.levels.success.single",
                         [
                             TextComponent::text(amount.to_string()),
-                            TextComponent::text(target_name.unwrap()),
+                            target_name.unwrap(),
                         ],
                     )
                 }
@@ -247,7 +248,7 @@ impl CommandExecutor for Executor {
                                 self.exp_type.unwrap(),
                                 amount,
                                 targets.len(),
-                                Some(target.gameprofile.name.clone()),
+                                Some(target.get_display_name().await),
                             );
                             sender.send_message(msg).await;
                         }

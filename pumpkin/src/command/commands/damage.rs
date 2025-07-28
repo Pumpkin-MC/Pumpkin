@@ -39,7 +39,7 @@ async fn send_damage_result(
     sender: &mut CommandSender,
     success: bool,
     amount: f32,
-    target_name: String,
+    target_name: TextComponent,
 ) {
     if !success {
         sender
@@ -54,10 +54,7 @@ async fn send_damage_result(
     sender
         .send_message(TextComponent::translate(
             "commands.damage.success",
-            [
-                TextComponent::text(amount.to_string()),
-                TextComponent::text(target_name),
-            ],
+            [TextComponent::text(amount.to_string()), target_name],
         ))
         .await;
 }
@@ -96,7 +93,7 @@ impl CommandExecutor for LocationExecutor {
             .damage_with_context(amount, damage_type, Some(location), None, None)
             .await;
 
-        send_damage_result(sender, success, amount, target.gameprofile.name.clone()).await;
+        send_damage_result(sender, success, amount, target.get_display_name().await).await;
 
         Ok(())
     }
@@ -147,7 +144,7 @@ impl CommandExecutor for EntityExecutor {
             )
             .await;
 
-        send_damage_result(sender, success, amount, target.gameprofile.name.clone()).await;
+        send_damage_result(sender, success, amount, target.get_display_name().await).await;
 
         Ok(())
     }

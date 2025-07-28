@@ -234,11 +234,10 @@ impl LivingEntity {
         cause: Option<&dyn EntityBase>,
     ) {
         let world = self.entity.world.read().await;
-        let entities = world.entities.read().await;
-        let dyn_self = entities
-            .get(&self.entity.entity_uuid)
-            .expect("Entity not found in world")
-            .as_ref();
+        let dyn_self = world
+            .get_entity_by_id(self.entity.entity_id)
+            .await
+            .expect("Entity not found in world");
         if self
             .dead
             .compare_exchange(false, true, Relaxed, Relaxed)

@@ -1600,6 +1600,11 @@ impl World {
                 return Some(entity.clone());
             }
         }
+        for player in self.players.read().await.values() {
+            if player.get_entity().entity_id == id {
+                return Some(player.clone() as Arc<dyn EntityBase>);
+            }
+        }
         None
     }
 

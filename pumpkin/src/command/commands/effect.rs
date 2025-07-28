@@ -9,6 +9,7 @@ use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
+use crate::entity::EntityBase;
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_util::text::color::{Color, NamedColor};
@@ -129,10 +130,7 @@ impl CommandExecutor for GiveExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.effect.give.success.single",
-                    [
-                        translation_name,
-                        TextComponent::text(targets[0].gameprofile.name.clone()),
-                    ],
+                    [translation_name, targets[0].get_display_name().await],
                 ))
                 .await;
         } else {
@@ -190,7 +188,7 @@ impl CommandExecutor for ClearExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.effect.clear.everything.success.single",
-                        [TextComponent::text(targets[0].gameprofile.name.to_string())],
+                        [targets[0].get_display_name().await],
                     ))
                     .await;
             } else {
@@ -234,7 +232,7 @@ impl CommandExecutor for ClearExecutor {
                             "commands.effect.clear.specific.success.single",
                             [
                                 TextComponent::text(effect.to_name()),
-                                TextComponent::text(targets[0].gameprofile.name.to_string()),
+                                targets[0].get_display_name().await,
                             ],
                         ))
                         .await;
