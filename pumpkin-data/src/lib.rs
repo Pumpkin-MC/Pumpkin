@@ -150,6 +150,10 @@ pub mod flower_pot_transformations;
 #[path = "generated/fuels.rs"]
 pub mod fuels;
 
+#[rustfmt::skip]
+#[path = "generated/recipe_remainder.rs"]
+pub mod recipe_remainder;
+
 mod block_direction;
 pub mod block_state;
 mod blocks;
