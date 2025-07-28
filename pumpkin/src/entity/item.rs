@@ -87,7 +87,7 @@ impl EntityBase for ItemEntity {
             .send_meta_data(&[Metadata::new(
                 8,
                 MetaDataType::ItemStack,
-                &ItemStackSerializer::from(*self.item_stack.lock().await),
+                &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
             )])
             .await;
     }

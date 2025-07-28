@@ -3,7 +3,7 @@ name = "pumpkin"
 version.workspace = true
 description = "Empowering everyone to host fast and efficient Minecraft servers."
 edition.workspace = true
-rust-version = "1.87"
+rust-version = "1.88"
 
 [package.metadata.tauri-winres]
 # FileDescription is handled as the Program name by Windows!
