@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
-use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_world::item::ItemStack;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
@@ -12,6 +10,7 @@ use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use CommandError::InvalidConsumption;
 
@@ -42,26 +41,17 @@ async fn clear_player(target: &Player) -> u64 {
     count
 }
 
-fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> TextComponent {
+async fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> TextComponent {
     match targets {
-        [target] if item_count == 0 => TextComponent::translate(
-            "clear.failed.single",
-            [TextComponent::text(target.gameprofile.name.clone())],
-        )
-        .color_named(NamedColor::Red),
+        [target] if item_count == 0 => {
+            TextComponent::translate("clear.failed.single", [target.get_display_name().await])
+                .color_named(NamedColor::Red)
+        }
         [target] => TextComponent::translate(
             "commands.clear.success.single",
             [
                 TextComponent::text(item_count.to_string()),
-                TextComponent::text(target.gameprofile.name.clone())
-                    .click_event(ClickEvent::SuggestCommand {
-                        command: format!("/tell {} ", target.gameprofile.name.clone()).into(),
-                    })
-                    .hover_event(HoverEvent::show_entity(
-                        target.living_entity.entity.entity_uuid.to_string(),
-                        target.living_entity.entity.entity_type.resource_name.into(),
-                        Some(TextComponent::text(target.gameprofile.name.clone())),
-                    )),
+                target.get_display_name().await,
             ],
         ),
         targets if item_count == 0 => TextComponent::translate(
@@ -98,7 +88,7 @@ impl CommandExecutor for Executor {
             item_count += clear_player(target).await;
         }
 
-        let msg = clear_command_text_output(item_count, targets);
+        let msg = clear_command_text_output(item_count, targets).await;
 
         sender.send_message(msg).await;
 
@@ -121,7 +111,7 @@ impl CommandExecutor for SelfExecutor {
         let item_count = clear_player(&target).await;
 
         let hold_target = [target];
-        let msg = clear_command_text_output(item_count, &hold_target);
+        let msg = clear_command_text_output(item_count, &hold_target).await;
 
         sender.send_message(msg).await;
 

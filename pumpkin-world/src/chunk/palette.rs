@@ -29,7 +29,8 @@ impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
         self.cube[y][z][x]
     }
 
-    fn set(&mut self, x: usize, y: usize, z: usize, value: V) {
+    /// Returns the Original
+    fn set(&mut self, x: usize, y: usize, z: usize, value: V) -> V {
         debug_assert!(x < DIM);
         debug_assert!(y < DIM);
         debug_assert!(z < DIM);
@@ -48,6 +49,7 @@ impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
             .entry(value)
             .and_modify(|count| *count += 1)
             .or_insert(1);
+        original
     }
 }
 
@@ -191,24 +193,27 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         }
     }
 
-    pub fn set(&mut self, x: usize, y: usize, z: usize, value: V) {
+    pub fn set(&mut self, x: usize, y: usize, z: usize, value: V) -> V {
         debug_assert!(x < Self::SIZE);
         debug_assert!(y < Self::SIZE);
         debug_assert!(z < Self::SIZE);
 
         match self {
             Self::Homogeneous(original) => {
-                if value != *original {
-                    let mut cube = Box::new([[[*original; DIM]; DIM]; DIM]);
+                let original = *original;
+                if value != original {
+                    let mut cube = Box::new([[[original; DIM]; DIM]; DIM]);
                     cube[y][z][x] = value;
                     *self = Self::from_cube(cube);
                 }
+                original
             }
             Self::Heterogeneous(data) => {
-                data.set(x, y, z, value);
+                let original = data.set(x, y, z, value);
                 if data.counts.len() == 1 {
                     *self = Self::Homogeneous(*data.counts.keys().next().unwrap());
                 }
+                original
             }
         }
     }

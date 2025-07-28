@@ -1,3 +1,4 @@
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -90,10 +91,7 @@ async fn ban_player(sender: &CommandSender, player: &Player, reason: Option<Stri
     sender
         .send_message(TextComponent::translate(
             "commands.ban.success",
-            [
-                TextComponent::text(player.gameprofile.name.clone()),
-                TextComponent::text(reason),
-            ],
+            [player.get_display_name().await, TextComponent::text(reason)],
         ))
         .await;
 

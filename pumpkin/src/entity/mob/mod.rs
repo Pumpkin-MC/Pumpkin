@@ -1,9 +1,11 @@
+use core::f32;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use tokio::sync::Mutex;
-
 use crate::server::Server;
+use async_trait::async_trait;
+use pumpkin_data::damage::DamageType;
+use pumpkin_util::math::vector3::Vector3;
+use tokio::sync::Mutex;
 
 use super::{
     Entity, EntityBase,
@@ -37,6 +39,19 @@ impl EntityBase for MobEntity {
         }
         let mut navigator = self.navigator.lock().await;
         navigator.tick(&self.living_entity).await;
+    }
+
+    async fn damage_with_context(
+        &self,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        self.living_entity
+            .damage_with_context(amount, damage_type, position, source, cause)
+            .await
     }
 
     fn get_entity(&self) -> &Entity {
