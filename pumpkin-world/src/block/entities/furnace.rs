@@ -298,7 +298,7 @@ impl BlockEntity for FurnaceBlockEntity {
         let furnace = Self {
             position,
             dirty: AtomicBool::new(false),
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             cooking_total_time,
             cooking_time_spent,
             lit_total_time,
@@ -354,7 +354,7 @@ impl FurnaceBlockEntity {
         Self {
             position,
             dirty: AtomicBool::new(false),
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             cooking_total_time: AtomicU16::new(0),
             cooking_time_spent: AtomicU16::new(0),
             lit_total_time: AtomicU16::new(0),
@@ -384,7 +384,7 @@ impl Inventory for FurnaceBlockEntity {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY;
+        let mut removed = ItemStack::EMPTY.clone();
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -401,7 +401,7 @@ impl Inventory for FurnaceBlockEntity {
         let is_same_item =
             !stack.is_empty() && ItemStack::are_items_and_components_equal(&furnace_stack, &stack);
 
-        *furnace_stack = stack;
+        *furnace_stack = stack.clone();
         drop(furnace_stack);
 
         if slot == 0 && !is_same_item {
@@ -429,7 +429,7 @@ impl Inventory for FurnaceBlockEntity {
 impl Clearable for FurnaceBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY;
+            *slot.lock().await = ItemStack::EMPTY.clone();
         }
     }
 }

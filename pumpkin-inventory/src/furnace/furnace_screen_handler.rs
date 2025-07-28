@@ -106,7 +106,7 @@ impl ScreenHandler for FurnaceScreenHandler {
     async fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
         const FUEL_SLOT: i32 = 1;
 
-        let mut stack_left = ItemStack::EMPTY;
+        let mut stack_left = ItemStack::EMPTY.clone();
         let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
         if !slot.has_stack().await {
@@ -115,7 +115,7 @@ impl ScreenHandler for FurnaceScreenHandler {
 
         let slot_stack = slot.get_stack().await;
         let mut stack = slot_stack.lock().await;
-        stack_left = *stack;
+        stack_left = stack.clone();
 
         let success = if slot_index < 3 {
             self.insert_item(&mut stack, 3, self.get_behaviour().slots.len() as i32, true)
@@ -127,12 +127,12 @@ impl ScreenHandler for FurnaceScreenHandler {
         };
 
         if !success {
-            return ItemStack::EMPTY;
+            return ItemStack::EMPTY.clone();
         }
 
         if stack.is_empty() {
             drop(stack);
-            slot.set_stack(ItemStack::EMPTY).await;
+            slot.set_stack(ItemStack::EMPTY.clone()).await;
         } else {
             slot.mark_dirty().await;
         }
