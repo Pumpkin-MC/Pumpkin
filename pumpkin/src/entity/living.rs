@@ -260,7 +260,7 @@ impl LivingEntity {
 
             let level_info = world.level_info.read().await;
             let game_rules = &level_info.game_rules;
-            if self.entity.entity_type == EntityType::PLAYER && game_rules.show_death_messages {
+            if self.entity.entity_type == &EntityType::PLAYER && game_rules.show_death_messages {
                 //TODO: KillCredit
                 let death_message = if let Some(death_message_type) = damage_type.death_message_type
                 {
