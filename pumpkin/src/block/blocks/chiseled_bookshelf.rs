@@ -3,8 +3,8 @@ use std::sync::{Arc, atomic::Ordering};
 use crate::{
     block::{
         pumpkin_block::{
-            BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
-            OnStateReplacedArgs, PlacedArgs, PumpkinBlock, UseWithItemArgs,
+            BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
+            PumpkinBlock, UseWithItemArgs,
         },
         registry::BlockActionResult,
     },
