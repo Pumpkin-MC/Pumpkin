@@ -1,3 +1,4 @@
+use std::sync::Weak;
 use std::time::Duration;
 use std::{
     collections::HashMap,
@@ -129,6 +130,7 @@ pub mod weather;
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
+use pumpkin_world::generation::settings::GenerationSettings;
 use uuid::Uuid;
 use weather::Weather;
 
@@ -180,6 +182,7 @@ pub struct World {
     pub weather: Mutex<Weather>,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
+    pub server: Weak<Server>,
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
@@ -192,6 +195,7 @@ impl World {
         level_info: Arc<RwLock<LevelData>>,
         dimension_type: VanillaDimensionType,
         block_registry: Arc<BlockRegistry>,
+        server: Weak<Server>,
     ) -> Self {
         // TODO
         let generation_settings = match dimension_type {
@@ -222,6 +226,7 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
+            server,
         }
     }
 
@@ -812,10 +817,9 @@ impl World {
         spawn_for_chunk(self, chunk_pos, chunk, spawn_state, spawn_list).await;
     }
 
-    /// Gets the y position of the first non air block from the top down
-    pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
+    pub fn generation_settings(&self) -> &GenerationSettings {
         // TODO: this is bad
-        let generation_settings = match self.dimension_type {
+        match self.dimension_type {
             VanillaDimensionType::Overworld => GENERATION_SETTINGS
                 .get(&GeneratorSetting::Overworld)
                 .unwrap(),
@@ -826,19 +830,24 @@ impl World {
             VanillaDimensionType::TheNether => {
                 GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
             }
-        };
+        }
+    }
+
+    /// Gets the y position of the first non air block from the top down
+    pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
+        let generation_settings = self.generation_settings();
         for y in (i32::from(generation_settings.shape.min_y)
-            ..=i32::from(generation_settings.shape.height))
+            ..i32::from(generation_settings.shape.max_y()))
             .rev()
         {
-            let pos = BlockPos(Vector3::new(position.x, y, position.y));
+            let pos = BlockPos::new(position.x, y, position.y);
             let block = self.get_block_state(&pos).await;
             if block.is_air() {
                 continue;
             }
             return y;
         }
-        i32::from(generation_settings.shape.height)
+        i32::from(generation_settings.shape.min_y)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1725,6 +1734,11 @@ impl World {
         for entity in self.entities.read().await.values() {
             if entity.get_entity().entity_id == id {
                 return Some(entity.clone());
+            }
+        }
+        for player in self.players.read().await.values() {
+            if player.get_entity().entity_id == id {
+                return Some(player.clone() as Arc<dyn EntityBase>);
             }
         }
         None

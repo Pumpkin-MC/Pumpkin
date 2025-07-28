@@ -1,14 +1,12 @@
 use async_trait::async_trait;
-use pumpkin_data::entity;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::click::ClickEvent;
-use pumpkin_util::text::hover::HoverEvent;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
+use crate::entity::EntityBase;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["kill"];
@@ -31,28 +29,15 @@ impl CommandExecutor for Executor {
         };
 
         let target_count = targets.len();
-        let mut name = String::new();
         for target in targets {
             target.kill().await;
-            name.clone_from(&target.gameprofile.name);
         }
 
         let msg = if target_count == 1 {
-            let entity = &targets[0].living_entity.entity;
-            let mut entity_display =
-                TextComponent::text(name.clone()).hover_event(HoverEvent::show_entity(
-                    entity.entity_uuid.to_string(),
-                    entity.entity_type.resource_name.into(),
-                    Some(TextComponent::text(name.clone())),
-                ));
-
-            if entity.entity_type == &entity::EntityType::PLAYER {
-                entity_display = entity_display.click_event(ClickEvent::SuggestCommand {
-                    command: format!("/tell {} ", name.clone()).into(),
-                });
-            }
-
-            TextComponent::translate("commands.kill.success.single", [entity_display])
+            TextComponent::translate(
+                "commands.kill.success.single",
+                [targets[0].get_display_name().await],
+            )
         } else {
             TextComponent::translate(
                 "commands.kill.success.multiple",
@@ -77,23 +62,12 @@ impl CommandExecutor for SelfExecutor {
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let target = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
-        let name = target.gameprofile.name.clone();
-        let entity = &target.living_entity.entity;
-
         target.kill().await;
 
         sender
             .send_message(TextComponent::translate(
                 "commands.kill.success.single",
-                [TextComponent::text(name.clone())
-                    .hover_event(HoverEvent::show_entity(
-                        entity.entity_uuid.to_string(),
-                        entity.entity_type.resource_name.into(),
-                        Some(TextComponent::text(name.clone())),
-                    ))
-                    .click_event(ClickEvent::SuggestCommand {
-                        command: format!("/tell {} ", name.clone()).into(),
-                    })],
+                [target.get_display_name().await],
             ))
             .await;
 
