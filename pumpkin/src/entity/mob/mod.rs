@@ -5,13 +5,13 @@ use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
 use tokio::sync::Mutex;
-use pumpkin_data::damage::DamageType;
-use pumpkin_util::math::vector3::Vector3;
 
 pub mod zombie;
 
@@ -119,7 +119,8 @@ where
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> bool {
-        self.get_mob_entity().living_entity
+        self.get_mob_entity()
+            .living_entity
             .damage_with_context(amount, damage_type, position, source, cause)
             .await
     }

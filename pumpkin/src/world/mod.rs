@@ -1,5 +1,5 @@
-use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Weak;
+use std::sync::atomic::Ordering::Relaxed;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
