@@ -1,5 +1,6 @@
 pub mod context;
 pub mod events;
+pub mod task;
 
 use std::sync::Arc;
 
