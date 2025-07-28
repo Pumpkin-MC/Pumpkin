@@ -12,9 +12,9 @@ use crate::{
     world::World,
 };
 use async_trait::async_trait;
-use pumpkin_data::item::Item;
 use pumpkin_data::{
     block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
+    item::Item,
     sound::{Sound, SoundCategory},
     tag,
     tag::Taggable,
