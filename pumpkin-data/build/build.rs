@@ -30,6 +30,7 @@ mod packet;
 mod particle;
 mod potion;
 mod potion_brewing;
+mod recipe_remainder;
 mod recipes;
 mod scoreboard_slot;
 mod screen;
@@ -87,6 +88,7 @@ pub fn main() {
         (effect::build, "effect.rs"),
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
+        (recipe_remainder::build, "recipe_remainder.rs"),
     ];
 
     build_functions.par_iter().for_each(|(build_fn, file)| {

@@ -18,8 +18,11 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::{ComparableInventory, Inventory};
 use pumpkin_world::item::ItemStack;
+use pumpkin_world::{
+    block::entities::PropertyDelegate,
+    inventory::{ComparableInventory, Inventory},
+};
 use std::cmp::max;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
@@ -28,18 +31,33 @@ use tokio::sync::Mutex;
 const SLOT_INDEX_OUTSIDE: i32 = -999;
 
 pub struct ScreenProperty {
-    _old_value: i32,
-    _index: u8,
-    value: i32,
+    old_value: i32,
+    index: u8,
+    value: Arc<dyn PropertyDelegate>,
 }
 
 impl ScreenProperty {
+    pub fn new(value: Arc<dyn PropertyDelegate>, index: u8) -> Self {
+        Self {
+            old_value: value.get_property(index as i32),
+            index,
+            value,
+        }
+    }
+
     pub fn get(&self) -> i32 {
-        self.value
+        self.value.get_property(self.index as i32)
     }
 
     pub fn set(&mut self, value: i32) {
-        self.value = value;
+        self.value.set_property(self.index as i32, value);
+    }
+
+    pub fn has_changed(&mut self) -> bool {
+        let value = self.get();
+        let has_changed = !value.eq(&self.old_value);
+        self.old_value = value;
+        has_changed
     }
 }
 
@@ -257,13 +275,50 @@ pub trait ScreenHandler: Send + Sync {
             self.update_tracked_slot(i, stack).await;
         }
 
-        /* TODO: Implement this
-        for i in 0..self.prop_size() {
-            let property = self.get_property(i);
-            self.set_tracked_property(i, property);
-        } */
+        let behaviour = self.get_behaviour_mut();
+        let mut prop_vec = vec![];
+        for (idx, prop) in behaviour.properties.iter_mut().enumerate() {
+            let value = prop.get();
+            if prop.has_changed() {
+                prop_vec.push((idx, value));
+            }
+        }
+
+        for (idx, value) in prop_vec {
+            self.update_tracked_properties(idx as i32, value).await;
+            self.check_property_updates(idx as i32, value).await;
+        }
 
         self.sync_state().await;
+    }
+
+    async fn update_tracked_properties(&mut self, idx: i32, value: i32) {
+        let behaviour = self.get_behaviour_mut();
+        if idx <= behaviour.tracked_property_values.len() as i32 {
+            behaviour.tracked_property_values[idx as usize] = value;
+            for listener in behaviour.listeners.iter() {
+                listener
+                    .on_property_update(behaviour, idx as u8, value)
+                    .await;
+            }
+        }
+    }
+
+    async fn check_property_updates(&mut self, idx: i32, value: i32) {
+        let behaviour = self.get_behaviour_mut();
+        if !behaviour.disable_sync {
+            if let Some(old_value) = behaviour.tracked_property_values.get(idx as usize) {
+                let old_value = *old_value;
+                if old_value != value {
+                    behaviour
+                        .tracked_property_values
+                        .insert(idx as usize, value);
+                    if let Some(ref sync_handler) = behaviour.sync_handler {
+                        sync_handler.update_property(behaviour, idx, value).await;
+                    }
+                }
+            }
+        }
     }
 
     async fn update_tracked_slot(&mut self, slot: usize, stack: ItemStack) {
@@ -327,11 +382,19 @@ pub trait ScreenHandler: Send + Sync {
 
         self.check_cursor_stack_updates().await;
 
-        /* TODO: Implement this
-        for i in 0..self.prop_size() {
-            let property = self.get_property(i);
-            self.set_tracked_property(i, property);
-        } */
+        let behaviour = self.get_behaviour_mut();
+        let mut prop_vec = vec![];
+        for (idx, prop) in behaviour.properties.iter_mut().enumerate() {
+            let value = prop.get();
+            if prop.has_changed() {
+                prop_vec.push((idx, value));
+            }
+        }
+
+        for (idx, value) in prop_vec {
+            self.update_tracked_properties(idx as i32, value).await;
+            self.check_property_updates(idx as i32, value).await;
+        }
     }
 
     async fn is_slot_valid(&self, slot: i32) -> bool {
@@ -836,7 +899,7 @@ pub trait ScreenHandlerListener: Send + Sync {
         _stack: ItemStack,
     ) {
     }
-    fn on_property_update(
+    async fn on_property_update(
         &self,
         _screen_handler: &ScreenHandlerBehaviour,
         _property: u8,

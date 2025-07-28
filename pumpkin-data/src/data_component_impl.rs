@@ -44,8 +44,6 @@ pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T 
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
     value.as_mut_any().downcast_mut::<T>().unwrap()
 }
-
-// please don't make the size of the struct too large. use Cow<> when necessary
 #[derive(Clone, Debug, Hash)]
 pub struct CustomDataImpl;
 impl DataComponentImpl for CustomDataImpl {

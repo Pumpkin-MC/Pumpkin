@@ -375,7 +375,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = "Try to parse an item from a raw id."]
-            pub fn from_id(id: u16) -> Option<&'static Self> {
+            pub const fn from_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #type_from_raw_id_arms
                     _ => None
