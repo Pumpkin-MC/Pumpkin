@@ -10,6 +10,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
 use tokio::sync::Mutex;
+use pumpkin_data::damage::DamageType;
+use pumpkin_util::math::vector3::Vector3;
 
 pub mod zombie;
 
@@ -107,6 +109,19 @@ where
         let look_control = mob_entity.look_control.lock().await;
         look_control.tick(self).await;
         drop(look_control);
+    }
+
+    async fn damage_with_context(
+        &self,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        self.get_mob_entity().living_entity
+            .damage_with_context(amount, damage_type, position, source, cause)
+            .await
     }
 
     fn get_entity(&self) -> &Entity {

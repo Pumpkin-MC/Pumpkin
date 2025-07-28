@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use pumpkin_config::{BASIC_CONFIG, whitelist::WhitelistEntry};
 use pumpkin_util::text::TextComponent;
 
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandExecutor, CommandSender,
@@ -224,7 +225,7 @@ impl CommandExecutor for RemoveExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.whitelist.remove.success",
-                            [TextComponent::text(player.gameprofile.name.clone())],
+                            [player.get_display_name().await],
                         ))
                         .await;
                 }
