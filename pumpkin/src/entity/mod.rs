@@ -1,3 +1,5 @@
+use crate::entity::combat::GLOBAL_COMBAT_PROFILE;
+use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
@@ -35,12 +37,10 @@ use std::sync::{
     Arc,
     atomic::{
         AtomicBool, AtomicI32, AtomicU32,
-        Ordering::{self, Relaxed},
+        Ordering::{self, Acquire, Relaxed, Release},
     },
 };
 use tokio::sync::{Mutex, RwLock};
-
-use crate::world::World;
 
 pub mod ai;
 pub mod decoration;
@@ -55,7 +55,7 @@ pub mod projectile;
 pub mod tnt;
 pub mod r#type;
 
-mod combat;
+pub mod combat;
 
 #[async_trait]
 pub trait EntityBase: Send + Sync {
@@ -334,8 +334,8 @@ impl Entity {
     }
 
     async fn tick_portal(&self, caller: &Arc<dyn EntityBase>) {
-        if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
-            self.portal_cooldown.fetch_sub(1, Ordering::Relaxed);
+        if self.portal_cooldown.load(Relaxed) > 0 {
+            self.portal_cooldown.fetch_sub(1, Relaxed);
         }
         let mut manager_guard = self.portal_manager.lock().await;
         // I know this is ugly, but a quick fix because i can't modify the thing while using it
@@ -345,7 +345,7 @@ impl Entity {
             if portal_manager.tick() {
                 // reset cooldown
                 self.portal_cooldown
-                    .store(self.default_portal_cooldown(), Ordering::Relaxed);
+                    .store(self.default_portal_cooldown(), Relaxed);
                 let pos = self.pos.load();
                 // TODO: this is bad
                 let scale_factor_new = if portal_manager.portal_world.dimension_type
@@ -384,9 +384,9 @@ impl Entity {
     }
 
     pub async fn try_use_portal(&self, portal_delay: u32, portal_world: Arc<World>, pos: BlockPos) {
-        if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
+        if self.portal_cooldown.load(Relaxed) > 0 {
             self.portal_cooldown
-                .store(self.default_portal_cooldown(), Ordering::Relaxed);
+                .store(self.default_portal_cooldown(), Relaxed);
             return;
         }
         let mut manager = self.portal_manager.lock().await;
@@ -405,7 +405,7 @@ impl Entity {
 
     /// Extinguishes this entity.
     pub fn extinguish(&self) {
-        self.fire_ticks.store(0, Ordering::Relaxed);
+        self.fire_ticks.store(0, Relaxed);
     }
 
     pub fn set_on_fire_for(&self, seconds: f32) {
@@ -413,8 +413,8 @@ impl Entity {
     }
 
     pub fn set_on_fire_for_ticks(&self, ticks: u32) {
-        if self.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
-            self.fire_ticks.store(ticks as i32, Ordering::Relaxed);
+        if self.fire_ticks.load(Relaxed) < ticks as i32 {
+            self.fire_ticks.store(ticks as i32, Relaxed);
         }
         // TODO: defrost
     }
@@ -458,25 +458,9 @@ impl Entity {
     ///
     /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
     pub fn knockback(&self, strength: f64, x: f64, z: f64) {
-        // This has some vanilla magic
-        let mut x = x;
-        let mut z = z;
-        while x.mul_add(x, z * z) < 1.0E-5 {
-            x = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
-            z = (rand::random::<f64>() - rand::random::<f64>()) * 0.01;
-        }
+        let combat_profile = GLOBAL_COMBAT_PROFILE.clone();
 
-        let var8 = Vector3::new(x, 0.0, z).normalize() * strength;
-        let velocity = self.velocity.load();
-        self.velocity.store(Vector3::new(
-            velocity.x / 2.0 - var8.x,
-            if self.on_ground.load(Relaxed) {
-                (velocity.y / 2.0 + strength).min(0.4)
-            } else {
-                velocity.y
-            },
-            velocity.z / 2.0 - var8.z,
-        ));
+        combat_profile.receive_knockback(strength, self, x, z);
     }
 
     pub async fn set_sneaking(&self, sneaking: bool) {
@@ -491,8 +475,8 @@ impl Entity {
     }
 
     pub async fn set_on_fire(&self, on_fire: bool) {
-        if self.has_visual_fire.load(Ordering::Relaxed) != on_fire {
-            self.has_visual_fire.store(on_fire, Ordering::Relaxed);
+        if self.has_visual_fire.load(Relaxed) != on_fire {
+            self.has_visual_fire.store(on_fire, Relaxed);
             self.set_flag(Flag::OnFire, on_fire).await;
         }
     }
@@ -639,13 +623,13 @@ impl Entity {
     }
 
     pub async fn set_sprinting(&self, sprinting: bool) {
-        assert!(self.sprinting.load(Relaxed) != sprinting);
-        self.sprinting.store(sprinting, Relaxed);
+        assert_ne!(self.sprinting.load(Acquire), sprinting);
+        self.sprinting.store(sprinting, Release);
         self.set_flag(Flag::Sprinting, sprinting).await;
     }
 
     pub fn check_fall_flying(&self) -> bool {
-        !self.on_ground.load(Relaxed)
+        !self.on_ground.load(Acquire)
     }
 
     pub async fn set_fall_flying(&self, fall_flying: bool) {
@@ -817,11 +801,11 @@ impl EntityBase for Entity {
 
     async fn tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
         self.tick_portal(&caller).await;
-        let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
+        let fire_ticks = self.fire_ticks.load(Relaxed);
         if fire_ticks > 0 {
             if self.entity_type.fire_immune {
-                self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
-                if self.fire_ticks.load(Ordering::Relaxed) < 0 {
+                self.fire_ticks.store(fire_ticks - 4, Relaxed);
+                if self.fire_ticks.load(Relaxed) < 0 {
                     self.extinguish();
                 }
             } else {
@@ -829,11 +813,10 @@ impl EntityBase for Entity {
                     caller.damage(1.0, DamageType::ON_FIRE).await;
                 }
 
-                self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
+                self.fire_ticks.store(fire_ticks - 1, Relaxed);
             }
         }
-        self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
-            .await;
+        self.set_on_fire(self.fire_ticks.load(Relaxed) > 0).await;
         // TODO: Tick
     }
 
@@ -894,7 +877,7 @@ impl EntityBase for Entity {
             NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
         );
         nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
-        nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
+        nbt.put_bool("OnGround", self.on_ground.load(Acquire));
         nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
         nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
         if self.has_visual_fire.load(Relaxed) {

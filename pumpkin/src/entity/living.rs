@@ -1,11 +1,15 @@
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
+use std::sync::atomic::{
+    AtomicBool, AtomicU8,
+    Ordering::{Acquire, Relaxed, Release},
+};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
+use tokio::sync::Mutex;
 
 use super::EntityBase;
 use super::{Entity, NBTStorage, effect::Effect};
 use crate::block::loot::{LootContextParameters, LootTableExt};
+use crate::entity::combat::{CombatType, GLOBAL_COMBAT_PROFILE};
 use crate::server::Server;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -24,7 +28,6 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
-use tokio::sync::Mutex;
 
 /// Represents a living entity within the game world.
 ///
@@ -45,6 +48,11 @@ pub struct LivingEntity {
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: Mutex<HashMap<EffectType, Effect>>,
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
+    /// Stuff for classic combat
+    pub hurt_time: AtomicU8,
+    pub hurt_resistant_time: AtomicU8,
+    pub max_hurt_resistant_time: AtomicU8,
+    pub velocity_changed: AtomicBool,
 }
 impl LivingEntity {
     pub fn new(entity: Entity) -> Self {
@@ -59,6 +67,10 @@ impl LivingEntity {
             death_time: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
+            hurt_time: AtomicU8::new(0),
+            hurt_resistant_time: AtomicU8::new(0),
+            max_hurt_resistant_time: AtomicU8::new(20),
+            velocity_changed: AtomicBool::new(false),
         }
     }
 
@@ -339,8 +351,22 @@ impl EntityBase for LivingEntity {
         if self.time_until_regen.load(Relaxed) > 0 {
             self.time_until_regen.fetch_sub(1, Relaxed);
         }
+        // Tick the relevant values for classic combat if it is enabled
+        if GLOBAL_COMBAT_PROFILE.clone().combat_type() != CombatType::Modern {
+            let hurt_time = self.hurt_time.load(Acquire);
+            if hurt_time > 0 {
+                self.hurt_time.store(hurt_time - 1, Release);
+            }
+            let hurt_resistant_time = self.hurt_resistant_time.load(Acquire);
+            if hurt_resistant_time > 0 {
+                self.hurt_resistant_time
+                    .store(hurt_resistant_time - 1, Release);
+            }
+        }
+
         if self.health.load() <= 0.0 {
-            let time = self.death_time.fetch_add(1, Ordering::Relaxed);
+            let time = self.death_time.fetch_add(1, Relaxed);
+
             if time == 20 {
                 // Spawn Death particles
                 self.entity
