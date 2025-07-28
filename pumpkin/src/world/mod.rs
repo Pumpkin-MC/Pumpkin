@@ -94,16 +94,19 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_registry::VanillaDimensionType;
-use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
+use pumpkin_util::{
+    math::{position::chunk_section_from_pos, vector2::Vector2},
+    random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
+};
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable, item::ItemStack, world::SimpleWorld,
+    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{
@@ -747,7 +750,7 @@ impl World {
 
         for block_entity in tick_data.block_entities {
             let world: Arc<dyn SimpleWorld> = self.clone();
-            block_entity.tick(&world).await;
+            block_entity.tick(world).await;
         }
     }
 
@@ -1985,6 +1988,7 @@ impl World {
     }
 
     /// Sets a block and returns the old block id
+    #[allow(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -2020,8 +2024,20 @@ impl World {
 
         let block_moved = flags.contains(BlockFlags::MOVED);
 
-        // WorldChunk.java line 310
-        if old_block != new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
+        let is_new_block = old_block != new_block;
+
+        // WorldChunk.java line 305-314
+        if is_new_block
+            && old_block.default_state.block_entity_type != u16::MAX
+            && let Some(entity) = self.get_block_entity(position).await
+        {
+            let world: Arc<dyn SimpleWorld> = self.clone();
+            entity.on_block_replaced(world, *position).await;
+            self.remove_block_entity(position).await;
+        }
+
+        // WorldChunk.java line 317
+        if is_new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
             self.block_registry
                 .on_state_replaced(
                     self,
@@ -2208,6 +2224,60 @@ impl World {
         let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
         self.spawn_entity(item_entity).await;
     }
+
+    /* ItemScatterer.java */
+    pub async fn scatter_inventory(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        inventory: &Arc<dyn Inventory>,
+    ) {
+        for i in 0..inventory.size() {
+            self.scatter_stack(
+                f64::from(position.0.x),
+                f64::from(position.0.y),
+                f64::from(position.0.z),
+                inventory.remove_stack(i).await,
+            )
+            .await;
+        }
+    }
+    pub async fn scatter_stack(self: &Arc<Self>, x: f64, y: f64, z: f64, mut stack: ItemStack) {
+        const TRIANGULAR_DEVIATION: f64 = 0.114_850_001_711_398_36;
+
+        const XZ_MODE: f64 = 0.0;
+        const Y_MODE: f64 = 0.2;
+
+        let width = f64::from(EntityType::ITEM.dimension[0]);
+        let half_width = width / 2.0;
+        let spawn_area = 1.0 - width;
+
+        let mut rng = Xoroshiro::from_seed(get_seed());
+
+        // TODO: Use world random here: world.random.nextDouble()
+        let x = x.floor() + rng.next_f64() * spawn_area + half_width;
+        let y = y.floor() + rng.next_f64() * spawn_area;
+        let z = z.floor() + rng.next_f64() * spawn_area + half_width;
+
+        while !stack.is_empty() {
+            let item = stack.split((rng.next_bounded_i32(21) + 10) as u8);
+            let velocity = Vector3::new(
+                rng.next_triangular(XZ_MODE, TRIANGULAR_DEVIATION),
+                rng.next_triangular(Y_MODE, TRIANGULAR_DEVIATION),
+                rng.next_triangular(XZ_MODE, TRIANGULAR_DEVIATION),
+            );
+
+            let entity = Entity::new(
+                Uuid::new_v4(),
+                self.clone(),
+                Vector3::new(x, y, z),
+                EntityType::ITEM,
+                false,
+            );
+            let entity = Arc::new(ItemEntity::new_with_velocity(entity, item, velocity, 10).await);
+            self.spawn_entity(entity).await;
+        }
+    }
+    /* End ItemScatterer.java */
 
     pub async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
         self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, false))
@@ -2692,6 +2762,14 @@ impl pumpkin_world::world::SimpleWorld for World {
 
     async fn get_world_age(&self) -> i64 {
         self.level_time.lock().await.world_age
+    }
+
+    async fn scatter_inventory(
+        self: Arc<Self>,
+        position: &BlockPos,
+        inventory: &Arc<dyn Inventory>,
+    ) {
+        Self::scatter_inventory(&self, position, inventory).await;
     }
 }
 

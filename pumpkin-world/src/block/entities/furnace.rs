@@ -160,7 +160,7 @@ impl FurnaceBlockEntity {
 
 #[async_trait]
 impl BlockEntity for FurnaceBlockEntity {
-    async fn tick(&self, world: &Arc<dyn SimpleWorld>) {
+    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
         let is_burning = self.is_burning();
         let mut is_dirty = false;
         if self.is_burning() {
