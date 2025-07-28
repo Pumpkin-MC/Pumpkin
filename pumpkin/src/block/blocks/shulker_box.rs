@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{BlockMetadata, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs};
+use crate::block::pumpkin_block::{BlockMetadata, OnPlaceArgs, PlacedArgs};
 use crate::block::{
     pumpkin_block::{NormalUseArgs, PumpkinBlock},
     registry::BlockActionResult,
@@ -78,9 +78,5 @@ impl PumpkinBlock for ShulkerBoxBlock {
         args.world
             .add_block_entity(Arc::new(barrel_block_entity))
             .await;
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
     }
 }

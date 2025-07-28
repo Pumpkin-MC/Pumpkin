@@ -29,6 +29,7 @@ pub mod glazed_terracotta;
 pub mod grindstone;
 pub mod iron_bars;
 pub mod jukebox;
+pub mod ladder;
 pub mod lanterns;
 pub mod logs;
 pub mod nether_portal;

@@ -8,7 +8,6 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 
 use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::OnStateReplacedArgs;
 use crate::block::pumpkin_block::PlacedArgs;
 use crate::block::pumpkin_block::PlayerPlacedArgs;
 use crate::block::pumpkin_block::PumpkinBlock;
@@ -39,9 +38,5 @@ impl PumpkinBlock for SignBlock {
             crate::net::ClientPlatform::Java(java) => java.send_sign_packet(*args.position).await,
             crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
         }
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
     }
 }

@@ -1,3 +1,4 @@
+use std::sync::Weak;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -5,9 +6,11 @@ use std::{
 
 pub mod chunker;
 pub mod explosion;
+pub mod loot;
 pub mod portal;
 pub mod time;
 
+use crate::world::loot::LootContextParameters;
 use crate::{
     PLUGIN_MANAGER,
     block::{
@@ -26,16 +29,12 @@ use crate::{
     },
     server::{CURRENT_BEDROCK_MC_VERSION, Server},
 };
-use crate::{
-    block::{BlockEvent, loot::LootContextParameters},
-    entity::item::ItemEntity,
-};
+use crate::{block::BlockEvent, entity::item::ItemEntity};
 use async_trait::async_trait;
 use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::entity::EffectType;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
     Block,
@@ -93,16 +92,19 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_registry::VanillaDimensionType;
-use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
+use pumpkin_util::{
+    math::{position::chunk_section_from_pos, vector2::Vector2},
+    random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
+};
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable, item::ItemStack, world::SimpleWorld,
+    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{
@@ -124,6 +126,8 @@ pub mod custom_bossbar;
 pub mod scoreboard;
 pub mod weather;
 
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_world::generation::settings::GenerationSettings;
 use uuid::Uuid;
 use weather::Weather;
 
@@ -174,6 +178,7 @@ pub struct World {
     pub weather: Mutex<Weather>,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
+    pub server: Weak<Server>,
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
@@ -186,6 +191,7 @@ impl World {
         level_info: Arc<RwLock<LevelData>>,
         dimension_type: VanillaDimensionType,
         block_registry: Arc<BlockRegistry>,
+        server: Weak<Server>,
     ) -> Self {
         // TODO
         let generation_settings = match dimension_type {
@@ -215,6 +221,7 @@ impl World {
             sea_level: generation_settings.sea_level,
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
+            server,
         }
     }
 
@@ -281,11 +288,15 @@ impl World {
             .await;
     }
 
-    pub async fn send_remove_mob_effect(&self, entity: &Entity, effect_type: EffectType) {
+    pub async fn send_remove_mob_effect(
+        &self,
+        entity: &Entity,
+        effect_type: &'static StatusEffect,
+    ) {
         // TODO: only nearby
         self.broadcast_packet_all(&CRemoveMobEffect::new(
             entity.entity_id.into(),
-            VarInt(effect_type as i32),
+            VarInt(i32::from(effect_type.id)),
         ))
         .await;
     }
@@ -672,14 +683,13 @@ impl World {
 
         for block_entity in tick_data.block_entities {
             let world: Arc<dyn SimpleWorld> = self.clone();
-            block_entity.tick(&world).await;
+            block_entity.tick(world).await;
         }
     }
 
-    /// Gets the y position of the first non air block from the top down
-    pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
+    pub fn generation_settings(&self) -> &GenerationSettings {
         // TODO: this is bad
-        let generation_settings = match self.dimension_type {
+        match self.dimension_type {
             VanillaDimensionType::Overworld => GENERATION_SETTINGS
                 .get(&GeneratorSetting::Overworld)
                 .unwrap(),
@@ -690,19 +700,24 @@ impl World {
             VanillaDimensionType::TheNether => {
                 GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
             }
-        };
+        }
+    }
+
+    /// Gets the y position of the first non air block from the top down
+    pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
+        let generation_settings = self.generation_settings();
         for y in (i32::from(generation_settings.shape.min_y)
-            ..=i32::from(generation_settings.shape.height))
+            ..i32::from(generation_settings.shape.max_y()))
             .rev()
         {
-            let pos = BlockPos(Vector3::new(position.x, y, position.y));
+            let pos = BlockPos::new(position.x, y, position.y);
             let block = self.get_block_state(&pos).await;
             if block.is_air() {
                 continue;
             }
             return y;
         }
-        i32::from(generation_settings.shape.height)
+        i32::from(generation_settings.shape.min_y)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1591,6 +1606,11 @@ impl World {
                 return Some(entity.clone());
             }
         }
+        for player in self.players.read().await.values() {
+            if player.get_entity().entity_id == id {
+                return Some(player.clone() as Arc<dyn EntityBase>);
+            }
+        }
         None
     }
 
@@ -1836,6 +1856,7 @@ impl World {
     }
 
     /// Sets a block and returns the old block id
+    #[allow(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -1871,8 +1892,20 @@ impl World {
 
         let block_moved = flags.contains(BlockFlags::MOVED);
 
-        // WorldChunk.java line 310
-        if old_block != new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
+        let is_new_block = old_block != new_block;
+
+        // WorldChunk.java line 305-314
+        if is_new_block
+            && old_block.default_state.block_entity_type != u16::MAX
+            && let Some(entity) = self.get_block_entity(position).await
+        {
+            let world: Arc<dyn SimpleWorld> = self.clone();
+            entity.on_block_replaced(world, *position).await;
+            self.remove_block_entity(position).await;
+        }
+
+        // WorldChunk.java line 317
+        if is_new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
             self.block_registry
                 .on_state_replaced(
                     self,
@@ -2059,6 +2092,60 @@ impl World {
         let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
         self.spawn_entity(item_entity).await;
     }
+
+    /* ItemScatterer.java */
+    pub async fn scatter_inventory(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        inventory: &Arc<dyn Inventory>,
+    ) {
+        for i in 0..inventory.size() {
+            self.scatter_stack(
+                f64::from(position.0.x),
+                f64::from(position.0.y),
+                f64::from(position.0.z),
+                inventory.remove_stack(i).await,
+            )
+            .await;
+        }
+    }
+    pub async fn scatter_stack(self: &Arc<Self>, x: f64, y: f64, z: f64, mut stack: ItemStack) {
+        const TRIANGULAR_DEVIATION: f64 = 0.114_850_001_711_398_36;
+
+        const XZ_MODE: f64 = 0.0;
+        const Y_MODE: f64 = 0.2;
+
+        let width = f64::from(EntityType::ITEM.dimension[0]);
+        let half_width = width / 2.0;
+        let spawn_area = 1.0 - width;
+
+        let mut rng = Xoroshiro::from_seed(get_seed());
+
+        // TODO: Use world random here: world.random.nextDouble()
+        let x = x.floor() + rng.next_f64() * spawn_area + half_width;
+        let y = y.floor() + rng.next_f64() * spawn_area;
+        let z = z.floor() + rng.next_f64() * spawn_area + half_width;
+
+        while !stack.is_empty() {
+            let item = stack.split((rng.next_bounded_i32(21) + 10) as u8);
+            let velocity = Vector3::new(
+                rng.next_triangular(XZ_MODE, TRIANGULAR_DEVIATION),
+                rng.next_triangular(Y_MODE, TRIANGULAR_DEVIATION),
+                rng.next_triangular(XZ_MODE, TRIANGULAR_DEVIATION),
+            );
+
+            let entity = Entity::new(
+                Uuid::new_v4(),
+                self.clone(),
+                Vector3::new(x, y, z),
+                EntityType::ITEM,
+                false,
+            );
+            let entity = Arc::new(ItemEntity::new_with_velocity(entity, item, velocity, 10).await);
+            self.spawn_entity(entity).await;
+        }
+    }
+    /* End ItemScatterer.java */
 
     pub async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
         self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, false))
@@ -2543,6 +2630,14 @@ impl pumpkin_world::world::SimpleWorld for World {
 
     async fn get_world_age(&self) -> i64 {
         self.level_time.lock().await.world_age
+    }
+
+    async fn scatter_inventory(
+        self: Arc<Self>,
+        position: &BlockPos,
+        inventory: &Arc<dyn Inventory>,
+    ) {
+        Self::scatter_inventory(&self, position, inventory).await;
     }
 }
 

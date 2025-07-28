@@ -1,3 +1,4 @@
+use core::f32;
 use std::collections::VecDeque;
 use std::f64::consts::TAU;
 use std::num::NonZeroU8;
@@ -20,7 +21,8 @@ use uuid::Uuid;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
-use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
@@ -58,6 +60,8 @@ use pumpkin_util::math::{
 use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::click::ClickEvent;
+use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::entity::entity_data_flags::{
@@ -80,11 +84,11 @@ use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
 
 use super::combat::{self, AttackType, player_attack_sound};
-use super::effect::Effect;
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage};
+use pumpkin_data::potion::Effect;
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -486,7 +490,13 @@ impl Player {
         }
 
         if !victim
-            .damage(damage as f32, DamageType::PLAYER_ATTACK)
+            .damage_with_context(
+                damage as f32,
+                DamageType::PLAYER_ATTACK,
+                None,
+                Some(&self.living_entity.entity),
+                Some(&self.living_entity.entity),
+            )
             .await
         {
             world
@@ -1373,10 +1383,10 @@ impl Player {
     pub async fn get_mining_speed(&self, block: &'static Block) -> f32 {
         let mut speed = self.inventory.held_item().lock().await.get_speed(block);
         // Haste
-        if self.living_entity.has_effect(EffectType::Haste).await
+        if self.living_entity.has_effect(&StatusEffect::HASTE).await
             || self
                 .living_entity
-                .has_effect(EffectType::ConduitPower)
+                .has_effect(&StatusEffect::CONDUIT_POWER)
                 .await
         {
             speed *= 1.0 + (self.get_haste_amplifier().await + 1) as f32 * 0.2;
@@ -1384,7 +1394,7 @@ impl Player {
         // Fatigue
         if let Some(fatigue) = self
             .living_entity
-            .get_effect(EffectType::MiningFatigue)
+            .get_effect(&StatusEffect::MINING_FATIGUE)
             .await
         {
             let fatigue_speed = match fatigue.amplifier {
@@ -1405,12 +1415,12 @@ impl Player {
     async fn get_haste_amplifier(&self) -> u32 {
         let mut i = 0;
         let mut j = 0;
-        if let Some(effect) = self.living_entity.get_effect(EffectType::Haste).await {
+        if let Some(effect) = self.living_entity.get_effect(&StatusEffect::HASTE).await {
             i = effect.amplifier;
         }
         if let Some(effect) = self
             .living_entity
-            .get_effect(EffectType::ConduitPower)
+            .get_effect(&StatusEffect::CONDUIT_POWER)
             .await
         {
             j = effect.amplifier;
@@ -1596,7 +1606,7 @@ impl Player {
             flag |= 8;
         }
 
-        let effect_id = VarInt(effect.r#type as i32);
+        let effect_id = VarInt(i32::from(effect.effect_type.id));
         self.client
             .enqueue_packet(&CUpdateMobEffect::new(
                 self.entity_id().into(),
@@ -1608,8 +1618,8 @@ impl Player {
             .await;
     }
 
-    pub async fn remove_effect(&self, effect_type: EffectType) {
-        let effect_id = VarInt(effect_type as i32);
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
+        let effect_id = VarInt(i32::from(effect_type.id));
         self.client
             .enqueue_packet(
                 &pumpkin_protocol::java::client::play::CRemoveMobEffect::new(
@@ -1628,7 +1638,7 @@ impl Player {
         let mut effect_list = vec![];
         for effect in self.living_entity.active_effects.lock().await.keys() {
             effect_list.push(*effect);
-            let effect_id = VarInt(*effect as i32);
+            let effect_id = VarInt(i32::from(effect.id));
             self.client
                 .enqueue_packet(
                     &pumpkin_protocol::java::client::play::CRemoveMobEffect::new(
@@ -2006,7 +2016,14 @@ impl NBTStorage for PlayerInventory {
 
 #[async_trait]
 impl EntityBase for Player {
-    async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
+    async fn damage_with_context(
+        &self,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
         if self.abilities.lock().await.invulnerable {
             return false;
         }
@@ -2018,7 +2035,10 @@ impl EntityBase for Player {
                 &self.living_entity.entity.pos.load(),
             )
             .await;
-        let result = self.living_entity.damage(amount, damage_type).await;
+        let result = self
+            .living_entity
+            .damage_with_context(amount, damage_type, position, source, cause)
+            .await;
         if result {
             let health = self.living_entity.health.load();
             if health <= 0.0 {
@@ -2044,6 +2064,25 @@ impl EntityBase for Player {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
+    }
+
+    fn get_name(&self) -> TextComponent {
+        //TODO: team color
+        TextComponent::text(self.gameprofile.name.clone())
+    }
+
+    async fn get_display_name(&self) -> TextComponent {
+        let name = self.get_name();
+        let name_clone = name.clone();
+        let mut name = name.click_event(ClickEvent::SuggestCommand {
+            command: format!("/tell {} ", self.gameprofile.name.clone()).into(),
+        });
+        name = name.hover_event(HoverEvent::show_entity(
+            self.living_entity.entity.entity_uuid.to_string(),
+            self.living_entity.entity.entity_type.resource_name.into(),
+            Some(name_clone),
+        ));
+        name.insertion(self.gameprofile.name.clone())
     }
 }
 

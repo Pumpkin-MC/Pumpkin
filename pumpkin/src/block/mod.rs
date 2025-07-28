@@ -66,7 +66,6 @@ use blocks::{
 };
 use fluid::lava::FlowingLava;
 use fluid::water::FlowingWater;
-use loot::LootTableExt;
 use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::{Block, BlockState};
 
@@ -98,21 +97,21 @@ use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
 use crate::block::blocks::hopper::HopperBlock;
+use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
-use crate::block::loot::LootContextParameters;
 use crate::block::registry::BlockRegistry;
 use crate::world::World;
+use crate::world::loot::{LootContextParameters, LootTableExt};
 use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::Player};
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
 use std::sync::Arc;
 
 pub mod blocks;
 mod fluid;
-pub mod loot;
 pub mod pumpkin_block;
 pub mod pumpkin_fluid;
 pub mod registry;
@@ -195,6 +194,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChiseledBookshelfBlock);
     manager.register(LecternBlock);
     manager.register(ChainBlock);
+    manager.register(LadderBlock);
     manager.register(LanternBlock);
 
     // Fire

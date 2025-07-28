@@ -13,7 +13,7 @@ use pumpkin_world::block::entities::chest::ChestBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::pumpkin_block::{
-    BlockMetadata, BrokenArgs, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs, UseWithItemArgs,
+    BlockMetadata, BrokenArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -86,10 +86,6 @@ impl PumpkinBlock for ChestBlock {
                 )
                 .await;
         }
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
     }
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {

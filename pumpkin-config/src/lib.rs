@@ -178,7 +178,7 @@ impl Default for BasicConfiguration {
             scrub_ips: true,
             use_favicon: true,
             favicon_path: "icon.png".to_string(),
-            default_level_name: "World".to_string(),
+            default_level_name: "world".to_string(),
             allow_chat_reports: false,
             white_list: false,
             enforce_whitelist: false,
