@@ -4,6 +4,7 @@ use crate::block::pumpkin_block::{BrokenArgs, PumpkinBlock, UseWithItemArgs};
 use crate::block::registry::BlockActionResult;
 use crate::world::World;
 use async_trait::async_trait;
+use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
     Block,
@@ -55,14 +56,14 @@ impl PumpkinBlock for JukeboxBlock {
             return BlockActionResult::Success;
         }
 
-        let Some(jukebox_playable) = &args
+        let jukebox_playable = args
             .item_stack
             .lock()
             .await
-            .item
-            .components
-            .jukebox_playable
-        else {
+            .get_data_component::<JukeboxPlayableImpl>()
+            .map(|i| i.song);
+
+        let Some(jukebox_playable) = jukebox_playable else {
             return BlockActionResult::Pass;
         };
 

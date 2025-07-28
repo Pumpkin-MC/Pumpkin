@@ -621,23 +621,15 @@ impl Level {
         let chunk = self.get_chunk(chunk_coordinate).await;
         let mut chunk = chunk.write().await;
 
-        let replaced_block_state_id = chunk
-            .section
-            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
-            .unwrap();
-
-        if replaced_block_state_id == block_state_id {
-            return block_state_id;
-        }
-
-        chunk.mark_dirty(true);
-
-        chunk.section.set_block_absolute_y(
+        let replaced_block_state_id = chunk.section.set_block_absolute_y(
             relative.x as usize,
             relative.y,
             relative.z as usize,
             block_state_id,
         );
+        if replaced_block_state_id != block_state_id {
+            chunk.mark_dirty(true);
+        }
         replaced_block_state_id
     }
 

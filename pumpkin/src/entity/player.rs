@@ -19,8 +19,8 @@ use uuid::Uuid;
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
-use pumpkin_data::item::Operation;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
@@ -448,13 +448,16 @@ impl Player {
 
         // Get the attack damage
         // TODO: this should be cached in memory, we shouldn't just use default here either
-        if let Some(modifiers) = item_stack.lock().await.item.components.attribute_modifiers {
-            for item_mod in modifiers {
+        if let Some(modifiers) = item_stack
+            .lock()
+            .await
+            .get_data_component::<AttributeModifiersImpl>()
+        {
+            for item_mod in modifiers.attribute_modifiers.iter() {
                 if item_mod.operation == Operation::AddValue {
                     if item_mod.id == "minecraft:base_attack_damage" {
                         add_damage = item_mod.amount;
-                    }
-                    if item_mod.id == "minecraft:base_attack_speed" {
+                    } else if item_mod.id == "minecraft:base_attack_speed" {
                         add_speed = item_mod.amount;
                     }
                 }
@@ -772,7 +775,6 @@ impl Player {
         if self.mining.load(Ordering::Relaxed) {
             let pos = self.mining_pos.lock().await;
             let world = self.world().await;
-            let block = world.get_block(&pos).await;
             let state = world.get_block_state(&pos).await;
             // Is the block broken?
             if state.is_air() {
@@ -787,7 +789,6 @@ impl Player {
                     *pos,
                     &world,
                     state,
-                    block.name,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
                 .await;
@@ -834,11 +835,11 @@ impl Player {
         location: BlockPos,
         world: &World,
         state: &BlockState,
-        block_name: &str,
         starting_time: i32,
     ) {
         let time = self.tick_counter.load(Ordering::Relaxed) - starting_time;
-        let speed = block::calc_block_breaking(self, state, block_name).await * (time + 1) as f32;
+        let speed = block::calc_block_breaking(self, state, Block::from_state_id(state.id)).await
+            * (time + 1) as f32;
         let progress = (speed * 10.0) as i32;
         if progress != self.current_block_destroy_stage.load(Ordering::Relaxed) {
             world
@@ -1359,23 +1360,18 @@ impl Player {
             .await;
     }
 
-    pub async fn can_harvest(&self, block: &BlockState, block_name: &str) -> bool {
-        !block.tool_required()
+    pub async fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {
+        !state.tool_required()
             || self
                 .inventory
                 .held_item()
                 .lock()
                 .await
-                .is_correct_for_drops(block_name)
+                .is_correct_for_drops(block)
     }
 
-    pub async fn get_mining_speed(&self, block_name: &str) -> f32 {
-        let mut speed = self
-            .inventory
-            .held_item()
-            .lock()
-            .await
-            .get_speed(block_name);
+    pub async fn get_mining_speed(&self, block: &'static Block) -> f32 {
+        let mut speed = self.inventory.held_item().lock().await.get_speed(block);
         // Haste
         if self.living_entity.has_effect(EffectType::Haste).await
             || self
@@ -1490,7 +1486,7 @@ impl Player {
                 .await;
 
             if let Some(slot_index) = slot_index {
-                screen_handler.set_received_stack(slot_index, *item_stack);
+                screen_handler.set_received_stack(slot_index, item_stack.clone());
             }
         }
     }

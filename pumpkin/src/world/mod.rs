@@ -1318,18 +1318,18 @@ impl World {
 
         equipment_list.push((
             EquipmentSlot::MAIN_HAND.discriminant(),
-            *from.inventory.held_item().lock().await,
+            from.inventory.held_item().lock().await.clone(),
         ));
 
         for (slot, item_arc_mutex) in &from.inventory.entity_equipment.lock().await.equipment {
             let item_guard = item_arc_mutex.lock().await;
-            let item_stack = *item_guard;
+            let item_stack = item_guard.clone();
             equipment_list.push((slot.discriminant(), item_stack));
         }
 
         let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
             .iter()
-            .map(|(slot, stack)| (*slot, ItemStackSerializer::from(*stack)))
+            .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
             .collect();
         self.broadcast_packet_except(
             &[from.get_entity().entity_uuid],
@@ -1963,7 +1963,6 @@ impl World {
     }
 
     /// Sets a block and returns the old block id
-    #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -1977,26 +1976,17 @@ impl World {
         else {
             panic!("Timed out while waiting to acquire chunk write lock")
         };
-        let Some(replaced_block_state_id) = chunk.section.get_block_absolute_y(
-            relative.x as usize,
-            relative.y,
-            relative.z as usize,
-        ) else {
-            return block_state_id;
-        };
-
-        if replaced_block_state_id == block_state_id {
-            return block_state_id;
-        }
-
-        chunk.mark_dirty(true);
-
-        chunk.section.set_block_absolute_y(
+        let replaced_block_state_id = chunk.section.set_block_absolute_y(
             relative.x as usize,
             relative.y,
             relative.z as usize,
             block_state_id,
         );
+        if replaced_block_state_id == block_state_id {
+            return block_state_id;
+        }
+        chunk.mark_dirty(true);
+
         self.unsent_block_changes
             .lock()
             .await
