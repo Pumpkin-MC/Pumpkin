@@ -5,13 +5,14 @@ use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
 use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
 use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::WorldgenBiome::MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::chunk::ChunkData;
+use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use rand::seq::IndexedRandom;
 use rand::{Rng, rng};
 use std::collections::HashMap;
@@ -320,9 +321,9 @@ pub async fn spawn_for_chunk(
             .can_spawn_for_category_local(category, chunk_pos)
             .await
         {
-            let random_pos = get_random_pos_within(world, chunk_pos, chunk).await;
+            let random_pos = get_random_pos_within(world.min_y, chunk_pos, chunk).await;
             // debug!("try random pos: {:?}", random_pos);
-            if random_pos.0.y > i32::from(world.min_y) {
+            if random_pos.0.y > world.min_y {
                 spawn_category_for_position(category, world, random_pos, chunk_pos, spawn_state)
                     .await;
             }
@@ -330,14 +331,19 @@ pub async fn spawn_for_chunk(
     }
 }
 pub async fn get_random_pos_within(
-    world: &Arc<World>,
+    min_y: i32,
     chunk_pos: &Vector2<i32>,
-    _chunk: &Arc<RwLock<ChunkData>>,
+    chunk: &Arc<RwLock<ChunkData>>,
 ) -> BlockPos {
     let x = (chunk_pos.x << 4) + rng().random_range(0..16);
     let z = (chunk_pos.y << 4) + rng().random_range(0..16);
-    let temp_y = world.get_top_block(Vector2::new(x, z)).await + 1; // TODO chunk.getHeight(Heightmap.Types.WORLD_SURFACE, i, j) + 1
-    let min_y = i32::from(world.min_y);
+    let temp_y =
+        chunk
+            .read()
+            .await
+            .heightmap
+            .get_height(ChunkHeightmapType::WorldSurface, x, z, min_y)
+            + 1;
     let y = rng().random_range(min_y..=temp_y);
     BlockPos::new(x, y, z)
 }
@@ -456,8 +462,9 @@ pub fn is_right_distance_to_player_and_spawn_point(
         return false;
     }
     #[allow(clippy::overly_complex_bool_expr)]
+    #[allow(clippy::nonminimal_bool)]
     {
-        chunk_pos == &Vector2::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)) || true // TODO canSpawnEntitiesInChunk(ChunkPos chunkPos)
+        chunk_pos == &Vector2::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)) || false // TODO canSpawnEntitiesInChunk(ChunkPos chunkPos)
     }
 }
 
@@ -469,7 +476,7 @@ pub fn get_random_spawn_mob_at(
     // TODO Holder<Biome> holder = level.getBiome(pos);
     let biome = &Biome::PLAINS;
     if category == &MobCategory::WATER_AMBIENT
-        && biome.is_tagged_with("minecraft:reduce_water_ambient_spawns")?
+        && biome.is_tagged_with_by_tag(&MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
         && rng().random::<f32>() < 0.98f32
     {
         None

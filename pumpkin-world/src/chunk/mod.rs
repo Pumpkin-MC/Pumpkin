@@ -438,7 +438,7 @@ impl ChunkData {
     }
 
     //TODO: Tracking heightmaps update.
-    pub async fn calculate_heightmap(&mut self) -> ChunkHeightmaps {
+    pub fn calculate_heightmap(&mut self) -> ChunkHeightmaps {
         let highest_non_empty_subchunk = self.get_highest_non_empty_subchunk();
         let mut heightmaps = ChunkHeightmaps::default();
 

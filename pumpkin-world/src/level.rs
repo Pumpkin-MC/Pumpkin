@@ -840,11 +840,12 @@ impl Level {
                             // Deduplicate chunk generation using chunk_generation_locks
 
                             // We are responsible for generating the chunk
-                            let generated_chunk = world_gen.generate_chunk(
+                            let mut generated_chunk = world_gen.generate_chunk(
                                 &self_clone,
                                 block_registry.as_ref(),
                                 &pos,
                             );
+                            generated_chunk.heightmap = generated_chunk.calculate_heightmap();
                             let arc_chunk = Arc::new(RwLock::new(generated_chunk));
                             loaded_chunks.insert(pos, arc_chunk.clone());
 

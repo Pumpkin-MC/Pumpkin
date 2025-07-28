@@ -128,6 +128,7 @@ pub mod scoreboard;
 pub mod weather;
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
+use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
 use uuid::Uuid;
 use weather::Weather;
 
@@ -174,7 +175,7 @@ pub struct World {
     /// The type of dimension the world is in.
     pub dimension_type: VanillaDimensionType,
     pub sea_level: i32,
-    pub min_y: i8,
+    pub min_y: i32,
     /// The world's weather, including rain and thunder levels.
     pub weather: Mutex<Weather>,
     /// Block Behaviour
@@ -218,7 +219,7 @@ impl World {
             weather: Mutex::new(Weather::new()),
             block_registry,
             sea_level: generation_settings.sea_level,
-            min_y: generation_settings.shape.min_y,
+            min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
         }
@@ -680,6 +681,7 @@ impl World {
 
         let mut spawning_chunks_map = HashMap::new();
         // TODO use FixedPlayerDistanceChunkTracker
+
         for i in self.players.read().await.values() {
             let center = i.living_entity.entity.chunk_pos.load();
             for dx in -8i32..=8 {
@@ -760,16 +762,23 @@ impl World {
         {
             let rand_value = rng().random::<i32>() >> 2;
             let delta = Vector3::new(rand_value & 15, rand_value >> 16 & 15, rand_value >> 8 & 15);
-            let random_pos = Vector3::new(chunk_pos.x * 16, 0, chunk_pos.y * 16).add(&delta);
+            let random_pos = Vector3::new(
+                chunk_pos.x << 4,
+                chunk.read().await.heightmap.get_height(
+                    MotionBlocking,
+                    chunk_pos.x << 4,
+                    chunk_pos.y << 4,
+                    self.min_y,
+                ),
+                chunk_pos.y << 4,
+            )
+            .add(&delta);
             // TODO this.getBrightness(LightLayer.SKY, blockPos) >= 15;
             // TODO heightmap
 
-            if self
-                .get_top_block(Vector2::new(random_pos.x, random_pos.y))
-                .await
-                - 64
-                <= random_pos.y
-            {
+            // TODO findLightningRod(blockPos)
+            // TODO encapsulatingFullBlocks
+            if true {
                 // TODO biome.getPrecipitationAt(pos, this.getSeaLevel()) == Biome.Precipitation.RAIN
                 // TODO this.getCurrentDifficultyAt(blockPos);
                 if rng().random::<f32>() < 0.0675
