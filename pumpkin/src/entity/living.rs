@@ -1,5 +1,5 @@
-use pumpkin_data::potion::Effect;
 use core::f32;
+use pumpkin_data::potion::Effect;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
@@ -13,9 +13,9 @@ use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
-use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::damage::DeathMessageType;
-use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_inventory::equipment_slot::EquipmentSlot;
@@ -383,7 +383,7 @@ impl EntityBase for LivingEntity {
         }
 
         if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
-            && self.has_effect(EffectType::FireResistance).await
+            && self.has_effect(&StatusEffect::FIRE_RESISTANCE).await
         {
             return false; // Fire resistance
         }
