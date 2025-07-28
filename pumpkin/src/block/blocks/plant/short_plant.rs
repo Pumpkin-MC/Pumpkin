@@ -23,9 +23,7 @@ impl BlockMetadata for ShortPlantBlock {
 #[async_trait]
 impl PumpkinBlock for ShortPlantBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let block_below = args.block_accessor.get_block(&args.position.down()).await;
-        block_below.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)
-            || block_below == &Block::FARMLAND
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }
 
     async fn get_state_for_neighbor_update(
