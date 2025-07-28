@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
-use pumpkin_data::{Block, BlockState, tag::Tagable};
+use pumpkin_data::tag;
+use pumpkin_data::{Block, BlockState, tag::Taggable};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 use trunk::TrunkPlacer;
@@ -38,7 +39,7 @@ pub struct TreeNode {
 
 impl TreeFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -49,9 +50,8 @@ impl TreeFeature {
         pos: BlockPos,
     ) -> bool {
         // TODO
-        let log_positions = self
-            .generate_main(chunk, level, min_y, height, feature_name, random, pos)
-            .await;
+        let log_positions =
+            self.generate_main(chunk, level, min_y, height, feature_name, random, pos);
 
         for decorator in &self.decorators {
             decorator.generate(chunk, random, Vec::new(), log_positions.clone());
@@ -60,22 +60,19 @@ impl TreeFeature {
     }
 
     pub fn can_replace_or_log(state: &BlockState, block: &Block) -> bool {
-        Self::can_replace(state, block) || block.is_tagged_with("minecraft:logs").unwrap()
+        Self::can_replace(state, block) || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LOGS)
     }
 
     pub fn is_air_or_leaves(state: &BlockState, block: &Block) -> bool {
-        state.is_air() || block.is_tagged_with("minecraft:leaves").unwrap()
+        state.is_air() || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LEAVES)
     }
 
     pub fn can_replace(state: &BlockState, block: &Block) -> bool {
-        state.is_air()
-            || block
-                .is_tagged_with("minecraft:replaceable_by_trees")
-                .unwrap()
+        state.is_air() || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }
 
     #[expect(clippy::too_many_arguments)]
-    async fn generate_main(
+    fn generate_main(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -95,19 +92,16 @@ impl TreeFeature {
         let trunk_state = self.trunk_provider.get(random, pos);
         let dirt_state = self.dirt_provider.get(random, pos);
 
-        let (nodes, logs) = self
-            .trunk_placer
-            .generate(
-                top,
-                pos,
-                chunk,
-                level,
-                random,
-                self.force_dirt,
-                dirt_state,
-                trunk_state,
-            )
-            .await;
+        let (nodes, logs) = self.trunk_placer.generate(
+            top,
+            pos,
+            chunk,
+            level,
+            random,
+            self.force_dirt,
+            dirt_state,
+            trunk_state,
+        );
 
         let foliage_height = self
             .foliage_placer
@@ -117,17 +111,15 @@ impl TreeFeature {
         let foliage_radius = self.foliage_placer.get_random_radius(random, base_height);
         let foliage_state = self.foliage_provider.get(random, pos);
         for node in nodes {
-            self.foliage_placer
-                .generate(
-                    chunk,
-                    level,
-                    random,
-                    &node,
-                    foliage_height,
-                    foliage_radius,
-                    foliage_state,
-                )
-                .await;
+            self.foliage_placer.generate(
+                chunk,
+                level,
+                random,
+                &node,
+                foliage_height,
+                foliage_radius,
+                foliage_state,
+            );
         }
         logs
     }

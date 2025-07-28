@@ -7,6 +7,7 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use async_trait::async_trait;
+use pumpkin_data::FacingExt;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
@@ -18,8 +19,9 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::dropper::DropperBlockEntity;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::block::entities::hopper::HopperBlockEntity;
 use pumpkin_world::inventory::Inventory;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
 use std::sync::Arc;
@@ -151,7 +153,41 @@ impl PumpkinBlock for DropperBlock {
                     args.world.get_block_state(args.position).await.id,
                     args.block,
                 );
-                // TODO add item to container
+                if let Some(entity) = args
+                    .world
+                    .get_block_entity(
+                        &args
+                            .position
+                            .offset(props.facing.to_block_direction().to_offset()),
+                    )
+                    .await
+                {
+                    if let Some(container) = entity.get_inventory() {
+                        // TODO check WorldlyContainer
+                        let mut is_full = true;
+                        for i in 0..container.size() {
+                            let bind = container.get_stack(i).await;
+                            let item = bind.lock().await;
+                            if item.item_count < item.get_max_stack_size() {
+                                is_full = false;
+                                break;
+                            }
+                        }
+                        if is_full {
+                            return;
+                        }
+                        //TODO WorldlyContainer
+                        let backup = item.clone();
+                        let one_item = item.split(1);
+                        if HopperBlockEntity::add_one_item(dropper, container.as_ref(), one_item)
+                            .await
+                        {
+                            return;
+                        }
+                        *item = backup;
+                        return;
+                    }
+                }
                 let drop_item = item.split(1);
                 let facing = to_normal(props.facing);
                 let mut position = args.position.to_centered_f64().add(&(facing * 0.7));

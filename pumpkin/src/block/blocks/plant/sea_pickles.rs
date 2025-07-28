@@ -10,8 +10,8 @@ use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, Integer1To4};
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Tagable;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -32,15 +32,14 @@ impl PumpkinBlock for SeaPickleBlock {
                 .world
                 .get_block(&args.position.down())
                 .await
-                .is_tagged_with("minecraft:coral_blocks")
-                .unwrap()
+                .is_tagged_with_by_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
             || !SeaPickleProperties::from_state_id(
                 args.world.get_block_state_id(args.position).await,
                 args.block,
             )
             .waterlogged
         {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
 
         //1:1 vanilla algorithm
@@ -64,8 +63,7 @@ impl PumpkinBlock for SeaPickleBlock {
                             .world
                             .get_block(&lv.down())
                             .await
-                            .is_tagged_with("minecraft:coral_blocks")
-                            .unwrap()
+                            .is_tagged_with_by_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
                     {
                         continue;
                     }

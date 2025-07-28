@@ -1,11 +1,13 @@
 use pumpkin_macros::packet;
-use serde::{Deserialize, Serialize};
 
-use crate::{bedrock::client::start_game::Experiments, codec::var_uint::VarUInt};
+use crate::{
+    bedrock::client::start_game::Experiments, codec::var_uint::VarUInt, serial::PacketWrite,
+};
 
-#[derive(Serialize, Deserialize)]
-#[packet(0x07)]
+#[derive(PacketWrite)]
+#[packet(7)]
 pub struct CResourcePackStackPacket {
+    // https://mojang.github.io/bedrock-protocol-docs/html/ResourcePackStackPacket.html
     resource_pack_required: bool,
     addons_list_size: VarUInt,
     texture_pack_list_size: VarUInt,

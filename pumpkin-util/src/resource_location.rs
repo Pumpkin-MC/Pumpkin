@@ -1,4 +1,4 @@
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 
@@ -33,20 +33,27 @@ impl std::fmt::Display for ResourceLocation {
     }
 }
 
+impl FromStr for ResourceLocation {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.split_once(':') {
+            Some((namespace, path)) => Ok(ResourceLocation {
+                namespace: namespace.to_string(),
+                path: path.to_string(),
+            }),
+            None => Err(()),
+        }
+    }
+}
+
 impl Serialize for ResourceLocation {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_string())
     }
 }
 
 impl<'de> Deserialize<'de> for ResourceLocation {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct ResourceLocationVisitor;
 
         impl Visitor<'_> for ResourceLocationVisitor {
@@ -56,17 +63,14 @@ impl<'de> Deserialize<'de> for ResourceLocation {
                 formatter.write_str("a valid resource location (namespace:path)")
             }
 
-            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
                 self.visit_str(&v)
             }
 
-            fn visit_str<E>(self, resource_location: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_str<E: serde::de::Error>(
+                self,
+                resource_location: &str,
+            ) -> Result<Self::Value, E> {
                 match resource_location.split_once(":") {
                     Some((namespace, path)) => Ok(ResourceLocation {
                         namespace: namespace.to_string(),

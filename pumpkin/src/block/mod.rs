@@ -98,7 +98,9 @@ use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
 use crate::block::blocks::lanterns::LanternBlock;
+use crate::block::blocks::hopper::HopperBlock;
 use crate::block::blocks::lectern::LecternBlock;
+use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
 use crate::block::loot::LootContextParameters;
@@ -117,6 +119,7 @@ pub mod registry;
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
 
@@ -219,6 +222,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ComparatorBlock);
     manager.register(TargetBlock);
     manager.register(BarrelBlock);
+    manager.register(HopperBlock);
+    manager.register(ShulkerBoxBlock);
     manager.register(DropperBlock);
     manager.register(DispenserBlock);
 
@@ -266,20 +271,24 @@ pub async fn drop_loot(
     }
 }
 
-pub async fn calc_block_breaking(player: &Player, state: &BlockState, block_name: &str) -> f32 {
+pub async fn calc_block_breaking(
+    player: &Player,
+    state: &BlockState,
+    block: &'static Block,
+) -> f32 {
     let hardness = state.hardness;
     #[expect(clippy::float_cmp)]
     if hardness == -1.0 {
         // unbreakable
         return 0.0;
     }
-    let i = if player.can_harvest(state, block_name).await {
+    let i = if player.can_harvest(state, block).await {
         30
     } else {
         100
     };
 
-    player.get_mining_speed(block_name).await / hardness / i as f32
+    player.get_mining_speed(block).await / hardness / i as f32
 }
 
 #[derive(PartialEq)]

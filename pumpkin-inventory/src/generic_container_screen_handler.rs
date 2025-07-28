@@ -40,6 +40,21 @@ pub fn create_generic_3x3(
     )
 }
 
+pub fn create_hopper(
+    sync_id: u8,
+    player_inventory: &Arc<PlayerInventory>,
+    inventory: Arc<dyn Inventory>,
+) -> GenericContainerScreenHandler {
+    GenericContainerScreenHandler::new(
+        WindowType::Hopper,
+        sync_id,
+        player_inventory,
+        inventory,
+        1,
+        5,
+    )
+}
+
 pub struct GenericContainerScreenHandler {
     pub inventory: Arc<dyn Inventory>,
     pub rows: u8,
@@ -103,12 +118,12 @@ impl ScreenHandler for GenericContainerScreenHandler {
     }
 
     async fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
-        let mut stack_left = ItemStack::EMPTY;
+        let mut stack_left = ItemStack::EMPTY.clone();
         let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
         if slot.has_stack().await {
             let slot_stack = slot.get_stack().await;
-            stack_left = *slot_stack.lock().await;
+            stack_left = slot_stack.lock().await.clone();
 
             if slot_index < (self.rows * 9) as i32 {
                 if !self
@@ -120,7 +135,7 @@ impl ScreenHandler for GenericContainerScreenHandler {
                     )
                     .await
                 {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             } else if !self
                 .insert_item(
@@ -131,11 +146,11 @@ impl ScreenHandler for GenericContainerScreenHandler {
                 )
                 .await
             {
-                return ItemStack::EMPTY;
+                return ItemStack::EMPTY.clone();
             }
 
             if stack_left.is_empty() {
-                slot.set_stack(ItemStack::EMPTY).await;
+                slot.set_stack(ItemStack::EMPTY.clone()).await;
             } else {
                 slot.mark_dirty().await;
             }

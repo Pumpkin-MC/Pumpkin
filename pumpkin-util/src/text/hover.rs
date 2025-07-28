@@ -38,10 +38,11 @@ impl HoverEvent {
             value: vec![text.0],
         }
     }
-    pub fn show_entity<P>(uuid: P, kind: P, name: Option<TextComponent>) -> Self
-    where
-        P: Into<Cow<'static, str>>,
-    {
+    pub fn show_entity<P: Into<Cow<'static, str>>>(
+        uuid: P,
+        kind: P,
+        name: Option<TextComponent>,
+    ) -> Self {
         Self::ShowEntity {
             id: kind.into(),
             uuid: uuid.into(),

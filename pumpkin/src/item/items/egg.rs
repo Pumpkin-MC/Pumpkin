@@ -40,10 +40,10 @@ impl PumpkinItem for EggItem {
             EntityType::EGG,
             false,
         );
-        let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);
+        let egg = ThrownItemEntity::new(entity, &player.living_entity.entity);
         let yaw = player.living_entity.entity.yaw.load();
         let pitch = player.living_entity.entity.pitch.load();
-        snowball.set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
-        world.spawn_entity(Arc::new(snowball)).await;
+        egg.set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
+        world.spawn_entity(Arc::new(egg)).await;
     }
 }

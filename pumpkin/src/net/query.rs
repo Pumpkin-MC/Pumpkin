@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     ffi::{CString, NulError},
     net::SocketAddr,
-    sync::Arc,
+    sync::{Arc, atomic::Ordering},
     time::Duration,
 };
 
@@ -14,7 +14,7 @@ use rand::Rng;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
 use crate::{
-    SHOULD_STOP, STOP_INTERRUPT,
+    PLUGIN_MANAGER, SHOULD_STOP, STOP_INTERRUPT,
     server::{CURRENT_MC_VERSION, Server},
 };
 
@@ -39,13 +39,14 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     });
 
     log::info!(
-        "Server query running on {}",
+        "Server query running on port {}",
         socket
             .local_addr()
             .expect("Unable to find running address!")
+            .port()
     );
 
-    while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+    while !SHOULD_STOP.load(Ordering::Relaxed) {
         let socket = socket.clone();
         let valid_challenge_tokens = valid_challenge_tokens.clone();
         let server = server.clone();
@@ -139,9 +140,9 @@ async fn handle_packet(
                                 }
                             }
 
-                            let plugin_manager = crate::PLUGIN_MANAGER.read().await;
-                            let plugins = plugin_manager
+                            let plugins = PLUGIN_MANAGER
                                 .active_plugins()
+                                .await
                                 .into_iter()
                                 .map(|meta| meta.name.to_string())
                                 .reduce(|acc, name| format!("{acc}, {name}"))

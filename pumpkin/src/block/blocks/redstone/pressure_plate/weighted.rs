@@ -119,7 +119,7 @@ impl PressurePlate for WeightedPressurePlateBlock {
         props.to_state_id(block)
     }
 
-    fn tick_rate(&self) -> u16 {
+    fn tick_rate(&self) -> u8 {
         10
     }
 }

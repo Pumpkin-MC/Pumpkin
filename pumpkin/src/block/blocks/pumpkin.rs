@@ -11,6 +11,7 @@ use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 use uuid::Uuid;
+
 #[pumpkin_block("minecraft:pumpkin")]
 pub struct PumpkinBlock;
 
@@ -18,7 +19,7 @@ pub struct PumpkinBlock;
 impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if args.item_stack.lock().await.item != &Item::SHEARS {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
         // TODO: set direction
         args.world

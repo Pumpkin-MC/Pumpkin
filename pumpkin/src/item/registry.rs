@@ -17,6 +17,7 @@ pub struct ItemRegistry {
 impl ItemRegistry {
     pub fn register<T: PumpkinItem + ItemMetadata + 'static>(&mut self, item: T) {
         let val = Arc::new(item);
+        self.items.reserve(T::ids().len());
         for i in T::ids() {
             self.items.insert(Item::from_id(i).unwrap(), val.clone());
         }

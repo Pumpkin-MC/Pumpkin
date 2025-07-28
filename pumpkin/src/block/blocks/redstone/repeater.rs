@@ -3,14 +3,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, HorizontalFacingExt,
-    block_properties::{
-        BlockProperties, EnumVariants, HorizontalFacing, Integer1To4, get_state_by_state_id,
-    },
+    block_properties::{BlockProperties, EnumVariants, HorizontalFacing, Integer1To4},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
-use pumpkin_world::{BlockStateId, chunk::TickPriority};
+use pumpkin_world::{BlockStateId, tick::TickPriority};
 
 use crate::{
     block::{
@@ -146,7 +144,7 @@ impl PumpkinBlock for RepeaterBlock {
             self,
             args.world,
             *args.position,
-            get_state_by_state_id(args.state_id).id,
+            BlockState::from_id(args.state_id).id,
             args.block,
         )
         .await;
@@ -161,7 +159,7 @@ impl PumpkinBlock for RepeaterBlock {
                 self,
                 args.world,
                 *args.neighbor_position,
-                get_state_by_state_id(args.neighbor_state_id),
+                BlockState::from_id(args.neighbor_state_id),
             )
             .await
         {
@@ -239,9 +237,9 @@ impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
         }
     }
 
-    fn get_update_delay_internal(&self, state_id: BlockStateId, block: &Block) -> u16 {
+    fn get_update_delay_internal(&self, state_id: BlockStateId, block: &Block) -> u8 {
         let props = RepeaterProperties::from_state_id(state_id, block);
-        (props.delay.to_index() + 1) * 2
+        (props.delay.to_index() as u8 + 1) * 2
     }
 }
 
