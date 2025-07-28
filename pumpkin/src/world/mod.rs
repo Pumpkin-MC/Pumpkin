@@ -7,9 +7,11 @@ use std::{
 
 pub mod chunker;
 pub mod explosion;
+pub mod loot;
 pub mod portal;
 pub mod time;
 
+use crate::world::loot::LootContextParameters;
 use crate::{
     PLUGIN_MANAGER,
     block::{
@@ -28,10 +30,7 @@ use crate::{
     },
     server::{CURRENT_BEDROCK_MC_VERSION, Server},
 };
-use crate::{
-    block::{BlockEvent, loot::LootContextParameters},
-    entity::item::ItemEntity,
-};
+use crate::{block::BlockEvent, entity::item::ItemEntity};
 use async_trait::async_trait;
 use border::Worldborder;
 use bytes::BufMut;

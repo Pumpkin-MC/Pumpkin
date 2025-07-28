@@ -5,8 +5,9 @@ use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::{
-    block::{drop_loot, loot::LootContextParameters, pumpkin_block::ExplodeArgs},
+    block::{drop_loot, pumpkin_block::ExplodeArgs},
     server::Server,
+    world::loot::LootContextParameters,
 };
 
 use super::{BlockFlags, World};
@@ -88,6 +89,7 @@ impl Explosion {
                 let params = LootContextParameters {
                     block_state: Some(state),
                     explosion_radius: Some(self.power),
+                    ..Default::default()
                 };
                 drop_loot(world, block, &pos, false, params).await;
             }
