@@ -1,3 +1,4 @@
+use super::player_inventory::PlayerInventory;
 use crate::crafting::crafting_inventory::CraftingInventory;
 use crate::crafting::crafting_screen_handler::CraftingScreenHandler;
 use crate::crafting::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
@@ -5,13 +6,12 @@ use crate::equipment_slot::{EquipmentSlot, EquipmentType};
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::{ArmorSlot, NormalSlot, Slot};
 use async_trait::async_trait;
+use pumpkin_data::data_component_impl::EquippableImpl;
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use std::any::Any;
 use std::sync::Arc;
-
-use super::player_inventory::PlayerInventory;
 
 pub struct PlayerScreenHandler {
     behaviour: ScreenHandlerBehaviour,
@@ -108,11 +108,10 @@ impl ScreenHandler for PlayerScreenHandler {
         if slot.has_stack().await {
             let slot_stack = slot.get_stack().await;
             let mut slot_stack = slot_stack.lock().await;
-            let stack_prev = *slot_stack;
+            let stack_prev = slot_stack.clone();
 
             let equipment_slot = slot_stack
-                .components
-                .equippable
+                .get_data_component::<EquippableImpl>()
                 .and_then(|equippable| EquipmentSlot::get_from_name(equippable.slot))
                 .unwrap_or(EquipmentSlot::MAIN_HAND);
 
@@ -120,17 +119,17 @@ impl ScreenHandler for PlayerScreenHandler {
             if slot_index == 0 {
                 // From crafting result slot
                 if !self.insert_item(&mut slot_stack, 9, 45, true).await {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (1..5).contains(&slot_index) {
                 // From craft ingredient slots
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (5..9).contains(&slot_index) {
                 // From armour slots
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             } else if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
                 && self
@@ -146,7 +145,7 @@ impl ScreenHandler for PlayerScreenHandler {
                     .insert_item(&mut slot_stack, index, index + 1, false)
                     .await
                 {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             } else if matches!(equipment_slot, EquipmentSlot::OffHand(_)) {
                 // Into offhand slot
@@ -155,15 +154,15 @@ impl ScreenHandler for PlayerScreenHandler {
                     .insert_item(&mut slot_stack, index, index + 1, false)
                     .await
                 {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (9..36).contains(&slot_index) {
                 if !self.insert_item(&mut slot_stack, 36, 45, false).await {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (36..45).contains(&slot_index) {
                 if !self.insert_item(&mut slot_stack, 9, 36, false).await {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             } else if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                 return ItemStack::EMPTY.clone();

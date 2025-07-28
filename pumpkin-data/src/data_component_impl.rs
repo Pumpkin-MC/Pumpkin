@@ -5,6 +5,7 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::*;
 use crate::tag::Tag;
 use crate::{AttributeModifierSlot, Block};
+use pumpkin_util::registry::RegistryEntryList;
 use pumpkin_util::text::TextComponent;
 use std::any::Any;
 use std::borrow::Cow;
@@ -323,7 +324,39 @@ pub struct WeaponImpl;
 #[derive(Clone, Debug, Hash)]
 pub struct EnchantableImpl;
 #[derive(Clone, Debug, Hash)]
-pub struct EquippableImpl;
+pub struct EquippableImpl {
+    pub slot: &'static str,
+    pub equip_sound: Option<&'static str>,
+    pub asset_id: Option<&'static str>,
+    pub camera_overlay: Option<&'static str>,
+    pub allowed_entities: Option<&'static [&'static str]>,
+    pub dispensable: bool,
+    pub swappable: bool,
+    pub damage_on_hurt: bool,
+    pub equip_on_interact: bool,
+    pub can_be_sheared: bool,
+    pub shearing_sound: Option<&'static str>,
+}
+impl DataComponentImpl for EquippableImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        Equippable
+    }
+
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+}
 #[derive(Clone, Debug, Hash)]
 pub struct RepairableImpl;
 #[derive(Clone, Debug, Hash)]

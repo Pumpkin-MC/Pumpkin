@@ -218,82 +218,78 @@ impl ToTokens for ItemComponents {
             }), });
         };
 
-        let equippable = match &self.equippable {
-            Some(equippable) => {
-                let slot = LitStr::new(&equippable.slot, Span::call_site());
-                let equip_sound = equippable
-                    .equip_sound
-                    .as_ref()
-                    .map(|s| {
-                        let equip_sound = LitStr::new(s, Span::call_site());
-                        quote! { Some(#equip_sound) }
-                    })
-                    .unwrap_or(quote! { None });
-                let asset_id = equippable
-                    .asset_id
-                    .as_ref()
-                    .map(|s| {
-                        let asset_id = LitStr::new(s, Span::call_site());
-                        quote! { Some(#asset_id) }
-                    })
-                    .unwrap_or(quote! { None });
-                let camera_overlay = equippable
-                    .camera_overlay
-                    .as_ref()
-                    .map(|s| {
-                        let camera_overlay = LitStr::new(s, Span::call_site());
-                        quote! { Some(#camera_overlay) }
-                    })
-                    .unwrap_or(quote! { None });
-                let allowed_entities = equippable
-                    .allowed_entities
-                    .clone()
-                    .map(|list| {
-                        let vec: Vec<_> = list
-                            .get_values()
-                            .iter()
-                            .map(|reg| {
-                                let reg = LitStr::new(&reg.serialize(), Span::call_site());
-                                quote! { #reg }
-                            })
-                            .collect();
-                        quote! {
-                            Some(&[#(#vec),*])
-                        }
-                    })
-                    .unwrap_or(quote! { None });
-                let dispensable = LitBool::new(equippable.dispensable, Span::call_site());
-                let swappable = LitBool::new(equippable.swappable, Span::call_site());
-                let damage_on_hurt = LitBool::new(equippable.damage_on_hurt, Span::call_site());
-                let equip_on_interact =
-                    LitBool::new(equippable.equip_on_interact, Span::call_site());
-                let can_be_sheared = LitBool::new(equippable.can_be_sheared, Span::call_site());
-                let shearing_sound = equippable
-                    .shearing_sound
-                    .as_ref()
-                    .map(|s| {
-                        let shearing_sound = LitStr::new(s, Span::call_site());
-                        quote! {
-                            Some(#shearing_sound)
-                        }
-                    })
-                    .unwrap_or(quote! { None });
+        if let Some(equippable) = &self.equippable {
+            let slot = LitStr::new(&equippable.slot, Span::call_site());
+            let equip_sound = equippable
+                .equip_sound
+                .as_ref()
+                .map(|s| {
+                    let equip_sound = LitStr::new(s, Span::call_site());
+                    quote! { Some(#equip_sound) }
+                })
+                .unwrap_or(quote! { None });
+            let asset_id = equippable
+                .asset_id
+                .as_ref()
+                .map(|s| {
+                    let asset_id = LitStr::new(s, Span::call_site());
+                    quote! { Some(#asset_id) }
+                })
+                .unwrap_or(quote! { None });
+            let camera_overlay = equippable
+                .camera_overlay
+                .as_ref()
+                .map(|s| {
+                    let camera_overlay = LitStr::new(s, Span::call_site());
+                    quote! { Some(#camera_overlay) }
+                })
+                .unwrap_or(quote! { None });
+            let allowed_entities = equippable
+                .allowed_entities
+                .clone()
+                .map(|list| {
+                    let vec: Vec<_> = list
+                        .get_values()
+                        .iter()
+                        .map(|reg| {
+                            let reg = LitStr::new(&reg.serialize(), Span::call_site());
+                            quote! { #reg }
+                        })
+                        .collect();
+                    quote! {
+                        Some(&[#(#vec),*])
+                    }
+                })
+                .unwrap_or(quote! { None });
+            let dispensable = LitBool::new(equippable.dispensable, Span::call_site());
+            let swappable = LitBool::new(equippable.swappable, Span::call_site());
+            let damage_on_hurt = LitBool::new(equippable.damage_on_hurt, Span::call_site());
+            let equip_on_interact = LitBool::new(equippable.equip_on_interact, Span::call_site());
+            let can_be_sheared = LitBool::new(equippable.can_be_sheared, Span::call_site());
+            let shearing_sound = equippable
+                .shearing_sound
+                .as_ref()
+                .map(|s| {
+                    let shearing_sound = LitStr::new(s, Span::call_site());
+                    quote! {
+                        Some(#shearing_sound)
+                    }
+                })
+                .unwrap_or(quote! { None });
 
-                quote! { Some(EquippableComponent {
-                    slot: #slot,
-                    equip_sound: #equip_sound,
-                    asset_id: #asset_id,
-                    camera_overlay: #camera_overlay,
-                    allowed_entities: #allowed_entities,
-                    dispensable: #dispensable,
-                    swappable: #swappable,
-                    damage_on_hurt: #damage_on_hurt,
-                    equip_on_interact: #equip_on_interact,
-                    can_be_sheared: #can_be_sheared,
-                    shearing_sound: #shearing_sound
-                }) }
-            }
-            None => quote! { None },
+            tokens.extend(quote! { (Equippable, &EquippableImpl {
+                slot: #slot,
+                equip_sound: #equip_sound,
+                asset_id: #asset_id,
+                camera_overlay: #camera_overlay,
+                allowed_entities: #allowed_entities,
+                dispensable: #dispensable,
+                swappable: #swappable,
+                damage_on_hurt: #damage_on_hurt,
+                equip_on_interact: #equip_on_interact,
+                can_be_sheared: #can_be_sheared,
+                shearing_sound: #shearing_sound
+            }), });
         };
     }
 }
@@ -486,12 +482,6 @@ pub(crate) fn build() -> TokenStream {
                     #type_from_raw_id_arms
                     _ => None
                 }
-            }
-
-            #[doc = "Try to get default components from a resource location string."]
-            pub fn default_components(name: &str) -> Option<ItemComponents> {
-                let item = Self::from_registry_key(name)?;
-                Some(item.components)
             }
         }
 
