@@ -256,7 +256,7 @@ impl LivingEntity {
                 )
                 .await;
             let params = LootContextParameters {
-                killed_by_player: cause.map(|c| c.get_entity().entity_type == EntityType::PLAYER),
+                killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
                 ..Default::default()
             };
 

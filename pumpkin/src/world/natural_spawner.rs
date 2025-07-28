@@ -1,6 +1,6 @@
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
-use pumpkin_data::biome::{Biome, Spawner};
+use pumpkin_data::biome::Spawner;
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
 use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
 use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
@@ -201,8 +201,7 @@ impl SpawnState {
                 continue;
             }
             let entity_pos = &entity.get_entity().block_pos.load();
-            // TODO getRoughBiome(blockPos, chunk)
-            let biome = &Biome::PLAINS;
+            let biome = world.level.get_rough_biome(entity_pos).await;
             if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
                 potential.add_charge(entity_pos, cost.charge);
             }
@@ -238,16 +237,16 @@ impl SpawnState {
             .can_spawn(category, chunk_pos)
             .await
     }
-    fn can_spawn(
+    async fn can_spawn(
         &mut self,
         entity_type: &'static EntityType,
         pos: &BlockPos,
-        _world: &Arc<World>,
+        world: &Arc<World>,
     ) -> bool {
         self.last_checked_pos = *pos;
         self.last_checked_type = entity_type;
         // TODO get biome
-        let biome = &Biome::PLAINS;
+        let biome = world.level.get_rough_biome(pos).await;
         if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
             self.last_charge = cost.charge;
             self.spawn_potential
@@ -262,14 +261,14 @@ impl SpawnState {
         &mut self,
         entity_type: &'static EntityType,
         pos: &BlockPos,
-        _world: &Arc<World>,
+        world: &Arc<World>,
     ) {
         let charge;
         if self.last_checked_pos.eq(pos) && self.last_checked_type == entity_type {
             charge = self.last_charge;
         } else {
             // TODO get biome
-            let biome = &Biome::PLAINS;
+            let biome = world.level.get_rough_biome(pos).await;
             if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
                 charge = cost.charge;
             } else {
@@ -386,7 +385,7 @@ pub async fn spawn_category_for_position(
                 inc += 1;
                 continue;
             }
-            let Some(spawner) = get_random_spawn_mob_at(category, &new_pos) else {
+            let Some(spawner) = get_random_spawn_mob_at(world, category, &new_pos).await else {
                 // debug!("{new_pos:?} failed, no random spawn mob at category: {category:?}");
                 break 'outer;
             };
@@ -406,7 +405,7 @@ pub async fn spawn_category_for_position(
                 inc += 1;
                 continue;
             }
-            if !spawn_state.can_spawn(entity_type, &new_pos, world) {
+            if !spawn_state.can_spawn(entity_type, &new_pos, world).await {
                 // debug!("{new_pos:?} failed, can't spawn at");
                 inc += 1;
                 continue;
@@ -469,12 +468,13 @@ pub fn is_right_distance_to_player_and_spawn_point(
 }
 
 #[must_use]
-pub fn get_random_spawn_mob_at(
+pub async fn get_random_spawn_mob_at(
+    world: &Arc<World>,
     category: &'static MobCategory,
-    _block_pos: &BlockPos,
+    block_pos: &BlockPos,
 ) -> Option<&'static Spawner> {
     // TODO Holder<Biome> holder = level.getBiome(pos);
-    let biome = &Biome::PLAINS;
+    let biome = world.level.get_rough_biome(block_pos).await;
     if category == &MobCategory::WATER_AMBIENT
         && biome.is_tagged_with_by_tag(&MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
         && rng().random::<f32>() < 0.98f32

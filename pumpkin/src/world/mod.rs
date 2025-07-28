@@ -2270,7 +2270,7 @@ impl World {
                 Uuid::new_v4(),
                 self.clone(),
                 Vector3::new(x, y, z),
-                EntityType::ITEM,
+                &EntityType::ITEM,
                 false,
             );
             let entity = Arc::new(ItemEntity::new_with_velocity(entity, item, velocity, 10).await);

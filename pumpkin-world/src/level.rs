@@ -1,7 +1,21 @@
+use crate::{
+    BlockStateId,
+    block::{RawBlockState, entities::BlockEntity},
+    chunk::{
+        ChunkData, ChunkEntityData, ChunkParsingError, ChunkReadingError,
+        format::{anvil::AnvilChunkFile, linear::LinearFile},
+        io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
+    },
+    dimension::Dimension,
+    generation::{Seed, get_world_gen, implementation::WorldGenerator},
+    tick::{OrderedTick, ScheduledTick, TickPriority},
+    world::BlockRegistryExt,
+};
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
+use pumpkin_data::biome::Biome;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
@@ -23,20 +37,6 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_util::task::TaskTracker;
-
-use crate::{
-    BlockStateId,
-    block::{RawBlockState, entities::BlockEntity},
-    chunk::{
-        ChunkData, ChunkEntityData, ChunkParsingError, ChunkReadingError,
-        format::{anvil::AnvilChunkFile, linear::LinearFile},
-        io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
-    },
-    dimension::Dimension,
-    generation::{Seed, get_world_gen, implementation::WorldGenerator},
-    tick::{OrderedTick, ScheduledTick, TickPriority},
-    world::BlockRegistryExt,
-};
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
 pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
@@ -610,6 +610,21 @@ impl Level {
         };
 
         RawBlockState(id)
+    }
+    pub async fn get_rough_biome(self: &Arc<Self>, position: &BlockPos) -> &'static Biome {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.get_chunk(chunk_coordinate).await;
+
+        let chunk = chunk.read().await;
+        let Some(id) = chunk.section.get_rough_biome_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+        ) else {
+            return &Biome::THE_VOID;
+        };
+
+        Biome::from_id(id).unwrap()
     }
 
     pub async fn set_block_state(
