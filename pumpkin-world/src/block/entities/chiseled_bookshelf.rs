@@ -1,3 +1,9 @@
+use async_trait::async_trait;
+use log::warn;
+use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
+use std::any::Any;
 use std::{
     array::from_fn,
     sync::{
@@ -5,12 +11,6 @@ use std::{
         atomic::{AtomicBool, AtomicI8, Ordering},
     },
 };
-
-use async_trait::async_trait;
-use log::warn;
-use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
-use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
 
 use crate::{
@@ -46,7 +46,7 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
     {
         let chiseled_bookshelf = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             last_interacted_slot: AtomicI8::new(
                 nbt.get_int(LAST_INTERACTED_SLOT).unwrap_or(-1) as i8
             ),
@@ -77,7 +77,7 @@ impl ChiseledBookshelfBlockEntity {
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             last_interacted_slot: AtomicI8::new(-1),
             dirty: AtomicBool::new(false),
         }
@@ -138,7 +138,7 @@ impl Inventory for ChiseledBookshelfBlockEntity {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY;
+        let mut removed = ItemStack::EMPTY.clone();
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -155,13 +155,17 @@ impl Inventory for ChiseledBookshelfBlockEntity {
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 #[async_trait]
 impl Clearable for ChiseledBookshelfBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY;
+            *slot.lock().await = ItemStack::EMPTY.clone();
         }
     }
 }

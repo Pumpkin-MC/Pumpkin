@@ -18,7 +18,7 @@ pub struct GiantTrunkPlacer;
 
 impl GiantTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,

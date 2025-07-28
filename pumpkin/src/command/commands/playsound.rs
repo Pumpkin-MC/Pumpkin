@@ -13,6 +13,7 @@ use crate::command::{
     tree::CommandTree,
     tree::builder::argument,
 };
+use crate::entity::EntityBase;
 
 /// Command: playsound <sound> [<source>] [<targets>] [<pos>] [<volume>] [<pitch>] [<minVolume>]
 ///
@@ -144,7 +145,7 @@ impl CommandExecutor for Executor {
                         "commands.playsound.success.single",
                         [
                             TextComponent::text(sound_name),
-                            TextComponent::text(targets[0].gameprofile.name.clone()),
+                            targets[0].get_display_name().await,
                         ],
                     ))
                     .await;

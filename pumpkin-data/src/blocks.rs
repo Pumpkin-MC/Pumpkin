@@ -1,7 +1,6 @@
 use crate::{
     BlockState, BlockStateRef,
-    block_properties::get_state_by_state_id,
-    tag::{RegistryKey, Tagable},
+    tag::{RegistryKey, Taggable},
 };
 use pumpkin_util::{
     loot_table::LootTable,
@@ -42,7 +41,7 @@ impl Hash for Block {
     }
 }
 
-impl Tagable for Block {
+impl Taggable for Block {
     #[inline]
     fn tag_key() -> RegistryKey {
         RegistryKey::Block
@@ -51,6 +50,11 @@ impl Tagable for Block {
     #[inline]
     fn registry_key(&self) -> &str {
         self.name
+    }
+
+    #[inline]
+    fn registry_id(&self) -> u16 {
+        self.id
     }
 }
 
@@ -71,7 +75,7 @@ impl Block {
         self.properties(state_id).is_some_and(|properties| {
             properties
                 .to_props()
-                .iter()
+                .into_iter()
                 .any(|(key, value)| key == "waterlogged" && value == "true")
         })
     }

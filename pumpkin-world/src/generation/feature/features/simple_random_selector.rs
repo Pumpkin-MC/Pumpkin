@@ -18,7 +18,7 @@ pub struct SimpleRandomFeature {
 
 impl SimpleRandomFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -31,7 +31,7 @@ impl SimpleRandomFeature {
     ) -> bool {
         let i = random.next_bounded_i32(self.features.len() as i32);
         let feature = &self.features[i as usize];
-        Box::pin(feature.generate(
+        feature.generate(
             chunk,
             level,
             block_registry,
@@ -40,7 +40,6 @@ impl SimpleRandomFeature {
             feature_name,
             random,
             pos,
-        ))
-        .await
+        )
     }
 }

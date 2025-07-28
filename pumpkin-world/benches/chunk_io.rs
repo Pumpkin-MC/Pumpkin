@@ -81,7 +81,7 @@ struct BlockRegistry;
 
 #[async_trait]
 impl BlockRegistryExt for BlockRegistry {
-    async fn can_place_at(
+    fn can_place_at(
         &self,
         _block: &pumpkin_data::Block,
         _block_accessor: &dyn BlockAccessor,

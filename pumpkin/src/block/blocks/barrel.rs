@@ -27,7 +27,6 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         _player: &dyn InventoryPlayer,
     ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
-        #[allow(clippy::option_if_let_else)]
         Some(Arc::new(Mutex::new(create_generic_9x3(
             sync_id,
             player_inventory,

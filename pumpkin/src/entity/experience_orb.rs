@@ -1,4 +1,8 @@
-use std::sync::{Arc, atomic::AtomicU32};
+use core::f32;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering},
+};
 
 use async_trait::async_trait;
 use pumpkin_data::{damage::DamageType, entity::EntityType};
@@ -74,9 +78,7 @@ impl EntityBase for ExperienceOrbEntity {
     async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
         self.entity.tick(caller, server).await;
 
-        let age = self
-            .orb_age
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
         if age >= 6000 {
             self.entity.remove().await;
         }
@@ -99,7 +101,14 @@ impl EntityBase for ExperienceOrbEntity {
         }
     }
 
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+    async fn damage_with_context(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
         false
     }
 

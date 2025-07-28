@@ -78,7 +78,7 @@ pub trait LeaveValidator {
 
 impl FoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate_square<T: LeaveValidator>(
+    pub fn generate_square<T: LeaveValidator>(
         validator: &T,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -97,13 +97,13 @@ impl FoliagePlacer {
                     continue;
                 }
                 let pos = BlockPos(center_pos.0.add(&Vector3::new(x, y, z)));
-                Self::place_foliage_block(chunk, level, pos, foliage_provider).await;
+                Self::place_foliage_block(chunk, level, pos, foliage_provider);
             }
         }
     }
 
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -114,18 +114,16 @@ impl FoliagePlacer {
         foliage_provider: &BlockState,
     ) {
         let offset = self.offset.get(random);
-        self.r#type
-            .generate(
-                chunk,
-                level,
-                random,
-                node,
-                foliage_height,
-                radius,
-                offset,
-                foliage_provider,
-            )
-            .await;
+        self.r#type.generate(
+            chunk,
+            level,
+            random,
+            node,
+            foliage_height,
+            radius,
+            offset,
+            foliage_provider,
+        );
     }
 
     pub fn get_random_radius(&self, random: &mut RandomGenerator, base_height: i32) -> i32 {
@@ -135,7 +133,7 @@ impl FoliagePlacer {
         }
     }
 
-    pub async fn place_foliage_block(
+    pub fn place_foliage_block(
         chunk: &mut ProtoChunk<'_>,
         _level: &Arc<Level>,
         pos: BlockPos,
@@ -148,7 +146,7 @@ impl FoliagePlacer {
         if chunk.chunk_pos == pos.chunk_and_chunk_relative_position().0 {
             chunk.set_block_state(&pos.0, block_state);
         } else {
-            // level.set_block_state(&pos, block_state.id).await;
+            //level.set_block_state(&pos, block_state.id).await;
         }
     }
 }
@@ -182,7 +180,7 @@ pub enum FoliageType {
 
 impl FoliageType {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate(
         &self,
         chunk: &mut ProtoChunk<'_>,
         level: &Arc<Level>,
@@ -194,157 +192,116 @@ impl FoliageType {
         foliage_provider: &BlockState,
     ) {
         match self {
-            FoliageType::Blob(blob) => {
-                blob.generate(
-                    chunk,
-                    level,
-                    random,
-                    node,
-                    foliage_height,
-                    radius,
-                    offset,
-                    foliage_provider,
-                )
-                .await
-            }
-            FoliageType::Spruce(spruce) => {
-                spruce
-                    .generate(
-                        chunk,
-                        level,
-                        random,
-                        node,
-                        foliage_height,
-                        radius,
-                        offset,
-                        foliage_provider,
-                    )
-                    .await
-            }
-            FoliageType::Pine(pine) => {
-                pine.generate(
-                    chunk,
-                    level,
-                    random,
-                    node,
-                    foliage_height,
-                    radius,
-                    offset,
-                    foliage_provider,
-                )
-                .await
-            }
-            FoliageType::Acacia(acacia) => {
-                acacia
-                    .generate(
-                        chunk,
-                        level,
-                        random,
-                        node,
-                        foliage_height,
-                        radius,
-                        offset,
-                        foliage_provider,
-                    )
-                    .await
-            }
-            FoliageType::Bush(bush) => {
-                bush.generate(
-                    chunk,
-                    level,
-                    random,
-                    node,
-                    foliage_height,
-                    radius,
-                    offset,
-                    foliage_provider,
-                )
-                .await
-            }
-            FoliageType::Fancy(fancy) => {
-                fancy
-                    .generate(
-                        chunk,
-                        level,
-                        random,
-                        node,
-                        foliage_height,
-                        radius,
-                        offset,
-                        foliage_provider,
-                    )
-                    .await
-            }
-            FoliageType::Jungle(jungle) => {
-                jungle
-                    .generate(
-                        chunk,
-                        level,
-                        random,
-                        node,
-                        foliage_height,
-                        radius,
-                        offset,
-                        foliage_provider,
-                    )
-                    .await
-            }
-            FoliageType::MegaPine(mega_pine) => {
-                mega_pine
-                    .generate(
-                        chunk,
-                        level,
-                        random,
-                        node,
-                        foliage_height,
-                        radius,
-                        offset,
-                        foliage_provider,
-                    )
-                    .await
-            }
-            FoliageType::DarkOak(dark_oak) => {
-                dark_oak
-                    .generate(
-                        chunk,
-                        level,
-                        random,
-                        node,
-                        foliage_height,
-                        radius,
-                        offset,
-                        foliage_provider,
-                    )
-                    .await
-            }
-            FoliageType::RandomSpread(random_spread) => {
-                random_spread
-                    .generate(
-                        chunk,
-                        level,
-                        random,
-                        node,
-                        foliage_height,
-                        radius,
-                        offset,
-                        foliage_provider,
-                    )
-                    .await
-            }
-            FoliageType::Cherry(cherry) => {
-                cherry
-                    .generate(
-                        chunk,
-                        level,
-                        random,
-                        node,
-                        foliage_height,
-                        radius,
-                        offset,
-                        foliage_provider,
-                    )
-                    .await
-            }
+            FoliageType::Blob(blob) => blob.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
+            FoliageType::Spruce(spruce) => spruce.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
+            FoliageType::Pine(pine) => pine.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
+            FoliageType::Acacia(acacia) => acacia.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
+            FoliageType::Bush(bush) => bush.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
+            FoliageType::Fancy(fancy) => fancy.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
+            FoliageType::Jungle(jungle) => jungle.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
+            FoliageType::MegaPine(mega_pine) => mega_pine.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
+            FoliageType::DarkOak(dark_oak) => dark_oak.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
+            FoliageType::RandomSpread(random_spread) => random_spread.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
+            FoliageType::Cherry(cherry) => cherry.generate(
+                chunk,
+                level,
+                random,
+                node,
+                foliage_height,
+                radius,
+                offset,
+                foliage_provider,
+            ),
         }
     }
 

@@ -28,7 +28,7 @@ pub trait GeneratorInit {
 
 #[async_trait]
 pub trait WorldGenerator: Sync + Send {
-    async fn generate_chunk(
+    fn generate_chunk(
         &self,
         level: &Arc<Level>,
         block_registry: &dyn BlockRegistryExt,
@@ -61,9 +61,8 @@ impl GeneratorInit for VanillaGenerator {
     }
 }
 
-#[async_trait]
 impl WorldGenerator for VanillaGenerator {
-    async fn generate_chunk(
+    fn generate_chunk(
         &self,
         level: &Arc<Level>,
         block_registry: &dyn BlockRegistryExt,
@@ -85,38 +84,40 @@ impl WorldGenerator for VanillaGenerator {
             &self.random_config,
             generation_settings,
         );
-        // TODO: Temporary yield to allow other tasks to run, eventually replace with rayon
-        tokio::task::yield_now().await;
         proto_chunk.populate_biomes(self.dimension);
-        // TODO: Temporary yield to allow other tasks to run, eventually replace with rayon
-        tokio::task::yield_now().await;
         proto_chunk.populate_noise();
-        // TODO: Temporary yield to allow other tasks to run, eventually replace with rayon
-        tokio::task::yield_now().await;
         proto_chunk.build_surface();
-        // TODO: Temporary yield to allow other tasks to run, eventually replace with rayon
-        tokio::task::yield_now().await;
-        proto_chunk.generate_features(level, block_registry).await;
+        proto_chunk.generate_features(level, block_registry);
 
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
-            for z in 0..BiomePalette::SIZE {
-                for x in 0..BiomePalette::SIZE {
-                    let absolute_y =
-                        biome_coords::from_block(generation_settings.shape.min_y as i32) + y as i32;
-                    let biome =
-                        proto_chunk.get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
-                    sections.set_relative_biome(x, y as usize, z, biome.id);
+            let relative_y = y as usize;
+            let section_index = relative_y / BiomePalette::SIZE;
+            let relative_y = relative_y % BiomePalette::SIZE;
+            if let Some(section) = sections.sections.get_mut(section_index) {
+                for z in 0..BiomePalette::SIZE {
+                    for x in 0..BiomePalette::SIZE {
+                        let absolute_y =
+                            biome_coords::from_block(generation_settings.shape.min_y as i32)
+                                + y as i32;
+                        let biome =
+                            proto_chunk.get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
+                        section.biomes.set(x, relative_y, z, biome.id);
+                    }
                 }
             }
         }
-
         for y in 0..generation_settings.shape.height {
-            for z in 0..BlockPalette::SIZE {
-                for x in 0..BlockPalette::SIZE {
-                    let absolute_y = generation_settings.shape.min_y as i32 + y as i32;
-                    let block =
-                        proto_chunk.get_block_state(&Vector3::new(x as i32, absolute_y, z as i32));
-                    sections.set_relative_block(x, y as usize, z, block.0);
+            let relative_y = (y as i32 - sections.min_y) as usize;
+            let section_index = relative_y / BlockPalette::SIZE;
+            let relative_y = relative_y % BlockPalette::SIZE;
+            if let Some(section) = sections.sections.get_mut(section_index) {
+                for z in 0..BlockPalette::SIZE {
+                    for x in 0..BlockPalette::SIZE {
+                        let absolute_y = generation_settings.shape.min_y as i32 + y as i32;
+                        let block = proto_chunk
+                            .get_block_state(&Vector3::new(x as i32, absolute_y, z as i32));
+                        section.block_states.set(x, relative_y, z, block.0);
+                    }
                 }
             }
         }

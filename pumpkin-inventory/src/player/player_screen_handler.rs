@@ -166,19 +166,20 @@ impl ScreenHandler for PlayerScreenHandler {
                     return ItemStack::EMPTY;
                 }
             } else if !self.insert_item(&mut slot_stack, 9, 45, false).await {
-                return ItemStack::EMPTY;
+                return ItemStack::EMPTY.clone();
             }
 
-            let stack = *slot_stack;
+            let stack = slot_stack.clone();
             drop(slot_stack); // release the lock before calling other methods
             if stack.is_empty() {
-                slot.set_stack_prev(ItemStack::EMPTY, stack_prev).await;
+                slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone())
+                    .await;
             } else {
                 slot.mark_dirty().await;
             }
 
             if stack.item_count == stack_prev.item_count {
-                return ItemStack::EMPTY;
+                return ItemStack::EMPTY.clone();
             }
 
             slot.on_take_item(player, &stack).await;
@@ -186,7 +187,8 @@ impl ScreenHandler for PlayerScreenHandler {
             if slot_index == 0 {
                 // From crafting result slot
                 // Notify the result slot to refill
-                slot.on_quick_move_crafted(stack, stack_prev).await;
+                slot.on_quick_move_crafted(stack.clone(), stack_prev.clone())
+                    .await;
                 // For crafting result slot, drop any remaining items
                 if !stack.is_empty() {
                     player.drop_item(stack, false).await;
@@ -197,6 +199,6 @@ impl ScreenHandler for PlayerScreenHandler {
         }
 
         // Nothing changed
-        ItemStack::EMPTY
+        ItemStack::EMPTY.clone()
     }
 }

@@ -28,6 +28,15 @@ mod sound_enum;
 #[path = "generated/recipes.rs"]
 pub mod recipes;
 
+#[rustfmt::skip]
+#[path = "generated/data_component.rs"]
+pub mod data_component;
+pub mod data_component_impl;
+
+#[rustfmt::skip]
+#[path = "generated/attributes.rs"]
+pub mod attributes;
+
 pub mod sound {
     pub use crate::sound_category::*;
     pub use crate::sound_enum::*;
@@ -140,6 +149,10 @@ pub mod flower_pot_transformations;
 #[rustfmt::skip]
 #[path = "generated/fuels.rs"]
 pub mod fuels;
+
+#[rustfmt::skip]
+#[path = "generated/recipe_remainder.rs"]
+pub mod recipe_remainder;
 
 mod block_direction;
 pub mod block_state;

@@ -49,7 +49,7 @@ impl<'a> PistonHandler<'a> {
     pub async fn calculate_push(&mut self) -> bool {
         self.moved_blocks.clear();
         self.broken_blocks.clear();
-        let (block, block_state) = self.world.get_block_and_block_state(&self.pos_to).await;
+        let (block, block_state) = self.world.get_block_and_state(&self.pos_to).await;
 
         if !PistonBlock::is_movable(
             block,
@@ -92,7 +92,7 @@ impl<'a> PistonHandler<'a> {
     }
 
     async fn try_move(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
-        let (mut block, mut block_state) = self.world.get_block_and_block_state(&pos).await;
+        let (block, block_state) = self.world.get_block_and_state(&pos).await;
         if block_state.is_air() {
             return true;
         }
@@ -112,7 +112,7 @@ impl<'a> PistonHandler<'a> {
         while Self::is_block_sticky(block) {
             let block_pos = pos.offset_dir(self.motion_direction.opposite().to_offset(), i as i32);
             let block2 = block;
-            (block, block_state) = self.world.get_block_and_block_state(&block_pos).await;
+            let (block, block_state) = self.world.get_block_and_state(&block_pos).await;
             if block_state.is_air()
                 || !Self::is_adjacent_block_stuck(block2, block)
                 || !PistonBlock::is_movable(
@@ -153,7 +153,7 @@ impl<'a> PistonHandler<'a> {
                 }
                 return true;
             }
-            (block, block_state) = self.world.get_block_and_block_state(&block_pos2).await;
+            let (block, block_state) = self.world.get_block_and_state(&block_pos2).await;
             if block_state.is_air() {
                 return true;
             }

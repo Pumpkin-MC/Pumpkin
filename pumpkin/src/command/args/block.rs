@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
-use pumpkin_data::{Block, block_properties::get_block};
+use pumpkin_data::Block;
+use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
@@ -59,7 +59,7 @@ impl<'a> FindArg<'a> for BlockArgumentConsumer {
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::Block(name)) => get_block(name).map_or_else(
+            Some(Arg::Block(name)) => Block::from_name(name).map_or_else(
                 || {
                     if name.starts_with("minecraft:") {
                         Err(CommandError::CommandFailed(Box::new(
@@ -134,52 +134,43 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::BlockPredicate(name)) => {
-                name.strip_prefix("#").map_or_else(
-                    || {
-                        get_block(name).map_or_else(
-                            || {
-                                if name.starts_with("minecraft:") {
-                                    Err(CommandError::CommandFailed(Box::new(
-                                        TextComponent::translate(
-                                            "argument.block.id.invalid",
-                                            [TextComponent::text((*name).to_string())],
-                                        ),
-                                    )))
-                                } else {
-                                    Err(CommandError::CommandFailed(Box::new(
-                                        TextComponent::translate(
-                                            "argument.block.id.invalid",
-                                            [TextComponent::text("minecraft:".to_string() + *name)],
-                                        ),
-                                    )))
-                                }
-                            },
-                            |block| Ok(Some(BlockPredicate::Block(block.id))),
-                        )
-                    },
-                    |tag| {
-                        get_tag_values(RegistryKey::Block, tag).map_or_else(
-                            || {
+            Some(Arg::BlockPredicate(name)) => name.strip_prefix("#").map_or_else(
+                || {
+                    Block::from_name(name).map_or_else(
+                        || {
+                            if name.starts_with("minecraft:") {
                                 Err(CommandError::CommandFailed(Box::new(
                                     TextComponent::translate(
-                                        "arguments.block.tag.unknown",
-                                        [TextComponent::text((*tag).to_string())],
+                                        "argument.block.id.invalid",
+                                        [TextComponent::text((*name).to_string())],
                                     ),
                                 )))
-                            },
-                            |blocks| {
-                                let mut block_ids = Vec::with_capacity(blocks.len());
-                                // TODO it will be slow to check name str, we should make a tag list of ids
-                                for block_name in blocks {
-                                    block_ids.push(get_block(block_name).unwrap().id);
-                                }
-                                Ok(Some(BlockPredicate::Tag(block_ids)))
-                            },
-                        )
-                    },
-                )
-            }
+                            } else {
+                                Err(CommandError::CommandFailed(Box::new(
+                                    TextComponent::translate(
+                                        "argument.block.id.invalid",
+                                        [TextComponent::text("minecraft:".to_string() + *name)],
+                                    ),
+                                )))
+                            }
+                        },
+                        |block| Ok(Some(BlockPredicate::Block(block.id))),
+                    )
+                },
+                |tag| {
+                    get_tag_ids(RegistryKey::Block, tag).map_or_else(
+                        || {
+                            Err(CommandError::CommandFailed(Box::new(
+                                TextComponent::translate(
+                                    "arguments.block.tag.unknown",
+                                    [TextComponent::text((*tag).to_string())],
+                                ),
+                            )))
+                        },
+                        |blocks| Ok(Some(BlockPredicate::Tag(blocks.to_vec()))),
+                    )
+                },
+            ),
             _ => Ok(None),
         }
     }

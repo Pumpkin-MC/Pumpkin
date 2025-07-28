@@ -20,7 +20,7 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Facing;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 
@@ -262,7 +262,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
 
 pub async fn should_be_lit(world: &World, pos: &BlockPos, face: BlockDirection) -> bool {
     let other_pos = pos.offset(face.to_offset());
-    let (block, state) = world.get_block_and_block_state(&other_pos).await;
+    let (block, state) = world.get_block_and_state(&other_pos).await;
     get_redstone_power(block, state, world, &other_pos, face).await == 0
 }
 

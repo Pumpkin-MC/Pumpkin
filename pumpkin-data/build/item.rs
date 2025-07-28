@@ -1,19 +1,21 @@
-use std::{collections::HashMap, fs};
-
+use crate::enchantments::AttributeModifierSlot;
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
+use pumpkin_util::registry::TagType;
+use pumpkin_util::text::TextContent;
 use pumpkin_util::{registry::RegistryEntryList, text::TextComponent};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
+use std::{collections::HashMap, fs};
 use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub struct Item {
     pub id: u16,
     pub components: ItemComponents,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub struct ItemComponents {
     #[serde(rename = "minecraft:item_name")]
     pub item_name: TextComponent,
@@ -38,137 +40,184 @@ pub struct ItemComponents {
 impl ToTokens for ItemComponents {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let max_stack_size = LitInt::new(&self.max_stack_size.to_string(), Span::call_site());
-        let jukebox_playable = match &self.jukebox_playable {
-            Some(playable) => {
-                let song = LitStr::new(playable, Span::call_site());
-                quote! { Some(#song) }
-            }
-            None => quote! { None },
+        tokens.extend(quote! {
+            (MaxStackSize, &MaxStackSizeImpl {
+                size: #max_stack_size,
+            }),
+        });
+        if let Some(playable) = &self.jukebox_playable {
+            let song = LitStr::new(playable, Span::call_site());
+            tokens.extend(quote! {
+                (JukeboxPlayable, &JukeboxPlayableImpl{
+                    song: #song,
+                }),
+            });
+        }
+
+        let TextContent::Translate {
+            translate: text,
+            with: _,
+        } = self.item_name.clone().0.content
+        else {
+            unreachable!()
+        };
+        let item_name = LitStr::new(&text, Span::call_site());
+        tokens.extend(quote! {
+            (ItemName, &ItemNameImpl {
+                name: #item_name,
+            }),
+        });
+
+        if let Some(d) = self.damage {
+            let damage_lit = LitInt::new(&d.to_string(), Span::call_site());
+            tokens.extend(quote! {
+                (Damage, &DamageImpl {
+                    damage: #damage_lit,
+                }),
+            });
         };
 
-        let item_name = {
-            let text = self.item_name.clone().get_text();
-            let item_name = LitStr::new(&text, Span::call_site());
-            quote! { #item_name }
+        if let Some(md) = self.max_damage {
+            let max_damage_lit = LitInt::new(&md.to_string(), Span::call_site());
+            tokens.extend(quote! {
+                (MaxDamage, &MaxDamageImpl {
+                    max_damage: #max_damage_lit,
+                }),
+            });
         };
 
-        let damage = match self.damage {
-            Some(d) => {
-                let damage_lit = LitInt::new(&d.to_string(), Span::call_site());
-                quote! { Some(#damage_lit) }
-            }
-            None => quote! { None },
-        };
+        if let Some(modifiers) = &self.attribute_modifiers {
+            let modifier_code = modifiers.iter().map(|modifier| {
+                let r#type = format_ident!(
+                    "{}",
+                    modifier
+                        .r#type
+                        .strip_prefix("minecraft:")
+                        .unwrap()
+                        .to_uppercase()
+                );
+                let id = LitStr::new(&modifier.id, Span::call_site());
+                let amount = modifier.amount;
+                let operation = Ident::new(&format!("{:?}", modifier.operation), Span::call_site());
+                let slot = modifier.slot.to_tokens();
 
-        let max_damage = match self.max_damage {
-            Some(md) => {
-                let max_damage_lit = LitInt::new(&md.to_string(), Span::call_site());
-                quote! { Some(#max_damage_lit) }
-            }
-            None => quote! { None },
-        };
-
-        let attribute_modifiers = match &self.attribute_modifiers {
-            Some(modifiers) => {
-                let modifier_code = modifiers.iter().map(|modifier| {
-                    let r#type = LitStr::new(&modifier.r#type, Span::call_site());
-                    let id = LitStr::new(&modifier.id, Span::call_site());
-                    let amount = modifier.amount;
-                    let operation =
-                        Ident::new(&format!("{:?}", modifier.operation), Span::call_site());
-                    let slot = LitStr::new(&modifier.slot, Span::call_site());
-
-                    quote! {
-                        Modifier {
-                            r#type: #r#type,
-                            id: #id,
-                            amount: #amount,
-                            operation: Operation::#operation,
-                            slot: #slot,
-                        }
+                quote! {
+                    Modifier {
+                        r#type: &Attributes::#r#type,
+                        id: #id,
+                        amount: #amount,
+                        operation: Operation::#operation,
+                        slot: #slot,
                     }
-                });
-                quote! { Some(&[#(#modifier_code),*]) }
-            }
-            None => quote! { None },
+                }
+            });
+            tokens.extend(quote! {
+                (AttributeModifiers, &AttributeModifiersImpl {
+                    attribute_modifiers: Cow::Borrowed(&[#(#modifier_code),*])
+                }),
+            });
         };
 
-        let tool = match &self.tool {
-            Some(tool) => {
-                let rules_code = tool.rules.iter().map(|rule| {
-                    let mut block_array = Vec::new();
+        if let Some(tool) = &self.tool {
+            let rules_code = tool.rules.iter().map(|rule| {
+                let block_array;
 
-                    // TODO: According to the wiki, this can be a string or a list.
-                    // I dont think there'll be any issues with always using a list, but we can
-                    // probably save bandwidth by doing single strings.
-                    for reg in rule.blocks.get_values() {
-                        let tag_string = reg.serialize();
-                        // The client knows what tags are; just send them the tag instead of all the
-                        // blocks that are a part of the tag.
-                        block_array.extend(quote! { #tag_string });
+                if let RegistryEntryList::Single(t) = &rule.blocks {
+                    if let TagType::Item(str) = t {
+                        let ident = format_ident!(
+                            "{}",
+                            str.strip_prefix("minecraft:").unwrap().to_uppercase()
+                        );
+                        block_array = quote! {
+                            Blocks(Cow::Borrowed(&[&Block::#ident]))
+                        }
+                    } else if let TagType::Tag(str) = t {
+                        let ident = format_ident!(
+                            "{}",
+                            str.replace(":", "_").replace("/", "_").to_uppercase()
+                        );
+                        block_array = quote! {
+                            Tag(&tag::Block::#ident)
+                        }
+                    } else {
+                        unreachable!();
                     }
-
-                    let speed = match rule.speed {
-                        Some(speed) => {
-                            quote! { Some(#speed) }
-                        }
-                        None => quote! { None },
-                    };
-                    let correct_for_drops = match rule.correct_for_drops {
-                        Some(correct_for_drops) => {
-                            let correct_for_drops =
-                                LitBool::new(correct_for_drops, Span::call_site());
-                            quote! { Some(#correct_for_drops) }
-                        }
-                        None => quote! { None },
-                    };
-                    quote! {
-                        ToolRule {
-                            blocks: &[#(#block_array),*],
-                            speed: #speed,
-                            correct_for_drops: #correct_for_drops
-                        }
+                } else if let RegistryEntryList::Many(t) = &rule.blocks {
+                    let mut array = vec![];
+                    for i in t {
+                        let TagType::Item(str) = i else {
+                            unreachable!();
+                        };
+                        let ident = format_ident!(
+                            "{}",
+                            str.strip_prefix("minecraft:").unwrap().to_uppercase()
+                        );
+                        array.push(quote! {
+                            &Block::#ident
+                        });
                     }
-                });
-                let damage_per_block = match tool.damage_per_block {
+                    block_array = quote! {
+                        Blocks(Cow::Borrowed(&[#(#array),*]))
+                    }
+                } else {
+                    unreachable!();
+                }
+                let speed = match rule.speed {
                     Some(speed) => {
-                        let speed = LitInt::new(&speed.to_string(), Span::call_site());
                         quote! { Some(#speed) }
                     }
                     None => quote! { None },
                 };
-                let default_mining_speed = match tool.default_mining_speed {
-                    Some(speed) => {
-                        let speed = LitFloat::new(&speed.to_string(), Span::call_site());
-                        quote! { Some(#speed) }
+                let correct_for_drops = match rule.correct_for_drops {
+                    Some(correct_for_drops) => {
+                        let correct_for_drops = LitBool::new(correct_for_drops, Span::call_site());
+                        quote! { Some(#correct_for_drops) }
                     }
                     None => quote! { None },
                 };
-                quote! { Some(ToolComponent { rules: &[#(#rules_code),*], damage_per_block: #damage_per_block, default_mining_speed: #default_mining_speed  }) }
-            }
-            None => quote! { None },
+                quote! {
+                    ToolRule {
+                        blocks: #block_array,
+                        speed: #speed,
+                        correct_for_drops: #correct_for_drops
+                    }
+                }
+            });
+            let damage_per_block = {
+                let speed = LitInt::new(&tool.damage_per_block.to_string(), Span::call_site());
+                quote! { #speed }
+            };
+            let default_mining_speed = {
+                let speed = LitFloat::new(
+                    &format!("{:.1}", tool.default_mining_speed),
+                    Span::call_site(),
+                );
+                quote! { #speed }
+            };
+            let can_destroy_blocks_in_creative =
+                LitBool::new(tool.can_destroy_blocks_in_creative, Span::call_site());
+            tokens.extend(quote! { (Tool, &ToolImpl {
+                rules: Cow::Borrowed(&[#(#rules_code),*]),
+                default_mining_speed: #default_mining_speed,
+                damage_per_block: #damage_per_block,
+                can_destroy_blocks_in_creative: #can_destroy_blocks_in_creative
+            }), });
         };
 
-        let food = match &self.food {
-            Some(food) => {
-                let nutrition = LitInt::new(&food.nutrition.to_string(), Span::call_site());
-                let saturation =
-                    LitFloat::new(&format!("{:.1}", food.saturation), Span::call_site());
-                let can_always_eat = match food.can_always_eat {
-                    Some(can) => {
-                        let can = LitBool::new(can, Span::call_site());
-                        quote! { Some(#can) }
-                    }
-                    None => quote! { None },
-                };
-                quote! { Some(FoodComponent {
-                    nutrition: #nutrition,
-                    saturation: #saturation,
-                    can_always_eat: #can_always_eat,
-                } ) }
-            }
-            None => quote! { None },
+        if let Some(food) = &self.food {
+            let nutrition = LitInt::new(&food.nutrition.to_string(), Span::call_site());
+            let saturation = LitFloat::new(&format!("{:.1}", food.saturation), Span::call_site());
+            let can_always_eat = {
+                let can = LitBool::new(food.can_always_eat, Span::call_site());
+                quote! { #can }
+            };
+            tokens.extend(quote! { (Food, &FoodImpl {
+                nutrition: #nutrition,
+                saturation: #saturation,
+                can_always_eat: #can_always_eat,
+            }), });
         };
+
         let equippable = match &self.equippable {
             Some(equippable) => {
                 let slot = LitStr::new(&equippable.slot, Span::call_site());
@@ -246,34 +295,41 @@ impl ToTokens for ItemComponents {
             }
             None => quote! { None },
         };
-
-        tokens.extend(quote! {
-            ItemComponents {
-                item_name: #item_name,
-                max_stack_size: #max_stack_size,
-                jukebox_playable: #jukebox_playable,
-                damage: #damage,
-                max_damage: #max_damage,
-                attribute_modifiers: #attribute_modifiers,
-                tool: #tool,
-                food: #food,
-                equippable: #equippable,
-            }
-        });
     }
+}
+
+fn return_1u32() -> u32 {
+    1
+}
+
+fn return_1f32() -> f32 {
+    1.
+}
+
+fn return_true() -> bool {
+    true
 }
 #[derive(Deserialize, Clone, Debug)]
 pub struct ToolComponent {
     rules: Vec<ToolRule>,
-    default_mining_speed: Option<f32>,
-    damage_per_block: Option<u32>,
+    #[serde(default = "return_1f32")]
+    default_mining_speed: f32,
+    #[serde(default = "return_1u32")]
+    damage_per_block: u32,
+    #[serde(default = "return_true")]
+    can_destroy_blocks_in_creative: bool,
+}
+
+fn return_false() -> bool {
+    false
 }
 
 #[derive(Deserialize, Copy, Clone, Debug)]
 pub struct FoodComponent {
     nutrition: u8,
     saturation: f32,
-    can_always_eat: Option<bool>,
+    #[serde(default = "return_false")]
+    can_always_eat: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -283,14 +339,14 @@ pub struct ToolRule {
     correct_for_drops: Option<bool>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub struct Modifier {
     pub r#type: String,
     pub id: String,
     pub amount: f64,
     pub operation: Operation,
     // TODO: Make this an enum
-    pub slot: String,
+    pub slot: AttributeModifierSlot,
 }
 
 fn _true() -> bool {
@@ -345,13 +401,13 @@ pub(crate) fn build() -> TokenStream {
         let components = &item.components;
         let components_tokens = components.to_token_stream();
 
-        let id_lit = LitInt::new(&item.id.to_string(), proc_macro2::Span::call_site());
+        let id_lit = LitInt::new(&item.id.to_string(), Span::call_site());
 
         constants.extend(quote! {
             pub const #const_ident: Item = Item {
                 id: #id_lit,
                 registry_key: #name,
-                components: #components_tokens
+                components: &[#components_tokens],
             };
         });
 
@@ -365,15 +421,23 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use std::hash::{Hash, Hasher};
+        use crate::data_component::DataComponent::*;
+        use crate::data_component_impl::*;
+        use crate::tag::{RegistryKey, Taggable};
         use pumpkin_util::text::TextComponent;
-        use crate::tag::{Tagable, RegistryKey};
+        use std::borrow::Cow;
+        use std::hash::{Hash, Hasher};
+        use crate::{tag, AttributeModifierSlot};
+        use crate::attributes::Attributes;
+        use crate::data_component_impl::IDSet::{Blocks, Tag};
+        use crate::data_component::DataComponent;
+        use crate::Block;
 
         #[derive(Clone, Debug)]
         pub struct Item {
             pub id: u16,
             pub registry_key: &'static str,
-            pub components: ItemComponents,
+            pub components: &'static [(DataComponent, &'static dyn DataComponentImpl)],
         }
 
         impl PartialEq for Item {
@@ -390,77 +454,21 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        #[derive(Clone, Copy, Debug)]
-        pub struct ItemComponents {
-            pub item_name: &'static str,
-            pub max_stack_size: u8,
-            pub jukebox_playable: Option<&'static str>,
-            pub damage: Option<u16>,
-            pub max_damage: Option<u16>,
-            pub attribute_modifiers: Option<&'static [Modifier]>,
-            pub tool: Option<ToolComponent>,
-            pub food: Option<FoodComponent>,
-            pub equippable: Option<EquippableComponent>,
-        }
-
-        #[derive(Clone, Copy, Debug)]
-        pub struct Modifier {
-            pub r#type: &'static str,
-            pub id: &'static str,
-            pub amount: f64,
-            pub operation: Operation,
-            // TODO: Make this an enum
-            pub slot: &'static str,
-        }
-
-        #[derive(Clone, Copy, Debug, PartialEq)]
-        pub enum Operation {
-            AddValue,
-            AddMultipliedBase,
-            AddMultipliedTotal,
-        }
-
-        #[derive(Clone, Copy, Debug, PartialEq)]
-        pub struct ToolComponent {
-            pub rules: &'static [ToolRule],
-            pub default_mining_speed: Option<f32>,
-            pub damage_per_block: Option<u32>,
-        }
-
-        #[derive(Clone, Copy, Debug, PartialEq)]
-        pub struct ToolRule {
-            pub blocks: &'static [&'static str],
-            pub speed: Option<f32>,
-            pub correct_for_drops: Option<bool>,
-        }
-
-        #[derive(Clone, Copy, Debug, PartialEq)]
-        pub struct FoodComponent {
-            pub nutrition: u8,
-            pub saturation: f32,
-            pub can_always_eat: Option<bool>,
-        }
-
-        #[derive(Clone, Copy, Debug, PartialEq)]
-        pub struct EquippableComponent {
-            pub slot: &'static str,
-            pub equip_sound: Option<&'static str>,
-            pub asset_id: Option<&'static str>,
-            pub camera_overlay: Option<&'static str>,
-            pub allowed_entities: Option<&'static [&'static str]>,
-            pub dispensable: bool,
-            pub swappable: bool,
-            pub damage_on_hurt: bool,
-            pub equip_on_interact: bool,
-            pub can_be_sheared: bool,
-            pub shearing_sound: Option<&'static str>,
-        }
-
         impl Item {
             #constants
 
             pub fn translated_name(&self) -> TextComponent {
-                TextComponent::text(self.components.item_name)
+                TextComponent::translate(
+                    self.components
+                        .iter()
+                        .find_map(|(id, data)| if id == &ItemName {
+                            Some(data.as_any().downcast_ref::<ItemNameImpl>().unwrap().name)
+                        } else {
+                            None
+                        }
+                    ).unwrap(),
+                    &[],
+                )
             }
 
             #[doc = "Try to parse an item from a resource location string."]
@@ -487,7 +495,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        impl Tagable for Item {
+        impl Taggable for Item {
             #[inline]
             fn tag_key() -> RegistryKey {
                 RegistryKey::Item
@@ -496,6 +504,11 @@ pub(crate) fn build() -> TokenStream {
             #[inline]
             fn registry_key(&self) -> &str {
                 self.registry_key
+            }
+
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id
             }
         }
     }

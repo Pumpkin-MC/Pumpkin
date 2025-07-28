@@ -4,7 +4,7 @@ use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::player_server_data::ServerPlayerData;
 use crate::entity::NBTStorage;
 use crate::item::registry::ItemRegistry;
-use crate::net::{ClientPlatform, EncryptionError, GameProfile, PlayerConfig};
+use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
@@ -49,8 +49,8 @@ pub mod seasonal_events;
 pub mod tick_rate_manager;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.7";
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.93";
+pub const CURRENT_MC_VERSION: &str = "1.21.8";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -107,8 +107,9 @@ pub struct Server {
 
 impl Server {
     #[allow(clippy::new_without_default)]
+    #[allow(clippy::too_many_lines)]
     #[must_use]
-    pub async fn new() -> Self {
+    pub async fn new() -> Arc<Self> {
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = RwLock::new(default_dispatcher().await);
         let world_path = BASIC_CONFIG.get_world_path();
@@ -136,41 +137,24 @@ impl Server {
                 fs::copy(dat_path, backup_path).unwrap();
             }
         }
-
-        let level_info = level_info.unwrap_or_default(); // TODO: Improve error handling
-        let seed = level_info.world_gen_settings.seed;
-        log::info!("Loading Overworld: {seed}");
-        let overworld = World::load(
-            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
-            VanillaDimensionType::Overworld,
-            block_registry.clone(),
-        );
-        log::info!("Loading Nether: {seed}");
-        let nether = World::load(
-            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
-            VanillaDimensionType::TheNether,
-            block_registry.clone(),
-        );
-        log::info!("Loading End: {seed}");
-        let end = World::load(
-            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
-            VanillaDimensionType::TheEnd,
-            block_registry.clone(),
-        );
-
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
         let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
 
         let world_name = world_path.to_str().unwrap();
 
-        Self {
+        let level_info = level_info.unwrap_or_else(|err| {
+            log::warn!("Failed to get level_info, using default instead: {err}");
+            LevelData::default()
+        });
+
+        let seed = level_info.world_gen_settings.seed;
+        let level_info = Arc::new(RwLock::new(level_info));
+
+        let server = Self {
             cached_registry: Registry::get_synced(),
             container_id: 0.into(),
-            worlds: RwLock::new(vec![Arc::new(overworld), Arc::new(nether), Arc::new(end)]),
+            worlds: RwLock::new(vec![]),
             dimensions: vec![
                 VanillaDimensionType::Overworld,
                 VanillaDimensionType::OverworldCaves,
@@ -178,7 +162,7 @@ impl Server {
                 VanillaDimensionType::TheEnd,
             ],
             command_dispatcher,
-            block_registry,
+            block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: KeyStore::new(),
             listing: Mutex::new(CachedStatus::new()),
@@ -200,9 +184,42 @@ impl Server {
             server_guid: rand::random(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
-            level_info: Arc::new(RwLock::new(level_info)),
+            level_info: level_info.clone(),
             _locker: Arc::new(locker),
-        }
+        };
+
+        let server = Arc::new(server);
+        let weak = Arc::downgrade(&server);
+        log::info!("Loading Overworld: {seed}");
+        let overworld = World::load(
+            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::Overworld,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        log::info!("Loading Nether: {seed}");
+        let nether = World::load(
+            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::TheNether,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        log::info!("Loading End: {seed}");
+        let end = World::load(
+            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::TheEnd,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        *server
+            .worlds
+            .try_write()
+            .expect("Nothing should hold a lock of worlds before server startup") =
+            vec![overworld.into(), nether.into(), end.into()];
+        server
     }
 
     const SPAWN_CHUNK_RADIUS: i32 = 1;
@@ -336,13 +353,6 @@ impl Server {
                         }
                     }
 
-                    // Send tick rate information to the new player
-                    if let ClientPlatform::Java(_) = &player.client {
-                        self.tick_rate_manager.update_joining_player(&player).await;
-                    } else {
-                        // Todo
-                    }
-
                     Some((player, world.clone()))
                 } else {
                     None
@@ -350,7 +360,7 @@ impl Server {
             }
 
             'cancelled: {
-                player.kick(event.kick_message).await;
+                player.kick(DisconnectReason::Kicked, event.kick_message).await;
                 None
             }
         }}
@@ -371,11 +381,13 @@ impl Server {
         for world in self.worlds.read().await.iter() {
             world.shutdown().await;
         }
+        let level_data = self.level_info.read().await;
         // then lets save the world info
-        if let Err(err) = self.world_info_writer.write_world_info(
-            &*self.level_info.read().await,
-            &BASIC_CONFIG.get_world_path(),
-        ) {
+
+        if let Err(err) = self
+            .world_info_writer
+            .write_world_info(&level_data, &BASIC_CONFIG.get_world_path())
+        {
             log::error!("Failed to save level.dat: {err}");
         }
         log::info!("Completed worlds");
@@ -388,10 +400,7 @@ impl Server {
     /// # Arguments
     ///
     /// * `packet`: A reference to the packet to be broadcast. The packet must implement the `ClientPacket` trait.
-    pub async fn broadcast_packet_all<P>(&self, packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         for world in self.worlds.read().await.iter() {
             let current_players = world.players.read().await;
             for player in current_players.values() {
@@ -595,12 +604,11 @@ impl Server {
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub async fn tick(self: &Arc<Self>) {
-        // Always run player and network ticking, even when game is frozen
-        self.tick_players_and_network().await;
-
-        // Only run world/game logic if the tick rate manager allows it
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds().await;
+            // Always run player and network ticking, even when game is frozen
+        } else {
+            self.tick_players_and_network().await;
         }
     }
 

@@ -31,7 +31,10 @@ impl NoiseValuePoint {
 #[cfg(test)]
 mod test {
     use pumpkin_data::{chunk::Biome, noise_router::OVERWORLD_BASE_NOISE_ROUTER};
-    use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+    use pumpkin_util::{
+        math::{vector2::Vector2, vector3::Vector3},
+        read_data_from_file,
+    };
 
     use crate::{
         GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
@@ -41,7 +44,6 @@ mod test {
             multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
             proto_noise_router::ProtoNoiseRouters,
         },
-        read_data_from_file,
     };
 
     #[test]

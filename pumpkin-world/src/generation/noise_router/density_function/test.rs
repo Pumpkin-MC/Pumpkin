@@ -1,5 +1,5 @@
 use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
-use pumpkin_util::assert_eq_delta;
+use pumpkin_util::{assert_eq_delta, read_data_from_file};
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
@@ -16,7 +16,6 @@ use crate::generation::noise_router::chunk_noise_router::{
 use crate::generation::noise_router::proto_noise_router::{
     ProtoNoiseFunctionComponent, ProtoNoiseRouters,
 };
-use crate::read_data_from_file;
 
 use super::test_deserializer::DensityFunctionRepr;
 use super::{NoiseFunctionComponentRange, NoisePos, PassThrough};
@@ -54,7 +53,7 @@ macro_rules! build_function_stack {
             .map(|component| match component {
                 ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
                     ChunkNoiseFunctionComponent::PassThrough(PassThrough::new(
-                        wrapper.input_index(),
+                        wrapper.input_index,
                         wrapper.min(),
                         wrapper.max(),
                     ))

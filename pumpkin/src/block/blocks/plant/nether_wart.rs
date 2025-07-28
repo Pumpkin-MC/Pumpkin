@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::Block;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -34,6 +34,6 @@ impl PumpkinBlock for NetherWartBlock {
 impl PlantBlockBase for NetherWartBlock {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos).await;
-        block.is_tagged_with("minecraft:soul_sand").unwrap()
+        block == &Block::SOUL_SAND
     }
 }
