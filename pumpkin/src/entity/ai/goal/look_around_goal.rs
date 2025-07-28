@@ -58,6 +58,10 @@ impl Goal for LookAroundGoal {
         );
     }
 
+    fn should_run_every_tick(&self) -> bool {
+        true
+    }
+
     fn get_goal_control(&self) -> &GoalControl {
         &self.goal_control
     }

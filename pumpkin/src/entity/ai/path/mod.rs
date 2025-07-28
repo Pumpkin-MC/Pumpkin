@@ -102,7 +102,7 @@ impl Navigator {
     #[must_use]
     pub fn is_idle(&self) -> bool {
         // TODO: implement
-        true
+        false
     }
 }
 

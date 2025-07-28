@@ -11,9 +11,11 @@ pub mod ambient_stand_goal;
 pub mod goal_selector;
 pub mod look_around_goal;
 pub mod look_at_entity;
+mod melee_attack_goal;
 pub mod move_to_target_pos_goal;
 pub mod step_and_destroy_block_goal;
 mod track_target_goal;
+pub mod zombie_attack_goal;
 
 #[must_use]
 pub fn to_goal_ticks(server_ticks: i32) -> i32 {

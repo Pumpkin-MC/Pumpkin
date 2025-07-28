@@ -220,6 +220,7 @@ pub struct Entity {
     pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
     /// The vehicle that entity is in
     pub vehicle: Mutex<Option<Arc<dyn EntityBase>>>,
+    pub age: AtomicI32,
 
     pub first_loaded_chunk_position: AtomicCell<Option<Vector3<i32>>>,
 
@@ -283,6 +284,7 @@ impl Entity {
             removal_reason: AtomicCell::new(None),
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
+            age: AtomicI32::new(0),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
         }

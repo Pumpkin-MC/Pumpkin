@@ -129,7 +129,7 @@ impl Goal for TrackTargetGoal {
         if target.is_none() {
             return false;
         } // TODO: continue when scoreboard team are implemented
-        false
+        true
     }
 
     async fn start(&self, _mob: &dyn Mob) {

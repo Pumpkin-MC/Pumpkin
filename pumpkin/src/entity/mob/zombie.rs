@@ -2,6 +2,7 @@ use super::{Mob, MobEntity};
 use crate::entity::ai::goal::look_around_goal::LookAroundGoal;
 use crate::entity::ai::goal::move_to_target_pos_goal::MoveToTargetPos;
 use crate::entity::ai::goal::step_and_destroy_block_goal::{StepAndDestroyBlockGoal, Stepping};
+use crate::entity::ai::goal::zombie_attack_goal::ZombieAttackGoal;
 use crate::entity::ai::goal::{Goal, GoalControl};
 use crate::entity::{
     Entity,
@@ -48,6 +49,9 @@ impl Zombie {
             .await;
         goal_selector
             .add_goal(8, Arc::new(LookAroundGoal::default()))
+            .await;
+        goal_selector
+            .add_goal(2, Arc::new(ZombieAttackGoal::new(0.1, false)))
             .await;
 
         target_selector

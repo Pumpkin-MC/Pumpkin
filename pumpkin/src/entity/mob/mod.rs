@@ -51,6 +51,10 @@ impl MobEntity {
                 < position_target_range * position_target_range
         }
     }
+
+    pub fn set_attacking(&self, _attacking: bool) {
+        // TODO: set to data tracker
+    }
 }
 
 // This trait contains all overridable functions
@@ -86,8 +90,15 @@ where
     async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
         let mob_entity = self.get_mob_entity();
         mob_entity.living_entity.tick(caller, server).await;
-        mob_entity.target_selector.tick(self).await;
-        mob_entity.goals_selector.tick(self).await;
+
+        let age = mob_entity.living_entity.entity.age.load(Relaxed);
+        if (age + mob_entity.living_entity.entity.entity_id) % 2 != 0 && age > 1 {
+            mob_entity.target_selector.tick_goals(self, false).await;
+            mob_entity.goals_selector.tick_goals(self, false).await;
+        } else {
+            mob_entity.target_selector.tick(self).await;
+            mob_entity.goals_selector.tick(self).await;
+        }
 
         let mut navigator = mob_entity.navigator.lock().await;
         navigator.tick(&mob_entity.living_entity).await;

@@ -1,3 +1,4 @@
+use std::sync::atomic::Ordering::Relaxed;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -578,6 +579,7 @@ impl World {
         log::debug!("Ticking entities");
         // Entity ticks
         for entity in entities_to_tick {
+            entity.get_entity().age.fetch_add(1, Relaxed);
             entity.tick(entity.clone(), server).await;
             for player in self.players.read().await.values() {
                 if player
