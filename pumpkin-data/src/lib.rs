@@ -157,6 +157,7 @@ pub mod potion;
 #[path = "generated/potion_brewing.rs"]
 pub mod potion_brewing;
 
+#[rustfmt::skip]
 #[path = "generated/recipe_remainder.rs"]
 pub mod recipe_remainder;
 
