@@ -112,7 +112,7 @@ impl FurnaceBlockEntity {
                 };
                 let output_item_stack = ItemStack::new(recipe.result.count, output_item);
 
-                if side_items.are_equal(&ItemStack::EMPTY) {
+                if side_items.are_equal(ItemStack::EMPTY) {
                     drop(side_items);
                     self.set_stack(2, output_item_stack).await;
                 } else if side_items.are_items_and_components_equal(&output_item_stack) {
