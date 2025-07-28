@@ -2,7 +2,7 @@ use crate::block::pumpkin_block::{OnNeighborUpdateArgs, OnPlaceArgs, OnScheduled
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::{BlockStateId, chunk::TickPriority, world::BlockFlags};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::block::pumpkin_block::PumpkinBlock;
 

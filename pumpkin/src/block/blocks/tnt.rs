@@ -1,3 +1,4 @@
+use pumpkin_data::item::Item;
 use std::sync::Arc;
 
 use crate::block::pumpkin_block::{
@@ -9,7 +10,6 @@ use crate::entity::tnt::TNTEntity;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;

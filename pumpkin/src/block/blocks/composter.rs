@@ -1,20 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use pumpkin_data::{
-    Block,
-    block_properties::{BlockProperties, ComposterLikeProperties, EnumVariants, Integer0To8},
-    composter_increase_chance::get_composter_increase_chance_from_item_id,
-    entity::EntityType,
-    item::Item,
-    world::WorldEvent,
-};
-use pumpkin_macros::pumpkin_block;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, chunk::TickPriority, item::ItemStack, world::BlockFlags};
-use rand::Rng;
-use uuid::Uuid;
-
 use crate::{
     block::{
         pumpkin_block::{
@@ -26,6 +11,20 @@ use crate::{
     entity::{Entity, item::ItemEntity},
     world::World,
 };
+use async_trait::async_trait;
+use pumpkin_data::{
+    Block,
+    block_properties::{BlockProperties, ComposterLikeProperties, EnumVariants, Integer0To8},
+    composter_increase_chance::get_composter_increase_chance_from_item_id,
+    entity::EntityType,
+    item::Item,
+    world::WorldEvent,
+};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::{BlockStateId, item::ItemStack, tick::TickPriority, world::BlockFlags};
+use rand::Rng;
+use uuid::Uuid;
 
 #[pumpkin_block("minecraft:composter")]
 pub struct ComposterBlock;

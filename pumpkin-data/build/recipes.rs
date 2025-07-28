@@ -374,7 +374,7 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
-        use crate::tag::Tagable;
+        use crate::tag::Taggable;
         use crate::item::Item;
 
         #[derive(Clone, Debug)]
@@ -409,12 +409,12 @@ pub(crate) fn build() -> TokenStream {
         #[allow(dead_code)]
         #[derive(Clone, Debug)]
         pub struct CookingRecipe {
-            category: RecipeCategoryTypes,
-            group: Option<&'static str>,
-            ingredient: RecipeIngredientTypes,
-            cookingtime: i32,
-            experience: f32,
-            result: RecipeResultStruct,
+            pub category: RecipeCategoryTypes,
+            pub group: Option<&'static str>,
+            pub ingredient: RecipeIngredientTypes,
+            pub cookingtime: i32,
+            pub experience: f32,
+            pub result: RecipeResultStruct,
         }
 
         #[derive(Clone, Debug)]

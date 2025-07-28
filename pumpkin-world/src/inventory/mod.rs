@@ -15,6 +15,6 @@ pub async fn split_stack(stacks: &[Arc<Mutex<ItemStack>>], slot: usize, amount: 
     if slot < stacks.len() && !stack.is_empty() && amount > 0 {
         stack.split(amount)
     } else {
-        ItemStack::EMPTY
+        ItemStack::EMPTY.clone()
     }
 }

@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::Axis;
@@ -10,8 +9,9 @@ use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -86,14 +86,14 @@ fn can_open_door(block: &Block) -> bool {
 // Todo: The sounds should be from BlockSetType
 fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
-        if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
+        if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
             Sound::BlockWoodenDoorOpen
         } else if block == &Block::IRON_DOOR {
             Sound::BlockIronDoorOpen
         } else {
             Sound::BlockCopperDoorOpen
         }
-    } else if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
+    } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
         Sound::BlockWoodenDoorClose
     } else if block == &Block::IRON_DOOR {
         Sound::BlockIronDoorClose
@@ -125,15 +125,13 @@ async fn get_hinge(
     let has_left_door = world
         .get_block(&left_pos)
         .await
-        .is_tagged_with("minecraft:doors")
-        .unwrap()
+        .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
         && DoorProperties::from_state_id(left_state.id, left_block).half == DoubleBlockHalf::Lower;
 
     let has_right_door = world
         .get_block(&right_pos)
         .await
-        .is_tagged_with("minecraft:doors")
-        .unwrap()
+        .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
         && DoorProperties::from_state_id(right_state.id, right_block).half
             == DoubleBlockHalf::Lower;
 

@@ -1,10 +1,10 @@
 use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
 use crate::block::pumpkin_block::OnPlaceArgs;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -47,8 +47,8 @@ pub async fn compute_bars_state(
 
         let connected = other_block == block
             || other_block_state.is_side_solid(direction.opposite())
-            || other_block.is_tagged_with("c:glass_panes").unwrap()
-            || other_block.is_tagged_with("minecraft:walls").unwrap();
+            || other_block.is_tagged_with_by_tag(&tag::Block::C_GLASS_PANES)
+            || other_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WALLS);
 
         match direction {
             BlockDirection::North => bars_props.north = connected,

@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_util::{GameMode, math::position::BlockPos};
-use pumpkin_world::{block::entities::command_block::CommandBlockEntity, chunk::TickPriority};
+use pumpkin_world::{block::entities::command_block::CommandBlockEntity, tick::TickPriority};
 
 use crate::{
     block::pumpkin_block::{

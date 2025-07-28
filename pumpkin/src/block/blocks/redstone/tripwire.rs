@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{BlockProperties, HorizontalFacing},
-    item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{BlockStateId, chunk::TickPriority, world::BlockFlags};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{
     block::pumpkin_block::{
