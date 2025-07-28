@@ -130,7 +130,8 @@ impl ScreenHandler for FurnaceScreenHandler {
             return ItemStack::EMPTY;
         }
 
-        if stack_left.is_empty() {
+        if stack.is_empty() {
+            drop(stack);
             slot.set_stack(ItemStack::EMPTY).await;
         } else {
             slot.mark_dirty().await;
