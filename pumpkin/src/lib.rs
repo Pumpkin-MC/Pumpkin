@@ -322,7 +322,6 @@ impl PumpkinServer {
         }
     }
 
-    #[expect(unused_assignments)]
     pub async fn unified_listener_task(
         &self,
         master_client_id_counter: &mut u64,
