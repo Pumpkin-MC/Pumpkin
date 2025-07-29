@@ -2,7 +2,7 @@ use flate2::write::GzEncoder;
 use log::{LevelFilter, Log, Record};
 use rustyline_async::Readline;
 use simplelog::{CombinedLogger, Config, SharedLogger, WriteLogger};
-use std::fmt::format;
+use std::fmt::{Arguments, format};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -141,7 +141,7 @@ impl Log for GzipRollingLogger {
         if let Ok(data) = self.data.lock() {
             let original_string = format(*record.args());
             let string = remove_ansi_color_code(&original_string);
-            let args = format_args!("{}", string);
+            let args: Arguments<'_> = format_args!("{}", string);
             let record = Record::builder()
                 .args(args)
                 .metadata(record.metadata().clone())
