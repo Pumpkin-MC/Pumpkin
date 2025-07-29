@@ -1,7 +1,8 @@
 use flate2::write::GzEncoder;
-use log::{LevelFilter, Log};
+use log::{LevelFilter, Log, Record};
 use rustyline_async::Readline;
 use simplelog::{CombinedLogger, Config, SharedLogger, WriteLogger};
+use std::fmt::format;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -105,6 +106,26 @@ impl GzipRollingLogger {
     }
 }
 
+fn remove_ansi_color_code(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut in_escape_sequence = false;
+
+    for c in s.chars() {
+        if in_escape_sequence {
+            if c.is_ascii_alphabetic() {
+                // This broadly covers 'm', 'J', 'H', etc.
+                in_escape_sequence = false;
+            }
+        } else if c == '\x1B' {
+            in_escape_sequence = true;
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}
+
 impl Log for GzipRollingLogger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
         metadata.level() <= self.log_level
@@ -118,7 +139,15 @@ impl Log for GzipRollingLogger {
         let now = time::OffsetDateTime::now_utc();
 
         if let Ok(data) = self.data.lock() {
-            let record = record.clone();
+            let string = remove_ansi_color_code(&*format(*record.args()));
+            let args = format_args!("{}", string);
+            let record = Record::builder()
+                .args(args)
+                .metadata(record.metadata().clone())
+                .module_path(record.module_path())
+                .file(record.file())
+                .line(record.line())
+                .build();
             data.latest_logger.log(&record);
             if data.current_day_of_month != now.day() {
                 drop(data);

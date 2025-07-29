@@ -39,7 +39,6 @@ compile_error!("Compiling for WASI targets is not supported!");
 use plugin::PluginManager;
 use pumpkin_config::BASIC_CONFIG;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
-use std::panic::panic_any;
 use std::{
     io::{self},
     sync::{Arc, LazyLock},
