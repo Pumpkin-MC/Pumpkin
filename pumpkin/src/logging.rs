@@ -141,7 +141,7 @@ impl Log for GzipRollingLogger {
         if let Ok(data) = self.data.lock() {
             let original_string = format(record.args().clone());
             let string = remove_ansi_color_code(&original_string);
-            let record: Record<'a> = Record::builder()
+            let record: Record = Record::builder()
                 .args(format_args!("{}", string))
                 .metadata(record.metadata().clone())
                 .module_path(record.module_path())
