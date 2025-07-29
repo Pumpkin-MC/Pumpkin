@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::NormalUseArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::NormalUseArgs;
+use crate::block::OnPlaceArgs;
 use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
@@ -15,7 +15,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
 use crate::block::registry::BlockActionResult;
 use crate::world::World;
 
@@ -58,7 +58,7 @@ pub async fn toggle_fence_gate(
 pub struct FenceGateBlock;
 
 #[async_trait]
-impl PumpkinBlock for FenceGateBlock {
+impl BlockBehaviour for FenceGateBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut fence_gate_props = FenceGateProperties::default(args.block);
         fence_gate_props.facing = args.player.living_entity.entity.get_horizontal_facing();

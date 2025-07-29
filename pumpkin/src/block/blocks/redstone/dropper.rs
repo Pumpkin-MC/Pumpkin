@@ -1,8 +1,9 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::{
-    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs, PumpkinBlock,
-};
 use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    PlacedArgs,
+};
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use async_trait::async_trait;
@@ -81,7 +82,7 @@ const fn to_data3d(facing: Facing) -> i32 {
 }
 
 #[async_trait]
-impl PumpkinBlock for DropperBlock {
+impl BlockBehaviour for DropperBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(inventory) = block_entity.get_inventory() {

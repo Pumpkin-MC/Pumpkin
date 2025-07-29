@@ -4,15 +4,13 @@ use pumpkin_world::BlockStateId;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock, RandomTickArgs,
-};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs};
 
 #[pumpkin_block("minecraft:wheat")]
 pub struct WheatBlock;
 
 #[async_trait]
-impl PumpkinBlock for WheatBlock {
+impl BlockBehaviour for WheatBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as CropBlockBase>::can_plant_on_top(self, args.block_accessor, &args.position.down())
             .await

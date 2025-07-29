@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::entity::Entity;
 use crate::entity::player::Player;
 use crate::entity::projectile::ThrownItemEntity;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -21,7 +21,7 @@ impl ItemMetadata for EggItem {
 const POWER: f32 = 1.5;
 
 #[async_trait]
-impl PumpkinItem for EggItem {
+impl ItemBehaviour for EggItem {
     async fn normal_use(&self, _block: &Item, player: &Player) {
         let position = player.position();
         let world = player.world().await;

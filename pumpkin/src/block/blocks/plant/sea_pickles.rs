@@ -1,10 +1,10 @@
 use crate::block::BlockIsReplacing;
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock,
+use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     UseWithItemArgs,
 };
-use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, Integer1To4};
@@ -24,7 +24,7 @@ type SeaPickleProperties = pumpkin_data::block_properties::SeaPickleLikeProperti
 pub struct SeaPickleBlock;
 
 #[async_trait]
-impl PumpkinBlock for SeaPickleBlock {
+impl BlockBehaviour for SeaPickleBlock {
     #[allow(clippy::many_single_char_names)]
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if args.item_stack.lock().await.item != &Item::BONE_MEAL

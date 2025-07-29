@@ -6,7 +6,7 @@ use pumpkin_data::{
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
-use crate::{block::pumpkin_block::GetStateForNeighborUpdateArgs, entity::player::Player};
+use crate::{block::GetStateForNeighborUpdateArgs, entity::player::Player};
 
 #[async_trait]
 pub trait WallMountedBlock {

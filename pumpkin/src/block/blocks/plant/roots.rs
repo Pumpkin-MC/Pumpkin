@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 
-use crate::block::pumpkin_block::{BlockMetadata, CanPlaceAtArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, BlockMetadata, CanPlaceAtArgs};
 
 pub struct RootsBlock;
 
@@ -17,7 +17,7 @@ impl BlockMetadata for RootsBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for RootsBlock {
+impl BlockBehaviour for RootsBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let block_below = args.block_accessor.get_block(&args.position.down()).await;
         block_below.is_tagged_with_by_tag(&tag::Block::MINECRAFT_NYLIUM)

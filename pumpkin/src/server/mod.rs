@@ -114,7 +114,7 @@ impl Server {
         let command_dispatcher = RwLock::new(default_dispatcher().await);
         let world_path = BASIC_CONFIG.get_world_path();
 
-        let block_registry = super::block::default_registry();
+        let block_registry = super::block::registry::default_registry();
 
         let level_info = AnvilLevelInfo.read_world_info(&world_path);
         if let Err(error) = &level_info {

@@ -12,13 +12,11 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::chest::ChestBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::pumpkin_block::{
-    BlockMetadata, BrokenArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
-};
+use crate::block::{BlockMetadata, BrokenArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs};
 use crate::entity::EntityBase;
 use crate::world::World;
 use crate::{
-    block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
+    block::{BlockBehaviour, registry::BlockActionResult},
     entity::player::Player,
 };
 
@@ -35,7 +33,7 @@ impl BlockMetadata for ChestBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for ChestBlock {
+impl BlockBehaviour for ChestBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut chest_props = ChestLikeProperties::default(args.block);
 

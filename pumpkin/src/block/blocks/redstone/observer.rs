@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{
+use crate::block::{
     EmitsRedstonePowerArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     OnScheduledTickArgs, OnStateReplacedArgs,
 };
@@ -14,7 +14,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{
-    block::pumpkin_block::{OnNeighborUpdateArgs, PumpkinBlock},
+    block::{BlockBehaviour, OnNeighborUpdateArgs},
     world::World,
 };
 
@@ -22,7 +22,7 @@ use crate::{
 pub struct ObserverBlock;
 
 #[async_trait]
-impl PumpkinBlock for ObserverBlock {
+impl BlockBehaviour for ObserverBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = ObserverLikeProperties::default(args.block);
         props.facing = args.player.living_entity.entity.get_facing();

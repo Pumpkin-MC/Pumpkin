@@ -1,4 +1,4 @@
-use crate::block::pumpkin_block::UseWithItemArgs;
+use crate::block::UseWithItemArgs;
 use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
@@ -16,7 +16,7 @@ use uuid::Uuid;
 pub struct PumpkinBlock;
 
 #[async_trait]
-impl crate::block::pumpkin_block::PumpkinBlock for PumpkinBlock {
+impl crate::block::BlockBehaviour for PumpkinBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if args.item_stack.lock().await.item != &Item::SHEARS {
             return BlockActionResult::Pass;

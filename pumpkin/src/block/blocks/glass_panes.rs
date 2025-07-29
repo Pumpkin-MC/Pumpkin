@@ -1,5 +1,5 @@
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
@@ -12,7 +12,7 @@ use pumpkin_world::BlockStateId;
 
 type GlassPaneProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::{BlockBehaviour, BlockMetadata};
 use crate::world::World;
 
 pub struct GlassPaneBlock;
@@ -27,7 +27,7 @@ impl BlockMetadata for GlassPaneBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for GlassPaneBlock {
+impl BlockBehaviour for GlassPaneBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut pane_props = GlassPaneProperties::default(args.block);
         pane_props.waterlogged = args.replacing.water_source();

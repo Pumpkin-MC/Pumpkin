@@ -1,5 +1,5 @@
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PumpkinBlock,
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
 };
 use crate::world::World;
 use async_trait::async_trait;
@@ -16,7 +16,7 @@ use pumpkin_world::world::BlockFlags;
 pub struct LadderBlock;
 
 #[async_trait]
-impl PumpkinBlock for LadderBlock {
+impl BlockBehaviour for LadderBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = LadderLikeProperties::default(args.block);
         props.facing = args.direction.opposite().to_cardinal_direction();

@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use crate::{
     block::{
-        pumpkin_block::{
-            GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs, PumpkinBlock,
+        registry::BlockActionResult,
+        {
+            BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs,
             UseWithItemArgs,
         },
-        registry::BlockActionResult,
     },
     entity::{Entity, item::ItemEntity},
     world::World,
@@ -30,7 +30,7 @@ use uuid::Uuid;
 pub struct ComposterBlock;
 
 #[async_trait]
-impl PumpkinBlock for ComposterBlock {
+impl BlockBehaviour for ComposterBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position).await;
         let props = ComposterLikeProperties::from_state_id(state_id, args.block);

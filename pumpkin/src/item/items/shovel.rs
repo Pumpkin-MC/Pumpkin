@@ -1,5 +1,5 @@
 use crate::entity::player::Player;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
@@ -21,7 +21,7 @@ impl ItemMetadata for ShovelItem {
 }
 
 #[async_trait]
-impl PumpkinItem for ShovelItem {
+impl ItemBehaviour for ShovelItem {
     async fn use_on_block(
         &self,
         _item: &Item,

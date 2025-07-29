@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::{
+    entity::player::Player,
+    item::{ItemBehaviour, ItemMetadata},
+};
 use async_trait::async_trait;
 use pumpkin_data::{
     Block,
@@ -15,7 +18,6 @@ use pumpkin_util::{
 };
 use pumpkin_world::{inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags};
 
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::world::World;
 
 pub struct EmptyBucketItem;
@@ -94,7 +96,7 @@ fn set_waterlogged(block: &Block, state: u16, waterlogged: bool) -> u16 {
 }
 
 #[async_trait]
-impl PumpkinItem for EmptyBucketItem {
+impl ItemBehaviour for EmptyBucketItem {
     async fn normal_use(&self, _item: &Item, player: &Player) {
         let world = player.world().await.clone();
         let (start_pos, end_pos) = get_start_and_end_pos(player);
@@ -204,7 +206,7 @@ impl PumpkinItem for EmptyBucketItem {
 }
 
 #[async_trait]
-impl PumpkinItem for FilledBucketItem {
+impl ItemBehaviour for FilledBucketItem {
     async fn normal_use(&self, item: &Item, player: &Player) {
         let world = player.world().await.clone();
         let (start_pos, end_pos) = get_start_and_end_pos(player);

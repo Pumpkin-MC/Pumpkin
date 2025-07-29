@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::OnEntityCollisionArgs;
-use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
+use crate::block::OnEntityCollisionArgs;
+use crate::block::PlacedArgs;
 use async_trait::async_trait;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::VanillaDimensionType;
@@ -12,7 +12,7 @@ use pumpkin_world::block::entities::end_portal::EndPortalBlockEntity;
 pub struct EndPortalBlock;
 
 #[async_trait]
-impl PumpkinBlock for EndPortalBlock {
+impl BlockBehaviour for EndPortalBlock {
     async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         let world = if args.world.dimension_type == VanillaDimensionType::TheEnd {
             args.server

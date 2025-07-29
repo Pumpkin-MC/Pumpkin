@@ -7,15 +7,15 @@ use pumpkin_util::math::position::BlockPos;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::pumpkin_item::{ItemMetadata, PumpkinItem};
+use super::{ItemBehaviour, ItemMetadata};
 
 #[derive(Default)]
 pub struct ItemRegistry {
-    items: HashMap<&'static Item, Arc<dyn PumpkinItem>>,
+    items: HashMap<&'static Item, Arc<dyn ItemBehaviour>>,
 }
 
 impl ItemRegistry {
-    pub fn register<T: PumpkinItem + ItemMetadata + 'static>(&mut self, item: T) {
+    pub fn register<T: ItemBehaviour + ItemMetadata + 'static>(&mut self, item: T) {
         let val = Arc::new(item);
         self.items.reserve(T::ids().len());
         for i in T::ids() {
@@ -56,7 +56,7 @@ impl ItemRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_item(&self, item: &Item) -> Option<&Arc<dyn PumpkinItem>> {
+    pub fn get_pumpkin_item(&self, item: &Item) -> Option<&Arc<dyn ItemBehaviour>> {
         self.items.get(item)
     }
 }

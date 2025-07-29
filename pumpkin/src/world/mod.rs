@@ -16,8 +16,8 @@ use crate::{
     PLUGIN_MANAGER,
     block::{
         self,
-        pumpkin_block::{OnNeighborUpdateArgs, OnScheduledTickArgs},
         registry::BlockRegistry,
+        {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
     entity::{Entity, EntityBase, player::Player, r#type::from_type},

@@ -1,4 +1,4 @@
-use crate::block::pumpkin_block::{OnPlaceArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, OnPlaceArgs};
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, LadderLikeProperties};
 use pumpkin_macros::pumpkin_block;
@@ -8,7 +8,7 @@ use pumpkin_world::BlockStateId;
 pub struct EnderChestBlock;
 
 #[async_trait]
-impl PumpkinBlock for EnderChestBlock {
+impl BlockBehaviour for EnderChestBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = LadderLikeProperties::default(args.block);
         props.facing = args

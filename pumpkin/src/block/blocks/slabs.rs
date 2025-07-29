@@ -7,10 +7,10 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::BlockStateId;
 
+use crate::block::BlockBehaviour;
 use crate::block::BlockIsReplacing;
-use crate::block::pumpkin_block::CanUpdateAtArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::CanUpdateAtArgs;
+use crate::block::OnPlaceArgs;
 
 type SlabProperties = pumpkin_data::block_properties::ResinBrickSlabLikeProperties;
 
@@ -18,7 +18,7 @@ type SlabProperties = pumpkin_data::block_properties::ResinBrickSlabLikeProperti
 pub struct SlabBlock;
 
 #[async_trait]
-impl PumpkinBlock for SlabBlock {
+impl BlockBehaviour for SlabBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         if let BlockIsReplacing::Itself(state_id) = args.replacing {
             let mut slab_props = SlabProperties::from_state_id(state_id, args.block);

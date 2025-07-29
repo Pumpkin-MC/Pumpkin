@@ -17,7 +17,14 @@ pub struct SpreadContext {
     holes: HashMap<BlockPos, bool>,
 }
 
+impl Default for SpreadContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SpreadContext {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             holes: HashMap::new(),

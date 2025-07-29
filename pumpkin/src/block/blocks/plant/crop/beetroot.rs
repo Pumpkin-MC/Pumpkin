@@ -9,9 +9,7 @@ use rand::Rng;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock, RandomTickArgs,
-};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs};
 
 type BeetrootProperties = NetherWartLikeProperties;
 
@@ -19,7 +17,7 @@ type BeetrootProperties = NetherWartLikeProperties;
 pub struct BeetrootBlock;
 
 #[async_trait]
-impl PumpkinBlock for BeetrootBlock {
+impl BlockBehaviour for BeetrootBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as CropBlockBase>::can_plant_on_top(self, args.block_accessor, &args.position.down())
             .await

@@ -12,11 +12,11 @@ use pumpkin_world::{BlockStateId, world::BlockFlags};
 use crate::{
     block::{
         BlockIsReplacing,
-        pumpkin_block::{
-            CanPlaceAtArgs, CanUpdateAtArgs, NormalUseArgs, OnPlaceArgs, PumpkinBlock,
+        registry::BlockActionResult,
+        {
+            BlockBehaviour, CanPlaceAtArgs, CanUpdateAtArgs, NormalUseArgs, OnPlaceArgs,
             UseWithItemArgs,
         },
-        registry::BlockActionResult,
     },
     entity::EntityBase,
 };
@@ -25,7 +25,7 @@ use crate::{
 pub struct CandleBlock;
 
 #[async_trait]
-impl PumpkinBlock for CandleBlock {
+impl BlockBehaviour for CandleBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         if args.player.get_entity().pose.load() != EntityPose::Crouching {
             if let BlockIsReplacing::Itself(state_id) = args.replacing {
