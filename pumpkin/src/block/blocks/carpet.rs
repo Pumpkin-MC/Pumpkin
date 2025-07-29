@@ -1,5 +1,5 @@
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs, PumpkinBlock,
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
 };
 use async_trait::async_trait;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
@@ -13,7 +13,7 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 pub struct CarpetBlock;
 
 #[async_trait]
-impl PumpkinBlock for CarpetBlock {
+impl BlockBehaviour for CarpetBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_at(args.block_accessor, args.position).await
     }
@@ -43,7 +43,7 @@ impl PumpkinBlock for CarpetBlock {
 pub struct MossCarpetBlock;
 
 #[async_trait]
-impl PumpkinBlock for MossCarpetBlock {
+impl BlockBehaviour for MossCarpetBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_at(args.block_accessor, args.position).await
     }
@@ -73,7 +73,7 @@ impl PumpkinBlock for MossCarpetBlock {
 pub struct PaleMossCarpetBlock;
 
 #[async_trait]
-impl PumpkinBlock for PaleMossCarpetBlock {
+impl BlockBehaviour for PaleMossCarpetBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_at(args.block_accessor, args.position).await
     }

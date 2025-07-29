@@ -12,8 +12,8 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs, PumpkinBlock,
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
     RandomTickArgs,
 };
 
@@ -21,7 +21,7 @@ use crate::block::pumpkin_block::{
 pub struct SugarCaneBlock;
 
 #[async_trait]
-impl PumpkinBlock for SugarCaneBlock {
+impl BlockBehaviour for SugarCaneBlock {
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if !can_place_at(args.world.as_ref(), args.position).await {
             args.world

@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::{
     block::{
         blocks::candle_cakes::cake_from_candle,
-        pumpkin_block::{NormalUseArgs, PumpkinBlock, UseWithItemArgs},
         registry::BlockActionResult,
+        {BlockBehaviour, NormalUseArgs, UseWithItemArgs},
     },
     entity::player::Player,
     world::World,
@@ -79,7 +79,7 @@ impl CakeBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for CakeBlock {
+impl BlockBehaviour for CakeBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position).await;
         let properties = CakeLikeProperties::from_state_id(state_id, args.block);

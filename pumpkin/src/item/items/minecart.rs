@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::entity::Entity;
 use crate::entity::player::Player;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
@@ -48,7 +48,7 @@ impl ItemMetadata for MinecartItem {
 }
 
 #[async_trait]
-impl PumpkinItem for MinecartItem {
+impl ItemBehaviour for MinecartItem {
     async fn use_on_block(
         &self,
         item: &Item,

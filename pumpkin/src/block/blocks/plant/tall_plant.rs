@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 
-use crate::block::pumpkin_block::{BlockMetadata, CanPlaceAtArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, BlockMetadata, CanPlaceAtArgs};
 
 pub struct TallPlantBlock;
 
@@ -26,7 +26,7 @@ impl BlockMetadata for TallPlantBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for TallPlantBlock {
+impl BlockBehaviour for TallPlantBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let (block, state) = args.block_accessor.get_block_and_state(args.position).await;
         if let Some(props) = block.properties(state.id).map(|s| s.to_props()) {

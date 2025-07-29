@@ -1,5 +1,5 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::{BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
 use crate::entity::EntityBase;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
@@ -29,7 +29,7 @@ impl BlockMetadata for SkullBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for SkullBlock {
+impl BlockBehaviour for SkullBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = SkeletonSkullLikeProperties::default(args.block);
         props.rotation = args.player.get_entity().get_rotation_16();

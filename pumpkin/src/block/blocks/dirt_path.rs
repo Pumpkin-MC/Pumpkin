@@ -1,8 +1,8 @@
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::OnScheduledTickArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
+use crate::block::CanPlaceAtArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::OnScheduledTickArgs;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
@@ -17,7 +17,7 @@ use pumpkin_world::world::BlockFlags;
 pub struct DirtPathBlock;
 
 #[async_trait]
-impl PumpkinBlock for DirtPathBlock {
+impl BlockBehaviour for DirtPathBlock {
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         // TODO: push up entities
         args.world

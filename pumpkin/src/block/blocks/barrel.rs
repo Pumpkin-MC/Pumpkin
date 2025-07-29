@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{OnPlaceArgs, OnStateReplacedArgs, PlacedArgs};
+use crate::block::{OnPlaceArgs, PlacedArgs};
 use crate::block::{
-    pumpkin_block::{NormalUseArgs, PumpkinBlock},
     registry::BlockActionResult,
+    {BlockBehaviour, NormalUseArgs},
 };
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
@@ -43,7 +43,7 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
 pub struct BarrelBlock;
 
 #[async_trait]
-impl PumpkinBlock for BarrelBlock {
+impl BlockBehaviour for BarrelBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(inventory) = block_entity.get_inventory() {
@@ -67,9 +67,5 @@ impl PumpkinBlock for BarrelBlock {
         args.world
             .add_block_entity(Arc::new(barrel_block_entity))
             .await;
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
     }
 }

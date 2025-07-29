@@ -1,5 +1,5 @@
-use crate::block::pumpkin_block::{PumpkinBlock, RandomTickArgs, UseWithItemArgs};
 use crate::block::registry::BlockActionResult;
+use crate::block::{BlockBehaviour, RandomTickArgs, UseWithItemArgs};
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::flower_pot_transformations::get_potted_item;
@@ -12,7 +12,7 @@ use pumpkin_world::world::BlockFlags;
 pub struct FlowerPotBlock;
 
 #[async_trait]
-impl PumpkinBlock for FlowerPotBlock {
+impl BlockBehaviour for FlowerPotBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let item = args.item_stack.lock().await.item;
         //Place the flower inside the pot

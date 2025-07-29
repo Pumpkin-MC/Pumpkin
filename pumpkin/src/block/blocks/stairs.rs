@@ -12,9 +12,9 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::pumpkin_block::OnNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
+use crate::block::OnNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
 use crate::world::World;
 
 type StairsProperties = pumpkin_data::block_properties::OakStairsLikeProperties;
@@ -23,7 +23,7 @@ type StairsProperties = pumpkin_data::block_properties::OakStairsLikeProperties;
 pub struct StairBlock;
 
 #[async_trait]
-impl PumpkinBlock for StairBlock {
+impl BlockBehaviour for StairBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut stair_props = StairsProperties::default(args.block);
         stair_props.waterlogged = args.replacing.water_source();

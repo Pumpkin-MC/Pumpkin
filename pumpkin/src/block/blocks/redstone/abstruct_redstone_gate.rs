@@ -16,9 +16,7 @@ use pumpkin_world::{
 };
 
 use crate::{
-    block::pumpkin_block::{
-        GetRedstonePowerArgs, OnNeighborUpdateArgs, OnStateReplacedArgs, PlayerPlacedArgs,
-    },
+    block::{GetRedstonePowerArgs, OnNeighborUpdateArgs, OnStateReplacedArgs, PlayerPlacedArgs},
     entity::player::Player,
     world::World,
 };

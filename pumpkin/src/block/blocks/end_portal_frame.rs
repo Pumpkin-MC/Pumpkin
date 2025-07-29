@@ -4,7 +4,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 
 use crate::{
-    block::pumpkin_block::{OnPlaceArgs, PumpkinBlock},
+    block::{BlockBehaviour, OnPlaceArgs},
     entity::EntityBase,
 };
 
@@ -14,7 +14,7 @@ type EndPortalFrameProperties = pumpkin_data::block_properties::EndPortalFrameLi
 pub struct EndPortalFrameBlock;
 
 #[async_trait]
-impl PumpkinBlock for EndPortalFrameBlock {
+impl BlockBehaviour for EndPortalFrameBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut end_portal_frame_props = EndPortalFrameProperties::default(args.block);
         end_portal_frame_props.facing = args.player.get_entity().get_horizontal_facing().opposite();

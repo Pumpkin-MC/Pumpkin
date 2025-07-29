@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{
-    GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, PumpkinBlock,
-};
+use crate::block::{BlockBehaviour, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs};
 use crate::entity::EntityBase;
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
@@ -35,7 +33,7 @@ impl NetherPortalBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for NetherPortalBlock {
+impl BlockBehaviour for NetherPortalBlock {
     async fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,

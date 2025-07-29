@@ -66,6 +66,14 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
         );
     }
 
+    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        Some(self)
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

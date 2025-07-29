@@ -8,10 +8,10 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
-    block::pumpkin_block::{
-        BlockMetadata, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
-        OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-        PumpkinBlock,
+    block::{
+        BlockBehaviour, BlockMetadata, CanPlaceAtArgs, EmitsRedstonePowerArgs,
+        GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
+        OnStateReplacedArgs,
     },
     world::World,
 };
@@ -41,7 +41,7 @@ impl BlockMetadata for PressurePlateBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for PressurePlateBlock {
+impl BlockBehaviour for PressurePlateBlock {
     async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         self.on_entity_collision_pp(args).await;
     }

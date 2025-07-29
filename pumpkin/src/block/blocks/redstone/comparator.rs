@@ -17,13 +17,13 @@ use pumpkin_world::{
 
 use crate::{
     block::{
-        pumpkin_block::{
-            BrokenArgs, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
-            GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
-            OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-            PlacedArgs, PlayerPlacedArgs, PumpkinBlock,
-        },
         registry::BlockActionResult,
+        {
+            BlockBehaviour, BrokenArgs, CanPlaceAtArgs, EmitsRedstonePowerArgs,
+            GetComparatorOutputArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
+            NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+            OnStateReplacedArgs, PlacedArgs, PlayerPlacedArgs,
+        },
     },
     world::World,
 };
@@ -34,7 +34,7 @@ use super::abstruct_redstone_gate::{self, RedstoneGateBlock, RedstoneGateBlockPr
 pub struct ComparatorBlock;
 
 #[async_trait]
-impl PumpkinBlock for ComparatorBlock {
+impl BlockBehaviour for ComparatorBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         RedstoneGateBlock::on_place(self, args.player, args.block).await
     }

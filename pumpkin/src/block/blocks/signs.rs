@@ -7,11 +7,10 @@ use pumpkin_data::tag::get_tag_values;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::OnStateReplacedArgs;
-use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::PlayerPlacedArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
+use crate::block::OnPlaceArgs;
+use crate::block::PlacedArgs;
+use crate::block::PlayerPlacedArgs;
 use crate::entity::EntityBase;
 
 type SignProperties = pumpkin_data::block_properties::OakSignLikeProperties;
@@ -20,7 +19,7 @@ type SignProperties = pumpkin_data::block_properties::OakSignLikeProperties;
 pub struct SignBlock;
 
 #[async_trait]
-impl PumpkinBlock for SignBlock {
+impl BlockBehaviour for SignBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> u16 {
         let mut sign_props = SignProperties::default(args.block);
         sign_props.waterlogged = args.replacing.water_source();
@@ -39,9 +38,5 @@ impl PumpkinBlock for SignBlock {
             crate::net::ClientPlatform::Java(java) => java.send_sign_packet(*args.position).await,
             crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
         }
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
     }
 }

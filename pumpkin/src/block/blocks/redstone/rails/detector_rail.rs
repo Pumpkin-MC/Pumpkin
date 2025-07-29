@@ -3,11 +3,11 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::OnNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
+use crate::block::CanPlaceAtArgs;
+use crate::block::OnNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::PlacedArgs;
 
 use super::RailProperties;
 use super::common::{
@@ -19,7 +19,7 @@ use super::common::{
 pub struct DetectorRailBlock;
 
 #[async_trait]
-impl PumpkinBlock for DetectorRailBlock {
+impl BlockBehaviour for DetectorRailBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut rail_props = RailProperties::default(args.block);
         let player_facing = args.player.living_entity.entity.get_horizontal_facing();

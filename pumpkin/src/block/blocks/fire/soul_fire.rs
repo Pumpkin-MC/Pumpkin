@@ -4,9 +4,7 @@ use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 
-use crate::block::pumpkin_block::{
-    BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock,
-};
+use crate::block::{BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
 
 use super::FireBlockBase;
 
@@ -21,7 +19,7 @@ impl SoulFireBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for SoulFireBlock {
+impl BlockBehaviour for SoulFireBlock {
     async fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,

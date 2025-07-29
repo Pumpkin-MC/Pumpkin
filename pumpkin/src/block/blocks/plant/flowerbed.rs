@@ -5,9 +5,9 @@ use pumpkin_world::BlockStateId;
 
 use crate::block::blocks::plant::PlantBlockBase;
 
-use crate::block::pumpkin_block::{
-    BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    PumpkinBlock,
+use crate::block::{
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs,
+    OnPlaceArgs,
 };
 
 use super::segmented::Segmented;
@@ -27,7 +27,7 @@ impl BlockMetadata for FlowerbedBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for FlowerbedBlock {
+impl BlockBehaviour for FlowerbedBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let block_below = args.block_accessor.get_block(&args.position.down()).await;
         block_below.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)
