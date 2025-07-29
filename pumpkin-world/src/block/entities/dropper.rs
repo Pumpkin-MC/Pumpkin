@@ -73,7 +73,7 @@ impl DropperBlockEntity {
     pub async fn get_random_slot(&self) -> Option<MutexGuard<ItemStack>> {
         // this.unpackLootTable(null);
         let mut ret = None;
-        let mut j = 0;
+        let mut j = 1;
         for i in &self.items {
             let item = i.lock().await;
             if !item.is_empty() {

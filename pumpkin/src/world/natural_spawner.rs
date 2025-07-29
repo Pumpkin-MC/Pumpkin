@@ -1,4 +1,5 @@
-use crate::entity::{Entity, EntityBase};
+use crate::entity::EntityBase;
+use crate::entity::r#type::from_type;
 use crate::world::World;
 use pumpkin_data::biome::Spawner;
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
@@ -410,19 +411,15 @@ pub async fn spawn_category_for_position(
                 inc += 1;
                 continue;
             }
-            let entity = Entity::new(
-                Uuid::new_v4(),
-                world.clone(),
-                new_pos_center,
-                entity_type,
-                false,
-            );
-            entity.set_rotation(rng().random::<f32>() * 360., 0.);
+            let entity = from_type(entity_type, new_pos_center, world, Uuid::new_v4());
+            entity
+                .get_entity()
+                .set_rotation(rng().random::<f32>() * 360., 0.);
             // TODO isValidPositionForMob(level, mob, f)
             // TODO spawnGroupData = mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), EntitySpawnReason.NATURAL, spawnGroupData);
             spawn_cluster_size += 1;
             group_size += 1;
-            world.spawn_entity(Arc::new(entity)).await;
+            world.spawn_entity(entity).await;
             spawn_state.after_spawn(entity_type, &new_pos, world).await;
             if spawn_cluster_size >= entity_type.limit_per_chunk {
                 return;
