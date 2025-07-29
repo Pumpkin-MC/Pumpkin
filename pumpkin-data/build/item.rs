@@ -262,8 +262,22 @@ impl ToTokens for ItemComponents {
                         .get_values()
                         .iter()
                         .map(|reg| {
-                            let reg = LitStr::new(&reg.serialize(), Span::call_site());
-                            quote! { #reg }
+                            match reg {
+                                TagType::Item(item) => {
+                                    let ident = format_ident!(
+                                        "{}",
+                                        item.strip_prefix("minecraft:").unwrap().to_uppercase()
+                                    );
+                                    quote! { EntityTypeOrTag::Single(&crate::entity_type::EntityType::#ident) }
+                                },
+                                TagType::Tag(tag) => {
+                                    let ident = format_ident!(
+                                        "{}",
+                                        tag.replace(":", "_").replace("/", "_").to_uppercase()
+                                    );
+                                    quote! { EntityTypeOrTag::Tag(&crate::tag::EntityType::#ident) }
+                                }
+                            }
                         })
                         .collect();
                     quote! {

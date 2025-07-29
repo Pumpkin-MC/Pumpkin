@@ -3,6 +3,7 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::*;
+use crate::entity_type::EntityType;
 use crate::tag::Tag;
 use crate::{AttributeModifierSlot, Block};
 use pumpkin_util::registry::RegistryEntryList;
@@ -475,6 +476,27 @@ impl EquipmentSlot {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum EntityTypeOrTag {
+    Tag(&'static Tag),
+    Single(&'static EntityType),
+}
+
+impl Hash for EntityTypeOrTag {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            EntityTypeOrTag::Tag(tag) => {
+                for x in tag.0 {
+                    x.hash(state);
+                }
+            }
+            EntityTypeOrTag::Single(entity_type) => {
+                entity_type.id.hash(state);
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Hash)]
 pub struct EnchantableImpl;
 #[derive(Clone, Debug, Hash)]
@@ -483,7 +505,8 @@ pub struct EquippableImpl {
     pub equip_sound: &'static str,
     pub asset_id: Option<&'static str>,
     pub camera_overlay: Option<&'static str>,
-    pub allowed_entities: Option<&'static [&'static str]>,
+    // pub allowed_entities: Option<&'static [&'static str]>,
+    pub allowed_entities: Option<&'static [EntityTypeOrTag]>,
     pub dispensable: bool,
     pub swappable: bool,
     pub damage_on_hurt: bool,
