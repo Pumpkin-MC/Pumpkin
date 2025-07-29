@@ -1,8 +1,24 @@
-use crate::block::{blocks::plant::PlantBlockBase, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, BlockBehaviour, RandomTickArgs};
+use crate::block::{
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
+    blocks::plant::PlantBlockBase,
+};
 use async_trait::async_trait;
-use pumpkin_data::{block_properties::{BlockProperties, EnumVariants, Integer0To7, WheatLikeProperties, WallTorchLikeProperties}, Block, BlockDirection, tag, tag::Taggable};
-use pumpkin_util::{math::position::BlockPos, random::{xoroshiro128::Xoroshiro, RandomGenerator}};
-use pumpkin_world::{world::{BlockAccessor, BlockFlags}, BlockStateId};
+use pumpkin_data::{
+    Block, BlockDirection,
+    block_properties::{
+        BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties, WheatLikeProperties,
+    },
+    tag,
+    tag::Taggable,
+};
+use pumpkin_util::{
+    math::position::BlockPos,
+    random::{RandomGenerator, xoroshiro128::Xoroshiro},
+};
+use pumpkin_world::{
+    BlockStateId,
+    world::{BlockAccessor, BlockFlags},
+};
 use rand::Rng;
 
 type StemProperties = WheatLikeProperties;
@@ -21,13 +37,13 @@ impl BlockMetadata for StemBlock {
 }
 
 impl StemBlock {
-    fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
+    fn state_with_age(block: &Block, state: u16, age: i32) -> BlockStateId {
         let mut props = StemProperties::from_state_id(state, block);
         props.age = Integer0To7::from_index(age as u16);
         props.to_state_id(block)
     }
 
-    fn get_attached_stem(&self, dir: BlockDirection, block: &Block) -> BlockStateId {
+    fn get_attached_stem(dir: BlockDirection, block: &Block) -> BlockStateId {
         let attached_block = match block.id {
             id if id == Block::PUMPKIN_STEM.id => &Block::ATTACHED_PUMPKIN_STEM,
             id if id == Block::MELON_STEM.id => &Block::ATTACHED_MELON_STEM,
@@ -38,7 +54,7 @@ impl StemBlock {
         props.to_state_id(attached_block)
     }
 
-    fn get_gourd(&self, block: &Block) -> &Block{
+    fn get_gourd(block: &Block) -> &Block {
         match block.id {
             id if id == Block::PUMPKIN_STEM.id => &Block::PUMPKIN,
             id if id == Block::MELON_STEM.id => &Block::MELON,
@@ -74,11 +90,13 @@ impl BlockBehaviour for StemBlock {
             let props = StemProperties::from_state_id(state, block);
             let age = i32::from(props.age.to_index());
             if age < 7 {
-                args.world.set_block_state(
-                    args.position,
-                    self.state_with_age(block, state, age + 1),
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                ).await;
+                args.world
+                    .set_block_state(
+                        args.position,
+                        Self::state_with_age(block, state, age + 1),
+                        BlockFlags::NOTIFY_NEIGHBORS,
+                    )
+                    .await;
             } else {
                 let dir = BlockDirection::random_horizontal(&mut RandomGenerator::Xoroshiro(
                     Xoroshiro::from_seed(rand::rng().random()),
@@ -86,11 +104,22 @@ impl BlockBehaviour for StemBlock {
                 let plant_block_pos = args.position.offset(dir.to_offset());
                 let plant_block_state = args.world.get_block_state(&plant_block_pos).await;
                 let under_block: &Block = args.world.get_block(&plant_block_pos.down()).await;
-                if plant_block_state.is_air() && (under_block == &Block::FARMLAND || under_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)) {
-                    let attached_stem = self.get_attached_stem(dir, block);
-                    let gourd = self.get_gourd(block);
-                    args.world.set_block_state(&plant_block_pos, gourd.default_state.id, BlockFlags::NOTIFY_NEIGHBORS).await;
-                    args.world.set_block_state(args.position, attached_stem, BlockFlags::NOTIFY_NEIGHBORS).await;
+                if plant_block_state.is_air()
+                    && (under_block == &Block::FARMLAND
+                        || under_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT))
+                {
+                    let attached_stem = Self::get_attached_stem(dir, block);
+                    let gourd = Self::get_gourd(block);
+                    args.world
+                        .set_block_state(
+                            &plant_block_pos,
+                            gourd.default_state.id,
+                            BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                    args.world
+                        .set_block_state(args.position, attached_stem, BlockFlags::NOTIFY_NEIGHBORS)
+                        .await;
                 }
             }
         }

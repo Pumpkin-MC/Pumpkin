@@ -106,9 +106,9 @@ use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::redstone::dispenser::DispenserBlock;
 use crate::block::blocks::redstone::dropper::DropperBlock;
 
+use super::BlockIsReplacing;
 use super::blocks::plant::gourds::attached_stem::AttachedStemBlock;
 use super::blocks::plant::gourds::stem::StemBlock;
-use super::BlockIsReplacing;
 use super::fluid::FluidBehaviour;
 use super::{
     BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs, EmitsRedstonePowerArgs, ExplodeArgs,

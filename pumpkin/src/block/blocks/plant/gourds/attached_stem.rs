@@ -1,15 +1,22 @@
 use async_trait::async_trait;
-use pumpkin_data::{block_properties::{BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties, WheatLikeProperties}, Block};
+use pumpkin_data::{
+    Block,
+    block_properties::{
+        BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties, WheatLikeProperties,
+    },
+};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{world::BlockAccessor, BlockStateId};
+use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
-use crate::block::{blocks::plant::PlantBlockBase, BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
+use crate::block::{
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    blocks::plant::PlantBlockBase,
+};
 
 type AttachedStemProperties = WallTorchLikeProperties;
 
 type StemProperties = WheatLikeProperties;
 pub struct AttachedStemBlock;
-
 
 impl BlockMetadata for AttachedStemBlock {
     fn namespace(&self) -> &'static str {
@@ -17,12 +24,15 @@ impl BlockMetadata for AttachedStemBlock {
     }
 
     fn ids(&self) -> &'static [&'static str] {
-        &[Block::ATTACHED_PUMPKIN_STEM.name, Block::ATTACHED_MELON_STEM.name]
+        &[
+            Block::ATTACHED_PUMPKIN_STEM.name,
+            Block::ATTACHED_MELON_STEM.name,
+        ]
     }
 }
 
 impl AttachedStemBlock {
-    fn get_stem(&self, block: &Block) -> &Block {
+    fn get_stem(block: &Block) -> &Block {
         match block.id {
             id if id == Block::ATTACHED_PUMPKIN_STEM.id => &Block::PUMPKIN_STEM,
             id if id == Block::ATTACHED_MELON_STEM.id => &Block::MELON_STEM,
@@ -30,7 +40,7 @@ impl AttachedStemBlock {
         }
     }
 
-    fn get_gourd(&self, block: &Block) -> &Block {
+    fn get_gourd(block: &Block) -> &Block {
         match block.id {
             id if id == Block::ATTACHED_PUMPKIN_STEM.id => &Block::PUMPKIN,
             id if id == Block::ATTACHED_MELON_STEM.id => &Block::MELON,
@@ -50,10 +60,12 @@ impl BlockBehaviour for AttachedStemBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let props = AttachedStemProperties::from_state_id(args.state_id, args.block);
-        if args.direction.to_horizontal_facing() == Some(props.facing) && args.neighbor_state_id != self.get_gourd(args.block).default_state.id {
-            let mut props = StemProperties::default(self.get_stem(args.block));
+        if args.direction.to_horizontal_facing() == Some(props.facing)
+            && args.neighbor_state_id != Self::get_gourd(args.block).default_state.id
+        {
+            let mut props = StemProperties::default(Self::get_stem(args.block));
             props.age = Integer0To7::from_index(7);
-            return props.to_state_id(self.get_stem(args.block));
+            return props.to_state_id(Self::get_stem(args.block));
         }
         <Self as PlantBlockBase>::get_state_for_neighbor_update(
             self,
