@@ -4,6 +4,7 @@ use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
 pub mod bush;
 pub mod crop;
+pub mod gourds;
 pub mod dry_vegetation;
 pub mod flower;
 pub mod flowerbed;
