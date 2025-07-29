@@ -118,7 +118,8 @@ impl Log for GzipRollingLogger {
         let now = time::OffsetDateTime::now_utc();
 
         if let Ok(data) = self.data.lock() {
-            data.latest_logger.log(record);
+            let record = record.clone();
+            data.latest_logger.log(&record);
             if data.current_day_of_month != now.day() {
                 drop(data);
                 if let Err(e) = self.rotate_log() {
@@ -162,7 +163,7 @@ impl ReadlineLogWrapper {
         }
     }
 
-    pub(crate) fn take_readline(&self) -> Option<Readline> {
+    pub fn take_readline(&self) -> Option<Readline> {
         if let Ok(mut result) = self.readline.lock() {
             result.take()
         } else {
