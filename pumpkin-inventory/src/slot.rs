@@ -8,8 +8,9 @@ use std::{
     time::Duration,
 };
 
-use crate::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
+use crate::screen_handler::InventoryPlayer;
 use async_trait::async_trait;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item::Item;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;

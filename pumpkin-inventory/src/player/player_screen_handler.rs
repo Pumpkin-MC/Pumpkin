@@ -2,11 +2,10 @@ use super::player_inventory::PlayerInventory;
 use crate::crafting::crafting_inventory::CraftingInventory;
 use crate::crafting::crafting_screen_handler::CraftingScreenHandler;
 use crate::crafting::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
-use crate::equipment_slot::{EquipmentSlot, EquipmentType};
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::{ArmorSlot, NormalSlot, Slot};
 use async_trait::async_trait;
-use pumpkin_data::data_component_impl::EquippableImpl;
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl};
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
@@ -112,8 +111,7 @@ impl ScreenHandler for PlayerScreenHandler {
 
             let equipment_slot = slot_stack
                 .get_data_component::<EquippableImpl>()
-                .and_then(|equippable| EquipmentSlot::get_from_name(equippable.slot))
-                .unwrap_or(EquipmentSlot::MAIN_HAND);
+                .map_or(&EquipmentSlot::MAIN_HAND, |equippable| equippable.slot);
 
             #[allow(clippy::if_same_then_else)]
             if slot_index == 0 {

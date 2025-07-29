@@ -219,15 +219,25 @@ impl ToTokens for ItemComponents {
         };
 
         if let Some(equippable) = &self.equippable {
-            let slot = LitStr::new(&equippable.slot, Span::call_site());
+            let slot = match equippable.slot.as_str() {
+                "mainhand" => quote! { &EquipmentSlot::MAIN_HAND },
+                "offhand" => quote! { &EquipmentSlot::OFF_HAND },
+                "head" => quote! { &EquipmentSlot::HEAD },
+                "chest" => quote! { &EquipmentSlot::CHEST },
+                "legs" => quote! { &EquipmentSlot::LEGS },
+                "feet" => quote! { &EquipmentSlot::FEET },
+                "body" => quote! { &EquipmentSlot::BODY },
+                "saddle" => quote! { &EquipmentSlot::SADDLE },
+                _ => panic!("Unknown equippable slot: {}", equippable.slot),
+            };
             let equip_sound = equippable
                 .equip_sound
                 .as_ref()
                 .map(|s| {
                     let equip_sound = LitStr::new(s, Span::call_site());
-                    quote! { Some(#equip_sound) }
+                    quote! { #equip_sound }
                 })
-                .unwrap_or(quote! { None });
+                .unwrap_or(quote! { "item.armor.equip_generic" });
             let asset_id = equippable
                 .asset_id
                 .as_ref()
