@@ -147,7 +147,10 @@ impl ScreenHandler for PlayerScreenHandler {
                 {
                     return ItemStack::EMPTY.clone();
                 }
-            } else if matches!(equipment_slot, EquipmentSlot::OffHand(_)) {
+            } else if matches!(equipment_slot, EquipmentSlot::OffHand(_))
+                && slot_index != 45
+                && self.get_slot(45).await.get_cloned_stack().await.is_empty()
+            {
                 // Into offhand slot
                 let index = 45;
                 if !self
