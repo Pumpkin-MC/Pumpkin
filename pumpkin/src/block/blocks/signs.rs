@@ -8,15 +8,11 @@ use pumpkin_data::block_properties::EnumVariants;
 use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
-use pumpkin_data::world::WorldEvent;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::block::entities::BlockEntity;
-use pumpkin_world::block::entities::sign::DyeColor;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
-use pumpkin_world::block::entities::sign::Text;
 use uuid::Uuid;
 
 use crate::block::BlockBehaviour;
@@ -29,6 +25,10 @@ use crate::block::UseWithItemArgs;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::item::items::dye::DyeItem;
+use crate::item::items::glowing_ink_sac::GlowingInkSacItem;
+use crate::item::items::honeycomb::HoneyCombItem;
+use crate::item::items::ink_sac::InkSacItem;
 use crate::world::World;
 
 type SignProperties = pumpkin_data::block_properties::OakSignLikeProperties;
@@ -145,24 +145,30 @@ impl BlockBehaviour for SignBlock {
 
         let mut item = args.item_stack.lock().await;
 
-        let result = match item.item.id {
-            id if id == pumpkin_data::item::Item::HONEYCOMB.id => {
-                apply_wax_to_sign(&args, &block_entity, sign_entity).await
-            }
-            id if id == pumpkin_data::item::Item::GLOW_INK_SAC.id => {
-                apply_glow_ink_to_sign(&args, &block_entity, text).await
-            }
-            id if id == pumpkin_data::item::Item::INK_SAC.id => {
-                apply_ink_to_sign(&args, &block_entity, text).await
-            }
-            _ => {
-                if let Some(color_name) = item.item.registry_key.strip_suffix("_dye") {
-                    apply_dye_to_sign(&args, &block_entity, text, color_name).await
-                } else {
-                    BlockActionResult::PassToDefaultBlockAction
-                }
-            }
+        let Some(pumpkin_item) = args.server.item_registry.get_pumpkin_item(&item.item) else {
+            return BlockActionResult::PassToDefaultBlockAction;
         };
+
+        let result =
+            if let Some(honeycomb_item) = pumpkin_item.as_any().downcast_ref::<HoneyCombItem>() {
+                honeycomb_item
+                    .apply_to_sign(&args, &block_entity, sign_entity)
+                    .await
+            } else if let Some(g_ink_sac_item) =
+                pumpkin_item.as_any().downcast_ref::<GlowingInkSacItem>()
+            {
+                g_ink_sac_item
+                    .apply_to_sign(&args, &block_entity, text)
+                    .await
+            } else if let Some(ink_sac_item) = pumpkin_item.as_any().downcast_ref::<InkSacItem>() {
+                ink_sac_item.apply_to_sign(&args, &block_entity, text).await
+            } else if let Some(dye) = pumpkin_item.as_any().downcast_ref::<DyeItem>() {
+                let color_name = item.item.registry_key.strip_suffix("_dye").unwrap();
+                dye.apply_to_sign(&args, &block_entity, text, color_name)
+                    .await
+            } else {
+                BlockActionResult::PassToDefaultBlockAction
+            };
 
         if result == BlockActionResult::Success {
             if !args.player.has_infinite_materials() {
@@ -173,86 +179,6 @@ impl BlockBehaviour for SignBlock {
 
         result
     }
-}
-
-async fn apply_wax_to_sign(
-    args: &UseWithItemArgs<'_>,
-    block_entity: &Arc<dyn BlockEntity>,
-    sign_entity: &SignBlockEntity,
-) -> BlockActionResult {
-    sign_entity.is_waxed.store(true, Ordering::Relaxed);
-
-    args.world.update_block_entity(block_entity).await;
-    args.world
-        .sync_world_event(WorldEvent::BlockWaxed, *args.position, 0)
-        .await;
-
-    BlockActionResult::Success
-}
-
-async fn apply_glow_ink_to_sign(
-    args: &UseWithItemArgs<'_>,
-    block_entity: &Arc<dyn BlockEntity>,
-    text: &Text,
-) -> BlockActionResult {
-    let changed = !text.has_glowing_text.swap(true, Ordering::Relaxed);
-
-    if !changed {
-        return BlockActionResult::PassToDefaultBlockAction;
-    }
-
-    args.world.update_block_entity(block_entity).await;
-    args.world
-        .play_block_sound(
-            pumpkin_data::sound::Sound::ItemGlowInkSacUse,
-            pumpkin_data::sound::SoundCategory::Blocks,
-            *args.position,
-        )
-        .await;
-    BlockActionResult::Success
-}
-
-async fn apply_ink_to_sign(
-    args: &UseWithItemArgs<'_>,
-    block_entity: &Arc<dyn BlockEntity>,
-    text: &Text,
-) -> BlockActionResult {
-    let changed = text.has_glowing_text.swap(false, Ordering::Relaxed);
-
-    if !changed {
-        return BlockActionResult::PassToDefaultBlockAction;
-    }
-
-    args.world.update_block_entity(block_entity).await;
-    args.world
-        .play_block_sound(
-            pumpkin_data::sound::Sound::ItemInkSacUse,
-            pumpkin_data::sound::SoundCategory::Blocks,
-            *args.position,
-        )
-        .await;
-    BlockActionResult::Success
-}
-
-async fn apply_dye_to_sign(
-    args: &UseWithItemArgs<'_>,
-    block_entity: &Arc<dyn BlockEntity>,
-    text: &Text,
-    color_name: &str,
-) -> BlockActionResult {
-    let dye_color = DyeColor::from(color_name);
-
-    text.set_color(dye_color);
-
-    args.world.update_block_entity(block_entity).await;
-    args.world
-        .play_block_sound(
-            pumpkin_data::sound::Sound::ItemDyeUse,
-            pumpkin_data::sound::SoundCategory::Blocks,
-            *args.position,
-        )
-        .await;
-    BlockActionResult::Success
 }
 
 async fn is_facing_front_text(
