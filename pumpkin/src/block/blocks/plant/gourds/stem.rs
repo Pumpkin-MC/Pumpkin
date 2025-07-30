@@ -58,7 +58,7 @@ impl StemBlock {
         match block.id {
             id if id == Block::PUMPKIN_STEM.id => &Block::PUMPKIN,
             id if id == Block::MELON_STEM.id => &Block::MELON,
-            _ => &Block::MELON_STEM, // Should never happen
+            _ => &Block::MELON, // Should never happen
         }
     }
 }
