@@ -80,23 +80,14 @@ impl BlockBehaviour for FarmlandBlock {
         } else {
             let state_id = args.world.get_block_state_id(args.position).await;
             let mut props = FarmlandProperties::from_state_id(state_id, args.block);
-            if props.moisture != Integer0To7::L0 {
-                props.moisture = Integer0To7::from_index(props.moisture.to_index() - 1);
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
-            } else {
-                //TODO push entities up
+            if props.moisture == Integer0To7::L0 {
                 if !args
                     .world
                     .get_block(&args.position.up())
                     .await
                     .is_tagged_with_by_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
                 {
+                    //TODO push entities up
                     args.world
                         .set_block_state(
                             args.position,
@@ -105,6 +96,15 @@ impl BlockBehaviour for FarmlandBlock {
                         )
                         .await;
                 }
+            } else {
+                props.moisture = Integer0To7::from_index(props.moisture.to_index() - 1);
+                args.world
+                    .set_block_state(
+                        args.position,
+                        props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_NEIGHBORS,
+                    )
+                    .await;
             }
         }
     }
