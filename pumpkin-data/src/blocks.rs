@@ -1,6 +1,6 @@
 use crate::{
     BlockState, BlockStateRef,
-    tag::{RegistryKey, Tagable},
+    tag::{RegistryKey, Taggable},
 };
 use pumpkin_util::{
     loot_table::LootTable,
@@ -41,7 +41,7 @@ impl Hash for Block {
     }
 }
 
-impl Tagable for Block {
+impl Taggable for Block {
     #[inline]
     fn tag_key() -> RegistryKey {
         RegistryKey::Block
@@ -50,6 +50,11 @@ impl Tagable for Block {
     #[inline]
     fn registry_key(&self) -> &str {
         self.name
+    }
+
+    #[inline]
+    fn registry_id(&self) -> u16 {
+        self.id
     }
 }
 

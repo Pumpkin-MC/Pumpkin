@@ -1,9 +1,13 @@
+use pumpkin_data::Block;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{
+    DataComponentImpl, IDSet, MaxStackSizeImpl, ToolImpl, get,
+};
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
-use std::hash::Hash;
 
 mod categories;
 
@@ -17,18 +21,20 @@ pub enum Rarity {
     Epic,
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug)]
 pub struct ItemStack {
     pub item_count: u8,
     pub item: &'static Item,
+    pub patch: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>,
 }
 
-impl Hash for ItemStack {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.item_count.hash(state);
-        self.item.id.hash(state);
-    }
-}
+// impl Hash for ItemStack {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.item_count.hash(state);
+//         self.item.id.hash(state);
+//         self.patch.hash(state);
+//     }
+// }
 
 /*
 impl PartialEq for ItemStack {
@@ -38,17 +44,45 @@ impl PartialEq for ItemStack {
 } */
 
 impl ItemStack {
-    pub const EMPTY: ItemStack = ItemStack {
-        item_count: 0,
-        item: &Item::AIR,
-    };
-
     pub fn new(item_count: u8, item: &'static Item) -> Self {
-        Self { item_count, item }
+        Self {
+            item_count,
+            item,
+            patch: Vec::new(),
+        }
     }
 
+    pub fn get_data_component<T: DataComponentImpl + 'static>(&self) -> Option<&T> {
+        let to_get_id = &T::get_enum();
+        for (id, component) in &self.patch {
+            if id == to_get_id {
+                return if let Some(component) = component {
+                    Some(get::<T>(component.as_ref()))
+                } else {
+                    None
+                };
+            }
+        }
+        for (id, component) in self.item.components {
+            if id == to_get_id {
+                return Some(get::<T>(*component));
+            }
+        }
+        None
+    }
+
+    pub const EMPTY: &'static ItemStack = &ItemStack {
+        item_count: 0,
+        item: &Item::AIR,
+        patch: Vec::new(),
+    };
+
     pub fn get_max_stack_size(&self) -> u8 {
-        self.item.components.max_stack_size
+        if let Some(value) = self.get_data_component::<MaxStackSizeImpl>() {
+            value.size
+        } else {
+            1
+        }
     }
 
     pub fn get_item(&self) -> &Item {
@@ -84,7 +118,7 @@ impl ItemStack {
     }
 
     pub fn copy_with_count(&self, count: u8) -> Self {
-        let mut stack = *self;
+        let mut stack = self.clone();
         stack.item_count = count;
         stack
     }
@@ -112,71 +146,59 @@ impl ItemStack {
     /// Determines the mining speed for a block based on tool rules.
     /// Direct matches return immediately, tagged blocks are checked separately.
     /// If no match is found, returns the tool's default mining speed or `1.0`.
-    pub fn get_speed(&self, block: &str) -> f32 {
+    pub fn get_speed(&self, block: &'static Block) -> f32 {
         // No tool? Use default speed
-        let Some(tool) = &self.item.components.tool else {
-            return 1.0;
-        };
-
-        for rule in tool.rules {
-            // Skip if speed is not set
-            let Some(speed) = rule.speed else {
-                continue;
-            };
-
-            for entry in rule.blocks {
-                if entry.eq(&block) {
-                    return speed;
-                }
-
-                if entry.starts_with('#') {
-                    // Check if block is in the tag group
-                    if let Some(blocks) =
-                        get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
-                    {
+        if let Some(tool) = self.get_data_component::<ToolImpl>() {
+            for rule in tool.rules.iter() {
+                // Skip if speed is not set
+                let Some(speed) = rule.speed else {
+                    continue;
+                };
+                match &rule.blocks {
+                    IDSet::Tag(tag) => {
+                        if block.is_tagged_with_by_tag(tag) {
+                            return speed;
+                        }
+                    }
+                    IDSet::Blocks(blocks) => {
                         if blocks.contains(&block) {
                             return speed;
                         }
                     }
                 }
             }
+            tool.default_mining_speed
+        } else {
+            1.0
         }
-        // Return default mining speed if no match is found
-        tool.default_mining_speed.unwrap_or(1.0)
     }
 
     /// Determines if a tool is valid for block drops based on tool rules.
     /// Direct matches return immediately, while tagged blocks are checked separately.
-    pub fn is_correct_for_drops(&self, block: &str) -> bool {
-        // Return false if no tool component exists
-        let Some(tool) = &self.item.components.tool else {
-            return false;
-        };
-
-        for rule in tool.rules {
-            // Skip rules without a drop condition
-            let Some(correct_for_drops) = rule.correct_for_drops else {
-                continue;
-            };
-
-            for entry in rule.blocks {
-                if entry.eq(&block) {
-                    return correct_for_drops;
-                }
-
-                if entry.starts_with('#') {
-                    // Check if block exists within the tag group
-                    if let Some(blocks) =
-                        get_tag_values(RegistryKey::Block, entry.strip_prefix('#').unwrap())
-                    {
+    pub fn is_correct_for_drops(&self, block: &'static Block) -> bool {
+        if let Some(tool) = self.get_data_component::<ToolImpl>() {
+            for rule in tool.rules.iter() {
+                // Skip if speed is not set
+                let Some(correct) = rule.correct_for_drops else {
+                    continue;
+                };
+                match &rule.blocks {
+                    IDSet::Tag(tag) => {
+                        if block.is_tagged_with_by_tag(tag) {
+                            return correct;
+                        }
+                    }
+                    IDSet::Blocks(blocks) => {
                         if blocks.contains(&block) {
-                            return correct_for_drops;
+                            return correct;
                         }
                     }
                 }
             }
+            false
+        } else {
+            false
         }
-        false
     }
 
     pub fn write_item_stack(&self, compound: &mut NbtCompound) {
@@ -223,6 +245,7 @@ impl From<&RecipeResultStruct> for ItemStack {
             item_count: value.count,
             item: Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
                 .expect("Crafting recipe gives invalid item"),
+            patch: Vec::new(),
         }
     }
 }

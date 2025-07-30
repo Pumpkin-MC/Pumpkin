@@ -4,8 +4,8 @@ use pumpkin_data::{Block, FacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::pumpkin_block::BrokenArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
+use crate::block::BrokenArgs;
 
 use super::piston::PistonProps;
 
@@ -15,7 +15,7 @@ pub(crate) type PistonHeadProperties = pumpkin_data::block_properties::PistonHea
 pub struct PistonHeadBlock;
 
 #[async_trait]
-impl PumpkinBlock for PistonHeadBlock {
+impl BlockBehaviour for PistonHeadBlock {
     async fn broken(&self, args: BrokenArgs<'_>) {
         let props = PistonHeadProperties::from_state_id(args.state.id, &Block::PISTON_HEAD);
         let pos = args

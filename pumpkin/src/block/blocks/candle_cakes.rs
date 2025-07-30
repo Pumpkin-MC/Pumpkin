@@ -13,8 +13,8 @@ use pumpkin_world::{item::ItemStack, world::BlockFlags};
 use crate::{
     block::{
         blocks::cake::CakeBlock,
-        pumpkin_block::{NormalUseArgs, PumpkinBlock, UseWithItemArgs},
         registry::BlockActionResult,
+        {BlockBehaviour, NormalUseArgs, UseWithItemArgs},
     },
     entity::player::Player,
     world::World,
@@ -73,11 +73,11 @@ impl CandleCakeBlock {
         match player.gamemode.load() {
             GameMode::Survival | GameMode::Adventure => {
                 if player.hunger_manager.level.load() >= 20 {
-                    return BlockActionResult::Continue;
+                    return BlockActionResult::Pass;
                 }
             }
             GameMode::Creative => {}
-            GameMode::Spectator => return BlockActionResult::Continue,
+            GameMode::Spectator => return BlockActionResult::Pass,
         }
 
         let candle_item = candle_from_cake(block);
@@ -101,16 +101,13 @@ impl CandleCakeBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for CandleCakeBlock {
+impl BlockBehaviour for CandleCakeBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         match args.item_stack.lock().await.item.id {
             id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
-                BlockActionResult::Continue
+                BlockActionResult::Pass
             } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
-            _ => {
-                Self::consume_and_drop_candle(args.block, args.player, args.position, args.world)
-                    .await
-            }
+            _ => BlockActionResult::PassToDefaultBlockAction,
         }
     }
 

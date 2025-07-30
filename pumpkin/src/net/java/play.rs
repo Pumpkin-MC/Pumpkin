@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
-use crate::block::pumpkin_block::BlockHitResult;
+use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
@@ -38,10 +38,9 @@ use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    Animation, CBlockUpdate, CCommandSuggestions, CEntityAnimation, CEntityPositionSync, CHeadRot,
-    COpenSignEditor, CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot,
-    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
-    PlayerAction,
+    CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
+    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot, CSystemChatMessage,
+    CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
@@ -60,6 +59,7 @@ use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
@@ -69,6 +69,7 @@ const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
     BlockOutOfReach,
+    InvalidHand,
     InvalidBlockFace,
     BlockOutOfWorld,
     InvalidGamemode,
@@ -84,14 +85,14 @@ impl PumpkinError for BlockPlacingError {
     fn is_kick(&self) -> bool {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => false,
-            Self::InvalidBlockFace => true,
+            Self::InvalidBlockFace | Self::InvalidHand => true,
         }
     }
 
     fn severity(&self) -> log::Level {
         match self {
             Self::BlockOutOfWorld | Self::InvalidGamemode => log::Level::Trace,
-            Self::BlockOutOfReach | Self::InvalidBlockFace => log::Level::Warn,
+            Self::BlockOutOfReach | Self::InvalidBlockFace | Self::InvalidHand => log::Level::Warn,
         }
     }
 
@@ -99,6 +100,7 @@ impl PumpkinError for BlockPlacingError {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => None,
             Self::InvalidBlockFace => Some("Invalid block face".into()),
+            Self::InvalidHand => Some("Invalid hand".into()),
         }
     }
 }
@@ -693,26 +695,10 @@ impl JavaClient {
     }
 
     pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {
-        let animation = match swing_arm.hand.0 {
-            0 => Animation::SwingMainArm,
-            1 => Animation::SwingOffhand,
-            _ => {
-                self.kick(TextComponent::text("Invalid hand")).await;
-                return;
-            }
+        let Ok(hand) = Hand::try_from(swing_arm.hand.0) else {
+            self.kick(TextComponent::text("Invalid hand")).await;
+            return;
         };
-        // Invert hand if player is left handed
-        let animation = match player.config.read().await.main_hand {
-            Hand::Left => match animation {
-                Animation::SwingMainArm => Animation::SwingOffhand,
-                Animation::SwingOffhand => Animation::SwingMainArm,
-                _ => unreachable!(),
-            },
-            Hand::Right => animation,
-        };
-
-        let id = player.entity_id();
-        let world = player.world().await;
 
         let inventory = player.inventory();
         let item = inventory.held_item();
@@ -754,12 +740,7 @@ impl JavaClient {
         send_cancellable! {{
             event;
             'after: {
-                world
-                    .broadcast_packet_except(
-                        &[player.gameprofile.id],
-                        &CEntityAnimation::new(id.into(), animation),
-                    )
-                    .await;
+                player.swing_hand(hand, false).await;
             }
         }}
     }
@@ -1227,7 +1208,7 @@ impl JavaClient {
                         Ordering::Relaxed,
                     );
                     if !state.is_air() {
-                        let speed = block::calc_block_breaking(player, state, block.name).await;
+                        let speed = block::calc_block_breaking(player, state, block).await;
                         // Instant break
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&position).await;
@@ -1292,7 +1273,7 @@ impl JavaClient {
 
                     let (block, state) = world.get_block_and_state(&location).await;
                     let drop = player.gamemode.load() != GameMode::Creative
-                        && player.can_harvest(state, block.name).await;
+                        && player.can_harvest(state, block).await;
 
                     world
                         .break_block(
@@ -1398,70 +1379,53 @@ impl JavaClient {
         let Ok(face) = BlockDirection::try_from(use_item_on.face.0) else {
             return Err(BlockPlacingError::InvalidBlockFace);
         };
+
+        let Ok(hand) = Hand::try_from(use_item_on.hand.0) else {
+            return Err(BlockPlacingError::InvalidHand);
+        };
+
         //TODO this.player.resetLastActionTime();
         //TODO this.gameModeForPlayer == GameType.SPECTATOR
+
         let inventory = player.inventory();
         let held_item = inventory.held_item();
         let off_hand_item = inventory.off_hand_item().await;
         let held_item_empty = held_item.lock().await.is_empty();
         let off_hand_item_empty = off_hand_item.lock().await.is_empty();
-        let item = if use_item_on.hand.0 == 0 {
+        let item = if matches!(hand, Hand::Left) {
             held_item
         } else {
             off_hand_item
         };
 
         let entity = &player.living_entity.entity;
-        let world = &entity.world.read().await;
+        let world = entity.world.read().await;
         let block = world.get_block(&position).await;
 
         let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
 
         // Code based on the java class ServerPlayerInteractionManager
         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
-            match match server
-                .block_registry
-                .use_with_item(
-                    block,
+            let result = self
+                .call_use_item_on(
                     player,
                     &position,
-                    &BlockHitResult {
-                        side: &face,
-                        cursor_pos: &cursor_pos,
-                    },
+                    &cursor_pos,
+                    &face,
                     &item,
+                    &world,
+                    block,
                     server,
-                    world,
                 )
-                .await
-            {
-                BlockActionResult::PassToDefault => {
-                    server
-                        .block_registry
-                        .on_use(
-                            block,
-                            player,
-                            &position,
-                            &BlockHitResult {
-                                side: &face,
-                                cursor_pos: &cursor_pos,
-                            },
-                            server,
-                            world,
-                        )
-                        .await
+                .await;
+            if result.consumes_action() {
+                // TODO: Trigger ANY_BLOCK_USE Criteria
+
+                if matches!(result, BlockActionResult::SuccessServer) {
+                    drop(world); // IMPORTANT: We need to drop this to prevent a deadlock
+                    player.swing_hand(hand, true).await;
                 }
-                BlockActionResult::Fail => BlockActionResult::Fail,
-                BlockActionResult::Consume => BlockActionResult::Consume,
-                BlockActionResult::Continue => BlockActionResult::Continue,
-                BlockActionResult::Success => BlockActionResult::Success,
-            } {
-                BlockActionResult::Fail => return Ok(()),
-                BlockActionResult::Success | BlockActionResult::Consume => {
-                    /* TODO: Swing hand */
-                    return Ok(());
-                }
-                BlockActionResult::Continue | BlockActionResult::PassToDefault => {} // Do nothing,
+                return Ok(());
             }
         }
 
@@ -1507,6 +1471,58 @@ impl JavaClient {
         }
 
         Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn call_use_item_on(
+        &self,
+        player: &Player,
+        position: &BlockPos,
+        cursor_pos: &Vector3<f32>,
+        face: &BlockDirection,
+        held_item: &Arc<Mutex<ItemStack>>,
+        world: &Arc<World>,
+        block: &Block,
+        server: &Arc<Server>,
+    ) -> BlockActionResult {
+        let result = server
+            .block_registry
+            .use_with_item(
+                block,
+                player,
+                position,
+                &BlockHitResult { face, cursor_pos },
+                held_item,
+                server,
+                world,
+            )
+            .await;
+
+        if result.consumes_action() {
+            // TODO: Trigger ITEM_USED_ON_BLOCK Criteria
+            return result;
+        }
+
+        if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+            let result = server
+                .block_registry
+                .on_use(
+                    block,
+                    player,
+                    position,
+                    &BlockHitResult { face, cursor_pos },
+                    server,
+                    world,
+                )
+                .await;
+
+            if result.consumes_action() {
+                // TODO: Trigger DEFAULT_BLOCK_USE Criteria
+                return result;
+            }
+        }
+
+        BlockActionResult::Pass
     }
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
@@ -1612,7 +1628,7 @@ impl JavaClient {
         }
         let inv = player.inventory();
         inv.set_selected_slot(slot as u8);
-        let stack = *inv.held_item().lock().await;
+        let stack = inv.held_item().lock().await.clone();
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         player.living_entity.send_equipment_changes(equipment).await;
     }
@@ -1636,7 +1652,7 @@ impl JavaClient {
             player_screen_handler
                 .get_slot(packet.slot as usize)
                 .await
-                .set_stack(item_stack)
+                .set_stack(item_stack.clone())
                 .await;
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
             player_screen_handler.send_content_updates().await;

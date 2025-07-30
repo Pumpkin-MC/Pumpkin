@@ -15,10 +15,10 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::bed::BedBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::pumpkin_block::{
-    BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs, PumpkinBlock,
-};
 use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
+};
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
@@ -66,7 +66,7 @@ const NO_SLEEP_IDS: &[u16] = &[
 pub struct BedBlock;
 
 #[async_trait]
-impl PumpkinBlock for BedBlock {
+impl BlockBehaviour for BedBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         if let Some(player) = args.player {
             let facing = player.living_entity.entity.get_horizontal_facing();
@@ -167,7 +167,7 @@ impl PumpkinBlock for BedBlock {
                 .explode(args.server, bed_head_pos.to_centered_f64(), 5.0)
                 .await;
 
-            return BlockActionResult::Success;
+            return BlockActionResult::SuccessServer;
         }
 
         // Make sure the bed is not obstructed
@@ -188,7 +188,7 @@ impl PumpkinBlock for BedBlock {
                     true,
                 )
                 .await;
-            return BlockActionResult::Success;
+            return BlockActionResult::SuccessServer;
         }
 
         // Make sure the bed is not occupied
@@ -201,7 +201,7 @@ impl PumpkinBlock for BedBlock {
                     true,
                 )
                 .await;
-            return BlockActionResult::Success;
+            return BlockActionResult::SuccessServer;
         }
 
         // Make sure player is close enough
@@ -220,7 +220,7 @@ impl PumpkinBlock for BedBlock {
                     true,
                 )
                 .await;
-            return BlockActionResult::Success;
+            return BlockActionResult::SuccessServer;
         }
 
         // Set respawn point
@@ -246,7 +246,7 @@ impl PumpkinBlock for BedBlock {
                     true,
                 )
                 .await;
-            return BlockActionResult::Success;
+            return BlockActionResult::SuccessServer;
         }
 
         // Make sure there are no monsters nearby
@@ -265,14 +265,14 @@ impl PumpkinBlock for BedBlock {
                         true,
                     )
                     .await;
-                return BlockActionResult::Continue;
+                return BlockActionResult::SuccessServer;
             }
         }
 
         args.player.sleep(bed_head_pos).await;
         Self::set_occupied(true, args.world, args.block, args.position, state_id).await;
 
-        BlockActionResult::Success
+        BlockActionResult::SuccessServer
     }
 }
 

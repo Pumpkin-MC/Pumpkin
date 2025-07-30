@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::Axis;
@@ -10,8 +9,9 @@ use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -19,14 +19,14 @@ use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
+use crate::block::BlockBehaviour;
+use crate::block::CanPlaceAtArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::NormalUseArgs;
+use crate::block::OnNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::PlacedArgs;
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::NormalUseArgs;
-use crate::block::pumpkin_block::OnNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use pumpkin_protocol::java::server::play::SUseItemOn;
@@ -86,14 +86,14 @@ fn can_open_door(block: &Block) -> bool {
 // Todo: The sounds should be from BlockSetType
 fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
-        if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
+        if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
             Sound::BlockWoodenDoorOpen
         } else if block == &Block::IRON_DOOR {
             Sound::BlockIronDoorOpen
         } else {
             Sound::BlockCopperDoorOpen
         }
-    } else if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
+    } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
         Sound::BlockWoodenDoorClose
     } else if block == &Block::IRON_DOOR {
         Sound::BlockIronDoorClose
@@ -125,15 +125,13 @@ async fn get_hinge(
     let has_left_door = world
         .get_block(&left_pos)
         .await
-        .is_tagged_with("minecraft:doors")
-        .unwrap()
+        .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
         && DoorProperties::from_state_id(left_state.id, left_block).half == DoubleBlockHalf::Lower;
 
     let has_right_door = world
         .get_block(&right_pos)
         .await
-        .is_tagged_with("minecraft:doors")
-        .unwrap()
+        .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
         && DoorProperties::from_state_id(right_state.id, right_block).half
             == DoubleBlockHalf::Lower;
 
@@ -166,7 +164,7 @@ async fn get_hinge(
 pub struct DoorBlock;
 
 #[async_trait]
-impl PumpkinBlock for DoorBlock {
+impl BlockBehaviour for DoorBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let powered = block_receives_redstone_power(args.world, args.position).await
             || block_receives_redstone_power(args.world, &args.position.up()).await;
@@ -203,7 +201,7 @@ impl PumpkinBlock for DoorBlock {
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !can_open_door(args.block) {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
 
         toggle_door(args.player, args.world, args.position).await;

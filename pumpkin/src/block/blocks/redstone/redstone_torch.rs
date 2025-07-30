@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use crate::block::BlockIsReplacing;
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::EmitsRedstonePowerArgs;
-use crate::block::pumpkin_block::GetRedstonePowerArgs;
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::OnScheduledTickArgs;
-use crate::block::pumpkin_block::OnStateReplacedArgs;
-use crate::block::pumpkin_block::PlacedArgs;
+use crate::block::CanPlaceAtArgs;
+use crate::block::EmitsRedstonePowerArgs;
+use crate::block::GetRedstonePowerArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::OnNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::OnScheduledTickArgs;
+use crate::block::OnStateReplacedArgs;
+use crate::block::PlacedArgs;
 use crate::entity::EntityBase;
 use async_trait::async_trait;
 use pumpkin_data::Block;
@@ -20,14 +20,14 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Facing;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 
 type RWallTorchProps = pumpkin_data::block_properties::FurnaceLikeProperties;
 type RTorchProps = pumpkin_data::block_properties::RedstoneOreLikeProperties;
 
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::{BlockBehaviour, BlockMetadata};
 use crate::world::World;
 
 use super::get_redstone_power;
@@ -45,7 +45,7 @@ impl BlockMetadata for RedstoneTorchBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for RedstoneTorchBlock {
+impl BlockBehaviour for RedstoneTorchBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let world = args.world;
         let block = args.block;

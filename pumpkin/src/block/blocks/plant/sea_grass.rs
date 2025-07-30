@@ -5,14 +5,14 @@ use pumpkin_world::BlockStateId;
 
 use crate::block::{
     blocks::plant::PlantBlockBase,
-    pumpkin_block::{CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock},
+    {BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs},
 };
 
 #[pumpkin_block("minecraft:seagrass")]
 pub struct SeaGrassBlock;
 
 #[async_trait]
-impl PumpkinBlock for SeaGrassBlock {
+impl BlockBehaviour for SeaGrassBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }

@@ -11,8 +11,8 @@ use pumpkin_world::world::BlockAccessor;
 type WallTorchProps = pumpkin_data::block_properties::WallTorchLikeProperties;
 // Normal tourches don't have properties
 
-use crate::block::pumpkin_block::{
-    BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock,
+use crate::block::{
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
 };
 
 pub struct TorchBlock;
@@ -33,7 +33,7 @@ impl BlockMetadata for TorchBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for TorchBlock {
+impl BlockBehaviour for TorchBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         if args.direction == BlockDirection::Down {
             let support_block = args.world.get_block_state(&args.position.down()).await;

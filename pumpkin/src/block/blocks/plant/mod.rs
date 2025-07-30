@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, tag::Tagable};
+use pumpkin_data::{Block, tag, tag::Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
@@ -7,6 +7,7 @@ pub mod crop;
 pub mod dry_vegetation;
 pub mod flower;
 pub mod flowerbed;
+pub mod gourds;
 pub mod leaf_litter;
 pub mod lily_pad;
 pub mod mushroom_plant;
@@ -22,7 +23,7 @@ pub mod tall_plant;
 trait PlantBlockBase {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos).await;
-        block.is_tagged_with("minecraft:dirt").unwrap() || block == &Block::FARMLAND
+        block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT) || block == &Block::FARMLAND
     }
 
     async fn get_state_for_neighbor_update(

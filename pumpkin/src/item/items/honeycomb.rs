@@ -1,13 +1,13 @@
 use crate::entity::player::Player;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::OakDoorLikeProperties;
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
@@ -20,7 +20,7 @@ impl ItemMetadata for HoneyCombItem {
 }
 
 #[async_trait]
-impl PumpkinItem for HoneyCombItem {
+impl ItemBehaviour for HoneyCombItem {
     async fn use_on_block(
         &self,
         _item: &Item,
@@ -41,8 +41,8 @@ impl PumpkinItem for HoneyCombItem {
             // create new properties for the new log.
             let new_block = &Block::from_id(replacement_block.unwrap());
 
-            let new_state_id = if block.is_tagged_with("#minecraft:doors").is_some()
-                && block.is_tagged_with("#minecraft:doors").unwrap()
+            let new_state_id = if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
+                && block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
             {
                 // get block state of the old log.
                 let door_information = world.get_block_state_id(&location).await;

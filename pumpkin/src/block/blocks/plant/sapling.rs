@@ -8,9 +8,7 @@ use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock, RandomTickArgs,
-};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs};
 use crate::world::World;
 
 type SaplingProperties = pumpkin_data::block_properties::OakSaplingLikeProperties;
@@ -34,7 +32,7 @@ impl SaplingBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for SaplingBlock {
+impl BlockBehaviour for SaplingBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }

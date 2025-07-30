@@ -17,13 +17,14 @@ use pumpkin_world::block::entities::sign::DyeColor;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use uuid::Uuid;
 
-use crate::block::pumpkin_block::NormalUseArgs;
-use crate::block::pumpkin_block::OnStateReplacedArgs;
-use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::PlayerPlacedArgs;
-use crate::block::pumpkin_block::UseWithItemArgs;
-use crate::block::pumpkin_block::{OnPlaceArgs, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
+use crate::block::BlockBehaviour;
+use crate::block::NormalUseArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::OnStateReplacedArgs;
+use crate::block::PlacedArgs;
+use crate::block::PlayerPlacedArgs;
+use crate::block::UseWithItemArgs;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
@@ -37,7 +38,7 @@ pub struct SignBlock;
 //TODO: Add support for Hanging Signs
 //TODO: add support for click commands
 #[async_trait]
-impl PumpkinBlock for SignBlock {
+impl BlockBehaviour for SignBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> u16 {
         let mut sign_props = SignProperties::default(args.block);
         sign_props.waterlogged = args.replacing.water_source();
@@ -66,10 +67,10 @@ impl PumpkinBlock for SignBlock {
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let Some(block_entity) = args.world.get_block_entity(args.position).await else {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         };
         let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         };
 
         if sign_entity.is_waxed.load(Ordering::Relaxed) {
@@ -80,7 +81,7 @@ impl PumpkinBlock for SignBlock {
                     *args.position,
                 )
                 .await;
-            return BlockActionResult::Success;
+            return BlockActionResult::SuccessServer;
         }
 
         let mut currently_editing = sign_entity.currently_editing_player.lock().await;
@@ -92,7 +93,7 @@ impl PumpkinBlock for SignBlock {
         )
         .await
         {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
 
         let is_facing_front_text =
@@ -105,19 +106,19 @@ impl PumpkinBlock for SignBlock {
             crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
         }
 
-        return BlockActionResult::Success;
+        return BlockActionResult::SuccessServer;
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let Some(block_entity) = args.world.get_block_entity(args.position).await else {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         };
         let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         };
 
         if sign_entity.is_waxed.load(Ordering::Relaxed) {
-            return BlockActionResult::PassToDefault;
+            return BlockActionResult::PassToDefaultBlockAction;
         }
 
         let mut currently_editing = sign_entity.currently_editing_player.lock().await;
@@ -129,8 +130,8 @@ impl PumpkinBlock for SignBlock {
         )
         .await
         {
-            //TODO: I don't think that makes sense, since it will also just return in normal_use, but vanilla does it like this
-            return BlockActionResult::PassToDefault;
+            // I don't think that makes sense, since it will also just return in normal_use, but vanilla does it like this
+            return BlockActionResult::PassToDefaultBlockAction;
         }
 
         let mut item = args.item_stack.lock().await;
@@ -166,7 +167,7 @@ impl PumpkinBlock for SignBlock {
             let changed = !text.has_glowing_text.swap(true, Ordering::Relaxed);
 
             if !changed {
-                return BlockActionResult::PassToDefault;
+                return BlockActionResult::PassToDefaultBlockAction;
             }
 
             if !args.player.has_infinite_materials() {
@@ -191,7 +192,7 @@ impl PumpkinBlock for SignBlock {
             let changed = text.has_glowing_text.swap(false, Ordering::Relaxed);
 
             if !changed {
-                return BlockActionResult::PassToDefault;
+                return BlockActionResult::PassToDefaultBlockAction;
             }
 
             if !args.player.has_infinite_materials() {
@@ -235,7 +236,7 @@ impl PumpkinBlock for SignBlock {
             return BlockActionResult::Success;
         }
 
-        BlockActionResult::PassToDefault
+        BlockActionResult::PassToDefaultBlockAction
     }
 }
 

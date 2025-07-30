@@ -2,7 +2,7 @@ use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
-use pumpkin_data::{Block, block_properties::has_random_ticks};
+use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -11,7 +11,7 @@ use std::{
     path::PathBuf,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 use tokio::{
@@ -28,13 +28,13 @@ use crate::{
     BlockStateId,
     block::{RawBlockState, entities::BlockEntity},
     chunk::{
-        ChunkData, ChunkEntityData, ChunkParsingError, ChunkReadingError, ScheduledTick,
-        TickPriority,
+        ChunkData, ChunkEntityData, ChunkParsingError, ChunkReadingError,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
     generation::{Seed, get_world_gen, implementation::WorldGenerator},
+    tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
 
@@ -57,6 +57,9 @@ pub struct Level {
 
     // Holds this level's spawn chunks, which are always loaded
     spawn_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+
+    /// Counts the number of ticks that have been scheduled for this world
+    schedule_tick_counts: AtomicU64,
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
@@ -84,9 +87,9 @@ pub struct Level {
 }
 
 pub struct TickData {
-    pub block_ticks: Vec<ScheduledTick>,
-    pub fluid_ticks: Vec<ScheduledTick>,
-    pub random_ticks: Vec<ScheduledTick>,
+    pub block_ticks: Vec<OrderedTick<&'static Block>>,
+    pub fluid_ticks: Vec<OrderedTick<&'static Fluid>>,
+    pub random_ticks: Vec<ScheduledTick<()>>,
     pub block_entities: Vec<Arc<dyn BlockEntity>>,
 }
 
@@ -147,6 +150,7 @@ impl Level {
             level_folder,
             chunk_saver,
             entity_saver,
+            schedule_tick_counts: AtomicU64::new(0),
             spawn_chunks: Arc::new(DashMap::new()),
             loaded_chunks: Arc::new(DashMap::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
@@ -403,11 +407,13 @@ impl Level {
             random_ticks: Vec::with_capacity(self.loaded_chunks.len() * 3 * 16 * 16),
             block_entities: Vec::new(),
         };
+
         let mut rng = SmallRng::from_os_rng();
         for chunk in self.loaded_chunks.iter() {
             let mut chunk = chunk.write().await;
-            ticks.block_ticks.extend(chunk.get_and_tick_block_ticks());
-            ticks.fluid_ticks.extend(chunk.get_and_tick_fluid_ticks());
+            ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
+            ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
+
             let chunk = chunk.downgrade();
 
             let chunk_x_base = chunk.position.x * 16;
@@ -444,20 +450,22 @@ impl Level {
                 for (random_pos, block_id) in section_data {
                     if has_random_ticks(block_id) {
                         ticks.random_ticks.push(ScheduledTick {
-                            block_pos: random_pos,
+                            position: random_pos,
                             delay: 0,
                             priority: TickPriority::Normal,
-                            target_block_id: 0,
+                            value: (),
                         });
                     }
                 }
             }
 
-            let cloned_entities = chunk.block_entities.values().cloned().collect::<Vec<_>>();
-            ticks.block_entities.extend(cloned_entities);
+            ticks
+                .block_entities
+                .extend(chunk.block_entities.values().cloned());
         }
 
-        ticks.block_ticks.sort_by_key(|tick| tick.priority);
+        ticks.block_ticks.sort_unstable();
+        ticks.fluid_ticks.sort_unstable();
 
         ticks
     }
@@ -548,7 +556,7 @@ impl Level {
         self: &Arc<Self>,
         chunk_coordinate: Vector2<i32>,
     ) -> Arc<RwLock<ChunkData>> {
-        match self.try_get_chunk(chunk_coordinate) {
+        match self.try_get_chunk(&chunk_coordinate) {
             Some(chunk) => chunk.clone(),
             None => self.receive_chunk(chunk_coordinate).await.0,
         }
@@ -613,23 +621,15 @@ impl Level {
         let chunk = self.get_chunk(chunk_coordinate).await;
         let mut chunk = chunk.write().await;
 
-        let replaced_block_state_id = chunk
-            .section
-            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
-            .unwrap();
-
-        if replaced_block_state_id == block_state_id {
-            return block_state_id;
-        }
-
-        chunk.mark_dirty(true);
-
-        chunk.section.set_block_absolute_y(
+        let replaced_block_state_id = chunk.section.set_block_absolute_y(
             relative.x as usize,
             relative.y,
             relative.z as usize,
             block_state_id,
         );
+        if replaced_block_state_id != block_state_id {
+            chunk.mark_dirty(true);
+        }
         replaced_block_state_id
     }
 
@@ -1037,9 +1037,9 @@ impl Level {
 
     pub fn try_get_chunk(
         &self,
-        coordinates: Vector2<i32>,
+        coordinates: &Vector2<i32>,
     ) -> Option<dashmap::mapref::one::Ref<'_, Vector2<i32>, Arc<RwLock<ChunkData>>>> {
-        self.loaded_chunks.try_get(&coordinates).try_unwrap()
+        self.loaded_chunks.try_get(coordinates).try_unwrap()
     }
 
     pub fn try_get_entity_chunk(
@@ -1047,5 +1047,75 @@ impl Level {
         coordinates: Vector2<i32>,
     ) -> Option<dashmap::mapref::one::Ref<'_, Vector2<i32>, Arc<RwLock<ChunkEntityData>>>> {
         self.loaded_entity_chunks.try_get(&coordinates).try_unwrap()
+    }
+
+    pub async fn schedule_block_tick(
+        self: &Arc<Self>,
+        block: &Block,
+        block_pos: BlockPos,
+        delay: u8,
+        priority: TickPriority,
+    ) {
+        let chunk = self
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
+        let mut chunk = chunk.write().await;
+        chunk.block_ticks.schedule_tick(
+            ScheduledTick {
+                delay,
+                position: block_pos,
+                priority,
+                value: unsafe { &*(block as *const Block) },
+            },
+            self.schedule_tick_counts.load(Ordering::Relaxed),
+        );
+        self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub async fn schedule_fluid_tick(
+        self: &Arc<Self>,
+        fluid: &Fluid,
+        block_pos: BlockPos,
+        delay: u8,
+        priority: TickPriority,
+    ) {
+        let chunk = self
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
+        let mut chunk = chunk.write().await;
+        chunk.fluid_ticks.schedule_tick(
+            ScheduledTick {
+                delay,
+                position: block_pos,
+                priority,
+                value: unsafe { &*(fluid as *const Fluid) },
+            },
+            self.schedule_tick_counts.load(Ordering::Relaxed),
+        );
+        self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub async fn is_block_tick_scheduled(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        block: &Block,
+    ) -> bool {
+        let chunk = self
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
+        let chunk = chunk.read().await;
+        chunk.block_ticks.is_scheduled(*block_pos, block)
+    }
+
+    pub async fn is_fluid_tick_scheduled(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        fluid: &Fluid,
+    ) -> bool {
+        let chunk = self
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
+        let chunk = chunk.read().await;
+        chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
     }
 }

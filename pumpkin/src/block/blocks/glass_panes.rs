@@ -1,18 +1,18 @@
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
 type GlassPaneProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::{BlockBehaviour, BlockMetadata};
 use crate::world::World;
 
 pub struct GlassPaneBlock;
@@ -27,7 +27,7 @@ impl BlockMetadata for GlassPaneBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for GlassPaneBlock {
+impl BlockBehaviour for GlassPaneBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut pane_props = GlassPaneProperties::default(args.block);
         pane_props.waterlogged = args.replacing.water_source();
@@ -56,9 +56,9 @@ pub async fn compute_pane_state(
 
         let connected = other_block == block
             || other_block_state.is_side_solid(direction.opposite())
-            || other_block.is_tagged_with("c:glass_panes").unwrap()
+            || other_block.is_tagged_with_by_tag(&tag::Block::C_GLASS_PANES)
             || other_block == &Block::IRON_BARS
-            || other_block.is_tagged_with("minecraft:walls").unwrap();
+            || other_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WALLS);
 
         match direction {
             BlockDirection::North => pane_props.north = connected,

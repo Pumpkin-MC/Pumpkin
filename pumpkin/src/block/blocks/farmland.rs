@@ -1,15 +1,15 @@
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::OnScheduledTickArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
+use crate::block::CanPlaceAtArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::OnScheduledTickArgs;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 
@@ -17,7 +17,7 @@ use pumpkin_world::world::BlockFlags;
 pub struct FarmLandBlock;
 
 #[async_trait]
-impl PumpkinBlock for FarmLandBlock {
+impl BlockBehaviour for FarmLandBlock {
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         // TODO: push up entities
         args.world

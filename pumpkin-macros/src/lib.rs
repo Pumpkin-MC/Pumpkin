@@ -100,8 +100,6 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
             if let Some(cancelled_block) = cancelled_block {
                 quote! {
                     let event = crate::PLUGIN_MANAGER
-                        .read()
-                        .await
                         .fire(#event)
                         .await;
 
@@ -115,8 +113,6 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
             } else {
                 quote! {
                     let event = crate::PLUGIN_MANAGER
-                        .read()
-                        .await
                         .fire(#event)
                         .await;
 
@@ -129,8 +125,6 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
         } else if let Some(cancelled_block) = cancelled_block {
             quote! {
                 let event = crate::PLUGIN_MANAGER
-                    .read()
-                    .await
                     .fire(#event)
                     .await;
 
@@ -142,8 +136,6 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
         } else {
             quote! {
                 let event = crate::PLUGIN_MANAGER
-                    .read()
-                    .await
                     .fire(#event)
                     .await;
             }
@@ -189,7 +181,7 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let code = quote! {
         #item
-        impl #impl_generics crate::block::pumpkin_block::BlockMetadata for #name #ty_generics {
+        impl #impl_generics crate::block::BlockMetadata for #name #ty_generics {
             fn namespace(&self) -> &'static str {
                 #namespace
             }
@@ -218,7 +210,7 @@ pub fn pumpkin_block_from_tag(input: TokenStream, item: TokenStream) -> TokenStr
 
     let code = quote! {
         #item
-        impl #impl_generics crate::block::pumpkin_block::BlockMetadata for #name #ty_generics {
+        impl #impl_generics crate::block::BlockMetadata for #name #ty_generics {
             fn namespace(&self) -> &'static str {
                 #namespace
             }

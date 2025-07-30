@@ -1,19 +1,19 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{BlockProperties, HorizontalFacing},
-    item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{BlockStateId, chunk::TickPriority, world::BlockFlags};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{
-    block::pumpkin_block::{
-        BrokenArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnPlaceArgs,
-        OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs, PumpkinBlock,
+    block::{
+        BlockBehaviour, BrokenArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+        OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs,
     },
     world::World,
 };
@@ -27,7 +27,7 @@ type TripwireHookProperties = pumpkin_data::block_properties::TripwireHookLikePr
 pub struct TripwireBlock;
 
 #[async_trait]
-impl PumpkinBlock for TripwireBlock {
+impl BlockBehaviour for TripwireBlock {
     async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         let mut props = TripwireProperties::from_state_id(args.state.id, args.block);
         if props.powered {

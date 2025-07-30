@@ -28,6 +28,15 @@ mod sound_enum;
 #[path = "generated/recipes.rs"]
 pub mod recipes;
 
+#[rustfmt::skip]
+#[path = "generated/data_component.rs"]
+pub mod data_component;
+pub mod data_component_impl;
+
+#[rustfmt::skip]
+#[path = "generated/attributes.rs"]
+pub mod attributes;
+
 pub mod sound {
     pub use crate::sound_category::*;
     pub use crate::sound_enum::*;
@@ -76,10 +85,6 @@ mod entity_type;
 mod spawn_egg;
 
 #[rustfmt::skip]
-#[path = "generated/status_effect.rs"]
-mod status_effect;
-
-#[rustfmt::skip]
 #[path = "generated/enchantment.rs"]
 mod enchantment;
 pub use enchantment::*;
@@ -89,7 +94,6 @@ pub mod entity {
     pub use super::entity_status::*;
     pub use super::entity_type::*;
     pub use super::spawn_egg::*;
-    pub use super::status_effect::*;
 }
 
 #[rustfmt::skip]
@@ -140,6 +144,22 @@ pub mod flower_pot_transformations;
 #[rustfmt::skip]
 #[path = "generated/fuels.rs"]
 pub mod fuels;
+
+#[rustfmt::skip]
+#[path = "generated/effect.rs"]
+pub mod effect;
+
+#[rustfmt::skip]
+#[path = "generated/potion.rs"]
+pub mod potion;
+
+#[rustfmt::skip]
+#[path = "generated/potion_brewing.rs"]
+pub mod potion_brewing;
+
+#[rustfmt::skip]
+#[path = "generated/recipe_remainder.rs"]
+pub mod recipe_remainder;
 
 mod block_direction;
 pub mod block_state;
