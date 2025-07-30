@@ -1,11 +1,33 @@
+use std::{
+    any::Any,
+    array::from_fn,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
+use tokio::sync::Mutex;
+
+use crate::{
+    block::viewer::{ViewerCountListener, ViewerCountTracker},
+    inventory::{Clearable, Inventory, split_stack},
+    item::ItemStack,
+    world::SimpleWorld,
+};
 
 use super::BlockEntity;
 
+#[derive(Debug)]
 pub struct ChestBlockEntity {
     pub position: BlockPos,
-    //pub items: [Item; 27],
+    pub items: [Arc<Mutex<ItemStack>>; 27],
+    pub dirty: AtomicBool,
+
+    // Viewer
+    pub viewers: ViewerCountTracker,
 }
 
 #[async_trait]
@@ -18,23 +40,135 @@ impl BlockEntity for ChestBlockEntity {
         self.position
     }
 
-    fn from_nbt(_nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
+    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
-        Self { position }
+        let chest = Self {
+            position,
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            dirty: AtomicBool::new(false),
+            viewers: ViewerCountTracker::new(),
+        };
+
+        chest.read_data(nbt, &chest.items);
+
+        chest
     }
 
-    async fn write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {}
+    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        self.write_data(nbt, &self.items, true).await;
+        // Safety precaution
+        //self.clear().await;
+    }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
+        self.viewers
+            .update_viewer_count::<ChestBlockEntity>(self, world, &self.position)
+            .await;
+    }
+
+    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        Some(self)
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
+
+    fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+#[async_trait]
+impl ViewerCountListener for ChestBlockEntity {
+    async fn on_container_open(&self, _world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
+        //self.play_sound(world, Sound::BlockChestOpen).await;
+    }
+
+    async fn on_container_close(&self, _world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
+        //self.play_sound(world, Sound::BlockChestClose).await;
+    }
+
+    async fn on_viewer_count_update(
+        &self,
+        _world: &Arc<dyn SimpleWorld>,
+        _position: &BlockPos,
+        _old: u16,
+        _new: u16,
+    ) {
     }
 }
 
 impl ChestBlockEntity {
     pub const ID: &'static str = "minecraft:chest";
     pub fn new(position: BlockPos) -> Self {
-        Self { position }
+        Self {
+            position,
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            dirty: AtomicBool::new(false),
+            viewers: ViewerCountTracker::new(),
+        }
+    }
+}
+#[async_trait]
+impl Inventory for ChestBlockEntity {
+    fn size(&self) -> usize {
+        self.items.len()
+    }
+
+    async fn is_empty(&self) -> bool {
+        for slot in self.items.iter() {
+            if !slot.lock().await.is_empty() {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    async fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>> {
+        self.items[slot].clone()
+    }
+
+    async fn remove_stack(&self, slot: usize) -> ItemStack {
+        let mut removed = ItemStack::EMPTY.clone();
+        let mut guard = self.items[slot].lock().await;
+        std::mem::swap(&mut removed, &mut *guard);
+        removed
+    }
+
+    async fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
+        split_stack(&self.items, slot, amount).await
+    }
+
+    async fn set_stack(&self, slot: usize, stack: ItemStack) {
+        *self.items[slot].lock().await = stack;
+    }
+
+    fn on_open(&self) {
+        self.viewers.open_container();
+    }
+
+    fn on_close(&self) {
+        self.viewers.close_container();
+    }
+
+    fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[async_trait]
+impl Clearable for ChestBlockEntity {
+    async fn clear(&self) {
+        for slot in self.items.iter() {
+            *slot.lock().await = ItemStack::EMPTY.clone();
+        }
     }
 }

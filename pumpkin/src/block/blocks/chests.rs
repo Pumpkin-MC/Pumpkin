@@ -1,24 +1,59 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures::future::join;
 use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_inventory::double::DoubleInventory;
+use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::chest::ChestBlockEntity;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
+use tokio::sync::Mutex;
 
-use crate::block::{BlockMetadata, BrokenArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs};
+use crate::block::{BlockMetadata, BrokenArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs};
 use crate::entity::EntityBase;
 use crate::world::World;
 use crate::{
     block::{BlockBehaviour, registry::BlockActionResult},
     entity::player::Player,
 };
+
+struct ChestScreenFactory(Arc<dyn Inventory>);
+
+#[async_trait]
+impl ScreenHandlerFactory for ChestScreenFactory {
+    async fn create_screen_handler(
+        &self,
+        sync_id: u8,
+        player_inventory: &Arc<PlayerInventory>,
+        _player: &dyn InventoryPlayer,
+    ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
+        Some(Arc::new(Mutex::new(if self.0.size() > 27 {
+            create_generic_9x6(sync_id, player_inventory, self.0.clone())
+        } else {
+            create_generic_9x3(sync_id, player_inventory, self.0.clone())
+        })))
+    }
+
+    fn get_display_name(&self) -> TextComponent {
+        if self.0.size() > 27 {
+            TextComponent::translate("container.chestDouble", &[])
+        } else {
+            TextComponent::translate("container.chest", &[])
+        }
+    }
+}
 
 pub struct ChestBlock;
 
@@ -86,8 +121,41 @@ impl BlockBehaviour for ChestBlock {
         }
     }
 
-    async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
-        BlockActionResult::Consume
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let (state, first_chest) = join(
+            args.world.get_block_state_id(args.position),
+            args.world.get_block_entity(args.position),
+        )
+        .await;
+
+        let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
+            return BlockActionResult::Fail;
+        };
+
+        let chest_props = ChestLikeProperties::from_state_id(state, args.block);
+        let connected_towards = match chest_props.r#type {
+            ChestType::Single => None,
+            ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
+            ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
+        };
+
+        let inventory = if let Some(direction) = connected_towards
+            && let Some(second_inventory) = args
+                .world
+                .get_block_entity(&args.position.offset(direction.to_offset()))
+                .await
+                .and_then(BlockEntity::get_inventory)
+        {
+            DoubleInventory::new(first_inventory, second_inventory)
+        } else {
+            first_inventory
+        };
+
+        args.player
+            .open_handled_screen(&ChestScreenFactory(inventory))
+            .await;
+
+        BlockActionResult::Success
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {

@@ -83,7 +83,7 @@ impl BlockEntity for BarrelBlockEntity {
         self.dirty.load(Ordering::Relaxed)
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

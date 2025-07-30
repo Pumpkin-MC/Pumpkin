@@ -25,6 +25,21 @@ pub fn create_generic_9x3(
     )
 }
 
+pub fn create_generic_9x6(
+    sync_id: u8,
+    player_inventory: &Arc<PlayerInventory>,
+    inventory: Arc<dyn Inventory>,
+) -> GenericContainerScreenHandler {
+    GenericContainerScreenHandler::new(
+        WindowType::Generic9x6,
+        sync_id,
+        player_inventory,
+        inventory,
+        6,
+        9,
+    )
+}
+
 pub fn create_generic_3x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
