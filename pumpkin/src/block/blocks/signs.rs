@@ -13,11 +13,12 @@ use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::sign::DyeColor;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
+use pumpkin_world::block::entities::sign::Text;
 use uuid::Uuid;
 
-use crate::block::registry::BlockActionResult;
 use crate::block::BlockBehaviour;
 use crate::block::NormalUseArgs;
 use crate::block::OnPlaceArgs;
@@ -25,6 +26,7 @@ use crate::block::OnStateReplacedArgs;
 use crate::block::PlacedArgs;
 use crate::block::PlayerPlacedArgs;
 use crate::block::UseWithItemArgs;
+use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
@@ -106,7 +108,7 @@ impl BlockBehaviour for SignBlock {
             crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
         }
 
-        return BlockActionResult::SuccessServer;
+        BlockActionResult::SuccessServer
     }
 
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
@@ -134,110 +136,123 @@ impl BlockBehaviour for SignBlock {
             return BlockActionResult::PassToDefaultBlockAction;
         }
 
-        let mut item = args.item_stack.lock().await;
-
-        if item.item.id == pumpkin_data::item::Item::HONEYCOMB.id {
-            sign_entity.is_waxed.store(true, Ordering::Relaxed);
-
-            if !args.player.has_infinite_materials() {
-                item.decrement(1);
-            }
-            drop(item);
-            *currently_editing = None;
-            drop(currently_editing);
-
-            args.world.update_block_entity(&block_entity).await;
-            args.world
-                .sync_world_event(WorldEvent::BlockWaxed, *args.position, 0)
-                .await;
-
-            return BlockActionResult::Success;
-        }
-
-        let is_facing_front_text =
-            is_facing_front_text(args.world, args.position, args.block, args.player).await;
-
-        let text = if is_facing_front_text {
+        let text = if is_facing_front_text(args.world, args.position, args.block, args.player).await
+        {
             &sign_entity.front_text
         } else {
             &sign_entity.back_text
         };
 
-        if item.item.id == pumpkin_data::item::Item::GLOW_INK_SAC.id {
-            let changed = !text.has_glowing_text.swap(true, Ordering::Relaxed);
+        let mut item = args.item_stack.lock().await;
 
-            if !changed {
-                return BlockActionResult::PassToDefaultBlockAction;
+        let result = match item.item.id {
+            id if id == pumpkin_data::item::Item::HONEYCOMB.id => {
+                apply_wax_to_sign(&args, &block_entity, sign_entity).await
             }
+            id if id == pumpkin_data::item::Item::GLOW_INK_SAC.id => {
+                apply_glow_ink_to_sign(&args, &block_entity, text).await
+            }
+            id if id == pumpkin_data::item::Item::INK_SAC.id => {
+                apply_ink_to_sign(&args, &block_entity, text).await
+            }
+            _ => {
+                if let Some(color_name) = item.item.registry_key.strip_suffix("_dye") {
+                    apply_dye_to_sign(&args, &block_entity, text, color_name).await
+                } else {
+                    BlockActionResult::PassToDefaultBlockAction
+                }
+            }
+        };
 
+        if result == BlockActionResult::Success {
             if !args.player.has_infinite_materials() {
                 item.decrement(1);
             }
-            drop(item);
             *currently_editing = None;
-            drop(currently_editing);
-
-            args.world.update_block_entity(&block_entity).await;
-            args.world
-                .play_block_sound(
-                    pumpkin_data::sound::Sound::ItemGlowInkSacUse,
-                    pumpkin_data::sound::SoundCategory::Blocks,
-                    *args.position,
-                )
-                .await;
-            return BlockActionResult::Success;
         }
 
-        if item.item.id == pumpkin_data::item::Item::INK_SAC.id {
-            let changed = text.has_glowing_text.swap(false, Ordering::Relaxed);
-
-            if !changed {
-                return BlockActionResult::PassToDefaultBlockAction;
-            }
-
-            if !args.player.has_infinite_materials() {
-                item.decrement(1);
-            }
-            drop(item);
-            *currently_editing = None;
-            drop(currently_editing);
-
-            args.world.update_block_entity(&block_entity).await;
-            args.world
-                .play_block_sound(
-                    pumpkin_data::sound::Sound::ItemInkSacUse,
-                    pumpkin_data::sound::SoundCategory::Blocks,
-                    *args.position,
-                )
-                .await;
-            return BlockActionResult::Success;
-        }
-
-        if let Some(color_name) = item.item.registry_key.strip_suffix("_dye") {
-            let dye_color = DyeColor::from(color_name);
-
-            text.set_color(dye_color);
-
-            if !args.player.has_infinite_materials() {
-                item.decrement(1);
-            }
-            drop(item);
-            *currently_editing = None;
-            drop(currently_editing);
-
-            args.world.update_block_entity(&block_entity).await;
-            args.world
-                .play_block_sound(
-                    pumpkin_data::sound::Sound::ItemDyeUse,
-                    pumpkin_data::sound::SoundCategory::Blocks,
-                    *args.position,
-                )
-                .await;
-            return BlockActionResult::Success;
-        }
-
-        BlockActionResult::PassToDefaultBlockAction
+        result
     }
+}
+
+async fn apply_wax_to_sign(
+    args: &UseWithItemArgs<'_>,
+    block_entity: &Arc<dyn BlockEntity>,
+    sign_entity: &SignBlockEntity,
+) -> BlockActionResult {
+    sign_entity.is_waxed.store(true, Ordering::Relaxed);
+
+    args.world.update_block_entity(block_entity).await;
+    args.world
+        .sync_world_event(WorldEvent::BlockWaxed, *args.position, 0)
+        .await;
+
+    BlockActionResult::Success
+}
+
+async fn apply_glow_ink_to_sign(
+    args: &UseWithItemArgs<'_>,
+    block_entity: &Arc<dyn BlockEntity>,
+    text: &Text,
+) -> BlockActionResult {
+    let changed = !text.has_glowing_text.swap(true, Ordering::Relaxed);
+
+    if !changed {
+        return BlockActionResult::PassToDefaultBlockAction;
+    }
+
+    args.world.update_block_entity(block_entity).await;
+    args.world
+        .play_block_sound(
+            pumpkin_data::sound::Sound::ItemGlowInkSacUse,
+            pumpkin_data::sound::SoundCategory::Blocks,
+            *args.position,
+        )
+        .await;
+    BlockActionResult::Success
+}
+
+async fn apply_ink_to_sign(
+    args: &UseWithItemArgs<'_>,
+    block_entity: &Arc<dyn BlockEntity>,
+    text: &Text,
+) -> BlockActionResult {
+    let changed = text.has_glowing_text.swap(false, Ordering::Relaxed);
+
+    if !changed {
+        return BlockActionResult::PassToDefaultBlockAction;
+    }
+
+    args.world.update_block_entity(block_entity).await;
+    args.world
+        .play_block_sound(
+            pumpkin_data::sound::Sound::ItemInkSacUse,
+            pumpkin_data::sound::SoundCategory::Blocks,
+            *args.position,
+        )
+        .await;
+    BlockActionResult::Success
+}
+
+async fn apply_dye_to_sign(
+    args: &UseWithItemArgs<'_>,
+    block_entity: &Arc<dyn BlockEntity>,
+    text: &Text,
+    color_name: &str,
+) -> BlockActionResult {
+    let dye_color = DyeColor::from(color_name);
+
+    text.set_color(dye_color);
+
+    args.world.update_block_entity(block_entity).await;
+    args.world
+        .play_block_sound(
+            pumpkin_data::sound::Sound::ItemDyeUse,
+            pumpkin_data::sound::SoundCategory::Blocks,
+            *args.position,
+        )
+        .await;
+    BlockActionResult::Success
 }
 
 async fn is_facing_front_text(
