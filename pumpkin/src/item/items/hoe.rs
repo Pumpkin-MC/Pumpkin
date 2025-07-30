@@ -96,4 +96,8 @@ impl ItemBehaviour for HoeItem {
             }
         }
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

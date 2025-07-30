@@ -53,4 +53,8 @@ impl ItemBehaviour for FireChargeItem {
         )
         .await;
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
