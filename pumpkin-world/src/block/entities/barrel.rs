@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use log::info;
 use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, FacingExt};
@@ -16,7 +15,7 @@ use std::{
 use tokio::sync::Mutex;
 
 use crate::block::viewer::{ViewerCountListener, ViewerCountTracker};
-use crate::world::SimpleWorld;
+use crate::world::{BlockFlags, SimpleWorld};
 use crate::{
     inventory::{
         split_stack, {Clearable, Inventory},
@@ -90,13 +89,13 @@ impl BlockEntity for BarrelBlockEntity {
 #[async_trait]
 impl ViewerCountListener for BarrelBlockEntity {
     async fn on_container_open(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
-        info!("Barrel open");
         self.play_sound(world, Sound::BlockBarrelOpen).await;
+        self.set_open(world, true).await;
     }
 
     async fn on_container_close(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
-        info!("Barrel closed");
         self.play_sound(world, Sound::BlockBarrelClose).await;
+        self.set_open(world, false).await;
     }
 }
 
@@ -109,6 +108,22 @@ impl BarrelBlockEntity {
             dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         }
+    }
+
+    async fn set_open(&self, world: &Arc<dyn SimpleWorld>, open: bool) {
+        let state = world.get_block_state(&self.position).await;
+        let mut properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
+
+        properties.open = open;
+
+        world
+            .clone()
+            .set_block_state(
+                &self.position,
+                properties.to_state_id(&Block::BARREL),
+                BlockFlags::NOTIFY_ALL,
+            )
+            .await;
     }
 
     async fn play_sound(&self, world: &Arc<dyn SimpleWorld>, sound: Sound) {
