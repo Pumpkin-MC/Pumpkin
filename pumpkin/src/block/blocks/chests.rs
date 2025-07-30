@@ -146,7 +146,12 @@ impl BlockBehaviour for ChestBlock {
                 .await
                 .and_then(BlockEntity::get_inventory)
         {
-            DoubleInventory::new(first_inventory, second_inventory)
+            // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
+            if matches!(chest_props.r#type, ChestType::Right) {
+                DoubleInventory::new(first_inventory, second_inventory)
+            } else {
+                DoubleInventory::new(second_inventory, first_inventory)
+            }
         } else {
             first_inventory
         };
