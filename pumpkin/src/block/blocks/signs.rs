@@ -145,7 +145,7 @@ impl BlockBehaviour for SignBlock {
 
         let mut item = args.item_stack.lock().await;
 
-        let Some(pumpkin_item) = args.server.item_registry.get_pumpkin_item(&item.item) else {
+        let Some(pumpkin_item) = args.server.item_registry.get_pumpkin_item(item.item) else {
             return BlockActionResult::PassToDefaultBlockAction;
         };
 
