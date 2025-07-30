@@ -2632,6 +2632,10 @@ impl pumpkin_world::world::SimpleWorld for World {
         self.level_time.lock().await.world_age
     }
 
+    async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
+        self.play_sound(sound, category, position).await;
+    }
+
     async fn scatter_inventory(
         self: Arc<Self>,
         position: &BlockPos,

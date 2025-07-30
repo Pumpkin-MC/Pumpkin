@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use log::info;
 use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, FacingExt};
@@ -68,7 +69,9 @@ impl BlockEntity for BarrelBlockEntity {
     }
 
     async fn tick(&self, world: Arc<dyn SimpleWorld>) {
-        self.viewers.update_viewer_count::<BarrelBlockEntity>(&self, world, &self.position).await;
+        self.viewers
+            .update_viewer_count::<BarrelBlockEntity>(self, world, &self.position)
+            .await;
     }
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
@@ -87,10 +90,12 @@ impl BlockEntity for BarrelBlockEntity {
 #[async_trait]
 impl ViewerCountListener for BarrelBlockEntity {
     async fn on_container_open(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
+        info!("Barrel open");
         self.play_sound(world, Sound::BlockBarrelOpen).await;
     }
 
     async fn on_container_close(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
+        info!("Barrel closed");
         self.play_sound(world, Sound::BlockBarrelClose).await;
     }
 }
@@ -110,8 +115,14 @@ impl BarrelBlockEntity {
         let state = world.get_block_state(&self.position).await;
         let properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
         let direction = properties.facing.to_block_direction().to_offset();
-        let position = Vector3::new(self.position.0.x as f64 + 0.5 + direction.x as f64 / 2.0, self.position.0.y as f64 + 0.5 + direction.y as f64 / 2.0, self.position.0.z as f64+ 0.5 + direction.z as f64 / 2.0);
-        world.play_sound(sound, SoundCategory::Blocks, &position).await;
+        let position = Vector3::new(
+            self.position.0.x as f64 + 0.5 + direction.x as f64 / 2.0,
+            self.position.0.y as f64 + 0.5 + direction.y as f64 / 2.0,
+            self.position.0.z as f64 + 0.5 + direction.z as f64 / 2.0,
+        );
+        world
+            .play_sound(sound, SoundCategory::Blocks, &position)
+            .await;
     }
 }
 
@@ -150,12 +161,12 @@ impl Inventory for BarrelBlockEntity {
         *self.items[slot].lock().await = stack;
     }
 
-    async fn on_open(&self) {
-        self.viewers.open_container().await;
+    fn on_open(&self) {
+        self.viewers.open_container();
     }
 
-    async fn on_close(&self) {
-        self.viewers.close_container().await;
+    fn on_close(&self) {
+        self.viewers.close_container();
     }
 
     fn mark_dirty(&self) {
