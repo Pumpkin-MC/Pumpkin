@@ -472,6 +472,18 @@ impl World {
             .await;
     }
 
+    pub async fn play_sound_fine(
+        &self,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        self.play_sound_raw(sound as u16, category, position, volume, pitch)
+            .await;
+    }
+
     pub async fn play_sound_expect(
         &self,
         player: &Player,
@@ -2634,6 +2646,18 @@ impl pumpkin_world::world::SimpleWorld for World {
 
     async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
         self.play_sound(sound, category, position).await;
+    }
+
+    async fn play_sound_fine(
+        &self,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        self.play_sound_fine(sound, category, position, volume, pitch)
+            .await;
     }
 
     async fn scatter_inventory(

@@ -63,6 +63,14 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
     async fn get_world_age(&self) -> i64;
 
     async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>);
+    async fn play_sound_fine(
+        &self,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    );
 
     /* ItemScatterer */
     async fn scatter_inventory(

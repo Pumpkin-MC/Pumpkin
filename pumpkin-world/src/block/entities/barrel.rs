@@ -4,6 +4,8 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, FacingExt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomImpl, get_seed};
 use std::any::Any;
 use std::{
     array::from_fn,
@@ -127,6 +129,8 @@ impl BarrelBlockEntity {
     }
 
     async fn play_sound(&self, world: &Arc<dyn SimpleWorld>, sound: Sound) {
+        let mut rng = Xoroshiro::from_seed(get_seed());
+
         let state = world.get_block_state(&self.position).await;
         let properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
         let direction = properties.facing.to_block_direction().to_offset();
@@ -136,7 +140,13 @@ impl BarrelBlockEntity {
             self.position.0.z as f64 + 0.5 + direction.z as f64 / 2.0,
         );
         world
-            .play_sound(sound, SoundCategory::Blocks, &position)
+            .play_sound_fine(
+                sound,
+                SoundCategory::Blocks,
+                &position,
+                0.5,
+                rng.next_f32() * 0.1 + 0.9,
+            )
             .await;
     }
 }
