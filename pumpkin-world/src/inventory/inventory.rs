@@ -1,4 +1,5 @@
 use crate::item::ItemStack;
+use crate::world::SimpleWorld;
 use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
@@ -80,13 +81,11 @@ pub trait Inventory: Send + Sync + Debug + Clearable {
 
     /*
     boolean canPlayerUse(PlayerEntity player);
-
-    default void onOpen(PlayerEntity player) {
-    }
-
-    default void onClose(PlayerEntity player) {
-    }
     */
+
+    // TODO: Add PlayerEntity player
+    async fn on_open(&self) {}
+    async fn on_close(&self) {}
 
     /// isValid is source
     fn is_valid_slot_for(&self, _slot: usize, _stack: &ItemStack) -> bool {

@@ -4,8 +4,10 @@ use crate::block::entities::BlockEntity;
 use crate::{BlockStateId, inventory::Inventory};
 use async_trait::async_trait;
 use bitflags::bitflags;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use thiserror::Error;
 
 bitflags! {
@@ -59,6 +61,8 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
     async fn remove_block_entity(&self, block_pos: &BlockPos);
     async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>>;
     async fn get_world_age(&self) -> i64;
+
+    async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>);
 
     /* ItemScatterer */
     async fn scatter_inventory(

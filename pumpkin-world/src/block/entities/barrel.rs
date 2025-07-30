@@ -1,5 +1,9 @@
 use async_trait::async_trait;
+use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{Block, FacingExt};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use std::any::Any;
 use std::{
     array::from_fn,
@@ -10,6 +14,8 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+use crate::block::viewer::{ViewerCountListener, ViewerCountTracker};
+use crate::world::SimpleWorld;
 use crate::{
     inventory::{
         split_stack, {Clearable, Inventory},
@@ -24,6 +30,9 @@ pub struct BarrelBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; 27],
     pub dirty: AtomicBool,
+
+    // Viewer
+    pub viewers: ViewerCountTracker,
 }
 
 #[async_trait]
@@ -44,6 +53,7 @@ impl BlockEntity for BarrelBlockEntity {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
+            viewers: ViewerCountTracker::new(),
         };
 
         barrel.read_data(nbt, &barrel.items);
@@ -55,6 +65,10 @@ impl BlockEntity for BarrelBlockEntity {
         self.write_data(nbt, &self.items, true).await;
         // Safety precaution
         //self.clear().await;
+    }
+
+    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
+        self.viewers.update_viewer_count::<BarrelBlockEntity>(&self, world, &self.position).await;
     }
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
@@ -70,6 +84,17 @@ impl BlockEntity for BarrelBlockEntity {
     }
 }
 
+#[async_trait]
+impl ViewerCountListener for BarrelBlockEntity {
+    async fn on_container_open(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
+        self.play_sound(world, Sound::BlockBarrelOpen).await;
+    }
+
+    async fn on_container_close(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
+        self.play_sound(world, Sound::BlockBarrelClose).await;
+    }
+}
+
 impl BarrelBlockEntity {
     pub const ID: &'static str = "minecraft:barrel";
     pub fn new(position: BlockPos) -> Self {
@@ -77,7 +102,16 @@ impl BarrelBlockEntity {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
+            viewers: ViewerCountTracker::new(),
         }
+    }
+
+    async fn play_sound(&self, world: &Arc<dyn SimpleWorld>, sound: Sound) {
+        let state = world.get_block_state(&self.position).await;
+        let properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
+        let direction = properties.facing.to_block_direction().to_offset();
+        let position = Vector3::new(self.position.0.x as f64 + 0.5 + direction.x as f64 / 2.0, self.position.0.y as f64 + 0.5 + direction.y as f64 / 2.0, self.position.0.z as f64+ 0.5 + direction.z as f64 / 2.0);
+        world.play_sound(sound, SoundCategory::Blocks, &position).await;
     }
 }
 
@@ -114,6 +148,14 @@ impl Inventory for BarrelBlockEntity {
 
     async fn set_stack(&self, slot: usize, stack: ItemStack) {
         *self.items[slot].lock().await = stack;
+    }
+
+    async fn on_open(&self) {
+        self.viewers.open_container().await;
+    }
+
+    async fn on_close(&self) {
+        self.viewers.close_container().await;
     }
 
     fn mark_dirty(&self) {

@@ -36,7 +36,7 @@ impl ScreenHandlerFactory for HopperBlockScreenFactory {
             sync_id,
             player_inventory,
             self.0.clone(),
-        ))))
+        ).await)))
     }
 
     fn get_display_name(&self) -> TextComponent {
