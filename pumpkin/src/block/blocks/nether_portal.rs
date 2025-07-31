@@ -29,7 +29,7 @@ impl NetherPortalBlock {
                     GameMode::Creative => {
                         level_info.game_rules.players_nether_portal_creative_delay as u32
                     }
-                    _ => level_info.game_rules.players_nether_portal_creative_delay as u32,
+                    _ => level_info.game_rules.players_nether_portal_default_delay as u32,
                 }),
             _ => 0,
         }
@@ -49,8 +49,8 @@ impl BlockBehaviour for NetherPortalBlock {
         if is_horizontal
             || args.neighbor_state_id == args.state_id
             || NetherPortal::get_on_axis(args.world, args.position, state_axis)
-                .await
-                .is_some_and(|e| e.was_already_valid())
+            .await
+            .is_some_and(|e| e.was_already_valid())
         {
             return args.state_id;
         }
