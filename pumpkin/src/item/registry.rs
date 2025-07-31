@@ -43,7 +43,7 @@ impl ItemRegistry {
         if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item
                 .use_on_block(item, player, location, face, block, server)
-                .await
+                .await;
         }
     }
 
