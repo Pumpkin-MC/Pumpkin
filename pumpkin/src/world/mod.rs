@@ -2632,6 +2632,10 @@ impl pumpkin_world::world::SimpleWorld for World {
         Self::update_neighbors(&self, block_pos, except).await;
     }
 
+    async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
+        self.add_synced_block_event(pos, r#type, data).await;
+    }
+
     async fn remove_block_entity(&self, block_pos: &BlockPos) {
         self.remove_block_entity(block_pos).await;
     }

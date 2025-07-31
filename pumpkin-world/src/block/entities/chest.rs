@@ -8,7 +8,15 @@ use std::{
 };
 
 use async_trait::async_trait;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_data::{
+    Block, HorizontalFacingExt,
+    block_properties::{BlockProperties, ChestLikeProperties, ChestType},
+    sound::{Sound, SoundCategory},
+};
+use pumpkin_util::{
+    math::{position::BlockPos, vector3::Vector3},
+    random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
+};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -83,26 +91,31 @@ impl BlockEntity for ChestBlockEntity {
 
 #[async_trait]
 impl ViewerCountListener for ChestBlockEntity {
-    async fn on_container_open(&self, _world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
-        //self.play_sound(world, Sound::BlockChestOpen).await;
+    async fn on_container_open(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
+        self.play_sound(world, Sound::BlockChestOpen).await;
     }
 
-    async fn on_container_close(&self, _world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
-        //self.play_sound(world, Sound::BlockChestClose).await;
+    async fn on_container_close(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
+        self.play_sound(world, Sound::BlockChestClose).await;
     }
 
     async fn on_viewer_count_update(
         &self,
-        _world: &Arc<dyn SimpleWorld>,
-        _position: &BlockPos,
+        world: &Arc<dyn SimpleWorld>,
+        position: &BlockPos,
         _old: u16,
-        _new: u16,
+        new: u16,
     ) {
+        world
+            .add_synced_block_event(*position, Self::LID_ANIMATION_EVENT_TYPE, new as u8)
+            .await
     }
 }
 
 impl ChestBlockEntity {
+    pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:chest";
+
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -111,7 +124,41 @@ impl ChestBlockEntity {
             viewers: ViewerCountTracker::new(),
         }
     }
+
+    async fn play_sound(&self, world: &Arc<dyn SimpleWorld>, sound: Sound) {
+        let mut rng = Xoroshiro::from_seed(get_seed());
+
+        let state = world.get_block_state(&self.position).await;
+        let properties = ChestLikeProperties::from_state_id(state.id, &Block::CHEST);
+        let position = match properties.r#type {
+            ChestType::Left => return,
+            ChestType::Single => Vector3::new(
+                self.position.0.x as f64 + 0.5,
+                self.position.0.y as f64 + 0.5,
+                self.position.0.z as f64 + 0.5,
+            ),
+            ChestType::Right => {
+                let direction = properties.facing.to_block_direction().to_offset();
+                Vector3::new(
+                    self.position.0.x as f64 + 0.5 + direction.x as f64 * 0.5,
+                    self.position.0.y as f64 + 0.5,
+                    self.position.0.z as f64 + 0.5 + direction.z as f64 * 0.5,
+                )
+            }
+        };
+
+        world
+            .play_sound_fine(
+                sound,
+                SoundCategory::Blocks,
+                &position,
+                0.5,
+                rng.next_f32() * 0.1 + 0.9,
+            )
+            .await;
+    }
 }
+
 #[async_trait]
 impl Inventory for ChestBlockEntity {
     fn size(&self) -> usize {

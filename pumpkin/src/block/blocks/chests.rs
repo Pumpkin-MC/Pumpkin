@@ -21,7 +21,9 @@ use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
 
-use crate::block::{BlockMetadata, BrokenArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs};
+use crate::block::{
+    BlockMetadata, BrokenArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
+};
 use crate::entity::EntityBase;
 use crate::world::World;
 use crate::{
@@ -86,6 +88,11 @@ impl BlockBehaviour for ChestBlock {
         chest_props.r#type = r#type;
 
         chest_props.to_state_id(args.block)
+    }
+
+    async fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
+        // On the server, we don't need the ChestLidAnimator because the client is responsible for that.
+        args.r#type == Self::LID_ANIMATION_EVENT_TYPE
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
@@ -192,6 +199,10 @@ impl BlockBehaviour for ChestBlock {
                 .await;
         }
     }
+}
+
+impl ChestBlock {
+    pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
 }
 
 async fn compute_chest_props(

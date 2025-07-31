@@ -58,6 +58,8 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
         except: Option<BlockDirection>,
     );
 
+    async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8);
+
     async fn remove_block_entity(&self, block_pos: &BlockPos);
     async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>>;
     async fn get_world_age(&self) -> i64;
