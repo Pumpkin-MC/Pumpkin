@@ -411,7 +411,7 @@ pub async fn spawn_category_for_position(
                 inc += 1;
                 continue;
             }
-            let entity = from_type(entity_type, new_pos_center, world, Uuid::new_v4());
+            let entity = from_type(entity_type, new_pos_center, world, Uuid::new_v4()).await;
             entity
                 .get_entity()
                 .set_rotation(rng().random::<f32>() * 360., 0.);

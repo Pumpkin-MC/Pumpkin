@@ -1,6 +1,6 @@
 use std::sync::Weak;
-use std::time::Duration;
 use std::sync::atomic::Ordering::Relaxed;
+use std::time::Duration;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -37,8 +37,8 @@ use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::entity::MobCategory;
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
     Block,
@@ -1905,7 +1905,7 @@ impl World {
         &self,
         pos: Vector3<f64>,
         radius: f64,
-        entity_types: Option<&[EntityType]>,
+        entity_types: Option<&[&'static EntityType]>,
     ) -> Option<Arc<dyn EntityBase>> {
         // Get regular entities
         let entities = self.get_nearby_entities(pos, radius).await;
