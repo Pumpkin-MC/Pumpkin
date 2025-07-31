@@ -1518,30 +1518,30 @@ impl Player {
         match &self.client {
             ClientPlatform::Java(client) => {
                 client
-                    .enqueue_packet(&CSystemChatMessage::new(&text, false))
-                    .await
+                    .enqueue_packet(&CSystemChatMessage::new(text, false))
+                    .await;
             }
             ClientPlatform::Bedrock(client) => {
                 client
                     .send_game_packet(&SText::system_message(text.clone().get_text()))
-                    .await
+                    .await;
             }
-        };
+        }
     }
 
     pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
         match &self.client {
             ClientPlatform::Java(client) => {
                 client
-                    .enqueue_packet(&CSystemChatMessage::new(&text, overlay))
-                    .await
+                    .enqueue_packet(&CSystemChatMessage::new(text, overlay))
+                    .await;
             }
             ClientPlatform::Bedrock(client) => {
                 client
                     .send_game_packet(&SText::system_message(text.clone().get_text()))
-                    .await
+                    .await;
             }
-        };
+        }
     }
 
     pub async fn tick_experience(&self) {
