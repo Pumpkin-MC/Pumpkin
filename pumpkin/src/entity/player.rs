@@ -1891,6 +1891,10 @@ impl Player {
                 .await;
         }
     }
+
+    pub async fn reset_state(&self) {
+        self.living_entity.reset_state().await;
+    }
 }
 
 #[async_trait]

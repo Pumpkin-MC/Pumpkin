@@ -954,6 +954,11 @@ impl Entity {
             dyn_self.damage(4.0, DamageType::OUT_OF_WORLD).await;
         }
     }
+
+    pub async fn reset_state(&self) {
+        self.pose.store(EntityPose::Standing);
+        self.fall_flying.store(false, Relaxed);
+    }
 }
 
 #[async_trait]

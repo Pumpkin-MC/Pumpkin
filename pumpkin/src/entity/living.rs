@@ -363,6 +363,16 @@ impl LivingEntity {
     pub fn is_part_of_game(&self) -> bool {
         self.is_spectator() && self.entity.is_alive()
     }
+
+    pub async fn reset_state(&self) {
+        self.entity.reset_state().await;
+        self.hurt_cooldown.store(0, Relaxed);
+        self.last_damage_taken.store(0f32);
+        self.entity.portal_cooldown.store(0, Relaxed);
+        *self.entity.portal_manager.lock().await = None;
+        self.fall_distance.store(0f32);
+        self.dead.store(false, Relaxed);
+    }
 }
 
 impl LivingEntityTrait for LivingEntity {}
