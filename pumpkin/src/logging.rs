@@ -131,7 +131,7 @@ impl Log for GzipRollingLogger {
         metadata.level() <= self.log_level
     }
 
-    fn log<'a, 'b:'a>(&self, record: &'a log::Record) {
+    fn log(&self, record: &log::Record) {
         if !self.enabled(record.metadata()) {
             return;
         }
@@ -141,14 +141,15 @@ impl Log for GzipRollingLogger {
         if let Ok(data) = self.data.lock() {
             let original_string = format(record.args().clone());
             let string = remove_ansi_color_code(&original_string);
-            let record: Record<'b> = Record::<'b>::builder()
-                .args(format_args!("{}", string))
-                .metadata(record.metadata().clone())
-                .module_path(record.module_path())
-                .file(record.file())
-                .line(record.line())
-                .build();
-            data.latest_logger.log(&record);
+            data.latest_logger.log(
+                &Record::builder()
+                    .args(format_args!("{}", string))
+                    .metadata(record.metadata().clone())
+                    .module_path(record.module_path())
+                    .file(record.file())
+                    .line(record.line())
+                    .build(),
+            );
             if data.current_day_of_month != now.day() {
                 drop(data);
                 if let Err(e) = self.rotate_log() {
