@@ -304,11 +304,8 @@ impl Entity {
             entity_type,
             on_ground: AtomicBool::new(false),
             pos: AtomicCell::new(position),
-            block_pos: AtomicCell::new(BlockPos(Vector3::new(floor_x, floor_y, floor_z))),
-            chunk_pos: AtomicCell::new(Vector2::new(
-                get_section_cord(floor_x),
-                get_section_cord(floor_z),
-            )),
+            block_pos: AtomicCell::new(BlockPos::new(floor_x, floor_y, floor_z)),
+            chunk_pos: AtomicCell::new(Vector2::new(floor_x / 16, floor_z / 16)),
             sneaking: AtomicBool::new(false),
             world: Arc::new(RwLock::new(world)),
             sprinting: AtomicBool::new(false),

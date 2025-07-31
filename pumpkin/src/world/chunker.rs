@@ -1,14 +1,7 @@
-use std::{
-    num::{NonZeroU8, NonZeroU32},
-    sync::Arc,
-};
+use std::{num::NonZeroU8, sync::Arc};
 
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_protocol::{
-    bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
-    java::client::play::{CCenterChunk, CUnloadChunk},
-};
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_protocol::java::client::play::{CCenterChunk, CUnloadChunk};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::{entity::player::Player, net::ClientPlatform};
@@ -24,32 +17,23 @@ pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
 
 pub async fn update_position(player: &Arc<Player>) {
     let entity = &player.living_entity.entity;
-    let pos = entity.pos.load();
 
     let view_distance = get_view_distance(player).await;
     let new_chunk_center = entity.chunk_pos.load();
 
     let old_cylindrical = player.watched_section.load();
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
+    println!("update");
 
     if old_cylindrical != new_cylindrical {
-        match &player.client {
-            ClientPlatform::Java(client) => {
-                client
-                    .send_packet_now(&CCenterChunk {
-                        chunk_x: new_chunk_center.x.into(),
-                        chunk_z: new_chunk_center.y.into(),
-                    })
-                    .await;
-            }
-            ClientPlatform::Bedrock(client) => {
-                client
-                    .send_game_packet(&CNetworkChunkPublisherUpdate::new(
-                        BlockPos::new(pos.x as i32, pos.y as i32, pos.z as i32),
-                        NonZeroU32::from(view_distance).get(),
-                    ))
-                    .await;
-            }
+        println!("not same");
+        if let ClientPlatform::Java(client) = &player.client {
+            client
+                .send_packet_now(&CCenterChunk {
+                    chunk_x: new_chunk_center.x.into(),
+                    chunk_z: new_chunk_center.y.into(),
+                })
+                .await;
         }
         let mut loading_chunks = Vec::new();
         let mut unloading_chunks = Vec::new();
@@ -95,6 +79,10 @@ pub async fn update_position(player: &Arc<Player>) {
                 loading_chunks,
                 new_chunk_center,
             );
+        }
+    } else {
+        if old_cylindrical.view_distance != new_cylindrical.view_distance {
+            panic!()
         }
     }
 }

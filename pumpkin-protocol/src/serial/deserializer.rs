@@ -4,6 +4,7 @@ use std::{
 };
 
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+use uuid::Uuid;
 
 use crate::{codec::var_uint::VarUInt, serial::PacketRead};
 
@@ -175,23 +176,45 @@ impl PacketRead for SocketAddr {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         match u8::read(reader)? {
             4 => {
-                let mut ip = [0; 4];
-                reader.read_exact(&mut ip)?;
+                let ip = u32::read_be(reader)?;
                 let port = u16::read_be(reader)?;
                 Ok(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from(ip), port)))
             }
             6 => {
+                // Addr family
+                u16::read(reader)?;
+                let port = u16::read_be(reader)?;
+                let flowinfo = u32::read_be(reader)?;
+
                 let mut ip = [0; 16];
                 reader.read_exact(&mut ip)?;
-                let port = u16::read_be(reader)?;
+                let ip = Ipv6Addr::from(ip);
+
+                let scope_id = u32::read_be(reader)?;
+
                 Ok(SocketAddr::V6(SocketAddrV6::new(
-                    Ipv6Addr::from(ip),
-                    port,
-                    0, // flowinfo
-                    0, // scope_id
+                    ip, port, flowinfo, scope_id,
                 )))
             }
             _ => Err(Error::other("Invalid socket address version")),
         }
+    }
+}
+
+impl PacketRead for Uuid {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let mut bytes = [0; 16];
+        reader.read_exact(&mut bytes)?;
+        Ok(Uuid::from_bytes(bytes))
+    }
+}
+
+impl<T: PacketRead> PacketRead for Option<T> {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        Ok(if bool::read(reader)? {
+            Some(T::read(reader)?)
+        } else {
+            None
+        })
     }
 }

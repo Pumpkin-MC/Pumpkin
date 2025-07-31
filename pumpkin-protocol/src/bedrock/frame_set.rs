@@ -10,6 +10,12 @@ pub struct FrameSet {
 }
 
 impl FrameSet {
+    pub fn new() -> Self {
+        Self {
+            sequence: u24(0),
+            frames: Vec::new(),
+        }
+    }
     pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         Ok(Self {
             sequence: u24::read(reader)?,
@@ -42,6 +48,20 @@ pub struct Frame {
 }
 
 impl Frame {
+    pub fn new_unreliable(payload: Vec<u8>) -> Self {
+        Self {
+            reliability: RakReliability::Unreliable,
+            payload,
+            reliable_number: 0,
+            sequence_index: 0,
+            order_index: 0,
+            order_channel: 0,
+            split_size: 0,
+            split_id: 0,
+            split_index: 0,
+        }
+    }
+
     pub fn read<R: Read>(reader: &mut R) -> Result<Vec<Self>, Error> {
         let mut frames = Vec::new();
 
