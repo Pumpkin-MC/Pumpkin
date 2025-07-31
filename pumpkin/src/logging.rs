@@ -131,7 +131,7 @@ impl Log for GzipRollingLogger {
         metadata.level() <= self.log_level
     }
 
-    fn log(&self, record: &log::Record) {
+    fn log(&self, record: &Record) {
         if !self.enabled(record.metadata()) {
             return;
         }
@@ -139,11 +139,11 @@ impl Log for GzipRollingLogger {
         let now = time::OffsetDateTime::now_utc();
 
         if let Ok(data) = self.data.lock() {
-            let original_string = format(record.args().clone());
+            let original_string = format(*record.args());
             let string = remove_ansi_color_code(&original_string);
             data.latest_logger.log(
                 &Record::builder()
-                    .args(format_args!("{}", string))
+                    .args(format_args!("{string}"))
                     .metadata(record.metadata().clone())
                     .module_path(record.module_path())
                     .file(record.file())
