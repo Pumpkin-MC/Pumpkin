@@ -1,7 +1,21 @@
+use crate::{
+    BlockStateId,
+    block::{RawBlockState, entities::BlockEntity},
+    chunk::{
+        ChunkData, ChunkEntityData, ChunkParsingError, ChunkReadingError,
+        format::{anvil::AnvilChunkFile, linear::LinearFile},
+        io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
+    },
+    dimension::Dimension,
+    generation::{Seed, get_world_gen, implementation::WorldGenerator},
+    tick::{OrderedTick, ScheduledTick, TickPriority},
+    world::BlockRegistryExt,
+};
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
+use pumpkin_data::biome::Biome;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
@@ -24,20 +38,6 @@ use tokio::{
 };
 use tokio_util::task::TaskTracker;
 
-use crate::{
-    BlockStateId,
-    block::{RawBlockState, entities::BlockEntity},
-    chunk::{
-        ChunkData, ChunkEntityData, ChunkParsingError, ChunkReadingError,
-        format::{anvil::AnvilChunkFile, linear::LinearFile},
-        io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
-    },
-    dimension::Dimension,
-    generation::{Seed, get_world_gen, implementation::WorldGenerator},
-    tick::{OrderedTick, ScheduledTick, TickPriority},
-    world::BlockRegistryExt,
-};
-
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
 pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
 
@@ -54,9 +54,6 @@ pub struct Level {
     pub seed: Seed,
     block_registry: Arc<dyn BlockRegistryExt>,
     level_folder: LevelFolder,
-
-    // Holds this level's spawn chunks, which are always loaded
-    spawn_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
 
     /// Counts the number of ticks that have been scheduled for this world
     schedule_tick_counts: AtomicU64,
@@ -151,7 +148,6 @@ impl Level {
             chunk_saver,
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
-            spawn_chunks: Arc::new(DashMap::new()),
             loaded_chunks: Arc::new(DashMap::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
@@ -611,6 +607,21 @@ impl Level {
 
         RawBlockState(id)
     }
+    pub async fn get_rough_biome(self: &Arc<Self>, position: &BlockPos) -> &'static Biome {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.get_chunk(chunk_coordinate).await;
+
+        let chunk = chunk.read().await;
+        let Some(id) = chunk.section.get_rough_biome_absolute_y(
+            relative.x as usize,
+            relative.y,
+            relative.z as usize,
+        ) else {
+            return &Biome::THE_VOID;
+        };
+
+        Biome::from_id(id).unwrap()
+    }
 
     pub async fn set_block_state(
         self: &Arc<Self>,
@@ -667,22 +678,6 @@ impl Level {
         }
     }
 
-    /// Initializes the spawn chunks to these chunks
-    pub async fn read_spawn_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
-        let (send, mut recv) = mpsc::unbounded_channel();
-
-        let fetcher = self.fetch_chunks(chunks, send);
-        let handler = async {
-            while let Some((chunk, _)) = recv.recv().await {
-                let pos = chunk.read().await.position;
-                self.spawn_chunks.insert(pos, chunk);
-            }
-        };
-
-        let _ = tokio::join!(fetcher, handler);
-        log::debug!("Read {} chunks as spawn chunks", chunks.len());
-    }
-
     /// Reads/Generates many chunks in a world
     /// Note: The order of the output chunks will almost never be in the same order as the order of input chunks
     pub async fn fetch_chunks(
@@ -708,11 +703,6 @@ impl Level {
         for chunk in chunks {
             let is_ok = if let Some(chunk) = self.loaded_chunks.get(chunk) {
                 send_chunk(false, chunk.value().clone(), &channel)
-            } else if let Some(spawn_chunk) = self.spawn_chunks.get(chunk) {
-                // Also clone the arc into the loaded chunks
-                self.loaded_chunks
-                    .insert(*chunk, spawn_chunk.value().clone());
-                send_chunk(false, spawn_chunk.value().clone(), &channel)
             } else {
                 remaining_chunks.push(*chunk);
                 true
@@ -840,11 +830,12 @@ impl Level {
                             // Deduplicate chunk generation using chunk_generation_locks
 
                             // We are responsible for generating the chunk
-                            let generated_chunk = world_gen.generate_chunk(
+                            let mut generated_chunk = world_gen.generate_chunk(
                                 &self_clone,
                                 block_registry.as_ref(),
                                 &pos,
                             );
+                            generated_chunk.heightmap = generated_chunk.calculate_heightmap();
                             let arc_chunk = Arc::new(RwLock::new(generated_chunk));
                             loaded_chunks.insert(pos, arc_chunk.clone());
 

@@ -258,7 +258,7 @@ impl LivingEntity {
                 )
                 .await;
             let params = LootContextParameters {
-                killed_by_player: cause.map(|c| c.get_entity().entity_type == EntityType::PLAYER),
+                killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
                 ..Default::default()
             };
 
@@ -267,7 +267,7 @@ impl LivingEntity {
 
             let level_info = world.level_info.read().await;
             let game_rules = &level_info.game_rules;
-            if self.entity.entity_type == EntityType::PLAYER && game_rules.show_death_messages {
+            if self.entity.entity_type == &EntityType::PLAYER && game_rules.show_death_messages {
                 //TODO: KillCredit
                 let death_message = if let Some(death_message_type) = damage_type.death_message_type
                 {
@@ -356,6 +356,10 @@ impl LivingEntity {
         for effect_type in effects_to_remove {
             self.remove_effect(effect_type).await;
         }
+    }
+
+    pub fn is_part_of_game(&self) -> bool {
+        self.is_spectator() && self.entity.is_alive()
     }
 }
 

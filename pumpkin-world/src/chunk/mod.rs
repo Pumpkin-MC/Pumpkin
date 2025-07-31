@@ -303,6 +303,26 @@ impl ChunkSections {
         }
     }
 
+    pub fn get_rough_biome_absolute_y(
+        &self,
+        relative_x: usize,
+        y: i32,
+        relative_z: usize,
+    ) -> Option<u8> {
+        let y = y - self.min_y;
+        if y < 0 {
+            None
+        } else {
+            let relative_y = y as usize;
+            self.get_noise_biome(
+                relative_y / BlockPalette::SIZE,
+                relative_x >> 2 & 3,
+                relative_y >> 2 & 3,
+                relative_z >> 2 & 3,
+            )
+        }
+    }
+
     /// Returns the replaced block state ID
     pub fn set_block_absolute_y(
         &mut self,
@@ -391,6 +411,20 @@ impl ChunkSections {
                 .set(relative_x, relative_y, relative_z, biome_id);
         }
     }
+
+    pub fn get_noise_biome(
+        &self,
+        index: usize,
+        scale_x: usize,
+        scale_y: usize,
+        scale_z: usize,
+    ) -> Option<u8> {
+        debug_assert!(scale_x < BiomePalette::SIZE);
+        debug_assert!(scale_z < BiomePalette::SIZE);
+        self.sections
+            .get(index)
+            .map(|section| section.biomes.get(scale_x, scale_y, scale_z))
+    }
 }
 
 impl ChunkData {
@@ -438,7 +472,7 @@ impl ChunkData {
     }
 
     //TODO: Tracking heightmaps update.
-    pub async fn calculate_heightmap(&mut self) -> ChunkHeightmaps {
+    pub fn calculate_heightmap(&mut self) -> ChunkHeightmaps {
         let highest_non_empty_subchunk = self.get_highest_non_empty_subchunk();
         let mut heightmaps = ChunkHeightmaps::default();
 

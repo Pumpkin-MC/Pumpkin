@@ -133,7 +133,7 @@ impl ComposterBlock {
                 Uuid::new_v4(),
                 world.clone(),
                 item_position,
-                EntityType::ITEM,
+                &EntityType::ITEM,
                 false,
             ),
             ItemStack::new(1, &Item::BONE_MEAL),

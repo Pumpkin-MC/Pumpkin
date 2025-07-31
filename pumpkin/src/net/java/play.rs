@@ -1446,7 +1446,6 @@ impl JavaClient {
                 server,
             )
             .await;
-        self.update_sequence(player, use_item_on.sequence.0);
 
         // Check if the item is a block, because not every item can be placed :D
         if let Some(block) = Block::from_item_id(item.lock().await.item.id) {
@@ -1556,6 +1555,7 @@ impl JavaClient {
             self.kick(TextComponent::text("InvalidHand")).await;
             return;
         };
+        self.update_sequence(player, use_item.sequence.0);
         let item_in_hand = if hand == Hand::Left {
             inventory.held_item()
         } else {
@@ -1603,7 +1603,6 @@ impl JavaClient {
                 let item = held.item;
                 drop(held);
                 server.item_registry.on_use(item, player).await;
-                self.update_sequence(player, use_item.sequence.0);
             }
         }}
     }
@@ -1710,7 +1709,7 @@ impl JavaClient {
     async fn spawn_entity_from_egg(
         &self,
         player: &Player,
-        entity_type: EntityType,
+        entity_type: &'static EntityType,
         location: BlockPos,
         face: BlockDirection,
     ) {
@@ -1726,7 +1725,7 @@ impl JavaClient {
 
         let world = player.world().await;
         // Create a new mob and UUID based on the spawn egg id
-        let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
+        let mob = from_type(entity_type, pos, &world, Uuid::new_v4()).await;
 
         // Set the rotation
         mob.get_entity().set_rotation(yaw, 0.0);

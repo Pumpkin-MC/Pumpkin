@@ -23,6 +23,16 @@ pub fn wrap_degrees(degrees: f32) -> f32 {
     var1
 }
 
+pub fn clamp_angle(value: f32, mean: f32, delta: f32) -> f32 {
+    let i = subtract_angles(value, mean);
+    let j = i.clamp(-delta, delta);
+    mean - j
+}
+
+pub fn subtract_angles(start: f32, end: f32) -> f32 {
+    wrap_degrees(end - start)
+}
+
 pub fn squared_magnitude(a: f64, b: f64, c: f64) -> f64 {
     c.mul_add(c, a.mul_add(a, b * b))
 }
