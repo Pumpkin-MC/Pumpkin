@@ -1,9 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
-
-use crate::equipment_slot::EquipmentSlot;
 
 // EntityEquipment.java
 #[derive(Debug, Clone)]

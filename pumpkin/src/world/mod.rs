@@ -35,6 +35,7 @@ use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
     Block,
@@ -45,7 +46,7 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState};
-use pumpkin_inventory::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::chunk_radius_update::CChunkRadiusUpdate;
@@ -544,7 +545,6 @@ impl World {
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         let start = tokio::time::Instant::now();
         self.flush_block_updates().await;
-
         // tick block entities
         self.flush_synced_block_events().await;
 
@@ -573,13 +573,13 @@ impl World {
         }
 
         let chunk_start = tokio::time::Instant::now();
-        log::debug!("Ticking chunks");
+        log::trace!("Ticking chunks");
         self.tick_chunks().await;
         let elapsed = chunk_start.elapsed();
 
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
 
-        log::debug!("Ticking players");
+        log::trace!("Ticking players");
         // player ticks
         for player in players_to_tick {
             player.tick(server).await;
@@ -587,7 +587,7 @@ impl World {
 
         let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
 
-        log::debug!("Ticking entities");
+        log::trace!("Ticking entities");
         // Entity ticks
         for entity in entities_to_tick {
             entity.tick(entity.clone(), server).await;
@@ -607,7 +607,7 @@ impl World {
             }
         }
 
-        log::debug!(
+        log::trace!(
             "Ticking world took {:?}, loaded chunks: {}, chunk tick took {:?}",
             start.elapsed(),
             self.level.loaded_chunk_count(),
