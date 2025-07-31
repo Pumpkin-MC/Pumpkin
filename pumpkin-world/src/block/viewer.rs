@@ -60,11 +60,11 @@ impl ViewerCountTracker {
                 }
                 _ => {} // Ignore
             }
-        }
 
-        entity
-            .on_viewer_count_update(&world, position, old, current)
-            .await;
+            entity
+                .on_viewer_count_update(&world, position, old, current)
+                .await;
+        }
 
         // TODO: Requires players
     }
