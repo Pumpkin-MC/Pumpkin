@@ -1091,13 +1091,16 @@ impl EntityBase for Entity {
 }
 
 #[async_trait]
-pub trait NBTStorage: Send + Sync + Sized {
+pub trait NBTStorage: Send + Sync {
     async fn write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     async fn read_nbt(&mut self, _nbt: &mut NbtCompound) {}
 
     async fn read_nbt_non_mut(&self, _nbt: &mut NbtCompound) {}
+}
 
+#[async_trait]
+pub trait NBTStorageInit: Send + Sync + Sized {
     /// Creates an instance of the type from NBT data. If the NBT data is invalid or cannot be parsed, it returns `None`.
     async fn create_from_nbt(_nbt: &mut NbtCompound) -> Option<Self> {
         None

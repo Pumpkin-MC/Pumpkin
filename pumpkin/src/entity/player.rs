@@ -87,7 +87,7 @@ use super::combat::{self, AttackType, player_attack_sound};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
-use super::{Entity, EntityBase, NBTStorage};
+use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
@@ -1971,6 +1971,8 @@ impl NBTStorage for Player {
     }
 }
 
+impl NBTStorageInit for Player {}
+
 #[async_trait]
 impl NBTStorage for PlayerInventory {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
@@ -2023,6 +2025,8 @@ impl NBTStorage for PlayerInventory {
         }
     }
 }
+
+impl NBTStorageInit for PlayerInventory {}
 
 #[async_trait]
 impl EntityBase for Player {
@@ -2133,7 +2137,7 @@ pub struct Abilities {
 
 #[async_trait]
 impl NBTStorage for Abilities {
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
         let mut component = NbtCompound::new();
         component.put_bool("invulnerable", self.invulnerable);
         component.put_bool("flying", self.flying);
@@ -2145,7 +2149,7 @@ impl NBTStorage for Abilities {
         nbt.put_component("abilities", component);
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         if let Some(component) = nbt.get_compound("abilities") {
             self.invulnerable = component.get_bool("invulnerable").unwrap_or(false);
             self.flying = component.get_bool("flying").unwrap_or(false);
@@ -2157,6 +2161,8 @@ impl NBTStorage for Abilities {
         }
     }
 }
+
+impl NBTStorageInit for Abilities {}
 
 impl Default for Abilities {
     fn default() -> Self {
