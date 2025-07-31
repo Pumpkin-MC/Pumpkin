@@ -123,10 +123,10 @@ impl WorldGenerator for VanillaGenerator {
         }
         ChunkData {
             light_engine: ChunkLight {
-                sky_light: (0..sections.sections.len() + 2)
+                sky_light: (0..sections.sections.len())
                     .map(|_| LightContainer::new_filled(15))
                     .collect(),
-                block_light: (0..sections.sections.len() + 2)
+                block_light: (0..sections.sections.len())
                     .map(|_| LightContainer::new_empty(15))
                     .collect(),
             },

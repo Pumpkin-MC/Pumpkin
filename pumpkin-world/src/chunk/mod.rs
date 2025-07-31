@@ -513,15 +513,12 @@ impl ChunkData {
     }
 
     pub fn get_highest_non_empty_subchunk(&self) -> usize {
-        let idx = self
-            .section
-            .sections
-            .iter()
-            .rev()
-            .position(|sub_chunk| sub_chunk.block_states.non_air_block_count() != 0)
-            .map(|idx| (self.section.sections.len() - idx).saturating_sub(1));
-
-        idx.unwrap_or_default()
+        for (i, sub_chunk) in self.section.sections.iter().enumerate().rev() {
+            if sub_chunk.block_states.non_air_block_count() != 0 {
+                return i;
+            }
+        }
+        return 0;
     }
 }
 

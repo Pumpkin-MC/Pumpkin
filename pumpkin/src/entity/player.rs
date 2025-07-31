@@ -12,6 +12,7 @@ use crossbeam::atomic::AtomicCell;
 use log::warn;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
+use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
@@ -301,7 +302,7 @@ impl Player {
         let living_entity = LivingEntity::new(Entity::new(
             player_uuid,
             world,
-            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(0.0, 100.0, 0.0),
             EntityType::PLAYER,
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
         ));
@@ -336,7 +337,7 @@ impl Player {
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: AtomicCell::new(None),
             sleeping_since: AtomicCell::new(None),
-            // We want this to be an impossible watched section so that `player_chunker::update_position`
+            // We want this to be an impossible watched section so that `chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
             watched_section: AtomicCell::new(Cylindrical::new(
@@ -1512,13 +1513,33 @@ impl Player {
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {
-        self.send_system_message_raw(text, false).await;
+        match &self.client {
+            ClientPlatform::Java(client) => {
+                client
+                    .enqueue_packet(&CSystemChatMessage::new(&text, false))
+                    .await
+            }
+            ClientPlatform::Bedrock(client) => {
+                client
+                    .send_game_packet(&SText::system_message(text.clone().get_text()))
+                    .await
+            }
+        };
     }
 
     pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
-        self.client
-            .enqueue_packet(&CSystemChatMessage::new(text, overlay))
-            .await;
+        match &self.client {
+            ClientPlatform::Java(client) => {
+                client
+                    .enqueue_packet(&CSystemChatMessage::new(&text, overlay))
+                    .await
+            }
+            ClientPlatform::Bedrock(client) => {
+                client
+                    .send_game_packet(&SText::system_message(text.clone().get_text()))
+                    .await
+            }
+        };
     }
 
     pub async fn tick_experience(&self) {
@@ -1890,6 +1911,12 @@ impl Player {
                 .broadcast_packet_except(&[self.gameprofile.id], &packet)
                 .await;
         }
+    }
+}
+
+impl PartialEq for Player {
+    fn eq(&self, other: &Self) -> bool {
+        self.gameprofile.id == other.gameprofile.id
     }
 }
 

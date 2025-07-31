@@ -22,27 +22,33 @@ pub struct CLevelChunk<'a> {
 
 impl<'a> PacketWrite for CLevelChunk<'a> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        println!("level");
         VarInt(self.chunk.position.x).write(writer)?;
         VarInt(self.chunk.position.y).write(writer)?;
 
         VarInt(self.dimension).write(writer)?;
         let sub_chunk_count = self.chunk.section.sections.len() as u32;
+        assert_eq!(sub_chunk_count, 24);
         VarUInt(sub_chunk_count).write(writer)?;
         self.cache_enabled.write(writer)?;
 
         let mut chunk_data = Vec::new();
         let data_write = &mut chunk_data;
 
+        let min_y = (self.chunk.section.min_y / 16) as i8;
+
         // Blocks
-        for (i, sub_chunk) in self.chunk.section.sections.iter().enumerate() {
+        for i in 0..sub_chunk_count as usize {
+            let sub_chunk = &self.chunk.section.sections[(i + 4) % 24];
             // Version 9
             // [version:byte][num_storages:byte][sub_chunk_index:byte][block storage1]...[blockStorageN]
+            let y = i as i8 + min_y;
             let num_storages = 1;
-            data_write.write_all(&[VERSION, num_storages, ((i as i8) - 4) as u8])?;
+            data_write.write_all(&[VERSION, num_storages, y as _])?;
             let network_repr = sub_chunk.block_states.convert_be_network();
             (network_repr.bits_per_entry << 1 | 1).write(data_write)?;
 
-            for data in network_repr.packed_data.iter() {
+            for data in network_repr.packed_data {
                 data.write(data_write)?;
             }
 
@@ -63,7 +69,8 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
         // Biomes
         for i in 0..sub_chunk_count {
             let num_storages = 1;
-            data_write.write_all(&[VERSION, num_storages, ((i as i8) - 4) as u8])?;
+            let y = i as i8 + min_y;
+            data_write.write_all(&[VERSION, num_storages, y as _])?;
 
             for _ in 0..num_storages {
                 1u8.write(data_write)?;

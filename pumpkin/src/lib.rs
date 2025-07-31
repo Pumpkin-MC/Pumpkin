@@ -171,10 +171,6 @@ impl PumpkinServer {
     pub async fn new() -> Self {
         let server = Server::new().await;
 
-        for world in &*server.worlds.read().await {
-            world.level.read_spawn_chunks(&Server::spawn_chunks()).await;
-        }
-
         let rcon = advanced_config().networking.rcon.clone();
 
         let mut ticker = Ticker::new();

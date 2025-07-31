@@ -9,6 +9,7 @@ use pumpkin_protocol::{
             resource_pack_stack::CResourcePackStackPacket, resource_packs_info::CResourcePacksInfo,
             start_game::Experiments,
         },
+        frame_set::FrameSet,
         server::{login::SLogin, request_network_settings::SRequestNetworkSettings},
     },
     codec::var_uint::VarUInt,
@@ -77,29 +78,39 @@ impl BedrockClient {
         //    String::from_utf8_unchecked(general_purpose::URL_SAFE_NO_PAD.decode(raw_token[1]).unwrap())
         //};
 
-        // TODO: Batch these
-        self.send_game_packet(&CPlayStatus::LoginSuccess).await;
-        self.send_game_packet(&CResourcePacksInfo::new(
-            false,
-            false,
-            false,
-            false,
-            uuid::Uuid::default(),
-            String::new(),
-        ))
+        let mut frame_set = FrameSet::new();
+
+        self.write_game_packet_to_set(&CPlayStatus::LoginSuccess, &mut frame_set)
+            .await;
+        self.write_game_packet_to_set(
+            &CResourcePacksInfo::new(
+                false,
+                false,
+                false,
+                false,
+                uuid::Uuid::default(),
+                String::new(),
+            ),
+            &mut frame_set,
+        )
         .await;
-        self.send_game_packet(&CResourcePackStackPacket::new(
-            false,
-            VarUInt(0),
-            VarUInt(0),
-            CURRENT_BEDROCK_MC_VERSION.to_string(),
-            Experiments {
-                names_size: 0,
-                experiments_ever_toggled: false,
-            },
-            false,
-        ))
+        self.write_game_packet_to_set(
+            &CResourcePackStackPacket::new(
+                false,
+                VarUInt(0),
+                VarUInt(0),
+                CURRENT_BEDROCK_MC_VERSION.to_string(),
+                Experiments {
+                    names_size: 0,
+                    experiments_ever_toggled: false,
+                },
+                false,
+            ),
+            &mut frame_set,
+        )
         .await;
+
+        self.send_frame_set(frame_set, 0x84).await;
 
         if let Some((player, world)) = server
             .add_player(
