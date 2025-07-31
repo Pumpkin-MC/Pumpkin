@@ -357,6 +357,10 @@ impl LivingEntity {
             self.remove_effect(effect_type).await;
         }
     }
+
+    pub fn is_part_of_game(&self) -> bool {
+        self.is_spectator() && self.entity.is_alive()
+    }
 }
 
 impl LivingEntityTrait for LivingEntity {}
