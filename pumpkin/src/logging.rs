@@ -2,7 +2,7 @@ use flate2::write::GzEncoder;
 use log::{LevelFilter, Log, Record};
 use rustyline_async::Readline;
 use simplelog::{CombinedLogger, Config, SharedLogger, WriteLogger};
-use std::fmt::{Arguments, format};
+use std::fmt::format;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
