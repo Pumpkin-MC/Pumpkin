@@ -518,7 +518,7 @@ impl ChunkData {
                 return i;
             }
         }
-        return 0;
+        0
     }
 }
 

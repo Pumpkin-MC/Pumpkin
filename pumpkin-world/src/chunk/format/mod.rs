@@ -140,7 +140,7 @@ impl ChunkData {
                 .map(|x| {
                     x.block_light
                         .clone()
-                        .map(|y| LightContainer::new(y))
+                        .map(LightContainer::new)
                         .unwrap_or_default()
                 })
                 .collect(),
@@ -150,7 +150,7 @@ impl ChunkData {
                 .map(|x| {
                     x.sky_light
                         .clone()
-                        .map(|y| LightContainer::new(y))
+                        .map(LightContainer::new)
                         .unwrap_or_default()
                 })
                 .collect(),
@@ -159,7 +159,6 @@ impl ChunkData {
         let sub_chunks = chunk_data
             .sections
             .into_iter()
-            .filter(|section| section.y >= chunk_data.min_y_section as i8)
             .map(|section| SubChunk {
                 block_states: section
                     .block_states
@@ -203,6 +202,7 @@ impl ChunkData {
             .iter()
             .enumerate()
             .map(|(i, section)| ChunkSectionNBT {
+                // negative number canot be shifted to divide them
                 y: (i as i8) + section_coords::block_to_section(self.section.min_y) as i8,
                 block_states: Some(section.block_states.to_disk_nbt()),
                 biomes: Some(section.biomes.to_disk_nbt()),

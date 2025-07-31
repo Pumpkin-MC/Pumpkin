@@ -22,7 +22,6 @@ pub struct CLevelChunk<'a> {
 
 impl<'a> PacketWrite for CLevelChunk<'a> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        println!("level");
         VarInt(self.chunk.position.x).write(writer)?;
         VarInt(self.chunk.position.y).write(writer)?;
 
@@ -35,11 +34,10 @@ impl<'a> PacketWrite for CLevelChunk<'a> {
         let mut chunk_data = Vec::new();
         let data_write = &mut chunk_data;
 
-        let min_y = (self.chunk.section.min_y / 16) as i8;
+        let min_y = (self.chunk.section.min_y >> 4) as i8;
 
         // Blocks
-        for i in 0..sub_chunk_count as usize {
-            let sub_chunk = &self.chunk.section.sections[(i + 4) % 24];
+        for (i, sub_chunk) in self.chunk.section.sections.iter().enumerate() {
             // Version 9
             // [version:byte][num_storages:byte][sub_chunk_index:byte][block storage1]...[blockStorageN]
             let y = i as i8 + min_y;

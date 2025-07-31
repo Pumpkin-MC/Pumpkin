@@ -78,7 +78,7 @@ impl BedrockClient {
         //    String::from_utf8_unchecked(general_purpose::URL_SAFE_NO_PAD.decode(raw_token[1]).unwrap())
         //};
 
-        let mut frame_set = FrameSet::new();
+        let mut frame_set = FrameSet::default();
 
         self.write_game_packet_to_set(&CPlayStatus::LoginSuccess, &mut frame_set)
             .await;

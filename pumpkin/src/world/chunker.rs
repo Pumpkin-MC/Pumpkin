@@ -23,10 +23,8 @@ pub async fn update_position(player: &Arc<Player>) {
 
     let old_cylindrical = player.watched_section.load();
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
-    println!("update");
 
     if old_cylindrical != new_cylindrical {
-        println!("not same");
         if let ClientPlatform::Java(client) = &player.client {
             client
                 .send_packet_now(&CCenterChunk {
@@ -79,10 +77,6 @@ pub async fn update_position(player: &Arc<Player>) {
                 loading_chunks,
                 new_chunk_center,
             );
-        }
-    } else {
-        if old_cylindrical.view_distance != new_cylindrical.view_distance {
-            panic!()
         }
     }
 }

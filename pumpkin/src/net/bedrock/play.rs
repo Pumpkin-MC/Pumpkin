@@ -50,8 +50,6 @@ impl BedrockClient {
             return;
         }
 
-        println!("new radius: {}", chunk_radius.0);
-
         self.send_game_packet(&CChunkRadiusUpdate { chunk_radius })
             .await;
 

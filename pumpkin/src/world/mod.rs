@@ -852,7 +852,7 @@ impl World {
             })
             .await;
 
-        let mut frame_set = FrameSet::new();
+        let mut frame_set = FrameSet::default();
         client
             .write_game_packet_to_set(
                 &CChunkRadiusUpdate {
@@ -1394,7 +1394,6 @@ impl World {
     ) {
         if player.client.closed() {
             log::info!("The connection has closed before world chunks were spawned");
-            println!("The connection has closed before world chunks were spawned");
             return;
         }
         #[cfg(debug_assertions)]
@@ -1415,12 +1414,10 @@ impl World {
         let player1 = player.clone();
 
         player.clone().spawn_task(async move {
-            println!("start chunk");
             'main: loop {
                 let recv_result = tokio::select! {
                     () = player.client.await_close_interrupt() => {
                         log::debug!("Canceling player packet processing");
-                        println!("Canceling player packet processing");
                         None
                     },
                     recv_result = receiver.recv() => {
@@ -1488,7 +1485,6 @@ impl World {
                     }};
                 }
             }
-            println!("end chunk");
 
             #[cfg(debug_assertions)]
             log::debug!("Chunks queued after {}ms", inst.elapsed().as_millis());
