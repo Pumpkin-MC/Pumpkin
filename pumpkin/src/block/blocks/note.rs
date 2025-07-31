@@ -1,8 +1,8 @@
-use crate::block::pumpkin_block::{
+use crate::block::registry::BlockActionResult;
+use crate::block::{
     GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
     UseWithItemArgs,
 };
-use crate::block::registry::BlockActionResult;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::Axis;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -18,7 +18,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
-    block::pumpkin_block::{OnSyncedBlockEventArgs, PumpkinBlock},
+    block::{BlockBehaviour, OnSyncedBlockEventArgs},
     world::World,
 };
 
@@ -62,7 +62,7 @@ impl NoteBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for NoteBlock {
+impl BlockBehaviour for NoteBlock {
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         let block_state = args.world.get_block_state(args.position).await;
         let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);

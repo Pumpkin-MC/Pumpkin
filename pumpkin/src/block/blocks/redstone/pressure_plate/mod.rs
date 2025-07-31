@@ -5,7 +5,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{
-    block::pumpkin_block::{OnEntityCollisionArgs, OnScheduledTickArgs, OnStateReplacedArgs},
+    block::{OnEntityCollisionArgs, OnScheduledTickArgs, OnStateReplacedArgs},
     world::World,
 };
 

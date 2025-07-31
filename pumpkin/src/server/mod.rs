@@ -20,7 +20,6 @@ use pumpkin_protocol::java::client::play::CChangeDifficulty;
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_registry::{Registry, VanillaDimensionType};
 use pumpkin_util::Difficulty;
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
 use pumpkin_world::lock::LevelLocker;
@@ -107,13 +106,14 @@ pub struct Server {
 
 impl Server {
     #[allow(clippy::new_without_default)]
+    #[allow(clippy::too_many_lines)]
     #[must_use]
-    pub async fn new() -> Self {
+    pub async fn new() -> Arc<Self> {
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = RwLock::new(default_dispatcher().await);
         let world_path = BASIC_CONFIG.get_world_path();
 
-        let block_registry = super::block::default_registry();
+        let block_registry = super::block::registry::default_registry();
 
         let level_info = AnvilLevelInfo.read_world_info(&world_path);
         if let Err(error) = &level_info {
@@ -136,50 +136,24 @@ impl Server {
                 fs::copy(dat_path, backup_path).unwrap();
             }
         }
-
-        let level_info = match level_info {
-            Ok(level_info) => level_info,
-            Err(err) => {
-                log::warn!("Failed to get level_info, using default instead: {err}");
-                LevelData::default()
-            }
-        };
-
-        let seed = level_info.world_gen_settings.seed;
-        log::info!("Loading Overworld: {seed}");
-
-        let level_info = Arc::new(RwLock::new(level_info));
-        let overworld = World::load(
-            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
-            Arc::clone(&level_info),
-            VanillaDimensionType::Overworld,
-            Arc::clone(&block_registry),
-        );
-        log::info!("Loading Nether");
-        let nether = World::load(
-            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
-            Arc::clone(&level_info),
-            VanillaDimensionType::TheNether,
-            Arc::clone(&block_registry),
-        );
-        log::info!("Loading End");
-        let end = World::load(
-            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
-            Arc::clone(&level_info),
-            VanillaDimensionType::TheEnd,
-            Arc::clone(&block_registry),
-        );
-
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
         let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
 
         let world_name = world_path.to_str().unwrap();
 
-        Self {
+        let level_info = level_info.unwrap_or_else(|err| {
+            log::warn!("Failed to get level_info, using default instead: {err}");
+            LevelData::default()
+        });
+
+        let seed = level_info.world_gen_settings.seed;
+        let level_info = Arc::new(RwLock::new(level_info));
+
+        let server = Self {
             cached_registry: Registry::get_synced(),
             container_id: 0.into(),
-            worlds: RwLock::new(vec![Arc::new(overworld), Arc::new(nether), Arc::new(end)]),
+            worlds: RwLock::new(vec![]),
             dimensions: vec![
                 VanillaDimensionType::Overworld,
                 VanillaDimensionType::OverworldCaves,
@@ -187,7 +161,7 @@ impl Server {
                 VanillaDimensionType::TheEnd,
             ],
             command_dispatcher,
-            block_registry,
+            block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: KeyStore::new(),
             listing: Mutex::new(CachedStatus::new()),
@@ -209,21 +183,42 @@ impl Server {
             server_guid: rand::random(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
-            level_info,
+            level_info: level_info.clone(),
             _locker: Arc::new(locker),
-        }
-    }
+        };
 
-    const SPAWN_CHUNK_RADIUS: i32 = 1;
-
-    #[must_use]
-    pub fn spawn_chunks() -> Box<[Vector2<i32>]> {
-        (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS)
-            .flat_map(|x| {
-                (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS)
-                    .map(move |z| Vector2::new(x, z))
-            })
-            .collect()
+        let server = Arc::new(server);
+        let weak = Arc::downgrade(&server);
+        log::info!("Loading Overworld: {seed}");
+        let overworld = World::load(
+            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::Overworld,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        log::info!("Loading Nether: {seed}");
+        let nether = World::load(
+            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::TheNether,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        log::info!("Loading End: {seed}");
+        let end = World::load(
+            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::TheEnd,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        *server
+            .worlds
+            .try_write()
+            .expect("Nothing should hold a lock of worlds before server startup") =
+            vec![overworld.into(), nether.into(), end.into()];
+        server
     }
 
     /// Spawns a task associated with this server. All tasks spawned with this method are awaited

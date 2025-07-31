@@ -19,7 +19,7 @@ impl BlockMetadata for ShortPlantBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for ShortPlantBlock {
+impl BlockBehaviour for ShortPlantBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }

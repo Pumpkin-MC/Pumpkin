@@ -1,7 +1,7 @@
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
@@ -23,7 +23,7 @@ impl ItemMetadata for HoeItem {
 }
 
 #[async_trait]
-impl PumpkinItem for HoeItem {
+impl ItemBehaviour for HoeItem {
     async fn use_on_block(
         &self,
         _item: &Item,
@@ -85,7 +85,7 @@ impl PumpkinItem for HoeItem {
                     Uuid::new_v4(),
                     world.clone(),
                     location,
-                    EntityType::SNOWBALL,
+                    &EntityType::SNOWBALL,
                     false,
                 );
                 // TODO: Merge stacks together

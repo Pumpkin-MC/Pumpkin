@@ -31,7 +31,7 @@ impl BlockEntity for DropperBlockEntity {
     {
         let dropper = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
         };
 
@@ -66,18 +66,18 @@ impl DropperBlockEntity {
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
         }
     }
     pub async fn get_random_slot(&self) -> Option<MutexGuard<ItemStack>> {
         // this.unpackLootTable(null);
         let mut ret = None;
-        let mut j = 0;
+        let mut j = 1;
         for i in &self.items {
             let item = i.lock().await;
             if !item.is_empty() {
-                if rng().random_range(0..=j) == 0 {
+                if rng().random_range(0..j) == 0 {
                     ret = Some(item);
                 }
                 j += 1;
@@ -108,7 +108,7 @@ impl Inventory for DropperBlockEntity {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY;
+        let mut removed = ItemStack::EMPTY.clone();
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -135,7 +135,7 @@ impl Inventory for DropperBlockEntity {
 impl Clearable for DropperBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY;
+            *slot.lock().await = ItemStack::EMPTY.clone();
         }
     }
 }

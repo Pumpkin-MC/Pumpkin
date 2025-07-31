@@ -1,6 +1,73 @@
-use crate::block::pumpkin_block::{
-    BlockHitResult, BlockMetadata, OnEntityCollisionArgs, PumpkinBlock,
-};
+use crate::block::blocks::anvil::AnvilBlock;
+use crate::block::blocks::bamboo::BambooBlock;
+use crate::block::blocks::barrel::BarrelBlock;
+use crate::block::blocks::bed::BedBlock;
+use crate::block::blocks::cactus::CactusBlock;
+use crate::block::blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
+use crate::block::blocks::chests::ChestBlock;
+use crate::block::blocks::command::CommandBlock;
+use crate::block::blocks::composter::ComposterBlock;
+use crate::block::blocks::dirt_path::DirtPathBlock;
+use crate::block::blocks::doors::DoorBlock;
+use crate::block::blocks::end_portal::EndPortalBlock;
+use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
+use crate::block::blocks::farmland::FarmLandBlock;
+use crate::block::blocks::fence_gates::FenceGateBlock;
+use crate::block::blocks::fences::FenceBlock;
+use crate::block::blocks::fire::fire::FireBlock;
+use crate::block::blocks::fire::soul_fire::SoulFireBlock;
+use crate::block::blocks::furnace::FurnaceBlock;
+use crate::block::blocks::glass_panes::GlassPaneBlock;
+use crate::block::blocks::grindstone::GrindstoneBlock;
+use crate::block::blocks::iron_bars::IronBarsBlock;
+use crate::block::blocks::logs::LogBlock;
+use crate::block::blocks::nether_portal::NetherPortalBlock;
+use crate::block::blocks::note::NoteBlock;
+use crate::block::blocks::piston::piston::PistonBlock;
+use crate::block::blocks::piston::piston_extension::PistonExtensionBlock;
+use crate::block::blocks::piston::piston_head::PistonHeadBlock;
+use crate::block::blocks::plant::bush::BushBlock;
+use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
+use crate::block::blocks::plant::flower::FlowerBlock;
+use crate::block::blocks::plant::flowerbed::FlowerbedBlock;
+use crate::block::blocks::plant::leaf_litter::LeafLitterBlock;
+use crate::block::blocks::plant::lily_pad::LilyPadBlock;
+use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
+use crate::block::blocks::plant::sapling::SaplingBlock;
+use crate::block::blocks::plant::short_plant::ShortPlantBlock;
+use crate::block::blocks::plant::tall_plant::TallPlantBlock;
+use crate::block::blocks::pumpkin::PumpkinBlock;
+use crate::block::blocks::redstone::buttons::ButtonBlock;
+use crate::block::blocks::redstone::comparator::ComparatorBlock;
+use crate::block::blocks::redstone::copper_bulb::CopperBulbBlock;
+use crate::block::blocks::redstone::lever::LeverBlock;
+use crate::block::blocks::redstone::observer::ObserverBlock;
+use crate::block::blocks::redstone::pressure_plate::plate::PressurePlateBlock;
+use crate::block::blocks::redstone::pressure_plate::weighted::WeightedPressurePlateBlock;
+use crate::block::blocks::redstone::rails::activator_rail::ActivatorRailBlock;
+use crate::block::blocks::redstone::rails::detector_rail::DetectorRailBlock;
+use crate::block::blocks::redstone::rails::powered_rail::PoweredRailBlock;
+use crate::block::blocks::redstone::rails::rail::RailBlock;
+use crate::block::blocks::redstone::redstone_block::RedstoneBlock;
+use crate::block::blocks::redstone::redstone_lamp::RedstoneLamp;
+use crate::block::blocks::redstone::redstone_torch::RedstoneTorchBlock;
+use crate::block::blocks::redstone::redstone_wire::RedstoneWireBlock;
+use crate::block::blocks::redstone::repeater::RepeaterBlock;
+use crate::block::blocks::redstone::target_block::TargetBlock;
+use crate::block::blocks::redstone::tripwire::TripwireBlock;
+use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
+use crate::block::blocks::signs::SignBlock;
+use crate::block::blocks::slabs::SlabBlock;
+use crate::block::blocks::stairs::StairBlock;
+use crate::block::blocks::sugar_cane::SugarCaneBlock;
+use crate::block::blocks::tnt::TNTBlock;
+use crate::block::blocks::torches::TorchBlock;
+use crate::block::blocks::trapdoor::TrapDoorBlock;
+use crate::block::blocks::vine::VineBlock;
+use crate::block::blocks::walls::WallBlock;
+use crate::block::fluid::lava::FlowingLava;
+use crate::block::fluid::water::FlowingWater;
+use crate::block::{BlockBehaviour, BlockHitResult, BlockMetadata, OnEntityCollisionArgs};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -19,14 +86,168 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::block::blocks::banners::BannerBlock;
+use crate::block::blocks::cake::CakeBlock;
+use crate::block::blocks::campfire::CampfireBlock;
+use crate::block::blocks::candle_cakes::CandleCakeBlock;
+use crate::block::blocks::candles::CandleBlock;
+use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
+use crate::block::blocks::flower_pots::FlowerPotBlock;
+use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
+use crate::block::blocks::plant::crop::beetroot::BeetrootBlock;
+use crate::block::blocks::plant::crop::carrot::CarrotBlock;
+use crate::block::blocks::plant::crop::potatoes::PotatoBlock;
+use crate::block::blocks::plant::crop::torch_flower::TorchFlowerBlock;
+use crate::block::blocks::plant::crop::wheat::WheatBlock;
+use crate::block::blocks::plant::nether_wart::NetherWartBlock;
+use crate::block::blocks::plant::roots::RootsBlock;
+use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
+use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
+use crate::block::blocks::redstone::dispenser::DispenserBlock;
+use crate::block::blocks::redstone::dropper::DropperBlock;
+
 use super::BlockIsReplacing;
-use super::pumpkin_block::{
+use super::blocks::plant::gourds::attached_stem::AttachedStemBlock;
+use super::blocks::plant::gourds::stem::StemBlock;
+use super::fluid::FluidBehaviour;
+use super::{
     BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs, EmitsRedstonePowerArgs, ExplodeArgs,
     GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
     OnPlaceArgs, OnStateReplacedArgs, OnSyncedBlockEventArgs, PlacedArgs, PlayerPlacedArgs,
     PrepareArgs, UseWithItemArgs,
 };
-use super::pumpkin_fluid::PumpkinFluid;
+use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
+use crate::block::blocks::crafting_table::CraftingTableBlock;
+use crate::block::blocks::ender_chest::EnderChestBlock;
+use crate::block::blocks::hopper::HopperBlock;
+use crate::block::blocks::jukebox::JukeboxBlock;
+use crate::block::blocks::ladder::LadderBlock;
+use crate::block::blocks::lectern::LecternBlock;
+use crate::block::blocks::shulker_box::ShulkerBoxBlock;
+use crate::block::blocks::skull_block::SkullBlock;
+use crate::block::blocks::smoker::SmokerBlock;
+
+#[must_use]
+#[allow(clippy::too_many_lines)]
+pub fn default_registry() -> Arc<BlockRegistry> {
+    let mut manager = BlockRegistry::default();
+
+    // Blocks
+    manager.register(AnvilBlock);
+    manager.register(BedBlock);
+    manager.register(SaplingBlock);
+    manager.register(CactusBlock);
+    manager.register(CarpetBlock);
+    manager.register(CampfireBlock);
+    manager.register(MossCarpetBlock);
+    manager.register(PaleMossCarpetBlock);
+    manager.register(ChestBlock);
+    manager.register(EnderChestBlock);
+    manager.register(CraftingTableBlock);
+    manager.register(DirtPathBlock);
+    manager.register(DoorBlock);
+    manager.register(FarmLandBlock);
+    manager.register(FenceGateBlock);
+    manager.register(FenceBlock);
+    manager.register(FlowerPotBlock);
+    manager.register(FurnaceBlock);
+    manager.register(BlastFurnaceBlock);
+    manager.register(SmokerBlock);
+    manager.register(GlassPaneBlock);
+    manager.register(GlazedTerracottaBlock);
+    manager.register(GrindstoneBlock);
+    manager.register(IronBarsBlock);
+    manager.register(JukeboxBlock);
+    manager.register(LogBlock);
+    manager.register(BambooBlock);
+    manager.register(BannerBlock);
+    manager.register(SignBlock);
+    manager.register(SlabBlock);
+    manager.register(StairBlock);
+    manager.register(ShortPlantBlock);
+    manager.register(DryVegetationBlock);
+    manager.register(LilyPadBlock);
+    manager.register(SugarCaneBlock);
+    manager.register(VineBlock);
+    manager.register(TNTBlock);
+    manager.register(BushBlock);
+    manager.register(FlowerBlock);
+    manager.register(PotatoBlock);
+    manager.register(BeetrootBlock);
+    manager.register(TorchFlowerBlock);
+    manager.register(CarrotBlock);
+    manager.register(SeaGrassBlock);
+    manager.register(NetherWartBlock);
+    manager.register(WheatBlock);
+    manager.register(TorchBlock);
+    manager.register(TrapDoorBlock);
+    manager.register(MushroomPlantBlock);
+    manager.register(FlowerbedBlock);
+    manager.register(LeafLitterBlock);
+    manager.register(WallBlock);
+    manager.register(RootsBlock);
+    manager.register(NetherPortalBlock);
+    manager.register(TallPlantBlock);
+    manager.register(NoteBlock);
+    manager.register(PumpkinBlock);
+    manager.register(CommandBlock);
+    manager.register(ComposterBlock);
+    manager.register(PressurePlateBlock);
+    manager.register(WeightedPressurePlateBlock);
+    manager.register(EndPortalBlock);
+    manager.register(EndPortalFrameBlock);
+    manager.register(CandleBlock);
+    manager.register(SeaPickleBlock);
+    manager.register(CakeBlock);
+    manager.register(CandleCakeBlock);
+    manager.register(SkullBlock);
+    manager.register(ChiseledBookshelfBlock);
+    manager.register(LecternBlock);
+    manager.register(StemBlock);
+    manager.register(AttachedStemBlock);
+
+    // Fire
+    manager.register(SoulFireBlock);
+    manager.register(FireBlock);
+
+    // Redstone
+    manager.register(ButtonBlock);
+    manager.register(LeverBlock);
+    manager.register(ObserverBlock);
+    manager.register(TripwireBlock);
+    manager.register(TripwireHookBlock);
+
+    // Piston
+    manager.register(PistonBlock);
+    manager.register(PistonExtensionBlock);
+    manager.register(PistonHeadBlock);
+
+    manager.register(RedstoneBlock);
+    manager.register(RedstoneLamp);
+    manager.register(CopperBulbBlock);
+    manager.register(RedstoneTorchBlock);
+    manager.register(RedstoneWireBlock);
+    manager.register(RepeaterBlock);
+    manager.register(ComparatorBlock);
+    manager.register(TargetBlock);
+    manager.register(BarrelBlock);
+    manager.register(HopperBlock);
+    manager.register(ShulkerBoxBlock);
+    manager.register(DropperBlock);
+    manager.register(DispenserBlock);
+    manager.register(LadderBlock);
+
+    // Rails
+    manager.register(RailBlock);
+    manager.register(ActivatorRailBlock);
+    manager.register(DetectorRailBlock);
+    manager.register(PoweredRailBlock);
+
+    // Fluids
+    manager.register_fluid(FlowingWater);
+    manager.register_fluid(FlowingLava);
+    Arc::new(manager)
+}
 
 // ActionResult.java
 pub enum BlockActionResult {
@@ -53,8 +274,8 @@ impl BlockActionResult {
 
 #[derive(Default)]
 pub struct BlockRegistry {
-    blocks: HashMap<&'static Block, Arc<dyn PumpkinBlock>>,
-    fluids: HashMap<&'static Fluid, Arc<dyn PumpkinFluid>>,
+    blocks: HashMap<&'static Block, Arc<dyn BlockBehaviour>>,
+    fluids: HashMap<&'static Fluid, Arc<dyn FluidBehaviour>>,
 }
 
 #[async_trait]
@@ -83,7 +304,7 @@ impl BlockRegistryExt for BlockRegistry {
 }
 
 impl BlockRegistry {
-    pub fn register<T: PumpkinBlock + BlockMetadata + 'static>(&mut self, block: T) {
+    pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {
         let names = block.names();
         let val = Arc::new(block);
         self.blocks.reserve(names.len());
@@ -93,7 +314,7 @@ impl BlockRegistry {
         }
     }
 
-    pub fn register_fluid<T: PumpkinFluid + BlockMetadata + 'static>(&mut self, fluid: T) {
+    pub fn register_fluid<T: FluidBehaviour + BlockMetadata + 'static>(&mut self, fluid: T) {
         let names = fluid.names();
         let val = Arc::new(fluid);
         self.fluids.reserve(names.len());
@@ -562,12 +783,12 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_block(&self, block: &Block) -> Option<&Arc<dyn PumpkinBlock>> {
+    pub fn get_pumpkin_block(&self, block: &Block) -> Option<&Arc<dyn BlockBehaviour>> {
         self.blocks.get(block)
     }
 
     #[must_use]
-    pub fn get_pumpkin_fluid(&self, fluid: &Fluid) -> Option<&Arc<dyn PumpkinFluid>> {
+    pub fn get_pumpkin_fluid(&self, fluid: &Fluid) -> Option<&Arc<dyn FluidBehaviour>> {
         self.fluids.get(fluid)
     }
 

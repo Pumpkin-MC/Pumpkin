@@ -1,5 +1,5 @@
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
@@ -17,7 +17,7 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
 use crate::world::World;
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 type FenceLikeProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
@@ -27,7 +27,7 @@ type WallProperties = pumpkin_data::block_properties::ResinBrickWallLikeProperti
 pub struct WallBlock;
 
 #[async_trait]
-impl PumpkinBlock for WallBlock {
+impl BlockBehaviour for WallBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut wall_props = WallProperties::default(args.block);
         wall_props.waterlogged = args.replacing.water_source();

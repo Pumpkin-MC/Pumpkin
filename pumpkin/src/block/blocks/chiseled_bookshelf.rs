@@ -1,5 +1,16 @@
 use std::sync::{Arc, atomic::Ordering};
 
+use crate::{
+    block::{
+        registry::BlockActionResult,
+        {
+            BlockBehaviour, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
+            PlacedArgs, UseWithItemArgs,
+        },
+    },
+    entity::{EntityBase, player::Player},
+    world::World,
+};
 use async_trait::async_trait;
 use pumpkin_data::{
     block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
@@ -17,23 +28,11 @@ use pumpkin_world::{
 };
 use tokio::sync::Mutex;
 
-use crate::{
-    block::{
-        pumpkin_block::{
-            BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
-            OnStateReplacedArgs, PlacedArgs, PumpkinBlock, UseWithItemArgs,
-        },
-        registry::BlockActionResult,
-    },
-    entity::{EntityBase, player::Player},
-    world::World,
-};
-
 #[pumpkin_block("minecraft:chiseled_bookshelf")]
 pub struct ChiseledBookshelfBlock;
 
 #[async_trait]
-impl PumpkinBlock for ChiseledBookshelfBlock {
+impl BlockBehaviour for ChiseledBookshelfBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut properties = ChiseledBookshelfLikeProperties::default(args.block);
 
@@ -117,10 +116,6 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
         args.world.add_block_entity(Arc::new(block_entity)).await;
     }
 
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
-    }
-
     async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(block_entity) = block_entity
@@ -147,7 +142,7 @@ impl ChiseledBookshelfBlock {
         // TODO: Increment used stats for chiseled bookshelf on the player
 
         let mut item = item.lock().await;
-        let sound = if *item.get_item() == Item::ENCHANTED_BOOK {
+        let sound = if item.get_item() == &Item::ENCHANTED_BOOK {
             Sound::BlockChiseledBookshelfPickupEnchanted
         } else {
             Sound::BlockChiseledBookshelfPickup
@@ -176,7 +171,7 @@ impl ChiseledBookshelfBlock {
     ) {
         let mut stack = entity.remove_stack_specific(slot as usize, 1).await;
 
-        let sound = if *stack.get_item() == Item::ENCHANTED_BOOK {
+        let sound = if stack.get_item() == &Item::ENCHANTED_BOOK {
             Sound::BlockChiseledBookshelfPickupEnchanted
         } else {
             Sound::BlockChiseledBookshelfPickup

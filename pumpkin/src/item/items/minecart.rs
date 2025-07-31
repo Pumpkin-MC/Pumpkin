@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::entity::Entity;
 use crate::entity::player::Player;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
@@ -20,14 +20,14 @@ use uuid::Uuid;
 pub struct MinecartItem;
 
 impl MinecartItem {
-    fn item_to_entity(item: &Item) -> EntityType {
+    fn item_to_entity(item: &Item) -> &'static EntityType {
         match item.id {
-            val if val == Item::MINECART.id => EntityType::MINECART,
-            val if val == Item::TNT_MINECART.id => EntityType::TNT_MINECART,
-            val if val == Item::CHEST_MINECART.id => EntityType::CHEST_MINECART,
-            val if val == Item::HOPPER_MINECART.id => EntityType::HOPPER_MINECART,
-            val if val == Item::FURNACE_MINECART.id => EntityType::FURNACE_MINECART,
-            val if val == Item::COMMAND_BLOCK_MINECART.id => EntityType::COMMAND_BLOCK_MINECART,
+            val if val == Item::MINECART.id => &EntityType::MINECART,
+            val if val == Item::TNT_MINECART.id => &EntityType::TNT_MINECART,
+            val if val == Item::CHEST_MINECART.id => &EntityType::CHEST_MINECART,
+            val if val == Item::HOPPER_MINECART.id => &EntityType::HOPPER_MINECART,
+            val if val == Item::FURNACE_MINECART.id => &EntityType::FURNACE_MINECART,
+            val if val == Item::COMMAND_BLOCK_MINECART.id => &EntityType::COMMAND_BLOCK_MINECART,
             _ => unreachable!(),
         }
     }
@@ -48,7 +48,7 @@ impl ItemMetadata for MinecartItem {
 }
 
 #[async_trait]
-impl PumpkinItem for MinecartItem {
+impl ItemBehaviour for MinecartItem {
     async fn use_on_block(
         &self,
         item: &Item,

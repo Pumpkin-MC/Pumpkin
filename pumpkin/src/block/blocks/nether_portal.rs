@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{
-    GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, PumpkinBlock,
-};
+use crate::block::{BlockBehaviour, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs};
 use crate::entity::EntityBase;
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
@@ -23,8 +21,10 @@ impl NetherPortalBlock {
     async fn get_portal_time(world: &Arc<World>, entity: &dyn EntityBase) -> u32 {
         let entity_type = entity.get_entity().entity_type;
 
-        match entity_type {
-            EntityType::PLAYER => (world.get_player_by_id(entity.get_entity().entity_id).await)
+        match entity_type.id {
+            id if id == EntityType::PLAYER.id => (world
+                .get_player_by_id(entity.get_entity().entity_id)
+                .await)
                 .map_or(80, |player| match player.gamemode.load() {
                     GameMode::Creative => 0,
                     _ => 80,
@@ -35,7 +35,7 @@ impl NetherPortalBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for NetherPortalBlock {
+impl BlockBehaviour for NetherPortalBlock {
     async fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,

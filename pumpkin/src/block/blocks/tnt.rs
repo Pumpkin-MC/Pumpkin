@@ -1,15 +1,15 @@
+use pumpkin_data::item::Item;
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{
-    ExplodeArgs, OnNeighborUpdateArgs, PlacedArgs, PumpkinBlock, UseWithItemArgs,
-};
 use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, ExplodeArgs, OnNeighborUpdateArgs, PlacedArgs, UseWithItemArgs,
+};
 use crate::entity::Entity;
 use crate::entity::tnt::TNTEntity;
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -29,7 +29,7 @@ impl TNTBlock {
             Uuid::new_v4(),
             world.clone(),
             location.to_f64(),
-            EntityType::TNT,
+            &EntityType::TNT,
             false,
         );
         let pos = entity.pos.load();
@@ -52,7 +52,7 @@ const DEFAULT_FUSE: u32 = 80;
 const DEFAULT_POWER: f32 = 4.0;
 
 #[async_trait]
-impl PumpkinBlock for TNTBlock {
+impl BlockBehaviour for TNTBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let item = args.item_stack.lock().await.item;
         if item != &Item::FLINT_AND_STEEL || item == &Item::FIRE_CHARGE {
@@ -81,7 +81,7 @@ impl PumpkinBlock for TNTBlock {
             Uuid::new_v4(),
             args.world.clone(),
             args.position.to_f64(),
-            EntityType::TNT,
+            &EntityType::TNT,
             false,
         );
         let angle = rand::random::<f64>() * std::f64::consts::TAU;

@@ -1,0 +1,472 @@
+{
+  "potion_types": [
+    [
+      "minecraft:potion"
+    ],
+    [
+      "minecraft:splash_potion"
+    ],
+    [
+      "minecraft:lingering_potion"
+    ]
+  ],
+  "potion_recipes": [
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:glowstone_dust"
+      ],
+      "to": "minecraft:thick"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:nether_wart"
+      ],
+      "to": "minecraft:awkward"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:breeze_rod"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:breeze_rod"
+      ],
+      "to": "minecraft:wind_charged"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:slime_block"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:slime_block"
+      ],
+      "to": "minecraft:oozing"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:stone"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:stone"
+      ],
+      "to": "minecraft:infested"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:cobweb"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:cobweb"
+      ],
+      "to": "minecraft:weaving"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:golden_carrot"
+      ],
+      "to": "minecraft:night_vision"
+    },
+    {
+      "from": "minecraft:night_vision",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_night_vision"
+    },
+    {
+      "from": "minecraft:night_vision",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:invisibility"
+    },
+    {
+      "from": "minecraft:long_night_vision",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:long_invisibility"
+    },
+    {
+      "from": "minecraft:invisibility",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_invisibility"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:magma_cream"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:magma_cream"
+      ],
+      "to": "minecraft:fire_resistance"
+    },
+    {
+      "from": "minecraft:fire_resistance",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_fire_resistance"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:rabbit_foot"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:rabbit_foot"
+      ],
+      "to": "minecraft:leaping"
+    },
+    {
+      "from": "minecraft:leaping",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_leaping"
+    },
+    {
+      "from": "minecraft:leaping",
+      "ingredient": [
+        "minecraft:glowstone_dust"
+      ],
+      "to": "minecraft:strong_leaping"
+    },
+    {
+      "from": "minecraft:leaping",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:slowness"
+    },
+    {
+      "from": "minecraft:long_leaping",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:long_slowness"
+    },
+    {
+      "from": "minecraft:slowness",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_slowness"
+    },
+    {
+      "from": "minecraft:slowness",
+      "ingredient": [
+        "minecraft:glowstone_dust"
+      ],
+      "to": "minecraft:strong_slowness"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:turtle_helmet"
+      ],
+      "to": "minecraft:turtle_master"
+    },
+    {
+      "from": "minecraft:turtle_master",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_turtle_master"
+    },
+    {
+      "from": "minecraft:turtle_master",
+      "ingredient": [
+        "minecraft:glowstone_dust"
+      ],
+      "to": "minecraft:strong_turtle_master"
+    },
+    {
+      "from": "minecraft:swiftness",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:slowness"
+    },
+    {
+      "from": "minecraft:long_swiftness",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:long_slowness"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:sugar"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:sugar"
+      ],
+      "to": "minecraft:swiftness"
+    },
+    {
+      "from": "minecraft:swiftness",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_swiftness"
+    },
+    {
+      "from": "minecraft:swiftness",
+      "ingredient": [
+        "minecraft:glowstone_dust"
+      ],
+      "to": "minecraft:strong_swiftness"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:pufferfish"
+      ],
+      "to": "minecraft:water_breathing"
+    },
+    {
+      "from": "minecraft:water_breathing",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_water_breathing"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:glistering_melon_slice"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:glistering_melon_slice"
+      ],
+      "to": "minecraft:healing"
+    },
+    {
+      "from": "minecraft:healing",
+      "ingredient": [
+        "minecraft:glowstone_dust"
+      ],
+      "to": "minecraft:strong_healing"
+    },
+    {
+      "from": "minecraft:healing",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:harming"
+    },
+    {
+      "from": "minecraft:strong_healing",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:strong_harming"
+    },
+    {
+      "from": "minecraft:harming",
+      "ingredient": [
+        "minecraft:glowstone_dust"
+      ],
+      "to": "minecraft:strong_harming"
+    },
+    {
+      "from": "minecraft:poison",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:harming"
+    },
+    {
+      "from": "minecraft:long_poison",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:harming"
+    },
+    {
+      "from": "minecraft:strong_poison",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:strong_harming"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:spider_eye"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:spider_eye"
+      ],
+      "to": "minecraft:poison"
+    },
+    {
+      "from": "minecraft:poison",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_poison"
+    },
+    {
+      "from": "minecraft:poison",
+      "ingredient": [
+        "minecraft:glowstone_dust"
+      ],
+      "to": "minecraft:strong_poison"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:ghast_tear"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:ghast_tear"
+      ],
+      "to": "minecraft:regeneration"
+    },
+    {
+      "from": "minecraft:regeneration",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_regeneration"
+    },
+    {
+      "from": "minecraft:regeneration",
+      "ingredient": [
+        "minecraft:glowstone_dust"
+      ],
+      "to": "minecraft:strong_regeneration"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:blaze_powder"
+      ],
+      "to": "minecraft:mundane"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:blaze_powder"
+      ],
+      "to": "minecraft:strength"
+    },
+    {
+      "from": "minecraft:strength",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_strength"
+    },
+    {
+      "from": "minecraft:strength",
+      "ingredient": [
+        "minecraft:glowstone_dust"
+      ],
+      "to": "minecraft:strong_strength"
+    },
+    {
+      "from": "minecraft:water",
+      "ingredient": [
+        "minecraft:fermented_spider_eye"
+      ],
+      "to": "minecraft:weakness"
+    },
+    {
+      "from": "minecraft:weakness",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_weakness"
+    },
+    {
+      "from": "minecraft:awkward",
+      "ingredient": [
+        "minecraft:phantom_membrane"
+      ],
+      "to": "minecraft:slow_falling"
+    },
+    {
+      "from": "minecraft:slow_falling",
+      "ingredient": [
+        "minecraft:redstone"
+      ],
+      "to": "minecraft:long_slow_falling"
+    }
+  ],
+  "item_recipes": [
+    {
+      "from": "minecraft:potion",
+      "ingredient": [
+        "minecraft:gunpowder"
+      ],
+      "to": "minecraft:splash_potion"
+    },
+    {
+      "from": "minecraft:splash_potion",
+      "ingredient": [
+        "minecraft:dragon_breath"
+      ],
+      "to": "minecraft:lingering_potion"
+    }
+  ]
+}

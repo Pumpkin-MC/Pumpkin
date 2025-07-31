@@ -9,6 +9,7 @@ use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::argument;
 use crate::command::{CommandExecutor, CommandSender};
+use crate::entity::EntityBase;
 use crate::net::DisconnectReason;
 use CommandError::InvalidConsumption;
 
@@ -40,8 +41,8 @@ impl CommandExecutor for Executor {
 
         for target in targets {
             target.kick(DisconnectReason::Kicked, reason.clone()).await;
-            let name = &target.gameprofile.name;
-            let msg = TextComponent::text(format!("Kicked: {name}"));
+            let mut msg = TextComponent::text("Kicked: ");
+            msg = msg.add_child(target.get_display_name().await);
             sender.send_message(msg.color_named(NamedColor::Blue)).await;
         }
 

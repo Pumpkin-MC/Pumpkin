@@ -1,5 +1,16 @@
 use std::sync::Arc;
 
+use crate::{
+    block::{
+        registry::BlockActionResult,
+        {
+            BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs,
+            UseWithItemArgs,
+        },
+    },
+    entity::{Entity, item::ItemEntity},
+    world::World,
+};
 use async_trait::async_trait;
 use pumpkin_data::{
     Block,
@@ -15,23 +26,11 @@ use pumpkin_world::{BlockStateId, item::ItemStack, tick::TickPriority, world::Bl
 use rand::Rng;
 use uuid::Uuid;
 
-use crate::{
-    block::{
-        pumpkin_block::{
-            GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs, PumpkinBlock,
-            UseWithItemArgs,
-        },
-        registry::BlockActionResult,
-    },
-    entity::{Entity, item::ItemEntity},
-    world::World,
-};
-
 #[pumpkin_block("minecraft:composter")]
 pub struct ComposterBlock;
 
 #[async_trait]
-impl PumpkinBlock for ComposterBlock {
+impl BlockBehaviour for ComposterBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position).await;
         let props = ComposterLikeProperties::from_state_id(state_id, args.block);
@@ -134,7 +133,7 @@ impl ComposterBlock {
                 Uuid::new_v4(),
                 world.clone(),
                 item_position,
-                EntityType::ITEM,
+                &EntityType::ITEM,
                 false,
             ),
             ItemStack::new(1, &Item::BONE_MEAL),

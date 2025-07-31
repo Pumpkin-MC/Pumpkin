@@ -34,6 +34,7 @@ impl BlockMetadata for TallPlantBlock {
 }
 
 #[async_trait]
+<<<<<<< HEAD
 impl PumpkinBlock for TallPlantBlock {
     async fn placed(&self, args: PlacedArgs<'_>) {
         let mut tall_plant_props =
@@ -49,6 +50,9 @@ impl PumpkinBlock for TallPlantBlock {
             .await;
     }
 
+=======
+impl BlockBehaviour for TallPlantBlock {
+>>>>>>> master
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let upper_state = args
             .block_accessor

@@ -11,7 +11,7 @@ use rand::Rng;
 use soul_fire::SoulFireBlock;
 
 use crate::block::blocks::fire::fire::FireBlock;
-use crate::block::pumpkin_block::{CanPlaceAtArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs};
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 

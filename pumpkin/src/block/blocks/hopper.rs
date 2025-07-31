@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::{
-    OnNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs,
-};
+use crate::block::{OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs};
 use crate::block::{
-    pumpkin_block::{NormalUseArgs, PumpkinBlock},
     registry::BlockActionResult,
+    {BlockBehaviour, NormalUseArgs},
 };
 use crate::world::World;
 use async_trait::async_trait;
@@ -52,7 +50,7 @@ pub struct HopperBlock;
 type HopperLikeProperties = pumpkin_data::block_properties::HopperLikeProperties;
 
 #[async_trait]
-impl PumpkinBlock for HopperBlock {
+impl BlockBehaviour for HopperBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(inventory) = block_entity.get_inventory() {
@@ -97,10 +95,6 @@ impl PumpkinBlock for HopperBlock {
             args.block,
         )
         .await;
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
     }
 }
 

@@ -22,7 +22,7 @@ impl BlockMetadata for MushroomPlantBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for MushroomPlantBlock {
+impl BlockBehaviour for MushroomPlantBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }

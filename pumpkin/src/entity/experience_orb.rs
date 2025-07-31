@@ -1,3 +1,4 @@
+use core::f32;
 use std::sync::{
     Arc,
     atomic::{AtomicU32, Ordering},
@@ -37,7 +38,7 @@ impl ExperienceOrbEntity {
                 Uuid::new_v4(),
                 world.clone(),
                 position,
-                EntityType::EXPERIENCE_ORB,
+                &EntityType::EXPERIENCE_ORB,
                 false,
             );
             let orb = Arc::new(Self::new(entity, i));
@@ -100,7 +101,14 @@ impl EntityBase for ExperienceOrbEntity {
         }
     }
 
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+    async fn damage_with_context(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
         false
     }
 

@@ -58,7 +58,7 @@ impl BlockEntity for HopperBlockEntity {
     {
         let hopper = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
             facing: HopperFacing::Down,
             cooldown_time: AtomicI32::from(nbt.get_int("TransferCooldown").unwrap_or(-1)),
@@ -70,7 +70,7 @@ impl BlockEntity for HopperBlockEntity {
         hopper
     }
 
-    async fn tick(&self, world: &Arc<dyn SimpleWorld>) {
+    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
         self.ticked_game_time.store(
             world.get_world_age().await,
             std::sync::atomic::Ordering::Relaxed,
@@ -86,7 +86,7 @@ impl BlockEntity for HopperBlockEntity {
                 world.get_block_state(&self.position).await.id,
                 &Block::HOPPER,
             );
-            self.try_move_items(&state, world).await;
+            self.try_move_items(&state, &world).await;
         }
     }
 
@@ -121,7 +121,7 @@ impl HopperBlockEntity {
     pub fn new(position: BlockPos, facing: HopperFacing) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
             facing,
             cooldown_time: AtomicI32::new(-1),
@@ -171,7 +171,7 @@ impl HopperBlockEntity {
                     let mut item = bind.lock().await;
                     if !item.is_empty() && container.can_transfer_to(self, i, &item) {
                         //TODO WorldlyContainer
-                        let backup = *item;
+                        let backup = item.clone();
                         let one_item = item.split(1);
                         if Self::add_one_item(container.as_ref(), self, one_item).await {
                             return true;
@@ -219,7 +219,7 @@ impl HopperBlockEntity {
                     let mut item = i.lock().await;
                     if !item.is_empty() {
                         //TODO WorldlyContainer
-                        let backup = *item;
+                        let backup = item.clone();
                         let one_item = item.split(1);
                         if Self::add_one_item(self, container.as_ref(), one_item).await {
                             return true;
@@ -239,7 +239,7 @@ impl HopperBlockEntity {
                 let bind = to.get_stack(j).await;
                 let mut dst = bind.lock().await;
                 if dst.is_empty() {
-                    *dst = item;
+                    *dst = item.clone();
                     success = true;
                 } else if dst.item_count < dst.get_max_stack_size() && dst.item == item.item {
                     // TODO check Components equal
@@ -310,7 +310,7 @@ impl Inventory for HopperBlockEntity {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY;
+        let mut removed = ItemStack::EMPTY.clone();
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -337,7 +337,7 @@ impl Inventory for HopperBlockEntity {
 impl Clearable for HopperBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY;
+            *slot.lock().await = ItemStack::EMPTY.clone();
         }
     }
 }

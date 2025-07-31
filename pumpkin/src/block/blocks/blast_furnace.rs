@@ -1,4 +1,4 @@
-use crate::block::pumpkin_block::{OnPlaceArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, OnPlaceArgs};
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, FurnaceLikeProperties};
 use pumpkin_macros::pumpkin_block;
@@ -8,7 +8,7 @@ use pumpkin_world::BlockStateId;
 pub struct BlastFurnaceBlock;
 
 #[async_trait]
-impl PumpkinBlock for BlastFurnaceBlock {
+impl BlockBehaviour for BlastFurnaceBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = FurnaceLikeProperties::default(args.block);
         props.facing = args

@@ -60,7 +60,7 @@ impl BlockEntity for PistonBlockEntity {
         self.position
     }
 
-    async fn tick(&self, world: &Arc<dyn SimpleWorld>) {
+    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
         let current_progress = self.current_progress.load();
         self.last_progress.store(current_progress);
         if current_progress >= 1.0 {
