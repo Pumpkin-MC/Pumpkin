@@ -10,6 +10,12 @@ pub struct FrameSet {
 }
 
 impl FrameSet {
+    pub fn new() -> Self {
+        Self {
+            sequence: u24(0),
+            frames: Vec::new(),
+        }
+    }
     pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         Ok(Self {
             sequence: u24::read(reader)?,
