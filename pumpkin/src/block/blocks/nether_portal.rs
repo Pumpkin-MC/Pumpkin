@@ -21,8 +21,10 @@ impl NetherPortalBlock {
     async fn get_portal_time(world: &Arc<World>, entity: &dyn EntityBase) -> u32 {
         let entity_type = entity.get_entity().entity_type;
         let level_info = world.level_info.read().await;
-        match entity_type {
-            EntityType::PLAYER => (world.get_player_by_id(entity.get_entity().entity_id).await)
+        match entity_type.id {
+            id if id == EntityType::PLAYER.id => (world
+                .get_player_by_id(entity.get_entity().entity_id)
+                .await)
                 .map_or(80, |player| match player.gamemode.load() {
                     GameMode::Creative => {
                         level_info.game_rules.players_nether_portal_creative_delay as u32

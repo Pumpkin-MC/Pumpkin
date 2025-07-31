@@ -36,7 +36,7 @@ impl ItemBehaviour for SnowBallItem {
             Uuid::new_v4(),
             world.clone(),
             position,
-            EntityType::SNOWBALL,
+            &EntityType::SNOWBALL,
             false,
         );
         let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);

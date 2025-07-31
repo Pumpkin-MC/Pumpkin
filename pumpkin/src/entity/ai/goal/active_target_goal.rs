@@ -19,14 +19,14 @@ pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Mutex<Option<Arc<dyn EntityBase>>>,
     reciprocal_chance: i32,
-    target_type: EntityType,
+    target_type: &'static EntityType,
     target_predicate: TargetPredicate,
 }
 
 impl ActiveTargetGoal {
     pub async fn new<F, Fut>(
         mob: &MobEntity,
-        target_type: EntityType,
+        target_type: &'static EntityType,
         reciprocal_chance: i32,
         check_visibility: bool,
         check_can_navigate: bool,
@@ -55,7 +55,7 @@ impl ActiveTargetGoal {
     #[must_use]
     pub async fn with_default(
         mob: &MobEntity,
-        target_type: EntityType,
+        target_type: &'static EntityType,
         check_visibility: bool,
     ) -> Self {
         let track_target_goal = TrackTargetGoal::with_default(check_visibility);
@@ -74,7 +74,7 @@ impl ActiveTargetGoal {
     async fn find_closest_target(&self, mob: &MobEntity) {
         let mut target = self.target.lock().await;
         let world = mob.living_entity.entity.world.read().await;
-        if self.target_type == EntityType::PLAYER {
+        if self.target_type == &EntityType::PLAYER {
             *target = world
                 .get_closest_player(
                     mob.living_entity.entity.pos.load(),

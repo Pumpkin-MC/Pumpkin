@@ -297,7 +297,7 @@ impl LivingEntity {
                 )
                 .await;
             let params = LootContextParameters {
-                killed_by_player: cause.map(|c| c.get_entity().entity_type == EntityType::PLAYER),
+                killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
                 ..Default::default()
             };
 
@@ -306,7 +306,7 @@ impl LivingEntity {
 
             let level_info = world.level_info.read().await;
             let game_rules = &level_info.game_rules;
-            if self.entity.entity_type == EntityType::PLAYER && game_rules.show_death_messages {
+            if self.entity.entity_type == &EntityType::PLAYER && game_rules.show_death_messages {
                 //TODO: KillCredit
                 let death_message =
                     Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
