@@ -23,13 +23,9 @@ pub fn wrap_degrees(degrees: f32) -> f32 {
     var1
 }
 
-pub fn clamp(value: f32, min: f32, max: f32) -> f32 {
-    if value < min { min } else { value.min(max) }
-}
-
 pub fn clamp_angle(value: f32, mean: f32, delta: f32) -> f32 {
     let i = subtract_angles(value, mean);
-    let j = clamp(i, -delta, delta);
+    let j = i.clamp(-delta, delta);
     mean - j
 }
 
