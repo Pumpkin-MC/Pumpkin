@@ -5,8 +5,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
 use crate::block::{
-    blocks::plant::PlantBlockBase,
-    pumpkin_block::{BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock},
+    blocks::plant::PlantBlockBase, BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs
 };
 
 pub struct MushroomPlantBlock;

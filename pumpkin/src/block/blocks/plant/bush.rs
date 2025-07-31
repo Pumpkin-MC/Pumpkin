@@ -2,9 +2,8 @@ use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_world::BlockStateId;
 
-use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{
-    BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock,
+use crate::block::{
+    blocks::plant::PlantBlockBase, BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs
 };
 
 pub struct BushBlock;

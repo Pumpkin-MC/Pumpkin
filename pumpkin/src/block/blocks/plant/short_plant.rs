@@ -2,8 +2,7 @@ use async_trait::async_trait;
 use pumpkin_world::BlockStateId;
 
 use crate::block::{
-    blocks::plant::PlantBlockBase,
-    pumpkin_block::{BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock},
+    blocks::plant::PlantBlockBase, BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs
 };
 
 pub struct ShortPlantBlock;
