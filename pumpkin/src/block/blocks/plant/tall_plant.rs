@@ -1,12 +1,13 @@
 use async_trait::async_trait;
+use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
     BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
 };
-use pumpkin_data::Block;
 use pumpkin_world::BlockStateId;
 
 use crate::block::{
-    blocks::plant::PlantBlockBase, BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    blocks::plant::PlantBlockBase,
 };
 
 pub struct TallPlantBlock;
