@@ -1081,6 +1081,7 @@ impl Player {
             };
 
             'after: {
+                // TODO: this is duplicate code from world
                 let position = event.position;
                 let yaw = event.yaw;
                 let pitch = event.pitch;
@@ -1119,6 +1120,11 @@ impl Player {
                 self.clone().request_teleport(position, yaw, pitch).await;
                 self.living_entity.last_pos.store(position);
                 self.send_abilities_update().await;
+                self.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
+                   self.get_inventory().get_selected_slot() as i8,
+                )).await;
+                self.on_screen_handler_opened(self.player_screen_handler.clone()).await;
+                self.send_health().await;
 
                 new_world.send_world_info(self, position, yaw, pitch).await;
             }
