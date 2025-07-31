@@ -267,6 +267,7 @@ pub trait FlowingFluid {
             return true;
         }
 
+        //TODO check if source
         if self.is_same_fluid(fluid, state_id) {
             let props = FlowingFluidProperties::from_state_id(state_id, fluid);
             return props.level == Level::L8 && props.falling != Falling::True;

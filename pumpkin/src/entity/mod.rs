@@ -57,6 +57,7 @@ pub mod tnt;
 pub mod r#type;
 
 mod combat;
+pub mod predicate;
 
 #[async_trait]
 pub trait EntityBase: Send + Sync {
@@ -111,6 +112,18 @@ pub trait EntityBase: Send + Sync {
             .await
     }
 
+    fn is_spectator(&self) -> bool {
+        false
+    }
+
+    fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
+        false
+    }
+
+    fn can_hit(&self) -> bool {
+        false
+    }
+
     async fn damage_with_context(
         &self,
         amount: f32,
@@ -124,6 +137,11 @@ pub trait EntityBase: Send + Sync {
     async fn on_player_collision(&self, _player: &Arc<Player>) {}
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+
+    fn get_player(&self) -> Option<&Player> {
+        None
+    }
+
     /// Should return the name of the entity without click or hover events.
     fn get_name(&self) -> TextComponent {
         let entity = self.get_entity();
@@ -163,6 +181,35 @@ pub trait EntityBase: Send + Sync {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum RemovalReason {
+    Killed,
+    Discarded,
+    UnloadedToChunk,
+    UnloadedWithPlayer,
+    ChangedDimension,
+}
+
+impl RemovalReason {
+    #[must_use]
+    pub fn should_destroy(&self) -> bool {
+        match self {
+            Self::Killed | Self::Discarded => true,
+            Self::UnloadedToChunk | Self::UnloadedWithPlayer | Self::ChangedDimension => false,
+        }
+    }
+
+    #[must_use]
+    pub fn should_save(&self) -> bool {
+        match self {
+            Self::Killed | Self::Discarded | Self::UnloadedWithPlayer | Self::ChangedDimension => {
+                false
+            }
+            Self::UnloadedToChunk => true,
+        }
+    }
+}
+
 static CURRENT_ID: AtomicI32 = AtomicI32::new(0);
 
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
@@ -195,6 +242,8 @@ pub struct Entity {
     pub yaw: AtomicCell<f32>,
     /// The entity's head yaw rotation (horizontal rotation of the head)
     pub head_yaw: AtomicCell<f32>,
+    /// The entity's body yaw rotation (horizontal rotation of the body)
+    pub body_yaw: AtomicCell<f32>,
     /// The entity's pitch rotation (vertical rotation) ↑ ↓
     pub pitch: AtomicCell<f32>,
     /// The height of the entity's eyes from the ground.
@@ -211,6 +260,12 @@ pub struct Entity {
     pub damage_immunities: Vec<DamageType>,
     pub fire_ticks: AtomicI32,
     pub has_visual_fire: AtomicBool,
+    pub removal_reason: AtomicCell<Option<RemovalReason>>,
+    // The passengers that entity has
+    pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
+    /// The vehicle that entity is in
+    pub vehicle: Mutex<Option<Arc<dyn EntityBase>>>,
+    pub age: AtomicI32,
 
     pub first_loaded_chunk_position: AtomicCell<Option<Vector3<i32>>>,
 
@@ -260,6 +315,7 @@ impl Entity {
             fall_flying: AtomicBool::new(false),
             yaw: AtomicCell::new(0.0),
             head_yaw: AtomicCell::new(0.0),
+            body_yaw: AtomicCell::new(0.0),
             pitch: AtomicCell::new(0.0),
             velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             standing_eye_height: entity_type.eye_height,
@@ -277,6 +333,10 @@ impl Entity {
             data: AtomicI32::new(0),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
+            removal_reason: AtomicCell::new(None),
+            passengers: Mutex::new(Vec::new()),
+            vehicle: Mutex::new(None),
+            age: AtomicI32::new(0),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
             custom_name: None,
@@ -476,6 +536,10 @@ impl Entity {
     pub fn set_rotation(&self, yaw: f32, pitch: f32) {
         // TODO
         self.yaw.store(yaw);
+        self.set_pitch(pitch);
+    }
+
+    pub fn set_pitch(&self, pitch: f32) {
         self.pitch.store(pitch.clamp(-90.0, 90.0) % 360.0);
     }
 
@@ -859,6 +923,27 @@ impl Entity {
                 self.on_ground.load(Ordering::SeqCst),
             ))
             .await;
+    }
+
+    pub fn get_eye_y(&self) -> f64 {
+        self.pos.load().y + f64::from(self.standing_eye_height)
+    }
+
+    pub fn is_removed(&self) -> bool {
+        self.removal_reason.load().is_some()
+    }
+
+    pub fn is_alive(&self) -> bool {
+        !self.is_removed()
+    }
+
+    pub async fn has_passengers(&self) -> bool {
+        !self.passengers.lock().await.is_empty()
+    }
+
+    pub async fn has_vehicle(&self) -> bool {
+        let vehicle = self.vehicle.lock().await;
+        vehicle.is_some()
     }
 
     pub async fn check_out_of_world(&self) {

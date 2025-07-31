@@ -14,11 +14,11 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CHurtAnimation, CTakeItemEntity};
@@ -356,6 +356,10 @@ impl LivingEntity {
         for effect_type in effects_to_remove {
             self.remove_effect(effect_type).await;
         }
+    }
+
+    pub fn is_part_of_game(&self) -> bool {
+        self.is_spectator() && self.entity.is_alive()
     }
 }
 

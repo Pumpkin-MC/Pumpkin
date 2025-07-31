@@ -107,6 +107,8 @@ use crate::block::blocks::redstone::dispenser::DispenserBlock;
 use crate::block::blocks::redstone::dropper::DropperBlock;
 
 use super::BlockIsReplacing;
+use super::blocks::plant::gourds::attached_stem::AttachedStemBlock;
+use super::blocks::plant::gourds::stem::StemBlock;
 use super::fluid::FluidBehaviour;
 use super::{
     BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs, EmitsRedstonePowerArgs, ExplodeArgs,
@@ -201,6 +203,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SkullBlock);
     manager.register(ChiseledBookshelfBlock);
     manager.register(LecternBlock);
+    manager.register(StemBlock);
+    manager.register(AttachedStemBlock);
 
     // Fire
     manager.register(SoulFireBlock);

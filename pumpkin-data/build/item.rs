@@ -33,6 +33,8 @@ pub struct ItemComponents {
     pub tool: Option<ToolComponent>,
     #[serde(rename = "minecraft:food")]
     pub food: Option<FoodComponent>,
+    #[serde(rename = "minecraft:equippable")]
+    pub equippable: Option<EquippableComponent>,
 }
 
 impl ToTokens for ItemComponents {
@@ -215,6 +217,104 @@ impl ToTokens for ItemComponents {
                 can_always_eat: #can_always_eat,
             }), });
         };
+
+        if let Some(equippable) = &self.equippable {
+            let slot = match equippable.slot.as_str() {
+                "mainhand" => quote! { &EquipmentSlot::MAIN_HAND },
+                "offhand" => quote! { &EquipmentSlot::OFF_HAND },
+                "head" => quote! { &EquipmentSlot::HEAD },
+                "chest" => quote! { &EquipmentSlot::CHEST },
+                "legs" => quote! { &EquipmentSlot::LEGS },
+                "feet" => quote! { &EquipmentSlot::FEET },
+                "body" => quote! { &EquipmentSlot::BODY },
+                "saddle" => quote! { &EquipmentSlot::SADDLE },
+                _ => panic!("Unknown equippable slot: {}", equippable.slot),
+            };
+            let equip_sound = equippable
+                .equip_sound
+                .as_ref()
+                .map(|s| {
+                    let equip_sound = LitStr::new(s, Span::call_site());
+                    quote! { #equip_sound }
+                })
+                .unwrap_or(quote! { "item.armor.equip_generic" });
+            let asset_id = equippable
+                .asset_id
+                .as_ref()
+                .map(|s| {
+                    let asset_id = LitStr::new(s, Span::call_site());
+                    quote! { Some(#asset_id) }
+                })
+                .unwrap_or(quote! { None });
+            let camera_overlay = equippable
+                .camera_overlay
+                .as_ref()
+                .map(|s| {
+                    let camera_overlay = LitStr::new(s, Span::call_site());
+                    quote! { Some(#camera_overlay) }
+                })
+                .unwrap_or(quote! { None });
+            let allowed_entities = equippable
+                .allowed_entities
+                .clone()
+                .map(|list| {
+                    let vec: Vec<_> = list
+                        .get_values()
+                        .iter()
+                        .map(|reg| {
+                            match reg {
+                                TagType::Item(item) => {
+                                    let ident = format_ident!(
+                                        "{}",
+                                        item.strip_prefix("minecraft:").unwrap().to_uppercase()
+                                    );
+                                    quote! { EntityTypeOrTag::Single(&crate::entity_type::EntityType::#ident) }
+                                },
+                                TagType::Tag(tag) => {
+                                    let ident = format_ident!(
+                                        "{}",
+                                        tag.replace(":", "_").replace("/", "_").to_uppercase()
+                                    );
+                                    quote! { EntityTypeOrTag::Tag(&crate::tag::EntityType::#ident) }
+                                }
+                            }
+                        })
+                        .collect();
+                    quote! {
+                        Some(&[#(#vec),*])
+                    }
+                })
+                .unwrap_or(quote! { None });
+            let dispensable = LitBool::new(equippable.dispensable, Span::call_site());
+            let swappable = LitBool::new(equippable.swappable, Span::call_site());
+            let damage_on_hurt = LitBool::new(equippable.damage_on_hurt, Span::call_site());
+            let equip_on_interact = LitBool::new(equippable.equip_on_interact, Span::call_site());
+            let can_be_sheared = LitBool::new(equippable.can_be_sheared, Span::call_site());
+            let shearing_sound = equippable
+                .shearing_sound
+                .as_ref()
+                .map(|s| {
+                    let shearing_sound = LitStr::new(s, Span::call_site());
+                    quote! {
+                        Some(#shearing_sound)
+                    }
+                })
+                .unwrap_or(quote! { None });
+
+            tokens.extend(quote! { (Equippable, &EquippableImpl {
+                slot: #slot,
+                equip_sound: #equip_sound,
+                asset_id: #asset_id,
+                camera_overlay: #camera_overlay,
+                allowed_entities: #allowed_entities,
+                dispensable: #dispensable,
+                swappable: #swappable,
+                damage_on_hurt: #damage_on_hurt,
+                equip_on_interact: #equip_on_interact,
+                can_be_sheared: #can_be_sheared,
+                shearing_sound: #shearing_sound
+            }), });
+        };
     }
 }
 
@@ -267,6 +367,31 @@ pub struct Modifier {
     pub operation: Operation,
     // TODO: Make this an enum
     pub slot: AttributeModifierSlot,
+}
+
+fn _true() -> bool {
+    true
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, Clone, Debug)]
+pub struct EquippableComponent {
+    pub slot: String,
+    pub equip_sound: Option<String>,
+    pub asset_id: Option<String>,
+    pub camera_overlay: Option<String>,
+    pub allowed_entities: Option<RegistryEntryList>,
+    #[serde(default = "_true")]
+    pub dispensable: bool,
+    #[serde(default = "_true")]
+    pub swappable: bool,
+    #[serde(default = "_true")]
+    pub damage_on_hurt: bool,
+    #[serde(default)]
+    pub equip_on_interact: bool,
+    #[serde(default)]
+    pub can_be_sheared: bool,
+    pub shearing_sound: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
@@ -368,6 +493,7 @@ pub(crate) fn build() -> TokenStream {
 
             #[doc = "Try to parse an item from a resource location string."]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
                 match name {
                     #type_from_name
                     _ => None

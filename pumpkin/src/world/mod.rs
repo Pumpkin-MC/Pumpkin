@@ -1,5 +1,6 @@
 use std::sync::Weak;
 use std::time::Duration;
+use std::sync::atomic::Ordering::Relaxed;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -37,6 +38,7 @@ use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::entity::MobCategory;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
     Block,
@@ -47,7 +49,7 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState};
-use pumpkin_inventory::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::{
@@ -551,7 +553,6 @@ impl World {
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         let start = tokio::time::Instant::now();
         self.flush_block_updates().await;
-
         // tick block entities
         self.flush_synced_block_events().await;
 
@@ -580,13 +581,13 @@ impl World {
         }
 
         let chunk_start = tokio::time::Instant::now();
-        log::debug!("Ticking chunks");
+        log::trace!("Ticking chunks");
         self.tick_chunks().await;
         let elapsed = chunk_start.elapsed();
 
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
 
-        log::debug!("Ticking players");
+        log::trace!("Ticking players");
         // player ticks
         for player in players_to_tick {
             player.tick(server).await;
@@ -594,9 +595,10 @@ impl World {
 
         let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
 
-        log::debug!("Ticking entities");
+        log::trace!("Ticking entities");
         // Entity ticks
         for entity in entities_to_tick {
+            entity.get_entity().age.fetch_add(1, Relaxed);
             entity.tick(entity.clone(), server).await;
             for player in self.players.read().await.values() {
                 if player
@@ -614,7 +616,7 @@ impl World {
             }
         }
 
-        log::debug!(
+        log::trace!(
             "Ticking world took {:?}, loaded chunks: {}, chunk tick took {:?}",
             start.elapsed(),
             self.level.loaded_chunk_count(),
@@ -1673,7 +1675,8 @@ impl World {
                         };
                         // Pos is zero since it will read from nbt
                         let entity =
-                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
+                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid)
+                                .await;
                         entity.read_nbt(entity_nbt).await;
                         let base_entity = entity.get_entity();
 
@@ -1709,7 +1712,8 @@ impl World {
                         continue;
                     };
                     // Pos is zero since it will read from nbt
-                    let entity = from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
+                    let entity =
+                        from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid).await;
                     entity.read_nbt(entity_nbt).await;
                     let base_entity = entity.get_entity();
                     player
@@ -1845,6 +1849,25 @@ impl World {
             .collect()
     }
 
+    pub async fn get_nearby_entities(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+    ) -> HashMap<uuid::Uuid, Arc<dyn EntityBase>> {
+        let radius_squared = radius.powi(2);
+
+        self.entities
+            .read()
+            .await
+            .iter()
+            .filter_map(|(id, entity)| {
+                let entity_pos = entity.get_entity().pos.load();
+                (entity_pos.squared_distance_to_vec(pos) <= radius_squared)
+                    .then(|| (*id, entity.clone()))
+            })
+            .collect()
+    }
+
     pub async fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
         let players = self.get_nearby_players(pos, radius).await;
         players
@@ -1862,6 +1885,53 @@ impl World {
                             .load()
                             .squared_distance_to_vec(pos),
                     )
+                    .unwrap()
+            })
+            .map(|p| p.1.clone())
+    }
+
+    /// Gets the closest entity to a position, with optional filtering by entity type.
+    ///
+    /// # Arguments
+    ///
+    /// * `pos` - The position to search around.
+    /// * `radius` - The radius to search within.
+    /// * `entity_types` - Optional array of entity types to filter by. If None, all entity types are included.
+    ///
+    /// # Returns
+    ///
+    /// The closest entity that matches the filter criteria, or None if no entities are found.
+    pub async fn get_closest_entity(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        entity_types: Option<&[EntityType]>,
+    ) -> Option<Arc<dyn EntityBase>> {
+        // Get regular entities
+        let entities = self.get_nearby_entities(pos, radius).await;
+
+        // Filter by entity type if specified
+        let filtered_entities = if let Some(types) = entity_types {
+            entities
+                .into_iter()
+                .filter(|(_, entity)| {
+                    let entity_type = entity.get_entity().entity_type;
+                    types.contains(&entity_type)
+                })
+                .collect::<HashMap<_, _>>()
+        } else {
+            entities
+        };
+
+        // Find the closest entity
+        filtered_entities
+            .iter()
+            .min_by(|a, b| {
+                a.1.get_entity()
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(pos)
+                    .partial_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(pos))
                     .unwrap()
             })
             .map(|p| p.1.clone())

@@ -55,9 +55,6 @@ pub struct Level {
     block_registry: Arc<dyn BlockRegistryExt>,
     level_folder: LevelFolder,
 
-    // Holds this level's spawn chunks, which are always loaded
-    spawn_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
-
     /// Counts the number of ticks that have been scheduled for this world
     schedule_tick_counts: AtomicU64,
 
@@ -151,7 +148,6 @@ impl Level {
             chunk_saver,
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
-            spawn_chunks: Arc::new(DashMap::new()),
             loaded_chunks: Arc::new(DashMap::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
@@ -682,22 +678,6 @@ impl Level {
         }
     }
 
-    /// Initializes the spawn chunks to these chunks
-    pub async fn read_spawn_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
-        let (send, mut recv) = mpsc::unbounded_channel();
-
-        let fetcher = self.fetch_chunks(chunks, send);
-        let handler = async {
-            while let Some((chunk, _)) = recv.recv().await {
-                let pos = chunk.read().await.position;
-                self.spawn_chunks.insert(pos, chunk);
-            }
-        };
-
-        let _ = tokio::join!(fetcher, handler);
-        log::debug!("Read {} chunks as spawn chunks", chunks.len());
-    }
-
     /// Reads/Generates many chunks in a world
     /// Note: The order of the output chunks will almost never be in the same order as the order of input chunks
     pub async fn fetch_chunks(
@@ -723,11 +703,6 @@ impl Level {
         for chunk in chunks {
             let is_ok = if let Some(chunk) = self.loaded_chunks.get(chunk) {
                 send_chunk(false, chunk.value().clone(), &channel)
-            } else if let Some(spawn_chunk) = self.spawn_chunks.get(chunk) {
-                // Also clone the arc into the loaded chunks
-                self.loaded_chunks
-                    .insert(*chunk, spawn_chunk.value().clone());
-                send_chunk(false, spawn_chunk.value().clone(), &channel)
             } else {
                 remaining_chunks.push(*chunk);
                 true
