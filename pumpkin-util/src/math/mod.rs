@@ -119,13 +119,7 @@ pub fn lerp_progress<T: Float>(value: T, start: T, end: T) -> T {
 }
 
 pub fn clamped_lerp(start: f64, end: f64, delta: f64) -> f64 {
-    if delta < 0f64 {
-        start
-    } else if delta > 1f64 {
-        end
-    } else {
-        lerp(delta, start, end)
-    }
+    lerp(delta.clamp(0.0, 1.0), start, end)
 }
 
 #[inline]

@@ -137,12 +137,22 @@ impl ChunkData {
             block_light: chunk_data
                 .sections
                 .iter()
-                .map(|x| x.block_light.clone().map(|y| LightContainer::new(y)).unwrap_or_default())
+                .map(|x| {
+                    x.block_light
+                        .clone()
+                        .map(|y| LightContainer::new(y))
+                        .unwrap_or_default()
+                })
                 .collect(),
             sky_light: chunk_data
                 .sections
                 .iter()
-                .map(|x| x.sky_light.clone().map(|y| LightContainer::new(y)).unwrap_or_default())
+                .map(|x| {
+                    x.sky_light
+                        .clone()
+                        .map(|y| LightContainer::new(y))
+                        .unwrap_or_default()
+                })
                 .collect(),
         };
 
