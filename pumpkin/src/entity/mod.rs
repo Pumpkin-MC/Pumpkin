@@ -219,7 +219,7 @@ pub struct Entity {
     /// A persistent, unique identifier for the entity
     pub entity_uuid: uuid::Uuid,
     /// The type of entity (e.g., player, zombie, item)
-    pub entity_type: EntityType,
+    pub entity_type: &'static EntityType,
     /// The world in which the entity exists.
     pub world: Arc<RwLock<Arc<World>>>,
     /// The entity's current position in the world
@@ -286,7 +286,7 @@ impl Entity {
         entity_uuid: uuid::Uuid,
         world: Arc<World>,
         position: Vector3<f64>,
-        entity_type: EntityType,
+        entity_type: &'static EntityType,
         invulnerable: bool,
     ) -> Self {
         let floor_x = position.x.floor() as i32;
@@ -305,7 +305,10 @@ impl Entity {
             on_ground: AtomicBool::new(false),
             pos: AtomicCell::new(position),
             block_pos: AtomicCell::new(BlockPos(Vector3::new(floor_x, floor_y, floor_z))),
-            chunk_pos: AtomicCell::new(Vector2::new(floor_x, floor_z)),
+            chunk_pos: AtomicCell::new(Vector2::new(
+                get_section_cord(floor_x),
+                get_section_cord(floor_z),
+            )),
             sneaking: AtomicBool::new(false),
             world: Arc::new(RwLock::new(world)),
             sprinting: AtomicBool::new(false),
@@ -436,7 +439,7 @@ impl Entity {
     }
 
     fn default_portal_cooldown(&self) -> u32 {
-        if self.entity_type == EntityType::PLAYER {
+        if self.entity_type == &EntityType::PLAYER {
             10
         } else {
             300

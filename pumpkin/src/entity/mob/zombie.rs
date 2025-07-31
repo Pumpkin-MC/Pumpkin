@@ -42,7 +42,7 @@ impl Zombie {
                 8,
                 Arc::new(LookAtEntityGoal::with_default(
                     mob_weak,
-                    EntityType::PLAYER,
+                    &EntityType::PLAYER,
                     8.0,
                 )),
             )
@@ -58,7 +58,7 @@ impl Zombie {
             .add_goal(
                 2,
                 Arc::new(
-                    ActiveTargetGoal::with_default(&mob_arc.mob_entity, EntityType::PLAYER, true)
+                    ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
                         .await,
                 ),
             )

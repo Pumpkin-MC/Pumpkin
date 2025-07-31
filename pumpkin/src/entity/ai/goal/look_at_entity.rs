@@ -19,7 +19,7 @@ pub struct LookAtEntityGoal {
     look_time: AtomicI32,
     chance: f64,
     look_forward: bool,
-    target_type: EntityType,
+    target_type: &'static EntityType,
     target_predicate: TargetPredicate,
 }
 
@@ -27,7 +27,7 @@ impl LookAtEntityGoal {
     #[must_use]
     pub fn new(
         mob_weak: Weak<dyn Mob>,
-        target_type: EntityType,
+        target_type: &'static EntityType,
         range: f64,
         chance: f64,
         look_forward: bool,
@@ -46,18 +46,22 @@ impl LookAtEntityGoal {
     }
 
     #[must_use]
-    pub fn with_default(mob_weak: Weak<dyn Mob>, target_type: EntityType, range: f64) -> Self {
+    pub fn with_default(
+        mob_weak: Weak<dyn Mob>,
+        target_type: &'static EntityType,
+        range: f64,
+    ) -> Self {
         Self::new(mob_weak, target_type, range, 0.02, false)
     }
 
     fn create_target_predicate(
         mob_weak: Weak<dyn Mob>,
-        target_type: EntityType,
+        target_type: &'static EntityType,
         range: f64,
     ) -> TargetPredicate {
         let mut target_predicate = TargetPredicate::non_attackable();
         target_predicate.base_max_distance = range;
-        if target_type == EntityType::PLAYER {
+        if target_type == &EntityType::PLAYER {
             target_predicate.set_predicate(move |living_entity, _world| {
                 let mob_weak = mob_weak.clone();
                 async move {
@@ -92,7 +96,7 @@ impl Goal for LookAtEntityGoal {
         drop(mob_target);
 
         let world = mob_entity.living_entity.entity.world.read().await;
-        if self.target_type == EntityType::PLAYER {
+        if self.target_type == &EntityType::PLAYER {
             *target = world
                 .get_closest_player(mob_entity.living_entity.entity.pos.load(), self.range)
                 .await

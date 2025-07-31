@@ -319,7 +319,7 @@ impl ComparatorBlock {
             .await
             .into_iter()
             .filter(|entity| {
-                entity.get_entity().entity_type == EntityType::ITEM_FRAME
+                entity.get_entity().entity_type == &EntityType::ITEM_FRAME
                     && entity.get_entity().get_horizontal_facing() == facing
             });
         if let Some(_itemframe) = itemframes.next() {

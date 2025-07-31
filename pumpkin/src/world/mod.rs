@@ -1,5 +1,6 @@
 use std::sync::Weak;
 use std::sync::atomic::Ordering::Relaxed;
+use std::time::Duration;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -37,6 +38,7 @@ use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
     Block,
@@ -115,6 +117,7 @@ use pumpkin_world::{
 };
 use pumpkin_world::{level::Level, tick::TickPriority};
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
+use rand::seq::SliceRandom;
 use rand::{Rng, rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
@@ -125,10 +128,13 @@ use tokio::sync::RwLock;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
+pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
 
+use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_data::effect::StatusEffect;
+use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
 use pumpkin_world::generation::settings::GenerationSettings;
 use uuid::Uuid;
 use weather::Weather;
@@ -176,6 +182,7 @@ pub struct World {
     /// The type of dimension the world is in.
     pub dimension_type: VanillaDimensionType,
     pub sea_level: i32,
+    pub min_y: i32,
     /// The world's weather, including rain and thunder levels.
     pub weather: Mutex<Weather>,
     /// Block Behaviour
@@ -221,6 +228,7 @@ impl World {
             weather: Mutex::new(Weather::new()),
             block_registry,
             sea_level: generation_settings.sea_level,
+            min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
             server,
@@ -695,10 +703,139 @@ impl World {
             }
         } */
 
+        let spawn_entity_clock_start = tokio::time::Instant::now();
+
+        let mut spawning_chunks_map = HashMap::new();
+        // TODO use FixedPlayerDistanceChunkTracker
+
+        for i in self.players.read().await.values() {
+            let center = i.living_entity.entity.chunk_pos.load();
+            for dx in -8i32..=8 {
+                for dy in -8i32..=8 {
+                    // if dx.abs() <= 2 || dy.abs() <= 2 || dx.abs() >= 6 || dy.abs() >= 6 { // this is only for debug, spawning runs too slow
+                    //     continue;
+                    // }
+                    let chunk_pos = center.add_raw(dx, dy);
+                    if let Some(chunk) = self.level.try_get_chunk(&chunk_pos) {
+                        spawning_chunks_map
+                            .entry(chunk_pos)
+                            .or_insert(chunk.value().clone());
+                    }
+                }
+            }
+        }
+
+        let mut spawning_chunks = Vec::with_capacity(spawning_chunks_map.len());
+        for i in spawning_chunks_map {
+            spawning_chunks.push(i);
+        }
+
+        let get_chunks_clock = spawn_entity_clock_start.elapsed();
+        // log::debug!("spawning chunks size {}", spawning_chunks.len());
+
+        let mut spawn_state =
+            SpawnState::new(spawning_chunks.len() as i32, &self.entities, self).await; // TODO store it
+
+        // TODO gamerule this.spawnEnemies || this.spawnFriendlies
+        let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
+        let spawn_list: Vec<&'static MobCategory> =
+            natural_spawner::get_filtered_spawning_categories(
+                &spawn_state,
+                true,
+                true,
+                spawn_passives,
+            );
+
+        // log::debug!("spawning list size {}", spawn_list.len());
+        log::debug!("spawning counter {:?}", spawn_state.mob_category_counts);
+
+        spawning_chunks.shuffle(&mut rng());
+
+        // TODO i think it can be multithread
+        for (pos, chunk) in &spawning_chunks {
+            self.tick_spawning_chunk(pos, chunk, &spawn_list, &mut spawn_state)
+                .await;
+        }
+        log::debug!(
+            "Spawning entity took {:?}, getting chunks {:?}, spawning chunks: {}, avg {:?} per chunk",
+            spawn_entity_clock_start.elapsed(),
+            get_chunks_clock,
+            spawning_chunks.len(),
+            spawn_entity_clock_start
+                .elapsed()
+                .checked_div(spawning_chunks.len() as u32)
+                .unwrap_or(Duration::new(0, 0))
+        );
+
         for block_entity in tick_data.block_entities {
             let world: Arc<dyn SimpleWorld> = self.clone();
             block_entity.tick(world).await;
         }
+    }
+
+    pub async fn tick_spawning_chunk(
+        self: &Arc<Self>,
+        chunk_pos: &Vector2<i32>,
+        chunk: &Arc<RwLock<ChunkData>>,
+        spawn_list: &Vec<&'static MobCategory>,
+        spawn_state: &mut SpawnState,
+    ) {
+        // this.level.tickThunder(chunk);
+        //TODO check in simulation distance
+        if self.weather.lock().await.raining
+            && self.weather.lock().await.thundering
+            && rng().random_range(0..100_000) == 0
+        {
+            let rand_value = rng().random::<i32>() >> 2;
+            let delta = Vector3::new(rand_value & 15, rand_value >> 16 & 15, rand_value >> 8 & 15);
+            let random_pos = Vector3::new(
+                chunk_pos.x << 4,
+                chunk.read().await.heightmap.get_height(
+                    MotionBlocking,
+                    chunk_pos.x << 4,
+                    chunk_pos.y << 4,
+                    self.min_y,
+                ),
+                chunk_pos.y << 4,
+            )
+            .add(&delta);
+            // TODO this.getBrightness(LightLayer.SKY, blockPos) >= 15;
+            // TODO heightmap
+
+            // TODO findLightningRod(blockPos)
+            // TODO encapsulatingFullBlocks
+            if true {
+                // TODO biome.getPrecipitationAt(pos, this.getSeaLevel()) == Biome.Precipitation.RAIN
+                // TODO this.getCurrentDifficultyAt(blockPos);
+                if rng().random::<f32>() < 0.0675
+                    && self.get_block(&random_pos.to_block_pos().down()).await
+                        != &Block::LIGHTNING_ROD
+                {
+                    let entity = Entity::new(
+                        Uuid::new_v4(),
+                        self.clone(),
+                        random_pos.to_f64(),
+                        &EntityType::SKELETON_HORSE,
+                        false,
+                    );
+                    self.spawn_entity(Arc::new(entity)).await;
+                }
+                let entity = Entity::new(
+                    Uuid::new_v4(),
+                    self.clone(),
+                    random_pos.to_f64().add_raw(0.5, 0., 0.5),
+                    &EntityType::LIGHTNING_BOLT,
+                    false,
+                );
+                self.spawn_entity(Arc::new(entity)).await;
+            }
+        }
+
+        if spawn_list.is_empty() {
+            return;
+        }
+        // TODO this.level.canSpawnEntitiesInChunk(chunkPos)
+        spawn_for_chunk(self, chunk_pos, chunk, spawn_state, spawn_list).await;
     }
 
     pub fn generation_settings(&self) -> &GenerationSettings {
@@ -1780,7 +1917,7 @@ impl World {
         &self,
         pos: Vector3<f64>,
         radius: f64,
-        entity_types: Option<&[EntityType]>,
+        entity_types: Option<&[&'static EntityType]>,
     ) -> Option<Arc<dyn EntityBase>> {
         // Get regular entities
         let entities = self.get_nearby_entities(pos, radius).await;
@@ -2170,7 +2307,7 @@ impl World {
             f64::from(pos.0.z) + 0.5 + rand::rng().random_range(-0.25..0.25),
         );
 
-        let entity = Entity::new(Uuid::new_v4(), self.clone(), pos, EntityType::ITEM, false);
+        let entity = Entity::new(Uuid::new_v4(), self.clone(), pos, &EntityType::ITEM, false);
         let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
         self.spawn_entity(item_entity).await;
     }
@@ -2220,7 +2357,7 @@ impl World {
                 Uuid::new_v4(),
                 self.clone(),
                 Vector3::new(x, y, z),
-                EntityType::ITEM,
+                &EntityType::ITEM,
                 false,
             );
             let entity = Arc::new(ItemEntity::new_with_velocity(entity, item, velocity, 10).await);
