@@ -7,6 +7,7 @@ pub mod crop;
 pub mod dry_vegetation;
 pub mod flower;
 pub mod flowerbed;
+pub mod gourds;
 pub mod leaf_litter;
 pub mod lily_pad;
 pub mod mushroom_plant;
