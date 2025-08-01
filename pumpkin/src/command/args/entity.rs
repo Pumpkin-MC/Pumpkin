@@ -57,11 +57,11 @@ impl ArgumentConsumer for EntityArgumentConsumer {
                 _ => None,
             },
             // @r is valid when there is at least one player
-            "@r" => server.get_random_player().await,
+            "@r" => Some(server.get_random_player().await? as Arc<dyn EntityBase>),
             // @a/@e/@r are not valid because we're looking for a single entity
             "@a" | "@e" => None,
             // player name is only valid if player is online
-            name => server.get_player_by_name(name).await,
+            name => Some(server.get_player_by_name(name).await? as Arc<dyn EntityBase>),
         };
 
         entity.map(Arg::Entity)

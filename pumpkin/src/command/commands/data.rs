@@ -32,7 +32,7 @@ impl CommandExecutor for GetEntityDataExecutor {
             return Err(InvalidConsumption(Some(ARG_ENTITY.into())));
         };
 
-        let data_storage = &**entity as &dyn NBTStorage;
+        let data_storage = (&**entity) as &dyn NBTStorage;
 
         sender
             .send_message(display_data(data_storage, entity.get_display_name().await).await?)

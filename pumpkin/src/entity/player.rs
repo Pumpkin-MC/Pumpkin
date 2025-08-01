@@ -1171,37 +1171,6 @@ impl Player {
         }}
     }
 
-    /// Teleports the player to a different position with an optional yaw and pitch.
-    /// This method is identical to `entity.teleport()` but emits a `PlayerTeleportEvent` instead of a `EntityTeleportEvent`.
-    pub async fn teleport(self: &Arc<Self>, position: Vector3<f64>, yaw: f32, pitch: f32) {
-        send_cancellable! {{
-            PlayerTeleportEvent {
-                player: self.clone(),
-                from: self.living_entity.entity.pos.load(),
-                to: position,
-                cancelled: false,
-            };
-            'after: {
-                let position = event.to;
-                let entity = self.get_entity();
-                self.request_teleport(position, yaw, pitch).await;
-                entity
-                    .world
-                    .read()
-                    .await
-                    .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
-                        self.living_entity.entity.entity_id.into(),
-                        position,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        yaw,
-                        pitch,
-                        entity.on_ground.load(Ordering::SeqCst),
-                    ))
-                    .await;
-            }
-        }}
-    }
-
     pub fn block_interaction_range(&self) -> f64 {
         if self.gamemode.load() == GameMode::Creative {
             5.0
@@ -2068,6 +2037,33 @@ impl EntityBase for Player {
         pitch: Option<f32>,
         world: Arc<World>,
     ) {
+        send_cancellable! {{
+            PlayerTeleportEvent {
+                player: self.clone(),
+                from: self.living_entity.entity.pos.load(),
+                to: position,
+                cancelled: false,
+            };
+            'after: {
+                let position = event.to;
+                let entity = self.get_entity();
+                self.request_teleport(position, yaw, pitch).await;
+                entity
+                    .world
+                    .read()
+                    .await
+                    .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
+                        self.living_entity.entity.entity_id.into(),
+                        position,
+                        Vector3::new(0.0, 0.0, 0.0),
+                        yaw,
+                        pitch,
+                        entity.on_ground.load(Ordering::SeqCst),
+                    ))
+                    .await;
+            }
+        }}
+
         self.teleport_world(world, position, yaw, pitch).await;
     }
 

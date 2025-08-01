@@ -70,9 +70,13 @@ impl CommandExecutor for EntitiesToEntityExecutor {
             )));
         }
         for target in targets {
-            let yaw = target.living_entity.entity.yaw.load();
-            let pitch = target.living_entity.entity.pitch.load();
-            target.teleport(pos, yaw, pitch).await;
+            let yaw = target.get_entity().yaw.load();
+            let pitch = target.get_entity().pitch.load();
+            let world = target.get_entity().world.read().await.clone();
+            target
+                .clone()
+                .teleport(pos.into(), yaw.into(), pitch.into(), world)
+                .await;
         }
 
         Ok(())
@@ -85,8 +89,8 @@ struct EntitiesToPosFacingPosExecutor;
 impl CommandExecutor for EntitiesToPosFacingPosExecutor {
     async fn execute<'a>(
         &self,
-        _sender: &mut CommandSender,
-        _server: &crate::server::Server,
+        sender: &mut CommandSender,
+        server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
@@ -99,9 +103,19 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
         }
         let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
         let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
+        //todo
+        let world = match sender {
+            CommandSender::Rcon(_) | CommandSender::Console => {
+                server.worlds.read().await.get(0).unwrap().clone()
+            }
+            CommandSender::Player(player) => player.world(),
+        };
 
         for target in targets {
-            target.teleport(pos, yaw, pitch).await;
+            target
+                .clone()
+                .teleport(Some(pos), Some(yaw), Some(pitch), world.clone())
+                .await;
         }
 
         Ok(())
@@ -132,7 +146,10 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
         let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_entity.pos.load());
 
         for target in targets {
-            target.teleport(pos, yaw, pitch).await;
+            target
+                .clone()
+                .teleport(Some(pos), Some(yaw), Some(pitch), None)
+                .await;
         }
 
         Ok(())
