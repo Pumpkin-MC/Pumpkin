@@ -82,14 +82,12 @@ macro_rules! read_data_from_file {
                 Ok(data) => {
                     match serde_json::from_str(&data) {
                         Ok(parsed) => parsed,
-                        Err(e) => {
-                            //eprintln!("Failed to parse JSON from runtime path: {}", e);
+                        Err(_) => {
                             $crate::fallback_to_global_path!($path)
                         }
                     }
                 }
-                Err(e) => {
-                    //eprintln!("Failed to read file from runtime path: {}", e);
+                Err(_) => {
                     $crate::fallback_to_global_path!($path)
                 }
             }
