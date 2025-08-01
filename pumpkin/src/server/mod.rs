@@ -30,7 +30,7 @@ use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
-use rand::seq::{IndexedRandom, SliceRandom};
+use rand::seq::{IndexedRandom, IteratorRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
 use std::fs;
@@ -782,6 +782,16 @@ impl Server {
             // If the sort is arbitrary, we just return all entities in all worlds
             EntityFilterSort::Arbitrary => iter.take(target_selector.get_limit()).collect(),
             EntityFilterSort::Random => {
+                if target_selector.get_limit() == 0 {
+                    return vec![];
+                } else if target_selector.get_limit() == 1 {
+                    // If the limit is 1, we just return a random entity
+                    return if let Some(entity) = iter.choose(&mut rand::rng()) {
+                        vec![entity.clone()]
+                    } else {
+                        vec![]
+                    };
+                }
                 // If the sort is random, we shuffle the entities and then take the limit
                 let mut entities: Vec<_> = iter.collect();
                 entities.shuffle(&mut rand::rng());
@@ -791,6 +801,9 @@ impl Server {
                     .collect()
             }
             EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
+                if target_selector.get_limit() == 0 {
+                    return vec![];
+                }
                 // sort entities first
                 // todo: command context
                 let center = if let Some(source) = source {

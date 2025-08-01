@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
-
 use crate::command::CommandSender;
+use crate::command::args::entities::TargetSelector;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::entity::EntityBase;
 use crate::server::Server;
+use async_trait::async_trait;
+use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
 use super::super::args::ArgumentConsumer;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
@@ -42,28 +42,21 @@ impl ArgumentConsumer for EntityArgumentConsumer {
     ) -> Option<Arg<'a>> {
         let s = args.pop()?;
 
-        let entity = match s {
-            // @s is always valid when sender is a player
-            "@s" => match src {
-                CommandSender::Player(p) => Some(p.clone() as Arc<dyn EntityBase>),
-                _ => None,
-            },
-            // @n/@p are always valid when sender is a player
-            #[allow(clippy::match_same_arms)] // todo: implement for non-players
-            "@n" | "@p" => match src {
-                CommandSender::Player(p) => Some(p.clone() as Arc<dyn EntityBase>),
-                // todo: implement for non-players: how should this behave when sender is console/rcon?
-                _ => None,
-            },
-            // @r is valid when there is at least one player
-            "@r" => Some(server.get_random_player().await? as Arc<dyn EntityBase>),
-            // @a/@e/@r are not valid because we're looking for a single entity
-            "@a" | "@e" => None,
-            // player name is only valid if player is online
-            name => Some(server.get_player_by_name(name).await? as Arc<dyn EntityBase>),
+        let entity_selector = match s.parse::<TargetSelector>() {
+            Ok(selector) => selector,
+            Err(e) => {
+                log::debug!("Failed to parse target selector '{s}': {e}");
+                return None;
+            }
         };
+        if entity_selector.get_limit() > 1 {
+            log::debug!("Target selector '{s}' has limit > 1, expected single entity");
+            return None;
+        }
+        // todo: command context
+        let entities = server.select_entities(&entity_selector, Some(src)).await;
 
-        entity.map(Arg::Entity)
+        entities.first().map(Arg::Entity)
     }
 
     async fn suggest<'a>(
