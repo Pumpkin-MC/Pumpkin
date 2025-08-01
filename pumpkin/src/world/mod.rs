@@ -50,7 +50,6 @@ use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
-use pumpkin_protocol::bedrock::client::chunk_radius_update::CChunkRadiusUpdate;
 use pumpkin_protocol::bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate;
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::{
@@ -840,7 +839,7 @@ impl World {
                 server_auth_sounds: false,
             })
             .await;
-        chunker::update_position(&player).await;
+        chunker::be_update_position(&player).await;
         client
             .send_game_packet(&CreativeContent {
                 groups: &[Group {
@@ -853,15 +852,6 @@ impl World {
             .await;
 
         let mut frame_set = FrameSet::default();
-        client
-            .write_game_packet_to_set(
-                &CChunkRadiusUpdate {
-                    chunk_radius: VarInt(16),
-                },
-                &mut frame_set,
-            )
-            .await;
-
         client
             .write_game_packet_to_set(
                 &CNetworkChunkPublisherUpdate::new(BlockPos::new(0, 100, 0), 16),

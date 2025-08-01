@@ -394,13 +394,8 @@ impl BedrockClient {
             .write_packet(&packet_buf, self.address, &self.socket)
             .await
         {
-            // It is expected that the packet will fail if we are closed
-            if !self.closed.load(Ordering::Relaxed) {
-                log::warn!("Failed to send packet to client: {err}");
-                // We now need to close the connection to the client since the stream is in an
-                // unknown state
-                self.close().await;
-            }
+            log::warn!("Failed to send packet to client: {err}");
+            self.close().await;
         }
     }
 
