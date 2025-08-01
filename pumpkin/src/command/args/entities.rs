@@ -121,7 +121,7 @@ impl FromStr for EntityFilter {
                 }
                 Ok(Self::Sort(sort))
             }
-            _ => todo!(),
+            _ => todo!("{key}"),
         }
     }
 }
