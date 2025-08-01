@@ -7,6 +7,7 @@ use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, Sugg
 use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 
@@ -43,7 +44,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
         let s = args.pop()?;
 
         let worlds = server.worlds.read().await;
-        let entities = match s {
+        let entities: Option<Vec<Arc<dyn EntityBase>>> = match s {
             "@s" => match src {
                 CommandSender::Player(p) => Some(vec![p.clone()]),
                 _ => None,
@@ -58,15 +59,20 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
             "@r" => server
                 .get_random_player()
                 .await
-                .map_or_else(|| Some(vec![]), |p| Some(vec![p])),
-            "@a" => Some(server.get_all_players().await),
-            "@e" => Some(server.worlds.read().await.map(|world| {
-                world
-            })),
+                .map_or_else(|| Some(vec![]), |p| Some(vec![p as Arc<dyn EntityBase>])),
+            "@a" => Some(
+                server
+                    .get_all_players()
+                    .await
+                    .into_iter()
+                    .map(|p| p as Arc<dyn EntityBase>)
+                    .collect(),
+            ),
+            "@e" => Some((*server.worlds.read().await).map(|world| world)),
             name => server.get_player_by_name(name).await.map(|p| vec![p]),
         };
 
-        Arg::Entities(entities)
+        entities
     }
 
     async fn suggest<'a>(
@@ -86,7 +92,7 @@ impl DefaultNameArgConsumer for EntitiesArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for EntitiesArgumentConsumer {
-    type Data = &'a [Arc<Player>];
+    type Data = &'a [Arc<dyn EntityBase>];
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
