@@ -44,7 +44,6 @@ macro_rules! global_path {
     }};
 }
 
-
 // #[macro_export]
 // macro_rules! read_data_from_file {
 //     ($path:expr) => {{
@@ -57,19 +56,27 @@ macro_rules! global_path {
 #[macro_export]
 macro_rules! read_data_from_file {
     ($path:expr) => {{
-        use std::path::PathBuf;
+        use std::path::{Path, PathBuf};
         use std::env;
         use std::fs;
-        //use log::warn;
-        
+
+        let normalized_path = {
+            let p = Path::new($path);
+            if let Some(fname) = p.file_name() {
+                PathBuf::from(fname)
+            } else {
+                PathBuf::from($path)
+            }
+        };
+
         let runtime_path = if let Ok(exe_path) = env::current_exe() {
             exe_path.parent()
-                .map(|dir| dir.join("assets").join($path))
-                .unwrap_or_else(|| PathBuf::from($path))
+                .map(|dir| dir.join("assets").join(&normalized_path))
+                .unwrap_or_else(|| normalized_path.clone())
         } else {
-            PathBuf::from($path)
+            normalized_path.clone()
         };
-        
+
         if fs::metadata(&runtime_path).is_ok() {
             match fs::read_to_string(&runtime_path) {
                 Ok(data) => {
