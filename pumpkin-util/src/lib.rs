@@ -56,9 +56,9 @@ macro_rules! global_path {
 #[macro_export]
 macro_rules! read_data_from_file {
     ($path:expr) => {{
-        use std::path::{Path, PathBuf};
         use std::env;
         use std::fs;
+        use std::path::{Path, PathBuf};
 
         let normalized_path = {
             let p = Path::new($path);
@@ -70,7 +70,8 @@ macro_rules! read_data_from_file {
         };
 
         let runtime_path = if let Ok(exe_path) = env::current_exe() {
-            exe_path.parent()
+            exe_path
+                .parent()
                 .map(|dir| dir.join("assets").join(&normalized_path))
                 .unwrap_or_else(|| normalized_path.clone())
         } else {
@@ -79,20 +80,17 @@ macro_rules! read_data_from_file {
 
         if fs::metadata(&runtime_path).is_ok() {
             match fs::read_to_string(&runtime_path) {
-                Ok(data) => {
-                    match serde_json::from_str(&data) {
-                        Ok(parsed) => parsed,
-                        Err(_) => {
-                            $crate::fallback_to_global_path!($path)
-                        }
+                Ok(data) => match serde_json::from_str(&data) {
+                    Ok(parsed) => parsed,
+                    Err(_) => {
+                        $crate::fallback_to_global_path!($path)
                     }
-                }
+                },
                 Err(_) => {
                     $crate::fallback_to_global_path!($path)
                 }
             }
         } else {
-            //eprintln!("Runtime path not found: {:?}", runtime_path);
             $crate::fallback_to_global_path!($path)
         }
     }};
@@ -105,9 +103,14 @@ macro_rules! fallback_to_global_path {
         let compile_time_path = global_path!($path);
         let data = std::fs::read_to_string(&compile_time_path)
             .unwrap_or_else(|e| panic!("File not found: {} - {}", compile_time_path.display(), e));
-        
-        serde_json::from_str(&data)
-            .unwrap_or_else(|e| panic!("Failed to parse JSON: {} - {}", compile_time_path.display(), e))
+
+        serde_json::from_str(&data).unwrap_or_else(|e| {
+            panic!(
+                "Failed to parse JSON: {} - {}",
+                compile_time_path.display(),
+                e
+            )
+        })
     }};
 }
 
