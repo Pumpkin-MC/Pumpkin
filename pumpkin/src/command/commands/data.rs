@@ -154,9 +154,7 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                     let item_display = snbt_colorful_display(item, depth + 1)
                         .map_err(|string| format!("Error displaying item.{key}: {string}"))?;
                     content = content
-                        .add_child(
-                            TextComponent::text(format!("{key}")).color_named(NamedColor::Aqua),
-                        )
+                        .add_child(TextComponent::text(key).color_named(NamedColor::Aqua))
                         .add_child(TextComponent::text(": "))
                         .add_child(item_display);
 
