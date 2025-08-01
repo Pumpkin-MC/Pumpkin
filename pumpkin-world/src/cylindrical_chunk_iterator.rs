@@ -19,20 +19,20 @@ impl Cylindrical {
     pub fn for_each_changed_chunk(
         old_cylindrical: Cylindrical,
         new_cylindrical: Cylindrical,
-        mut newly_included: impl FnMut(Vector2<i32>),
-        mut just_removed: impl FnMut(Vector2<i32>),
+        newly_included: &mut Vec<Vector2<i32>>,
+        just_removed: &mut Vec<Vector2<i32>>,
     ) {
         for new_cylindrical_chunk in new_cylindrical.all_chunks_within() {
             if !old_cylindrical.is_within_distance(new_cylindrical_chunk.x, new_cylindrical_chunk.y)
             {
-                newly_included(new_cylindrical_chunk);
+                newly_included.push(new_cylindrical_chunk);
             }
         }
 
         for old_cylindrical_chunk in old_cylindrical.all_chunks_within() {
             if !new_cylindrical.is_within_distance(old_cylindrical_chunk.x, old_cylindrical_chunk.y)
             {
-                just_removed(old_cylindrical_chunk);
+                just_removed.push(old_cylindrical_chunk);
             }
         }
     }

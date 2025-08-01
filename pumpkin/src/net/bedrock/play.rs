@@ -81,10 +81,11 @@ impl BedrockClient {
             return;
         }
         let pos = packet.position;
+        let entity = player.get_entity();
 
-        let old_block_pos = player.get_entity().block_pos.load();
+        let old_block_pos = entity.block_pos.load();
         player.living_entity.set_pos(pos.to_f64());
-        let new_block_pos = player.get_entity().block_pos.load();
+        let new_block_pos = entity.block_pos.load();
 
         if old_block_pos != new_block_pos {
             self.send_game_packet(&CNetworkChunkPublisherUpdate::new(
@@ -93,7 +94,7 @@ impl BedrockClient {
             ))
             .await;
 
-            chunker::update_position(player).await;
+            chunker::be_update_position(player).await;
         }
     }
 
