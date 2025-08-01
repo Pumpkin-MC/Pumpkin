@@ -7,10 +7,8 @@ use pumpkin_protocol::bedrock::{
 };
 use tokio::net::UdpSocket;
 
-use crate::{
-    net::bedrock::BedrockClient,
-    server::{CURRENT_BEDROCK_MC_VERSION, Server},
-};
+use crate::{net::bedrock::BedrockClient, server::Server};
+use pumpkin_world::CURRENT_BEDROCK_MC_VERSION;
 
 impl BedrockClient {
     pub async fn handle_unconnected_ping(

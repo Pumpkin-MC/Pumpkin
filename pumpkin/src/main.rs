@@ -49,17 +49,12 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
-
-use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
-
 use pumpkin::{LOGGER_IMPL, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
-
 
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
     text::{TextComponent, color::NamedColor},
 };
-use pumpkin_world::CURRENT_MC_VERSION;
 use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 
