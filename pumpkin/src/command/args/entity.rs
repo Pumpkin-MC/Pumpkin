@@ -7,7 +7,6 @@ use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::entity::EntityBase;
-use crate::entity::player::Player;
 use crate::server::Server;
 
 use super::super::args::ArgumentConsumer;
@@ -84,7 +83,7 @@ impl DefaultNameArgConsumer for EntityArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for EntityArgumentConsumer {
-    type Data = Arc<Player>;
+    type Data = Arc<dyn EntityBase>;
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

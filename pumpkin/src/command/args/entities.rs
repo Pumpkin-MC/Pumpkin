@@ -5,11 +5,10 @@ use crate::command::CommandSender;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::entity::EntityBase;
-use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
+use futures::StreamExt;
 use futures::future::join_all;
-use futures::{FutureExt, SinkExt, StreamExt};
 use pumpkin_data::entity::EntityType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
@@ -17,7 +16,6 @@ use pumpkin_util::GameMode;
 use uuid::Uuid;
 
 use super::super::args::ArgumentConsumer;
-use super::players::PlayersArgumentConsumer;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 
 enum EntitySelectorType {

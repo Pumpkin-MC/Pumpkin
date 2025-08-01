@@ -60,7 +60,7 @@ mod combat;
 pub mod predicate;
 
 #[async_trait]
-pub trait EntityBase: Send + Sync {
+pub trait EntityBase: Send + Sync + NBTStorage {
     /// Called every tick for this entity.
     ///
     /// The `caller` parameter is a reference to the entity that initiated the tick.
@@ -173,11 +173,8 @@ pub trait EntityBase: Send + Sync {
         name
     }
 
-    fn to_fat_ptr(&self) -> &dyn EntityBase
-    where
-        Self: Sized,
-    {
-        self as &dyn EntityBase
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
     }
 }
 
