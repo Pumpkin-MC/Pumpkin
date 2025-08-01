@@ -1,5 +1,6 @@
 pub mod container_click;
 pub mod crafting;
+pub mod double;
 pub mod drag_handler;
 pub mod entity_equipment;
 mod error;

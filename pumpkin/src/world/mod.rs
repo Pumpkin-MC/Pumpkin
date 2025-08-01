@@ -481,6 +481,18 @@ impl World {
             .await;
     }
 
+    pub async fn play_sound_fine(
+        &self,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        self.play_sound_raw(sound as u16, category, position, volume, pitch)
+            .await;
+    }
+
     pub async fn play_sound_expect(
         &self,
         player: &Player,
@@ -2829,6 +2841,10 @@ impl pumpkin_world::world::SimpleWorld for World {
         Self::update_neighbors(&self, block_pos, except).await;
     }
 
+    async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
+        self.add_synced_block_event(pos, r#type, data).await;
+    }
+
     async fn remove_block_entity(&self, block_pos: &BlockPos) {
         self.remove_block_entity(block_pos).await;
     }
@@ -2839,6 +2855,22 @@ impl pumpkin_world::world::SimpleWorld for World {
 
     async fn get_world_age(&self) -> i64 {
         self.level_time.lock().await.world_age
+    }
+
+    async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
+        self.play_sound(sound, category, position).await;
+    }
+
+    async fn play_sound_fine(
+        &self,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        self.play_sound_fine(sound, category, position, volume, pitch)
+            .await;
     }
 
     async fn scatter_inventory(

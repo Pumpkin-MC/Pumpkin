@@ -25,6 +25,21 @@ pub fn create_generic_9x3(
     )
 }
 
+pub fn create_generic_9x6(
+    sync_id: u8,
+    player_inventory: &Arc<PlayerInventory>,
+    inventory: Arc<dyn Inventory>,
+) -> GenericContainerScreenHandler {
+    GenericContainerScreenHandler::new(
+        WindowType::Generic9x6,
+        sync_id,
+        player_inventory,
+        inventory,
+        6,
+        9,
+    )
+}
+
 pub fn create_generic_3x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
@@ -72,13 +87,14 @@ impl GenericContainerScreenHandler {
         columns: u8,
     ) -> Self {
         let mut handler = Self {
-            inventory,
+            inventory: inventory.clone(),
             rows,
             columns,
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(screen_type)),
         };
 
-        //inventory.onOpen(player);
+        // TODO: Add player entity as a parameter
+        inventory.on_open();
         handler.add_inventory_slots();
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);
@@ -102,7 +118,7 @@ impl GenericContainerScreenHandler {
 impl ScreenHandler for GenericContainerScreenHandler {
     async fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player).await;
-        //TODO: self.inventory.on_closed(player).await;
+        self.inventory.on_close();
     }
 
     fn as_any(&self) -> &dyn Any {
