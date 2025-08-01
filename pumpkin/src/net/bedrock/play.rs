@@ -72,7 +72,7 @@ impl BedrockClient {
                 chunk_radius.0 as _,
             ))
             .await;
-            chunker::update_position(player).await;
+            chunker::be_update_position(player).await;
         }
     }
 
