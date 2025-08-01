@@ -1,12 +1,23 @@
+use async_trait::async_trait;
+use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{Block, FacingExt};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomImpl, get_seed};
+use std::any::Any;
 use std::{
     array::from_fn,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
-
-use async_trait::async_trait;
-use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
 
+use crate::block::viewer::{ViewerCountListener, ViewerCountTracker};
+use crate::world::{BlockFlags, SimpleWorld};
 use crate::{
     inventory::{
         split_stack, {Clearable, Inventory},
@@ -21,6 +32,9 @@ pub struct BarrelBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; 27],
     pub dirty: AtomicBool,
+
+    // Viewer
+    pub viewers: ViewerCountTracker,
 }
 
 #[async_trait]
@@ -39,8 +53,9 @@ impl BlockEntity for BarrelBlockEntity {
     {
         let barrel = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
+            viewers: ViewerCountTracker::new(),
         };
 
         barrel.read_data(nbt, &barrel.items);
@@ -54,16 +69,35 @@ impl BlockEntity for BarrelBlockEntity {
         //self.clear().await;
     }
 
+    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
+        self.viewers
+            .update_viewer_count::<BarrelBlockEntity>(self, world, &self.position)
+            .await;
+    }
+
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
     }
 
     fn is_dirty(&self) -> bool {
-        self.dirty.load(std::sync::atomic::Ordering::Relaxed)
+        self.dirty.load(Ordering::Relaxed)
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+#[async_trait]
+impl ViewerCountListener for BarrelBlockEntity {
+    async fn on_container_open(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
+        self.play_sound(world, Sound::BlockBarrelOpen).await;
+        self.set_open(world, true).await;
+    }
+
+    async fn on_container_close(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
+        self.play_sound(world, Sound::BlockBarrelClose).await;
+        self.set_open(world, false).await;
     }
 }
 
@@ -72,9 +106,48 @@ impl BarrelBlockEntity {
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
+            viewers: ViewerCountTracker::new(),
         }
+    }
+
+    async fn set_open(&self, world: &Arc<dyn SimpleWorld>, open: bool) {
+        let state = world.get_block_state(&self.position).await;
+        let mut properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
+
+        properties.open = open;
+
+        world
+            .clone()
+            .set_block_state(
+                &self.position,
+                properties.to_state_id(&Block::BARREL),
+                BlockFlags::NOTIFY_ALL,
+            )
+            .await;
+    }
+
+    async fn play_sound(&self, world: &Arc<dyn SimpleWorld>, sound: Sound) {
+        let mut rng = Xoroshiro::from_seed(get_seed());
+
+        let state = world.get_block_state(&self.position).await;
+        let properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
+        let direction = properties.facing.to_block_direction().to_offset();
+        let position = Vector3::new(
+            self.position.0.x as f64 + 0.5 + direction.x as f64 / 2.0,
+            self.position.0.y as f64 + 0.5 + direction.y as f64 / 2.0,
+            self.position.0.z as f64 + 0.5 + direction.z as f64 / 2.0,
+        );
+        world
+            .play_sound_fine(
+                sound,
+                SoundCategory::Blocks,
+                &position,
+                0.5,
+                rng.next_f32() * 0.1 + 0.9,
+            )
+            .await;
     }
 }
 
@@ -99,7 +172,7 @@ impl Inventory for BarrelBlockEntity {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY;
+        let mut removed = ItemStack::EMPTY.clone();
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -113,8 +186,20 @@ impl Inventory for BarrelBlockEntity {
         *self.items[slot].lock().await = stack;
     }
 
+    fn on_open(&self) {
+        self.viewers.open_container();
+    }
+
+    fn on_close(&self) {
+        self.viewers.close_container();
+    }
+
     fn mark_dirty(&self) {
-        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -122,7 +207,7 @@ impl Inventory for BarrelBlockEntity {
 impl Clearable for BarrelBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY;
+            *slot.lock().await = ItemStack::EMPTY.clone();
         }
     }
 }

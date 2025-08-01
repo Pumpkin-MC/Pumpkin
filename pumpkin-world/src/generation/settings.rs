@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::LazyLock};
 
+use pumpkin_util::read_data_from_file;
 use serde::Deserialize;
 
 use crate::{block::BlockStateCodec, dimension::Dimension};
@@ -7,10 +8,7 @@ use crate::{block::BlockStateCodec, dimension::Dimension};
 use super::{biome_coords::to_block, height_limit::HeightLimitView, surface::rule::MaterialRule};
 
 pub static GENERATION_SETTINGS: LazyLock<HashMap<GeneratorSetting, GenerationSettings>> =
-    LazyLock::new(|| {
-        serde_json::from_str(include_str!("../../../assets/chunk_gen_settings.json"))
-            .expect("Could not parse chunk_gen_settings.json registry.")
-    });
+    LazyLock::new(|| read_data_from_file!("../../../assets/chunk_gen_settings.json"));
 
 pub fn gen_settings_from_dimension(dimension: &Dimension) -> &GenerationSettings {
     match dimension {
@@ -54,10 +52,12 @@ pub struct GenerationShapeConfig {
 }
 
 impl GenerationShapeConfig {
+    #[inline]
     pub fn vertical_cell_block_count(&self) -> u8 {
         to_block(self.size_vertical)
     }
 
+    #[inline]
     pub fn horizontal_cell_block_count(&self) -> u8 {
         to_block(self.size_horizontal)
     }

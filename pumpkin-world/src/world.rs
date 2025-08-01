@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
+use crate::block::entities::BlockEntity;
+use crate::{BlockStateId, inventory::Inventory};
 use async_trait::async_trait;
 use bitflags::bitflags;
-use pumpkin_data::BlockDirection;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use thiserror::Error;
-
-use crate::BlockStateId;
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -56,14 +58,35 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
         except: Option<BlockDirection>,
     );
 
+    async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8);
+
     async fn remove_block_entity(&self, block_pos: &BlockPos);
+    async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>>;
+    async fn get_world_age(&self) -> i64;
+
+    async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>);
+    async fn play_sound_fine(
+        &self,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    );
+
+    /* ItemScatterer */
+    async fn scatter_inventory(
+        self: Arc<Self>,
+        position: &BlockPos,
+        inventory: &Arc<dyn Inventory>,
+    );
 }
 
 #[async_trait]
 pub trait BlockRegistryExt: Send + Sync {
     fn can_place_at(
         &self,
-        block: &pumpkin_data::Block,
+        block: &Block,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
         face: BlockDirection,
@@ -72,15 +95,12 @@ pub trait BlockRegistryExt: Send + Sync {
 
 #[async_trait]
 pub trait BlockAccessor: Send + Sync {
-    async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block;
+    async fn get_block(&self, position: &BlockPos) -> &'static Block;
 
-    async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState;
+    async fn get_block_state(&self, position: &BlockPos) -> &'static BlockState;
 
-    async fn get_block_and_block_state(
+    async fn get_block_and_state(
         &self,
         position: &BlockPos,
-    ) -> (
-        &'static pumpkin_data::Block,
-        &'static pumpkin_data::BlockState,
-    );
+    ) -> (&'static Block, &'static BlockState);
 }

@@ -1,26 +1,61 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures::future::join;
 use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_inventory::double::DoubleInventory;
+use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::chest::ChestBlockEntity;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
+use tokio::sync::Mutex;
 
-use crate::block::pumpkin_block::{
-    BlockMetadata, BrokenArgs, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs, UseWithItemArgs,
+use crate::block::{
+    BlockMetadata, BrokenArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
 use crate::{
-    block::{pumpkin_block::PumpkinBlock, registry::BlockActionResult},
+    block::{BlockBehaviour, registry::BlockActionResult},
     entity::player::Player,
 };
+
+struct ChestScreenFactory(Arc<dyn Inventory>);
+
+#[async_trait]
+impl ScreenHandlerFactory for ChestScreenFactory {
+    async fn create_screen_handler(
+        &self,
+        sync_id: u8,
+        player_inventory: &Arc<PlayerInventory>,
+        _player: &dyn InventoryPlayer,
+    ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
+        Some(Arc::new(Mutex::new(if self.0.size() > 27 {
+            create_generic_9x6(sync_id, player_inventory, self.0.clone())
+        } else {
+            create_generic_9x3(sync_id, player_inventory, self.0.clone())
+        })))
+    }
+
+    fn get_display_name(&self) -> TextComponent {
+        if self.0.size() > 27 {
+            TextComponent::translate("container.chestDouble", &[])
+        } else {
+            TextComponent::translate("container.chest", &[])
+        }
+    }
+}
 
 pub struct ChestBlock;
 
@@ -35,7 +70,7 @@ impl BlockMetadata for ChestBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for ChestBlock {
+impl BlockBehaviour for ChestBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut chest_props = ChestLikeProperties::default(args.block);
 
@@ -53,6 +88,11 @@ impl PumpkinBlock for ChestBlock {
         chest_props.r#type = r#type;
 
         chest_props.to_state_id(args.block)
+    }
+
+    async fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
+        // On the server, we don't need the ChestLidAnimator because the client is responsible for that.
+        args.r#type == Self::LID_ANIMATION_EVENT_TYPE
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
@@ -88,12 +128,46 @@ impl PumpkinBlock for ChestBlock {
         }
     }
 
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
-    }
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let (state, first_chest) = join(
+            args.world.get_block_state_id(args.position),
+            args.world.get_block_entity(args.position),
+        )
+        .await;
 
-    async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
-        BlockActionResult::Consume
+        let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
+            return BlockActionResult::Fail;
+        };
+
+        let chest_props = ChestLikeProperties::from_state_id(state, args.block);
+        let connected_towards = match chest_props.r#type {
+            ChestType::Single => None,
+            ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
+            ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
+        };
+
+        let inventory = if let Some(direction) = connected_towards
+            && let Some(second_inventory) = args
+                .world
+                .get_block_entity(&args.position.offset(direction.to_offset()))
+                .await
+                .and_then(BlockEntity::get_inventory)
+        {
+            // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
+            if matches!(chest_props.r#type, ChestType::Right) {
+                DoubleInventory::new(first_inventory, second_inventory)
+            } else {
+                DoubleInventory::new(second_inventory, first_inventory)
+            }
+        } else {
+            first_inventory
+        };
+
+        args.player
+            .open_handled_screen(&ChestScreenFactory(inventory))
+            .await;
+
+        BlockActionResult::Success
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {
@@ -127,6 +201,10 @@ impl PumpkinBlock for ChestBlock {
     }
 }
 
+impl ChestBlock {
+    pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
+}
+
 async fn compute_chest_props(
     world: &World,
     player: &Player,
@@ -142,12 +220,12 @@ async fn compute_chest_props(
         };
 
         let (clicked_block, clicked_block_state) = world
-            .get_block_and_block_state(&block_pos.offset(face.to_offset()))
+            .get_block_and_state_id(&block_pos.offset(face.to_offset()))
             .await;
 
         if clicked_block == block {
             let clicked_props =
-                ChestLikeProperties::from_state_id(clicked_block_state.id, clicked_block);
+                ChestLikeProperties::from_state_id(clicked_block_state, clicked_block);
 
             if clicked_props.r#type != ChestType::Single {
                 return (ChestType::Single, chest_facing);
@@ -201,15 +279,14 @@ async fn get_chest_properties_if_can_connect(
     wanted_type: ChestType,
 ) -> Option<ChestLikeProperties> {
     let (neighbor_block, neighbor_block_state) = world
-        .get_block_and_block_state(&block_pos.offset(direction.to_offset()))
+        .get_block_and_state_id(&block_pos.offset(direction.to_offset()))
         .await;
 
     if neighbor_block != block {
         return None;
     }
 
-    let neighbor_props =
-        ChestLikeProperties::from_state_id(neighbor_block_state.id, neighbor_block);
+    let neighbor_props = ChestLikeProperties::from_state_id(neighbor_block_state, neighbor_block);
     if neighbor_props.facing == facing && neighbor_props.r#type == wanted_type {
         return Some(neighbor_props);
     }

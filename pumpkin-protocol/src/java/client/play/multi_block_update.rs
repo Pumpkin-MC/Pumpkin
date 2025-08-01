@@ -29,10 +29,7 @@ impl CMultiBlockUpdate {
 }
 
 impl Serialize for CMultiBlockUpdate {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut tuple = serializer.serialize_tuple(2 + self.positions_to_state_ids.len())?;
 
         tuple.serialize_element(&vector3::packed_chunk_pos(&self.chunk_section))?;

@@ -7,7 +7,7 @@ use serde::Deserialize;
 use syn::LitInt;
 
 #[derive(Deserialize)]
-struct Biome {
+pub struct Biome {
     has_precipitation: bool,
     temperature: f32,
     downfall: f32,
@@ -16,7 +16,8 @@ struct Biome {
     features: Vec<Vec<String>>,
     creature_spawn_probability: Option<f32>,
     spawners: SpawnGroups,
-    id: u8,
+    spawn_costs: HashMap<String, SpawnCosts>,
+    pub id: u8,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash)]
@@ -31,17 +32,43 @@ struct SpawnGroups {
     water_creature: Vec<Spawner>,
 }
 
+#[allow(non_snake_case)]
 #[derive(Deserialize, Hash, PartialEq, Eq)]
 struct Spawner {
     r#type: String,
+    minCount: i32,
+    maxCount: i32,
 }
 
 impl Spawner {
     pub fn to_tokens(&self) -> TokenStream {
         let r#type = &self.r#type;
+        let min_count = &self.minCount;
+        let max_count = &self.maxCount;
         quote! {
             Spawner {
                 r#type: #r#type,
+                min_count: #min_count,
+                max_count: #max_count,
+            }
+        }
+    }
+}
+
+#[derive(Deserialize, PartialEq)]
+struct SpawnCosts {
+    energy_budget: f64,
+    charge: f64,
+}
+
+impl SpawnCosts {
+    pub fn to_tokens(&self) -> TokenStream {
+        let energy_budget = &self.energy_budget;
+        let charge = &self.charge;
+        quote! {
+            SpawnCosts {
+                energy_budget: #energy_budget,
+                charge: #charge,
             }
         }
     }
@@ -217,6 +244,18 @@ pub(crate) fn build() -> TokenStream {
             }
         };
 
+        let spawn_costs: Vec<_> = biome
+            .spawn_costs
+            .iter()
+            .map(|(name, cost)| {
+                let cost_token = cost.to_tokens();
+                let entity_type = name.strip_prefix("minecraft:").unwrap();
+                quote! {
+                    #entity_type => #cost_token
+                }
+            })
+            .collect();
+
         let temperature_modifier = match temperature_modifier {
             TemperatureModifier::Frozen => quote! { TemperatureModifier::Frozen },
             TemperatureModifier::None => quote! { TemperatureModifier::None },
@@ -225,17 +264,20 @@ pub(crate) fn build() -> TokenStream {
 
         variants.extend([quote! {
             pub const #format_name: Biome = Biome {
-               id: #index,
-               registry_id: #name,
-               weather: Weather::new(
-                    #has_precipitation,
-                    #temperature,
-                    #temperature_modifier,
-                    #downfall
-               ),
-               features: &[#(&[#(#features),*]),*],
-               creature_spawn_probability: #creature_spawn_probability,
-               spawners: #spawners,
+                id: #index,
+                registry_id: #name,
+                weather: Weather::new(
+                     #has_precipitation,
+                     #temperature,
+                     #temperature_modifier,
+                     #downfall
+                ),
+                features: &[#(&[#(#features),*]),*],
+                creature_spawn_probability: #creature_spawn_probability,
+                spawners: #spawners,
+                spawn_costs: phf::phf_map! {
+                    #(#spawn_costs),*
+                },
             };
         }]);
 
@@ -246,206 +288,223 @@ pub(crate) fn build() -> TokenStream {
     let overworld_tree = biome_trees.overworld.into_token_stream();
     let nether_tree = biome_trees.nether.into_token_stream();
     quote! {
+        use crate::biome::de::Deserialize;
+        use crate::entity_type::EntityType;
+        use crate::tag::Taggable;
+        use crate::tag::RegistryKey;
+        use pumpkin_util::biome::{TemperatureModifier, Weather};
+        use serde::{Deserializer, de};
+        use std::{fmt, hash::{Hasher, Hash}};
 
-            use pumpkin_util::biome::{TemperatureModifier, Weather};
-            use serde::{Deserializer, de};
-            use crate::biome::de::Deserialize;
-            use std::{fmt, hash::{Hasher, Hash}};
+        #[derive(Debug)]
+        pub struct Biome {
+            pub id: u8,
+            pub registry_id: &'static str,
+            pub weather: Weather,
+            // carvers: &'static [&str],
+            pub features: &'static [&'static [&'static str]],
+            pub creature_spawn_probability: f32,
+            pub spawners: SpawnGroups,
+            pub spawn_costs: phf::Map<&'static str, SpawnCosts>,
+        }
 
-            #[derive(Debug)]
-            pub struct Biome {
-                pub id: u8,
-                pub registry_id: &'static str,
-                pub weather: Weather,
-                // carvers: &'static [&str],
-                pub features: &'static [&'static [&'static str]],
-                pub creature_spawn_probability: f32,
-                pub spawners: SpawnGroups,
+        #[derive(Debug)]
+        pub struct SpawnGroups {
+            pub monster: &'static [Spawner],
+            pub ambient: &'static [Spawner],
+            pub axolotls: &'static [Spawner],
+            pub creature: &'static [Spawner],
+            pub misc: &'static [Spawner],
+            pub underground_water_creature: &'static [Spawner],
+            pub water_ambient: &'static [Spawner],
+            pub water_creature: &'static [Spawner],
+        }
+
+        #[derive(Debug)]
+        pub struct Spawner {
+            pub r#type: &'static str,
+            pub min_count: i32,
+            pub max_count: i32,
+        }
+
+        impl PartialEq for Biome {
+            fn eq(&self, other: &Biome) -> bool {
+                self.id == other.id
             }
+        }
 
-            #[derive(Debug)]
-            pub struct SpawnGroups {
-           pub monster: &'static [Spawner],
-          pub  ambient: &'static [Spawner],
-           pub axolotls: &'static [Spawner],
-          pub  creature: &'static [Spawner],
-          pub  misc: &'static [Spawner],
-          pub  underground_water_creature: &'static [Spawner],
-          pub  water_ambient: &'static [Spawner],
-          pub  water_creature: &'static [Spawner],
+        impl Eq for Biome {}
+
+        impl Hash for Biome {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.id.hash(state);
             }
+        }
 
-            #[derive(Debug)]
-    pub struct Spawner {
-       pub  r#type: &'static str,
-    }
+        #[derive(Debug)]
+        pub struct SpawnCosts {
+            pub energy_budget: f64,
+            pub charge: f64,
+        }
 
-            impl PartialEq for Biome {
-                fn eq(&self, other: &Biome) -> bool {
-                    self.id == other.id
-                }
-            }
+        impl<'de> Deserialize<'de> for &'static Biome {
+            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                struct BiomeVisitor;
 
-            impl Eq for Biome {}
+                impl de::Visitor<'_> for BiomeVisitor {
+                    type Value = &'static Biome;
 
-            impl Hash for Biome {
-                fn hash<H>(&self, state: &mut H) where H: Hasher {
-                    self.id.hash(state);
-                }
-            }
-
-            impl<'de> Deserialize<'de> for &'static Biome {
-                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-                where
-                    D: Deserializer<'de>,
-                {
-                    struct BiomeVisitor;
-
-                    impl de::Visitor<'_> for BiomeVisitor {
-                        type Value = &'static Biome;
-
-                        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                            formatter.write_str("a biome name as a string")
-                        }
-
-                        fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-                        where
-                            E: serde::de::Error,
-                        {
-                            self.visit_str(&v)
-                        }
-
-                        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-                        where
-                            E: de::Error,
-                        {
-                            let biome = Biome::from_name(value.strip_prefix("minecraft:").unwrap_or(value));
-                            biome.ok_or_else(|| E::unknown_variant(value, &["unknown biome"]))
-                        }
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter.write_str("a biome name as a string")
                     }
 
-                    deserializer.deserialize_str(BiomeVisitor)
-                }
-            }
+                    fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
+                        self.visit_str(&v)
+                    }
 
-            impl Biome {
-                #variants
-
-                pub fn from_name(name: &str) -> Option<&'static Self> {
-                    match name {
-                        #name_to_type
-                        _ => None
+                    fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                        let biome = Biome::from_name(value.strip_prefix("minecraft:").unwrap_or(value));
+                        biome.ok_or_else(|| E::unknown_variant(value, &["unknown biome"]))
                     }
                 }
 
-                pub const fn from_id(id: u8) -> Option<&'static Self> {
-                    match id {
-                        #id_to_type
-                        _ => None
-                    }
+                deserializer.deserialize_str(BiomeVisitor)
+            }
+        }
+
+        impl Biome {
+            #variants
+
+            pub fn from_name(name: &str) -> Option<&'static Self> {
+                match name {
+                    #name_to_type
+                    _ => None
                 }
             }
 
-            #[derive(PartialEq)]
-            pub struct ParameterRange {
-                min: i64,
-                max: i64,
+            pub const fn from_id(id: u8) -> Option<&'static Self> {
+                match id {
+                    #id_to_type
+                    _ => None
+                }
             }
+        }
 
-            impl ParameterRange {
-                fn calc_distance(&self, noise: i64) -> i64 {
-                    if noise > self.max {
-                        noise - self.max
-                    } else if noise < self.min {
-                        self.min - noise
-                    } else {
-                        0
+        impl Taggable for Biome {
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id as u16
+            }
+            #[inline]
+            fn tag_key() -> RegistryKey {
+                RegistryKey::WorldgenBiome
+            }
+            #[inline]
+            fn registry_key(&self) -> &str {
+                self.registry_id
+            }
+        }
+
+        #[derive(PartialEq)]
+        pub struct ParameterRange {
+            min: i64,
+            max: i64,
+        }
+
+        impl ParameterRange {
+            fn calc_distance(&self, noise: i64) -> i64 {
+                if noise > self.max {
+                    noise - self.max
+                } else if noise < self.min {
+                    self.min - noise
+                } else {
+                    0
+                }
+            }
+        }
+
+        #[derive(PartialEq)]
+        pub enum BiomeTree {
+            Leaf {
+                parameters: [ParameterRange; 7],
+                biome: &'static Biome,
+            },
+            Branch {
+                parameters: [ParameterRange; 7],
+                nodes: &'static [BiomeTree],
+            },
+        }
+
+
+        impl BiomeTree {
+            pub fn get(
+                &'static self,
+                point_list: &[i64; 7],
+                previous_result_node: &mut Option<&'static BiomeTree>,
+            ) -> &'static Biome {
+                let result_node = self.get_resulting_node(point_list, *previous_result_node);
+                match result_node {
+                    BiomeTree::Leaf { biome, .. } => {
+                        *previous_result_node = Some(result_node);
+                        biome
                     }
+                    _ => unreachable!(),
                 }
             }
 
-            #[derive(PartialEq)]
-            pub enum BiomeTree {
-                Leaf {
-                    parameters: [ParameterRange; 7],
-                    biome: &'static Biome,
-                },
-                Branch {
-                    parameters: [ParameterRange; 7],
-                    nodes: &'static [BiomeTree],
-                },
-            }
+            fn get_resulting_node(
+                &'static self,
+                point_list: &[i64; 7],
+                previous_result_node: Option<&'static BiomeTree>,
+            ) -> &'static BiomeTree {
+                match self {
+                    Self::Leaf { .. } => self,
+                    Self::Branch { nodes, .. } => {
+                        let mut distance = previous_result_node
+                            .map(|node| node.get_squared_distance(point_list))
+                            .unwrap_or(i64::MAX);
+                        let mut best_node = previous_result_node;
 
+                        for node in *nodes {
+                            let node_distance = node.get_squared_distance(point_list);
+                            if distance > node_distance {
+                                let node2 = node.get_resulting_node(point_list, best_node);
+                                let node2_distance = if node == node2 {
+                                    node_distance
+                                } else {
+                                    node2.get_squared_distance(point_list)
+                                };
 
-            impl BiomeTree {
-                pub fn get(
-                    &'static self,
-                    point_list: &[i64; 7],
-                    previous_result_node: &mut Option<&'static BiomeTree>,
-                ) -> &'static Biome {
-                    let result_node = self.get_resulting_node(point_list, *previous_result_node);
-                    match result_node {
-                        BiomeTree::Leaf { biome, .. } => {
-                            *previous_result_node = Some(result_node);
-                            biome
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-
-                fn get_resulting_node(
-                    &'static self,
-                    point_list: &[i64; 7],
-                    previous_result_node: Option<&'static BiomeTree>,
-                ) -> &'static BiomeTree {
-                    match self {
-                        Self::Leaf { .. } => self,
-                        Self::Branch { nodes, .. } => {
-                            let mut distance = previous_result_node
-                                .map(|node| node.get_squared_distance(point_list))
-                                .unwrap_or(i64::MAX);
-                            let mut best_node = previous_result_node;
-
-                            for node in *nodes {
-                                let node_distance = node.get_squared_distance(point_list);
-                                if distance > node_distance {
-                                    let node2 = node.get_resulting_node(point_list, best_node);
-                                    let node2_distance = if node == node2 {
-                                        node_distance
-                                    } else {
-                                        node2.get_squared_distance(point_list)
-                                    };
-
-                                    if distance > node2_distance {
-                                        distance = node2_distance;
-                                        best_node = Some(node2);
-                                    }
+                                if distance > node2_distance {
+                                    distance = node2_distance;
+                                    best_node = Some(node2);
                                 }
                             }
-
-                            best_node.expect("This should be populated after traversing the tree")
                         }
+
+                        best_node.expect("This should be populated after traversing the tree")
                     }
-                }
-
-                fn get_squared_distance(&self, point_list: &[i64; 7]) -> i64 {
-                    let parameters = match self {
-                        Self::Leaf { parameters, .. } => parameters,
-                        Self::Branch { parameters, .. } => parameters,
-                    };
-
-                    parameters
-                        .iter()
-                        .zip(point_list)
-                        .map(|(bound, value)| {
-                            let distance = bound.calc_distance(*value);
-                            distance * distance
-                        })
-                        .sum()
                 }
             }
 
-            pub const OVERWORLD_BIOME_SOURCE: BiomeTree = #overworld_tree;
-            pub const NETHER_BIOME_SOURCE: BiomeTree = #nether_tree;
+            fn get_squared_distance(&self, point_list: &[i64; 7]) -> i64 {
+                let parameters = match self {
+                    Self::Leaf { parameters, .. } => parameters,
+                    Self::Branch { parameters, .. } => parameters,
+                };
+
+                parameters
+                    .iter()
+                    .zip(point_list)
+                    .map(|(bound, value)| {
+                        let distance = bound.calc_distance(*value);
+                        distance * distance
+                    })
+                    .sum()
+            }
         }
+
+        pub const OVERWORLD_BIOME_SOURCE: BiomeTree = #overworld_tree;
+        pub const NETHER_BIOME_SOURCE: BiomeTree = #nether_tree;
+    }
 }

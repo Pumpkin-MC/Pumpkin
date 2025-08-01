@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::{
+    entity::player::Player,
+    item::{ItemBehaviour, ItemMetadata},
+};
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, BlockState,
+    Block,
     fluid::Fluid,
     item::Item,
     sound::{Sound, SoundCategory},
@@ -13,9 +16,8 @@ use pumpkin_util::{
     GameMode,
     math::{position::BlockPos, vector3::Vector3},
 };
-use pumpkin_world::{inventory::Inventory, item::ItemStack, world::BlockFlags};
+use pumpkin_world::{inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags};
 
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
 use crate::world::World;
 
 pub struct EmptyBucketItem;
@@ -67,8 +69,8 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     (start_pos, end_pos)
 }
 
-fn waterlogged_check(block: &Block, state: &BlockState) -> Option<bool> {
-    block.properties(state.id).and_then(|properties| {
+fn waterlogged_check(block: &Block, state: u16) -> Option<bool> {
+    block.properties(state).and_then(|properties| {
         properties
             .to_props()
             .into_iter()
@@ -77,10 +79,10 @@ fn waterlogged_check(block: &Block, state: &BlockState) -> Option<bool> {
     })
 }
 
-fn set_waterlogged(block: &Block, state: &BlockState, waterlogged: bool) -> u16 {
-    let original_props = &block.properties(state.id).unwrap().to_props();
+fn set_waterlogged(block: &Block, state: u16, waterlogged: bool) -> u16 {
+    let original_props = &block.properties(state).unwrap().to_props();
     let waterlogged = waterlogged.to_string();
-    let props = original_props
+    let props: Vec<(&str, &str)> = original_props
         .iter()
         .map(|(key, value)| {
             if key == "waterlogged" {
@@ -90,11 +92,11 @@ fn set_waterlogged(block: &Block, state: &BlockState, waterlogged: bool) -> u16 
             }
         })
         .collect();
-    block.from_properties(props).unwrap().to_state_id(block)
+    block.from_properties(&props).to_state_id(block)
 }
 
 #[async_trait]
-impl PumpkinItem for EmptyBucketItem {
+impl ItemBehaviour for EmptyBucketItem {
     async fn normal_use(&self, _item: &Item, player: &Player) {
         let world = player.world().await.clone();
         let (start_pos, end_pos) = get_start_and_end_pos(player);
@@ -117,10 +119,10 @@ impl PumpkinItem for EmptyBucketItem {
             return;
         };
 
-        let (block, state) = world.get_block_and_block_state(&block_pos).await;
+        let (block, state) = world.get_block_and_state_id(&block_pos).await;
 
         if block
-            .properties(state.id)
+            .properties(state)
             .and_then(|properties| {
                 properties
                     .to_props()
@@ -134,10 +136,10 @@ impl PumpkinItem for EmptyBucketItem {
             world
                 .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
-            world.schedule_fluid_tick(block.id, block_pos, 5).await;
-        } else if state.id == Block::LAVA.default_state.id
-            || state.id == Block::WATER.default_state.id
-        {
+            world
+                .schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal)
+                .await;
+        } else if state == Block::LAVA.default_state.id || state == Block::WATER.default_state.id {
             world
                 .break_block(&block_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
@@ -150,7 +152,7 @@ impl PumpkinItem for EmptyBucketItem {
                 .await;
         } else {
             let (block, state) = world
-                .get_block_and_block_state(&block_pos.offset(direction.to_offset()))
+                .get_block_and_state_id(&block_pos.offset(direction.to_offset()))
                 .await;
             if waterlogged_check(block, state).is_some() {
                 let state_id = set_waterlogged(block, state, false);
@@ -162,14 +164,19 @@ impl PumpkinItem for EmptyBucketItem {
                     )
                     .await;
                 world
-                    .schedule_fluid_tick(block.id, block_pos.offset(direction.to_offset()), 5)
+                    .schedule_fluid_tick(
+                        &Fluid::WATER,
+                        block_pos.offset(direction.to_offset()),
+                        5,
+                        TickPriority::Normal,
+                    )
                     .await;
             } else {
                 return;
             }
         }
 
-        let item = if state.id == Block::LAVA.default_state.id {
+        let item = if state == Block::LAVA.default_state.id {
             &Item::LAVA_BUCKET
         } else {
             &Item::WATER_BUCKET
@@ -199,7 +206,7 @@ impl PumpkinItem for EmptyBucketItem {
 }
 
 #[async_trait]
-impl PumpkinItem for FilledBucketItem {
+impl ItemBehaviour for FilledBucketItem {
     async fn normal_use(&self, item: &Item, player: &Player) {
         let world = player.world().await.clone();
         let (start_pos, end_pos) = get_start_and_end_pos(player);
@@ -229,23 +236,25 @@ impl PumpkinItem for FilledBucketItem {
                 .await;
             return;
         }
-        let (block, state) = world.get_block_and_block_state(&pos).await;
+        let (block, state) = world.get_block_and_state_id(&pos).await;
         if waterlogged_check(block, state).is_some() && item.id == Item::WATER_BUCKET.id {
             let state_id = set_waterlogged(block, state, true);
             world
                 .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
                 .await;
-            world.schedule_fluid_tick(block.id, pos, 5).await;
+            world
+                .schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal)
+                .await;
         } else {
             let (block, state) = world
-                .get_block_and_block_state(&pos.offset(direction.to_offset()))
+                .get_block_and_state(&pos.offset(direction.to_offset()))
                 .await;
 
-            if waterlogged_check(block, state).is_some() {
+            if waterlogged_check(block, state.id).is_some() {
                 if item.id == Item::LAVA_BUCKET.id {
                     return;
                 }
-                let state_id = set_waterlogged(block, state, true);
+                let state_id = set_waterlogged(block, state.id, true);
 
                 world
                     .set_block_state(
@@ -255,7 +264,12 @@ impl PumpkinItem for FilledBucketItem {
                     )
                     .await;
                 world
-                    .schedule_fluid_tick(block.id, pos.offset(direction.to_offset()), 5)
+                    .schedule_fluid_tick(
+                        &Fluid::WATER,
+                        pos.offset(direction.to_offset()),
+                        5,
+                        TickPriority::Normal,
+                    )
                     .await;
             } else if state.id == Block::AIR.default_state.id || state.is_liquid() {
                 world

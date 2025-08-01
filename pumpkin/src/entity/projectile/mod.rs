@@ -1,10 +1,12 @@
-use std::f32::{self};
+use std::{
+    f32::{self},
+    sync::atomic::Ordering,
+};
 
+use super::{Entity, EntityBase, living::LivingEntity};
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;
-
-use super::{Entity, EntityBase, living::LivingEntity};
 
 pub struct ThrownItemEntity {
     entity: Entity,
@@ -45,7 +47,7 @@ impl ThrownItemEntity {
             .velocity
             .store(self.entity.velocity.load().add_raw(
                 shooter_vel.x,
-                if shooter.on_ground.load(std::sync::atomic::Ordering::Relaxed) {
+                if shooter.on_ground.load(Ordering::Relaxed) {
                     0.0
                 } else {
                     shooter_vel.y
@@ -81,7 +83,14 @@ impl EntityBase for ThrownItemEntity {
         &self.entity
     }
 
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+    async fn damage_with_context(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
         false
     }
 

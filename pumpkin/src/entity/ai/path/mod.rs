@@ -1,4 +1,3 @@
-use pumpkin_protocol::java::client::play::CUpdateEntityPos;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::entity::living::LivingEntity;
@@ -75,29 +74,15 @@ impl Navigator {
             goal.current_progress += best_move.normalize() * goal.speed;
 
             // Now let's move
-            entity.set_pos(goal.current_progress);
-            let pos = entity.entity.pos.load();
-            let last_pos = entity.last_pos.load();
-
-            entity
-                .entity
-                .world
-                .read()
-                .await
-                .broadcast_packet_all(&CUpdateEntityPos::new(
-                    entity.entity.entity_id.into(),
-                    Vector3::new(
-                        pos.x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
-                        pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
-                        pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
-                    ),
-                    entity
-                        .entity
-                        .on_ground
-                        .load(std::sync::atomic::Ordering::Relaxed),
-                ))
-                .await;
+            entity.entity.set_pos(goal.current_progress);
+            entity.entity.send_pos().await;
         }
+    }
+
+    #[must_use]
+    pub fn is_idle(&self) -> bool {
+        // TODO: implement
+        false
     }
 }
 

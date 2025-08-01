@@ -5,7 +5,6 @@ use pumpkin_data::{
     Block, BlockDirection, BlockState, FacingExt,
     block_properties::{
         BlockProperties, MovingPistonLikeProperties, PistonHeadLikeProperties, PistonType,
-        get_block_by_state_id, get_state_by_state_id,
     },
     block_state::PistonBehavior,
 };
@@ -19,9 +18,9 @@ use pumpkin_world::{
 use crate::{
     block::{
         blocks::redstone::is_emitting_redstone_power,
-        pumpkin_block::{
-            BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
-            PumpkinBlock,
+        {
+            BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs,
+            OnSyncedBlockEventArgs, PlacedArgs,
         },
     },
     world::World,
@@ -86,7 +85,7 @@ impl PistonBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for PistonBlock {
+impl BlockBehaviour for PistonBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = PistonProps::default(args.block);
         props.extended = false;
@@ -188,7 +187,7 @@ impl PumpkinBlock for PistonBlock {
             .add_block_entity(Arc::new(PistonBlockEntity {
                 position: *pos,
                 facing: dir,
-                pushed_block_state: get_state_by_state_id(props.to_state_id(block)),
+                pushed_block_state: BlockState::from_id(props.to_state_id(block)),
                 current_progress: 0.0.into(),
                 last_progress: 0.0.into(),
                 extending: false,
@@ -199,7 +198,7 @@ impl PumpkinBlock for PistonBlock {
         world.update_neighbors(pos, None).await;
         if sticky {
             let pos = pos.offset_dir(dir.to_offset(), 2);
-            let (block, state) = world.get_block_and_block_state(&pos).await;
+            let (block, state) = world.get_block_and_state(&pos).await;
             let mut bl2 = false;
             if block == &Block::MOVING_PISTON {
                 if let Some(entity) = world.get_block_entity(&pos).await {
@@ -247,7 +246,7 @@ impl PumpkinBlock for PistonBlock {
 async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDirection) -> bool {
     for dir in BlockDirection::all() {
         let neighbor_pos = block_pos.offset(dir.to_offset());
-        let (block, state) = world.get_block_and_block_state(&neighbor_pos).await;
+        let (block, state) = world.get_block_and_state(&neighbor_pos).await;
         // Pistons can't be powered from the same direction as they are facing
         if dir == piston_dir
             || !is_emitting_redstone_power(block, state, world, &neighbor_pos, dir).await
@@ -257,13 +256,13 @@ async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDir
         return true;
     }
     let neighbor_pos = block_pos.offset(BlockDirection::Down.to_offset());
-    let (block, state) = world.get_block_and_block_state(&neighbor_pos).await;
+    let (block, state) = world.get_block_and_state(&neighbor_pos).await;
     if is_emitting_redstone_power(block, state, world, block_pos, BlockDirection::Down).await {
         return true;
     }
     for dir in BlockDirection::all() {
         let neighbor_pos = block_pos.up().offset(dir.to_offset());
-        let (block, state) = world.get_block_and_block_state(&neighbor_pos).await;
+        let (block, state) = world.get_block_and_state(&neighbor_pos).await;
         if dir == BlockDirection::Down
             || !is_emitting_redstone_power(block, state, world, &neighbor_pos, dir).await
         {
@@ -291,11 +290,11 @@ async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
         }
     } else if !should_extent && props.extended {
         let new_pos = block_pos.offset_dir(dir.to_offset(), 2);
-        let (new_block, new_state) = world.get_block_and_block_state(&new_pos).await;
+        let (new_block, new_state) = world.get_block_and_state_id(&new_pos).await;
         let mut r#type = 1;
 
         if new_block == &Block::MOVING_PISTON {
-            let new_props = MovingPistonLikeProperties::from_state_id(new_state.id, new_block);
+            let new_props = MovingPistonLikeProperties::from_state_id(new_state, new_block);
             if new_props.facing == props.facing {
                 if let Some(entity) = world.get_block_entity(&new_pos).await {
                     let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
@@ -418,7 +417,7 @@ async fn move_piston(
             .add_block_entity(Arc::new(PistonBlockEntity {
                 position: extended_pos,
                 facing: dir.to_facing().to_block_direction(),
-                pushed_block_state: get_state_by_state_id(props.to_state_id(&Block::PISTON_HEAD)),
+                pushed_block_state: BlockState::from_id(props.to_state_id(&Block::PISTON_HEAD)),
                 current_progress: 0.0.into(),
                 last_progress: 0.0.into(),
                 extending: true,
@@ -444,7 +443,7 @@ async fn move_piston(
             .prepare(
                 world,
                 pos,
-                get_block_by_state_id(state.id),
+                Block::from_state_id(state.id),
                 state.id,
                 BlockFlags::NOTIFY_LISTENERS,
             )
@@ -468,7 +467,7 @@ async fn move_piston(
                 .block_registry
                 .on_state_replaced(
                     world,
-                    get_block_by_state_id(block_state.id),
+                    Block::from_state_id(block_state.id),
                     &broken_block_pos,
                     block_state.id, // ?
                     false,
@@ -479,7 +478,7 @@ async fn move_piston(
                 .prepare(
                     world,
                     &broken_block_pos,
-                    get_block_by_state_id(block_state.id),
+                    Block::from_state_id(block_state.id),
                     block_state.id,
                     BlockFlags::NOTIFY_LISTENERS,
                 )

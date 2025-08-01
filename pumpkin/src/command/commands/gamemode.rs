@@ -14,6 +14,7 @@ use crate::command::dispatcher::CommandError::{InvalidConsumption, InvalidRequir
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandExecutor, CommandSender};
+use crate::entity::EntityBase;
 use crate::server::Server;
 
 const NAMES: [&str; 1] = ["gamemode"];
@@ -91,7 +92,7 @@ impl CommandExecutor for TargetPlayerExecutor {
                         .send_message(TextComponent::translate(
                             "commands.gamemode.success.other",
                             [
-                                TextComponent::text(target.gameprofile.name.clone()),
+                                target.get_display_name().await,
                                 TextComponent::translate(gamemode_string, []),
                             ],
                         ))

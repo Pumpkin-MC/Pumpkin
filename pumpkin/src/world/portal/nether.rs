@@ -3,7 +3,8 @@ use std::sync::Arc;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
-    tag::Tagable,
+    tag,
+    tag::Taggable,
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -121,7 +122,7 @@ impl NetherPortal {
         let limit_y = pos.0.y - Self::MAX_HEIGHT as i32;
         let mut pos = *pos;
         while pos.0.y > limit_y {
-            let (block, state) = world.get_block_and_block_state(&pos.down()).await;
+            let (block, state) = world.get_block_and_state(&pos.down()).await;
             if !Self::valid_state_inside_portal(block, state) {
                 break;
             }
@@ -143,7 +144,7 @@ impl NetherPortal {
         let mut lower_corner;
         for i in 0..=Self::MAX_WIDTH {
             lower_corner = original_lower_corner.offset_dir(negative_dir.to_offset(), i as i32);
-            let (block, block_state) = world.get_block_and_block_state(&lower_corner).await;
+            let (block, block_state) = world.get_block_and_state(&lower_corner).await;
             if !Self::valid_state_inside_portal(block, block_state) {
                 if &Self::FRAME_BLOCK != block {
                     break;
@@ -208,7 +209,7 @@ impl NetherPortal {
                 pos = lower_corner
                     .offset_dir(BlockDirection::Up.to_offset(), i)
                     .offset_dir(negative_dir.to_offset(), j as i32);
-                let (block, block_state) = world.get_block_and_block_state(&pos).await;
+                let (block, block_state) = world.get_block_and_state(&pos).await;
                 if !Self::valid_state_inside_portal(block, block_state) {
                     return i as u32;
                 }
@@ -242,7 +243,7 @@ impl NetherPortal {
     /// What is allowed to be inside the Portal frame
     fn valid_state_inside_portal(block: &Block, state: &BlockState) -> bool {
         state.is_air()
-            || block.is_tagged_with("minecraft:fire").unwrap()
+            || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_FIRE)
             || block == &Block::NETHER_PORTAL
     }
 }

@@ -1,4 +1,4 @@
-use crate::block::pumpkin_block::{OnPlaceArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, OnPlaceArgs};
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, DispenserLikeProperties};
 use pumpkin_macros::pumpkin_block;
@@ -8,7 +8,7 @@ use pumpkin_world::BlockStateId;
 pub struct DispenserBlock;
 
 #[async_trait]
-impl PumpkinBlock for DispenserBlock {
+impl BlockBehaviour for DispenserBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = DispenserLikeProperties::default(args.block);
         props.facing = args.player.living_entity.entity.get_facing().opposite();

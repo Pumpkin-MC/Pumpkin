@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::Axis;
@@ -10,22 +9,24 @@ use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::{Block, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
+use crate::block::BlockBehaviour;
+use crate::block::CanPlaceAtArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::NormalUseArgs;
+use crate::block::OnNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::PlacedArgs;
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::NormalUseArgs;
-use crate::block::pumpkin_block::OnNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use pumpkin_protocol::java::server::play::SUseItemOn;
@@ -35,8 +36,8 @@ use crate::world::World;
 type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 
 async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, block_state) = world.get_block_and_block_state(block_pos).await;
-    let mut door_props = DoorProperties::from_state_id(block_state.id, block);
+    let (block, block_state) = world.get_block_and_state_id(block_pos).await;
+    let mut door_props = DoorProperties::from_state_id(block_state, block);
     door_props.open = !door_props.open;
 
     let other_half = match door_props.half {
@@ -45,8 +46,8 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
     };
     let other_pos = block_pos.offset(other_half.to_offset());
 
-    let (other_block, other_state_id) = world.get_block_and_block_state(&other_pos).await;
-    let mut other_door_props = DoorProperties::from_state_id(other_state_id.id, other_block);
+    let (other_block, other_state_id) = world.get_block_and_state_id(&other_pos).await;
+    let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
     other_door_props.open = door_props.open;
 
     world
@@ -85,14 +86,14 @@ fn can_open_door(block: &Block) -> bool {
 // Todo: The sounds should be from BlockSetType
 fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
-        if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
+        if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
             Sound::BlockWoodenDoorOpen
         } else if block == &Block::IRON_DOOR {
             Sound::BlockIronDoorOpen
         } else {
             Sound::BlockCopperDoorOpen
         }
-    } else if block.is_tagged_with("minecraft:wooden_doors").unwrap() {
+    } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
         Sound::BlockWoodenDoorClose
     } else if block == &Block::IRON_DOOR {
         Sound::BlockIronDoorClose
@@ -112,27 +113,25 @@ async fn get_hinge(
     let top_pos = pos.up();
     let left_dir = facing.rotate_counter_clockwise();
     let left_pos = pos.offset(left_dir.to_block_direction().to_offset());
-    let (left_block, left_state) = world.get_block_and_block_state(&left_pos).await;
+    let (left_block, left_state) = world.get_block_and_state(&left_pos).await;
     let top_facing = top_pos.offset(facing.to_block_direction().to_offset());
     let top_state = world.get_block_state(&top_facing).await;
     let right_dir = facing.rotate_clockwise();
     let right_pos = pos.offset(right_dir.to_block_direction().to_offset());
-    let (right_block, right_state) = world.get_block_and_block_state(&right_pos).await;
+    let (right_block, right_state) = world.get_block_and_state(&right_pos).await;
     let top_right = top_pos.offset(facing.to_block_direction().to_offset());
     let top_right_state = world.get_block_state(&top_right).await;
 
     let has_left_door = world
         .get_block(&left_pos)
         .await
-        .is_tagged_with("minecraft:doors")
-        .unwrap()
+        .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
         && DoorProperties::from_state_id(left_state.id, left_block).half == DoubleBlockHalf::Lower;
 
     let has_right_door = world
         .get_block(&right_pos)
         .await
-        .is_tagged_with("minecraft:doors")
-        .unwrap()
+        .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
         && DoorProperties::from_state_id(right_state.id, right_block).half
             == DoubleBlockHalf::Lower;
 
@@ -161,19 +160,11 @@ async fn get_hinge(
     }
 }
 
+#[pumpkin_block_from_tag("minecraft:doors")]
 pub struct DoorBlock;
-impl BlockMetadata for DoorBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:doors").unwrap()
-    }
-}
 
 #[async_trait]
-impl PumpkinBlock for DoorBlock {
+impl BlockBehaviour for DoorBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let powered = block_receives_redstone_power(args.world, args.position).await
             || block_receives_redstone_power(args.world, &args.position.up()).await;
@@ -210,7 +201,7 @@ impl PumpkinBlock for DoorBlock {
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !can_open_door(args.block) {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
 
         toggle_door(args.player, args.world, args.position).await;
@@ -227,14 +218,13 @@ impl PumpkinBlock for DoorBlock {
             DoubleBlockHalf::Lower => BlockDirection::Up,
         };
         let other_pos = args.position.offset(other_half.to_offset());
-        let (other_block, other_state_id) = args.world.get_block_and_block_state(&other_pos).await;
+        let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_pos).await;
 
         let powered = block_receives_redstone_power(args.world, args.position).await
             || block_receives_redstone_power(args.world, &other_pos).await;
 
         if args.block.id == other_block.id && powered != door_props.powered {
-            let mut other_door_props =
-                DoorProperties::from_state_id(other_state_id.id, other_block);
+            let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
             door_props.powered = !door_props.powered;
             other_door_props.powered = door_props.powered;
 

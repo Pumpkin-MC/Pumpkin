@@ -49,7 +49,12 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
+
 use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+
+use pumpkin::{LOGGER_IMPL, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+
+
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
     text::{TextComponent, color::NamedColor},
@@ -76,15 +81,8 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 #[cfg(feature = "dhat-heap")]
 use pumpkin::HEAP_PROFILER;
 
-pub static PLUGIN_MANAGER: LazyLock<Arc<RwLock<PluginManager>>> = LazyLock::new(|| {
-    let manager = PluginManager::new();
-    let arc_manager = Arc::new(RwLock::new(manager));
-    let clone = Arc::clone(&arc_manager);
-    let arc_manager_clone = arc_manager.clone();
-    let mut manager = futures::executor::block_on(arc_manager_clone.write());
-    manager.set_self_ref(clone);
-    arc_manager
-});
+pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
+    LazyLock::new(|| Arc::new(PluginManager::new()));
 
 pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
@@ -117,14 +115,16 @@ async fn main() {
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        if let Some((wrapper, _)) = LOGGER_IMPL.as_ref() {
+            // Drop readline to reset terminal state
+            let _ = wrapper.take_readline();
+        }
         default_panic(info);
         // TODO: Gracefully exit?
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-    log::info!(
-        "Starting Pumpkin {CARGO_PKG_VERSION} for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
-    );
+    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
 
     log::debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
@@ -153,9 +153,9 @@ async fn main() {
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());
     log::info!(
-        "Server is now running. Connect using: {}{}{}",
+        "Server is now running. Connect using port: {}{}{}",
         if BASIC_CONFIG.java_edition {
-            format!("Java Edition: {}", BASIC_CONFIG.java_edition_address)
+            format!("Java Edition: {}", BASIC_CONFIG.java_edition_port)
         } else {
             String::new()
         },
@@ -165,10 +165,7 @@ async fn main() {
             ""
         },
         if BASIC_CONFIG.bedrock_edition {
-            format!(
-                "Bedrock/Pocket Edition: {}",
-                BASIC_CONFIG.bedrock_edition_address
-            )
+            format!("Bedrock Edition: {}", BASIC_CONFIG.bedrock_edition_port)
         } else {
             String::new()
         }

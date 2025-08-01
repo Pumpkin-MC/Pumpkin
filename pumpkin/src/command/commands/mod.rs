@@ -13,6 +13,7 @@ mod banlist;
 mod bossbar;
 mod clear;
 mod damage;
+mod data;
 pub mod defaultgamemode;
 mod deop;
 mod difficulty;
@@ -39,6 +40,7 @@ mod pumpkin;
 mod say;
 mod seed;
 mod setblock;
+mod setworldspawn;
 mod stop;
 mod stopsound;
 mod summon;
@@ -112,6 +114,11 @@ pub async fn default_dispatcher() -> CommandDispatcher {
         defaultgamemode::init_command_tree(),
         "minecraft:command.defaultgamemode",
     );
+    dispatcher.register(
+        setworldspawn::init_command_tree(),
+        "minecraft:command.setworldspawn",
+    );
+    dispatcher.register(data::init_command_tree(), "minecraft:command.data");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -370,10 +377,24 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.data",
+            "Query and modify data of entities and blocks",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
 }
 
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Three
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.setworldspawn",
+            "Sets the world spawn point",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
     registry
         .register_permission(Permission::new(
             "minecraft:command.op",

@@ -1,4 +1,4 @@
-use pumpkin_data::{BlockState, block_properties::get_block_by_state_id};
+use pumpkin_data::{Block, BlockState};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -9,7 +9,7 @@ pub struct BlockMatchRuleTest {
 
 impl BlockMatchRuleTest {
     pub fn test(&self, state: &BlockState) -> bool {
-        get_block_by_state_id(state.id).name
+        Block::from_state_id(state.id).name
             == self.block.strip_prefix("minecraft:").unwrap_or(&self.block)
     }
 }

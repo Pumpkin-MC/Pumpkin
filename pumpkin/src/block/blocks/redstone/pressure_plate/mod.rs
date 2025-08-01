@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, chunk::TickPriority, world::BlockFlags};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{
-    block::pumpkin_block::{OnEntityCollisionArgs, OnScheduledTickArgs, OnStateReplacedArgs},
+    block::{OnEntityCollisionArgs, OnScheduledTickArgs, OnStateReplacedArgs},
     world::World,
 };
 
@@ -75,7 +75,7 @@ pub(crate) trait PressurePlate {
 
     async fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8;
 
-    fn tick_rate(&self) -> u16 {
+    fn tick_rate(&self) -> u8 {
         20
     }
 }

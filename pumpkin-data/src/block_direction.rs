@@ -1,6 +1,6 @@
 use crate::block_properties::{Axis, Facing, HorizontalAxis, HorizontalFacing};
 use pumpkin_util::{
-    math::vector3::Vector3,
+    math::vector3::{Axis as MathAxis, Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
@@ -15,6 +15,25 @@ pub enum BlockDirection {
     South,
     West,
     East,
+}
+
+impl From<MathAxis> for Axis {
+    fn from(a: MathAxis) -> Self {
+        match a {
+            MathAxis::X => Self::X,
+            MathAxis::Y => Self::Y,
+            MathAxis::Z => Self::Z,
+        }
+    }
+}
+impl From<Axis> for MathAxis {
+    fn from(a: Axis) -> MathAxis {
+        match a {
+            Axis::X => Self::X,
+            Axis::Y => Self::Y,
+            Axis::Z => Self::Z,
+        }
+    }
 }
 
 pub struct InvalidBlockFace;
@@ -92,6 +111,10 @@ impl BlockDirection {
             BlockDirection::West => BlockDirection::East,
             BlockDirection::East => BlockDirection::West,
         }
+    }
+
+    pub fn positive(&self) -> bool {
+        matches!(self, Self::South | Self::East | Self::Up)
     }
 
     pub fn all() -> [BlockDirection; 6] {

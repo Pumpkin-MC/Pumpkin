@@ -27,6 +27,13 @@ impl<T: Math + Copy> Vector2<T> {
         }
     }
 
+    pub fn add_raw(&self, x: T, y: T) -> Self {
+        Vector2 {
+            x: self.x + x,
+            y: self.y + y,
+        }
+    }
+
     pub fn sub(&self, other: &Vector2<T>) -> Self {
         Vector2 {
             x: self.x - other.x,
@@ -122,10 +129,7 @@ pub const fn to_chunk_pos(vec: &Vector2<i32>) -> Vector2<i32> {
 }
 
 impl serde::Serialize for Vector2<f32> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::with_capacity(size_of::<Vector2<f32>>());
         buf.put_f32(self.x);
         buf.put_f32(self.y);

@@ -278,7 +278,7 @@ mod test {
 
     #[test]
     fn test_deserialize_level_dat() {
-        let raw_compressed_nbt = include_bytes!("../../assets/level_1_21_4.dat");
+        let raw_compressed_nbt = fs::read("assets/level_1_21_4.dat").unwrap();
         assert!(!raw_compressed_nbt.is_empty());
 
         let decoder = GzDecoder::new(&raw_compressed_nbt[..]);

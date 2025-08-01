@@ -1,5 +1,5 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::{BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -30,7 +30,7 @@ impl BlockMetadata for CopperBulbBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for CopperBulbBlock {
+impl BlockBehaviour for CopperBulbBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = CopperBulbLikeProperties::default(args.block);
         let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;

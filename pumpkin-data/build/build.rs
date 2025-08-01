@@ -4,11 +4,14 @@ use quote::{format_ident, quote};
 use rayon::prelude::*;
 use std::{fs, io::Write, path::Path, process::Command};
 
+mod attributes;
 mod biome;
 mod block;
 mod chunk_status;
 mod composter_increase_chance;
 mod damage_type;
+mod data_component;
+mod effect;
 mod enchantments;
 mod entity_pose;
 mod entity_status;
@@ -25,13 +28,15 @@ mod noise_parameter;
 mod noise_router;
 mod packet;
 mod particle;
+mod potion;
+mod potion_brewing;
+mod recipe_remainder;
 mod recipes;
 mod scoreboard_slot;
 mod screen;
 mod sound;
 mod sound_category;
 mod spawn_egg;
-mod status_effect;
 mod tag;
 mod world_event;
 
@@ -61,11 +66,10 @@ pub fn main() {
         (damage_type::build, "damage_type.rs"),
         (message_type::build, "message_type.rs"),
         (spawn_egg::build, "spawn_egg.rs"),
+        (block::build, "block.rs"),
         (item::build, "item.rs"),
         (fluid::build, "fluid.rs"),
-        (status_effect::build, "status_effect.rs"),
         (entity_status::build, "entity_status.rs"),
-        (block::build, "block.rs"),
         (tag::build, "tag.rs"),
         (noise_router::build, "noise_router.rs"),
         (
@@ -79,6 +83,12 @@ pub fn main() {
         (recipes::build, "recipes.rs"),
         (enchantments::build, "enchantment.rs"),
         (fuels::build, "fuels.rs"),
+        (data_component::build, "data_component.rs"),
+        (attributes::build, "attributes.rs"),
+        (effect::build, "effect.rs"),
+        (potion::build, "potion.rs"),
+        (potion_brewing::build, "potion_brewing.rs"),
+        (recipe_remainder::build, "recipe_remainder.rs"),
     ];
 
     build_functions.par_iter().for_each(|(build_fn, file)| {

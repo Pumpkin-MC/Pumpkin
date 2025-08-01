@@ -1,4 +1,4 @@
-use pumpkin_data::{BlockDirection, block_properties::get_block_by_state_id, tag::Tagable};
+use pumpkin_data::{Block, BlockDirection, tag, tag::Taggable};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -32,7 +32,10 @@ impl NetherForestVegetationFeature {
     ) -> bool {
         let state = chunk.get_block_state(&pos.down().0);
 
-        if !state.to_block().is_tagged_with("minecraft:nylium").unwrap() {
+        if !state
+            .to_block()
+            .is_tagged_with_by_tag(&tag::Block::MINECRAFT_NYLIUM)
+        {
             return false;
         }
         let mut result = false;
@@ -47,7 +50,7 @@ impl NetherForestVegetationFeature {
                     - random.next_bounded_i32(self.spread_width),
             );
             let nether_state = self.state_provider.get(random, pos);
-            let nether_block = get_block_by_state_id(nether_state.id);
+            let nether_block = Block::from_state_id(nether_state.id);
             if !chunk.is_air(&pos.0)
                 || pos.0.y <= chunk.bottom_y() as i32
                 || block_registry.can_place_at(nether_block, chunk, &pos, BlockDirection::Up)

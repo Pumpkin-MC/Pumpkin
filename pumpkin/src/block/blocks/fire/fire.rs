@@ -13,12 +13,12 @@ use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::tick::TickPriority;
 
 use crate::block::blocks::tnt::TNTBlock;
-use crate::block::pumpkin_block::{
-    BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
-    OnScheduledTickArgs, PlacedArgs, PumpkinBlock,
+use crate::block::{
+    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    OnEntityCollisionArgs, OnScheduledTickArgs, PlacedArgs,
 };
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
@@ -37,8 +37,7 @@ impl FireBlock {
     }
 
     fn is_flammable(block_state: &BlockState) -> bool {
-        if block_state
-            .block()
+        if Block::from_state_id(block_state.id)
             .properties(block_state.id)
             .and_then(|props| {
                 props
@@ -51,8 +50,7 @@ impl FireBlock {
         {
             return false;
         }
-        block_state
-            .block()
+        Block::from_state_id(block_state.id)
             .flammable
             .as_ref()
             .is_some_and(|f| f.burn_chance > 0)
@@ -168,7 +166,7 @@ impl FireBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for FireBlock {
+impl BlockBehaviour for FireBlock {
     async fn placed(&self, args: PlacedArgs<'_>) {
         if args.old_state_id == args.state_id {
             // Already a fire
@@ -192,7 +190,7 @@ impl PumpkinBlock for FireBlock {
             .schedule_block_tick(
                 args.block,
                 *args.position,
-                Self::get_fire_tick_delay() as u16,
+                Self::get_fire_tick_delay() as u8,
                 TickPriority::Normal,
             )
             .await;
@@ -204,7 +202,7 @@ impl PumpkinBlock for FireBlock {
             let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
             if ticks < 0 {
                 base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
-            } else if base_entity.entity_type == EntityType::PLAYER {
+            } else if base_entity.entity_type == &EntityType::PLAYER {
                 let rnd_ticks = rand::rng().random_range(1..3);
                 base_entity
                     .fire_ticks
@@ -263,7 +261,7 @@ impl PumpkinBlock for FireBlock {
             .schedule_block_tick(
                 block,
                 *pos,
-                Self::get_fire_tick_delay() as u16,
+                Self::get_fire_tick_delay() as u8,
                 TickPriority::Normal,
             )
             .await;

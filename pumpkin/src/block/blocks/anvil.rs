@@ -1,23 +1,15 @@
-use crate::block::pumpkin_block::{BlockMetadata, OnPlaceArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, OnPlaceArgs};
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::BlockStateId;
 
+#[pumpkin_block_from_tag("minecraft:anvil")]
 pub struct AnvilBlock;
 
-impl BlockMetadata for AnvilBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:anvil").unwrap()
-    }
-}
-
 #[async_trait]
-impl PumpkinBlock for AnvilBlock {
+impl BlockBehaviour for AnvilBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let dir = args
             .player

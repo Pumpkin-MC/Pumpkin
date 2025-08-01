@@ -3,7 +3,7 @@ use std::io::Write;
 use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
 use pumpkin_data::{
-    block_properties::get_block,
+    Block,
     fluid::Fluid,
     packet::clientbound::CONFIG_UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},
@@ -38,9 +38,9 @@ impl ClientPacket for CUpdateTags<'_> {
             for (key, values) in values.entries() {
                 // This is technically a `ResourceLocation` but same thing
                 p.write_string_bounded(key, u16::MAX as usize)?;
-                p.write_list(values, |p, string_id| {
+                p.write_list(values.0, |p, string_id| {
                     let id = match registry_key {
-                        RegistryKey::Block => get_block(string_id).unwrap().id as i32,
+                        RegistryKey::Block => Block::from_name(string_id).unwrap().id as i32,
                         RegistryKey::Fluid => Fluid::ident_to_fluid_id(string_id).unwrap() as i32,
                         _ => unimplemented!(),
                     };

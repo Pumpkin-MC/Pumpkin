@@ -10,16 +10,16 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     BlockStateId,
-    chunk::TickPriority,
+    tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };
 use rand::{Rng, rng};
 
 use crate::{
-    block::pumpkin_block::{
-        CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+    block::{
+        BlockBehaviour, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
         GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-        PlayerPlacedArgs, PumpkinBlock,
+        PlayerPlacedArgs,
     },
     world::World,
 };
@@ -31,7 +31,7 @@ type TripwireHookProperties = pumpkin_data::block_properties::TripwireHookLikePr
 pub struct TripwireHookBlock;
 
 #[async_trait]
-impl PumpkinBlock for TripwireHookBlock {
+impl BlockBehaviour for TripwireHookBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = TripwireHookProperties::default(args.block);
         props.powered = false;

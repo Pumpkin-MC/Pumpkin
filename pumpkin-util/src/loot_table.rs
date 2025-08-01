@@ -171,8 +171,7 @@ impl UniformLootNumberProvider {
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // TODO
-        random.next_f32()
+        random.next_f32() * (self.max - self.min) + self.min
     }
 
     pub fn get_max(&self) -> f32 {

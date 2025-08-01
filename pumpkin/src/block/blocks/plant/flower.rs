@@ -6,11 +6,9 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{
-    BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock,
-};
+use crate::block::{BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
 
-use crate::block::pumpkin_block::RandomTickArgs;
+use crate::block::RandomTickArgs;
 
 pub struct FlowerBlock;
 
@@ -25,7 +23,7 @@ impl BlockMetadata for FlowerBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for FlowerBlock {
+impl BlockBehaviour for FlowerBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }

@@ -4,29 +4,21 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::SlabType;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::BlockStateId;
 
+use crate::block::BlockBehaviour;
 use crate::block::BlockIsReplacing;
-use crate::block::pumpkin_block::CanUpdateAtArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock};
+use crate::block::CanUpdateAtArgs;
+use crate::block::OnPlaceArgs;
 
 type SlabProperties = pumpkin_data::block_properties::ResinBrickSlabLikeProperties;
 
+#[pumpkin_block_from_tag("minecraft:slabs")]
 pub struct SlabBlock;
 
-impl BlockMetadata for SlabBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:slabs").unwrap()
-    }
-}
-
 #[async_trait]
-impl PumpkinBlock for SlabBlock {
+impl BlockBehaviour for SlabBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         if let BlockIsReplacing::Itself(state_id) = args.replacing {
             let mut slab_props = SlabProperties::from_state_id(state_id, args.block);

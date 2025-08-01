@@ -23,6 +23,16 @@ pub fn wrap_degrees(degrees: f32) -> f32 {
     var1
 }
 
+pub fn clamp_angle(value: f32, mean: f32, delta: f32) -> f32 {
+    let i = subtract_angles(value, mean);
+    let j = i.clamp(-delta, delta);
+    mean - j
+}
+
+pub fn subtract_angles(start: f32, end: f32) -> f32 {
+    wrap_degrees(end - start)
+}
+
 pub fn squared_magnitude(a: f64, b: f64, c: f64) -> f64 {
     c.mul_add(c, a.mul_add(a, b * b))
 }
@@ -69,10 +79,7 @@ pub const fn smallest_encompassing_power_of_two(value: u32) -> u32 {
 }
 
 #[inline]
-pub fn floor_div<T>(x: T, y: T) -> T
-where
-    T: PrimInt + Zero + One,
-{
+pub fn floor_div<T: PrimInt + Zero + One>(x: T, y: T) -> T {
     let div = x / y;
     if (x ^ y) < T::zero() && div * y != x {
         div - T::one()
@@ -82,18 +89,12 @@ where
 }
 
 #[inline]
-pub fn square<T>(n: T) -> T
-where
-    T: Float,
-{
+pub fn square<T: Float>(n: T) -> T {
     n * n
 }
 
 #[inline]
-pub fn floor_mod<T>(x: T, y: T) -> T
-where
-    T: PrimInt + Zero,
-{
+pub fn floor_mod<T: PrimInt + Zero>(x: T, y: T) -> T {
     let rem = x % y;
     if (x ^ y) < T::zero() && rem != T::zero() {
         rem + y
@@ -103,26 +104,17 @@ where
 }
 
 #[inline]
-pub fn map<T>(value: T, old_start: T, old_end: T, new_start: T, new_end: T) -> T
-where
-    T: Float,
-{
+pub fn map<T: Float>(value: T, old_start: T, old_end: T, new_start: T, new_end: T) -> T {
     lerp(lerp_progress(value, old_start, old_end), new_start, new_end)
 }
 
 #[inline]
-pub fn lerp<T>(delta: T, start: T, end: T) -> T
-where
-    T: Float,
-{
+pub fn lerp<T: Float>(delta: T, start: T, end: T) -> T {
     start + delta * (end - start)
 }
 
 #[inline]
-pub fn lerp_progress<T>(value: T, start: T, end: T) -> T
-where
-    T: Float,
-{
+pub fn lerp_progress<T: Float>(value: T, start: T, end: T) -> T {
     (value - start) / (end - start)
 }
 

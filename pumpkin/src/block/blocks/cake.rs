@@ -1,26 +1,25 @@
 use std::sync::Arc;
 
+use crate::{
+    block::{
+        blocks::candle_cakes::cake_from_candle,
+        registry::BlockActionResult,
+        {BlockBehaviour, NormalUseArgs, UseWithItemArgs},
+    },
+    entity::player::Player,
+    world::World,
+};
 use async_trait::async_trait;
+use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CakeLikeProperties, EnumVariants, Integer0To6},
-    item::Item,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
-
-use crate::{
-    block::{
-        blocks::candle_cakes::cake_from_candle,
-        pumpkin_block::{NormalUseArgs, PumpkinBlock, UseWithItemArgs},
-        registry::BlockActionResult,
-    },
-    entity::player::Player,
-    world::World,
-};
 
 #[pumpkin_block("minecraft:cake")]
 pub struct CakeBlock;
@@ -37,7 +36,7 @@ impl CakeBlock {
             GameMode::Survival | GameMode::Adventure => {
                 let hunger_level = player.hunger_manager.level.load();
                 if hunger_level >= 20 {
-                    return BlockActionResult::Continue;
+                    return BlockActionResult::Pass;
                 }
                 player.hunger_manager.level.store(20.min(hunger_level + 2));
                 player
@@ -80,7 +79,7 @@ impl CakeBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for CakeBlock {
+impl BlockBehaviour for CakeBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position).await;
         let properties = CakeLikeProperties::from_state_id(state_id, args.block);

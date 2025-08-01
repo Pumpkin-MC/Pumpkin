@@ -1,17 +1,17 @@
 use crate::block::BlockIsReplacing;
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock,
+use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     UseWithItemArgs,
 };
-use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, Integer1To4};
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Tagable;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -24,7 +24,7 @@ type SeaPickleProperties = pumpkin_data::block_properties::SeaPickleLikeProperti
 pub struct SeaPickleBlock;
 
 #[async_trait]
-impl PumpkinBlock for SeaPickleBlock {
+impl BlockBehaviour for SeaPickleBlock {
     #[allow(clippy::many_single_char_names)]
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if args.item_stack.lock().await.item != &Item::BONE_MEAL
@@ -32,15 +32,14 @@ impl PumpkinBlock for SeaPickleBlock {
                 .world
                 .get_block(&args.position.down())
                 .await
-                .is_tagged_with("minecraft:coral_blocks")
-                .unwrap()
+                .is_tagged_with_by_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
             || !SeaPickleProperties::from_state_id(
                 args.world.get_block_state_id(args.position).await,
                 args.block,
             )
             .waterlogged
         {
-            return BlockActionResult::Continue;
+            return BlockActionResult::Pass;
         }
 
         //1:1 vanilla algorithm
@@ -64,8 +63,7 @@ impl PumpkinBlock for SeaPickleBlock {
                             .world
                             .get_block(&lv.down())
                             .await
-                            .is_tagged_with("minecraft:coral_blocks")
-                            .unwrap()
+                            .is_tagged_with_by_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
                     {
                         continue;
                     }

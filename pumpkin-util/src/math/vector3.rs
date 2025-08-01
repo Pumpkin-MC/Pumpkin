@@ -13,6 +13,54 @@ pub struct Vector3<T> {
     pub z: T,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+
+pub enum Axis {
+    X,
+
+    Y,
+
+    Z,
+}
+
+impl Axis {
+    pub fn all() -> [Self; 3] {
+        [Self::Y, Self::X, Self::Z]
+    }
+
+    pub fn horizontal() -> [Self; 2] {
+        [Self::X, Self::Z]
+    }
+
+    pub fn excluding(axis: Self) -> [Self; 2] {
+        match axis {
+            Self::X => [Self::Y, Self::Z],
+
+            Self::Y => [Self::X, Self::Z],
+
+            Self::Z => [Self::X, Self::Y],
+        }
+    }
+}
+
+impl<T: Copy> Vector3<T> {
+    pub fn get_axis(&self, a: Axis) -> T {
+        match a {
+            Axis::X => self.x,
+            Axis::Y => self.y,
+            Axis::Z => self.z,
+        }
+    }
+
+    pub fn set_axis(&mut self, a: Axis, value: T) {
+        match a {
+            Axis::X => self.x = value,
+            Axis::Y => self.y = value,
+            Axis::Z => self.z = value,
+        };
+    }
+}
+
 impl<T: Math + PartialOrd + Copy> Vector3<T> {
     pub const fn new(x: T, y: T, z: T) -> Self {
         Vector3 { x, y, z }
@@ -221,10 +269,7 @@ impl<T> From<Vector3<T>> for (T, T, T) {
     }
 }
 
-impl<T: Math + Copy> Vector3<T>
-where
-    T: Into<f64>,
-{
+impl<T: Math + Copy + Into<f64>> Vector3<T> {
     pub fn to_f64(&self) -> Vector3<f64> {
         Vector3 {
             x: self.x.into(),
@@ -234,10 +279,7 @@ where
     }
 }
 
-impl<T: Math + Copy> Vector3<T>
-where
-    T: Into<f64>,
-{
+impl<T: Math + Copy + Into<f64>> Vector3<T> {
     pub fn to_i32(&self) -> Vector3<i32> {
         let x: f64 = self.x.into();
         let y: f64 = self.y.into();
@@ -259,10 +301,7 @@ where
     }
 }
 
-impl<T: Math + Copy> Vector3<T>
-where
-    T: Into<f64>,
-{
+impl<T: Math + Copy + Into<f64>> Vector3<T> {
     pub fn to_block_pos(&self) -> BlockPos {
         BlockPos(self.to_i32())
     }
@@ -286,10 +325,7 @@ impl Math for i64 {}
 impl Math for u8 {}
 
 impl<'de> serde::Deserialize<'de> for Vector3<i32> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Vector3Visitor;
 
         impl<'de> serde::de::Visitor<'de> for Vector3Visitor {
@@ -299,10 +335,10 @@ impl<'de> serde::Deserialize<'de> for Vector3<i32> {
                 formatter.write_str("a valid Vector<i32>")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
                 if let Some(x) = seq.next_element::<i32>()? {
                     if let Some(y) = seq.next_element::<i32>()? {
                         if let Some(z) = seq.next_element::<i32>()? {
@@ -319,10 +355,7 @@ impl<'de> serde::Deserialize<'de> for Vector3<i32> {
 }
 
 impl<'de> serde::Deserialize<'de> for Vector3<f32> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Vector3Visitor;
 
         impl<'de> serde::de::Visitor<'de> for Vector3Visitor {
@@ -332,10 +365,10 @@ impl<'de> serde::Deserialize<'de> for Vector3<f32> {
                 formatter.write_str("a valid Vector<32>")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
                 if let Some(x) = seq.next_element::<f32>()? {
                     if let Some(y) = seq.next_element::<f32>()? {
                         if let Some(z) = seq.next_element::<f32>()? {
@@ -352,10 +385,7 @@ impl<'de> serde::Deserialize<'de> for Vector3<f32> {
 }
 
 impl<'de> serde::Deserialize<'de> for Vector3<f64> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Vector3Visitor;
 
         impl<'de> serde::de::Visitor<'de> for Vector3Visitor {
@@ -365,10 +395,10 @@ impl<'de> serde::Deserialize<'de> for Vector3<f64> {
                 formatter.write_str("a valid Vector<f64>")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
                 if let Some(x) = seq.next_element::<f64>()? {
                     if let Some(y) = seq.next_element::<f64>()? {
                         if let Some(z) = seq.next_element::<f64>()? {
@@ -385,10 +415,7 @@ impl<'de> serde::Deserialize<'de> for Vector3<f64> {
 }
 
 impl serde::Serialize for Vector3<f32> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::new();
         buf.put_f32(self.x);
         buf.put_f32(self.y);
@@ -398,10 +425,7 @@ impl serde::Serialize for Vector3<f32> {
 }
 
 impl serde::Serialize for Vector3<f64> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::new();
         buf.put_f64(self.x);
         buf.put_f64(self.y);
@@ -411,10 +435,7 @@ impl serde::Serialize for Vector3<f64> {
 }
 
 impl serde::Serialize for Vector3<i16> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::new();
         buf.put_i16(self.x);
         buf.put_i16(self.y);
@@ -424,10 +445,7 @@ impl serde::Serialize for Vector3<i16> {
 }
 
 impl serde::Serialize for Vector3<i32> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::new();
         buf.put_i32(self.x);
         buf.put_i32(self.y);
