@@ -1288,16 +1288,12 @@ impl Player {
 
     pub async fn kill(&self) {
         self.living_entity.kill().await;
-        self.handle_killed().await;
     }
 
-    async fn handle_killed(&self) {
+    async fn handle_killed(&self, death_msg: TextComponent) {
         self.set_client_loaded(false);
         self.client
-            .send_packet_now(&CCombatDeath::new(
-                self.entity_id().into(),
-                &TextComponent::text("noob"),
-            ))
+            .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
             .await;
     }
 
@@ -1901,6 +1897,10 @@ impl Player {
                 .await;
         }
     }
+
+    pub async fn reset_state(&self) {
+        self.living_entity.reset_state().await;
+    }
 }
 
 #[async_trait]
@@ -2041,14 +2041,11 @@ impl EntityBase for Player {
         if self.abilities.lock().await.invulnerable {
             return false;
         }
-        self.world()
+        let world = self.living_entity.entity.world.read().await;
+        let dyn_self = world
+            .get_entity_by_id(self.living_entity.entity.entity_id)
             .await
-            .play_sound(
-                Sound::EntityPlayerHurt,
-                SoundCategory::Players,
-                &self.living_entity.entity.pos.load(),
-            )
-            .await;
+            .expect("Entity not found in world");
         let result = self
             .living_entity
             .damage_with_context(amount, damage_type, position, source, cause)
@@ -2056,7 +2053,9 @@ impl EntityBase for Player {
         if result {
             let health = self.living_entity.health.load();
             if health <= 0.0 {
-                self.handle_killed().await;
+                let death_message =
+                    LivingEntity::get_death_message(&*dyn_self, damage_type, source, cause).await;
+                self.handle_killed(death_message).await;
             }
         }
         result

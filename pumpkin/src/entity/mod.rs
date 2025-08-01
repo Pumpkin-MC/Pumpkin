@@ -946,13 +946,19 @@ impl Entity {
         vehicle.is_some()
     }
 
-    pub async fn check_out_of_world(&self) {
+    pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
         if self.pos.load().y
             < f64::from(self.world.read().await.generation_settings().shape.min_y) - 64.0
         {
             // Tick out of world damage
-            self.damage(4.0, DamageType::OUT_OF_WORLD).await;
+            dyn_self.damage(4.0, DamageType::OUT_OF_WORLD).await;
         }
+    }
+
+    #[allow(clippy::unused_async)]
+    pub async fn reset_state(&self) {
+        self.pose.store(EntityPose::Standing);
+        self.fall_flying.store(false, Relaxed);
     }
 }
 
@@ -971,6 +977,7 @@ impl EntityBase for Entity {
 
     async fn tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
         self.tick_portal(&caller).await;
+        self.check_out_of_world(&*caller).await;
         let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
         if fire_ticks > 0 {
             if self.entity_type.fire_immune {
