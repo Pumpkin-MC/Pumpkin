@@ -89,7 +89,6 @@ impl CommandExecutor for LocationExecutor {
         let location = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
         let success = target
-            .living_entity
             .damage_with_context(amount, damage_type, Some(location), None, None)
             .await;
 
@@ -134,7 +133,6 @@ impl CommandExecutor for EntityExecutor {
         };
 
         let success = target
-            .living_entity
             .damage_with_context(
                 amount,
                 damage_type,

@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 
 use crate::server::Server;
 
-use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
     entity: Entity,
@@ -65,6 +65,8 @@ impl ItemEntity {
         }
     }
 }
+
+impl NBTStorage for ItemEntity {}
 
 #[async_trait]
 impl EntityBase for ItemEntity {

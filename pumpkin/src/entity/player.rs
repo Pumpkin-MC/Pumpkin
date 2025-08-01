@@ -1976,11 +1976,11 @@ impl NBTStorage for PlayerInventory {
         nbt.put("Inventory", NbtTag::List(vec));
     }
 
-    async fn read_nbt_non_mut(&self, nbt: &mut NbtCompound) {
+    async fn read_nbt_non_mut(&self, _nbt: &NbtCompound) {
         // Read selected hotbar slot
-        self.set_selected_slot(nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
+        self.set_selected_slot(_nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
         // Process inventory list
-        if let Some(inventory_list) = nbt.get_list("Inventory") {
+        if let Some(inventory_list) = _nbt.get_list("Inventory") {
             for tag in inventory_list {
                 if let Some(item_compound) = tag.extract_compound() {
                     if let Some(slot_byte) = item_compound.get_byte("Slot") {
@@ -2032,7 +2032,7 @@ impl EntityBase for Player {
 
     async fn teleport(
         self: Arc<Self>,
-        position: Option<Vector3<f64>>,
+        position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,

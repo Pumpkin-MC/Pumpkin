@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{server::Server, world::World};
 
-use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
@@ -72,6 +72,8 @@ impl ExperienceOrbEntity {
         }
     }
 }
+
+impl NBTStorage for ExperienceOrbEntity {}
 
 #[async_trait]
 impl EntityBase for ExperienceOrbEntity {

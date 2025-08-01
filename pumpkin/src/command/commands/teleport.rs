@@ -12,6 +12,7 @@ use crate::command::args::rotation::RotationArgumentConsumer;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
+use crate::entity::EntityBase;
 use crate::world::World;
 
 const NAMES: [&str; 2] = ["teleport", "tp"];
@@ -63,16 +64,17 @@ impl CommandExecutor for EntitiesToEntityExecutor {
         let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
         let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
-        let pos = destination.living_entity.entity.pos.load();
+        let pos = destination.get_entity().pos.load();
         if !World::is_valid(pos) {
             return Err(CommandError::CommandFailed(Box::new(
                 TextComponent::translate("argument.pos.outofbounds", []),
             )));
         }
         for target in targets {
-            let yaw = target.get_entity().yaw.load();
-            let pitch = target.get_entity().pitch.load();
-            let world = target.get_entity().world.read().await.clone();
+            let base_entity = target.get_entity();
+            let yaw = base_entity.yaw.load();
+            let pitch = base_entity.pitch.load();
+            let world = base_entity.world.read().await.clone();
             target
                 .clone()
                 .teleport(pos.into(), yaw.into(), pitch.into(), world)
@@ -223,7 +225,7 @@ impl CommandExecutor for SelfToEntityExecutor {
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
-        let pos = destination.living_entity.entity.pos.load();
+        let pos = destination.get_entity().pos.load();
 
         match sender {
             CommandSender::Player(player) => {
@@ -234,7 +236,7 @@ impl CommandExecutor for SelfToEntityExecutor {
                         TextComponent::translate("argument.pos.outofbounds", []),
                     )));
                 }
-                player.teleport(pos, yaw, pitch).await;
+                player.clone().teleport(pos, yaw, pitch).await;
             }
             _ => {
                 sender

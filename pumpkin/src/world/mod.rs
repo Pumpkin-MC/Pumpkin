@@ -132,6 +132,7 @@ pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
 
+use crate::entity::NBTStorage;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
