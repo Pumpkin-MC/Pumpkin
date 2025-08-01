@@ -15,10 +15,10 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::bed::BedBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::pumpkin_block::{
-    BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs, PumpkinBlock,
-};
 use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
+};
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
@@ -66,7 +66,7 @@ const NO_SLEEP_IDS: &[u16] = &[
 pub struct BedBlock;
 
 #[async_trait]
-impl PumpkinBlock for BedBlock {
+impl BlockBehaviour for BedBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         if let Some(player) = args.player {
             let facing = player.living_entity.entity.get_horizontal_facing();

@@ -1,7 +1,7 @@
 use crate::entity_equipment::EntityEquipment;
-use crate::equipment_slot::EquipmentSlot;
 use crate::screen_handler::InventoryPlayer;
 use async_trait::async_trait;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_world::inventory::split_stack;
 use pumpkin_world::inventory::{Clearable, Inventory};

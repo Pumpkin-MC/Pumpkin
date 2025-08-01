@@ -13,8 +13,8 @@ use pumpkin_world::{item::ItemStack, world::BlockFlags};
 use crate::{
     block::{
         blocks::cake::CakeBlock,
-        pumpkin_block::{NormalUseArgs, PumpkinBlock, UseWithItemArgs},
         registry::BlockActionResult,
+        {BlockBehaviour, NormalUseArgs, UseWithItemArgs},
     },
     entity::player::Player,
     world::World,
@@ -101,7 +101,7 @@ impl CandleCakeBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for CandleCakeBlock {
+impl BlockBehaviour for CandleCakeBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         match args.item_stack.lock().await.item.id {
             id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {

@@ -1,10 +1,10 @@
-use crate::block::pumpkin_block::{OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs};
+use crate::block::{OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs};
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
 
 use super::block_receives_redstone_power;
 
@@ -14,7 +14,7 @@ type RedstoneLampProperties = pumpkin_data::block_properties::RedstoneOreLikePro
 pub struct RedstoneLamp;
 
 #[async_trait]
-impl PumpkinBlock for RedstoneLamp {
+impl BlockBehaviour for RedstoneLamp {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = RedstoneLampProperties::default(args.block);
         props.lit = block_receives_redstone_power(args.world, args.position).await;

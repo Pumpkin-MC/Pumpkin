@@ -4,12 +4,12 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::OnNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::OnStateReplacedArgs;
-use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
+use crate::block::CanPlaceAtArgs;
+use crate::block::OnNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::OnStateReplacedArgs;
+use crate::block::PlacedArgs;
 use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_util::math::position::BlockPos;
@@ -38,7 +38,7 @@ use super::common::{
 pub struct ActivatorRailBlock;
 
 #[async_trait]
-impl PumpkinBlock for ActivatorRailBlock {
+impl BlockBehaviour for ActivatorRailBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut rail_props = RailProperties::default(args.block);
         let player_facing = args.player.living_entity.entity.get_horizontal_facing();
@@ -179,17 +179,11 @@ impl PumpkinBlock for ActivatorRailBlock {
         can_place_rail_at(args.block_accessor, args.position).await
     }
 
-    async fn emits_redstone_power(
-        &self,
-        _args: crate::block::pumpkin_block::EmitsRedstonePowerArgs<'_>,
-    ) -> bool {
+    async fn emits_redstone_power(&self, _args: crate::block::EmitsRedstonePowerArgs<'_>) -> bool {
         false
     }
 
-    async fn get_weak_redstone_power(
-        &self,
-        _args: crate::block::pumpkin_block::GetRedstonePowerArgs<'_>,
-    ) -> u8 {
+    async fn get_weak_redstone_power(&self, _args: crate::block::GetRedstonePowerArgs<'_>) -> u8 {
         0
     }
 }

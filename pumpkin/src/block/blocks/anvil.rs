@@ -1,4 +1,4 @@
-use crate::block::pumpkin_block::{OnPlaceArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, OnPlaceArgs};
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
@@ -9,7 +9,7 @@ use pumpkin_world::BlockStateId;
 pub struct AnvilBlock;
 
 #[async_trait]
-impl PumpkinBlock for AnvilBlock {
+impl BlockBehaviour for AnvilBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let dir = args
             .player

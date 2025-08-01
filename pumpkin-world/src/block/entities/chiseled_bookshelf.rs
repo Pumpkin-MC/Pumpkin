@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use log::warn;
+use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -66,6 +67,14 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
         );
     }
 
+    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        Some(self)
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -92,8 +101,6 @@ impl ChiseledBookshelfBlockEntity {
         if slot >= 0 && slot < self.items.len() as i8 {
             self.last_interacted_slot.store(slot, Ordering::Relaxed);
 
-            let block = world.get_block(&self.position).await;
-
             properties.slot_0_occupied = !self.items[0].lock().await.is_empty();
             properties.slot_1_occupied = !self.items[1].lock().await.is_empty();
             properties.slot_2_occupied = !self.items[2].lock().await.is_empty();
@@ -104,7 +111,7 @@ impl ChiseledBookshelfBlockEntity {
             world
                 .set_block_state(
                     &self.position,
-                    properties.to_state_id(block),
+                    properties.to_state_id(&Block::CHISELED_BOOKSHELF),
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;

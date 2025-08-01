@@ -19,14 +19,14 @@ use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
+use crate::block::BlockBehaviour;
+use crate::block::CanPlaceAtArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::NormalUseArgs;
+use crate::block::OnNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::PlacedArgs;
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::NormalUseArgs;
-use crate::block::pumpkin_block::OnNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use pumpkin_protocol::java::server::play::SUseItemOn;
@@ -164,7 +164,7 @@ async fn get_hinge(
 pub struct DoorBlock;
 
 #[async_trait]
-impl PumpkinBlock for DoorBlock {
+impl BlockBehaviour for DoorBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let powered = block_receives_redstone_power(args.world, args.position).await
             || block_receives_redstone_power(args.world, &args.position.up()).await;

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use bounded_num::{NotInBounds, Number};
 use pumpkin_data::Enchantment;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::EffectType;
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
@@ -110,7 +110,7 @@ pub enum Arg<'a> {
     Simple(&'a str),
     SoundCategory(SoundCategory),
     DamageType(DamageType),
-    Effect(EffectType),
+    Effect(&'static StatusEffect),
     Enchantment(Enchantment),
 }
 

@@ -12,12 +12,12 @@ use pumpkin_world::{BlockStateId, tick::TickPriority};
 
 use crate::{
     block::{
-        pumpkin_block::{
-            CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
-            GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
-            OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs, PlayerPlacedArgs, PumpkinBlock,
-        },
         registry::BlockActionResult,
+        {
+            BlockBehaviour, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+            GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+            OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs, PlayerPlacedArgs,
+        },
     },
     world::World,
 };
@@ -30,7 +30,7 @@ type RepeaterProperties = pumpkin_data::block_properties::RepeaterLikeProperties
 pub struct RepeaterBlock;
 
 #[async_trait]
-impl PumpkinBlock for RepeaterBlock {
+impl BlockBehaviour for RepeaterBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let state_id = RedstoneGateBlock::on_place(self, args.player, args.block).await;
 

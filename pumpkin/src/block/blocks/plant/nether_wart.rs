@@ -6,13 +6,13 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockAccessor;
 
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
 
 #[pumpkin_block("minecraft:nether_wart")]
 pub struct NetherWartBlock;
 
 #[async_trait]
-impl PumpkinBlock for NetherWartBlock {
+impl BlockBehaviour for NetherWartBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }

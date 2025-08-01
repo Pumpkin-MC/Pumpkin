@@ -11,16 +11,16 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnScheduledTickArgs,
-    PumpkinBlock, RandomTickArgs,
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+    OnScheduledTickArgs, RandomTickArgs,
 };
 
 #[pumpkin_block("minecraft:cactus")]
 pub struct CactusBlock;
 
 #[async_trait]
-impl PumpkinBlock for CactusBlock {
+impl BlockBehaviour for CactusBlock {
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         if !can_place_at(args.world.as_ref(), args.position).await {
             args.world

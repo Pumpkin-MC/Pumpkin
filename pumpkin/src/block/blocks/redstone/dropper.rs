@@ -1,9 +1,9 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::{
-    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-    PlacedArgs, PumpkinBlock,
-};
 use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    PlacedArgs,
+};
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use async_trait::async_trait;
@@ -82,7 +82,7 @@ const fn to_data3d(facing: Facing) -> i32 {
 }
 
 #[async_trait]
-impl PumpkinBlock for DropperBlock {
+impl BlockBehaviour for DropperBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(inventory) = block_entity.get_inventory() {
@@ -105,10 +105,6 @@ impl PumpkinBlock for DropperBlock {
         args.world
             .add_block_entity(Arc::new(dropper_block_entity))
             .await;
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
@@ -199,7 +195,7 @@ impl PumpkinBlock for DropperBlock {
                     Uuid::new_v4(),
                     args.world.clone(),
                     position,
-                    EntityType::ITEM,
+                    &EntityType::ITEM,
                     false,
                 );
                 let rd = rng().random::<f64>() * 0.1 + 0.2;

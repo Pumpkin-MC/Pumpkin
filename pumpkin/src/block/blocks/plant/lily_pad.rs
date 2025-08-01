@@ -7,15 +7,15 @@ use pumpkin_world::{
     world::{BlockAccessor, BlockFlags},
 };
 
-use crate::block::{blocks::plant::PlantBlockBase, pumpkin_block::GetStateForNeighborUpdateArgs};
+use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
 
-use crate::block::pumpkin_block::{CanPlaceAtArgs, OnEntityCollisionArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs, OnEntityCollisionArgs};
 
 #[pumpkin_block("minecraft:lily_pad")]
 pub struct LilyPadBlock;
 
 #[async_trait]
-impl PumpkinBlock for LilyPadBlock {
+impl BlockBehaviour for LilyPadBlock {
     async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         // Proberbly not the best solution, but works
         if args

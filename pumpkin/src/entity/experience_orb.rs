@@ -38,7 +38,7 @@ impl ExperienceOrbEntity {
                 Uuid::new_v4(),
                 world.clone(),
                 position,
-                EntityType::EXPERIENCE_ORB,
+                &EntityType::EXPERIENCE_ORB,
                 false,
             );
             let orb = Arc::new(Self::new(entity, i));

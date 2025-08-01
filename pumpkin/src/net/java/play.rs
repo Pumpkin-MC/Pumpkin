@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
-use crate::block::pumpkin_block::BlockHitResult;
+use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
@@ -27,12 +27,12 @@ use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_inventory::InventoryError;
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_macros::send_cancellable;
@@ -1446,7 +1446,6 @@ impl JavaClient {
                 server,
             )
             .await;
-        self.update_sequence(player, use_item_on.sequence.0);
 
         // Check if the item is a block, because not every item can be placed :D
         if let Some(block) = Block::from_item_id(item.lock().await.item.id) {
@@ -1556,6 +1555,7 @@ impl JavaClient {
             self.kick(TextComponent::text("InvalidHand")).await;
             return;
         };
+        self.update_sequence(player, use_item.sequence.0);
         let item_in_hand = if hand == Hand::Left {
             inventory.held_item()
         } else {
@@ -1603,7 +1603,6 @@ impl JavaClient {
                 let item = held.item;
                 drop(held);
                 server.item_registry.on_use(item, player).await;
-                self.update_sequence(player, use_item.sequence.0);
             }
         }}
     }
@@ -1710,7 +1709,7 @@ impl JavaClient {
     async fn spawn_entity_from_egg(
         &self,
         player: &Player,
-        entity_type: EntityType,
+        entity_type: &'static EntityType,
         location: BlockPos,
         face: BlockDirection,
     ) {
@@ -1726,7 +1725,7 @@ impl JavaClient {
 
         let world = player.world().await;
         // Create a new mob and UUID based on the spawn egg id
-        let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
+        let mob = from_type(entity_type, pos, &world, Uuid::new_v4()).await;
 
         // Set the rotation
         mob.get_entity().set_rotation(yaw, 0.0);

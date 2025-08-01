@@ -2,11 +2,11 @@ use std::sync::{Arc, atomic::Ordering};
 
 use crate::{
     block::{
-        pumpkin_block::{
-            BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
-            OnStateReplacedArgs, PlacedArgs, PumpkinBlock, UseWithItemArgs,
-        },
         registry::BlockActionResult,
+        {
+            BlockBehaviour, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
+            PlacedArgs, UseWithItemArgs,
+        },
     },
     entity::{EntityBase, player::Player},
     world::World,
@@ -32,7 +32,7 @@ use tokio::sync::Mutex;
 pub struct ChiseledBookshelfBlock;
 
 #[async_trait]
-impl PumpkinBlock for ChiseledBookshelfBlock {
+impl BlockBehaviour for ChiseledBookshelfBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut properties = ChiseledBookshelfLikeProperties::default(args.block);
 
@@ -114,10 +114,6 @@ impl PumpkinBlock for ChiseledBookshelfBlock {
     async fn placed(&self, args: PlacedArgs<'_>) {
         let block_entity = ChiseledBookshelfBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(block_entity)).await;
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
     }
 
     async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {

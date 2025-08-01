@@ -11,7 +11,7 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::entity::player::Player;
 use crate::item::items::ignite::ignition::Ignition;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
 
@@ -24,7 +24,7 @@ impl ItemMetadata for FireChargeItem {
 }
 
 #[async_trait]
-impl PumpkinItem for FireChargeItem {
+impl ItemBehaviour for FireChargeItem {
     async fn use_on_block(
         &self,
         _item: &Item,

@@ -1,4 +1,6 @@
 use std::sync::Weak;
+use std::sync::atomic::Ordering::Relaxed;
+use std::time::Duration;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -6,15 +8,17 @@ use std::{
 
 pub mod chunker;
 pub mod explosion;
+pub mod loot;
 pub mod portal;
 pub mod time;
 
+use crate::world::loot::LootContextParameters;
 use crate::{
     PLUGIN_MANAGER,
     block::{
         self,
-        pumpkin_block::{OnNeighborUpdateArgs, OnScheduledTickArgs},
         registry::BlockRegistry,
+        {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
     entity::{Entity, EntityBase, player::Player, r#type::from_type},
@@ -27,16 +31,14 @@ use crate::{
     },
     server::{CURRENT_BEDROCK_MC_VERSION, Server},
 };
-use crate::{
-    block::{BlockEvent, loot::LootContextParameters},
-    entity::item::ItemEntity,
-};
+use crate::{block::BlockEvent, entity::item::ItemEntity};
 use async_trait::async_trait;
 use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::entity::EffectType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties};
 use pumpkin_data::{
     Block,
@@ -47,7 +49,7 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState};
-use pumpkin_inventory::{equipment_slot::EquipmentSlot, screen_handler::InventoryPlayer};
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::{
@@ -94,16 +96,19 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_registry::VanillaDimensionType;
-use pumpkin_util::math::{position::chunk_section_from_pos, vector2::Vector2};
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
+use pumpkin_util::{
+    math::{position::chunk_section_from_pos, vector2::Vector2},
+    random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
+};
 use pumpkin_world::{
     BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable, item::ItemStack, world::SimpleWorld,
+    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{
@@ -112,6 +117,7 @@ use pumpkin_world::{
 };
 use pumpkin_world::{level::Level, tick::TickPriority};
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
+use rand::seq::SliceRandom;
 use rand::{Rng, rng};
 use scoreboard::Scoreboard;
 use serde::Serialize;
@@ -122,9 +128,13 @@ use tokio::sync::RwLock;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
+pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
 
+use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
 use pumpkin_world::generation::settings::GenerationSettings;
 use uuid::Uuid;
 use weather::Weather;
@@ -172,6 +182,7 @@ pub struct World {
     /// The type of dimension the world is in.
     pub dimension_type: VanillaDimensionType,
     pub sea_level: i32,
+    pub min_y: i32,
     /// The world's weather, including rain and thunder levels.
     pub weather: Mutex<Weather>,
     /// Block Behaviour
@@ -217,6 +228,7 @@ impl World {
             weather: Mutex::new(Weather::new()),
             block_registry,
             sea_level: generation_settings.sea_level,
+            min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
             server,
@@ -286,11 +298,15 @@ impl World {
             .await;
     }
 
-    pub async fn send_remove_mob_effect(&self, entity: &Entity, effect_type: EffectType) {
+    pub async fn send_remove_mob_effect(
+        &self,
+        entity: &Entity,
+        effect_type: &'static StatusEffect,
+    ) {
         // TODO: only nearby
         self.broadcast_packet_all(&CRemoveMobEffect::new(
             entity.entity_id.into(),
-            VarInt(effect_type as i32),
+            VarInt(i32::from(effect_type.id)),
         ))
         .await;
     }
@@ -465,6 +481,18 @@ impl World {
             .await;
     }
 
+    pub async fn play_sound_fine(
+        &self,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        self.play_sound_raw(sound as u16, category, position, volume, pitch)
+            .await;
+    }
+
     pub async fn play_sound_expect(
         &self,
         player: &Player,
@@ -537,7 +565,6 @@ impl World {
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         let start = tokio::time::Instant::now();
         self.flush_block_updates().await;
-
         // tick block entities
         self.flush_synced_block_events().await;
 
@@ -566,13 +593,13 @@ impl World {
         }
 
         let chunk_start = tokio::time::Instant::now();
-        log::debug!("Ticking chunks");
+        log::trace!("Ticking chunks");
         self.tick_chunks().await;
         let elapsed = chunk_start.elapsed();
 
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
 
-        log::debug!("Ticking players");
+        log::trace!("Ticking players");
         // player ticks
         for player in players_to_tick {
             player.tick(server).await;
@@ -580,9 +607,10 @@ impl World {
 
         let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
 
-        log::debug!("Ticking entities");
+        log::trace!("Ticking entities");
         // Entity ticks
         for entity in entities_to_tick {
+            entity.get_entity().age.fetch_add(1, Relaxed);
             entity.tick(entity.clone(), server).await;
             for player in self.players.read().await.values() {
                 if player
@@ -600,7 +628,7 @@ impl World {
             }
         }
 
-        log::debug!(
+        log::trace!(
             "Ticking world took {:?}, loaded chunks: {}, chunk tick took {:?}",
             start.elapsed(),
             self.level.loaded_chunk_count(),
@@ -675,10 +703,139 @@ impl World {
             }
         } */
 
+        let spawn_entity_clock_start = tokio::time::Instant::now();
+
+        let mut spawning_chunks_map = HashMap::new();
+        // TODO use FixedPlayerDistanceChunkTracker
+
+        for i in self.players.read().await.values() {
+            let center = i.living_entity.entity.chunk_pos.load();
+            for dx in -8i32..=8 {
+                for dy in -8i32..=8 {
+                    // if dx.abs() <= 2 || dy.abs() <= 2 || dx.abs() >= 6 || dy.abs() >= 6 { // this is only for debug, spawning runs too slow
+                    //     continue;
+                    // }
+                    let chunk_pos = center.add_raw(dx, dy);
+                    if let Some(chunk) = self.level.try_get_chunk(&chunk_pos) {
+                        spawning_chunks_map
+                            .entry(chunk_pos)
+                            .or_insert(chunk.value().clone());
+                    }
+                }
+            }
+        }
+
+        let mut spawning_chunks = Vec::with_capacity(spawning_chunks_map.len());
+        for i in spawning_chunks_map {
+            spawning_chunks.push(i);
+        }
+
+        let get_chunks_clock = spawn_entity_clock_start.elapsed();
+        // log::debug!("spawning chunks size {}", spawning_chunks.len());
+
+        let mut spawn_state =
+            SpawnState::new(spawning_chunks.len() as i32, &self.entities, self).await; // TODO store it
+
+        // TODO gamerule this.spawnEnemies || this.spawnFriendlies
+        let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
+        let spawn_list: Vec<&'static MobCategory> =
+            natural_spawner::get_filtered_spawning_categories(
+                &spawn_state,
+                true,
+                true,
+                spawn_passives,
+            );
+
+        // log::debug!("spawning list size {}", spawn_list.len());
+        log::debug!("spawning counter {:?}", spawn_state.mob_category_counts);
+
+        spawning_chunks.shuffle(&mut rng());
+
+        // TODO i think it can be multithread
+        for (pos, chunk) in &spawning_chunks {
+            self.tick_spawning_chunk(pos, chunk, &spawn_list, &mut spawn_state)
+                .await;
+        }
+        log::debug!(
+            "Spawning entity took {:?}, getting chunks {:?}, spawning chunks: {}, avg {:?} per chunk",
+            spawn_entity_clock_start.elapsed(),
+            get_chunks_clock,
+            spawning_chunks.len(),
+            spawn_entity_clock_start
+                .elapsed()
+                .checked_div(spawning_chunks.len() as u32)
+                .unwrap_or(Duration::new(0, 0))
+        );
+
         for block_entity in tick_data.block_entities {
             let world: Arc<dyn SimpleWorld> = self.clone();
-            block_entity.tick(&world).await;
+            block_entity.tick(world).await;
         }
+    }
+
+    pub async fn tick_spawning_chunk(
+        self: &Arc<Self>,
+        chunk_pos: &Vector2<i32>,
+        chunk: &Arc<RwLock<ChunkData>>,
+        spawn_list: &Vec<&'static MobCategory>,
+        spawn_state: &mut SpawnState,
+    ) {
+        // this.level.tickThunder(chunk);
+        //TODO check in simulation distance
+        if self.weather.lock().await.raining
+            && self.weather.lock().await.thundering
+            && rng().random_range(0..100_000) == 0
+        {
+            let rand_value = rng().random::<i32>() >> 2;
+            let delta = Vector3::new(rand_value & 15, rand_value >> 16 & 15, rand_value >> 8 & 15);
+            let random_pos = Vector3::new(
+                chunk_pos.x << 4,
+                chunk.read().await.heightmap.get_height(
+                    MotionBlocking,
+                    chunk_pos.x << 4,
+                    chunk_pos.y << 4,
+                    self.min_y,
+                ),
+                chunk_pos.y << 4,
+            )
+            .add(&delta);
+            // TODO this.getBrightness(LightLayer.SKY, blockPos) >= 15;
+            // TODO heightmap
+
+            // TODO findLightningRod(blockPos)
+            // TODO encapsulatingFullBlocks
+            if true {
+                // TODO biome.getPrecipitationAt(pos, this.getSeaLevel()) == Biome.Precipitation.RAIN
+                // TODO this.getCurrentDifficultyAt(blockPos);
+                if rng().random::<f32>() < 0.0675
+                    && self.get_block(&random_pos.to_block_pos().down()).await
+                        != &Block::LIGHTNING_ROD
+                {
+                    let entity = Entity::new(
+                        Uuid::new_v4(),
+                        self.clone(),
+                        random_pos.to_f64(),
+                        &EntityType::SKELETON_HORSE,
+                        false,
+                    );
+                    self.spawn_entity(Arc::new(entity)).await;
+                }
+                let entity = Entity::new(
+                    Uuid::new_v4(),
+                    self.clone(),
+                    random_pos.to_f64().add_raw(0.5, 0., 0.5),
+                    &EntityType::LIGHTNING_BOLT,
+                    false,
+                );
+                self.spawn_entity(Arc::new(entity)).await;
+            }
+        }
+
+        if spawn_list.is_empty() {
+            return;
+        }
+        // TODO this.level.canSpawnEntitiesInChunk(chunkPos)
+        spawn_for_chunk(self, chunk_pos, chunk, spawn_state, spawn_list).await;
     }
 
     pub fn generation_settings(&self) -> &GenerationSettings {
@@ -1319,6 +1476,8 @@ impl World {
             ))
             .await;
 
+        player.reset_state().await;
+
         log::debug!("Sending player abilities to {}", player.gameprofile.name);
         player.send_abilities_update().await;
 
@@ -1530,7 +1689,8 @@ impl World {
                         };
                         // Pos is zero since it will read from nbt
                         let entity =
-                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
+                            from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid)
+                                .await;
                         entity.read_nbt(entity_nbt).await;
                         let base_entity = entity.get_entity();
 
@@ -1566,7 +1726,8 @@ impl World {
                         continue;
                     };
                     // Pos is zero since it will read from nbt
-                    let entity = from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid);
+                    let entity =
+                        from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid).await;
                     entity.read_nbt(entity_nbt).await;
                     let base_entity = entity.get_entity();
                     player
@@ -1702,6 +1863,25 @@ impl World {
             .collect()
     }
 
+    pub async fn get_nearby_entities(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+    ) -> HashMap<uuid::Uuid, Arc<dyn EntityBase>> {
+        let radius_squared = radius.powi(2);
+
+        self.entities
+            .read()
+            .await
+            .iter()
+            .filter_map(|(id, entity)| {
+                let entity_pos = entity.get_entity().pos.load();
+                (entity_pos.squared_distance_to_vec(pos) <= radius_squared)
+                    .then(|| (*id, entity.clone()))
+            })
+            .collect()
+    }
+
     pub async fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
         let players = self.get_nearby_players(pos, radius).await;
         players
@@ -1719,6 +1899,53 @@ impl World {
                             .load()
                             .squared_distance_to_vec(pos),
                     )
+                    .unwrap()
+            })
+            .map(|p| p.1.clone())
+    }
+
+    /// Gets the closest entity to a position, with optional filtering by entity type.
+    ///
+    /// # Arguments
+    ///
+    /// * `pos` - The position to search around.
+    /// * `radius` - The radius to search within.
+    /// * `entity_types` - Optional array of entity types to filter by. If None, all entity types are included.
+    ///
+    /// # Returns
+    ///
+    /// The closest entity that matches the filter criteria, or None if no entities are found.
+    pub async fn get_closest_entity(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        entity_types: Option<&[&'static EntityType]>,
+    ) -> Option<Arc<dyn EntityBase>> {
+        // Get regular entities
+        let entities = self.get_nearby_entities(pos, radius).await;
+
+        // Filter by entity type if specified
+        let filtered_entities = if let Some(types) = entity_types {
+            entities
+                .into_iter()
+                .filter(|(_, entity)| {
+                    let entity_type = entity.get_entity().entity_type;
+                    types.contains(&entity_type)
+                })
+                .collect::<HashMap<_, _>>()
+        } else {
+            entities
+        };
+
+        // Find the closest entity
+        filtered_entities
+            .iter()
+            .min_by(|a, b| {
+                a.1.get_entity()
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(pos)
+                    .partial_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(pos))
                     .unwrap()
             })
             .map(|p| p.1.clone())
@@ -1850,6 +2077,7 @@ impl World {
     }
 
     /// Sets a block and returns the old block id
+    #[allow(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -1885,8 +2113,20 @@ impl World {
 
         let block_moved = flags.contains(BlockFlags::MOVED);
 
-        // WorldChunk.java line 310
-        if old_block != new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
+        let is_new_block = old_block != new_block;
+
+        // WorldChunk.java line 305-314
+        if is_new_block
+            && old_block.default_state.block_entity_type != u16::MAX
+            && let Some(entity) = self.get_block_entity(position).await
+        {
+            let world: Arc<dyn SimpleWorld> = self.clone();
+            entity.on_block_replaced(world, *position).await;
+            self.remove_block_entity(position).await;
+        }
+
+        // WorldChunk.java line 317
+        if is_new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
             self.block_registry
                 .on_state_replaced(
                     self,
@@ -2069,10 +2309,64 @@ impl World {
             f64::from(pos.0.z) + 0.5 + rand::rng().random_range(-0.25..0.25),
         );
 
-        let entity = Entity::new(Uuid::new_v4(), self.clone(), pos, EntityType::ITEM, false);
+        let entity = Entity::new(Uuid::new_v4(), self.clone(), pos, &EntityType::ITEM, false);
         let item_entity = Arc::new(ItemEntity::new(entity, stack).await);
         self.spawn_entity(item_entity).await;
     }
+
+    /* ItemScatterer.java */
+    pub async fn scatter_inventory(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        inventory: &Arc<dyn Inventory>,
+    ) {
+        for i in 0..inventory.size() {
+            self.scatter_stack(
+                f64::from(position.0.x),
+                f64::from(position.0.y),
+                f64::from(position.0.z),
+                inventory.remove_stack(i).await,
+            )
+            .await;
+        }
+    }
+    pub async fn scatter_stack(self: &Arc<Self>, x: f64, y: f64, z: f64, mut stack: ItemStack) {
+        const TRIANGULAR_DEVIATION: f64 = 0.114_850_001_711_398_36;
+
+        const XZ_MODE: f64 = 0.0;
+        const Y_MODE: f64 = 0.2;
+
+        let width = f64::from(EntityType::ITEM.dimension[0]);
+        let half_width = width / 2.0;
+        let spawn_area = 1.0 - width;
+
+        let mut rng = Xoroshiro::from_seed(get_seed());
+
+        // TODO: Use world random here: world.random.nextDouble()
+        let x = x.floor() + rng.next_f64() * spawn_area + half_width;
+        let y = y.floor() + rng.next_f64() * spawn_area;
+        let z = z.floor() + rng.next_f64() * spawn_area + half_width;
+
+        while !stack.is_empty() {
+            let item = stack.split((rng.next_bounded_i32(21) + 10) as u8);
+            let velocity = Vector3::new(
+                rng.next_triangular(XZ_MODE, TRIANGULAR_DEVIATION),
+                rng.next_triangular(Y_MODE, TRIANGULAR_DEVIATION),
+                rng.next_triangular(XZ_MODE, TRIANGULAR_DEVIATION),
+            );
+
+            let entity = Entity::new(
+                Uuid::new_v4(),
+                self.clone(),
+                Vector3::new(x, y, z),
+                &EntityType::ITEM,
+                false,
+            );
+            let entity = Arc::new(ItemEntity::new_with_velocity(entity, item, velocity, 10).await);
+            self.spawn_entity(entity).await;
+        }
+    }
+    /* End ItemScatterer.java */
 
     pub async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
         self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, false))
@@ -2547,6 +2841,10 @@ impl pumpkin_world::world::SimpleWorld for World {
         Self::update_neighbors(&self, block_pos, except).await;
     }
 
+    async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
+        self.add_synced_block_event(pos, r#type, data).await;
+    }
+
     async fn remove_block_entity(&self, block_pos: &BlockPos) {
         self.remove_block_entity(block_pos).await;
     }
@@ -2557,6 +2855,30 @@ impl pumpkin_world::world::SimpleWorld for World {
 
     async fn get_world_age(&self) -> i64 {
         self.level_time.lock().await.world_age
+    }
+
+    async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
+        self.play_sound(sound, category, position).await;
+    }
+
+    async fn play_sound_fine(
+        &self,
+        sound: Sound,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        self.play_sound_fine(sound, category, position, volume, pitch)
+            .await;
+    }
+
+    async fn scatter_inventory(
+        self: Arc<Self>,
+        position: &BlockPos,
+        inventory: &Arc<dyn Inventory>,
+    ) {
+        Self::scatter_inventory(&self, position, inventory).await;
     }
 }
 

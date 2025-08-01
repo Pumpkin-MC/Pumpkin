@@ -17,7 +17,14 @@ pub struct SpreadContext {
     holes: HashMap<BlockPos, bool>,
 }
 
+impl Default for SpreadContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SpreadContext {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             holes: HashMap::new(),
@@ -260,6 +267,7 @@ pub trait FlowingFluid {
             return true;
         }
 
+        //TODO check if source
         if self.is_same_fluid(fluid, state_id) {
             let props = FlowingFluidProperties::from_state_id(state_id, fluid);
             return props.level == Level::L8 && props.falling != Falling::True;

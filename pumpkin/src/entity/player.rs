@@ -20,13 +20,14 @@ use uuid::Uuid;
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
-use pumpkin_data::entity::{EffectType, EntityPose, EntityStatus, EntityType};
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState, tag};
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -83,11 +84,11 @@ use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
 
 use super::combat::{self, AttackType, player_attack_sound};
-use super::effect::Effect;
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage};
+use pumpkin_data::potion::Effect;
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -301,7 +302,7 @@ impl Player {
             player_uuid,
             world,
             Vector3::new(0.0, 0.0, 0.0),
-            EntityType::PLAYER,
+            &EntityType::PLAYER,
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
         ));
 
@@ -1080,6 +1081,7 @@ impl Player {
             };
 
             'after: {
+                // TODO: this is duplicate code from world
                 let position = event.position;
                 let yaw = event.yaw;
                 let pitch = event.pitch;
@@ -1118,6 +1120,11 @@ impl Player {
                 self.clone().request_teleport(position, yaw, pitch).await;
                 self.living_entity.last_pos.store(position);
                 self.send_abilities_update().await;
+                self.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
+                   self.get_inventory().get_selected_slot() as i8,
+                )).await;
+                self.on_screen_handler_opened(self.player_screen_handler.clone()).await;
+                self.send_health().await;
 
                 new_world.send_world_info(self, position, yaw, pitch).await;
             }
@@ -1281,16 +1288,12 @@ impl Player {
 
     pub async fn kill(&self) {
         self.living_entity.kill().await;
-        self.handle_killed().await;
     }
 
-    async fn handle_killed(&self) {
+    async fn handle_killed(&self, death_msg: TextComponent) {
         self.set_client_loaded(false);
         self.client
-            .send_packet_now(&CCombatDeath::new(
-                self.entity_id().into(),
-                &TextComponent::text("noob"),
-            ))
+            .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
             .await;
     }
 
@@ -1382,10 +1385,10 @@ impl Player {
     pub async fn get_mining_speed(&self, block: &'static Block) -> f32 {
         let mut speed = self.inventory.held_item().lock().await.get_speed(block);
         // Haste
-        if self.living_entity.has_effect(EffectType::Haste).await
+        if self.living_entity.has_effect(&StatusEffect::HASTE).await
             || self
                 .living_entity
-                .has_effect(EffectType::ConduitPower)
+                .has_effect(&StatusEffect::CONDUIT_POWER)
                 .await
         {
             speed *= 1.0 + (self.get_haste_amplifier().await + 1) as f32 * 0.2;
@@ -1393,7 +1396,7 @@ impl Player {
         // Fatigue
         if let Some(fatigue) = self
             .living_entity
-            .get_effect(EffectType::MiningFatigue)
+            .get_effect(&StatusEffect::MINING_FATIGUE)
             .await
         {
             let fatigue_speed = match fatigue.amplifier {
@@ -1414,12 +1417,12 @@ impl Player {
     async fn get_haste_amplifier(&self) -> u32 {
         let mut i = 0;
         let mut j = 0;
-        if let Some(effect) = self.living_entity.get_effect(EffectType::Haste).await {
+        if let Some(effect) = self.living_entity.get_effect(&StatusEffect::HASTE).await {
             i = effect.amplifier;
         }
         if let Some(effect) = self
             .living_entity
-            .get_effect(EffectType::ConduitPower)
+            .get_effect(&StatusEffect::CONDUIT_POWER)
             .await
         {
             j = effect.amplifier;
@@ -1451,7 +1454,7 @@ impl Player {
             Uuid::new_v4(),
             self.world().await,
             item_pos,
-            EntityType::ITEM,
+            &EntityType::ITEM,
             false,
         );
 
@@ -1605,7 +1608,7 @@ impl Player {
             flag |= 8;
         }
 
-        let effect_id = VarInt(effect.r#type as i32);
+        let effect_id = VarInt(i32::from(effect.effect_type.id));
         self.client
             .enqueue_packet(&CUpdateMobEffect::new(
                 self.entity_id().into(),
@@ -1617,8 +1620,8 @@ impl Player {
             .await;
     }
 
-    pub async fn remove_effect(&self, effect_type: EffectType) {
-        let effect_id = VarInt(effect_type as i32);
+    pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
+        let effect_id = VarInt(i32::from(effect_type.id));
         self.client
             .enqueue_packet(
                 &pumpkin_protocol::java::client::play::CRemoveMobEffect::new(
@@ -1637,7 +1640,7 @@ impl Player {
         let mut effect_list = vec![];
         for effect in self.living_entity.active_effects.lock().await.keys() {
             effect_list.push(*effect);
-            let effect_id = VarInt(*effect as i32);
+            let effect_id = VarInt(i32::from(effect.id));
             self.client
                 .enqueue_packet(
                     &pumpkin_protocol::java::client::play::CRemoveMobEffect::new(
@@ -1871,6 +1874,10 @@ impl Player {
             .await
     }
 
+    pub fn is_creative(&self) -> bool {
+        self.gamemode.load() == GameMode::Creative
+    }
+
     /// Swing the hand of the player
     pub async fn swing_hand(&self, hand: Hand, all: bool) {
         let world = self.world().await;
@@ -1889,6 +1896,10 @@ impl Player {
                 .broadcast_packet_except(&[self.gameprofile.id], &packet)
                 .await;
         }
+    }
+
+    pub async fn reset_state(&self) {
+        self.living_entity.reset_state().await;
     }
 }
 
@@ -2026,14 +2037,11 @@ impl EntityBase for Player {
         if self.abilities.lock().await.invulnerable {
             return false;
         }
-        self.world()
+        let world = self.living_entity.entity.world.read().await;
+        let dyn_self = world
+            .get_entity_by_id(self.living_entity.entity.entity_id)
             .await
-            .play_sound(
-                Sound::EntityPlayerHurt,
-                SoundCategory::Players,
-                &self.living_entity.entity.pos.load(),
-            )
-            .await;
+            .expect("Entity not found in world");
         let result = self
             .living_entity
             .damage_with_context(amount, damage_type, position, source, cause)
@@ -2041,7 +2049,9 @@ impl EntityBase for Player {
         if result {
             let health = self.living_entity.health.load();
             if health <= 0.0 {
-                self.handle_killed().await;
+                let death_message =
+                    LivingEntity::get_death_message(&*dyn_self, damage_type, source, cause).await;
+                self.handle_killed(death_message).await;
             }
         }
         result
@@ -2063,6 +2073,14 @@ impl EntityBase for Player {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
+    }
+
+    fn get_player(&self) -> Option<&Player> {
+        Some(self)
+    }
+
+    fn is_spectator(&self) -> bool {
+        self.gamemode.load() == GameMode::Spectator
     }
 
     fn get_name(&self) -> TextComponent {

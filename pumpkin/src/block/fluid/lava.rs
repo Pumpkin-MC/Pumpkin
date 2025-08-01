@@ -10,7 +10,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
-use crate::{block::pumpkin_fluid::PumpkinFluid, entity::EntityBase, world::World};
+use crate::{block::fluid::FluidBehaviour, entity::EntityBase, world::World};
 
 use super::flowing::FlowingFluid;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
@@ -73,7 +73,7 @@ impl FlowingLava {
 const LAVA_FLOW_SPEED: u8 = 30;
 
 #[async_trait]
-impl PumpkinFluid for FlowingLava {
+impl FluidBehaviour for FlowingLava {
     async fn placed(
         &self,
         world: &Arc<World>,

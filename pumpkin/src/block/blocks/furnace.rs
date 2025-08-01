@@ -13,7 +13,7 @@ use pumpkin_world::{
 };
 use tokio::sync::Mutex;
 
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
 
 struct FurnaceScreenFactory {
     inventory: Arc<dyn Inventory>,
@@ -56,10 +56,10 @@ impl ScreenHandlerFactory for FurnaceScreenFactory {
 pub struct FurnaceBlock;
 
 #[async_trait]
-impl PumpkinBlock for FurnaceBlock {
+impl BlockBehaviour for FurnaceBlock {
     async fn normal_use(
         &self,
-        args: crate::block::pumpkin_block::NormalUseArgs<'_>,
+        args: crate::block::NormalUseArgs<'_>,
     ) -> crate::block::registry::BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if let Some(inventory) = block_entity.clone().get_inventory() {
@@ -75,34 +75,24 @@ impl PumpkinBlock for FurnaceBlock {
     //Same to normal_use
     async fn use_with_item(
         &self,
-        _args: crate::block::pumpkin_block::UseWithItemArgs<'_>,
+        _args: crate::block::UseWithItemArgs<'_>,
     ) -> crate::block::registry::BlockActionResult {
         crate::block::registry::BlockActionResult::PassToDefaultBlockAction
     }
 
-    async fn on_entity_collision(
-        &self,
-        _args: crate::block::pumpkin_block::OnEntityCollisionArgs<'_>,
-    ) {
-    }
+    async fn on_entity_collision(&self, _args: crate::block::OnEntityCollisionArgs<'_>) {}
 
     fn should_drop_items_on_explosion(&self) -> bool {
         true
     }
 
-    async fn explode(&self, _args: crate::block::pumpkin_block::ExplodeArgs<'_>) {}
+    async fn explode(&self, _args: crate::block::ExplodeArgs<'_>) {}
 
-    async fn on_synced_block_event(
-        &self,
-        _args: crate::block::pumpkin_block::OnSyncedBlockEventArgs<'_>,
-    ) -> bool {
+    async fn on_synced_block_event(&self, _args: crate::block::OnSyncedBlockEventArgs<'_>) -> bool {
         false
     }
 
-    async fn on_place(
-        &self,
-        args: crate::block::pumpkin_block::OnPlaceArgs<'_>,
-    ) -> pumpkin_world::BlockStateId {
+    async fn on_place(&self, args: crate::block::OnPlaceArgs<'_>) -> pumpkin_world::BlockStateId {
         let mut props = FurnaceLikeProperties::default(args.block);
         props.facing = args
             .player
@@ -114,74 +104,59 @@ impl PumpkinBlock for FurnaceBlock {
         props.to_state_id(args.block)
     }
 
-    async fn random_tick(&self, _args: crate::block::pumpkin_block::RandomTickArgs<'_>) {}
+    async fn random_tick(&self, _args: crate::block::RandomTickArgs<'_>) {}
 
-    async fn can_place_at(&self, _args: crate::block::pumpkin_block::CanPlaceAtArgs<'_>) -> bool {
+    async fn can_place_at(&self, _args: crate::block::CanPlaceAtArgs<'_>) -> bool {
         true
     }
 
-    async fn can_update_at(&self, _args: crate::block::pumpkin_block::CanUpdateAtArgs<'_>) -> bool {
+    async fn can_update_at(&self, _args: crate::block::CanUpdateAtArgs<'_>) -> bool {
         false
     }
 
-    async fn placed(&self, args: crate::block::pumpkin_block::PlacedArgs<'_>) {
+    async fn placed(&self, args: crate::block::PlacedArgs<'_>) {
         let furnace_block_entity = FurnaceBlockEntity::new(*args.position);
         args.world
             .add_block_entity(Arc::new(furnace_block_entity))
             .await;
     }
 
-    async fn player_placed(&self, _args: crate::block::pumpkin_block::PlayerPlacedArgs<'_>) {}
+    async fn player_placed(&self, _args: crate::block::PlayerPlacedArgs<'_>) {}
 
-    async fn broken(&self, args: crate::block::pumpkin_block::BrokenArgs<'_>) {
+    async fn broken(&self, args: crate::block::BrokenArgs<'_>) {
         args.world.remove_block_entity(args.position).await;
     }
 
-    async fn on_neighbor_update(
-        &self,
-        _args: crate::block::pumpkin_block::OnNeighborUpdateArgs<'_>,
-    ) {
-    }
+    async fn on_neighbor_update(&self, _args: crate::block::OnNeighborUpdateArgs<'_>) {}
 
-    async fn prepare(&self, _args: crate::block::pumpkin_block::PrepareArgs<'_>) {}
+    async fn prepare(&self, _args: crate::block::PrepareArgs<'_>) {}
 
     async fn get_state_for_neighbor_update(
         &self,
-        args: crate::block::pumpkin_block::GetStateForNeighborUpdateArgs<'_>,
+        args: crate::block::GetStateForNeighborUpdateArgs<'_>,
     ) -> pumpkin_world::BlockStateId {
         args.state_id
     }
 
-    async fn on_scheduled_tick(&self, _args: crate::block::pumpkin_block::OnScheduledTickArgs<'_>) {
-    }
+    async fn on_scheduled_tick(&self, _args: crate::block::OnScheduledTickArgs<'_>) {}
 
-    async fn on_state_replaced(&self, _args: crate::block::pumpkin_block::OnStateReplacedArgs<'_>) {
-    }
+    async fn on_state_replaced(&self, _args: crate::block::OnStateReplacedArgs<'_>) {}
 
-    async fn emits_redstone_power(
-        &self,
-        _args: crate::block::pumpkin_block::EmitsRedstonePowerArgs<'_>,
-    ) -> bool {
+    async fn emits_redstone_power(&self, _args: crate::block::EmitsRedstonePowerArgs<'_>) -> bool {
         false
     }
 
-    async fn get_weak_redstone_power(
-        &self,
-        _args: crate::block::pumpkin_block::GetRedstonePowerArgs<'_>,
-    ) -> u8 {
+    async fn get_weak_redstone_power(&self, _args: crate::block::GetRedstonePowerArgs<'_>) -> u8 {
         0
     }
 
-    async fn get_strong_redstone_power(
-        &self,
-        _args: crate::block::pumpkin_block::GetRedstonePowerArgs<'_>,
-    ) -> u8 {
+    async fn get_strong_redstone_power(&self, _args: crate::block::GetRedstonePowerArgs<'_>) -> u8 {
         0
     }
 
     async fn get_comparator_output(
         &self,
-        _args: crate::block::pumpkin_block::GetComparatorOutputArgs<'_>,
+        _args: crate::block::GetComparatorOutputArgs<'_>,
     ) -> Option<u8> {
         None
     }
