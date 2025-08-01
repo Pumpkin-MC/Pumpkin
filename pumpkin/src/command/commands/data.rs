@@ -41,6 +41,7 @@ impl CommandExecutor for GetEntityDataExecutor {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent, String> {
     let folded = TextComponent::text("<...>").color_named(NamedColor::Gray);
     match tag {
