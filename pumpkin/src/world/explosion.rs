@@ -5,7 +5,7 @@ use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::{
-    block::{drop_loot, pumpkin_block::ExplodeArgs},
+    block::{ExplodeArgs, drop_loot},
     server::Server,
     world::loot::LootContextParameters,
 };

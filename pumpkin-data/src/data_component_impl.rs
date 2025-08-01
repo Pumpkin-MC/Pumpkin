@@ -3,8 +3,10 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::*;
+use crate::entity_type::EntityType;
 use crate::tag::Tag;
 use crate::{AttributeModifierSlot, Block};
+use pumpkin_util::registry::RegistryEntryList;
 use pumpkin_util::text::TextComponent;
 use std::any::Any;
 use std::borrow::Cow;
@@ -320,10 +322,218 @@ impl Hash for ToolImpl {
 }
 #[derive(Clone, Debug, Hash)]
 pub struct WeaponImpl;
+
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub enum EquipmentType {
+    Hand,
+    HumanoidArmor,
+    AnimalArmor,
+    Saddle,
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct EquipmentSlotData {
+    pub slot_type: EquipmentType,
+    pub entity_id: i32,
+    pub max_count: i32,
+    pub index: i32,
+    pub name: Cow<'static, str>,
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[repr(i8)]
+pub enum EquipmentSlot {
+    MainHand(EquipmentSlotData),
+    OffHand(EquipmentSlotData),
+    Feet(EquipmentSlotData),
+    Legs(EquipmentSlotData),
+    Chest(EquipmentSlotData),
+    Head(EquipmentSlotData),
+    Body(EquipmentSlotData),
+    Saddle(EquipmentSlotData),
+}
+
+impl EquipmentSlot {
+    pub const MAIN_HAND: Self = Self::MainHand(EquipmentSlotData {
+        slot_type: EquipmentType::Hand,
+        entity_id: 0,
+        index: 0,
+        max_count: 0,
+        name: Cow::Borrowed("mainhand"),
+    });
+    pub const OFF_HAND: Self = Self::OffHand(EquipmentSlotData {
+        slot_type: EquipmentType::Hand,
+        entity_id: 1,
+        index: 5,
+        max_count: 0,
+        name: Cow::Borrowed("offhand"),
+    });
+    pub const FEET: Self = Self::Feet(EquipmentSlotData {
+        slot_type: EquipmentType::HumanoidArmor,
+        entity_id: 0,
+        index: 1,
+        max_count: 1,
+        name: Cow::Borrowed("feet"),
+    });
+    pub const LEGS: Self = Self::Legs(EquipmentSlotData {
+        slot_type: EquipmentType::HumanoidArmor,
+        entity_id: 1,
+        index: 2,
+        max_count: 1,
+        name: Cow::Borrowed("legs"),
+    });
+    pub const CHEST: Self = Self::Chest(EquipmentSlotData {
+        slot_type: EquipmentType::HumanoidArmor,
+        entity_id: 2,
+        index: 3,
+        max_count: 1,
+        name: Cow::Borrowed("chest"),
+    });
+    pub const HEAD: Self = Self::Head(EquipmentSlotData {
+        slot_type: EquipmentType::HumanoidArmor,
+        entity_id: 3,
+        index: 4,
+        max_count: 1,
+        name: Cow::Borrowed("head"),
+    });
+    pub const BODY: Self = Self::Body(EquipmentSlotData {
+        slot_type: EquipmentType::AnimalArmor,
+        entity_id: 0,
+        index: 6,
+        max_count: 1,
+        name: Cow::Borrowed("body"),
+    });
+    pub const SADDLE: Self = Self::Saddle(EquipmentSlotData {
+        slot_type: EquipmentType::Saddle,
+        entity_id: 0,
+        index: 7,
+        max_count: 1,
+        name: Cow::Borrowed("saddle"),
+    });
+
+    pub fn get_entity_slot_id(&self) -> i32 {
+        match self {
+            Self::MainHand(data) => data.entity_id,
+            Self::OffHand(data) => data.entity_id,
+            Self::Feet(data) => data.entity_id,
+            Self::Legs(data) => data.entity_id,
+            Self::Chest(data) => data.entity_id,
+            Self::Head(data) => data.entity_id,
+            Self::Body(data) => data.entity_id,
+            Self::Saddle(data) => data.entity_id,
+        }
+    }
+
+    pub fn get_from_name(name: &str) -> Option<Self> {
+        match name {
+            "mainhand" => Some(Self::MAIN_HAND),
+            "offhand" => Some(Self::OFF_HAND),
+            "feet" => Some(Self::FEET),
+            "legs" => Some(Self::LEGS),
+            "chest" => Some(Self::CHEST),
+            "head" => Some(Self::HEAD),
+            "body" => Some(Self::BODY),
+            "saddle" => Some(Self::SADDLE),
+            _ => None,
+        }
+    }
+
+    pub fn get_offset_entity_slot_id(&self, offset: i32) -> i32 {
+        self.get_entity_slot_id() + offset
+    }
+
+    pub fn slot_type(&self) -> EquipmentType {
+        match self {
+            Self::MainHand(data) => data.slot_type,
+            Self::OffHand(data) => data.slot_type,
+            Self::Feet(data) => data.slot_type,
+            Self::Legs(data) => data.slot_type,
+            Self::Chest(data) => data.slot_type,
+            Self::Head(data) => data.slot_type,
+            Self::Body(data) => data.slot_type,
+            Self::Saddle(data) => data.slot_type,
+        }
+    }
+
+    pub fn is_armor_slot(&self) -> bool {
+        matches!(
+            self.slot_type(),
+            EquipmentType::HumanoidArmor | EquipmentType::AnimalArmor
+        )
+    }
+
+    pub const fn discriminant(&self) -> i8 {
+        match self {
+            Self::MainHand(_) => 0,
+            Self::OffHand(_) => 1,
+            Self::Feet(_) => 2,
+            Self::Legs(_) => 3,
+            Self::Chest(_) => 4,
+            Self::Head(_) => 5,
+            Self::Body(_) => 6,
+            Self::Saddle(_) => 7,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum EntityTypeOrTag {
+    Tag(&'static Tag),
+    Single(&'static EntityType),
+}
+
+impl Hash for EntityTypeOrTag {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            EntityTypeOrTag::Tag(tag) => {
+                for x in tag.0 {
+                    x.hash(state);
+                }
+            }
+            EntityTypeOrTag::Single(entity_type) => {
+                entity_type.id.hash(state);
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Hash)]
 pub struct EnchantableImpl;
 #[derive(Clone, Debug, Hash)]
-pub struct EquippableImpl;
+pub struct EquippableImpl {
+    pub slot: &'static EquipmentSlot,
+    pub equip_sound: &'static str,
+    pub asset_id: Option<&'static str>,
+    pub camera_overlay: Option<&'static str>,
+    // pub allowed_entities: Option<&'static [&'static str]>,
+    pub allowed_entities: Option<&'static [EntityTypeOrTag]>,
+    pub dispensable: bool,
+    pub swappable: bool,
+    pub damage_on_hurt: bool,
+    pub equip_on_interact: bool,
+    pub can_be_sheared: bool,
+    pub shearing_sound: Option<&'static str>,
+}
+impl DataComponentImpl for EquippableImpl {
+    fn get_enum() -> DataComponent
+    where
+        Self: Sized,
+    {
+        Equippable
+    }
+
+    fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+}
 #[derive(Clone, Debug, Hash)]
 pub struct RepairableImpl;
 #[derive(Clone, Debug, Hash)]

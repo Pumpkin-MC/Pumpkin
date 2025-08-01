@@ -20,7 +20,6 @@ use pumpkin_protocol::java::client::play::CChangeDifficulty;
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_registry::{Registry, VanillaDimensionType};
 use pumpkin_util::Difficulty;
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
 use pumpkin_world::lock::LevelLocker;
@@ -114,7 +113,7 @@ impl Server {
         let command_dispatcher = RwLock::new(default_dispatcher().await);
         let world_path = BASIC_CONFIG.get_world_path();
 
-        let block_registry = super::block::default_registry();
+        let block_registry = super::block::registry::default_registry();
 
         let level_info = AnvilLevelInfo.read_world_info(&world_path);
         if let Err(error) = &level_info {
@@ -220,18 +219,6 @@ impl Server {
             .expect("Nothing should hold a lock of worlds before server startup") =
             vec![overworld.into(), nether.into(), end.into()];
         server
-    }
-
-    const SPAWN_CHUNK_RADIUS: i32 = 1;
-
-    #[must_use]
-    pub fn spawn_chunks() -> Box<[Vector2<i32>]> {
-        (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS)
-            .flat_map(|x| {
-                (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS)
-                    .map(move |z| Vector2::new(x, z))
-            })
-            .collect()
     }
 
     /// Spawns a task associated with this server. All tasks spawned with this method are awaited

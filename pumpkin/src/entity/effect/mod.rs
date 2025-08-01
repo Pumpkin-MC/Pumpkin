@@ -1,4 +1,4 @@
-use crate::entity::NBTStorage;
+use crate::entity::{NBTStorage, NBTStorageInit};
 use async_trait::async_trait;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_nbt::compound::NbtCompound;
@@ -21,7 +21,10 @@ impl NBTStorage for pumpkin_data::potion::Effect {
         let show_icon: i8 = i8::from(self.show_icon);
         nbt.put("show_icon", NbtTag::Byte(show_icon));
     }
+}
 
+#[async_trait]
+impl NBTStorageInit for pumpkin_data::potion::Effect {
     async fn create_from_nbt(nbt: &mut NbtCompound) -> Option<Self> {
         let Some(effect_id) = nbt.get_string("id") else {
             log::warn!("Unable to read effect. Effect id is not present");

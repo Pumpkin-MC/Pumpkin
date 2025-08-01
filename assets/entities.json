@@ -2,8 +2,12 @@
   "acacia_boat": {
     "id": 0,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -17,8 +21,12 @@
   "acacia_chest_boat": {
     "id": 1,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -33,8 +41,12 @@
     "id": 2,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.35,
       0.6
@@ -52,8 +64,12 @@
   "area_effect_cloud": {
     "id": 3,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": true,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       6.0,
       0.5
@@ -68,8 +84,12 @@
     "id": 4,
     "max_health": 12.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.7,
       0.65
@@ -88,8 +108,12 @@
     "id": 5,
     "max_health": 20.0,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       1.975
@@ -107,8 +131,12 @@
   "arrow": {
     "id": 6,
     "attackable": false,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       0.5
@@ -123,8 +151,12 @@
     "id": 7,
     "max_health": 14.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "AXOLOTLS",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.75,
       0.42
@@ -142,8 +174,12 @@
   "bamboo_chest_raft": {
     "id": 8,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -157,8 +193,12 @@
   "bamboo_raft": {
     "id": 9,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -173,8 +213,12 @@
     "id": 10,
     "max_health": 6.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "AMBIENT",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.5,
       0.9
@@ -193,8 +237,12 @@
     "id": 11,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.7,
       0.6
@@ -212,8 +260,12 @@
   "birch_boat": {
     "id": 12,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -227,8 +279,12 @@
   "birch_chest_boat": {
     "id": 13,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -243,8 +299,12 @@
     "id": 14,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.8
@@ -299,8 +359,12 @@
   "block_display": {
     "id": 15,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.0,
       0.0
@@ -315,8 +379,12 @@
     "id": 16,
     "max_health": 16.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.99
@@ -437,8 +505,12 @@
     "id": 17,
     "max_health": 30.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.77
@@ -493,8 +565,12 @@
   "breeze_wind_charge": {
     "id": 18,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.3125,
       0.3125
@@ -509,8 +585,12 @@
     "id": 19,
     "max_health": 32.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 6,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.7,
       2.375
@@ -529,8 +609,12 @@
     "id": 20,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.6,
       0.7
@@ -572,8 +656,12 @@
     "id": 21,
     "max_health": 12.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.7,
       0.5
@@ -658,8 +746,12 @@
   "cherry_boat": {
     "id": 22,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -673,8 +765,12 @@
   "cherry_chest_boat": {
     "id": 23,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -688,8 +784,12 @@
   "chest_minecart": {
     "id": 24,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.98,
       0.7
@@ -704,8 +804,12 @@
     "id": 25,
     "max_health": 4.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.4,
       0.7
@@ -813,8 +917,12 @@
     "id": 26,
     "max_health": 3.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 8,
     "summonable": true,
     "fire_immune": false,
+    "category": "WATER_AMBIENT",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.5,
       0.3
@@ -898,8 +1006,12 @@
   "command_block_minecart": {
     "id": 27,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.98,
       0.7
@@ -914,8 +1026,12 @@
     "id": 28,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.9,
       1.4
@@ -1032,8 +1148,12 @@
     "id": 29,
     "max_health": 1.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.9,
       2.7
@@ -1052,8 +1172,12 @@
     "id": 30,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.7
@@ -1123,8 +1247,12 @@
   "dark_oak_boat": {
     "id": 31,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -1138,8 +1266,12 @@
   "dark_oak_chest_boat": {
     "id": 32,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -1154,8 +1286,12 @@
     "id": 33,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "WATER_CREATURE",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.9,
       0.6
@@ -1242,8 +1378,12 @@
     "id": 34,
     "max_health": 53.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 6,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.3964844,
       1.5
@@ -1293,8 +1433,12 @@
   "dragon_fireball": {
     "id": 35,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.0,
       1.0
@@ -1309,8 +1453,12 @@
     "id": 36,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -1385,8 +1533,12 @@
   "egg": {
     "id": 37,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -1401,8 +1553,12 @@
     "id": 38,
     "max_health": 80.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       1.9975,
       1.9975
@@ -1622,8 +1778,12 @@
     "id": 39,
     "max_health": 40.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       2.9
@@ -1674,8 +1834,12 @@
     "id": 40,
     "max_health": 8.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.4,
       0.3
@@ -1694,8 +1858,12 @@
     "id": 41,
     "max_health": 200.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       16.0,
       8.0
@@ -1713,8 +1881,12 @@
   "ender_pearl": {
     "id": 42,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -1728,8 +1900,12 @@
   "end_crystal": {
     "id": 43,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": true,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       2.0,
       2.0
@@ -1744,8 +1920,12 @@
     "id": 44,
     "max_health": 24.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -1810,8 +1990,12 @@
   "evoker_fangs": {
     "id": 45,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       0.8
@@ -1825,8 +2009,12 @@
   "experience_bottle": {
     "id": 46,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -1840,8 +2028,12 @@
   "experience_orb": {
     "id": 47,
     "attackable": false,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       0.5
@@ -1855,8 +2047,12 @@
   "eye_of_ender": {
     "id": 48,
     "attackable": false,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -1870,8 +2066,12 @@
   "falling_block": {
     "id": 49,
     "attackable": false,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.98,
       0.98
@@ -1885,8 +2085,12 @@
   "fireball": {
     "id": 50,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.0,
       1.0
@@ -1900,8 +2104,12 @@
   "firework_rocket": {
     "id": 51,
     "attackable": false,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -1916,8 +2124,12 @@
     "id": 52,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.6,
       0.7
@@ -1936,8 +2148,12 @@
     "id": 53,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       0.5
@@ -1955,8 +2171,12 @@
   "furnace_minecart": {
     "id": 54,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.98,
       0.7
@@ -1971,8 +2191,12 @@
     "id": 55,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 1,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       4.0,
       4.0
@@ -2089,8 +2313,12 @@
     "id": 56,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 1,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       4.0,
       4.0
@@ -2109,8 +2337,12 @@
     "id": 57,
     "max_health": 100.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       3.6,
       12.0
@@ -2128,8 +2360,12 @@
   "glow_item_frame": {
     "id": 58,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       0.5
@@ -2144,8 +2380,12 @@
     "id": 59,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "UNDERGROUND_WATER_CREATURE",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.8,
       0.8
@@ -2196,8 +2436,12 @@
     "id": 60,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.9,
       1.3
@@ -2216,8 +2460,12 @@
     "id": 61,
     "max_health": 30.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.85,
       0.85
@@ -2408,8 +2656,12 @@
     "id": 62,
     "max_health": 40.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       1.3964844,
       1.4
@@ -2525,8 +2777,12 @@
   "hopper_minecart": {
     "id": 63,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.98,
       0.7
@@ -2541,8 +2797,12 @@
     "id": 64,
     "max_health": 53.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 6,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.3964844,
       1.6
@@ -2593,8 +2853,12 @@
     "id": 65,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -2716,8 +2980,12 @@
     "id": 66,
     "max_health": 32.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -2735,8 +3003,12 @@
   "interaction": {
     "id": 67,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.0,
       0.0
@@ -2751,8 +3023,12 @@
     "id": 68,
     "max_health": 100.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.4,
       2.7
@@ -2814,8 +3090,12 @@
   "item": {
     "id": 69,
     "attackable": false,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -2829,8 +3109,12 @@
   "item_display": {
     "id": 70,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.0,
       0.0
@@ -2844,8 +3128,12 @@
   "item_frame": {
     "id": 71,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       0.5
@@ -2859,8 +3147,12 @@
   "jungle_boat": {
     "id": 72,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -2874,8 +3166,12 @@
   "jungle_chest_boat": {
     "id": 73,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -2889,8 +3185,12 @@
   "leash_knot": {
     "id": 74,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.375,
       0.5
@@ -2904,8 +3204,12 @@
   "lightning_bolt": {
     "id": 75,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.0,
       0.0
@@ -2920,8 +3224,12 @@
     "id": 76,
     "max_health": 53.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 6,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.9,
       1.87
@@ -2971,8 +3279,12 @@
   "llama_spit": {
     "id": 77,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -2987,8 +3299,12 @@
     "id": 78,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.52,
       0.52
@@ -3135,8 +3451,12 @@
   "mangrove_boat": {
     "id": 79,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -3150,8 +3470,12 @@
   "mangrove_chest_boat": {
     "id": 80,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -3165,8 +3489,12 @@
   "marker": {
     "id": 81,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.0,
       0.0
@@ -3180,8 +3508,12 @@
   "minecart": {
     "id": 82,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.98,
       0.7
@@ -3196,8 +3528,12 @@
     "id": 83,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.9,
       1.4
@@ -3314,8 +3650,12 @@
     "id": 84,
     "max_health": 53.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 6,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.3964844,
       1.6
@@ -3365,8 +3705,12 @@
   "oak_boat": {
     "id": 85,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -3380,8 +3724,12 @@
   "oak_chest_boat": {
     "id": 86,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -3396,8 +3744,12 @@
     "id": 87,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.6,
       0.7
@@ -3415,8 +3767,12 @@
   "ominous_item_spawner": {
     "id": 88,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -3430,8 +3786,12 @@
   "painting": {
     "id": 89,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       0.5
@@ -3445,8 +3805,12 @@
   "pale_oak_boat": {
     "id": 90,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -3460,8 +3824,12 @@
   "pale_oak_chest_boat": {
     "id": 91,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -3476,8 +3844,12 @@
     "id": 92,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.3,
       1.25
@@ -3515,8 +3887,12 @@
     "id": 93,
     "max_health": 6.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       0.9
@@ -3567,8 +3943,12 @@
     "id": 94,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.9,
       0.5
@@ -3624,8 +4004,12 @@
     "id": 95,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.9,
       0.9
@@ -3712,8 +4096,12 @@
     "id": 96,
     "max_health": 16.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -3732,8 +4120,12 @@
     "id": 97,
     "max_health": 50.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -3752,8 +4144,12 @@
     "id": 98,
     "max_health": 24.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 1,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.6,
       1.95
@@ -3811,8 +4207,12 @@
     "id": 99,
     "max_health": 30.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.4,
       1.4
@@ -3959,8 +4359,12 @@
   "splash_potion": {
     "id": 100,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -3974,8 +4378,12 @@
   "lingering_potion": {
     "id": 101,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -3990,8 +4398,12 @@
     "id": 102,
     "max_health": 3.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 8,
     "summonable": true,
     "fire_immune": false,
+    "category": "WATER_AMBIENT",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.7,
       0.7
@@ -4045,8 +4457,12 @@
     "id": 103,
     "max_health": 3.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.4,
       0.5
@@ -4184,8 +4600,12 @@
     "id": 104,
     "max_health": 100.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       1.95,
       2.2
@@ -4223,8 +4643,12 @@
     "id": 105,
     "max_health": 3.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 5,
     "summonable": true,
     "fire_immune": false,
+    "category": "WATER_AMBIENT",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.7,
       0.4
@@ -4309,8 +4733,12 @@
     "id": 106,
     "max_health": 8.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.9,
       1.3
@@ -4712,8 +5140,12 @@
     "id": 107,
     "max_health": 30.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.0,
       1.0
@@ -4755,8 +5187,12 @@
   "shulker_bullet": {
     "id": 108,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.3125,
       0.3125
@@ -4771,8 +5207,12 @@
     "id": 109,
     "max_health": 8.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.4,
       0.3
@@ -4791,8 +5231,12 @@
     "id": 110,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.99
@@ -4873,8 +5317,12 @@
     "id": 111,
     "max_health": 15.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 6,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.3964844,
       1.6
@@ -4925,8 +5373,12 @@
     "id": 112,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.52,
       0.52
@@ -5022,8 +5474,12 @@
   "small_fireball": {
     "id": 113,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.3125,
       0.3125
@@ -5038,8 +5494,12 @@
     "id": 114,
     "max_health": 14.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.9,
       1.75
@@ -5057,8 +5517,12 @@
   "snowball": {
     "id": 115,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25
@@ -5073,8 +5537,12 @@
     "id": 116,
     "max_health": 4.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.7,
       1.9
@@ -5115,8 +5583,12 @@
   "spawner_minecart": {
     "id": 117,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.98,
       0.7
@@ -5130,8 +5602,12 @@
   "spectral_arrow": {
     "id": 118,
     "attackable": false,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       0.5
@@ -5146,8 +5622,12 @@
     "id": 119,
     "max_health": 16.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       1.4,
       0.9
@@ -5232,8 +5712,12 @@
   "spruce_boat": {
     "id": 120,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -5247,8 +5731,12 @@
   "spruce_chest_boat": {
     "id": 121,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.375,
       0.5625
@@ -5263,8 +5751,12 @@
     "id": 122,
     "max_health": 10.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "WATER_CREATURE",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.8,
       0.8
@@ -5315,8 +5807,12 @@
     "id": 123,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.99
@@ -5437,8 +5933,12 @@
     "id": 124,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.9,
       1.7
@@ -5489,8 +5989,12 @@
     "id": 125,
     "max_health": 6.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 8,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.4,
       0.3
@@ -5508,8 +6012,12 @@
   "text_display": {
     "id": 126,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.0,
       0.0
@@ -5523,8 +6031,12 @@
   "tnt": {
     "id": 127,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": true,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.98,
       0.98
@@ -5538,8 +6050,12 @@
   "tnt_minecart": {
     "id": 128,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.98,
       0.7
@@ -5554,8 +6070,12 @@
     "id": 129,
     "max_health": 53.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 6,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.9,
       1.87
@@ -5605,8 +6125,12 @@
   "trident": {
     "id": 130,
     "attackable": false,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.5,
       0.5
@@ -5621,8 +6145,12 @@
     "id": 131,
     "max_health": 3.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 8,
     "summonable": true,
     "fire_immune": false,
+    "category": "WATER_AMBIENT",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.5,
       0.4
@@ -5676,8 +6204,12 @@
     "id": 132,
     "max_health": 30.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.2,
       0.4
@@ -5752,8 +6284,12 @@
     "id": 133,
     "max_health": 14.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.4,
       0.8
@@ -5772,8 +6308,12 @@
     "id": 134,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.6,
       1.95
@@ -5792,8 +6332,12 @@
     "id": 135,
     "max_health": 24.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -5849,8 +6393,12 @@
     "id": 136,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.6,
       1.95
@@ -5869,8 +6417,12 @@
     "id": 137,
     "max_health": 500.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.9,
       2.9
@@ -5900,8 +6452,12 @@
   "wind_charge": {
     "id": 138,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.3125,
       0.3125
@@ -5916,8 +6472,12 @@
     "id": 139,
     "max_health": 26.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -6123,8 +6683,12 @@
     "id": 140,
     "max_health": 300.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.9,
       3.5
@@ -6143,8 +6707,12 @@
     "id": 141,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.7,
       2.4
@@ -6249,8 +6817,12 @@
   "wither_skull": {
     "id": 142,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": true,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.3125,
       0.3125
@@ -6265,8 +6837,12 @@
     "id": 143,
     "max_health": 8.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 8,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.6,
       0.85
@@ -6285,8 +6861,12 @@
     "id": 144,
     "max_health": 40.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       1.3964844,
       1.4
@@ -6337,8 +6917,12 @@
     "id": 145,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -6487,8 +7071,12 @@
     "id": 146,
     "max_health": 15.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 6,
     "summonable": true,
     "fire_immune": false,
+    "category": "CREATURE",
+    "can_spawn_far_from_player": true,
     "dimension": [
       1.3964844,
       1.6
@@ -6539,8 +7127,12 @@
     "id": 147,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": false,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -6662,8 +7254,12 @@
     "id": 148,
     "max_health": 20.0,
     "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
     "summonable": true,
     "fire_immune": true,
+    "category": "MONSTER",
+    "can_spawn_far_from_player": false,
     "dimension": [
       0.6,
       1.95
@@ -6769,6 +7365,8 @@
     "id": 149,
     "summonable": false,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.6,
       1.8
@@ -6786,8 +7384,12 @@
   "fishing_bobber": {
     "id": 150,
     "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
     "summonable": false,
     "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
     "dimension": [
       0.25,
       0.25

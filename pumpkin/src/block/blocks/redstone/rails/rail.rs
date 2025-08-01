@@ -5,11 +5,11 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::OnNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::PlacedArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
+use crate::block::BlockBehaviour;
+use crate::block::CanPlaceAtArgs;
+use crate::block::OnNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::PlacedArgs;
 
 use super::StraightRailShapeExt;
 use super::common::{can_place_rail_at, rail_placement_is_valid, update_flanking_rails_shape};
@@ -19,7 +19,7 @@ use super::{HorizontalFacingRailExt, Rail, RailElevation, RailProperties};
 pub struct RailBlock;
 
 #[async_trait]
-impl PumpkinBlock for RailBlock {
+impl BlockBehaviour for RailBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let world = args.world;
         let block_pos = args.position;

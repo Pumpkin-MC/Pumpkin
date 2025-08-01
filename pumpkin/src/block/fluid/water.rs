@@ -6,7 +6,7 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority};
 
-use crate::{block::pumpkin_fluid::PumpkinFluid, entity::EntityBase, world::World};
+use crate::{block::fluid::FluidBehaviour, entity::EntityBase, world::World};
 
 use super::flowing::FlowingFluid;
 
@@ -16,7 +16,7 @@ pub struct FlowingWater;
 const WATER_FLOW_SPEED: u8 = 5;
 
 #[async_trait]
-impl PumpkinFluid for FlowingWater {
+impl FluidBehaviour for FlowingWater {
     async fn placed(
         &self,
         world: &Arc<World>,

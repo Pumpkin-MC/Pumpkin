@@ -10,9 +10,9 @@ use pumpkin_world::{BlockStateId, tick::TickPriority};
 use crate::{
     block::{
         BlockIsReplacing,
-        pumpkin_block::{
-            BlockMetadata, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnPlaceArgs,
-            PumpkinBlock,
+        {
+            BlockBehaviour, BlockMetadata, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+            OnPlaceArgs,
         },
     },
     entity::EntityBase,
@@ -31,7 +31,7 @@ impl BlockMetadata for CampfireBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for CampfireBlock {
+impl BlockBehaviour for CampfireBlock {
     // TODO: cooking food on campfire (CampfireBlockEntity)
     async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit

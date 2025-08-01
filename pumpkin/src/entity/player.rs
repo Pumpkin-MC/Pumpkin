@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -27,7 +28,6 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState, tag};
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -87,7 +87,7 @@ use super::combat::{self, AttackType, player_attack_sound};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
-use super::{Entity, EntityBase, NBTStorage};
+use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
@@ -302,7 +302,7 @@ impl Player {
             player_uuid,
             world,
             Vector3::new(0.0, 0.0, 0.0),
-            EntityType::PLAYER,
+            &EntityType::PLAYER,
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
         ));
 
@@ -1081,6 +1081,7 @@ impl Player {
             };
 
             'after: {
+                // TODO: this is duplicate code from world
                 let position = event.position;
                 let yaw = event.yaw;
                 let pitch = event.pitch;
@@ -1119,6 +1120,11 @@ impl Player {
                 self.clone().request_teleport(position, yaw, pitch).await;
                 self.living_entity.last_pos.store(position);
                 self.send_abilities_update().await;
+                self.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
+                   self.get_inventory().get_selected_slot() as i8,
+                )).await;
+                self.on_screen_handler_opened(self.player_screen_handler.clone()).await;
+                self.send_health().await;
 
                 new_world.send_world_info(self, position, yaw, pitch).await;
             }
@@ -1282,16 +1288,12 @@ impl Player {
 
     pub async fn kill(&self) {
         self.living_entity.kill().await;
-        self.handle_killed().await;
     }
 
-    async fn handle_killed(&self) {
+    async fn handle_killed(&self, death_msg: TextComponent) {
         self.set_client_loaded(false);
         self.client
-            .send_packet_now(&CCombatDeath::new(
-                self.entity_id().into(),
-                &TextComponent::text("noob"),
-            ))
+            .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
             .await;
     }
 
@@ -1452,7 +1454,7 @@ impl Player {
             Uuid::new_v4(),
             self.world().await,
             item_pos,
-            EntityType::ITEM,
+            &EntityType::ITEM,
             false,
         );
 
@@ -1872,6 +1874,10 @@ impl Player {
             .await
     }
 
+    pub fn is_creative(&self) -> bool {
+        self.gamemode.load() == GameMode::Creative
+    }
+
     /// Swing the hand of the player
     pub async fn swing_hand(&self, hand: Hand, all: bool) {
         let world = self.world().await;
@@ -1890,6 +1896,10 @@ impl Player {
                 .broadcast_packet_except(&[self.gameprofile.id], &packet)
                 .await;
         }
+    }
+
+    pub async fn reset_state(&self) {
+        self.living_entity.reset_state().await;
     }
 }
 
@@ -1961,6 +1971,8 @@ impl NBTStorage for Player {
     }
 }
 
+impl NBTStorageInit for Player {}
+
 #[async_trait]
 impl NBTStorage for PlayerInventory {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
@@ -2014,6 +2026,8 @@ impl NBTStorage for PlayerInventory {
     }
 }
 
+impl NBTStorageInit for PlayerInventory {}
+
 #[async_trait]
 impl EntityBase for Player {
     async fn damage_with_context(
@@ -2027,14 +2041,11 @@ impl EntityBase for Player {
         if self.abilities.lock().await.invulnerable {
             return false;
         }
-        self.world()
+        let world = self.living_entity.entity.world.read().await;
+        let dyn_self = world
+            .get_entity_by_id(self.living_entity.entity.entity_id)
             .await
-            .play_sound(
-                Sound::EntityPlayerHurt,
-                SoundCategory::Players,
-                &self.living_entity.entity.pos.load(),
-            )
-            .await;
+            .expect("Entity not found in world");
         let result = self
             .living_entity
             .damage_with_context(amount, damage_type, position, source, cause)
@@ -2042,7 +2053,9 @@ impl EntityBase for Player {
         if result {
             let health = self.living_entity.health.load();
             if health <= 0.0 {
-                self.handle_killed().await;
+                let death_message =
+                    LivingEntity::get_death_message(&*dyn_self, damage_type, source, cause).await;
+                self.handle_killed(death_message).await;
             }
         }
         result
@@ -2064,6 +2077,14 @@ impl EntityBase for Player {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.living_entity)
+    }
+
+    fn get_player(&self) -> Option<&Player> {
+        Some(self)
+    }
+
+    fn is_spectator(&self) -> bool {
+        self.gamemode.load() == GameMode::Spectator
     }
 
     fn get_name(&self) -> TextComponent {
@@ -2115,7 +2136,7 @@ pub struct Abilities {
 
 #[async_trait]
 impl NBTStorage for Abilities {
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
         let mut component = NbtCompound::new();
         component.put_bool("invulnerable", self.invulnerable);
         component.put_bool("flying", self.flying);
@@ -2127,7 +2148,7 @@ impl NBTStorage for Abilities {
         nbt.put_component("abilities", component);
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         if let Some(component) = nbt.get_compound("abilities") {
             self.invulnerable = component.get_bool("invulnerable").unwrap_or(false);
             self.flying = component.get_bool("flying").unwrap_or(false);
@@ -2139,6 +2160,8 @@ impl NBTStorage for Abilities {
         }
     }
 }
+
+impl NBTStorageInit for Abilities {}
 
 impl Default for Abilities {
     fn default() -> Self {

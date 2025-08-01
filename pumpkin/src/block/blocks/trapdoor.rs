@@ -1,6 +1,6 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::{NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
+use crate::block::{BlockBehaviour, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs};
 use crate::entity::player::Player;
 use crate::world::World;
 use async_trait::async_trait;
@@ -70,7 +70,7 @@ fn get_sound(block: &Block, open: bool) -> Sound {
 pub struct TrapDoorBlock;
 
 #[async_trait]
-impl PumpkinBlock for TrapDoorBlock {
+impl BlockBehaviour for TrapDoorBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if !can_open_trapdoor(args.block) {
             return BlockActionResult::Pass;

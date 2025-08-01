@@ -1,12 +1,11 @@
-use core::f32;
 use pumpkin_data::potion::Effect;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
-use super::EntityBase;
 use super::{Entity, NBTStorage};
+use super::{EntityBase, NBTStorageInit};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use async_trait::async_trait;
@@ -14,11 +13,12 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CHurtAnimation, CTakeItemEntity};
@@ -231,7 +231,46 @@ impl LivingEntity {
 
     /// Kills the Entity
     pub async fn kill(&self) {
-        self.damage(f32::MAX, DamageType::OUT_OF_WORLD).await;
+        self.damage(f32::MAX, DamageType::GENERIC_KILL).await;
+    }
+
+    pub async fn get_death_message(
+        dyn_self: &dyn EntityBase,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> TextComponent {
+        match damage_type.death_message_type {
+            DeathMessageType::Default => {
+                if cause.is_some() && source.is_some() {
+                    TextComponent::translate(
+                        format!("death.attack.{}.player", damage_type.message_id),
+                        [
+                            dyn_self.get_display_name().await,
+                            cause.unwrap().get_display_name().await,
+                        ],
+                    )
+                } else {
+                    TextComponent::translate(
+                        format!("death.attack.{}", damage_type.message_id),
+                        [dyn_self.get_display_name().await],
+                    )
+                }
+            }
+            DeathMessageType::FallVariants => {
+                //TODO
+                TextComponent::translate(
+                    "death.fell.accident.generic",
+                    [dyn_self.get_display_name().await],
+                )
+            }
+            DeathMessageType::IntentionalGameDesign => TextComponent::text("[")
+                .add_child(TextComponent::translate(
+                    format!("death.attack.{}.message", damage_type.message_id),
+                    [dyn_self.get_display_name().await],
+                ))
+                .add_child(TextComponent::text("]")),
+        }
     }
 
     pub async fn on_death(
@@ -258,7 +297,7 @@ impl LivingEntity {
                 )
                 .await;
             let params = LootContextParameters {
-                killed_by_player: cause.map(|c| c.get_entity().entity_type == EntityType::PLAYER),
+                killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
                 ..Default::default()
             };
 
@@ -267,47 +306,10 @@ impl LivingEntity {
 
             let level_info = world.level_info.read().await;
             let game_rules = &level_info.game_rules;
-            if self.entity.entity_type == EntityType::PLAYER && game_rules.show_death_messages {
+            if self.entity.entity_type == &EntityType::PLAYER && game_rules.show_death_messages {
                 //TODO: KillCredit
-                let death_message = if let Some(death_message_type) = damage_type.death_message_type
-                {
-                    match death_message_type {
-                        DeathMessageType::Default => {
-                            if cause.is_some() && source.is_some() {
-                                TextComponent::translate(
-                                    format!("death.attack.{}.player", damage_type.message_id),
-                                    [
-                                        dyn_self.get_display_name().await,
-                                        cause.unwrap().get_display_name().await,
-                                    ],
-                                )
-                            } else {
-                                TextComponent::translate(
-                                    format!("death.attack.{}", damage_type.message_id),
-                                    [dyn_self.get_display_name().await],
-                                )
-                            }
-                        }
-                        DeathMessageType::FallVariants => {
-                            //TODO
-                            TextComponent::translate(
-                                "death.fell.accident.generic",
-                                [dyn_self.get_display_name().await],
-                            )
-                        }
-                        DeathMessageType::IntentionalGameDesign => TextComponent::text("[")
-                            .add_child(TextComponent::translate(
-                                format!("death.attack.{}.message", damage_type.message_id),
-                                [dyn_self.get_display_name().await],
-                            ))
-                            .add_child(TextComponent::text("]")),
-                    }
-                } else {
-                    TextComponent::translate(
-                        "death.attack.generic",
-                        [dyn_self.get_display_name().await],
-                    )
-                };
+                let death_message =
+                    Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
                 if let Some(server) = world.server.upgrade() {
                     for player in server.get_all_players().await {
                         player.send_system_message(&death_message).await;
@@ -357,6 +359,20 @@ impl LivingEntity {
             self.remove_effect(effect_type).await;
         }
     }
+
+    pub fn is_part_of_game(&self) -> bool {
+        self.is_spectator() && self.entity.is_alive()
+    }
+
+    pub async fn reset_state(&self) {
+        self.entity.reset_state().await;
+        self.hurt_cooldown.store(0, Relaxed);
+        self.last_damage_taken.store(0f32);
+        self.entity.portal_cooldown.store(0, Relaxed);
+        *self.entity.portal_manager.lock().await = None;
+        self.fall_distance.store(0f32);
+        self.dead.store(false, Relaxed);
+    }
 }
 
 impl LivingEntityTrait for LivingEntity {}
@@ -393,13 +409,16 @@ impl EntityBase for LivingEntity {
         let world = self.entity.world.read().await;
 
         let last_damage = self.last_damage_taken.load();
+        let play_sound;
         let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 {
             if amount <= last_damage {
                 return false;
             }
+            play_sound = false;
             amount - self.last_damage_taken.load()
         } else {
             self.hurt_cooldown.store(20, Relaxed);
+            play_sound = true;
             amount
         };
         self.last_damage_taken.store(amount);
@@ -427,11 +446,26 @@ impl EntityBase for LivingEntity {
             ))
             .await;
 
+        if play_sound {
+            self.entity
+                .world
+                .read()
+                .await
+                .play_sound(
+                    // Sound::EntityPlayerHurt,
+                    Sound::EntityGenericHurt,
+                    SoundCategory::Players,
+                    &self.entity.pos.load(),
+                )
+                .await;
+            // todo: calculate knockback
+        }
+
         let new_health = self.health.load() - damage_amount;
         if damage_amount > 0.0 {
             self.on_actually_hurt(damage_amount, damage_type).await;
+            self.set_health(new_health).await;
         }
-        self.set_health(new_health).await;
 
         if new_health <= 0.0 {
             self.on_death(damage_type, source, cause).await;
@@ -448,7 +482,7 @@ impl EntityBase for LivingEntity {
             self.hurt_cooldown.fetch_sub(1, Relaxed);
         }
         if self.health.load() <= 0.0 {
-            let time = self.death_time.fetch_add(1, Ordering::Relaxed);
+            let time = self.death_time.fetch_add(1, Relaxed);
             if time == 20 {
                 // Spawn Death particles
                 self.entity

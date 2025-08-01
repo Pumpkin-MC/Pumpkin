@@ -16,17 +16,17 @@ use pumpkin_world::world::BlockFlags;
 
 type ButtonLikeProperties = pumpkin_data::block_properties::LeverLikeProperties;
 
+use crate::block::CanPlaceAtArgs;
+use crate::block::EmitsRedstonePowerArgs;
+use crate::block::GetRedstonePowerArgs;
+use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::OnPlaceArgs;
+use crate::block::OnScheduledTickArgs;
+use crate::block::OnStateReplacedArgs;
 use crate::block::blocks::abstruct_wall_mounting::WallMountedBlock;
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::EmitsRedstonePowerArgs;
-use crate::block::pumpkin_block::GetRedstonePowerArgs;
-use crate::block::pumpkin_block::GetStateForNeighborUpdateArgs;
-use crate::block::pumpkin_block::OnPlaceArgs;
-use crate::block::pumpkin_block::OnScheduledTickArgs;
-use crate::block::pumpkin_block::OnStateReplacedArgs;
-use crate::block::pumpkin_block::{NormalUseArgs, PumpkinBlock};
 use crate::block::registry::BlockActionResult;
+use crate::block::{BlockBehaviour, NormalUseArgs};
 use crate::world::World;
 
 async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
@@ -58,7 +58,7 @@ async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
 pub struct ButtonBlock;
 
 #[async_trait]
-impl PumpkinBlock for ButtonBlock {
+impl BlockBehaviour for ButtonBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         click_button(args.world, args.position).await;
 

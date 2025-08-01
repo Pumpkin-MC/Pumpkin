@@ -2,11 +2,11 @@ use std::sync::{Arc, atomic::Ordering};
 
 use crate::{
     block::{
-        pumpkin_block::{
-            BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
-            PumpkinBlock, UseWithItemArgs,
-        },
         registry::BlockActionResult,
+        {
+            BlockBehaviour, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
+            PlacedArgs, UseWithItemArgs,
+        },
     },
     entity::{EntityBase, player::Player},
     world::World,
@@ -32,7 +32,7 @@ use tokio::sync::Mutex;
 pub struct ChiseledBookshelfBlock;
 
 #[async_trait]
-impl PumpkinBlock for ChiseledBookshelfBlock {
+impl BlockBehaviour for ChiseledBookshelfBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut properties = ChiseledBookshelfLikeProperties::default(args.block);
 

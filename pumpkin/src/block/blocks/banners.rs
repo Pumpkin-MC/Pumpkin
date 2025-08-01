@@ -1,4 +1,4 @@
-use crate::block::pumpkin_block::{OnPlaceArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, OnPlaceArgs};
 use crate::entity::EntityBase;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, WhiteBannerLikeProperties};
@@ -10,7 +10,7 @@ use pumpkin_world::BlockStateId;
 pub struct BannerBlock;
 
 #[async_trait]
-impl PumpkinBlock for BannerBlock {
+impl BlockBehaviour for BannerBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = WhiteBannerLikeProperties::default(args.block);
         props.rotation = args.player.get_entity().get_flipped_rotation_16();
