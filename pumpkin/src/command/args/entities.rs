@@ -7,7 +7,6 @@ use crate::command::tree::RawArgs;
 use crate::entity::EntityBase;
 use crate::server::Server;
 use async_trait::async_trait;
-use futures::StreamExt;
 use futures::future::join_all;
 use pumpkin_data::entity::EntityType;
 use pumpkin_nbt::compound::NbtCompound;
@@ -18,6 +17,7 @@ use uuid::Uuid;
 use super::super::args::ArgumentConsumer;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 
+#[allow(dead_code)]
 enum EntitySelectorType {
     Source,
     NearestPlayer,
@@ -30,11 +30,13 @@ enum EntitySelectorType {
 }
 
 // todo tags
+#[allow(dead_code)]
 enum ValueCondition<T> {
     Equals(T),
     NotEquals(T),
 }
 
+#[allow(dead_code)]
 enum ComparableValueCondition<T> {
     Equals(T),
     NotEquals(T),
@@ -45,6 +47,7 @@ enum ComparableValueCondition<T> {
     Between(T, T),
 }
 
+#[allow(dead_code)]
 enum EntityFilterSort {
     Arbitrary,
     Nearest,
@@ -52,6 +55,7 @@ enum EntityFilterSort {
     Random,
 }
 
+#[allow(dead_code)]
 enum EntityFilter {
     X(ComparableValueCondition<f64>),
     Y(ComparableValueCondition<f64>),
@@ -84,8 +88,8 @@ impl FromStr for EntityFilter {
         match key {
             "type" => {
                 let entity_type =
-                    EntityType::from_name(value).ok_or(format!("Invalid entity type {}", value))?;
-                Ok(EntityFilter::Type(ValueCondition::Equals(&entity_type)))
+                    EntityType::from_name(value).ok_or(format!("Invalid entity type {value}"))?;
+                Ok(EntityFilter::Type(ValueCondition::Equals(entity_type)))
             }
             _ => todo!(),
         }
@@ -93,6 +97,7 @@ impl FromStr for EntityFilter {
 }
 
 /// https://minecraft.wiki/w/Target_selectors
+#[allow(dead_code)]
 struct TargetSelector {
     pub selector_type: EntitySelectorType,
     pub include_conditions: Vec<EntityFilter>,
@@ -164,7 +169,7 @@ impl FromStr for TargetSelector {
             let include_conditions = conditions
                 .iter()
                 .filter_map(|s| {
-                    if s.is_empty() || s.chars()[0] == '!' {
+                    if s.is_empty() || s.as_bytes()[0] == b'!' {
                         None
                     } else {
                         EntityFilter::from_str(s).ok()
@@ -174,7 +179,7 @@ impl FromStr for TargetSelector {
             let exclude_conditions = conditions
                 .iter()
                 .filter_map(|s| {
-                    if s.is_empty() || s.chars()[0] != '!' {
+                    if s.is_empty() || s.as_bytes()[0] != b'!' {
                         None
                     } else {
                         EntityFilter::from_str(&s[1..]).ok()
@@ -256,14 +261,15 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
                     .collect(),
             ),
             "@e" => Some(
-                join_all(
-                    server
-                        .worlds
+                join_all(server.worlds.read().await.iter().map(async |world| {
+                    world
+                        .entities
                         .read()
                         .await
-                        .iter()
-                        .map(async |world| world.entities.read().await.values().into_iter()),
-                )
+                        .values()
+                        .cloned()
+                        .collect::<Vec<Arc<dyn EntityBase>>>()
+                }))
                 .await
                 .into_iter()
                 .flatten()
@@ -274,7 +280,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
             ]),
         };
 
-        entities
+        entities.map(Arg::Entities)
     }
 
     async fn suggest<'a>(

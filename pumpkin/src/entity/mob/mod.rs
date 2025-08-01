@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, ai::path::Navigator, living::LivingEntity};
+use super::{Entity, EntityBase, NBTStorage, ai::path::Navigator, living::LivingEntity};
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::server::Server;
@@ -131,6 +131,10 @@ where
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.get_mob_entity().living_entity)
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
     }
 }
 

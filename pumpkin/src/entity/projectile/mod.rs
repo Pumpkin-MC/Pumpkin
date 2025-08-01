@@ -99,4 +99,8 @@ impl EntityBase for ThrownItemEntity {
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
 }

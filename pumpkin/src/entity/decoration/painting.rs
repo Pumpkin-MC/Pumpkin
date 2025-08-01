@@ -51,4 +51,8 @@ impl EntityBase for PaintingEntity {
         self.entity.remove().await;
         true
     }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
 }

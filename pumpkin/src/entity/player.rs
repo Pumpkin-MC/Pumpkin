@@ -1044,29 +1044,12 @@ impl Player {
     pub async fn teleport_world(
         self: &Arc<Self>,
         new_world: Arc<World>,
-        position: Option<Vector3<f64>>,
+        position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.read().await.clone();
         let info = &new_world.level_info.read().await;
-        let position = if let Some(pos) = position {
-            pos
-        } else {
-            Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(
-                    new_world
-                        .get_top_block(Vector2::new(
-                            f64::from(info.spawn_x) as i32,
-                            f64::from(info.spawn_z) as i32,
-                        ))
-                        .await
-                        + 1,
-                ),
-                f64::from(info.spawn_z) + 0.5,
-            )
-        };
         let yaw = yaw.unwrap_or(info.spawn_angle);
         let pitch = pitch.unwrap_or(10.0);
 
@@ -2038,34 +2021,39 @@ impl EntityBase for Player {
         pitch: Option<f32>,
         world: Arc<World>,
     ) {
-        send_cancellable! {{
-            PlayerTeleportEvent {
-                player: self.clone(),
-                from: self.living_entity.entity.pos.load(),
-                to: position,
-                cancelled: false,
-            };
-            'after: {
-                let position = event.to;
-                let entity = self.get_entity();
-                self.request_teleport(position, yaw, pitch).await;
-                entity
-                    .world
-                    .read()
-                    .await
-                    .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
-                        self.living_entity.entity.entity_id.into(),
-                        position,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        yaw,
-                        pitch,
-                        entity.on_ground.load(Ordering::SeqCst),
-                    ))
-                    .await;
-            }
-        }}
-
-        self.teleport_world(world, position, yaw, pitch).await;
+        if Arc::ptr_eq(&world, &self.world().await) {
+            // Same world
+            let yaw = yaw.unwrap_or(self.living_entity.entity.yaw.load());
+            let pitch = pitch.unwrap_or(self.living_entity.entity.pitch.load());
+            send_cancellable! {{
+                PlayerTeleportEvent {
+                    player: self.clone(),
+                    from: self.living_entity.entity.pos.load(),
+                    to: position,
+                    cancelled: false,
+                };
+                'after: {
+                    let position = event.to;
+                    let entity = self.get_entity();
+                    self.request_teleport(position, yaw, pitch).await;
+                    entity
+                        .world
+                        .read()
+                        .await
+                        .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
+                            self.living_entity.entity.entity_id.into(),
+                            position,
+                            Vector3::new(0.0, 0.0, 0.0),
+                            yaw,
+                            pitch,
+                            entity.on_ground.load(Ordering::SeqCst),
+                        ))
+                        .await;
+                }
+            }}
+        } else {
+            self.teleport_world(world, position, yaw, pitch).await;
+        }
     }
 
     fn get_entity(&self) -> &Entity {
@@ -2101,6 +2089,10 @@ impl EntityBase for Player {
             Some(name_clone),
         ));
         name.insertion(self.gameprofile.name.clone())
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
     }
 }
 

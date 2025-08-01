@@ -428,4 +428,8 @@ impl EntityBase for ItemEntity {
     fn get_gravity(&self) -> f64 {
         0.04
     }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
 }

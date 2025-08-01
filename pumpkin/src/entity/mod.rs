@@ -176,9 +176,8 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         name
     }
 
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
-    }
+    /// Map
+    fn as_nbt_storage(&self) -> &dyn NBTStorage;
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -1904,6 +1903,10 @@ impl EntityBase for Entity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
     }
 }
 

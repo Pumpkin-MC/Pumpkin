@@ -5,7 +5,7 @@ use crate::command::{
     args::{Arg, ConsumedArgs},
     tree::{CommandTree, builder::argument},
 };
-use crate::entity::{EntityBase, NBTStorage};
+use crate::entity::NBTStorage;
 use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_nbt::compound::NbtCompound;
