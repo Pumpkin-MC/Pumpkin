@@ -95,6 +95,10 @@ impl NbtCompound {
         Ok(())
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.child_tags.is_empty()
+    }
+
     pub fn put(&mut self, name: &str, value: impl Into<NbtTag>) {
         let name = name.to_string();
         if !self.child_tags.iter().any(|(key, _)| key == &name) {
