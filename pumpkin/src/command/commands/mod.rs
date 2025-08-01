@@ -13,6 +13,7 @@ mod banlist;
 mod bossbar;
 mod clear;
 mod damage;
+mod data;
 pub mod defaultgamemode;
 mod deop;
 mod difficulty;
@@ -117,6 +118,7 @@ pub async fn default_dispatcher() -> CommandDispatcher {
         setworldspawn::init_command_tree(),
         "minecraft:command.setworldspawn",
     );
+    dispatcher.register(data::init_command_tree(), "minecraft:command.data");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -372,6 +374,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.difficulty",
             "Sets the difficulty of the world",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.data",
+            "Query and modify data of entities and blocks",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();

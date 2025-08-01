@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
-use super::EntityBase;
 use super::{Entity, NBTStorage};
+use super::{EntityBase, NBTStorageInit};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use async_trait::async_trait;
