@@ -56,7 +56,8 @@ impl ArgumentConsumer for EntityArgumentConsumer {
         // todo: command context
         let entities = server.select_entities(&entity_selector, Some(src)).await;
 
-        entities.first().map(Arg::Entity)
+        // Take first
+        entities.into_iter().next().map(Arg::Entity)
     }
 
     async fn suggest<'a>(
