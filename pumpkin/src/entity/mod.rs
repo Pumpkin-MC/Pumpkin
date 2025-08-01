@@ -3,7 +3,6 @@ use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
-use core::f32;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
@@ -176,7 +175,12 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         name
     }
 
-    /// Map
+    /// Kills the Entity.
+    async fn kill(&self) {
+        self.damage(f32::MAX, DamageType::GENERIC_KILL).await;
+    }
+
+    /// Returns itself as the nbt storage for saving and loading data.
     fn as_nbt_storage(&self) -> &dyn NBTStorage;
 }
 
@@ -448,8 +452,8 @@ impl Entity {
         let position = self.pos.load();
         let delta = target.sub(&position);
         let root = delta.x.hypot(delta.z);
-        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / f32::consts::PI);
-        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / f32::consts::PI) - 90.0);
+        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / std::f32::consts::PI);
+        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / std::f32::consts::PI) - 90.0);
         self.pitch.store(pitch);
         self.yaw.store(yaw);
 

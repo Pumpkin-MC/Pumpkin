@@ -1239,10 +1239,6 @@ impl Player {
         }
     }
 
-    pub async fn kill(&self) {
-        self.living_entity.kill().await;
-    }
-
     async fn handle_killed(&self, death_msg: TextComponent) {
         self.set_client_loaded(false);
         self.client

@@ -253,11 +253,6 @@ impl LivingEntity {
         }
     }
 
-    /// Kills the Entity
-    pub async fn kill(&self) {
-        self.damage(f32::MAX, DamageType::GENERIC_KILL).await;
-    }
-
     pub async fn get_death_message(
         dyn_self: &dyn EntityBase,
         damage_type: DamageType,
