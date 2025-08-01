@@ -12,7 +12,10 @@ use std::{
     f64::consts::TAU,
     sync::{
         Arc,
-        atomic::{AtomicU32, Ordering::Relaxed},
+        atomic::{
+            AtomicU32,
+            Ordering::{self, Relaxed},
+        },
     },
 };
 
@@ -36,7 +39,27 @@ impl NBTStorage for TNTEntity {}
 
 #[async_trait]
 impl EntityBase for TNTEntity {
-    async fn tick(&self, _caller: Arc<dyn EntityBase>, server: &Server) {
+    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
+        let entity = &self.entity;
+        let original_velo = entity.velocity.load();
+
+        let mut velo = original_velo;
+        velo.y -= self.get_gravity();
+
+        entity.move_entity(caller.clone(), velo).await;
+        entity.tick_block_collisions(&caller, server).await;
+        entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
+        if entity.on_ground.load(Ordering::Relaxed) {
+            entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
+        }
+        let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst);
+
+        if velocity_dirty {
+            entity.send_pos_rot().await;
+
+            entity.send_velocity().await;
+        }
+
         let fuse = self.fuse.fetch_sub(1, Relaxed);
         if fuse == 0 {
             self.entity.remove().await;
@@ -46,6 +69,8 @@ impl EntityBase for TNTEntity {
                 .await
                 .explode(server, self.entity.pos.load(), self.power)
                 .await;
+        } else {
+            entity.update_fluid_state(&caller).await;
         }
     }
 
@@ -90,5 +115,9 @@ impl EntityBase for TNTEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn get_gravity(&self) -> f64 {
+        0.04
     }
 }

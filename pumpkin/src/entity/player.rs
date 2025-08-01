@@ -588,6 +588,7 @@ impl Player {
 
         self.get_entity().set_pose(EntityPose::Sleeping).await;
         self.living_entity
+            .entity
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
         self.get_entity()
             .send_meta_data(&[Metadata::new(
@@ -1094,7 +1095,7 @@ impl Player {
                 new_world.players.write().await.insert(uuid, self.clone());
                 self.unload_watched_chunks(&current_world).await;
 
-                let last_pos = self.living_entity.last_pos.load();
+                let last_pos = self.living_entity.entity.last_pos.load();
                 let death_dimension = self.world().await.dimension_type.resource_location();
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
@@ -1118,7 +1119,7 @@ impl Player {
                     ;
                 self.send_permission_lvl_update().await;
                 self.clone().request_teleport(position, yaw, pitch).await;
-                self.living_entity.last_pos.store(position);
+                self.living_entity.entity.last_pos.store(position);
                 self.send_abilities_update().await;
                 self.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
                    self.get_inventory().get_selected_slot() as i8,
@@ -1153,7 +1154,7 @@ impl Player {
                     .teleport_id_count
                     .fetch_add(1, Ordering::Relaxed);
                 let teleport_id = i + 1;
-                self.living_entity.set_pos(position);
+                self.living_entity.entity.set_pos(position);
                 let entity = &self.living_entity.entity;
                 entity.set_rotation(yaw, pitch);
                 *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));

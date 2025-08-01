@@ -1,4 +1,5 @@
 use pumpkin_data::potion::Effect;
+use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
@@ -38,8 +39,6 @@ use tokio::sync::Mutex;
 pub struct LivingEntity {
     /// The underlying entity object, providing basic entity information and functionality.
     pub entity: Entity,
-    /// The last known position of the entity.
-    pub last_pos: AtomicCell<Vector3<f64>>,
     /// Tracks the remaining time until the entity can regenerate health.
     pub hurt_cooldown: AtomicI32,
     /// Stores the amount of damage the entity last received.
@@ -53,6 +52,20 @@ pub struct LivingEntity {
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: Mutex<HashMap<&'static StatusEffect, Effect>>,
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
+    pub movement_input: AtomicCell<Vector3<f64>>,
+
+    pub movement_speed: AtomicCell<f64>,
+
+    pub jumping: AtomicBool,
+
+    pub jumping_cooldown: AtomicU8,
+
+    pub climbing: AtomicBool,
+
+    /// The position where the entity was last climbing, used for death messages
+    pub climbing_pos: AtomicCell<Option<BlockPos>>,
+
+    _water_movement_speed_multiplier: f32,
 }
 
 #[async_trait]
@@ -64,10 +77,18 @@ pub trait LivingEntityTrait: EntityBase {
 
 impl LivingEntity {
     pub fn new(entity: Entity) -> Self {
-        let pos = entity.pos.load();
+        let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
+            0.98
+        } else if entity.entity_type == &EntityType::SKELETON_HORSE {
+            0.96
+        } else {
+            0.8
+        };
+
+        // TODO: Extract default MOVEMENT_SPEED Entity Attribute
+        let default_movement_speed = 0.25;
         Self {
             entity,
-            last_pos: AtomicCell::new(pos),
             hurt_cooldown: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             health: AtomicCell::new(20.0),
@@ -76,6 +97,13 @@ impl LivingEntity {
             dead: AtomicBool::new(false),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
+            jumping: AtomicBool::new(false),
+            jumping_cooldown: AtomicU8::new(0),
+            climbing: AtomicBool::new(false),
+            climbing_pos: AtomicCell::new(None),
+            movement_input: AtomicCell::new(Vector3::default()),
+            movement_speed: AtomicCell::new(default_movement_speed),
+            _water_movement_speed_multiplier: water_movement_speed_multiplier,
         }
     }
 
@@ -113,11 +141,6 @@ impl LivingEntity {
                 stack_amount.try_into().unwrap(),
             ))
             .await;
-    }
-
-    pub fn set_pos(&self, position: Vector3<f64>) {
-        self.last_pos.store(self.entity.pos.load());
-        self.entity.set_pos(position);
     }
 
     pub async fn heal(&self, additional_health: f32) {
