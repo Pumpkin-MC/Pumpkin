@@ -453,7 +453,8 @@ impl Entity {
         let delta = target.sub(&position);
         let root = delta.x.hypot(delta.z);
         let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / std::f32::consts::PI);
-        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / std::f32::consts::PI) - 90.0);
+        let yaw =
+            wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / std::f32::consts::PI) - 90.0);
         self.pitch.store(pitch);
         self.yaw.store(yaw);
 
@@ -1625,7 +1626,8 @@ impl Entity {
     }
 
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
-        self.invulnerable.load(Relaxed) || self.damage_immunities.contains(damage_type)
+        *damage_type != DamageType::GENERIC_KILL
+            && (self.invulnerable.load(Relaxed) || self.damage_immunities.contains(damage_type))
     }
 
     fn velocity_multiplier(_pos: Vector3<f64>) -> f32 {

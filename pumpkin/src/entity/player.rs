@@ -1987,7 +1987,7 @@ impl EntityBase for Player {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> bool {
-        if self.abilities.lock().await.invulnerable {
+        if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
             return false;
         }
         let world = self.living_entity.entity.world.read().await;
