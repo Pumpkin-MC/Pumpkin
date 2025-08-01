@@ -184,6 +184,7 @@ pub(crate) fn build() -> TokenStream {
     quote! {
         use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
+        use std::hash::Hash;
 
         #[derive(Debug)]
         pub struct EntityType {
@@ -203,11 +204,19 @@ pub(crate) fn build() -> TokenStream {
             pub resource_name: &'static str,
         }
 
+        impl Hash for EntityType {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.id.hash(state);
+            }
+        }
+
         impl PartialEq for EntityType {
             fn eq(&self, other: &Self) -> bool {
                 self.id == other.id
             }
         }
+
+        impl Eq for EntityType {}
 
         #[derive(Debug)]
         pub struct SpawnRestriction {

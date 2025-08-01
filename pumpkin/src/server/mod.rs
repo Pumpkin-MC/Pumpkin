@@ -32,6 +32,7 @@ use pumpkin_world::world_info::anvil::{
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
+use std::collections::HashSet;
 use std::fs;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
@@ -53,7 +54,9 @@ pub mod ticker;
 pub const CURRENT_MC_VERSION: &str = "1.21.8";
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
 
-use super::command::args::entities::{EntityFilterSort, EntitySelectorType, TargetSelector};
+use super::command::args::entities::{
+    EntityFilter, EntityFilterSort, EntitySelectorType, TargetSelector, ValueCondition,
+};
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -744,6 +747,34 @@ impl Server {
                 }
             }
         };
+        let type_included = target_selector
+            .conditions
+            .iter()
+            .filter_map(|f| {
+                if let EntityFilter::Type(ValueCondition::Equals(entity_type)) = f {
+                    Some(*entity_type)
+                } else {
+                    None
+                }
+            })
+            .collect::<HashSet<_>>();
+        let type_excluded = target_selector
+            .conditions
+            .iter()
+            .filter_map(|f| {
+                if let EntityFilter::Type(ValueCondition::NotEquals(entity_type)) = f {
+                    Some(*entity_type)
+                } else {
+                    None
+                }
+            })
+            .collect::<HashSet<_>>();
+        let type_filtered = iter.filter(|e| {
+            // Filter by entity type
+            (type_excluded.is_empty() || !type_excluded.contains(&e.get_entity().entity_type))
+                && (type_included.is_empty() || type_included.contains(&e.get_entity().entity_type))
+        });
+        let iter = type_filtered;
         match target_selector
             .get_sort()
             .unwrap_or(EntityFilterSort::Arbitrary)
