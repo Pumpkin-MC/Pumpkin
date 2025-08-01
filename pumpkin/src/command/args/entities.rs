@@ -7,7 +7,6 @@ use crate::command::tree::RawArgs;
 use crate::entity::EntityBase;
 use crate::server::Server;
 use async_trait::async_trait;
-use futures::future::join_all;
 use pumpkin_data::entity::EntityType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
@@ -239,7 +238,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
         let entity_selector = match s.parse::<TargetSelector>() {
             Ok(selector) => selector,
             Err(e) => {
-                log::debug!("Failed to parse target selector '{}': {}", s, e);
+                log::debug!("Failed to parse target selector '{s}': {e}");
                 return None;
             }
         };
