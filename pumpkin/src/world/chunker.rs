@@ -28,11 +28,11 @@ pub async fn update_position(player: &Arc<Player>) {
 
     if old_cylindrical != new_cylindrical {
         client
-        .send_packet_now(&CCenterChunk {
-            chunk_x: new_chunk_center.x.into(),
-            chunk_z: new_chunk_center.y.into(),
-        })
-        .await;
+            .send_packet_now(&CCenterChunk {
+                chunk_x: new_chunk_center.x.into(),
+                chunk_z: new_chunk_center.y.into(),
+            })
+            .await;
         let mut loading_chunks = Vec::new();
         let mut unloading_chunks = Vec::new();
 
@@ -61,10 +61,10 @@ pub async fn update_position(player: &Arc<Player>) {
         if !chunks_to_clean.is_empty() {
             level.clean_chunks(&chunks_to_clean).await;
             for chunk in unloading_chunks {
-                    client
-                        .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
-                        .await;
-                }
+                client
+                    .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
+                    .await;
+            }
         }
 
         if !loading_chunks.is_empty() {

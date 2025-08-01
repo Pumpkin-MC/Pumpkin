@@ -710,8 +710,8 @@ impl World {
 
         for i in self.players.read().await.values() {
             let center = i.living_entity.entity.chunk_pos.load();
-            for dx in -8i32..=8 {
-                for dy in -8i32..=8 {
+            for dx in -8..=8 {
+                for dy in -8..=8 {
                     // if dx.abs() <= 2 || dy.abs() <= 2 || dx.abs() >= 6 || dy.abs() >= 6 { // this is only for debug, spawning runs too slow
                     //     continue;
                     // }
@@ -725,10 +725,8 @@ impl World {
             }
         }
 
-        let mut spawning_chunks = Vec::with_capacity(spawning_chunks_map.len());
-        for i in spawning_chunks_map {
-            spawning_chunks.push(i);
-        }
+        let mut spawning_chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)> =
+            spawning_chunks_map.into_iter().collect();
 
         let get_chunks_clock = spawn_entity_clock_start.elapsed();
         // log::debug!("spawning chunks size {}", spawning_chunks.len());
@@ -782,10 +780,8 @@ impl World {
     ) {
         // this.level.tickThunder(chunk);
         //TODO check in simulation distance
-        if self.weather.lock().await.raining
-            && self.weather.lock().await.thundering
-            && rng().random_range(0..100_000) == 0
-        {
+        let weather = self.weather.lock().await;
+        if weather.raining && weather.thundering && rng().random_range(0..100_000) == 0 {
             let rand_value = rng().random::<i32>() >> 2;
             let delta = Vector3::new(rand_value & 15, rand_value >> 16 & 15, rand_value >> 8 & 15);
             let random_pos = Vector3::new(

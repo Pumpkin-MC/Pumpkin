@@ -195,20 +195,20 @@ impl SpawnState {
         let mut local_mob_cap = LocalMobCapCalculator::new(world);
         let mut counter = MobCounts::default();
         for entity in entities.read().await.values() {
-            let entity_type = &entity.get_entity().entity_type;
-            #[allow(clippy::overly_complex_bool_expr)]
-            if entity_type.mob && false || entity_type.category == &MobCategory::MISC {
+            let entity = entity.get_entity();
+            let entity_type = entity.entity_type;
+            if !entity_type.mob || entity_type.category == &MobCategory::MISC {
                 // TODO (mob.isPersistenceRequired() || mob.requiresCustomPersistence())
                 continue;
             }
-            let entity_pos = &entity.get_entity().block_pos.load();
-            let biome = world.level.get_rough_biome(entity_pos).await;
+            let entity_pos = entity.block_pos.load();
+            let biome = world.level.get_rough_biome(&entity_pos).await;
             if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
-                potential.add_charge(entity_pos, cost.charge);
+                potential.add_charge(&entity_pos, cost.charge);
             }
             if entity_type.mob {
                 local_mob_cap
-                    .add_mob(&entity.get_entity().chunk_pos.load(), entity_type.category)
+                    .add_mob(&entity.chunk_pos.load(), entity_type.category)
                     .await;
             }
             counter.add(entity_type.category);

@@ -341,7 +341,7 @@ impl Player {
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
             watched_section: AtomicCell::new(Cylindrical::new(
-                Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
+                Vector2::new(1, 1),
                 NonZeroU8::new(1).unwrap(),
             )),
             wait_for_keep_alive: AtomicBool::new(false),
