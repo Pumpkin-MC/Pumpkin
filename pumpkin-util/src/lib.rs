@@ -44,12 +44,65 @@ macro_rules! global_path {
     }};
 }
 
+
+// #[macro_export]
+// macro_rules! read_data_from_file {
+//     ($path:expr) => {{
+//         use $crate::global_path;
+//         serde_json::from_str(&std::fs::read_to_string(global_path!($path)).expect("no data file"))
+//             .expect("failed to decode data")
+//     }};
+// }
+
 #[macro_export]
 macro_rules! read_data_from_file {
     ($path:expr) => {{
+        use std::path::PathBuf;
+        use std::env;
+        use std::fs;
+        //use log::warn;
+        
+        let runtime_path = if let Ok(exe_path) = env::current_exe() {
+            exe_path.parent()
+                .map(|dir| dir.join("assets").join($path))
+                .unwrap_or_else(|| PathBuf::from($path))
+        } else {
+            PathBuf::from($path)
+        };
+        
+        if fs::metadata(&runtime_path).is_ok() {
+            match fs::read_to_string(&runtime_path) {
+                Ok(data) => {
+                    match serde_json::from_str(&data) {
+                        Ok(parsed) => parsed,
+                        Err(e) => {
+                            eprintln!("Failed to parse JSON from runtime path: {}", e);
+                            $crate::fallback_to_global_path!($path)
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to read file from runtime path: {}", e);
+                    $crate::fallback_to_global_path!($path)
+                }
+            }
+        } else {
+            eprintln!("Runtime path not found: {:?}", runtime_path);
+            $crate::fallback_to_global_path!($path)
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! fallback_to_global_path {
+    ($path:expr) => {{
         use $crate::global_path;
-        serde_json::from_str(&std::fs::read_to_string(global_path!($path)).expect("no data file"))
-            .expect("failed to decode data")
+        let compile_time_path = global_path!($path);
+        let data = std::fs::read_to_string(&compile_time_path)
+            .unwrap_or_else(|e| panic!("File not found: {} - {}", compile_time_path.display(), e));
+        
+        serde_json::from_str(&data)
+            .unwrap_or_else(|e| panic!("Failed to parse JSON: {} - {}", compile_time_path.display(), e))
     }};
 }
 
