@@ -18,7 +18,7 @@ use super::super::args::ArgumentConsumer;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 
 #[allow(dead_code)]
-enum EntitySelectorType {
+pub enum EntitySelectorType {
     Source,
     NearestPlayer,
     NearestEntity,
@@ -31,13 +31,13 @@ enum EntitySelectorType {
 
 // todo tags
 #[allow(dead_code)]
-enum ValueCondition<T> {
+pub enum ValueCondition<T> {
     Equals(T),
     NotEquals(T),
 }
 
 #[allow(dead_code)]
-enum ComparableValueCondition<T> {
+pub enum ComparableValueCondition<T> {
     Equals(T),
     NotEquals(T),
     GreaterThan(T),
@@ -48,7 +48,8 @@ enum ComparableValueCondition<T> {
 }
 
 #[allow(dead_code)]
-enum EntityFilterSort {
+#[derive(Copy, Clone, PartialEq)]
+pub enum EntityFilterSort {
     Arbitrary,
     Nearest,
     Furthest,
@@ -56,7 +57,7 @@ enum EntityFilterSort {
 }
 
 #[allow(dead_code)]
-enum EntityFilter {
+pub enum EntityFilter {
     X(ComparableValueCondition<f64>),
     Y(ComparableValueCondition<f64>),
     Z(ComparableValueCondition<f64>),
@@ -80,7 +81,11 @@ enum EntityFilter {
 impl FromStr for EntityFilter {
     type Err = String;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(mut s: &str) -> Result<Self, Self::Err> {
+        let negate = s.starts_with('!');
+        if negate {
+            s = &s[1..];
+        }
         let mut parts = s.splitn(2, '=');
         let key = parts.next().ok_or("Missing key in entity filter")?;
         let value = parts.next().ok_or("Missing value in entity filter")?;
@@ -89,7 +94,11 @@ impl FromStr for EntityFilter {
             "type" => {
                 let entity_type =
                     EntityType::from_name(value).ok_or(format!("Invalid entity type {value}"))?;
-                Ok(Self::Type(ValueCondition::Equals(entity_type)))
+                Ok(Self::Type(if negate {
+                    ValueCondition::NotEquals(entity_type)
+                } else {
+                    ValueCondition::Equals(entity_type)
+                }))
             }
             _ => todo!(),
         }
@@ -98,10 +107,9 @@ impl FromStr for EntityFilter {
 
 /// <https://minecraft.wiki/w/Target_selectors>
 #[allow(dead_code)]
-struct TargetSelector {
+pub struct TargetSelector {
     pub selector_type: EntitySelectorType,
-    pub include_conditions: Vec<EntityFilter>,
-    pub exclude_conditions: Vec<EntityFilter>,
+    pub conditions: Vec<EntityFilter>,
     pub player_only: bool,
 }
 
@@ -130,9 +138,31 @@ impl TargetSelector {
                     | EntitySelectorType::NamedPlayer(_)
             ),
             selector_type,
-            include_conditions: filter,
-            exclude_conditions: vec![],
+            conditions: filter,
         }
+    }
+
+    pub fn get_sort(&self) -> Option<EntityFilterSort> {
+        self.conditions.iter().find_map(|f| {
+            if let EntityFilter::Sort(sort) = f {
+                Some(*sort)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn get_limit(&self) -> usize {
+        self.conditions
+            .iter()
+            .find_map(|f| {
+                if let EntityFilter::Limit(limit) = f {
+                    Some(*limit)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(usize::MAX)
     }
 }
 
@@ -159,41 +189,22 @@ impl FromStr for TargetSelector {
                 .split(',')
                 .map(str::trim)
                 .collect();
-            let include_conditions = conditions
+            let conditions = conditions
                 .iter()
-                .filter_map(|s| {
-                    if s.is_empty() || s.as_bytes()[0] == b'!' {
-                        None
-                    } else {
-                        EntityFilter::from_str(s).ok()
-                    }
-                })
+                .filter_map(|s| EntityFilter::from_str(s).ok())
                 .collect::<Vec<_>>();
-            let exclude_conditions = conditions
-                .iter()
-                .filter_map(|s| {
-                    if s.is_empty() || s.as_bytes()[0] != b'!' {
-                        None
-                    } else {
-                        EntityFilter::from_str(&s[1..]).ok()
-                    }
-                })
-                .collect::<Vec<_>>();
-            selector.include_conditions.extend(include_conditions);
-            selector.exclude_conditions.extend(exclude_conditions);
+            selector.conditions.extend(conditions);
             Ok(selector)
         } else if let Ok(uuid) = Uuid::parse_str(arg) {
             return Ok(Self {
                 selector_type: EntitySelectorType::Uuid(uuid),
-                include_conditions: Vec::new(),
-                exclude_conditions: Vec::new(),
+                conditions: Vec::new(),
                 player_only: false,
             });
         } else {
             return Ok(Self {
                 selector_type: EntitySelectorType::NamedPlayer(arg.to_string()),
-                include_conditions: Vec::new(),
-                exclude_conditions: Vec::new(),
+                conditions: Vec::new(),
                 player_only: true,
             });
         }
@@ -224,56 +235,18 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
         server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> Option<Arg<'a>> {
-        // todo
-
         let s = args.pop()?;
-
-        let worlds = server.worlds.read().await;
-        let entities: Option<Vec<Arc<dyn EntityBase>>> = match s {
-            "@s" => match src {
-                CommandSender::Player(p) => Some(vec![p.clone()]),
-                _ => None,
-            },
-            #[allow(clippy::match_same_arms)]
-            // todo: implement for non-players and remove this line
-            "@n" | "@p" => match src {
-                CommandSender::Player(p) => Some(vec![p.clone()]),
-                // todo: implement for non-players: how should this behave when sender is console/rcon?
-                _ => None,
-            },
-            "@r" => server
-                .get_random_player()
-                .await
-                .map_or_else(|| Some(vec![]), |p| Some(vec![p as Arc<dyn EntityBase>])),
-            "@a" => Some(
-                server
-                    .get_all_players()
-                    .await
-                    .into_iter()
-                    .map(|p| p as Arc<dyn EntityBase>)
-                    .collect(),
-            ),
-            "@e" => Some(
-                join_all(worlds.iter().map(async |world| {
-                    world
-                        .entities
-                        .read()
-                        .await
-                        .values()
-                        .cloned()
-                        .collect::<Vec<Arc<dyn EntityBase>>>()
-                }))
-                .await
-                .into_iter()
-                .flatten()
-                .collect::<Vec<Arc<dyn EntityBase>>>(),
-            ),
-            name => Some(vec![
-                server.get_player_by_name(name).await? as Arc<dyn EntityBase>,
-            ]),
+        let entity_selector = match s.parse::<TargetSelector>() {
+            Ok(selector) => selector,
+            Err(e) => {
+                log::debug!("Failed to parse target selector '{}': {}", s, e);
+                return None;
+            }
         };
+        // todo: command context
+        let entities = server.select_entities(&entity_selector, Some(src)).await;
 
-        entities.map(Arg::Entities)
+        Some(Arg::Entities(entities))
     }
 
     async fn suggest<'a>(

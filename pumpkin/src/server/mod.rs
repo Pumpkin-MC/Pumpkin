@@ -2,7 +2,7 @@ use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::player_server_data::ServerPlayerData;
-use crate::entity::NBTStorage;
+use crate::entity::{EntityBase, NBTStorage};
 use crate::item::registry::ItemRegistry;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
 use crate::plugin::player::player_login::PlayerLoginEvent;
@@ -14,12 +14,14 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
+use crate::command::CommandSender;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::CChangeDifficulty;
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_registry::{Registry, VanillaDimensionType};
 use pumpkin_util::Difficulty;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
 use pumpkin_world::lock::LevelLocker;
@@ -28,7 +30,7 @@ use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
-use rand::seq::IndexedRandom;
+use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::fs;
 use std::net::IpAddr;
@@ -50,6 +52,8 @@ pub mod ticker;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.8";
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
+
+use super::command::args::entities::{EntityFilterSort, EntitySelectorType, TargetSelector};
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -662,5 +666,124 @@ impl Server {
     /// Returns a copy of the last 100 tick times.
     pub async fn get_tick_times_nanos_copy(&self) -> [i64; 100] {
         *self.tick_times_nanos.lock().await
+    }
+
+    pub async fn select_entities(
+        &self,
+        target_selector: &TargetSelector,
+        source: Option<&CommandSender>,
+    ) -> Vec<Arc<dyn EntityBase>> {
+        let iter = match &target_selector.selector_type {
+            EntitySelectorType::Source
+            | EntitySelectorType::NearestEntity
+            | EntitySelectorType::NearestPlayer => {
+                // todo: command context, currently the nearest entity is the player itself
+                if let Some(sender) = source {
+                    if let Some(player) = sender.as_player() {
+                        vec![player as Arc<dyn EntityBase>].into_iter()
+                    } else {
+                        vec![].into_iter()
+                    }
+                } else {
+                    vec![].into_iter()
+                }
+            }
+            EntitySelectorType::RandomPlayer => {
+                if let Some(player) = self.get_random_player().await {
+                    vec![player as Arc<dyn EntityBase>].into_iter()
+                } else {
+                    vec![].into_iter()
+                }
+            }
+            EntitySelectorType::AllPlayers => self
+                .get_all_players()
+                .await
+                .into_iter()
+                .map(|p| p as Arc<dyn EntityBase>)
+                .collect::<Vec<_>>()
+                .into_iter(),
+            EntitySelectorType::AllEntities => {
+                let mut entities = Vec::new();
+                for world in self.worlds.read().await.iter() {
+                    entities.extend(
+                        world
+                            .entities
+                            .read()
+                            .await
+                            .values()
+                            .cloned()
+                            .collect::<Vec<_>>(),
+                    );
+                    entities.extend(
+                        world
+                            .players
+                            .read()
+                            .await
+                            .values()
+                            .cloned()
+                            .map(|p| p as Arc<dyn EntityBase>)
+                            .collect::<Vec<_>>(),
+                    );
+                }
+                entities.into_iter()
+            }
+            EntitySelectorType::NamedPlayer(name) => {
+                if let Some(player) = self.get_player_by_name(name).await {
+                    vec![player as Arc<dyn EntityBase>].into_iter()
+                } else {
+                    vec![].into_iter()
+                }
+            }
+            EntitySelectorType::Uuid(uuid) => {
+                if let Some(player) = self.get_player_by_uuid(*uuid).await {
+                    vec![player as Arc<dyn EntityBase>].into_iter()
+                } else {
+                    vec![].into_iter()
+                }
+            }
+        };
+        match target_selector
+            .get_sort()
+            .unwrap_or(EntityFilterSort::Arbitrary)
+        {
+            // If the sort is arbitrary, we just return all entities in all worlds
+            EntityFilterSort::Arbitrary => iter.take(target_selector.get_limit()).collect(),
+            EntityFilterSort::Random => {
+                // If the sort is random, we shuffle the entities and then take the limit
+                let mut entities: Vec<_> = iter.collect();
+                entities.shuffle(&mut rand::rng());
+                entities
+                    .into_iter()
+                    .take(target_selector.get_limit())
+                    .collect()
+            }
+            EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
+                // sort entities first
+                // todo: command context
+                let center = if let Some(source) = source {
+                    source.position().unwrap_or_default()
+                } else {
+                    Vector3::default()
+                };
+                let mut entities = iter.collect::<Vec<_>>();
+                entities.sort_by(|a, b| {
+                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(center);
+                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(center);
+                    if target_selector.get_sort() == Some(EntityFilterSort::Nearest) {
+                        a_distance
+                            .partial_cmp(&b_distance)
+                            .unwrap_or(core::cmp::Ordering::Equal)
+                    } else {
+                        b_distance
+                            .partial_cmp(&a_distance)
+                            .unwrap_or(core::cmp::Ordering::Equal)
+                    }
+                });
+                entities
+                    .into_iter()
+                    .take(target_selector.get_limit())
+                    .collect()
+            }
+        }
     }
 }
