@@ -99,6 +99,28 @@ impl FromStr for EntityFilter {
                     ValueCondition::Equals(entity_type)
                 }))
             }
+            "limit" => {
+                let limit = value
+                    .parse::<usize>()
+                    .map_err(|_| "Invalid limit value".to_string())?;
+                if negate {
+                    return Err("Negation of limit is not allowed".to_string());
+                }
+                Ok(Self::Limit(limit))
+            }
+            "sort" => {
+                let sort = match value {
+                    "arbitrary" => EntityFilterSort::Arbitrary,
+                    "nearest" => EntityFilterSort::Nearest,
+                    "furthest" => EntityFilterSort::Furthest,
+                    "random" => EntityFilterSort::Random,
+                    _ => return Err(format!("Invalid sort type {value}")),
+                };
+                if negate {
+                    return Err("Negation of sort is not allowed".to_string());
+                }
+                Ok(Self::Sort(sort))
+            }
             _ => todo!(),
         }
     }
@@ -143,7 +165,7 @@ impl TargetSelector {
 
     #[must_use]
     pub fn get_sort(&self) -> Option<EntityFilterSort> {
-        self.conditions.iter().find_map(|f| {
+        self.conditions.iter().rev().find_map(|f| {
             if let EntityFilter::Sort(sort) = f {
                 Some(*sort)
             } else {
@@ -156,6 +178,7 @@ impl TargetSelector {
     pub fn get_limit(&self) -> usize {
         self.conditions
             .iter()
+            .rev()
             .find_map(|f| {
                 if let EntityFilter::Limit(limit) = f {
                     Some(*limit)
