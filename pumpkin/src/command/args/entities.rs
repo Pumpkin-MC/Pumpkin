@@ -89,14 +89,14 @@ impl FromStr for EntityFilter {
             "type" => {
                 let entity_type =
                     EntityType::from_name(value).ok_or(format!("Invalid entity type {value}"))?;
-                Ok(EntityFilter::Type(ValueCondition::Equals(entity_type)))
+                Ok(Self::Type(ValueCondition::Equals(entity_type)))
             }
             _ => todo!(),
         }
     }
 }
 
-/// https://minecraft.wiki/w/Target_selectors
+/// <https://minecraft.wiki/w/Target_selectors>
 #[allow(dead_code)]
 struct TargetSelector {
     pub selector_type: EntitySelectorType,
@@ -111,11 +111,7 @@ impl TargetSelector {
         let mut filter = Vec::new();
         match selector_type {
             EntitySelectorType::Source => filter.push(EntityFilter::Limit(1)),
-            EntitySelectorType::NearestPlayer => {
-                filter.push(EntityFilter::Sort(EntityFilterSort::Nearest));
-                filter.push(EntityFilter::Limit(1));
-            }
-            EntitySelectorType::NearestEntity => {
+            EntitySelectorType::NearestPlayer | EntitySelectorType::NearestEntity => {
                 filter.push(EntityFilter::Sort(EntityFilterSort::Nearest));
                 filter.push(EntityFilter::Limit(1));
             }
@@ -123,10 +119,7 @@ impl TargetSelector {
                 filter.push(EntityFilter::Sort(EntityFilterSort::Random));
                 filter.push(EntityFilter::Limit(1));
             }
-            EntitySelectorType::AllPlayers => {}
-            EntitySelectorType::AllEntities => {}
-            EntitySelectorType::NamedPlayer(_) => {}
-            EntitySelectorType::Uuid(_) => {}
+            _ => {}
         }
         Self {
             player_only: matches!(
@@ -164,7 +157,7 @@ impl FromStr for TargetSelector {
             }
             let conditions: Vec<_> = body[1][..body[1].len() - 1]
                 .split(',')
-                .map(|s| s.trim())
+                .map(str::trim)
                 .collect();
             let include_conditions = conditions
                 .iter()
@@ -261,7 +254,7 @@ impl ArgumentConsumer for EntitiesArgumentConsumer {
                     .collect(),
             ),
             "@e" => Some(
-                join_all(server.worlds.read().await.iter().map(async |world| {
+                join_all(worlds.iter().map(async |world| {
                     world
                         .entities
                         .read()
