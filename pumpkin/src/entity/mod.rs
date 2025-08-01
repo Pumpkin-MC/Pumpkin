@@ -1287,7 +1287,7 @@ impl Entity {
                 caller
                     .clone()
                     .teleport(
-                        Some(pos.0.to_f64()),
+                        pos.0.to_f64(),
                         None,
                         None,
                         portal_manager.portal_world.clone(),
@@ -1768,6 +1768,7 @@ impl Entity {
     }
 }
 
+#[async_trait]
 impl NBTStorage for Entity {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         let position = self.pos.load();
@@ -1888,7 +1889,7 @@ impl EntityBase for Entity {
 
     async fn teleport(
         self: Arc<Self>,
-        position: Option<Vector3<f64>>,
+        position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,

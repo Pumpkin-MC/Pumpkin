@@ -402,7 +402,7 @@ impl LivingEntity {
 impl LivingEntityTrait for LivingEntity {}
 
 impl NBTStorage for LivingEntity {
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.entity.write_nbt(nbt).await;
         nbt.put("Health", NbtTag::Float(self.health.load()));
         nbt.put("fall_distance", NbtTag::Float(self.fall_distance.load()));
@@ -423,7 +423,7 @@ impl NBTStorage for LivingEntity {
         // todo more...
     }
 
-    async fn read_nbt_non_mut(&self, _nbt: &NbtCompound) {
+    async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
         self.entity.read_nbt(nbt).await;
         self.health.store(nbt.get_float("Health").unwrap_or(0.0));
         self.fall_distance

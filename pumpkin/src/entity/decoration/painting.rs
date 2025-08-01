@@ -17,6 +17,7 @@ impl PaintingEntity {
     }
 }
 
+#[async_trait]
 impl NBTStorage for PaintingEntity {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_byte("facing", self.entity.data.load(Ordering::Relaxed) as i8);
