@@ -1459,7 +1459,7 @@ impl World {
             ))
             .await;
 
-        player.reset_state().await;
+        player.living_entity.reset_state().await;
 
         log::debug!("Sending player abilities to {}", player.gameprofile.name);
         player.send_abilities_update().await;

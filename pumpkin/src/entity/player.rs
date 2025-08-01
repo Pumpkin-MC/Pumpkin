@@ -304,7 +304,7 @@ impl Player {
             player_uuid,
             world,
             Vector3::new(0.0, 100.0, 0.0),
-            EntityType::PLAYER,
+            &EntityType::PLAYER,
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
         ));
 
