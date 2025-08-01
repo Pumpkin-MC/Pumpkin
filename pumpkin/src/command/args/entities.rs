@@ -141,6 +141,7 @@ impl TargetSelector {
         }
     }
 
+    #[must_use]
     pub fn get_sort(&self) -> Option<EntityFilterSort> {
         self.conditions.iter().find_map(|f| {
             if let EntityFilter::Sort(sort) = f {
@@ -151,6 +152,7 @@ impl TargetSelector {
         })
     }
 
+    #[must_use]
     pub fn get_limit(&self) -> usize {
         self.conditions
             .iter()
@@ -169,7 +171,7 @@ impl FromStr for TargetSelector {
     type Err = String;
 
     fn from_str(arg: &str) -> Result<Self, Self::Err> {
-        if arg.contains('[') {
+        if arg.starts_with('@') {
             let body: Vec<_> = arg.splitn(2, '[').collect();
             let r#type = match body[0] {
                 "@a" => EntitySelectorType::AllPlayers,
@@ -181,6 +183,11 @@ impl FromStr for TargetSelector {
                 _ => return Err(format!("Invalid target selector type {}", body[0])),
             };
             let mut selector = Self::new(r#type);
+            if body.len() < 2 {
+                // No conditions specified, return the selector with default conditions
+                return Ok(selector);
+            }
+            // parse conditions
             if body[1].as_bytes()[body[1].len() - 1] != b']' {
                 return Err("Target selector must end with ]".to_string());
             }

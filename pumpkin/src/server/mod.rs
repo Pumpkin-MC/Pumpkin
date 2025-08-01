@@ -668,6 +668,8 @@ impl Server {
         *self.tick_times_nanos.lock().await
     }
 
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::option_if_let_else)]
     pub async fn select_entities(
         &self,
         target_selector: &TargetSelector,
