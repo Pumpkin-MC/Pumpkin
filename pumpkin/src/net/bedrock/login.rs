@@ -10,7 +10,6 @@ use pumpkin_protocol::{
             start_game::Experiments,
         },
         frame_set::FrameSet,
-        frame_set::FrameSet,
         server::{login::SLogin, request_network_settings::SRequestNetworkSettings},
     },
     codec::var_uint::VarUInt,

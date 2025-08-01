@@ -695,7 +695,7 @@ impl Level {
         let mut remaining_chunks = Vec::new();
         for chunk in chunks {
             if let Some(chunk) = self.loaded_chunks.get(chunk) {
-                if !channel.send((chunk.value().clone(), false)).is_ok() {
+                if channel.send((chunk.value().clone(), false)).is_err() {
                     println!("sending failed");
                     return;
                 }
@@ -804,7 +804,7 @@ impl Level {
                     // However, it might have been unloaded between notification and access
                     if let Some(chunk) = loaded_chunks.get(&pos) {
                         let chunk = chunk.clone();
-                        if !channel.send((chunk, true)).is_ok() {
+                        if channel.send((chunk, true)).is_err() {
                             // Stop any additional queued generations
                             cloned_continue_to_generate.store(false, Ordering::Relaxed);
                         }
@@ -853,7 +853,7 @@ impl Level {
                             });
                         }
 
-                        if !channel.send((arc_chunk, true)).is_ok() {
+                        if channel.send((arc_chunk, true)).is_err() {
                             // Stop any additional queued generations
                             cloned_continue_to_generate.store(false, Ordering::Relaxed);
                         }

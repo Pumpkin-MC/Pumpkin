@@ -13,7 +13,6 @@ use log::warn;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::server::text::SText;
-use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
