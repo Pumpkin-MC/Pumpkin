@@ -81,13 +81,13 @@ impl FromStr for EntityFilter {
     type Err = String;
 
     fn from_str(mut s: &str) -> Result<Self, Self::Err> {
-        let negate = s.starts_with('!');
-        if negate {
-            s = &s[1..];
-        }
         let mut parts = s.splitn(2, '=');
         let key = parts.next().ok_or("Missing key in entity filter")?;
-        let value = parts.next().ok_or("Missing value in entity filter")?;
+        let mut value = parts.next().ok_or("Missing value in entity filter")?;
+        let negate = value.starts_with('!');
+        if negate {
+            value = &value[1..];
+        }
 
         match key {
             "type" => {
