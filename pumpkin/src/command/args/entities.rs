@@ -148,6 +148,10 @@ impl TargetSelector {
                 filter.push(EntityFilter::Sort(EntityFilterSort::Random));
                 filter.push(EntityFilter::Limit(1));
             }
+            EntitySelectorType::NamedPlayer(_) | EntitySelectorType::Uuid(_) => {
+                // Named or UUID selectors should only return one entity
+                filter.push(EntityFilter::Limit(1));
+            }
             _ => {}
         }
         Self {
@@ -225,17 +229,9 @@ impl FromStr for TargetSelector {
             selector.conditions.extend(conditions);
             Ok(selector)
         } else if let Ok(uuid) = Uuid::parse_str(arg) {
-            return Ok(Self {
-                selector_type: EntitySelectorType::Uuid(uuid),
-                conditions: Vec::new(),
-                player_only: false,
-            });
+            return Ok(Self::new(EntitySelectorType::Uuid(uuid)));
         } else {
-            return Ok(Self {
-                selector_type: EntitySelectorType::NamedPlayer(arg.to_string()),
-                conditions: Vec::new(),
-                player_only: true,
-            });
+            return Ok(Self::new(EntitySelectorType::NamedPlayer(arg.to_string())));
         }
     }
 }
