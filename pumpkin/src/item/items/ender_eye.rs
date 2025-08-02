@@ -76,4 +76,8 @@ impl ItemBehaviour for EnderEyeItem {
         }
         //TODO Throw the Ender Eye in the direction of the stronghold.
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

@@ -1,6 +1,8 @@
 pub mod items;
 pub mod registry;
 
+use std::any::Any;
+
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
@@ -48,4 +50,6 @@ pub trait ItemBehaviour: Send + Sync {
         let end_pos = start_pos.add(&direction);
         (start_pos, end_pos)
     }
+
+    fn as_any(&self) -> &dyn Any;
 }

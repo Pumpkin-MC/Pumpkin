@@ -250,6 +250,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 }
 
 // ActionResult.java
+#[derive(PartialEq)]
 pub enum BlockActionResult {
     /// Action was successful | Same as SUCCESS in vanilla
     Success,

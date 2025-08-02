@@ -46,4 +46,8 @@ impl ItemBehaviour for EggItem {
         egg.set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
         world.spawn_entity(Arc::new(egg)).await;
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

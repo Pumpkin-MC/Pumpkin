@@ -1526,18 +1526,30 @@ impl JavaClient {
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
         let world = &player.living_entity.entity.world.read().await;
-        let updated_sign = SignBlockEntity::new(
-            sign_data.location,
-            sign_data.is_front_text,
-            [
-                sign_data.line_1,
-                sign_data.line_2,
-                sign_data.line_3,
-                sign_data.line_4,
-            ],
-        );
+        let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
+            return;
+        };
+        let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
+            return;
+        };
+        if sign_entity.is_waxed.load(Ordering::Relaxed) {
+            return;
+        }
 
-        world.add_block_entity(Arc::new(updated_sign)).await;
+        let text = if sign_data.is_front_text {
+            &sign_entity.front_text
+        } else {
+            &sign_entity.back_text
+        };
+
+        *text.messages.lock().unwrap() = [
+            sign_data.line_1,
+            sign_data.line_2,
+            sign_data.line_3,
+            sign_data.line_4,
+        ];
+        *sign_entity.currently_editing_player.lock().await = None;
+        world.update_block_entity(&block_entity).await;
     }
 
     pub async fn handle_use_item(
@@ -1910,8 +1922,8 @@ impl JavaClient {
     }
 
     /// Checks if the block placed was a sign, then opens a dialog.
-    pub async fn send_sign_packet(&self, block_position: BlockPos) {
-        self.enqueue_packet(&COpenSignEditor::new(block_position, true))
+    pub async fn send_sign_packet(&self, block_position: BlockPos, is_front_text: bool) {
+        self.enqueue_packet(&COpenSignEditor::new(block_position, is_front_text))
             .await;
     }
 }
