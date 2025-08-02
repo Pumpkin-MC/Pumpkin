@@ -41,7 +41,7 @@ impl ItemRegistry {
     ) {
         let pumpkin_item = self.get_pumpkin_item(item);
         if let Some(pumpkin_item) = pumpkin_item {
-            return pumpkin_item
+            pumpkin_item
                 .use_on_block(item, player, location, face, block, server)
                 .await;
         }
@@ -56,7 +56,7 @@ impl ItemRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_item(&self, item: &Item) -> Option<&Arc<dyn ItemBehaviour>> {
-        self.items.get(item)
+    pub fn get_pumpkin_item(&self, item: &Item) -> Option<&dyn ItemBehaviour> {
+        self.items.get(item).map(|value| &**value)
     }
 }

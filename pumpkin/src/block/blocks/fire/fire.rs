@@ -202,7 +202,7 @@ impl BlockBehaviour for FireBlock {
             let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
             if ticks < 0 {
                 base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
-            } else if base_entity.entity_type == EntityType::PLAYER {
+            } else if base_entity.entity_type == &EntityType::PLAYER {
                 let rnd_ticks = rand::rng().random_range(1..3);
                 base_entity
                     .fire_ticks

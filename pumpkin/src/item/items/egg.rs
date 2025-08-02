@@ -37,7 +37,7 @@ impl ItemBehaviour for EggItem {
             Uuid::new_v4(),
             world.clone(),
             position,
-            EntityType::EGG,
+            &EntityType::EGG,
             false,
         );
         let egg = ThrownItemEntity::new(entity, &player.living_entity.entity);

@@ -11,7 +11,7 @@ use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
 use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
-use crate::block::blocks::farmland::FarmLandBlock;
+use crate::block::blocks::farmland::FarmlandBlock;
 use crate::block::blocks::fence_gates::FenceGateBlock;
 use crate::block::blocks::fences::FenceBlock;
 use crate::block::blocks::fire::fire::FireBlock;
@@ -107,8 +107,8 @@ use crate::block::blocks::redstone::dispenser::DispenserBlock;
 use crate::block::blocks::redstone::dropper::DropperBlock;
 
 use super::BlockIsReplacing;
-use super::blocks::plant::gourds::attached_stem::AttachedStemBlock;
-use super::blocks::plant::gourds::stem::StemBlock;
+use super::blocks::plant::crop::gourds::attached_stem::AttachedStemBlock;
+use super::blocks::plant::crop::gourds::stem::StemBlock;
 use super::fluid::FluidBehaviour;
 use super::{
     BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs, EmitsRedstonePowerArgs, ExplodeArgs,
@@ -146,7 +146,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CraftingTableBlock);
     manager.register(DirtPathBlock);
     manager.register(DoorBlock);
-    manager.register(FarmLandBlock);
+    manager.register(FarmlandBlock);
     manager.register(FenceGateBlock);
     manager.register(FenceBlock);
     manager.register(FlowerPotBlock);

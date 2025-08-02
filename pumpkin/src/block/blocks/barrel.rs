@@ -45,12 +45,12 @@ pub struct BarrelBlock;
 #[async_trait]
 impl BlockBehaviour for BarrelBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(inventory) = block_entity.get_inventory() {
-                args.player
-                    .open_handled_screen(&BarrelScreenFactory(inventory))
-                    .await;
-            }
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            && let Some(inventory) = block_entity.get_inventory()
+        {
+            args.player
+                .open_handled_screen(&BarrelScreenFactory(inventory))
+                .await;
         }
 
         BlockActionResult::Success

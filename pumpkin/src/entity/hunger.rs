@@ -1,4 +1,4 @@
-use super::{EntityBase, NBTStorage, player::Player};
+use super::{EntityBase, NBTStorage, NBTStorageInit, player::Player};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
@@ -112,3 +112,5 @@ impl NBTStorage for HungerManager {
             .store(nbt.get_int("foodTickTimer").unwrap_or(0) as u32);
     }
 }
+
+impl NBTStorageInit for HungerManager {}

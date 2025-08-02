@@ -13,6 +13,54 @@ pub struct Vector3<T> {
     pub z: T,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+
+pub enum Axis {
+    X,
+
+    Y,
+
+    Z,
+}
+
+impl Axis {
+    pub fn all() -> [Self; 3] {
+        [Self::Y, Self::X, Self::Z]
+    }
+
+    pub fn horizontal() -> [Self; 2] {
+        [Self::X, Self::Z]
+    }
+
+    pub fn excluding(axis: Self) -> [Self; 2] {
+        match axis {
+            Self::X => [Self::Y, Self::Z],
+
+            Self::Y => [Self::X, Self::Z],
+
+            Self::Z => [Self::X, Self::Y],
+        }
+    }
+}
+
+impl<T: Copy> Vector3<T> {
+    pub fn get_axis(&self, a: Axis) -> T {
+        match a {
+            Axis::X => self.x,
+            Axis::Y => self.y,
+            Axis::Z => self.z,
+        }
+    }
+
+    pub fn set_axis(&mut self, a: Axis, value: T) {
+        match a {
+            Axis::X => self.x = value,
+            Axis::Y => self.y = value,
+            Axis::Z => self.z = value,
+        };
+    }
+}
+
 impl<T: Math + PartialOrd + Copy> Vector3<T> {
     pub const fn new(x: T, y: T, z: T) -> Self {
         Vector3 { x, y, z }

@@ -48,9 +48,6 @@ pub mod seasonal_events;
 pub mod tick_rate_manager;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.8";
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
-
 /// Represents a Minecraft server instance.
 pub struct Server {
     /// Handles cryptographic keys for secure communication.
@@ -120,10 +117,11 @@ impl Server {
             match error {
                 // If it doesn't exist, just make a new one
                 WorldInfoError::InfoNotFound => (),
-                WorldInfoError::UnsupportedVersion(version) => {
-                    log::error!("Failed to load world info!, {version}");
+                WorldInfoError::UnsupportedDataVersion(_version)
+                | WorldInfoError::UnsupportedLevelVersion(_version) => {
+                    log::error!("Failed to load world info!");
                     log::error!("{error}");
-                    panic!("Unsupported world data! See the logs for more info.");
+                    panic!("Unsupported world version! See the logs for more info.");
                 }
                 e => {
                     panic!("World Error {e}");
