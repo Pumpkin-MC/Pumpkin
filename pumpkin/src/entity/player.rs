@@ -604,6 +604,29 @@ impl Player {
         self.sleeping_since.store(Some(0));
     }
 
+    pub async fn get_off_ground_speed(&self) -> f64 {
+        let sprinting = self.get_entity().sprinting.load(Ordering::Relaxed);
+
+        if !self.get_entity().has_vehicle().await {
+            let fly_speed = {
+                let abilities = self.abilities.lock().await;
+
+                abilities.flying.then_some(f64::from(abilities.fly_speed))
+            };
+
+            if let Some(flying) = fly_speed {
+                return if sprinting { flying * 2.0 } else { flying };
+            }
+        }
+
+        if sprinting { 0.025_999_999 } else { 0.02 }
+    }
+
+    pub async fn is_flying(&self) -> bool {
+        let abilities = self.abilities.lock().await;
+        abilities.flying
+    }
+
     pub async fn wake_up(&self) {
         let world = self.world().await;
         let respawn_point = self

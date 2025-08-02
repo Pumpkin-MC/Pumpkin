@@ -78,7 +78,31 @@ impl NBTStorage for ExperienceOrbEntity {}
 #[async_trait]
 impl EntityBase for ExperienceOrbEntity {
     async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
-        self.entity.tick(caller, server).await;
+        let entity = &self.entity;
+        entity.tick(caller.clone(), server).await;
+        let bounding_box = entity.bounding_box.load();
+
+        let original_velo = entity.velocity.load();
+
+        let mut velo = original_velo;
+
+        let no_clip = !self
+            .entity
+            .world
+            .read()
+            .await
+            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
+            .await;
+        // TODO: isSubmergedIn
+        if !no_clip {
+            velo.y -= self.get_gravity();
+        }
+
+        entity.velocity.store(velo);
+
+        entity.move_entity(caller.clone(), velo).await;
+
+        entity.tick_block_collisions(&caller, server).await;
 
         let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
         if age >= 6000 {
@@ -120,5 +144,9 @@ impl EntityBase for ExperienceOrbEntity {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    fn get_gravity(&self) -> f64 {
+        0.03
     }
 }

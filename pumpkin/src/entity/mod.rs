@@ -122,6 +122,10 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         false
     }
 
+    fn is_flutterer(&self) -> bool {
+        false
+    }
+
     async fn damage_with_context(
         &self,
         amount: f32,
@@ -670,7 +674,8 @@ impl Entity {
         self.velocity.store(motion);
     }
 
-    fn _tick_block_underneath(_caller: &Arc<dyn EntityBase>) {
+    #[allow(dead_code)]
+    fn tick_block_underneath(_caller: &Arc<dyn EntityBase>) {
         // let world = self.world.read().await;
 
         // let (pos, block, state) = self.get_block_with_y_offset(0.2).await;
@@ -1080,8 +1085,7 @@ impl Entity {
 
     // Entity.updateVelocity in yarn
 
-    #[allow(dead_code)]
-    fn _update_velocity_from_input(&self, movement_input: Vector3<f64>, speed: f64) {
+    fn update_velocity_from_input(&self, movement_input: Vector3<f64>, speed: f64) {
         let final_input = self.movement_input_to_velocity(movement_input, speed);
 
         self.velocity.store(self.velocity.load() + final_input);
@@ -1134,7 +1138,7 @@ impl Entity {
     }
 
     #[allow(clippy::float_cmp)]
-    async fn _get_jump_velocity_multiplier(&self) -> f32 {
+    async fn get_jump_velocity_multiplier(&self) -> f32 {
         let world = self.world.read().await;
 
         let f = world
@@ -1628,25 +1632,6 @@ impl Entity {
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
         *damage_type != DamageType::GENERIC_KILL
             && (self.invulnerable.load(Relaxed) || self.damage_immunities.contains(damage_type))
-    }
-
-    fn velocity_multiplier(_pos: Vector3<f64>) -> f32 {
-        // let world = self.world.read().await;
-        // TODO: handle when player is outside world
-        // let block = world.get_block(&self.block_pos.load()).await;
-        // block.velocity_multiplier
-        1.0
-        // if velo_multiplier == 1.0 {
-        //     const VELOCITY_OFFSET: f64 = 0.500001; // Vanilla
-        //     let pos_with_y_offset = BlockPos(Vector3::new(
-        //         pos.x.floor() as i32,
-        //         (pos.y - VELOCITY_OFFSET).floor() as i32,
-        //         pos.z.floor() as i32,
-        //     ));
-        //     let block = world.get_block(&pos_with_y_offset).await.unwrap();
-        //     block.velocity_multiplier
-        // } else {
-        // }
     }
 
     pub async fn check_block_collision(entity: &dyn EntityBase, server: &Server) {

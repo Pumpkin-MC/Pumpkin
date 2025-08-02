@@ -136,6 +136,10 @@ where
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
+
+    fn get_gravity(&self) -> f64 {
+        self.get_mob_entity().living_entity.get_gravity()
+    }
 }
 
 #[allow(dead_code)]
