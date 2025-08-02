@@ -80,7 +80,7 @@ pub enum EntityFilter {
 impl FromStr for EntityFilter {
     type Err = String;
 
-    fn from_str(mut s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.splitn(2, '=');
         let key = parts.next().ok_or("Missing key in entity filter")?;
         let mut value = parts.next().ok_or("Missing value in entity filter")?;
