@@ -50,6 +50,7 @@ use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
 use pumpkin::{LOGGER_IMPL, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
     text::{TextComponent, color::NamedColor},

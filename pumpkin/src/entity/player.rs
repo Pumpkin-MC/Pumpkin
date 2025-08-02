@@ -93,6 +93,8 @@ use pumpkin_data::potion::Effect;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
+pub const DATA_VERSION: i32 = 4438; // 1.21.7
+
 enum BatchState {
     Initial,
     Waiting,
@@ -1855,6 +1857,7 @@ impl Player {
 #[async_trait]
 impl NBTStorage for Player {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int("DataVersion", DATA_VERSION);
         self.living_entity.write_nbt(nbt).await;
         self.inventory.write_nbt(nbt).await;
 
@@ -1940,19 +1943,37 @@ impl NBTStorage for PlayerInventory {
             }
         }
 
-        for (i, slot) in &self.equipment_slots {
+        let mut equipment_compound = NbtCompound::new();
+        for slot in self.equipment_slots.values() {
             let equipment_binding = self.entity_equipment.lock().await;
             let stack_binding = equipment_binding.get(slot);
             let stack = stack_binding.lock().await;
             if !stack.is_empty() {
                 let mut item_compound = NbtCompound::new();
-                item_compound.put_byte("Slot", *i as i8);
                 stack.write_item_stack(&mut item_compound);
-                vec.push(NbtTag::Compound(item_compound));
+                match slot {
+                    EquipmentSlot::OffHand(_) => {
+                        equipment_compound.put_component("offhand", item_compound);
+                    }
+                    EquipmentSlot::Feet(_) => {
+                        equipment_compound.put_component("feet", item_compound);
+                    }
+                    EquipmentSlot::Legs(_) => {
+                        equipment_compound.put_component("legs", item_compound);
+                    }
+                    EquipmentSlot::Chest(_) => {
+                        equipment_compound.put_component("chest", item_compound);
+                    }
+                    EquipmentSlot::Head(_) => {
+                        equipment_compound.put_component("head", item_compound);
+                    }
+                    _ => {
+                        warn!("Invalid equipment slot for a player {slot:?}");
+                    }
+                }
             }
         }
-
-        // Save the inventory list
+        nbt.put_component("equipment", equipment_compound);
         nbt.put("Inventory", NbtTag::List(vec));
     }
 
@@ -1969,6 +1990,38 @@ impl NBTStorage for PlayerInventory {
                             self.set_stack(slot, item_stack).await;
                         }
                     }
+                }
+            }
+        }
+
+        if let Some(equipment) = nbt.get_compound("equipment") {
+            if let Some(offhand) = equipment.get_compound("offhand") {
+                if let Some(item_stack) = ItemStack::read_item_stack(offhand) {
+                    self.set_stack(40, item_stack).await;
+                }
+            }
+
+            if let Some(head) = equipment.get_compound("head") {
+                if let Some(item_stack) = ItemStack::read_item_stack(head) {
+                    self.set_stack(39, item_stack).await;
+                }
+            }
+
+            if let Some(chest) = equipment.get_compound("chest") {
+                if let Some(item_stack) = ItemStack::read_item_stack(chest) {
+                    self.set_stack(38, item_stack).await;
+                }
+            }
+
+            if let Some(legs) = equipment.get_compound("legs") {
+                if let Some(item_stack) = ItemStack::read_item_stack(legs) {
+                    self.set_stack(37, item_stack).await;
+                }
+            }
+
+            if let Some(feet) = equipment.get_compound("feet") {
+                if let Some(item_stack) = ItemStack::read_item_stack(feet) {
+                    self.set_stack(36, item_stack).await;
                 }
             }
         }
@@ -2140,8 +2193,8 @@ impl NBTStorage for Abilities {
             self.allow_flying = component.get_bool("mayfly").unwrap_or(false);
             self.creative = component.get_bool("instabuild").unwrap_or(false);
             self.allow_modify_world = component.get_bool("mayBuild").unwrap_or(false);
-            self.fly_speed = component.get_float("flySpeed").unwrap_or(0.0);
-            self.walk_speed = component.get_float("walk_speed").unwrap_or(0.0);
+            self.fly_speed = component.get_float("flySpeed").unwrap_or(0.05);
+            self.walk_speed = component.get_float("walkSpeed").unwrap_or(0.1);
         }
     }
 }

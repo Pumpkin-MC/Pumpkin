@@ -29,7 +29,7 @@ use crate::{
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
         world::{chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend},
     },
-    server::{CURRENT_BEDROCK_MC_VERSION, Server},
+    server::Server,
 };
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use async_trait::async_trait;
@@ -107,8 +107,9 @@ use pumpkin_util::{
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::{
-    BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
+    BlockStateId, CURRENT_BEDROCK_MC_VERSION, GENERATION_SETTINGS, GeneratorSetting, biome,
+    block::entities::BlockEntity, chunk::io::Dirtiable, inventory::Inventory, item::ItemStack,
+    world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{

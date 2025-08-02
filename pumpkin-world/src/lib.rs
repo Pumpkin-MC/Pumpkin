@@ -21,6 +21,9 @@ pub mod world_info;
 pub type BlockId = u16;
 pub type BlockStateId = u16;
 
+pub const CURRENT_MC_VERSION: &str = "1.21.7";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
+
 #[macro_export]
 macro_rules! global_path {
     ($path:expr) => {{

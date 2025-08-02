@@ -17,8 +17,9 @@ use serde_json::Value;
 
 use crate::{
     net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
-    server::{CURRENT_BEDROCK_MC_VERSION, Server},
+    server::Server,
 };
+use pumpkin_world::CURRENT_BEDROCK_MC_VERSION;
 
 impl BedrockClient {
     pub async fn handle_request_network_settings(&self, _packet: SRequestNetworkSettings) {
