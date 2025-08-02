@@ -3,7 +3,7 @@ use std::{
     sync::atomic::Ordering,
 };
 
-use super::{Entity, EntityBase, living::LivingEntity};
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;
@@ -77,6 +77,8 @@ impl ThrownItemEntity {
     }
 }
 
+impl NBTStorage for ThrownItemEntity {}
+
 #[async_trait]
 impl EntityBase for ThrownItemEntity {
     fn get_entity(&self) -> &Entity {
@@ -96,5 +98,9 @@ impl EntityBase for ThrownItemEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
     }
 }

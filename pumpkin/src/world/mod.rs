@@ -1995,7 +1995,7 @@ impl World {
                         let entity =
                             from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid)
                                 .await;
-                        entity.read_nbt(entity_nbt).await;
+                        entity.read_nbt_non_mut(entity_nbt).await;
                         let base_entity = entity.get_entity();
 
                         entities.remove(&base_entity.entity_uuid);
@@ -2032,7 +2032,7 @@ impl World {
                     // Pos is zero since it will read from nbt
                     let entity =
                         from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid).await;
-                    entity.read_nbt(entity_nbt).await;
+                    entity.read_nbt_non_mut(entity_nbt).await;
                     let base_entity = entity.get_entity();
                     player
                         .client

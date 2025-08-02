@@ -5,7 +5,7 @@ use crate::entity::ai::goal::step_and_destroy_block_goal::{StepAndDestroyBlockGo
 use crate::entity::ai::goal::zombie_attack_goal::ZombieAttackGoal;
 use crate::entity::ai::goal::{Goal, GoalControl};
 use crate::entity::{
-    Entity,
+    Entity, NBTStorage,
     ai::goal::{active_target_goal::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
 use crate::world::World;
@@ -67,6 +67,8 @@ impl Zombie {
         mob_arc
     }
 }
+
+impl NBTStorage for Zombie {}
 
 impl Mob for Zombie {
     fn get_mob_entity(&self) -> &MobEntity {

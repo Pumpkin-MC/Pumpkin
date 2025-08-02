@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{server::Server, world::World};
 
-use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
@@ -73,6 +73,8 @@ impl ExperienceOrbEntity {
     }
 }
 
+impl NBTStorage for ExperienceOrbEntity {}
+
 #[async_trait]
 impl EntityBase for ExperienceOrbEntity {
     async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
@@ -114,5 +116,9 @@ impl EntityBase for ExperienceOrbEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
     }
 }

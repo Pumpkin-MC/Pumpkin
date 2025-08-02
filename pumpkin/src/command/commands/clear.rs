@@ -5,7 +5,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::item::ItemStack;
 
-use crate::command::args::entities::EntitiesArgumentConsumer;
+use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, require};
@@ -79,7 +79,7 @@ impl CommandExecutor for Executor {
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let Some(Arg::Entities(targets)) = args.get(&ARG_TARGET) else {
+        let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
@@ -122,6 +122,6 @@ impl CommandExecutor for SelfExecutor {
 #[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(Executor))
+        .then(argument(ARG_TARGET, PlayersArgumentConsumer).execute(Executor))
         .then(require(|sender| sender.is_player()).execute(SelfExecutor))
 }

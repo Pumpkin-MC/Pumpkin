@@ -3,7 +3,6 @@ use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
-use core::f32;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
@@ -67,7 +66,7 @@ mod combat;
 pub mod predicate;
 
 #[async_trait]
-pub trait EntityBase: Send + Sync {
+pub trait EntityBase: Send + Sync + NBTStorage {
     /// Called every tick for this entity.
     ///
     /// The `caller` parameter is a reference to the entity that initiated the tick.
@@ -83,27 +82,11 @@ pub trait EntityBase: Send + Sync {
         }
     }
 
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        if let Some(living) = self.get_living_entity() {
-            living.write_nbt(nbt).await;
-        } else {
-            self.get_entity().write_nbt(nbt).await;
-        }
-    }
-
-    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
-        if let Some(living) = self.get_living_entity() {
-            living.read_nbt(nbt).await;
-        } else {
-            self.get_entity().read_nbt(nbt).await;
-        }
-    }
-
     async fn init_data_tracker(&self) {}
 
     async fn teleport(
         self: Arc<Self>,
-        position: Option<Vector3<f64>>,
+        position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
@@ -192,12 +175,13 @@ pub trait EntityBase: Send + Sync {
         name
     }
 
-    fn to_fat_ptr(&self) -> &dyn EntityBase
-    where
-        Self: Sized,
-    {
-        self as &dyn EntityBase
+    /// Kills the Entity.
+    async fn kill(&self) {
+        self.damage(f32::MAX, DamageType::GENERIC_KILL).await;
     }
+
+    /// Returns itself as the nbt storage for saving and loading data.
+    fn as_nbt_storage(&self) -> &dyn NBTStorage;
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -468,8 +452,9 @@ impl Entity {
         let position = self.pos.load();
         let delta = target.sub(&position);
         let root = delta.x.hypot(delta.z);
-        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / f32::consts::PI);
-        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / f32::consts::PI) - 90.0);
+        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / std::f32::consts::PI);
+        let yaw =
+            wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / std::f32::consts::PI) - 90.0);
         self.pitch.store(pitch);
         self.yaw.store(yaw);
 
@@ -1306,7 +1291,7 @@ impl Entity {
                 caller
                     .clone()
                     .teleport(
-                        Some(pos.0.to_f64()),
+                        pos.0.to_f64(),
                         None,
                         None,
                         portal_manager.portal_world.clone(),
@@ -1641,7 +1626,8 @@ impl Entity {
     }
 
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
-        self.invulnerable.load(Relaxed) || self.damage_immunities.contains(damage_type)
+        *damage_type != DamageType::GENERIC_KILL
+            && (self.invulnerable.load(Relaxed) || self.damage_immunities.contains(damage_type))
     }
 
     fn velocity_multiplier(_pos: Vector3<f64>) -> f32 {
@@ -1730,7 +1716,7 @@ impl Entity {
 
     async fn teleport(
         &self,
-        position: Option<Vector3<f64>>,
+        position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         _world: Arc<World>,
@@ -1741,7 +1727,7 @@ impl Entity {
             .await
             .broadcast_packet_all(&CEntityPositionSync::new(
                 self.entity_id.into(),
-                position.unwrap_or(Vector3::new(0.0, 0.0, 0.0)),
+                position,
                 Vector3::new(0.0, 0.0, 0.0),
                 yaw.unwrap_or(0.0),
                 pitch.unwrap_or(0.0),
@@ -1788,62 +1774,8 @@ impl Entity {
 }
 
 #[async_trait]
-impl EntityBase for Entity {
-    async fn damage_with_context(
-        &self,
-        _amount: f32,
-        _damage_type: DamageType,
-        _position: Option<Vector3<f64>>,
-        _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        false
-    }
-
-    async fn tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
-        self.tick_portal(&caller).await;
-        self.update_fluid_state(&caller).await;
-        self.check_out_of_world(&*caller).await;
-        let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
-        if fire_ticks > 0 {
-            if self.entity_type.fire_immune {
-                self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
-                if self.fire_ticks.load(Ordering::Relaxed) < 0 {
-                    self.extinguish();
-                }
-            } else {
-                if fire_ticks % 20 == 0 {
-                    caller.damage(1.0, DamageType::ON_FIRE).await;
-                }
-
-                self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
-            }
-        }
-        self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
-            .await;
-        // TODO: Tick
-    }
-
-    async fn teleport(
-        self: Arc<Self>,
-        position: Option<Vector3<f64>>,
-        yaw: Option<f32>,
-        pitch: Option<f32>,
-        world: Arc<World>,
-    ) {
-        // TODO: handle world change
-        self.teleport(position, yaw, pitch, world).await;
-    }
-
-    fn get_entity(&self) -> &Entity {
-        self
-    }
-
-    fn get_living_entity(&self) -> Option<&LivingEntity> {
-        None
-    }
-
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+impl NBTStorage for Entity {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
         let position = self.pos.load();
         nbt.put_string(
             "id",
@@ -1891,7 +1823,7 @@ impl EntityBase for Entity {
         // todo more...
     }
 
-    async fn read_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
         let position = nbt.get_list("Pos").unwrap();
         let x = position[0].extract_double().unwrap_or(0.0);
         let y = position[1].extract_double().unwrap_or(0.0);
@@ -1924,12 +1856,75 @@ impl EntityBase for Entity {
 }
 
 #[async_trait]
+impl EntityBase for Entity {
+    async fn damage_with_context(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        false
+    }
+
+    async fn tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
+        self.tick_portal(&caller).await;
+        self.update_fluid_state(&caller).await;
+        self.check_out_of_world(&*caller).await;
+        let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
+        if fire_ticks > 0 {
+            if self.entity_type.fire_immune {
+                self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
+                if self.fire_ticks.load(Ordering::Relaxed) < 0 {
+                    self.extinguish();
+                }
+            } else {
+                if fire_ticks % 20 == 0 {
+                    caller.damage(1.0, DamageType::ON_FIRE).await;
+                }
+
+                self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
+            }
+        }
+        self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
+            .await;
+        // TODO: Tick
+    }
+
+    async fn teleport(
+        self: Arc<Self>,
+        position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Arc<World>,
+    ) {
+        // TODO: handle world change
+        self.teleport(position, yaw, pitch, world).await;
+    }
+
+    fn get_entity(&self) -> &Entity {
+        self
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        None
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+}
+
+#[async_trait]
 pub trait NBTStorage: Send + Sync {
     async fn write_nbt(&self, _nbt: &mut NbtCompound) {}
 
-    async fn read_nbt(&mut self, _nbt: &mut NbtCompound) {}
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
+        self.read_nbt_non_mut(nbt).await;
+    }
 
-    async fn read_nbt_non_mut(&self, _nbt: &mut NbtCompound) {}
+    async fn read_nbt_non_mut(&self, _nbt: &NbtCompound) {}
 }
 
 #[async_trait]
