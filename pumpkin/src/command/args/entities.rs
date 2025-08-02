@@ -222,11 +222,9 @@ impl FromStr for TargetSelector {
                 .split(',')
                 .map(str::trim)
                 .collect();
-            let conditions = conditions
-                .iter()
-                .filter_map(|s| EntityFilter::from_str(s).ok())
-                .collect::<Vec<_>>();
-            selector.conditions.extend(conditions);
+            for s in conditions {
+                selector.conditions.push(EntityFilter::from_str(s)?);
+            }
             Ok(selector)
         } else if let Ok(uuid) = Uuid::parse_str(arg) {
             return Ok(Self::new(EntitySelectorType::Uuid(uuid)));
