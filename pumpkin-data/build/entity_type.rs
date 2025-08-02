@@ -328,6 +328,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             pub fn from_name(name: &str) -> Option<&'static Self> {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
                 match name {
                     #type_from_name
                     _ => None
