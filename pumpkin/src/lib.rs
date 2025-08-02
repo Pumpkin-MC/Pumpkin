@@ -21,6 +21,7 @@ use simplelog::SharedLogger;
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::net::{TcpListener as StdTcpListener, UdpSocket as StdUdpSocket};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -196,10 +197,10 @@ impl PumpkinServer {
                 RCONServer::run(&rcon, rcon_server).await.unwrap();
             });
         }
-        
+
         if is_port_in_use(BASIC_CONFIG.java_edition_port, "tcp") {
             panic!(
-                "端口 {} (TCP) is already in use, please change the port or close the program occupying it.",
+                "port {} (TCP) is already in use, please change the port or close the program occupying it.",
                 BASIC_CONFIG.java_edition_port
             );
         }
@@ -244,7 +245,7 @@ impl PumpkinServer {
 
         if is_port_in_use(BASIC_CONFIG.bedrock_edition_port, "udp") {
             panic!(
-                "端口 {} (UDP) is already in use, please change the port or close the program occupying it.",
+                "port {} (UDP) is already in use, please change the port or close the program occupying it.",
                 BASIC_CONFIG.bedrock_edition_port
             );
         }
@@ -547,9 +548,6 @@ fn scrub_address(ip: &str) -> String {
         .map(|ch| if ch == '.' || ch == ':' { ch } else { 'x' })
         .collect()
 }
-
-use std::net::{TcpListener as StdTcpListener, UdpSocket as StdUdpSocket};
-
 
 pub fn is_port_in_use(port: u16, protocol: &str) -> bool {
     match protocol.to_ascii_lowercase().as_str() {
