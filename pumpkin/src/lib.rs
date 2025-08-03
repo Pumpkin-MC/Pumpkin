@@ -20,7 +20,6 @@ use rustyline_async::{Readline, ReadlineEvent};
 use simplelog::SharedLogger;
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
-use std::net::{Ipv4Addr, SocketAddrV4};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -198,19 +197,14 @@ impl PumpkinServer {
         }
 
         // Setup the TCP server socket.
-        let listener = match tokio::net::TcpListener::bind(SocketAddrV4::new(
-            Ipv4Addr::new(0, 0, 0, 0),
+        let tcp_socket_addr = std::net::SocketAddr::V4(std::net::SocketAddrV4::new(
+            std::net::Ipv4Addr::new(0, 0, 0, 0),
             BASIC_CONFIG.java_edition_port,
-        ))
-        .await
-        {
+        ));
+
+        let listener = match tokio::net::TcpListener::bind(&tcp_socket_addr).await {
             Ok(l) => l,
-            Err(e) => {
-                panic!(
-                    "failed to bind TCP port: {}, error: {}.",
-                    BASIC_CONFIG.java_edition_port, e
-                );
-            }
+            Err(e) => panic!("Failed to bind Tcp address {} : {}", tcp_socket_addr, e),
         };
         // In the event the user puts 0 for their port, this will allow us to know what port it is running on
         let addr = listener
@@ -243,19 +237,14 @@ impl PumpkinServer {
             });
         };
 
-        let udp_socket = match UdpSocket::bind(SocketAddrV4::new(
-            Ipv4Addr::new(0, 0, 0, 0),
+        let udp_socket_addr = std::net::SocketAddr::V4(std::net::SocketAddrV4::new(
+            std::net::Ipv4Addr::new(0, 0, 0, 0),
             BASIC_CONFIG.bedrock_edition_port,
-        ))
-        .await
-        {
+        ));
+
+        let udp_socket = match tokio::net::UdpSocket::bind(&udp_socket_addr).await {
             Ok(s) => s,
-            Err(e) => {
-                panic!(
-                    "failed to bind UDP port: {}, error: {}.",
-                    BASIC_CONFIG.bedrock_edition_port, e
-                );
-            }
+            Err(e) => panic!("Failed to bind UDP address {}: {}", udp_socket_addr, e),
         };
 
         Self {
