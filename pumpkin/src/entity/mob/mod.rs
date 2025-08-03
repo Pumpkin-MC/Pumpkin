@@ -113,6 +113,7 @@ where
 
     async fn damage_with_context(
         &self,
+        dyn_self: &dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -121,8 +122,21 @@ where
     ) -> bool {
         self.get_mob_entity()
             .living_entity
-            .damage_with_context(amount, damage_type, position, source, cause)
+            .damage_with_context(dyn_self, amount, damage_type, position, source, cause)
             .await
+    }
+
+    async fn on_death(
+        &self,
+        dyn_self: &dyn EntityBase,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) {
+        self.get_mob_entity()
+            .living_entity
+            .on_death(dyn_self, damage_type, source, cause)
+            .await;
     }
 
     fn get_entity(&self) -> &Entity {
@@ -139,6 +153,10 @@ where
 
     fn get_gravity(&self) -> f64 {
         self.get_mob_entity().living_entity.get_gravity()
+    }
+
+    async fn kill(&self) {
+        self.get_mob_entity().living_entity.kill().await;
     }
 }
 

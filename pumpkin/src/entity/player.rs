@@ -13,7 +13,7 @@ use log::warn;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
-use pumpkin_world::inventory::Inventory;
+use pumpkin_world::inventory::{Clearable, Inventory};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -88,6 +88,7 @@ use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
+use crate::world::loot::LootContextParameters;
 use pumpkin_data::potion::Effect;
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
@@ -493,6 +494,7 @@ impl Player {
 
         if !victim
             .damage_with_context(
+                &*victim,
                 damage as f32,
                 DamageType::PLAYER_ATTACK,
                 None,
@@ -1422,6 +1424,28 @@ impl Player {
     }
 
     pub async fn drop_item(&self, item_stack: ItemStack) {
+        self.drop_item_with_options(item_stack, false, true).await;
+    }
+
+    /// Creates and drops an item entity
+    ///
+    /// # Parameters
+    /// * `item_stack` - The item stack to drop
+    /// * `random_throw` - Whether to throw randomly (true for random direction, false for player facing direction)
+    /// * `set_thrower` - Whether to set the player as the thrower (not implemented yet)
+    ///
+    /// # Returns
+    /// Returns None if the item stack is empty, otherwise returns the created `ItemEntity`
+    pub async fn drop_item_with_options(
+        &self,
+        item_stack: ItemStack,
+        random_throw: bool,
+        _set_thrower: bool,
+    ) -> Option<Arc<ItemEntity>> {
+        if item_stack.is_empty() {
+            return None;
+        }
+
         let item_pos = self.living_entity.entity.pos.load()
             + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
         let entity = Entity::new(
@@ -1432,25 +1456,36 @@ impl Player {
             false,
         );
 
-        let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
-        let yaw = f64::from(self.living_entity.entity.yaw.load()).to_radians();
-        let pitch_sin = pitch.sin();
-        let pitch_cos = pitch.cos();
-        let yaw_sin = yaw.sin();
-        let yaw_cos = yaw.cos();
-        let horizontal_offset = rand::random::<f64>() * TAU;
-        let l = 0.02 * rand::random::<f64>();
+        // Calculate throwing velocity
+        let velocity = if random_throw {
+            // Random throw mode
+            let f = rand::random::<f32>() * 0.5;
+            let g = rand::random::<f32>() * f32::consts::TAU;
+            Vector3::new(f64::from(-g.sin() * f), 0.2, f64::from(g.cos() * f))
+        } else {
+            let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
+            let yaw = f64::from(self.living_entity.entity.yaw.load()).to_radians();
+            let pitch_sin = pitch.sin();
+            let pitch_cos = pitch.cos();
+            let yaw_sin = yaw.sin();
+            let yaw_cos = yaw.cos();
+            let horizontal_offset = rand::random::<f64>() * TAU;
+            let l = 0.02 * rand::random::<f64>();
 
-        let velocity = Vector3::new(
-            -yaw_sin * pitch_cos * 0.3 + horizontal_offset.cos() * l,
-            -pitch_sin * 0.3 + 0.1 + (rand::random::<f64>() - rand::random::<f64>()) * 0.1,
-            yaw_cos * pitch_cos * 0.3 + horizontal_offset.sin() * l,
-        );
+            Vector3::new(
+                -yaw_sin * pitch_cos * 0.3 + horizontal_offset.cos() * l,
+                -pitch_sin * 0.3 + 0.1 + (rand::random::<f64>() - rand::random::<f64>()) * 0.1,
+                yaw_cos * pitch_cos * 0.3 + horizontal_offset.sin() * l,
+            )
+        };
 
         // TODO: Merge stacks together
         let item_entity =
             Arc::new(ItemEntity::new_with_velocity(entity, item_stack, velocity, 40).await);
-        self.world().await.spawn_entity(item_entity).await;
+
+        // TODO: If set_thrower is true, set the player as thrower (requires adding corresponding field in ItemEntity)
+        self.world().await.spawn_entity(item_entity.clone()).await;
+        Some(item_entity)
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
@@ -2057,6 +2092,7 @@ impl NBTStorageInit for PlayerInventory {}
 impl EntityBase for Player {
     async fn damage_with_context(
         &self,
+        dyn_self: &dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -2066,24 +2102,9 @@ impl EntityBase for Player {
         if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
             return false;
         }
-        let world = self.living_entity.entity.world.read().await;
-        let dyn_self = world
-            .get_entity_by_id(self.living_entity.entity.entity_id)
+        self.living_entity
+            .damage_with_context(dyn_self, amount, damage_type, position, source, cause)
             .await
-            .expect("Entity not found in world");
-        let result = self
-            .living_entity
-            .damage_with_context(amount, damage_type, position, source, cause)
-            .await;
-        if result {
-            let health = self.living_entity.health.load();
-            if health <= 0.0 {
-                let death_message =
-                    LivingEntity::get_death_message(&*dyn_self, damage_type, source, cause).await;
-                self.handle_killed(death_message).await;
-            }
-        }
-        result
     }
 
     async fn teleport(
@@ -2165,6 +2186,74 @@ impl EntityBase for Player {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    async fn on_death(
+        &self,
+        dyn_self: &dyn EntityBase,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) {
+        let death_message =
+            LivingEntity::get_death_message(dyn_self, damage_type, source, cause).await;
+        let world = self.world().await;
+        let level_info = world.level_info.read().await;
+        let game_rules = &level_info.game_rules;
+        if game_rules.show_death_messages {
+            if let Some(server) = world.server.upgrade() {
+                for player in server.get_all_players().await {
+                    player.send_system_message(&death_message).await;
+                }
+            }
+            self.handle_killed(death_message).await;
+        } else {
+            self.handle_killed(TextComponent::text("")).await;
+        }
+        self.living_entity
+            .on_death(dyn_self, damage_type, source, cause)
+            .await;
+    }
+
+    async fn drop_loot(&self, _dyn_self: &dyn EntityBase, _params: LootContextParameters) {
+        if !&self
+            .living_entity
+            .entity
+            .world
+            .read()
+            .await
+            .level_info
+            .read()
+            .await
+            .game_rules
+            .keep_inventory
+        {
+            // Drop the inventory contents
+            let inventory = &self.inventory.main_inventory;
+            for item in inventory {
+                let item_stack = item.lock().await.clone();
+                if !item_stack.is_empty() {
+                    self.drop_item_with_options(item_stack, true, false).await;
+                }
+            }
+
+            // Drop the equipment
+            let equipment = self.inventory.entity_equipment.lock().await;
+            let equipment_items = equipment.equipment.values();
+            for stack in equipment_items {
+                let item_stack = stack.lock().await.clone();
+                if !item_stack.is_empty() {
+                    self.drop_item_with_options(item_stack, true, false).await;
+                }
+            }
+            drop(equipment);
+
+            self.inventory.clear().await;
+        }
+    }
+
+    async fn kill(&self) {
+        self.living_entity.kill().await;
     }
 }
 

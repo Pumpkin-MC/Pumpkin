@@ -299,7 +299,15 @@ impl LivingEntity {
         let suffocating = self.entity.tick_block_collisions(&caller, server).await;
 
         if suffocating {
-            self.damage(1.0, DamageType::IN_WALL).await;
+            let dyn_self = self
+                .entity
+                .world
+                .read()
+                .await
+                .get_entity_by_id(self.entity.entity_id)
+                .await
+                .expect("Entity not found");
+            self.damage(&*dyn_self, 1.0, DamageType::IN_WALL).await;
         }
     }
 
@@ -665,7 +673,15 @@ impl LivingEntity {
 
             // TODO: Play block fall sound
             if damage > 0.0 {
-                let check_damage = self.damage(damage, DamageType::FALL).await; // Fall
+                let dyn_self = self
+                    .entity
+                    .world
+                    .read()
+                    .await
+                    .get_entity_by_id(self.entity.entity_id)
+                    .await
+                    .expect("Entity not found");
+                let check_damage = self.damage(&*dyn_self, damage, DamageType::FALL).await; // Fall
                 if check_damage {
                     self.entity
                         .play_sound(Self::get_fall_sound(fall_distance as i32))
@@ -700,6 +716,7 @@ impl LivingEntity {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> TextComponent {
+        //TODO: KillCredit
         match damage_type.death_message_type {
             DeathMessageType::Default => {
                 if cause.is_some() && source.is_some() {
@@ -730,62 +747,6 @@ impl LivingEntity {
                     [dyn_self.get_display_name().await],
                 ))
                 .add_child(TextComponent::text("]")),
-        }
-    }
-
-    pub async fn on_death(
-        &self,
-        damage_type: DamageType,
-        source: Option<&dyn EntityBase>,
-        cause: Option<&dyn EntityBase>,
-    ) {
-        let world = self.entity.world.read().await;
-        let dyn_self = world
-            .get_entity_by_id(self.entity.entity_id)
-            .await
-            .expect("Entity not found in world");
-        if self
-            .dead
-            .compare_exchange(false, true, Relaxed, Relaxed)
-            .is_ok()
-        {
-            // Plays the death sound
-            world
-                .send_entity_status(
-                    &self.entity,
-                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
-                )
-                .await;
-            let params = LootContextParameters {
-                killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
-                ..Default::default()
-            };
-
-            self.drop_loot(params).await;
-            self.entity.pose.store(EntityPose::Dying);
-
-            let level_info = world.level_info.read().await;
-            let game_rules = &level_info.game_rules;
-            if self.entity.entity_type == &EntityType::PLAYER && game_rules.show_death_messages {
-                //TODO: KillCredit
-                let death_message =
-                    Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
-                if let Some(server) = world.server.upgrade() {
-                    for player in server.get_all_players().await {
-                        player.send_system_message(&death_message).await;
-                    }
-                }
-            }
-        }
-    }
-
-    async fn drop_loot(&self, params: LootContextParameters) {
-        if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
-            let world = self.entity.world.read().await;
-            let pos = self.entity.block_pos.load();
-            for stack in loot_table.get_loot(params) {
-                world.drop_stack(&pos, stack).await;
-            }
         }
     }
 
@@ -878,6 +839,7 @@ impl NBTStorage for LivingEntity {
 impl EntityBase for LivingEntity {
     async fn damage_with_context(
         &self,
+        dyn_self: &dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -965,7 +927,9 @@ impl EntityBase for LivingEntity {
         }
 
         if new_health <= 0.0 {
-            self.on_death(damage_type, source, cause).await;
+            dyn_self
+                .on_death(dyn_self, damage_type, source, cause)
+                .await;
         }
 
         true
@@ -988,7 +952,7 @@ impl EntityBase for LivingEntity {
         if self.hurt_cooldown.load(Relaxed) > 0 {
             self.hurt_cooldown.fetch_sub(1, Relaxed);
         }
-        if self.health.load() <= 0.0 {
+        if self.dead.load(Relaxed) {
             let time = self.death_time.fetch_add(1, Relaxed);
             if time == 20 {
                 // Spawn Death particles
@@ -1013,5 +977,58 @@ impl EntityBase for LivingEntity {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    async fn kill(&self) {
+        let dyn_self = self
+            .entity
+            .world
+            .read()
+            .await
+            .get_entity_by_id(self.entity.entity_id)
+            .await
+            .expect("Entity not found");
+        self.damage(&*dyn_self, f32::MAX, DamageType::GENERIC_KILL)
+            .await;
+    }
+
+    async fn on_death(
+        &self,
+        dyn_self: &dyn EntityBase,
+        _damage_type: DamageType,
+        _source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) {
+        let world = self.entity.world.read().await;
+        if self
+            .dead
+            .compare_exchange(false, true, Relaxed, Relaxed)
+            .is_ok()
+        {
+            // Plays the death sound
+            world
+                .send_entity_status(
+                    &self.entity,
+                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
+                )
+                .await;
+            let params = LootContextParameters {
+                killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
+                ..Default::default()
+            };
+
+            dyn_self.drop_loot(dyn_self, params).await;
+            self.entity.pose.store(EntityPose::Dying);
+        }
+    }
+
+    async fn drop_loot(&self, _dyn_self: &dyn EntityBase, params: LootContextParameters) {
+        if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
+            let world = self.entity.world.read().await;
+            let pos = self.entity.block_pos.load();
+            for stack in loot_table.get_loot(params) {
+                world.drop_stack(&pos, stack).await;
+            }
+        }
     }
 }

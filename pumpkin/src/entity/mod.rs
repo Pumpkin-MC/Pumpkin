@@ -1,5 +1,6 @@
 use crate::entity::item::ItemEntity;
 use crate::world::World;
+use crate::world::loot::LootContextParameters;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
@@ -105,8 +106,13 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     /// Returns if damage was successful or not
-    async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-        self.damage_with_context(amount, damage_type, None, None, None)
+    async fn damage(
+        &self,
+        dyn_self: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+    ) -> bool {
+        self.damage_with_context(dyn_self, amount, damage_type, None, None, None)
             .await
     }
 
@@ -126,8 +132,19 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         false
     }
 
+    /// Inflicts damage to the entity with additional context.
+    ///
+    /// # Arguments
+    ///
+    /// * `dyn_self`: A reference to the entity that is being damaged to keep vtable pointer.
+    /// * `amount`: The amount of damage to inflict.
+    /// * `damage_type`: The type of damage being inflicted.
+    /// * `position`: The position where the damage occurred, if applicable.
+    /// * `source`: The source of the damage, like a projectile or a player if this is a direct attack.
+    /// * `cause`: The causing entity, like players.
     async fn damage_with_context(
         &self,
+        dyn_self: &dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -180,17 +197,24 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     /// Kills the Entity.
-    async fn kill(&self) {
-        if let Some(living) = self.get_living_entity() {
-            living.damage(f32::MAX, DamageType::GENERIC_KILL).await;
-        } else {
-            // TODO this should be removed once all entities are implemented
-            self.get_entity().remove().await;
-        }
-    }
+    async fn kill(&self);
 
     /// Returns itself as the nbt storage for saving and loading data.
     fn as_nbt_storage(&self) -> &dyn NBTStorage;
+
+    async fn on_death(
+        &self,
+        _dyn_self: &dyn EntityBase,
+        _damage_type: DamageType,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) {
+        self.get_entity().remove().await;
+    }
+
+    async fn drop_loot(&self, _dyn_self: &dyn EntityBase, _params: LootContextParameters) {}
+
+    async fn drop_experience(&self, _dyn_self: &dyn EntityBase, _params: LootContextParameters) {}
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -1752,7 +1776,9 @@ impl Entity {
             < f64::from(self.world.read().await.generation_settings().shape.min_y) - 64.0
         {
             // Tick out of world damage
-            dyn_self.damage(4.0, DamageType::OUT_OF_WORLD).await;
+            dyn_self
+                .damage(dyn_self, 4.0, DamageType::OUT_OF_WORLD)
+                .await;
         }
     }
 
@@ -1849,6 +1875,7 @@ impl NBTStorage for Entity {
 impl EntityBase for Entity {
     async fn damage_with_context(
         &self,
+        _dyn_self: &dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
@@ -1862,23 +1889,22 @@ impl EntityBase for Entity {
         self.tick_portal(&caller).await;
         self.update_fluid_state(&caller).await;
         self.check_out_of_world(&*caller).await;
-        let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
+        let fire_ticks = self.fire_ticks.load(Relaxed);
         if fire_ticks > 0 {
             if self.entity_type.fire_immune {
-                self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
-                if self.fire_ticks.load(Ordering::Relaxed) < 0 {
+                self.fire_ticks.store(fire_ticks - 4, Relaxed);
+                if self.fire_ticks.load(Relaxed) < 0 {
                     self.extinguish();
                 }
             } else {
                 if fire_ticks % 20 == 0 {
-                    caller.damage(1.0, DamageType::ON_FIRE).await;
+                    caller.damage(&*caller, 1.0, DamageType::ON_FIRE).await;
                 }
 
-                self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
+                self.fire_ticks.store(fire_ticks - 1, Relaxed);
             }
         }
-        self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
-            .await;
+        self.set_on_fire(self.fire_ticks.load(Relaxed) > 0).await;
         // TODO: Tick
     }
 
@@ -1903,6 +1929,10 @@ impl EntityBase for Entity {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    async fn kill(&self) {
+        self.remove().await;
     }
 }
 
