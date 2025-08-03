@@ -207,7 +207,7 @@ impl PumpkinServer {
             Ok(l) => l,
             Err(e) => {
                 panic!(
-                    "faild to bind TCP port: {}, error: {}.",
+                    "failed to bind TCP port: {}, error: {}.",
                     BASIC_CONFIG.java_edition_port, e
                 );
             }
@@ -252,7 +252,7 @@ impl PumpkinServer {
             Ok(s) => s,
             Err(e) => {
                 panic!(
-                    "faild to bind UDP port: {}, error: {}.",
+                    "failed to bind UDP port: {}, error: {}.",
                     BASIC_CONFIG.bedrock_edition_port, e
                 );
             }
