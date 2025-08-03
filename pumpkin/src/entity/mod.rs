@@ -181,7 +181,12 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     /// Kills the Entity.
     async fn kill(&self) {
-        self.damage(f32::MAX, DamageType::GENERIC_KILL).await;
+        if let Some(living) = self.get_living_entity() {
+            living.damage(f32::MAX, DamageType::GENERIC_KILL).await;
+        } else {
+            // TODO this should be removed once all entities are implemented
+            self.get_entity().remove().await;
+        }
     }
 
     /// Returns itself as the nbt storage for saving and loading data.
