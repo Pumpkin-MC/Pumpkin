@@ -6,9 +6,8 @@ use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
-use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
 use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::Integer0To15;
+use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
