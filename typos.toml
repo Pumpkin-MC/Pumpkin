@@ -4,3 +4,5 @@ extend-exclude = ["assets/"]
 [default.extend-words]
 handled = "handled"
 received = "received"
+ba = "ba"
+fo = "fo"
