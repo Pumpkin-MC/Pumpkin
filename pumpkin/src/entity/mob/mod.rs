@@ -3,6 +3,7 @@ use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::server::Server;
 use crate::world::World;
+use crate::world::loot::LootContextParameters;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
@@ -157,6 +158,20 @@ where
 
     async fn kill(&self) {
         self.get_mob_entity().living_entity.kill().await;
+    }
+
+    async fn drop_loot(&self, dyn_self: &dyn EntityBase, params: LootContextParameters) {
+        self.get_mob_entity()
+            .living_entity
+            .drop_loot(dyn_self, params)
+            .await;
+    }
+
+    async fn drop_experience(&self, dyn_self: &dyn EntityBase, params: LootContextParameters) {
+        self.get_mob_entity()
+            .living_entity
+            .drop_experience(dyn_self, params)
+            .await;
     }
 }
 
