@@ -84,7 +84,7 @@ macro_rules! run_task_later {
 
     ($($tt:tt)*) => {
         compile_error!(
-            "Invalid syntax for run_task_later! call. Expected `ticks = ...` or `duration = ...`."
+            "Invalid syntax for run_task_later! call. Expected `ticks = ...`(u64) or `duration = ...`."
         );
     };
 }
