@@ -101,6 +101,7 @@ impl EntityBase for FallingEntity {
 
     async fn damage_with_context(
         &self,
+        _dyn_self: &dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
@@ -124,5 +125,9 @@ impl EntityBase for FallingEntity {
 
     fn get_gravity(&self) -> f64 {
         0.04
+    }
+
+    async fn kill(&self) {
+        self.entity.kill().await;
     }
 }
