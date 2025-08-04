@@ -1910,6 +1910,8 @@ impl Player {
     }
 
     pub async fn reset_state(&self) {
+        *self.experience_pick_up_delay.lock().await = 0;
+        self.last_sent_xp.store(-1, Relaxed);
         self.living_entity.reset_state().await;
     }
 }
