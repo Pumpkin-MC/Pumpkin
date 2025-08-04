@@ -1043,6 +1043,16 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
+             #[doc = r" Get a raw ID from an State ID."]
+            #[inline]
+            pub const fn get_raw_id_from_state_id(state_id: u16) -> u16 {
+                if state_id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+                    0
+                } else {
+                    Self::RAW_ID_FROM_STATE_ID[state_id as usize]
+                }
+            }
+
             #[doc = r" Get a block from a state id."]
             #[inline]
             pub const fn from_state_id(id: u16) -> &'static Self {

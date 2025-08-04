@@ -17,6 +17,7 @@ pub mod dirt_path;
 pub mod doors;
 pub mod end_portal;
 pub mod end_portal_frame;
+pub mod falling;
 pub mod farmland;
 pub mod fence_gates;
 pub mod fences;
