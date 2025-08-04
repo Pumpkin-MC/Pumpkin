@@ -20,7 +20,7 @@ use tokio::sync::Mutex;
 
 use crate::server::Server;
 
-use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
     entity: Entity,
@@ -193,6 +193,8 @@ impl ItemEntity {
         }
     }
 }
+
+impl NBTStorage for ItemEntity {}
 
 #[async_trait]
 impl EntityBase for ItemEntity {
@@ -380,10 +382,11 @@ impl EntityBase for ItemEntity {
 
         if can_pickup
             && player.living_entity.health.load() > 0.0
-            && player
+            && (player
                 .inventory
                 .insert_stack_anywhere(&mut *self.item_stack.lock().await)
                 .await
+                || player.is_creative())
         {
             player
                 .client
@@ -425,5 +428,9 @@ impl EntityBase for ItemEntity {
 
     fn get_gravity(&self) -> f64 {
         0.04
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
     }
 }

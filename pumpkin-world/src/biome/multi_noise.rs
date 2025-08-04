@@ -40,9 +40,12 @@ mod test {
         GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
         dimension::Dimension,
-        generation::noise_router::{
-            multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
-            proto_noise_router::ProtoNoiseRouters,
+        generation::{
+            noise_router::{
+                multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+                proto_noise_router::ProtoNoiseRouters,
+            },
+            proto_chunk::TerrainCache,
         },
     };
 
@@ -61,8 +64,15 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-
-        let mut chunk = ProtoChunk::new(chunk_pos, &noise_rounter, &random_config, surface_config);
+        let terrain_cache = TerrainCache::from_random(&random_config);
+        let mut chunk = ProtoChunk::new(
+            chunk_pos,
+            &noise_rounter,
+            &random_config,
+            surface_config,
+            &terrain_cache,
+            surface_config.default_block.get_state(),
+        );
 
         for (x, y, z, tem, hum, con, ero, dep, wei) in expected_data.into_iter() {
             let point = chunk.multi_noise_sampler.sample(x, y, z);

@@ -64,9 +64,12 @@ mod test {
         GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
         chunk::palette::BIOME_NETWORK_MAX_BITS,
         dimension::Dimension,
-        generation::noise_router::{
-            multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
-            proto_noise_router::ProtoNoiseRouters,
+        generation::{
+            noise_router::{
+                multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+                proto_noise_router::ProtoNoiseRouters,
+            },
+            proto_chunk::TerrainCache,
         },
     };
 
@@ -108,11 +111,19 @@ mod test {
         let surface_settings = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
+        let terrain_cache = TerrainCache::from_random(&random_config);
+        let default_block = surface_settings.default_block.get_state();
 
         for data in expected_data.into_iter() {
             let chunk_pos = Vector2::new(data.x, data.z);
-            let mut chunk =
-                ProtoChunk::new(chunk_pos, &noise_router, &random_config, surface_settings);
+            let mut chunk = ProtoChunk::new(
+                chunk_pos,
+                &noise_router,
+                &random_config,
+                surface_settings,
+                &terrain_cache,
+                default_block,
+            );
             chunk.populate_biomes(Dimension::Overworld);
 
             for (biome_x, biome_y, biome_z, biome_id) in data.data {

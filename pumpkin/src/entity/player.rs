@@ -604,6 +604,29 @@ impl Player {
         self.sleeping_since.store(Some(0));
     }
 
+    pub async fn get_off_ground_speed(&self) -> f64 {
+        let sprinting = self.get_entity().sprinting.load(Ordering::Relaxed);
+
+        if !self.get_entity().has_vehicle().await {
+            let fly_speed = {
+                let abilities = self.abilities.lock().await;
+
+                abilities.flying.then_some(f64::from(abilities.fly_speed))
+            };
+
+            if let Some(flying) = fly_speed {
+                return if sprinting { flying * 2.0 } else { flying };
+            }
+        }
+
+        if sprinting { 0.025_999_999 } else { 0.02 }
+    }
+
+    pub async fn is_flying(&self) -> bool {
+        let abilities = self.abilities.lock().await;
+        abilities.flying
+    }
+
     pub async fn wake_up(&self) {
         let world = self.world().await;
         let respawn_point = self
@@ -1046,29 +1069,12 @@ impl Player {
     pub async fn teleport_world(
         self: &Arc<Self>,
         new_world: Arc<World>,
-        position: Option<Vector3<f64>>,
+        position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.read().await.clone();
         let info = &new_world.level_info.read().await;
-        let position = if let Some(pos) = position {
-            pos
-        } else {
-            Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(
-                    new_world
-                        .get_top_block(Vector2::new(
-                            f64::from(info.spawn_x) as i32,
-                            f64::from(info.spawn_z) as i32,
-                        ))
-                        .await
-                        + 1,
-                ),
-                f64::from(info.spawn_z) + 0.5,
-            )
-        };
         let yaw = yaw.unwrap_or(info.spawn_angle);
         let pitch = pitch.unwrap_or(10.0);
 
@@ -1174,37 +1180,6 @@ impl Player {
         }}
     }
 
-    /// Teleports the player to a different position with an optional yaw and pitch.
-    /// This method is identical to `entity.teleport()` but emits a `PlayerTeleportEvent` instead of a `EntityTeleportEvent`.
-    pub async fn teleport(self: &Arc<Self>, position: Vector3<f64>, yaw: f32, pitch: f32) {
-        send_cancellable! {{
-            PlayerTeleportEvent {
-                player: self.clone(),
-                from: self.living_entity.entity.pos.load(),
-                to: position,
-                cancelled: false,
-            };
-            'after: {
-                let position = event.to;
-                let entity = self.get_entity();
-                self.request_teleport(position, yaw, pitch).await;
-                entity
-                    .world
-                    .read()
-                    .await
-                    .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
-                        self.living_entity.entity.entity_id.into(),
-                        position,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        yaw,
-                        pitch,
-                        entity.on_ground.load(Ordering::SeqCst),
-                    ))
-                    .await;
-            }
-        }}
-    }
-
     pub fn block_interaction_range(&self) -> f64 {
         if self.gamemode.load() == GameMode::Creative {
             5.0
@@ -1287,10 +1262,6 @@ impl Player {
             self.client_loaded_timeout
                 .store(timeout.saturating_sub(1), Ordering::Relaxed);
         }
-    }
-
-    pub async fn kill(&self) {
-        self.living_entity.kill().await;
     }
 
     async fn handle_killed(&self, death_msg: TextComponent) {
@@ -2029,7 +2000,7 @@ impl NBTStorage for PlayerInventory {
         nbt.put("Inventory", NbtTag::List(vec));
     }
 
-    async fn read_nbt_non_mut(&self, nbt: &mut NbtCompound) {
+    async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
         // Read selected hotbar slot
         self.set_selected_slot(nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
         // Process inventory list
@@ -2092,7 +2063,7 @@ impl EntityBase for Player {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> bool {
-        if self.abilities.lock().await.invulnerable {
+        if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
             return false;
         }
         let world = self.living_entity.entity.world.read().await;
@@ -2117,12 +2088,44 @@ impl EntityBase for Player {
 
     async fn teleport(
         self: Arc<Self>,
-        position: Option<Vector3<f64>>,
+        position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
     ) {
-        self.teleport_world(world, position, yaw, pitch).await;
+        if Arc::ptr_eq(&world, &self.world().await) {
+            // Same world
+            let yaw = yaw.unwrap_or(self.living_entity.entity.yaw.load());
+            let pitch = pitch.unwrap_or(self.living_entity.entity.pitch.load());
+            send_cancellable! {{
+                PlayerTeleportEvent {
+                    player: self.clone(),
+                    from: self.living_entity.entity.pos.load(),
+                    to: position,
+                    cancelled: false,
+                };
+                'after: {
+                    let position = event.to;
+                    let entity = self.get_entity();
+                    self.request_teleport(position, yaw, pitch).await;
+                    entity
+                        .world
+                        .read()
+                        .await
+                        .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
+                            self.living_entity.entity.entity_id.into(),
+                            position,
+                            Vector3::new(0.0, 0.0, 0.0),
+                            yaw,
+                            pitch,
+                            entity.on_ground.load(Ordering::SeqCst),
+                        ))
+                        .await;
+                }
+            }}
+        } else {
+            self.teleport_world(world, position, yaw, pitch).await;
+        }
     }
 
     fn get_entity(&self) -> &Entity {
@@ -2158,6 +2161,10 @@ impl EntityBase for Player {
             Some(name_clone),
         ));
         name.insertion(self.gameprofile.name.clone())
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
     }
 }
 

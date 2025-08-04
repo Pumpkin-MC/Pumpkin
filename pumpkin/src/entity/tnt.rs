@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, living::LivingEntity};
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use crate::server::Server;
 use async_trait::async_trait;
 use core::f32;
@@ -34,6 +34,8 @@ impl TNTEntity {
         }
     }
 }
+
+impl NBTStorage for TNTEntity {}
 
 #[async_trait]
 impl EntityBase for TNTEntity {
@@ -117,5 +119,9 @@ impl EntityBase for TNTEntity {
 
     fn get_gravity(&self) -> f64 {
         0.04
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
     }
 }

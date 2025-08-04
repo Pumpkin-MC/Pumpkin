@@ -8,7 +8,7 @@ use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::java::server::play::{
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
+    SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SKeepAlive, SPickItemFromBlock,
     SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded,
     SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
     SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
@@ -667,6 +667,9 @@ impl JavaClient {
             SPlayerSession::PACKET_ID => {
                 self.handle_chat_session_update(player, server, SPlayerSession::read(payload)?)
                     .await;
+            }
+            SCustomPayload::PACKET_ID => {
+                // TODO: this fixes Failed to handle player packet id for now
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);

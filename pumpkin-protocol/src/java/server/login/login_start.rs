@@ -2,6 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::LOGIN_HELLO;
 use pumpkin_macros::packet;
+use serde::Serialize;
 
 use crate::{
     ServerPacket,
@@ -9,6 +10,7 @@ use crate::{
 };
 
 #[packet(LOGIN_HELLO)]
+#[derive(Serialize)]
 pub struct SLoginStart {
     pub name: String, // 16
     pub uuid: uuid::Uuid,
