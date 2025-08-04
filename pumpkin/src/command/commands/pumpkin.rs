@@ -4,12 +4,12 @@ use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::translation::get_translation_text;
+use pumpkin_world::CURRENT_MC_VERSION;
 use std::borrow::Cow;
 
 use crate::command::{
     CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
 };
-use crate::server::CURRENT_MC_VERSION;
 
 const NAMES: [&str; 2] = ["pumpkin", "version"];
 

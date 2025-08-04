@@ -8,9 +8,10 @@ use pumpkin_data::{
 use pumpkin_util::{
     HeightMap,
     math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
-    random::{RandomGenerator, RandomImpl, get_decorator_seed, xoroshiro128::Xoroshiro},
+    random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
 };
 
+use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::{
     BlockStateId,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier, hash_seed},
@@ -102,6 +103,7 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 pub struct ProtoChunk<'a> {
     pub chunk_pos: Vector2<i32>,
     pub noise_sampler: ChunkNoiseGenerator<'a>,
+    pub terrain_cache: &'a TerrainCache,
     // TODO: These can technically go to an even higher level and we can reuse them across chunks
     pub multi_noise_sampler: MultiNoiseSampler<'a>,
     pub surface_height_estimate_sampler: SurfaceHeightEstimateSampler<'a>,
@@ -122,12 +124,35 @@ pub struct ProtoChunk<'a> {
     // may want to use chunk status
 }
 
+pub struct TerrainCache {
+    pub terrain_builder: SurfaceTerrainBuilder,
+    pub surface_noise: DoublePerlinNoiseSampler,
+    pub secondary_noise: DoublePerlinNoiseSampler,
+}
+
+impl TerrainCache {
+    pub fn from_random(random_config: &GlobalRandomConfig) -> Self {
+        let random = &random_config.base_random_deriver;
+        let mut noise_builder = DoublePerlinNoiseBuilder::new(random_config);
+        let terrain_builder = SurfaceTerrainBuilder::new(&mut noise_builder, random);
+        let surface_noise = noise_builder.get_noise_sampler_for_id("surface");
+        let secondary_noise = noise_builder.get_noise_sampler_for_id("surface_secondary");
+        Self {
+            terrain_builder,
+            surface_noise,
+            secondary_noise,
+        }
+    }
+}
+
 impl<'a> ProtoChunk<'a> {
     pub fn new(
         chunk_pos: Vector2<i32>,
         base_router: &'a ProtoNoiseRouters,
         random_config: &'a GlobalRandomConfig,
         settings: &'a GenerationSettings,
+        terrain_cache: &'a TerrainCache,
+        default_block: &'static BlockState,
     ) -> Self {
         let generation_shape = &settings.shape;
 
@@ -184,11 +209,11 @@ impl<'a> ProtoChunk<'a> {
         let surface_height_estimate_sampler =
             SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
-        let default_block = settings.default_block.get_state();
         let default_heightmap = vec![i16::MIN; CHUNK_AREA].into_boxed_slice();
         Self {
             chunk_pos,
             settings,
+            terrain_cache,
             default_block,
             random_config,
             noise_sampler: sampler,
@@ -463,61 +488,68 @@ impl<'a> ProtoChunk<'a> {
     pub fn populate_noise(&mut self) {
         let horizontal_cell_block_count = self.noise_sampler.horizontal_cell_block_count();
         let vertical_cell_block_count = self.noise_sampler.vertical_cell_block_count();
-
         let horizontal_cells = CHUNK_DIM / horizontal_cell_block_count;
 
         let min_y = self.noise_sampler.min_y();
         let minimum_cell_y = min_y / vertical_cell_block_count as i8;
         let cell_height = self.noise_sampler.height() / vertical_cell_block_count as u16;
 
+        let start_block_x = self.start_block_x();
+        let start_block_z = self.start_block_z();
+        let start_cell_x = self.start_cell_x();
+        let start_cell_z = self.start_cell_z();
+
         // TODO: Block state updates when we implement those
         self.noise_sampler.sample_start_density();
         for cell_x in 0..horizontal_cells {
             self.noise_sampler.sample_end_density(cell_x);
             let sample_start_x =
-                (self.start_cell_x() + cell_x as i32) * horizontal_cell_block_count as i32;
+                (start_cell_x + cell_x as i32) * horizontal_cell_block_count as i32;
 
             for cell_z in 0..horizontal_cells {
+                let sample_start_z =
+                    (start_cell_z + cell_z as i32) * horizontal_cell_block_count as i32;
+
                 for cell_y in (0..cell_height).rev() {
                     self.noise_sampler
                         .on_sampled_cell_corners(cell_x, cell_y, cell_z);
                     let sample_start_y =
                         (minimum_cell_y as i32 + cell_y as i32) * vertical_cell_block_count as i32;
-                    let sample_start_z =
-                        (self.start_cell_z() + cell_z as i32) * horizontal_cell_block_count as i32;
+
+                    let block_y_base = sample_start_y;
+                    let delta_y_step = 1.0 / vertical_cell_block_count as f64;
+
                     for local_y in (0..vertical_cell_block_count).rev() {
-                        let block_y = (minimum_cell_y as i32 + cell_y as i32)
-                            * vertical_cell_block_count as i32
-                            + local_y as i32;
-                        let delta_y = local_y as f64 / vertical_cell_block_count as f64;
+                        let block_y = block_y_base + local_y as i32;
+                        let delta_y = local_y as f64 * delta_y_step;
                         self.noise_sampler.interpolate_y(delta_y);
 
+                        let block_x_base =
+                            start_block_x + cell_x as i32 * horizontal_cell_block_count as i32;
+                        let delta_x_step = 1.0 / horizontal_cell_block_count as f64;
+
                         for local_x in 0..horizontal_cell_block_count {
-                            let block_x = self.start_block_x()
-                                + cell_x as i32 * horizontal_cell_block_count as i32
-                                + local_x as i32;
-                            let delta_x = local_x as f64 / horizontal_cell_block_count as f64;
+                            let block_x = block_x_base + local_x as i32;
+                            let delta_x = local_x as f64 * delta_x_step;
                             self.noise_sampler.interpolate_x(delta_x);
 
+                            let block_z_base =
+                                start_block_z + cell_z as i32 * horizontal_cell_block_count as i32;
+                            let delta_z_step = 1.0 / horizontal_cell_block_count as f64;
+
                             for local_z in 0..horizontal_cell_block_count {
-                                let block_z = self.start_block_z()
-                                    + cell_z as i32 * horizontal_cell_block_count as i32
-                                    + local_z as i32;
-                                let delta_z = local_z as f64 / horizontal_cell_block_count as f64;
+                                let block_z = block_z_base + local_z as i32;
+                                let delta_z = local_z as f64 * delta_z_step;
                                 self.noise_sampler.interpolate_z(delta_z);
 
-                                // TODO: Can the math here be simplified? Do the above values come
-                                // to the same results?
-                                let cell_offset_x = block_x - sample_start_x;
+                                // The `cell_offset` calculations are still a good idea for clarity and correctness
+                                // but let's confirm the values.
+                                // block_x = start_block_x + cell_x*H + local_x
+                                // sample_start_x = start_cell_x*H + cell_x*H = (start_cell_x+cell_x)*H
+                                // These can be simplified.
+                                let cell_offset_x = local_x as i32;
                                 let cell_offset_y = block_y - sample_start_y;
-                                let cell_offset_z = block_z - sample_start_z;
-
-                                #[cfg(debug_assertions)]
-                                {
-                                    assert!(cell_offset_x >= 0);
-                                    assert!(cell_offset_y >= 0);
-                                    assert!(cell_offset_z >= 0);
-                                }
+                                let cell_offset_z = local_z as i32;
 
                                 let block_state = self
                                     .noise_sampler
@@ -540,25 +572,8 @@ impl<'a> ProtoChunk<'a> {
                     }
                 }
             }
-
             self.noise_sampler.swap_buffers();
         }
-    }
-
-    pub fn generate_entities(&self) {
-        let start_x = self.start_block_x();
-        let start_z = self.start_block_z();
-
-        let population_seed =
-            Xoroshiro::get_population_seed(self.random_config.seed, start_x, start_z);
-        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(population_seed));
-        let biome = self.get_biome(&Vector3::new(
-            start_x,
-            self.bottom_section_coord() as i32 + self.height() as i32 - 1,
-            start_z,
-        ));
-        while random.next_f32() < biome.creature_spawn_probability {}
-        todo!()
     }
 
     pub fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> &'static Biome {
@@ -582,14 +597,15 @@ impl<'a> ProtoChunk<'a> {
         let min_y = self.bottom_y();
 
         let random = &self.random_config.base_random_deriver;
-        let mut noise_builder = DoublePerlinNoiseBuilder::new(self.random_config);
-        let terrain_builder = SurfaceTerrainBuilder::new(&mut noise_builder, random);
+        let noise_builder = DoublePerlinNoiseBuilder::new(self.random_config);
         let mut context = MaterialRuleContext::new(
             min_y,
             self.height(),
             noise_builder,
             random,
-            &terrain_builder,
+            &self.terrain_cache.terrain_builder,
+            &self.terrain_cache.surface_noise,
+            &self.terrain_cache.secondary_noise,
         );
         for local_x in 0..16 {
             for local_z in 0..16 {
@@ -607,7 +623,9 @@ impl<'a> ProtoChunk<'a> {
 
                 let this_biome = self.get_biome_for_terrain_gen(&Vector3::new(x, biome_y, z));
                 if this_biome == &Biome::ERODED_BADLANDS {
-                    terrain_builder.place_badlands_pillar(self, x, z, top_block);
+                    self.terrain_cache
+                        .terrain_builder
+                        .place_badlands_pillar(self, x, z, top_block);
                     // Get the top block again if we placed a pillar!
 
                     top_block = self.top_block_height_exclusive(&Vector2::new(local_x, local_z));
@@ -678,7 +696,7 @@ impl<'a> ProtoChunk<'a> {
                         &mut self.surface_height_estimate_sampler,
                     );
 
-                    terrain_builder.place_iceberg(
+                    self.terrain_cache.terrain_builder.place_iceberg(
                         self,
                         this_biome,
                         x,
@@ -787,6 +805,7 @@ mod test {
                 density_function::{NoiseFunctionComponentRange, PassThrough},
                 proto_noise_router::{ProtoNoiseFunctionComponent, ProtoNoiseRouters},
             },
+            proto_chunk::TerrainCache,
             settings::{GENERATION_SETTINGS, GeneratorSetting},
         },
     };
@@ -796,6 +815,8 @@ mod test {
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
         LazyLock::new(|| GlobalRandomConfig::new(SEED, false)); // TODO: use legacy when needed
+    static TERRAIN_CACHE: LazyLock<TerrainCache> =
+        LazyLock::new(|| TerrainCache::from_random(&RANDOM_CONFIG));
     static BASE_NOISE_ROUTER: LazyLock<ProtoNoiseRouters> =
         LazyLock::new(|| ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG));
 
@@ -847,6 +868,8 @@ mod test {
             &base_router,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -904,6 +927,8 @@ mod test {
             &base_router,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -961,6 +986,8 @@ mod test {
             &base_router,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -1018,6 +1045,8 @@ mod test {
             &base_router,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -1075,6 +1104,8 @@ mod test {
             &base_router,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -1101,6 +1132,8 @@ mod test {
             &BASE_NOISE_ROUTER,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -1122,6 +1155,8 @@ mod test {
             &BASE_NOISE_ROUTER,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -1143,6 +1178,8 @@ mod test {
             &BASE_NOISE_ROUTER,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -1169,6 +1206,8 @@ mod test {
             &BASE_NOISE_ROUTER,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -1195,6 +1234,8 @@ mod test {
             &BASE_NOISE_ROUTER2,
             &RANDOM_CONFIG2,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -1221,6 +1262,8 @@ mod test {
             &BASE_NOISE_ROUTER2,
             &RANDOM_CONFIG2,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
         chunk.populate_noise();
 
@@ -1247,6 +1290,8 @@ mod test {
             &BASE_NOISE_ROUTER,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
 
         chunk.populate_biomes(Dimension::Overworld);
@@ -1276,6 +1321,8 @@ mod test {
             &BASE_NOISE_ROUTER,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
 
         chunk.populate_biomes(Dimension::Overworld);
@@ -1300,11 +1347,14 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
+        let terrain_cache = TerrainCache::from_random(&RANDOM_CONFIG2);
         let mut chunk = ProtoChunk::new(
             Vector2::new(-6, 11),
             &BASE_NOISE_ROUTER2,
             &RANDOM_CONFIG2,
             surface_config,
+            &terrain_cache,
+            surface_config.default_block.get_state(),
         );
 
         chunk.populate_biomes(Dimension::Overworld);
@@ -1329,11 +1379,15 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
+        let terrain_cache = TerrainCache::from_random(&RANDOM_CONFIG2);
+
         let mut chunk = ProtoChunk::new(
             Vector2::new(-7, 9),
             &BASE_NOISE_ROUTER2,
             &RANDOM_CONFIG2,
             surface_config,
+            &terrain_cache,
+            surface_config.default_block.get_state(),
         );
 
         chunk.populate_biomes(Dimension::Overworld);
@@ -1358,11 +1412,15 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
+        let terrain_cache = TerrainCache::from_random(&RANDOM_CONFIG2);
+
         let mut chunk = ProtoChunk::new(
             Vector2::new(-2, 15),
             &BASE_NOISE_ROUTER2,
             &RANDOM_CONFIG2,
             surface_config,
+            &terrain_cache,
+            surface_config.default_block.get_state(),
         );
 
         chunk.populate_biomes(Dimension::Overworld);
@@ -1393,6 +1451,8 @@ mod test {
             &BASE_NOISE_ROUTER,
             &RANDOM_CONFIG,
             surface_config,
+            &TERRAIN_CACHE,
+            surface_config.default_block.get_state(),
         );
 
         chunk.populate_biomes(Dimension::Overworld);

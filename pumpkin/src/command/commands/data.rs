@@ -5,7 +5,7 @@ use crate::command::{
     args::{Arg, ConsumedArgs},
     tree::{CommandTree, builder::argument},
 };
-use crate::entity::{EntityBase, NBTStorage};
+use crate::entity::NBTStorage;
 use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_nbt::compound::NbtCompound;
@@ -31,8 +31,7 @@ impl CommandExecutor for GetEntityDataExecutor {
         let Some(Arg::Entity(entity)) = args.get(&ARG_ENTITY) else {
             return Err(InvalidConsumption(Some(ARG_ENTITY.into())));
         };
-
-        let data_storage = &**entity as &dyn NBTStorage;
+        let data_storage = entity.as_nbt_storage();
 
         sender
             .send_message(display_data(data_storage, entity.get_display_name().await).await?)

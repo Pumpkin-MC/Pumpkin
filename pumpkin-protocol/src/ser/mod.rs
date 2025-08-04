@@ -260,6 +260,8 @@ pub trait NetworkWriteExt {
             self.write_u8(0)
         }
     }
+    fn write_fixed_bitset(&mut self, bits: usize, bit_set: FixedBitSet)
+    -> Result<(), WritingError>;
     fn write_var_int(&mut self, data: &VarInt) -> Result<(), WritingError>;
     fn write_var_uint(&mut self, data: &VarUInt) -> Result<(), WritingError>;
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
@@ -338,6 +340,21 @@ impl<W: Write> NetworkWriteExt for W {
 
     fn write_slice(&mut self, data: &[u8]) -> Result<(), WritingError> {
         self.write_all(data).map_err(WritingError::IoError)
+    }
+
+    fn write_fixed_bitset(
+        &mut self,
+        bits: usize,
+        bit_set: FixedBitSet,
+    ) -> Result<(), WritingError> {
+        let new_length = bits.div_ceil(8);
+        let mut new_vec = vec![0u8; new_length];
+        let bytes_to_copy = std::cmp::min(bit_set.len(), new_length);
+
+        new_vec[..bytes_to_copy].copy_from_slice(&bit_set[..bytes_to_copy]);
+        self.write_slice(&new_vec)?;
+
+        Ok(())
     }
 
     fn write_var_int(&mut self, data: &VarInt) -> Result<(), WritingError> {

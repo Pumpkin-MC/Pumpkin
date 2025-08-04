@@ -29,7 +29,7 @@ use crate::{
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
         world::{chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend},
     },
-    server::{CURRENT_BEDROCK_MC_VERSION, Server},
+    server::Server,
 };
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use async_trait::async_trait;
@@ -107,8 +107,9 @@ use pumpkin_util::{
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::{
-    BlockStateId, GENERATION_SETTINGS, GeneratorSetting, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
+    BlockStateId, CURRENT_BEDROCK_MC_VERSION, GENERATION_SETTINGS, GeneratorSetting, biome,
+    block::entities::BlockEntity, chunk::io::Dirtiable, inventory::Inventory, item::ItemStack,
+    world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{
@@ -1994,7 +1995,7 @@ impl World {
                         let entity =
                             from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid)
                                 .await;
-                        entity.read_nbt(entity_nbt).await;
+                        entity.read_nbt_non_mut(entity_nbt).await;
                         let base_entity = entity.get_entity();
 
                         entities.remove(&base_entity.entity_uuid);
@@ -2031,7 +2032,7 @@ impl World {
                     // Pos is zero since it will read from nbt
                     let entity =
                         from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, *uuid).await;
-                    entity.read_nbt(entity_nbt).await;
+                    entity.read_nbt_non_mut(entity_nbt).await;
                     let base_entity = entity.get_entity();
                     player
                         .client
