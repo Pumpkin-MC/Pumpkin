@@ -11,6 +11,7 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use std::ptr::addr_eq;
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
@@ -62,41 +63,52 @@ impl MobEntity {
     }
 
     fn get_base_mob_experience_drop(entity_type: &EntityType) -> u32 {
-        match entity_type {
-            &EntityType::SLIME => 1, // Slimes drop 1-3 experience depending on size
-            &EntityType::ENDERMITE | &EntityType::VEX => 3,
-            &EntityType::GHAST
-            | &EntityType::PIGLIN
-            | &EntityType::PHANTOM
-            | &EntityType::WARDEN
-            | &EntityType::ILLUSIONER
-            | &EntityType::ZOMBIE
-            | &EntityType::ZOGLIN
-            | &EntityType::SHULKER
-            | &EntityType::HOGLIN
-            | &EntityType::ZOMBIFIED_PIGLIN
-            | &EntityType::ZOMBIE_VILLAGER
-            | &EntityType::WITHER_SKELETON
-            | &EntityType::WITCH
-            | &EntityType::VINDICATOR
-            | &EntityType::STRAY
-            | &EntityType::SPIDER
-            | &EntityType::SKELETON
-            | &EntityType::PILLAGER
-            | &EntityType::HUSK
-            | &EntityType::EVOKER
-            | &EntityType::ENDERMAN
-            | &EntityType::DROWNED
-            | &EntityType::CREEPER
-            | &EntityType::CAVE_SPIDER
-            | &EntityType::BOGGED => 5,
-            &EntityType::EVOKER
-            | &EntityType::BREEZE
-            | &EntityType::GUARDIAN
-            | &EntityType::ELDER_GUARDIAN
-            | &EntityType::BLAZE => 10,
-            &EntityType::PIGLIN_BRUTE | &EntityType::RAVAGER => 20,
-            _ => 0,
+        if addr_eq(entity_type, &EntityType::SLIME) {
+            1 // Slimes drop 1-3 experience depending on size
+        } else if addr_eq(entity_type, &EntityType::ENDERMITE)
+            || addr_eq(entity_type, &EntityType::VEX)
+        {
+            3
+        } else if addr_eq(entity_type, &EntityType::GHAST)
+            || addr_eq(entity_type, &EntityType::PIGLIN)
+            || addr_eq(entity_type, &EntityType::PHANTOM)
+            || addr_eq(entity_type, &EntityType::WARDEN)
+            || addr_eq(entity_type, &EntityType::ILLUSIONER)
+            || addr_eq(entity_type, &EntityType::ZOMBIE)
+            || addr_eq(entity_type, &EntityType::ZOGLIN)
+            || addr_eq(entity_type, &EntityType::SHULKER)
+            || addr_eq(entity_type, &EntityType::HOGLIN)
+            || addr_eq(entity_type, &EntityType::ZOMBIFIED_PIGLIN)
+            || addr_eq(entity_type, &EntityType::ZOMBIE_VILLAGER)
+            || addr_eq(entity_type, &EntityType::WITHER_SKELETON)
+            || addr_eq(entity_type, &EntityType::WITCH)
+            || addr_eq(entity_type, &EntityType::VINDICATOR)
+            || addr_eq(entity_type, &EntityType::STRAY)
+            || addr_eq(entity_type, &EntityType::SPIDER)
+            || addr_eq(entity_type, &EntityType::SKELETON)
+            || addr_eq(entity_type, &EntityType::PILLAGER)
+            || addr_eq(entity_type, &EntityType::HUSK)
+            || addr_eq(entity_type, &EntityType::EVOKER)
+            || addr_eq(entity_type, &EntityType::ENDERMAN)
+            || addr_eq(entity_type, &EntityType::DROWNED)
+            || addr_eq(entity_type, &EntityType::CREEPER)
+            || addr_eq(entity_type, &EntityType::CAVE_SPIDER)
+            || addr_eq(entity_type, &EntityType::BOGGED)
+        {
+            5
+        } else if addr_eq(entity_type, &EntityType::EVOKER)
+            || addr_eq(entity_type, &EntityType::BREEZE)
+            || addr_eq(entity_type, &EntityType::GUARDIAN)
+            || addr_eq(entity_type, &EntityType::ELDER_GUARDIAN)
+            || addr_eq(entity_type, &EntityType::BLAZE)
+        {
+            10
+        } else if addr_eq(entity_type, &EntityType::PIGLIN_BRUTE)
+            || addr_eq(entity_type, &EntityType::RAVAGER)
+        {
+            20
+        } else {
+            0
         }
     }
 }
