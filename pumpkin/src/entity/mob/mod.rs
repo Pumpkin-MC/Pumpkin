@@ -1,12 +1,14 @@
 use super::{Entity, EntityBase, NBTStorage, ai::path::Navigator, living::LivingEntity};
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
+use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::server::Server;
 use crate::world::World;
 use crate::world::loot::LootContextParameters;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
@@ -57,6 +59,45 @@ impl MobEntity {
 
     pub fn set_attacking(&self, _attacking: bool) {
         // TODO: set to data tracker
+    }
+
+    fn get_base_mob_experience_drop(entity_type: &EntityType) -> u32 {
+        match entity_type {
+            &EntityType::SLIME => 1, // Slimes drop 1-3 experience depending on size
+            &EntityType::ENDERMITE | &EntityType::VEX => 3,
+            &EntityType::GHAST
+            | &EntityType::PIGLIN
+            | &EntityType::PHANTOM
+            | &EntityType::WARDEN
+            | &EntityType::ILLUSIONER
+            | &EntityType::ZOMBIE
+            | &EntityType::ZOGLIN
+            | &EntityType::SHULKER
+            | &EntityType::HOGLIN
+            | &EntityType::ZOMBIFIED_PIGLIN
+            | &EntityType::ZOMBIE_VILLAGER
+            | &EntityType::WITHER_SKELETON
+            | &EntityType::WITCH
+            | &EntityType::VINDICATOR
+            | &EntityType::STRAY
+            | &EntityType::SPIDER
+            | &EntityType::SKELETON
+            | &EntityType::PILLAGER
+            | &EntityType::HUSK
+            | &EntityType::EVOKER
+            | &EntityType::ENDERMAN
+            | &EntityType::DROWNED
+            | &EntityType::CREEPER
+            | &EntityType::CAVE_SPIDER
+            | &EntityType::BOGGED => 5,
+            &EntityType::EVOKER
+            | &EntityType::BREEZE
+            | &EntityType::GUARDIAN
+            | &EntityType::ELDER_GUARDIAN
+            | &EntityType::BLAZE => 10,
+            &EntityType::PIGLIN_BRUTE | &EntityType::RAVAGER => 20,
+            _ => 0,
+        }
     }
 }
 
@@ -167,11 +208,15 @@ where
             .await;
     }
 
-    async fn drop_experience(&self, dyn_self: &dyn EntityBase, params: LootContextParameters) {
-        self.get_mob_entity()
-            .living_entity
-            .drop_experience(dyn_self, params)
-            .await;
+    async fn drop_experience(&self, _dyn_self: &dyn EntityBase) {
+        let entity = &self.get_mob_entity().living_entity.entity;
+        let base_experience = MobEntity::get_base_mob_experience_drop(entity.entity_type);
+        ExperienceOrbEntity::spawn(
+            &*entity.world.read().await,
+            entity.pos.load(),
+            base_experience,
+        )
+        .await;
     }
 }
 

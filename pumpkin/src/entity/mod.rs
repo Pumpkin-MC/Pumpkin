@@ -215,7 +215,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     async fn drop_loot(&self, _dyn_self: &dyn EntityBase, _params: LootContextParameters) {}
 
-    async fn drop_experience(&self, _dyn_self: &dyn EntityBase, _params: LootContextParameters) {}
+    async fn drop_experience(&self, _dyn_self: &dyn EntityBase) {}
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]

@@ -1018,6 +1018,7 @@ impl EntityBase for LivingEntity {
             };
 
             dyn_self.drop_loot(dyn_self, params).await;
+            dyn_self.drop_experience(dyn_self).await;
             self.entity.pose.store(EntityPose::Dying);
         }
     }

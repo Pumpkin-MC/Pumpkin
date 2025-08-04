@@ -4,6 +4,7 @@ use std::f64::consts::TAU;
 use std::num::NonZeroU8;
 use std::ops::AddAssign;
 use std::sync::Arc;
+use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
@@ -88,6 +89,7 @@ use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
+use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::world::loot::LootContextParameters;
 use pumpkin_data::potion::Effect;
 
@@ -2249,6 +2251,28 @@ impl EntityBase for Player {
             drop(equipment);
 
             self.inventory.clear().await;
+        }
+    }
+
+    async fn drop_experience(&self, _dyn_self: &dyn EntityBase) {
+        if !&self
+            .living_entity
+            .entity
+            .world
+            .read()
+            .await
+            .level_info
+            .read()
+            .await
+            .game_rules
+            .keep_inventory
+        {
+            ExperienceOrbEntity::spawn(
+                &*self.living_entity.entity.world.read().await,
+                self.position(),
+                (7 * self.experience_level.load(Relaxed)).min(100) as u32,
+            )
+            .await;
         }
     }
 
