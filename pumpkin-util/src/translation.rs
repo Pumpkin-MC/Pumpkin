@@ -12,7 +12,7 @@ use std::{
 /// - Add support for translations on commands descriptions
 /// - Integrate custom translations with the plugins API
 /// - Try to optimize code of 'to_translated'
-use crate::text::TextComponentBase;
+use crate::text::{TextComponentBase, TextContent, style::Style};
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../assets/en_us.json");
 static PUMPKIN_EN_US_JSON: &str = include_str!("../../assets/translations/en_us.json");
@@ -76,7 +76,7 @@ pub fn reorder_substitutions(
         .map(|(i, _)| i)
         .collect();
 
-    if translation.contains("%s") {
+    if translation.matches("%s").count() == indices.len() {
         return (
             with,
             indices
@@ -89,10 +89,18 @@ pub fn reorder_substitutions(
         );
     }
 
-    let mut substitutions: Vec<TextComponentBase> = with.clone();
+    let mut substitutions: Vec<TextComponentBase> = indices
+        .iter()
+        .map(|_| TextComponentBase {
+            content: TextContent::Text { text: "".into() },
+            style: Style::default(),
+            extra: vec![],
+        })
+        .collect();
     let mut ranges: Vec<SubstitutionRange> = vec![];
 
     let bytes = translation.as_bytes();
+    let mut next_idx = 0usize;
     for (idx, &i) in indices.iter().enumerate() {
         let mut num_chars = String::new();
         let mut pos = 1;
@@ -100,13 +108,23 @@ pub fn reorder_substitutions(
             num_chars.push(bytes[i + pos] as char);
             pos += 1;
         }
+
+        if num_chars.is_empty() {
+            ranges.push(SubstitutionRange {
+                start: i,
+                end: i + 1,
+            });
+            substitutions[idx] = with[next_idx].clone();
+            next_idx = (next_idx + 1).clamp(0, with.len() - 1);
+            continue;
+        }
+
         ranges.push(SubstitutionRange {
             start: i,
             end: i + pos + 1,
         });
-        let sub_idx = idx.clamp(0, with.len() - 1);
         if let Ok(digit) = num_chars.parse::<usize>() {
-            substitutions[(digit.clamp(1, 9) - 1).clamp(0, with.len() - 1)] = with[sub_idx].clone();
+            substitutions[idx] = with[digit.clamp(1, with.len()) - 1].clone();
         }
     }
     (substitutions, ranges)
