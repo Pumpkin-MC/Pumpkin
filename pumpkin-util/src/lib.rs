@@ -44,6 +44,7 @@ macro_rules! global_path {
     }};
 }
 
+/// Reads JSON files form disk. Don't use this for static files!
 #[macro_export]
 macro_rules! read_data_from_file {
     ($path:expr) => {{
