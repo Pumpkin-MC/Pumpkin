@@ -11,7 +11,7 @@ use crate::{
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
-use crossbeam::channel::Sender;
+use crossbeam::channel::{Sender, unbounded};
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
@@ -89,8 +89,7 @@ pub struct Level {
 
     /// Pool of threads for world generation
     world_gen_pool: Arc<ThreadPool>,
-    normal_priority_gen_request_tx: Sender<Vector2<i32>>,
-    high_priority_gen_request_tx: Sender<Vector2<i32>>,
+    gen_request_tx: Sender<Vector2<i32>>,
     pending_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncChunk>>>>,
 }
 
@@ -151,10 +150,7 @@ impl Level {
                 }
             };
 
-        let (normal_priority_gen_request_tx, normal_priority_gen_request_rx) =
-            crossbeam::channel::unbounded();
-        let (high_priority_gen_request_tx, high_priority_gen_request_rx) =
-            crossbeam::channel::unbounded();
+        let (gen_request_tx, gen_request_rx) = crossbeam::channel::unbounded();
         let pending_generations = Arc::new(DashMap::new());
 
         let level_ref = Arc::new(Self {
@@ -180,19 +176,17 @@ impl Level {
                     .build()
                     .unwrap(),
             ),
-            normal_priority_gen_request_tx,
-            high_priority_gen_request_tx,
+            gen_request_tx,
             pending_generations: pending_generations.clone(),
         });
         let num_threads = 32;
         for thread_id in 0..num_threads {
             let level_clone = level_ref.clone();
             let pending_clone = pending_generations.clone();
-            let rx = normal_priority_gen_request_rx.clone();
-            let high_priority_rx = high_priority_gen_request_rx.clone();
+            let rx = gen_request_rx.clone();
 
             std::thread::spawn(move || {
-                while let Ok(pos) = high_priority_rx.try_recv().or_else(|_| rx.recv()) {
+                while let Ok(pos) = rx.recv() {
                     if level_clone.is_shutting_down.load(Ordering::Relaxed) {
                         break;
                     }
@@ -609,7 +603,7 @@ impl Level {
                     }
                     dashmap::mapref::entry::Entry::Vacant(entry) => {
                         entry.insert(vec![tx]);
-                        let _ = self.high_priority_gen_request_tx.send(pos);
+                        let _ = self.gen_request_tx.send(pos);
                     }
                 }
 
@@ -679,9 +673,7 @@ impl Level {
                                         }
                                         dashmap::mapref::entry::Entry::Vacant(entry) => {
                                             entry.insert(vec![tx]);
-                                            let _ = level_clone
-                                                .normal_priority_gen_request_tx
-                                                .send(pos);
+                                            let _ = level_clone.gen_request_tx.send(pos);
                                         }
                                     }
 
