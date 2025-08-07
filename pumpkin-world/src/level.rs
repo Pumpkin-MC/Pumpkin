@@ -11,7 +11,7 @@ use crate::{
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
-use crossbeam::channel::{Sender, unbounded};
+use crossbeam::channel::Sender;
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
@@ -85,10 +85,12 @@ pub struct Level {
     tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
     pub shutdown_notifier: Notify,
+    pub is_shutting_down: AtomicBool,
 
     /// Pool of threads for world generation
     world_gen_pool: Arc<ThreadPool>,
-    gen_request_tx: Sender<Vector2<i32>>,
+    normal_priority_gen_request_tx: Sender<Vector2<i32>>,
+    high_priority_gen_request_tx: Sender<Vector2<i32>>,
     pending_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncChunk>>>>,
 }
 
@@ -149,7 +151,10 @@ impl Level {
                 }
             };
 
-        let (gen_request_tx, gen_request_rx) = crossbeam::channel::unbounded();
+        let (normal_priority_gen_request_tx, normal_priority_gen_request_rx) =
+            crossbeam::channel::unbounded();
+        let (high_priority_gen_request_tx, high_priority_gen_request_rx) =
+            crossbeam::channel::unbounded();
         let pending_generations = Arc::new(DashMap::new());
 
         let level_ref = Arc::new(Self {
@@ -165,6 +170,7 @@ impl Level {
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
+            is_shutting_down: AtomicBool::new(false),
             // Limits concurrent chunk generation tasks to 2x the number of CPUs
             //chunk_generation_semaphore: Arc::new(Semaphore::new(num_cpus::get())),
             //chunk_generation_locks: Arc::new(Mutex::new(HashMap::new())),
@@ -174,17 +180,23 @@ impl Level {
                     .build()
                     .unwrap(),
             ),
-            gen_request_tx,
+            normal_priority_gen_request_tx,
+            high_priority_gen_request_tx,
             pending_generations: pending_generations.clone(),
         });
         let num_threads = 32;
         for thread_id in 0..num_threads {
             let level_clone = level_ref.clone();
             let pending_clone = pending_generations.clone();
-            let rx = gen_request_rx.clone();
+            let rx = normal_priority_gen_request_rx.clone();
+            let high_priority_rx = high_priority_gen_request_rx.clone();
 
             std::thread::spawn(move || {
-                while let Ok(pos) = rx.recv() {
+                while let Ok(pos) = high_priority_rx.try_recv().or_else(|_| rx.recv()) {
+                    if level_clone.is_shutting_down.load(Ordering::Relaxed) {
+                        break;
+                    }
+
                     log::info!(
                         "Generating chunk {pos:?}, worker thread {thread_id:?}, queue length {}",
                         rx.len()
@@ -249,6 +261,8 @@ impl Level {
         log::info!("Saving level...");
 
         self.shutdown_notifier.notify_waiters();
+        self.is_shutting_down.store(true, Ordering::Relaxed);
+
         self.tasks.close();
         log::debug!("Awaiting level tasks");
         self.tasks.wait().await;
@@ -595,7 +609,7 @@ impl Level {
                     }
                     dashmap::mapref::entry::Entry::Vacant(entry) => {
                         entry.insert(vec![tx]);
-                        let _ = self.gen_request_tx.send(pos);
+                        let _ = self.high_priority_gen_request_tx.send(pos);
                     }
                 }
 
@@ -652,22 +666,29 @@ impl Level {
                                 let _ = sender.send((chunk, false));
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
-                                // Need to generate
-                                let (tx, rx) = oneshot::channel();
+                                // Need to generate — but don't block here
+                                let sender_clone = sender.clone();
+                                let level_clone = level.clone();
 
-                                match level.pending_generations.entry(pos) {
-                                    dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                                        entry.get_mut().push(tx);
-                                    }
-                                    dashmap::mapref::entry::Entry::Vacant(entry) => {
-                                        entry.insert(vec![tx]);
-                                        let _ = level.gen_request_tx.send(pos);
-                                    }
-                                }
+                                tokio::spawn(async move {
+                                    let (tx, rx) = oneshot::channel();
 
-                                if let Ok(chunk) = rx.await {
-                                    let _ = sender.send((chunk, true));
-                                }
+                                    match level_clone.pending_generations.entry(pos) {
+                                        dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+                                            entry.get_mut().push(tx);
+                                        }
+                                        dashmap::mapref::entry::Entry::Vacant(entry) => {
+                                            entry.insert(vec![tx]);
+                                            let _ = level_clone
+                                                .normal_priority_gen_request_tx
+                                                .send(pos);
+                                        }
+                                    }
+
+                                    if let Ok(chunk) = rx.await {
+                                        let _ = sender_clone.send((chunk, true));
+                                    }
+                                });
                             }
                         }
                     }
