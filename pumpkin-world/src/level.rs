@@ -11,7 +11,7 @@ use crate::{
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
-use crossbeam::channel::{Sender, unbounded};
+use crossbeam::channel::Sender;
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
@@ -179,7 +179,9 @@ impl Level {
             gen_request_tx,
             pending_generations: pending_generations.clone(),
         });
-        let num_threads = 32;
+
+        //TODO: Investigate optimal number of threads
+        let num_threads = num_cpus::get().saturating_sub(1).max(1);
         for thread_id in 0..num_threads {
             let level_clone = level_ref.clone();
             let pending_clone = pending_generations.clone();
@@ -254,8 +256,8 @@ impl Level {
     pub async fn shutdown(&self) {
         log::info!("Saving level...");
 
-        self.shutdown_notifier.notify_waiters();
         self.is_shutting_down.store(true, Ordering::Relaxed);
+        self.shutdown_notifier.notify_waiters();
 
         self.tasks.close();
         log::debug!("Awaiting level tasks");
