@@ -197,7 +197,7 @@ pub struct World {
 impl World {
     #[must_use]
     pub fn load(
-        level: Level,
+        level: Arc<Level>,
         level_info: Arc<RwLock<LevelData>>,
         dimension_type: VanillaDimensionType,
         block_registry: Arc<BlockRegistry>,
@@ -218,7 +218,7 @@ impl World {
         };
 
         Self {
-            level: Arc::new(level),
+            level,
             level_info,
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
