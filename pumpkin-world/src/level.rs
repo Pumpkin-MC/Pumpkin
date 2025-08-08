@@ -592,7 +592,7 @@ impl Level {
         match self.load_single_chunk(pos).await {
             Ok((chunk, _)) => {
                 self.loaded_chunks.insert(pos, chunk.clone());
-                return chunk;
+                chunk
             }
             Err(_) => {
                 // Need to generate
@@ -609,7 +609,7 @@ impl Level {
                     }
                 }
 
-                return rx.await.expect("Generation worker dropped");
+                rx.await.expect("Generation worker dropped")
             }
         }
     }
