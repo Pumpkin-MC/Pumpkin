@@ -690,7 +690,6 @@ impl Level {
                             LoadedData::Loaded(chunk) => {
                                 let pos = chunk.read().await.position;
                                 level.loaded_chunks.insert(pos, chunk.clone());
-                                log::info!("Loaded chunk {pos:?}");
                                 let _ = sender.send((chunk, false));
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {

@@ -22,6 +22,7 @@ use crate::world::World;
 
 pub struct EmptyBucketItem;
 pub struct FilledBucketItem;
+#[allow(dead_code)]
 pub struct MilkBucketItem;
 
 impl ItemMetadata for EmptyBucketItem {

@@ -688,11 +688,11 @@ mod test {
     });
 
     fn create_aquifer(
-        base_router: &ProtoNoiseRouters,
+        base_router: &'_ ProtoNoiseRouters,
     ) -> (
         WorldAquiferSampler,
-        ChunkNoiseRouter,
-        SurfaceHeightEstimateSampler,
+        ChunkNoiseRouter<'_>,
+        SurfaceHeightEstimateSampler<'_>,
         ChunkNoiseFunctionSampleOptions,
     ) {
         let surface_config = GENERATION_SETTINGS
