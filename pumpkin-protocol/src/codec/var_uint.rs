@@ -119,24 +119,6 @@ gen_from!(i16);
 gen_from!(u16);
 gen_from!(u32);
 
-macro_rules! gen_try_from {
-    ($ty: ty) => {
-        impl TryFrom<$ty> for VarUInt {
-            type Error = <i32 as TryFrom<$ty>>::Error;
-
-            fn try_from(value: $ty) -> Result<Self, Self::Error> {
-                Ok(VarUInt(value as u32))
-            }
-        }
-    };
-}
-
-gen_try_from!(i32);
-gen_try_from!(i64);
-gen_try_from!(u64);
-gen_try_from!(isize);
-gen_try_from!(usize);
-
 impl Serialize for VarUInt {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut value = self.0;
