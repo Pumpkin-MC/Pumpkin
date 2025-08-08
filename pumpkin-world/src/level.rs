@@ -193,7 +193,7 @@ impl Level {
                         break;
                     }
 
-                    log::info!(
+                    log::debug!(
                         "Generating chunk {pos:?}, worker thread {thread_id:?}, queue length {}",
                         rx.len()
                     );
@@ -625,7 +625,7 @@ impl Level {
         let (sender, receiver) = mpsc::unbounded_channel();
         let level = self.clone();
 
-        log::info!("Receiving chunks: {}", chunks.len());
+        log::debug!("Receiving chunks: {}", chunks.len());
 
         self.spawn_task(async move {
             let cancel_notifier = level.shutdown_notifier.notified();
