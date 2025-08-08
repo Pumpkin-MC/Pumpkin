@@ -175,18 +175,18 @@ impl PumpkinServer {
 
         let mut ticker = Ticker::new();
 
-        if advanced_config().commands.use_console {
-            if let Some((wrapper, _)) = &*LOGGER_IMPL {
-                if let Some(rl) = wrapper.take_readline() {
-                    setup_console(rl, server.clone());
-                } else {
-                    if advanced_config().commands.use_tty {
-                        log::warn!(
-                            "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
-                        );
-                    }
-                    setup_stdin_console(server.clone()).await;
+        if advanced_config().commands.use_console
+            && let Some((wrapper, _)) = &*LOGGER_IMPL
+        {
+            if let Some(rl) = wrapper.take_readline() {
+                setup_console(rl, server.clone());
+            } else {
+                if advanced_config().commands.use_tty {
+                    log::warn!(
+                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                    );
                 }
+                setup_stdin_console(server.clone()).await;
             }
         }
 
@@ -311,10 +311,10 @@ impl PumpkinServer {
         log::info!("Completed save!");
 
         // Explicitly drop the line reader to return the terminal to the original state.
-        if let Some((wrapper, _)) = &*LOGGER_IMPL {
-            if let Some(rl) = wrapper.take_readline() {
-                let _ = rl;
-            }
+        if let Some((wrapper, _)) = &*LOGGER_IMPL
+            && let Some(rl) = wrapper.take_readline()
+        {
+            let _ = rl;
         }
     }
 

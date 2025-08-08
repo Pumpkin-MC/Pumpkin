@@ -227,9 +227,9 @@ impl FromStr for TargetSelector {
             }
             Ok(selector)
         } else if let Ok(uuid) = Uuid::parse_str(arg) {
-            return Ok(Self::new(EntitySelectorType::Uuid(uuid)));
+            Ok(Self::new(EntitySelectorType::Uuid(uuid)))
         } else {
-            return Ok(Self::new(EntitySelectorType::NamedPlayer(arg.to_string())));
+            Ok(Self::new(EntitySelectorType::NamedPlayer(arg.to_string())))
         }
     }
 }

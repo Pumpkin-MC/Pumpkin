@@ -3061,10 +3061,10 @@ impl World {
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
         let (collision, direction) = self.ray_outline_check(&block, from, to).await;
-        if let Some(dir) = direction {
-            if collision {
-                return Some((block, dir));
-            }
+        if let Some(dir) = direction
+            && collision
+        {
+            return Some((block, dir));
         }
 
         let difference = to.sub(&from);

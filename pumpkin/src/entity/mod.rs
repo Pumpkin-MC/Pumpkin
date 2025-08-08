@@ -990,13 +990,11 @@ impl Entity {
 
         let in_lava = in_fluid[1];
 
-        if in_lava {
-            if let Some(living) = caller.get_living_entity() {
-                let halved_fall = living.fall_distance.load() / 2.0;
+        if in_lava && let Some(living) = caller.get_living_entity() {
+            let halved_fall = living.fall_distance.load() / 2.0;
 
-                if halved_fall != 0.0 {
-                    living.fall_distance.store(halved_fall);
-                }
+            if halved_fall != 0.0 {
+                living.fall_distance.store(halved_fall);
             }
         }
 

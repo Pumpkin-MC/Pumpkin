@@ -197,10 +197,10 @@ impl PermissionManager {
 
             // Check for inherited permissions from parent nodes
             for (node, value) in attachment.get_permissions() {
-                if let Some(permission) = reg.get_permission(node) {
-                    if permission.children.contains_key(permission_node) {
-                        return *value && *permission.children.get(permission_node).unwrap();
-                    }
+                if let Some(permission) = reg.get_permission(node)
+                    && permission.children.contains_key(permission_node)
+                {
+                    return *value && *permission.children.get(permission_node).unwrap();
                 }
             }
         }
