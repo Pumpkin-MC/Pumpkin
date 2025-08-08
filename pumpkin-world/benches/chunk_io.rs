@@ -14,16 +14,10 @@ use pumpkin_world::{
 use tokio::{runtime::Runtime, sync::RwLock};
 
 async fn test_reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
-    let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
     let level = level.clone();
-    tokio::spawn(async move {
-        for pos in positions {
-            let chunk = level.get_chunk(pos).await;
-            let _ = send.send((chunk, false));
-        }
-    });
+    let mut receiver = level.receive_chunks(positions);
 
-    while let Some(x) = recv.recv().await {
+    while let Some(x) = receiver.recv().await {
         // Don't compile me away!
         let _ = x;
     }
@@ -105,27 +99,24 @@ fn initialize_level(
     // Initial writes
     let mut chunks = Vec::new();
     async_handler.block_on(async {
-        let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
         let block_registry = Arc::new(BlockRegistry);
 
         // Our data dir is empty, so we're generating new chunks here
-        let level_to_save =
-            Level::from_root_folder(root_dir.clone(), block_registry, 123, Dimension::Overworld);
+        let level_to_save = Arc::new(Level::from_root_folder(
+            root_dir.clone(),
+            block_registry,
+            123,
+            Dimension::Overworld,
+        ));
         println!("Level Seed is: {}", level_to_save.seed.0);
 
         let level_to_fetch = level_to_save.clone();
-        tokio::spawn(async move {
-            let chunks_to_generate = (MIN_CHUNK..MAX_CHUNK)
-                .flat_map(|x| (MIN_CHUNK..MAX_CHUNK).map(move |z| Vector2::new(x, z)))
-                .collect::<Vec<_>>();
-            let mut receiver = level_to_fetch.receive_chunks(chunks_to_generate);
-            while let Some(chunk) = receiver.recv().await {
-                let _ = send.send(chunk);
-            }
-            drop(send);
-        });
+        let chunks_to_generate = (MIN_CHUNK..MAX_CHUNK)
+            .flat_map(|x| (MIN_CHUNK..MAX_CHUNK).map(move |z| Vector2::new(x, z)))
+            .collect::<Vec<_>>();
+        let mut receiver = level_to_fetch.receive_chunks(chunks_to_generate);
 
-        while let Some((chunk, _)) = recv.recv().await {
+        while let Some((chunk, _)) = receiver.recv().await {
             let pos = chunk.read().await.position;
             chunks.push((pos, chunk));
         }
