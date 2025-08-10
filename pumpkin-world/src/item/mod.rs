@@ -52,7 +52,11 @@ impl ItemStack {
         }
     }
 
-    pub fn new_with_component(item_count: u8, item: &'static Item, component: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>) -> Self {
+    pub fn new_with_component(
+        item_count: u8,
+        item: &'static Item,
+        component: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>,
+    ) -> Self {
         Self {
             item_count,
             item,

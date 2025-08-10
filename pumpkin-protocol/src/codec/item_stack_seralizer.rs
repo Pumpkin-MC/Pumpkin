@@ -1,18 +1,16 @@
-use pumpkin_data::item::Item;
-use std::borrow::Cow;
+use crate::VarInt;
+use crate::codec::data_component::{deserialize, hash_serialize, serialize};
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
-use crate::VarInt;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
+use serde::ser::SerializeStruct;
 use serde::{
     Deserialize, Serialize, Serializer,
     de::{self, SeqAccess},
 };
-use serde::ser::SerializeStruct;
-use log::warn;
-use pumpkin_data::data_component::DataComponent;
-use crate::codec::data_component::{deserialize, hash_serialize, serialize};
-use crate::ser::serializer;
+use std::borrow::Cow;
 
 #[derive(Debug, Clone)]
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
@@ -41,26 +39,35 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
 
                     let num_components_to_add = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No component add length VarInt!"))?.0 as usize;
+                        .ok_or(de::Error::custom("No component add length VarInt!"))?
+                        .0 as usize;
                     let num_components_to_remove = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No component remove length VarInt!"))?.0 as usize;
+                        .ok_or(de::Error::custom("No component remove length VarInt!"))?
+                        .0 as usize;
 
-                    let mut patch = Vec::with_capacity(num_components_to_add + num_components_to_remove);
+                    let mut patch =
+                        Vec::with_capacity(num_components_to_add + num_components_to_remove);
                     for _ in 0..num_components_to_add {
                         let id = seq
                             .next_element::<VarInt>()?
-                            .ok_or(de::Error::custom("No component id VarInt!"))?.0;
-                        let id = u8::try_from(id).map_err(|_| { de::Error::custom("Unknown component id VarInt!") })?;
-                        let id = DataComponent::try_from_id(id).ok_or(de::Error::custom("Unknown component id VarInt!"))?;
+                            .ok_or(de::Error::custom("No component id VarInt!"))?
+                            .0;
+                        let id = u8::try_from(id)
+                            .map_err(|_| de::Error::custom("Unknown component id VarInt!"))?;
+                        let id = DataComponent::try_from_id(id)
+                            .ok_or(de::Error::custom("Unknown component id VarInt!"))?;
                         patch.push((id, Some(deserialize(id, &mut seq)?)))
                     }
                     for _ in 0..num_components_to_remove {
                         let id = seq
                             .next_element::<VarInt>()?
-                            .ok_or(de::Error::custom("No component id VarInt!"))?.0;
-                        let id = u8::try_from(id).map_err(|_| { de::Error::custom("Unknown component id VarInt!") })?;
-                        let id = DataComponent::try_from_id(id).ok_or(de::Error::custom("Unknown component id VarInt!"))?;
+                            .ok_or(de::Error::custom("No component id VarInt!"))?
+                            .0;
+                        let id = u8::try_from(id)
+                            .map_err(|_| de::Error::custom("Unknown component id VarInt!"))?;
+                        let id = DataComponent::try_from_id(id)
+                            .ok_or(de::Error::custom("Unknown component id VarInt!"))?;
                         patch.push((id, None))
                     }
 
@@ -177,31 +184,32 @@ impl OptionalItemStackHash {
                 (to_add, to_remove)
             };
             let (to_add, to_remove) = calc();
-            if to_add as usize != hash.components.added.len() || to_remove as usize != hash.components.removed.len() {
+            if to_add as usize != hash.components.added.len()
+                || to_remove as usize != hash.components.removed.len()
+            {
                 return false;
             }
             for (other_id, data) in &other.patch {
                 if let Some(data) = data {
                     let mut buf = Vec::new();
-                    let write = &mut buf;
-                    let mut s = serializer::Serializer::new(write);
-                    let mut state = s.serialize_struct("", 0).unwrap();
-                    hash_serialize(*other_id, data.as_ref(), &mut state).unwrap();
-                    SerializeStruct::end(&mut s).unwrap();
+                    hash_serialize(*other_id, data.as_ref(), &mut buf);
                     let mut digest = Digest::new(Crc32Iscsi);
                     digest.update(buf.as_slice());
                     let checksum = digest.finalize();
                     for (id, hash) in &hash.components.added {
                         if id == &VarInt::from(other_id.to_id()) {
-                            if *hash as u64 != checksum {
-                                log::warn!("checksum mismatch {} {}", checksum, hash);
+                            if hash != &(checksum as i32) {
                                 return false;
                             } else {
                                 break;
                             }
                         }
                     }
-                } else if !hash.components.removed.contains(&VarInt::from(other_id.to_id())) {
+                } else if !hash
+                    .components
+                    .removed
+                    .contains(&VarInt::from(other_id.to_id()))
+                {
                     return false;
                 }
             }

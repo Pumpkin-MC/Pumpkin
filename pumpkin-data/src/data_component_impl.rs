@@ -8,13 +8,13 @@ use crate::tag::Tag;
 use crate::{AttributeModifierSlot, Block};
 use pumpkin_util::registry::RegistryEntryList;
 use pumpkin_util::text::TextComponent;
+use serde::de::SeqAccess;
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize, de};
 use std::any::Any;
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::hash::Hash;
-use serde::de::SeqAccess;
-use serde::ser::SerializeSeq;
-use serde::{de, Deserialize, Serialize};
 
 pub trait DataComponentImpl: Send + Sync + Debug {
     fn write_nbt(&self) {
