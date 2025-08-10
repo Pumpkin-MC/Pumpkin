@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use pumpkin_data::data_component::DataComponent::MaxStackSize;
-use pumpkin_data::data_component_impl::{MaxStackSizeImpl, get};
+use pumpkin_data::data_component_impl::{MaxStackSizeImpl, get, DataComponentImpl};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 
 use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds};
@@ -82,6 +83,7 @@ impl CommandExecutor for Executor {
                 }
                 remaining -= take;
             }
+            target.inventory.set_stack(10, ItemStack::new_with_component(99u8, item, vec![(MaxStackSize, Some(MaxStackSizeImpl { size: 99 }.to_dyn()))])).await;
         }
         let msg = if targets.len() == 1 {
             TextComponent::translate(

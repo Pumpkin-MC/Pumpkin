@@ -52,6 +52,14 @@ impl ItemStack {
         }
     }
 
+    pub fn new_with_component(item_count: u8, item: &'static Item, component: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>) -> Self {
+        Self {
+            item_count,
+            item,
+            patch: component,
+        }
+    }
+
     pub fn get_data_component<T: DataComponentImpl + 'static>(&self) -> Option<&T> {
         let to_get_id = &T::get_enum();
         for (id, component) in &self.patch {

@@ -12,6 +12,7 @@ pub(crate) fn build() -> TokenStream {
             .expect("Failed to parse data_component.json");
 
     let mut enum_variants = TokenStream::new();
+    let mut id_to_enum = TokenStream::new();
     let mut enum_to_name = TokenStream::new();
     let mut data_component_vec = data_component.iter().collect::<Vec<_>>();
     data_component_vec.sort_by_key(|(_, i)| **i);
@@ -27,6 +28,10 @@ pub(crate) fn build() -> TokenStream {
 
         enum_variants.extend(quote! {
             #pascal_case = #raw_value,
+        });
+
+        id_to_enum.extend(quote! {
+            #raw_value => Some(DataComponent::#pascal_case),
         });
 
         // Enum -> &str
@@ -47,6 +52,12 @@ pub(crate) fn build() -> TokenStream {
         impl DataComponent {
             pub const fn to_id(self) -> u8 {
                 self as u8
+            }
+            pub const fn try_from_id(id: u8) -> Option<DataComponent> {
+                match id {
+                    #id_to_enum
+                    _ => None,
+                }
             }
             pub const fn to_name(self) -> &'static str {
                 match self {

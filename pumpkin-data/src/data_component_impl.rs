@@ -12,6 +12,9 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::hash::Hash;
+use serde::de::SeqAccess;
+use serde::ser::SerializeSeq;
+use serde::{de, Deserialize, Serialize};
 
 pub trait DataComponentImpl: Send + Sync + Debug {
     fn write_nbt(&self) {
@@ -20,15 +23,10 @@ pub trait DataComponentImpl: Send + Sync + Debug {
     fn read_nbt(&self) {
         todo!()
     }
-    fn deserialize(&self) {
-        todo!()
-    }
-    fn serialize(&self) {
-        todo!()
-    }
     fn get_enum() -> DataComponent
     where
         Self: Sized;
+    fn to_dyn(self) -> Box<dyn DataComponentImpl>;
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl>;
     fn as_any(&self) -> &dyn Any;
     fn as_mut_any(&mut self) -> &mut dyn Any;
@@ -40,9 +38,11 @@ impl Clone for Box<dyn DataComponentImpl> {
     }
 }
 
+#[inline]
 pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
     value.as_any().downcast_ref::<T>().unwrap()
 }
+#[inline]
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
     value.as_mut_any().downcast_mut::<T>().unwrap()
 }
@@ -55,7 +55,9 @@ impl DataComponentImpl for CustomDataImpl {
     {
         CustomData
     }
-
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
+    }
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
         Box::new(self.clone())
     }
@@ -78,6 +80,9 @@ impl DataComponentImpl for MaxStackSizeImpl {
     {
         MaxStackSize
     }
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
+    }
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
         Box::new(self.clone())
     }
@@ -88,6 +93,7 @@ impl DataComponentImpl for MaxStackSizeImpl {
         self
     }
 }
+impl MaxStackSizeImpl {}
 #[derive(Clone, Debug, Hash)]
 pub struct MaxDamageImpl {
     pub max_damage: i32,
@@ -98,6 +104,9 @@ impl DataComponentImpl for MaxDamageImpl {
         Self: Sized,
     {
         MaxDamage
+    }
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
     }
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
         Box::new(self.clone())
@@ -119,6 +128,9 @@ impl DataComponentImpl for DamageImpl {
         Self: Sized,
     {
         Damage
+    }
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
     }
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
         Box::new(self.clone())
@@ -145,6 +157,9 @@ impl DataComponentImpl for ItemNameImpl {
         Self: Sized,
     {
         ItemName
+    }
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
     }
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
         Box::new(self.clone())
@@ -203,6 +218,9 @@ impl DataComponentImpl for AttributeModifiersImpl {
     {
         AttributeModifiers
     }
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
+    }
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
         Box::new(self.clone())
     }
@@ -237,6 +255,9 @@ impl DataComponentImpl for FoodImpl {
         Self: Sized,
     {
         Food
+    }
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
     }
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
         Box::new(self.clone())
@@ -301,6 +322,9 @@ impl DataComponentImpl for ToolImpl {
         Self: Sized,
     {
         Tool
+    }
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
     }
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
         Box::new(self.clone())
@@ -522,6 +546,9 @@ impl DataComponentImpl for EquippableImpl {
         Equippable
     }
 
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
+    }
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
         Box::new(self.clone())
     }
@@ -596,6 +623,9 @@ impl DataComponentImpl for JukeboxPlayableImpl {
         Self: Sized,
     {
         JukeboxPlayable
+    }
+    fn to_dyn(self) -> Box<dyn DataComponentImpl> {
+        Box::new(self)
     }
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl> {
         Box::new(self.clone())

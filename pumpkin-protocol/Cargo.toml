@@ -31,6 +31,8 @@ async-compression = { version = "0.4.27", features = ["tokio", "zlib"] }
 
 take_mut = "0.2.2"
 bitflags = "2.9.1"
+crc-fast = "1.3.0"
+log = "0.4.27"
 
 [dev-dependencies]
 # Validate correctness
