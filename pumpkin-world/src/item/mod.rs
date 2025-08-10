@@ -1,7 +1,7 @@
 use pumpkin_data::Block;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    DataComponentImpl, IDSet, MaxStackSizeImpl, ToolImpl, get,
+    DataComponentImpl, IDSet, MaxStackSizeImpl, ToolImpl, get, read_data,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
@@ -219,9 +219,16 @@ impl ItemStack {
         compound.put_int("count", self.item_count as i32);
 
         // Create a tag compound for additional data
-        let tag = NbtCompound::new();
+        let mut tag = NbtCompound::new();
 
-        // TODO: Store custom data like enchantments, display name, etc. would go here
+        for (id, data) in &self.patch {
+            if let Some(data) = data {
+                tag.put(id.to_name(), data.write_data());
+            } else {
+                let name = '!'.to_string() + id.to_name();
+                tag.put(name.as_str(), NbtCompound::new());
+            }
+        }
 
         // Store custom data like enchantments, display name, etc. would go here
         compound.put_component("components", tag);
@@ -240,11 +247,20 @@ impl ItemStack {
         let count = compound.get_int("count")? as u8;
 
         // Create the item stack
-        let item_stack = Self::new(count, item);
+        let mut item_stack = Self::new(count, item);
 
         // Process any additional data in the components compound
-        if let Some(_tag) = compound.get_compound("components") {
-            // TODO: Process additional components like damage, enchantments, etc.
+        if let Some(tag) = compound.get_compound("components") {
+            for (name, data) in &tag.child_tags {
+                if let Some(name) = name.strip_prefix("!") {
+                    item_stack
+                        .patch
+                        .push((DataComponent::try_from_name(name)?, None));
+                } else {
+                    let id = DataComponent::try_from_name(name)?;
+                    item_stack.patch.push((id, Some(read_data(id, data)?)));
+                }
+            }
         }
 
         Some(item_stack)

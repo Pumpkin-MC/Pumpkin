@@ -2086,6 +2086,7 @@ dependencies = [
  "heck",
  "phf",
  "proc-macro2",
+ "pumpkin-nbt",
  "pumpkin-util",
  "quote",
  "rayon",

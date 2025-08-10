@@ -6,6 +6,8 @@ use crate::data_component::DataComponent::*;
 use crate::entity_type::EntityType;
 use crate::tag::Tag;
 use crate::{AttributeModifierSlot, Block};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::registry::RegistryEntryList;
 use pumpkin_util::text::TextComponent;
 use serde::de::SeqAccess;
@@ -17,10 +19,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 pub trait DataComponentImpl: Send + Sync + Debug {
-    fn write_nbt(&self) {
-        todo!()
-    }
-    fn read_nbt(&self) {
+    fn write_data(&self) -> NbtTag {
         todo!()
     }
     fn get_enum() -> DataComponent
@@ -30,6 +29,12 @@ pub trait DataComponentImpl: Send + Sync + Debug {
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl>;
     fn as_any(&self) -> &dyn Any;
     fn as_mut_any(&mut self) -> &mut dyn Any;
+}
+pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataComponentImpl>> {
+    match id {
+        MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
+        _ => todo!(),
+    }
 }
 
 impl Clone for Box<dyn DataComponentImpl> {
@@ -73,7 +78,15 @@ impl DataComponentImpl for CustomDataImpl {
 pub struct MaxStackSizeImpl {
     pub size: u8,
 }
+impl MaxStackSizeImpl {
+    fn read_data(data: &NbtTag) -> Option<MaxStackSizeImpl> {
+        data.extract_int().map(|size| Self { size: size as u8 })
+    }
+}
 impl DataComponentImpl for MaxStackSizeImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.size as i32)
+    }
     fn get_enum() -> DataComponent
     where
         Self: Sized,

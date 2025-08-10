@@ -14,6 +14,7 @@ pub(crate) fn build() -> TokenStream {
     let mut enum_variants = TokenStream::new();
     let mut id_to_enum = TokenStream::new();
     let mut enum_to_name = TokenStream::new();
+    let mut name_to_enum = TokenStream::new();
     let mut data_component_vec = data_component.iter().collect::<Vec<_>>();
     data_component_vec.sort_by_key(|(_, i)| **i);
 
@@ -32,6 +33,11 @@ pub(crate) fn build() -> TokenStream {
 
         id_to_enum.extend(quote! {
             #raw_value => Some(DataComponent::#pascal_case),
+        });
+
+        // TODO use phf
+        name_to_enum.extend(quote! {
+            #raw_name => Some(DataComponent::#pascal_case),
         });
 
         // Enum -> &str
@@ -56,6 +62,12 @@ pub(crate) fn build() -> TokenStream {
             pub const fn try_from_id(id: u8) -> Option<DataComponent> {
                 match id {
                     #id_to_enum
+                    _ => None,
+                }
+            }
+            pub fn try_from_name(name: &str) -> Option<DataComponent> {
+                match name {
+                    #name_to_enum
                     _ => None,
                 }
             }
