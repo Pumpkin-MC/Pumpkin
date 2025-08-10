@@ -14,9 +14,8 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
-
-use crate::plugin::task::TaskScheduler;
 use crate::command::CommandSender;
+use crate::plugin::task::TaskScheduler;
 
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
@@ -196,10 +195,6 @@ impl Server {
             level_info: level_info.clone(),
             _locker: Arc::new(locker),
             task_scheduler: TaskScheduler::new(),
-        }
-    }
-
-
         };
 
         let server = Arc::new(server);
