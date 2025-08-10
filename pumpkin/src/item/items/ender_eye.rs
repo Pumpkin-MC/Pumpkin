@@ -5,7 +5,7 @@ use pumpkin_data::{Block, BlockDirection, item::Item};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::{entity::player::Player, world::World};
 use async_trait::async_trait;
 
@@ -18,7 +18,7 @@ impl ItemMetadata for EnderEyeItem {
 }
 
 #[async_trait]
-impl PumpkinItem for EnderEyeItem {
+impl ItemBehaviour for EnderEyeItem {
     async fn use_on_block(
         &self,
         _item: &Item,

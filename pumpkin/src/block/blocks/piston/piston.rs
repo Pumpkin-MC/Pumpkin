@@ -18,9 +18,9 @@ use pumpkin_world::{
 use crate::{
     block::{
         blocks::redstone::is_emitting_redstone_power,
-        pumpkin_block::{
-            BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
-            PumpkinBlock,
+        {
+            BlockBehaviour, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs,
+            OnSyncedBlockEventArgs, PlacedArgs,
         },
     },
     world::World,
@@ -85,7 +85,7 @@ impl PistonBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for PistonBlock {
+impl BlockBehaviour for PistonBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = PistonProps::default(args.block);
         props.extended = false;

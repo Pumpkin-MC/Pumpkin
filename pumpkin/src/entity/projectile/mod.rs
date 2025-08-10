@@ -3,11 +3,10 @@ use std::{
     sync::atomic::Ordering,
 };
 
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;
-
-use super::{Entity, EntityBase, living::LivingEntity};
 
 pub struct ThrownItemEntity {
     entity: Entity,
@@ -78,17 +77,30 @@ impl ThrownItemEntity {
     }
 }
 
+impl NBTStorage for ThrownItemEntity {}
+
 #[async_trait]
 impl EntityBase for ThrownItemEntity {
     fn get_entity(&self) -> &Entity {
         &self.entity
     }
 
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+    async fn damage_with_context(
+        &self,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
         false
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
     }
 }

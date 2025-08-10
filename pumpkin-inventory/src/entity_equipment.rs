@@ -1,9 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
-
-use crate::equipment_slot::EquipmentSlot;
 
 // EntityEquipment.java
 #[derive(Debug, Clone)]
@@ -25,19 +24,19 @@ impl EntityEquipment {
     }
 
     pub async fn put(&mut self, slot: &EquipmentSlot, stack: ItemStack) -> ItemStack {
-        *self
-            .equipment
+        self.equipment
             .insert(slot.clone(), Arc::new(Mutex::new(stack)))
-            .unwrap_or(Arc::new(Mutex::new(ItemStack::EMPTY)))
+            .unwrap_or(Arc::new(Mutex::new(ItemStack::EMPTY.clone())))
             .lock()
             .await
+            .clone()
     }
 
     pub fn get(&self, slot: &EquipmentSlot) -> Arc<Mutex<ItemStack>> {
         self.equipment
             .get(slot)
             .cloned()
-            .unwrap_or(Arc::new(Mutex::new(ItemStack::EMPTY)))
+            .unwrap_or(Arc::new(Mutex::new(ItemStack::EMPTY.clone())))
     }
 
     pub async fn is_empty(&self) -> bool {

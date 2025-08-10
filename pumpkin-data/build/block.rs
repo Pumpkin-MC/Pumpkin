@@ -26,6 +26,18 @@ fn fill_array<T: Clone + quote::ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStre
     raw_id_from_state_id_ordered
 }
 
+fn fill_state_array(array: Vec<(Ident, usize, u16)>) -> Vec<TokenStream> {
+    let max_index = array.iter().map(|(_, _, index)| index).max().unwrap();
+    let mut ret = vec![quote! { Missed State }; (max_index + 1) as usize];
+
+    for (block, index, state_id) in array {
+        let index_lit = LitInt::new(&index.to_string(), Span::call_site());
+        ret[state_id as usize] = quote! { &Self::#block.states[#index_lit] };
+    }
+
+    ret
+}
+
 fn const_block_name_from_block_name(block: &str) -> String {
     block.to_shouty_snake_case()
 }
@@ -654,6 +666,7 @@ pub(crate) fn build() -> TokenStream {
     let mut block_from_name = TokenStream::new();
     let mut raw_id_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
+    let mut state_from_state_id = TokenStream::new();
     let mut random_tick_states = Vec::new();
     let mut block_properties_from_state_and_block_id = TokenStream::new();
     let mut block_properties_from_props_and_name = TokenStream::new();
@@ -778,6 +791,7 @@ pub(crate) fn build() -> TokenStream {
 
     let mut raw_id_from_state_id_array = vec![];
     let mut type_from_raw_id_array = vec![];
+    let mut state_from_state_id_array = Vec::<(Ident, usize, u16)>::new(); // block index state_id
 
     //let mut file = fs::File::create("../debug/debug.txt").unwrap();
 
@@ -834,6 +848,10 @@ pub(crate) fn build() -> TokenStream {
             raw_id_from_state_id_array.push((state.id, id_lit.clone()));
         }
 
+        for (index, state) in block.states.iter().enumerate() {
+            state_from_state_id_array.push((const_ident.clone(), index, state.id));
+        }
+
         if !existing_item_ids.contains(&item_id) {
             block_from_item_id.extend(quote! {
                 #item_id => Some(&Self::#const_ident),
@@ -875,6 +893,15 @@ pub(crate) fn build() -> TokenStream {
             #type_lit,
         });
     }
+    let state_from_state_id_array = fill_state_array(state_from_state_id_array);
+    let max_state_id_2 = state_from_state_id_array.len();
+    for token in state_from_state_id_array {
+        state_from_state_id.extend(quote! {
+            #token,
+        });
+    }
+
+    assert_eq!(max_state_id, max_state_id_2);
 
     quote! {
         use crate::{BlockState, Block, CollisionShape, blocks::Flammable};
@@ -955,15 +982,16 @@ pub(crate) fn build() -> TokenStream {
 
             #[doc = r" Get a block state from a state id."]
             #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
+            #[inline]
             pub fn from_id(id: u16) -> &'static Self {
-                let state: &Self = Block::from_state_id(id).states.iter().find(|state| state.id == id).unwrap();
-                state
+                Block::STATE_FROM_STATE_ID[id as usize]
             }
 
             #[doc = r" Get a block state from a state id and the corresponding block."]
-            pub fn from_id_with_block(id: u16) -> (&'static Block, &'static BlockState) {
+            #[inline]
+            pub fn from_id_with_block(id: u16) -> (&'static Block, &'static Self) {
                 let block = Block::from_state_id(id);
-                let state: &Self = block.states.iter().find(|state| state.id == id).unwrap();
+                let state: &Self = Block::STATE_FROM_STATE_ID[id as usize];
                 (block, state)
             }
 
@@ -989,7 +1017,12 @@ pub(crate) fn build() -> TokenStream {
                 #type_from_raw_id_items
             ];
 
+            const STATE_FROM_STATE_ID: [&'static BlockState; #max_state_id] = [
+                #state_from_state_id
+            ];
+
             #[doc = r" Try to parse a block from a resource location string."]
+            #[inline]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
                 Self::BLOCK_FROM_NAME_MAP.get(name)
             }
@@ -1001,6 +1034,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             #[doc = r" Get a block from a raw block id."]
+            #[inline]
             pub const fn from_id(id: u16) -> &'static Self {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     &Self::AIR
@@ -1009,7 +1043,18 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
+             #[doc = r" Get a raw ID from an State ID."]
+            #[inline]
+            pub const fn get_raw_id_from_state_id(state_id: u16) -> u16 {
+                if state_id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+                    0
+                } else {
+                    Self::RAW_ID_FROM_STATE_ID[state_id as usize]
+                }
+            }
+
             #[doc = r" Get a block from a state id."]
+            #[inline]
             pub const fn from_state_id(id: u16) -> &'static Self {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     return &Self::AIR;

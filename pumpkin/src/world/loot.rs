@@ -13,6 +13,7 @@ use rand::Rng;
 pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
     pub block_state: Option<&'static BlockState>,
+    pub killed_by_player: Option<bool>,
 }
 
 pub trait LootTableExt {
@@ -164,6 +165,7 @@ impl LootConditionExt for LootCondition {
                 }
                 true
             }
+            Self::KilledByPlayer => params.killed_by_player.unwrap_or(false),
             Self::BlockStateProperty {
                 block: _,
                 properties,

@@ -1,9 +1,10 @@
 pub mod container_click;
 pub mod crafting;
+pub mod double;
 pub mod drag_handler;
 pub mod entity_equipment;
-pub mod equipment_slot;
 mod error;
+pub mod furnace;
 pub mod generic_container_screen_handler;
 pub mod player;
 pub mod screen_handler;

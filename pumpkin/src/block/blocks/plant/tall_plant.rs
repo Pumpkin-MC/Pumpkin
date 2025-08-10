@@ -1,8 +1,14 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::block_properties::{
+    BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
+};
+use pumpkin_world::BlockStateId;
 
-use crate::block::pumpkin_block::{BlockMetadata, CanPlaceAtArgs, PumpkinBlock};
+use crate::block::{
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    blocks::plant::PlantBlockBase,
+};
 
 pub struct TallPlantBlock;
 
@@ -26,27 +32,40 @@ impl BlockMetadata for TallPlantBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for TallPlantBlock {
+impl BlockBehaviour for TallPlantBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let (block, state) = args.block_accessor.get_block_and_state(args.position).await;
-        if let Some(props) = block.properties(state.id).map(|s| s.to_props()) {
-            if props
-                .iter()
-                .any(|(key, value)| key == "half" && value == "upper")
-            {
-                let (block, below_state) = args
-                    .block_accessor
-                    .get_block_and_state(&args.position.down())
-                    .await;
-                if let Some(props) = block.properties(below_state.id).map(|s| s.to_props()) {
-                    let is_lower = props
-                        .iter()
-                        .any(|(key, value)| key == "half" && value == "lower");
-                    return below_state.id == state.id && is_lower;
-                }
+        let upper_state = args
+            .block_accessor
+            .get_block_state(&args.position.up())
+            .await;
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
+            && upper_state.is_air()
+    }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let tall_plant_props = TallSeagrassLikeProperties::from_state_id(args.state_id, args.block);
+        let other_block_pos = match tall_plant_props.half {
+            DoubleBlockHalf::Upper => args.position.down(),
+            DoubleBlockHalf::Lower => args.position.up(),
+        };
+        let (other_block, other_state_id) =
+            args.world.get_block_and_state_id(&other_block_pos).await;
+        if self.ids().contains(&other_block.name) {
+            let other_props =
+                TallSeagrassLikeProperties::from_state_id(other_state_id, other_block);
+            let opposite_half = match tall_plant_props.half {
+                DoubleBlockHalf::Upper => DoubleBlockHalf::Lower,
+                DoubleBlockHalf::Lower => DoubleBlockHalf::Upper,
+            };
+            if other_props.half == opposite_half {
+                return args.state_id;
             }
         }
-        let block_below = args.block_accessor.get_block(&args.position.down()).await;
-        block_below.is_tagged_with("minecraft:dirt").unwrap() || block_below == &Block::FARMLAND
+        return Block::AIR.default_state.id;
     }
 }
+
+impl PlantBlockBase for TallPlantBlock {}

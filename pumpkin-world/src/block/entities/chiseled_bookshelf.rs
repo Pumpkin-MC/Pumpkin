@@ -1,3 +1,10 @@
+use async_trait::async_trait;
+use log::warn;
+use pumpkin_data::Block;
+use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
+use std::any::Any;
 use std::{
     array::from_fn,
     sync::{
@@ -5,12 +12,6 @@ use std::{
         atomic::{AtomicBool, AtomicI8, Ordering},
     },
 };
-
-use async_trait::async_trait;
-use log::warn;
-use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
-use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
 
 use crate::{
@@ -46,7 +47,7 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
     {
         let chiseled_bookshelf = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             last_interacted_slot: AtomicI8::new(
                 nbt.get_int(LAST_INTERACTED_SLOT).unwrap_or(-1) as i8
             ),
@@ -66,6 +67,14 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
         );
     }
 
+    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        Some(self)
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -77,7 +86,7 @@ impl ChiseledBookshelfBlockEntity {
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             last_interacted_slot: AtomicI8::new(-1),
             dirty: AtomicBool::new(false),
         }
@@ -92,8 +101,6 @@ impl ChiseledBookshelfBlockEntity {
         if slot >= 0 && slot < self.items.len() as i8 {
             self.last_interacted_slot.store(slot, Ordering::Relaxed);
 
-            let block = world.get_block(&self.position).await;
-
             properties.slot_0_occupied = !self.items[0].lock().await.is_empty();
             properties.slot_1_occupied = !self.items[1].lock().await.is_empty();
             properties.slot_2_occupied = !self.items[2].lock().await.is_empty();
@@ -104,7 +111,7 @@ impl ChiseledBookshelfBlockEntity {
             world
                 .set_block_state(
                     &self.position,
-                    properties.to_state_id(block),
+                    properties.to_state_id(&Block::CHISELED_BOOKSHELF),
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;
@@ -138,7 +145,7 @@ impl Inventory for ChiseledBookshelfBlockEntity {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY;
+        let mut removed = ItemStack::EMPTY.clone();
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -155,13 +162,17 @@ impl Inventory for ChiseledBookshelfBlockEntity {
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 #[async_trait]
 impl Clearable for ChiseledBookshelfBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY;
+            *slot.lock().await = ItemStack::EMPTY.clone();
         }
     }
 }

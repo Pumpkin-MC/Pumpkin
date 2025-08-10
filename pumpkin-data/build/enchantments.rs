@@ -30,7 +30,7 @@ pub enum AttributeModifierSlot {
 }
 
 impl AttributeModifierSlot {
-    fn to_tokens(&self) -> TokenStream {
+    pub fn to_tokens(&self) -> TokenStream {
         match self {
             AttributeModifierSlot::Any => quote! { AttributeModifierSlot::Any },
             AttributeModifierSlot::MainHand => quote! { AttributeModifierSlot::MainHand },
@@ -52,7 +52,7 @@ pub(crate) fn build() -> TokenStream {
 
     let enchantments: HashMap<String, Enchantment> =
         serde_json::from_str(&fs::read_to_string("../assets/enchantments.json").unwrap())
-            .expect("Failed to parse biome.json");
+            .expect("Failed to parse enchantments.json");
 
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
@@ -80,6 +80,7 @@ pub(crate) fn build() -> TokenStream {
     }
 
     quote! {
+        use std::hash::Hash;
         #[derive(Debug, Clone)]
         pub struct Enchantment {
             pub name: &'static str,
@@ -90,7 +91,7 @@ pub(crate) fn build() -> TokenStream {
             // TODO: add more
         }
 
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, Hash)]
         pub enum AttributeModifierSlot {
             Any,
             MainHand,

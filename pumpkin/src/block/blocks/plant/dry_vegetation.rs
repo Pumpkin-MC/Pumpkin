@@ -1,7 +1,13 @@
 use async_trait::async_trait;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag;
+use pumpkin_data::tag::Taggable;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
-use crate::block::pumpkin_block::{BlockMetadata, CanPlaceAtArgs, PumpkinBlock};
+use crate::block::{
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    blocks::plant::PlantBlockBase,
+};
 
 pub struct DryVegetationBlock;
 
@@ -16,11 +22,32 @@ impl BlockMetadata for DryVegetationBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for DryVegetationBlock {
+impl BlockBehaviour for DryVegetationBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let block_below = args.block_accessor.get_block(&args.position.down()).await;
-        block_below
-            .is_tagged_with("minecraft:dry_vegetation_may_place_on")
-            .unwrap()
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
+    }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
+        .await
+    }
+}
+
+impl PlantBlockBase for DryVegetationBlock {
+    async fn can_plant_on_top(
+        &self,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+    ) -> bool {
+        let block_below = block_accessor.get_block(block_pos).await;
+        block_below.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DRY_VEGETATION_MAY_PLACE_ON)
     }
 }

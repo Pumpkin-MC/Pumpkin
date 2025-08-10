@@ -100,8 +100,6 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
             if let Some(cancelled_block) = cancelled_block {
                 quote! {
                     let event = crate::PLUGIN_MANAGER
-                        .read()
-                        .await
                         .fire(#event)
                         .await;
 
@@ -115,8 +113,6 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
             } else {
                 quote! {
                     let event = crate::PLUGIN_MANAGER
-                        .read()
-                        .await
                         .fire(#event)
                         .await;
 
@@ -129,8 +125,6 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
         } else if let Some(cancelled_block) = cancelled_block {
             quote! {
                 let event = crate::PLUGIN_MANAGER
-                    .read()
-                    .await
                     .fire(#event)
                     .await;
 
@@ -142,8 +136,6 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
         } else {
             quote! {
                 let event = crate::PLUGIN_MANAGER
-                    .read()
-                    .await
                     .fire(#event)
                     .await;
             }
@@ -189,12 +181,41 @@ pub fn pumpkin_block(input: TokenStream, item: TokenStream) -> TokenStream {
 
     let code = quote! {
         #item
-        impl #impl_generics crate::block::pumpkin_block::BlockMetadata for #name #ty_generics {
+        impl #impl_generics crate::block::BlockMetadata for #name #ty_generics {
             fn namespace(&self) -> &'static str {
                 #namespace
             }
             fn ids(&self) -> &'static [&'static str] {
                 &[#id]
+            }
+        }
+    };
+
+    code.into()
+}
+
+#[proc_macro_attribute]
+pub fn pumpkin_block_from_tag(input: TokenStream, item: TokenStream) -> TokenStream {
+    let ast: syn::DeriveInput = syn::parse(item.clone()).unwrap();
+    let name = &ast.ident;
+    let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
+
+    let input_string = input.to_string();
+    let packet_name = input_string.trim_matches('"');
+    let packet_name_split: Vec<&str> = packet_name.split(":").collect();
+
+    let namespace = packet_name_split[0];
+
+    let item: proc_macro2::TokenStream = item.into();
+
+    let code = quote! {
+        #item
+        impl #impl_generics crate::block::BlockMetadata for #name #ty_generics {
+            fn namespace(&self) -> &'static str {
+                #namespace
+            }
+            fn ids(&self) -> &'static [&'static str] {
+                get_tag_values(RegistryKey::Block, #packet_name).unwrap()
             }
         }
     };

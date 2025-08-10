@@ -2,9 +2,9 @@ use async_trait::async_trait;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_world::BlockStateId;
 
-use crate::block::pumpkin_block::{
-    BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    PumpkinBlock,
+use crate::block::{
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs,
+    OnPlaceArgs,
 };
 
 use super::segmented::Segmented;
@@ -24,7 +24,7 @@ impl BlockMetadata for LeafLitterBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for LeafLitterBlock {
+impl BlockBehaviour for LeafLitterBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let block_below = args
             .block_accessor

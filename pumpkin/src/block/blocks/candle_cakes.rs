@@ -6,14 +6,15 @@ use pumpkin_data::{
     item::Item,
     tag::{RegistryKey, get_tag_values},
 };
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{item::ItemStack, world::BlockFlags};
 
 use crate::{
     block::{
         blocks::cake::CakeBlock,
-        pumpkin_block::{BlockMetadata, NormalUseArgs, PumpkinBlock, UseWithItemArgs},
         registry::BlockActionResult,
+        {BlockBehaviour, NormalUseArgs, UseWithItemArgs},
     },
     entity::player::Player,
     world::World,
@@ -59,17 +60,8 @@ pub fn candle_from_cake(block: &Block) -> &'static Item {
         )
 }
 
+#[pumpkin_block_from_tag("minecraft:candle_cakes")]
 pub struct CandleCakeBlock;
-
-impl BlockMetadata for CandleCakeBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:candle_cakes").unwrap()
-    }
-}
 
 impl CandleCakeBlock {
     async fn consume_and_drop_candle(
@@ -81,11 +73,11 @@ impl CandleCakeBlock {
         match player.gamemode.load() {
             GameMode::Survival | GameMode::Adventure => {
                 if player.hunger_manager.level.load() >= 20 {
-                    return BlockActionResult::Continue;
+                    return BlockActionResult::Pass;
                 }
             }
             GameMode::Creative => {}
-            GameMode::Spectator => return BlockActionResult::Continue,
+            GameMode::Spectator => return BlockActionResult::Pass,
         }
 
         let candle_item = candle_from_cake(block);
@@ -109,16 +101,13 @@ impl CandleCakeBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for CandleCakeBlock {
+impl BlockBehaviour for CandleCakeBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         match args.item_stack.lock().await.item.id {
             id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
-                BlockActionResult::Continue
+                BlockActionResult::Pass
             } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
-            _ => {
-                Self::consume_and_drop_candle(args.block, args.player, args.position, args.world)
-                    .await
-            }
+            _ => BlockActionResult::PassToDefaultBlockAction,
         }
     }
 

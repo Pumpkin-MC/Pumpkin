@@ -2,7 +2,7 @@ use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::player_server_data::ServerPlayerData;
-use crate::entity::NBTStorage;
+use crate::entity::{EntityBase, NBTStorage};
 use crate::item::registry::ItemRegistry;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
 use crate::plugin::player::player_login::PlayerLoginEvent;
@@ -14,14 +14,17 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
+
 use crate::plugin::task::TaskScheduler;
+use crate::command::CommandSender;
+
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::CChangeDifficulty;
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_registry::{Registry, VanillaDimensionType};
 use pumpkin_util::Difficulty;
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::dimension::Dimension;
 use pumpkin_world::lock::LevelLocker;
@@ -30,8 +33,9 @@ use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
-use rand::seq::IndexedRandom;
+use rand::seq::{IndexedRandom, IteratorRandom, SliceRandom};
 use rsa::RsaPublicKey;
+use std::collections::HashSet;
 use std::fs;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
@@ -50,8 +54,9 @@ pub mod seasonal_events;
 pub mod tick_rate_manager;
 pub mod ticker;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.8";
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
+use super::command::args::entities::{
+    EntityFilter, EntityFilterSort, EntitySelectorType, TargetSelector, ValueCondition,
+};
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -110,23 +115,25 @@ pub struct Server {
 
 impl Server {
     #[allow(clippy::new_without_default)]
+    #[allow(clippy::too_many_lines)]
     #[must_use]
-    pub async fn new() -> Self {
+    pub async fn new() -> Arc<Self> {
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = RwLock::new(default_dispatcher().await);
         let world_path = BASIC_CONFIG.get_world_path();
 
-        let block_registry = super::block::default_registry();
+        let block_registry = super::block::registry::default_registry();
 
         let level_info = AnvilLevelInfo.read_world_info(&world_path);
         if let Err(error) = &level_info {
             match error {
                 // If it doesn't exist, just make a new one
                 WorldInfoError::InfoNotFound => (),
-                WorldInfoError::UnsupportedVersion(version) => {
-                    log::error!("Failed to load world info!, {version}");
+                WorldInfoError::UnsupportedDataVersion(_version)
+                | WorldInfoError::UnsupportedLevelVersion(_version) => {
+                    log::error!("Failed to load world info!");
                     log::error!("{error}");
-                    panic!("Unsupported world data! See the logs for more info.");
+                    panic!("Unsupported world version! See the logs for more info.");
                 }
                 e => {
                     panic!("World Error {e}");
@@ -139,41 +146,24 @@ impl Server {
                 fs::copy(dat_path, backup_path).unwrap();
             }
         }
-
-        let level_info = level_info.unwrap_or_default(); // TODO: Improve error handling
-        let seed = level_info.world_gen_settings.seed;
-        log::info!("Loading Overworld: {seed}");
-        let overworld = World::load(
-            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
-            VanillaDimensionType::Overworld,
-            block_registry.clone(),
-        );
-        log::info!("Loading Nether");
-        let nether = World::load(
-            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
-            VanillaDimensionType::TheNether,
-            block_registry.clone(),
-        );
-        log::info!("Loading End");
-        let end = World::load(
-            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
-            VanillaDimensionType::TheEnd,
-            block_registry.clone(),
-        );
-
         // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
         // So TODO
         let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
 
         let world_name = world_path.to_str().unwrap();
 
-        Self {
+        let level_info = level_info.unwrap_or_else(|err| {
+            log::warn!("Failed to get level_info, using default instead: {err}");
+            LevelData::default()
+        });
+
+        let seed = level_info.world_gen_settings.seed;
+        let level_info = Arc::new(RwLock::new(level_info));
+
+        let server = Self {
             cached_registry: Registry::get_synced(),
             container_id: 0.into(),
-            worlds: RwLock::new(vec![Arc::new(overworld), Arc::new(nether), Arc::new(end)]),
+            worlds: RwLock::new(vec![]),
             dimensions: vec![
                 VanillaDimensionType::Overworld,
                 VanillaDimensionType::OverworldCaves,
@@ -181,7 +171,7 @@ impl Server {
                 VanillaDimensionType::TheEnd,
             ],
             command_dispatcher,
-            block_registry,
+            block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: KeyStore::new(),
             listing: Mutex::new(CachedStatus::new()),
@@ -203,22 +193,47 @@ impl Server {
             server_guid: rand::random(),
             mojang_public_keys: Mutex::new(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
-            level_info: Arc::new(RwLock::new(level_info)),
+            level_info: level_info.clone(),
             _locker: Arc::new(locker),
             task_scheduler: TaskScheduler::new(),
         }
     }
 
-    const SPAWN_CHUNK_RADIUS: i32 = 1;
 
-    #[must_use]
-    pub fn spawn_chunks() -> Box<[Vector2<i32>]> {
-        (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS)
-            .flat_map(|x| {
-                (-Self::SPAWN_CHUNK_RADIUS..=Self::SPAWN_CHUNK_RADIUS)
-                    .map(move |z| Vector2::new(x, z))
-            })
-            .collect()
+        };
+
+        let server = Arc::new(server);
+        let weak = Arc::downgrade(&server);
+        log::info!("Loading Overworld: {seed}");
+        let overworld = World::load(
+            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::Overworld,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        log::info!("Loading Nether: {seed}");
+        let nether = World::load(
+            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::TheNether,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        log::info!("Loading End: {seed}");
+        let end = World::load(
+            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
+            level_info.clone(),
+            VanillaDimensionType::TheEnd,
+            block_registry.clone(),
+            weak.clone(),
+        );
+        *server
+            .worlds
+            .try_write()
+            .expect("Nothing should hold a lock of worlds before server startup") =
+            vec![overworld.into(), nether.into(), end.into()];
+        server
     }
 
     /// Spawns a task associated with this server. All tasks spawned with this method are awaited
@@ -368,11 +383,13 @@ impl Server {
         for world in self.worlds.read().await.iter() {
             world.shutdown().await;
         }
+        let level_data = self.level_info.read().await;
         // then lets save the world info
-        if let Err(err) = self.world_info_writer.write_world_info(
-            &*self.level_info.read().await,
-            &BASIC_CONFIG.get_world_path(),
-        ) {
+
+        if let Err(err) = self
+            .world_info_writer
+            .write_world_info(&level_data, &BASIC_CONFIG.get_world_path())
+        {
             log::error!("Failed to save level.dat: {err}");
         }
         log::info!("Completed worlds");
@@ -662,5 +679,167 @@ impl Server {
     /// Returns a copy of the last 100 tick times.
     pub async fn get_tick_times_nanos_copy(&self) -> [i64; 100] {
         *self.tick_times_nanos.lock().await
+    }
+
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::option_if_let_else)]
+    pub async fn select_entities(
+        &self,
+        target_selector: &TargetSelector,
+        source: Option<&CommandSender>,
+    ) -> Vec<Arc<dyn EntityBase>> {
+        let iter = match &target_selector.selector_type {
+            EntitySelectorType::Source
+            | EntitySelectorType::NearestEntity
+            | EntitySelectorType::NearestPlayer => {
+                // todo: command context, currently the nearest entity is the player itself
+                if let Some(sender) = source {
+                    if let Some(player) = sender.as_player() {
+                        vec![player as Arc<dyn EntityBase>].into_iter()
+                    } else {
+                        vec![].into_iter()
+                    }
+                } else {
+                    vec![].into_iter()
+                }
+            }
+            EntitySelectorType::RandomPlayer => {
+                if let Some(player) = self.get_random_player().await {
+                    vec![player as Arc<dyn EntityBase>].into_iter()
+                } else {
+                    vec![].into_iter()
+                }
+            }
+            EntitySelectorType::AllPlayers => self
+                .get_all_players()
+                .await
+                .into_iter()
+                .map(|p| p as Arc<dyn EntityBase>)
+                .collect::<Vec<_>>()
+                .into_iter(),
+            EntitySelectorType::AllEntities => {
+                let mut entities = Vec::new();
+                for world in self.worlds.read().await.iter() {
+                    entities.extend(
+                        world
+                            .entities
+                            .read()
+                            .await
+                            .values()
+                            .cloned()
+                            .collect::<Vec<_>>(),
+                    );
+                    entities.extend(
+                        world
+                            .players
+                            .read()
+                            .await
+                            .values()
+                            .cloned()
+                            .map(|p| p as Arc<dyn EntityBase>)
+                            .collect::<Vec<_>>(),
+                    );
+                }
+                entities.into_iter()
+            }
+            EntitySelectorType::NamedPlayer(name) => {
+                if let Some(player) = self.get_player_by_name(name).await {
+                    vec![player as Arc<dyn EntityBase>].into_iter()
+                } else {
+                    vec![].into_iter()
+                }
+            }
+            EntitySelectorType::Uuid(uuid) => {
+                if let Some(player) = self.get_player_by_uuid(*uuid).await {
+                    vec![player as Arc<dyn EntityBase>].into_iter()
+                } else {
+                    vec![].into_iter()
+                }
+            }
+        };
+        let type_included = target_selector
+            .conditions
+            .iter()
+            .filter_map(|f| {
+                if let EntityFilter::Type(ValueCondition::Equals(entity_type)) = f {
+                    Some(*entity_type)
+                } else {
+                    None
+                }
+            })
+            .collect::<HashSet<_>>();
+        let type_excluded = target_selector
+            .conditions
+            .iter()
+            .filter_map(|f| {
+                if let EntityFilter::Type(ValueCondition::NotEquals(entity_type)) = f {
+                    Some(*entity_type)
+                } else {
+                    None
+                }
+            })
+            .collect::<HashSet<_>>();
+        let type_filtered = iter.filter(|e| {
+            // Filter by entity type
+            (type_excluded.is_empty() || !type_excluded.contains(&e.get_entity().entity_type))
+                && (type_included.is_empty() || type_included.contains(&e.get_entity().entity_type))
+        });
+        let iter = type_filtered;
+        match target_selector
+            .get_sort()
+            .unwrap_or(EntityFilterSort::Arbitrary)
+        {
+            // If the sort is arbitrary, we just return all entities in all worlds
+            EntityFilterSort::Arbitrary => iter.take(target_selector.get_limit()).collect(),
+            EntityFilterSort::Random => {
+                if target_selector.get_limit() == 0 {
+                    return vec![];
+                } else if target_selector.get_limit() == 1 {
+                    // If the limit is 1, we just return a random entity
+                    return if let Some(entity) = iter.choose(&mut rand::rng()) {
+                        vec![entity.clone()]
+                    } else {
+                        vec![]
+                    };
+                }
+                // If the sort is random, we shuffle the entities and then take the limit
+                let mut entities: Vec<_> = iter.collect();
+                entities.shuffle(&mut rand::rng());
+                entities
+                    .into_iter()
+                    .take(target_selector.get_limit())
+                    .collect()
+            }
+            EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
+                if target_selector.get_limit() == 0 {
+                    return vec![];
+                }
+                // sort entities first
+                // todo: command context
+                let center = if let Some(source) = source {
+                    source.position().unwrap_or_default()
+                } else {
+                    Vector3::default()
+                };
+                let mut entities = iter.collect::<Vec<_>>();
+                entities.sort_by(|a, b| {
+                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(center);
+                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(center);
+                    if target_selector.get_sort() == Some(EntityFilterSort::Nearest) {
+                        a_distance
+                            .partial_cmp(&b_distance)
+                            .unwrap_or(core::cmp::Ordering::Equal)
+                    } else {
+                        b_distance
+                            .partial_cmp(&a_distance)
+                            .unwrap_or(core::cmp::Ordering::Equal)
+                    }
+                });
+                entities
+                    .into_iter()
+                    .take(target_selector.get_limit())
+                    .collect()
+            }
+        }
     }
 }

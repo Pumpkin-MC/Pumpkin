@@ -49,7 +49,8 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
-use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+use pumpkin::{LOGGER_IMPL, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
     text::{TextComponent, color::NamedColor},
@@ -75,15 +76,8 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 #[cfg(feature = "dhat-heap")]
 use pumpkin::HEAP_PROFILER;
 
-pub static PLUGIN_MANAGER: LazyLock<Arc<RwLock<PluginManager>>> = LazyLock::new(|| {
-    let manager = PluginManager::new();
-    let arc_manager = Arc::new(RwLock::new(manager));
-    let clone = Arc::clone(&arc_manager);
-    let arc_manager_clone = arc_manager.clone();
-    let mut manager = futures::executor::block_on(arc_manager_clone.write());
-    manager.set_self_ref(clone);
-    arc_manager
-});
+pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
+    LazyLock::new(|| Arc::new(PluginManager::new()));
 
 pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
@@ -116,6 +110,10 @@ async fn main() {
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        if let Some((wrapper, _)) = LOGGER_IMPL.as_ref() {
+            // Drop readline to reset terminal state
+            let _ = wrapper.take_readline();
+        }
         default_panic(info);
         // TODO: Gracefully exit?
         // We need to abide by the panic rules here.

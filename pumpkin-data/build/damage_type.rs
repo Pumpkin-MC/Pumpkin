@@ -69,9 +69,9 @@ pub(crate) fn build() -> TokenStream {
         let death_message_type = match &data.death_message_type {
             Some(msg) => {
                 let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
-                quote! { Some(DeathMessageType::#msg_ident) }
+                quote! { DeathMessageType::#msg_ident }
             }
-            None => quote! { None },
+            None => quote! { DeathMessageType::Default },
         };
 
         let effects = match &data.effects {
@@ -106,7 +106,7 @@ pub(crate) fn build() -> TokenStream {
     quote! {
         #[derive(Clone, Copy, Debug, PartialEq)]
         pub struct DamageType {
-            pub death_message_type: Option<DeathMessageType>,
+            pub death_message_type: DeathMessageType,
             pub exhaustion: f32,
             pub effects: Option<DamageEffects>,
             pub message_id: &'static str,

@@ -2,16 +2,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::NamedColor;
-use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_world::item::ItemStack;
 
-use crate::command::args::entities::EntitiesArgumentConsumer;
+use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use CommandError::InvalidConsumption;
 
@@ -26,7 +25,7 @@ async fn clear_player(target: &Player) -> u64 {
     for slot in &inventory.main_inventory {
         let mut slot_lock = slot.lock().await;
         count += u64::from(slot_lock.item_count);
-        *slot_lock = ItemStack::EMPTY;
+        *slot_lock = ItemStack::EMPTY.clone();
     }
 
     let entity_equipment_lock = inventory.entity_equipment.lock().await;
@@ -36,32 +35,23 @@ async fn clear_player(target: &Player) -> u64 {
             continue;
         }
         count += 1u64;
-        *slot_lock = ItemStack::EMPTY;
+        *slot_lock = ItemStack::EMPTY.clone();
     }
 
     count
 }
 
-fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> TextComponent {
+async fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> TextComponent {
     match targets {
-        [target] if item_count == 0 => TextComponent::translate(
-            "clear.failed.single",
-            [TextComponent::text(target.gameprofile.name.clone())],
-        )
-        .color_named(NamedColor::Red),
+        [target] if item_count == 0 => {
+            TextComponent::translate("clear.failed.single", [target.get_display_name().await])
+                .color_named(NamedColor::Red)
+        }
         [target] => TextComponent::translate(
             "commands.clear.success.single",
             [
                 TextComponent::text(item_count.to_string()),
-                TextComponent::text(target.gameprofile.name.clone())
-                    .click_event(ClickEvent::SuggestCommand {
-                        command: format!("/tell {} ", target.gameprofile.name.clone()).into(),
-                    })
-                    .hover_event(HoverEvent::show_entity(
-                        target.living_entity.entity.entity_uuid.to_string(),
-                        target.living_entity.entity.entity_type.resource_name.into(),
-                        Some(TextComponent::text(target.gameprofile.name.clone())),
-                    )),
+                target.get_display_name().await,
             ],
         ),
         targets if item_count == 0 => TextComponent::translate(
@@ -89,7 +79,7 @@ impl CommandExecutor for Executor {
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let Some(Arg::Entities(targets)) = args.get(&ARG_TARGET) else {
+        let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
             return Err(InvalidConsumption(Some(ARG_TARGET.into())));
         };
 
@@ -98,7 +88,7 @@ impl CommandExecutor for Executor {
             item_count += clear_player(target).await;
         }
 
-        let msg = clear_command_text_output(item_count, targets);
+        let msg = clear_command_text_output(item_count, targets).await;
 
         sender.send_message(msg).await;
 
@@ -121,7 +111,7 @@ impl CommandExecutor for SelfExecutor {
         let item_count = clear_player(&target).await;
 
         let hold_target = [target];
-        let msg = clear_command_text_output(item_count, &hold_target);
+        let msg = clear_command_text_output(item_count, &hold_target).await;
 
         sender.send_message(msg).await;
 
@@ -132,6 +122,6 @@ impl CommandExecutor for SelfExecutor {
 #[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(Executor))
+        .then(argument(ARG_TARGET, PlayersArgumentConsumer).execute(Executor))
         .then(require(|sender| sender.is_player()).execute(SelfExecutor))
 }

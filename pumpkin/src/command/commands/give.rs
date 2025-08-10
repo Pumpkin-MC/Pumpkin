@@ -1,6 +1,7 @@
 use async_trait::async_trait;
+use pumpkin_data::data_component::DataComponent::MaxStackSize;
+use pumpkin_data::data_component_impl::{MaxStackSizeImpl, get};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_world::item::ItemStack;
@@ -12,6 +13,7 @@ use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::{CommandError, CommandExecutor, CommandSender};
+use crate::entity::EntityBase;
 
 const NAMES: [&str; 1] = ["give"];
 
@@ -61,7 +63,14 @@ impl CommandExecutor for Executor {
         };
 
         for target in targets {
-            let max_stack = i32::from(item.components.max_stack_size);
+            let max_stack = i32::from(
+                item.components
+                    .iter()
+                    .find_map(|(id, component)| {
+                        (id == &MaxStackSize).then(|| get::<MaxStackSizeImpl>(*component).size)
+                    })
+                    .unwrap(),
+            );
             let mut remaining = item_count;
 
             while remaining > 0 {
@@ -86,21 +95,7 @@ impl CommandExecutor for Executor {
                             id: item_name.to_string().into(),
                             count: Some(item_count),
                         }),
-                    TextComponent::text(targets[0].gameprofile.name.to_string())
-                        .hover_event(HoverEvent::show_entity(
-                            targets[0].living_entity.entity.entity_uuid.to_string(),
-                            targets[0]
-                                .living_entity
-                                .entity
-                                .entity_type
-                                .resource_name
-                                .into(),
-                            Some(TextComponent::text(targets[0].gameprofile.name.clone())),
-                        ))
-                        .click_event(ClickEvent::SuggestCommand {
-                            command: format!("/tell {} ", targets[0].gameprofile.name.clone())
-                                .into(),
-                        }),
+                    targets[0].get_display_name().await,
                 ],
             )
         } else {

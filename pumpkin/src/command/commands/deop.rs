@@ -1,3 +1,4 @@
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -48,10 +49,9 @@ impl CommandExecutor for Executor {
                     .await;
             };
 
-            let player_name = &player.gameprofile.name;
             let msg = TextComponent::translate(
                 "commands.deop.success",
-                [TextComponent::text(player_name.clone())],
+                [player.get_display_name().await],
             );
             sender.send_message(msg).await;
         }

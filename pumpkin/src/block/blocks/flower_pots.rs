@@ -1,26 +1,18 @@
-use crate::block::pumpkin_block::{BlockMetadata, PumpkinBlock, RandomTickArgs, UseWithItemArgs};
 use crate::block::registry::BlockActionResult;
+use crate::block::{BlockBehaviour, RandomTickArgs, UseWithItemArgs};
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::flower_pot_transformations::get_potted_item;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_world::world::BlockFlags;
 
+#[pumpkin_block_from_tag("minecraft:flower_pots")]
 pub struct FlowerPotBlock;
 
-impl BlockMetadata for FlowerPotBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:flower_pots").unwrap()
-    }
-}
-
 #[async_trait]
-impl PumpkinBlock for FlowerPotBlock {
+impl BlockBehaviour for FlowerPotBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let item = args.item_stack.lock().await.item;
         //Place the flower inside the pot

@@ -13,6 +13,7 @@ use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_macros::send_cancellable;
+use pumpkin_protocol::ConnectionState::Play;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
@@ -47,15 +48,8 @@ pub mod world;
 pub static HEAP_PROFILER: LazyLock<Mutex<Option<dhat::Profiler>>> =
     LazyLock::new(|| Mutex::new(None));
 
-pub static PLUGIN_MANAGER: LazyLock<Arc<RwLock<PluginManager>>> = LazyLock::new(|| {
-    let manager = PluginManager::new();
-    let arc_manager = Arc::new(RwLock::new(manager));
-    let clone = Arc::clone(&arc_manager);
-    let arc_manager_clone = arc_manager.clone();
-    let mut manager = futures::executor::block_on(arc_manager_clone.write());
-    manager.set_self_ref(clone);
-    arc_manager
-});
+pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
+    LazyLock::new(|| Arc::new(PluginManager::new()));
 
 pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
@@ -75,6 +69,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                 "[year]-[month]-[day] [hour]:[minute]:[second]"
             ));
             config.set_time_level(LevelFilter::Error);
+            let _ = config.set_time_offset_to_local();
         } else {
             config.set_time_level(LevelFilter::Off);
         }
@@ -174,11 +169,7 @@ pub struct PumpkinServer {
 
 impl PumpkinServer {
     pub async fn new() -> Self {
-        let server = Arc::new(Server::new().await);
-
-        for world in &*server.worlds.read().await {
-            world.level.read_spawn_chunks(&Server::spawn_chunks()).await;
-        }
+        let server = Server::new().await;
 
         let rcon = advanced_config().networking.rcon.clone();
 
@@ -259,16 +250,15 @@ impl PumpkinServer {
     }
 
     pub async fn init_plugins(&self) {
-        let mut loader_lock = PLUGIN_MANAGER.write().await;
-        loader_lock.set_server(self.server.clone());
-        if let Err(err) = loader_lock.load_plugins().await {
+        PLUGIN_MANAGER.set_self_ref(PLUGIN_MANAGER.clone()).await;
+        PLUGIN_MANAGER.set_server(self.server.clone()).await;
+        if let Err(err) = PLUGIN_MANAGER.load_plugins().await {
             log::error!("{err}");
         };
     }
 
     pub async fn unload_plugins(&self) {
-        let mut loader_lock = PLUGIN_MANAGER.write().await;
-        if let Err(err) = loader_lock.unload_all_plugins().await {
+        if let Err(err) = PLUGIN_MANAGER.unload_all_plugins().await {
             log::error!("Error unloading plugins: {err}");
         } else {
             log::info!("All plugins unloaded successfully");
@@ -277,12 +267,12 @@ impl PumpkinServer {
 
     pub async fn start(&self) {
         let tasks = Arc::new(TaskTracker::new());
-        let master_client_id: u64 = 0;
+        let mut master_client_id: u64 = 0;
         let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
-                .unified_listener_task(master_client_id, &tasks, &bedrock_clients)
+                .unified_listener_task(&mut master_client_id, &tasks, &bedrock_clients)
                 .await
             {
                 break;
@@ -328,10 +318,9 @@ impl PumpkinServer {
         }
     }
 
-    #[expect(unused_assignments)]
     pub async fn unified_listener_task(
         &self,
-        mut master_client_id_counter: u64,
+        master_client_id_counter: &mut u64,
         tasks: &Arc<TaskTracker>,
         bedrock_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
     ) -> bool {
@@ -346,8 +335,8 @@ impl PumpkinServer {
                             log::warn!("Failed to set TCP_NODELAY: {e}");
                         }
 
-                        let client_id = master_client_id_counter;
-                        master_client_id_counter += 1;
+                        let client_id = *master_client_id_counter;
+                        *master_client_id_counter += 1;
 
                         let formatted_address = if BASIC_CONFIG.scrub_ips {
                             scrub_address(&format!("{client_addr}"))
@@ -363,24 +352,26 @@ impl PumpkinServer {
                         let server_clone = self.server.clone();
 
                         tasks.spawn(async move {
-                                java_client.process_packets(&server_clone).await;
-                                java_client.close();
-                                java_client.await_tasks().await;
+                            java_client.process_packets(&server_clone).await;
+                            java_client.close();
+                            java_client.await_tasks().await;
 
-                                let player = java_client.player.lock().await;
-                                if let Some(player) = player.as_ref() {
-                                    log::debug!("Cleaning up player for id {client_id}");
+                            let player = java_client.player.lock().await;
+                            if let Some(player) = player.as_ref() {
+                                log::debug!("Cleaning up player for id {client_id}");
 
-                                    if let Err(e) = server_clone.player_data_storage
-                                            .handle_player_leave(player)
-                                            .await
-                                    {
-                                        log::error!("Failed to save player data on disconnect: {e}");
-                                    }
-
-                                    player.remove().await;
-                                    server_clone.remove_player(player).await;
+                                if let Err(e) = server_clone.player_data_storage
+                                        .handle_player_leave(player)
+                                        .await
+                                {
+                                    log::error!("Failed to save player data on disconnect: {e}");
                                 }
+
+                                player.remove().await;
+                                server_clone.remove_player(player).await;
+                            } else if java_client.connection_state.load() == Play {
+                                log::error!("No player found for id {client_id}. This should not happen!");
+                            }
                         });
                     }
                     Err(e) => {
@@ -413,7 +404,7 @@ impl PumpkinServer {
                                         client.process_packet(&server, reader).await;
                                     });
                                 } else if let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
-                                    master_client_id_counter += 1;
+                                    *master_client_id_counter += 1;
 
                                     let mut platform = BedrockClient::new(self.udp_socket.clone(), client_addr, be_clients);
                                     platform.handle_connection_request(packet).await;

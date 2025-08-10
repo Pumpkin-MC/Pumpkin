@@ -44,8 +44,8 @@ pub struct MaterialRuleContext<'a> {
     last_est_heiht_unique_horizontal_pos_value: i64,
     unique_horizontal_pos_value: i64,
     surface_min_y: i32,
-    pub surface_noise: DoublePerlinNoiseSampler,
-    pub secondary_noise: DoublePerlinNoiseSampler,
+    pub surface_noise: &'a DoublePerlinNoiseSampler,
+    pub secondary_noise: &'a DoublePerlinNoiseSampler,
     pub stone_depth_below: i32,
     pub stone_depth_above: i32,
     pub terrain_builder: &'a SurfaceTerrainBuilder,
@@ -55,9 +55,11 @@ impl<'a> MaterialRuleContext<'a> {
     pub fn new(
         min_y: i8,
         height: u16,
-        mut noise_builder: DoublePerlinNoiseBuilder<'a>,
+        noise_builder: DoublePerlinNoiseBuilder<'a>,
         random_deriver: &'a RandomDeriver,
         terrain_builder: &'a SurfaceTerrainBuilder,
+        surface_noise: &'a DoublePerlinNoiseSampler,
+        secondary_noise: &'a DoublePerlinNoiseSampler,
     ) -> Self {
         const HORIZONTAL_POS: i64 = -i64::MAX; // Vanilla
         Self {
@@ -76,8 +78,8 @@ impl<'a> MaterialRuleContext<'a> {
             biome: &Biome::PLAINS,
             run_depth: 0,
             secondary_depth: 0.0,
-            surface_noise: noise_builder.get_noise_sampler_for_id("surface"),
-            secondary_noise: noise_builder.get_noise_sampler_for_id("surface_secondary"),
+            surface_noise,
+            secondary_noise,
             noise_builder,
             stone_depth_below: 0,
             stone_depth_above: 0,
@@ -325,6 +327,7 @@ pub struct NoiseThresholdMaterialCondition {
 
 impl NoiseThresholdMaterialCondition {
     pub fn test(&self, context: &mut MaterialRuleContext) -> bool {
+        // TODO: we want to cache these
         let sampler = context
             .noise_builder
             .get_noise_sampler_for_id(self.noise.strip_prefix("minecraft:").unwrap());

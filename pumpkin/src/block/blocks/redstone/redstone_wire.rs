@@ -12,13 +12,13 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
-use crate::block::pumpkin_block::{
+use crate::block::registry::BlockActionResult;
+use crate::block::{
     BrokenArgs, CanPlaceAtArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
     OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs, PrepareArgs,
 };
-use crate::block::registry::BlockActionResult;
 use crate::{
-    block::pumpkin_block::{NormalUseArgs, PumpkinBlock},
+    block::{BlockBehaviour, NormalUseArgs},
     world::World,
 };
 
@@ -31,7 +31,7 @@ type RedstoneWireProperties = RedstoneWireLikeProperties;
 pub struct RedstoneWireBlock;
 
 #[async_trait]
-impl PumpkinBlock for RedstoneWireBlock {
+impl BlockBehaviour for RedstoneWireBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_at(args.block_accessor, args.position).await
     }
@@ -140,7 +140,7 @@ impl PumpkinBlock for RedstoneWireBlock {
         if on_use(wire, args.world, args.position).await {
             BlockActionResult::Success
         } else {
-            BlockActionResult::Continue
+            BlockActionResult::Pass
         }
     }
 

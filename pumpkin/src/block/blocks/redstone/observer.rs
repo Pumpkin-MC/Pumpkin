@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{
+use crate::block::{
     EmitsRedstonePowerArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     OnScheduledTickArgs, OnStateReplacedArgs,
 };
@@ -11,10 +11,10 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, chunk::TickPriority, world::BlockFlags};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{
-    block::pumpkin_block::{OnNeighborUpdateArgs, PumpkinBlock},
+    block::{BlockBehaviour, OnNeighborUpdateArgs},
     world::World,
 };
 
@@ -22,7 +22,7 @@ use crate::{
 pub struct ObserverBlock;
 
 #[async_trait]
-impl PumpkinBlock for ObserverBlock {
+impl BlockBehaviour for ObserverBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = ObserverLikeProperties::default(args.block);
         props.facing = args.player.living_entity.entity.get_facing();
@@ -124,12 +124,6 @@ impl ObserverBlock {
     }
 
     async fn schedule_tick(world: &World, block_pos: &BlockPos) {
-        if world
-            .is_block_tick_scheduled(block_pos, &Block::OBSERVER)
-            .await
-        {
-            return;
-        }
         world
             .schedule_block_tick(&Block::OBSERVER, *block_pos, 2, TickPriority::Normal)
             .await;

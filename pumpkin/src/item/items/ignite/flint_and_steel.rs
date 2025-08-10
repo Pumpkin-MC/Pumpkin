@@ -1,6 +1,6 @@
 use crate::entity::player::Player;
-use crate::item::pumpkin_item::ItemMetadata;
-use crate::item::pumpkin_item::PumpkinItem;
+use crate::item::ItemBehaviour;
+use crate::item::ItemMetadata;
 use crate::server::Server;
 use crate::world::World;
 use async_trait::async_trait;
@@ -22,7 +22,7 @@ impl ItemMetadata for FlintAndSteelItem {
 }
 
 #[async_trait]
-impl PumpkinItem for FlintAndSteelItem {
+impl ItemBehaviour for FlintAndSteelItem {
     async fn use_on_block(
         &self,
         item: &Item,
