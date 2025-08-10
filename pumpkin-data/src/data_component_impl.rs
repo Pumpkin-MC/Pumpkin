@@ -93,7 +93,6 @@ impl DataComponentImpl for MaxStackSizeImpl {
         self
     }
 }
-impl MaxStackSizeImpl {}
 #[derive(Clone, Debug, Hash)]
 pub struct MaxDamageImpl {
     pub max_damage: i32,
