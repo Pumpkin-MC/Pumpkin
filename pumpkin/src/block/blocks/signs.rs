@@ -213,14 +213,12 @@ async fn try_claim_sign(
     world: &World,
     position: &BlockPos,
 ) -> bool {
-    if let Some(editing_player_id) = *currently_editing {
-        if editing_player_id != *uuid {
-            if let Some(editing_player) = world.get_player_by_uuid(editing_player_id).await {
-                if editing_player.can_interact_with_block_at(position, 4.0) {
-                    return false;
-                }
-            }
-        }
+    if let Some(editing_player_id) = *currently_editing
+        && editing_player_id != *uuid
+        && let Some(editing_player) = world.get_player_by_uuid(editing_player_id).await
+        && editing_player.can_interact_with_block_at(position, 4.0)
+    {
+        return false;
     }
     *currently_editing = Some(*uuid);
     true
