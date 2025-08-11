@@ -428,10 +428,10 @@ impl CommandDispatcher {
         for (key, value) in &self.commands {
             if key == name {
                 to_remove.push(key.clone());
-            } else if let Command::Alias(target) = value {
-                if target == name {
-                    to_remove.push(key.clone());
-                }
+            } else if let Command::Alias(target) = value
+                && target == name
+            {
+                to_remove.push(key.clone());
             }
         }
 

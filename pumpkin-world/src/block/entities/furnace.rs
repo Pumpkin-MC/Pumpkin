@@ -85,14 +85,12 @@ impl FurnaceBlockEntity {
 
         if let Some(recipe_output_item) =
             Item::from_registry_key(recipe.result.id.strip_prefix("minecraft:").unwrap())
+            && !is_top_items_empty
+            && recipe_output_item.id == side_item_stack.item.id
+            && side_item_stack.item_count < max_count
+            && side_item_stack.item_count < side_item_stack.get_max_stack_size()
         {
-            if !is_top_items_empty
-                && recipe_output_item.id == side_item_stack.item.id
-                && side_item_stack.item_count < max_count
-                && side_item_stack.item_count < side_item_stack.get_max_stack_size()
-            {
-                return true;
-            }
+            return true;
         }
         false
     }

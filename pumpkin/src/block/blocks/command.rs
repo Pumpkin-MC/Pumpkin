@@ -74,19 +74,19 @@ impl BlockBehaviour for CommandBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if block_entity.resource_location() != CommandBlockEntity::ID {
-                return;
-            }
-            // TODO
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            && block_entity.resource_location() != CommandBlockEntity::ID
+        {
+            return;
         }
+        // TODO
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        if let Some(player) = args.player {
-            if player.gamemode.load() == GameMode::Creative {
-                return true;
-            }
+        if let Some(player) = args.player
+            && player.gamemode.load() == GameMode::Creative
+        {
+            return true;
         }
 
         false

@@ -756,10 +756,10 @@ impl JavaClient {
                 gameprofile.id,
                 err
             );
-            if err.is_kick() {
-                if let Some(reason) = err.client_kick_reason() {
-                    self.kick(TextComponent::text(reason)).await;
-                }
+            if err.is_kick()
+                && let Some(reason) = err.client_kick_reason()
+            {
+                self.kick(TextComponent::text(reason)).await;
             }
             return;
         }
@@ -879,10 +879,10 @@ impl JavaClient {
                 player.gameprofile.id,
                 err
             );
-            if err.is_kick() {
-                if let Some(reason) = err.client_kick_reason() {
-                    self.kick(TextComponent::text(reason)).await;
-                }
+            if err.is_kick()
+                && let Some(reason) = err.client_kick_reason()
+            {
+                self.kick(TextComponent::text(reason)).await;
             }
             return;
         }

@@ -70,7 +70,7 @@ impl DropperBlockEntity {
             dirty: AtomicBool::new(false),
         }
     }
-    pub async fn get_random_slot(&self) -> Option<MutexGuard<ItemStack>> {
+    pub async fn get_random_slot(&self) -> Option<MutexGuard<'_, ItemStack>> {
         // this.unpackLootTable(null);
         let mut ret = None;
         let mut j = 1;

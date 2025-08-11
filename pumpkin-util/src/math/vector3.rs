@@ -339,12 +339,11 @@ impl<'de> serde::Deserialize<'de> for Vector3<i32> {
                 self,
                 mut seq: A,
             ) -> Result<Self::Value, A::Error> {
-                if let Some(x) = seq.next_element::<i32>()? {
-                    if let Some(y) = seq.next_element::<i32>()? {
-                        if let Some(z) = seq.next_element::<i32>()? {
-                            return Ok(Vector3::new(x, y, z));
-                        }
-                    }
+                if let Some(x) = seq.next_element::<i32>()?
+                    && let Some(y) = seq.next_element::<i32>()?
+                    && let Some(z) = seq.next_element::<i32>()?
+                {
+                    return Ok(Vector3::new(x, y, z));
                 }
                 Err(serde::de::Error::custom("Failed to read Vector<i32>"))
             }
@@ -369,12 +368,11 @@ impl<'de> serde::Deserialize<'de> for Vector3<f32> {
                 self,
                 mut seq: A,
             ) -> Result<Self::Value, A::Error> {
-                if let Some(x) = seq.next_element::<f32>()? {
-                    if let Some(y) = seq.next_element::<f32>()? {
-                        if let Some(z) = seq.next_element::<f32>()? {
-                            return Ok(Vector3::new(x, y, z));
-                        }
-                    }
+                if let Some(x) = seq.next_element::<f32>()?
+                    && let Some(y) = seq.next_element::<f32>()?
+                    && let Some(z) = seq.next_element::<f32>()?
+                {
+                    return Ok(Vector3::new(x, y, z));
                 }
                 Err(serde::de::Error::custom("Failed to read Vector<f32>"))
             }
@@ -399,12 +397,11 @@ impl<'de> serde::Deserialize<'de> for Vector3<f64> {
                 self,
                 mut seq: A,
             ) -> Result<Self::Value, A::Error> {
-                if let Some(x) = seq.next_element::<f64>()? {
-                    if let Some(y) = seq.next_element::<f64>()? {
-                        if let Some(z) = seq.next_element::<f64>()? {
-                            return Ok(Vector3::new(x, y, z));
-                        }
-                    }
+                if let Some(x) = seq.next_element::<f64>()?
+                    && let Some(y) = seq.next_element::<f64>()?
+                    && let Some(z) = seq.next_element::<f64>()?
+                {
+                    return Ok(Vector3::new(x, y, z));
                 }
                 Err(serde::de::Error::custom("Failed to read Vector<f64>"))
             }
