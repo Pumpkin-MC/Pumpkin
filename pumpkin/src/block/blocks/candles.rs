@@ -27,14 +27,14 @@ pub struct CandleBlock;
 #[async_trait]
 impl BlockBehaviour for CandleBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        if args.player.get_entity().pose.load() != EntityPose::Crouching {
-            if let BlockIsReplacing::Itself(state_id) = args.replacing {
-                let mut properties = CandleLikeProperties::from_state_id(state_id, args.block);
-                if properties.candles.to_index() < 3 {
-                    properties.candles = Integer1To4::from_index(properties.candles.to_index() + 1);
-                }
-                return properties.to_state_id(args.block);
+        if args.player.get_entity().pose.load() != EntityPose::Crouching
+            && let BlockIsReplacing::Itself(state_id) = args.replacing
+        {
+            let mut properties = CandleLikeProperties::from_state_id(state_id, args.block);
+            if properties.candles.to_index() < 3 {
+                properties.candles = Integer1To4::from_index(properties.candles.to_index() + 1);
             }
+            return properties.to_state_id(args.block);
         }
 
         let mut properties = CandleLikeProperties::default(args.block);

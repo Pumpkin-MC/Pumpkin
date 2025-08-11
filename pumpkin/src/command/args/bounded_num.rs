@@ -34,22 +34,22 @@ where
     ) -> Option<Arg<'a>> {
         let x = args.pop()?.parse::<T>().ok()?;
 
-        if let Some(max) = self.max_inclusive {
-            if x > max {
-                return Some(Arg::Num(Err(NotInBounds::UpperBound(
-                    x.to_number(),
-                    max.to_number(),
-                ))));
-            }
+        if let Some(max) = self.max_inclusive
+            && x > max
+        {
+            return Some(Arg::Num(Err(NotInBounds::UpperBound(
+                x.to_number(),
+                max.to_number(),
+            ))));
         }
 
-        if let Some(min) = self.min_inclusive {
-            if x < min {
-                return Some(Arg::Num(Err(NotInBounds::LowerBound(
-                    x.to_number(),
-                    min.to_number(),
-                ))));
-            }
+        if let Some(min) = self.min_inclusive
+            && x < min
+        {
+            return Some(Arg::Num(Err(NotInBounds::LowerBound(
+                x.to_number(),
+                min.to_number(),
+            ))));
         }
 
         Some(Arg::Num(Ok(x.to_number())))
@@ -198,7 +198,7 @@ impl ToFromNumber for f64 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<f64> {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Double {
             min: self.min_inclusive,
             max: self.max_inclusive,
@@ -226,7 +226,7 @@ impl ToFromNumber for f32 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<f32> {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Float {
             min: self.min_inclusive,
             max: self.max_inclusive,
@@ -254,7 +254,7 @@ impl ToFromNumber for i32 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<i32> {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Integer {
             min: self.min_inclusive,
             max: self.max_inclusive,
@@ -282,7 +282,7 @@ impl ToFromNumber for i64 {
 }
 
 impl GetClientSideArgParser for BoundedNumArgumentConsumer<i64> {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Long {
             min: self.min_inclusive,
             max: self.max_inclusive,

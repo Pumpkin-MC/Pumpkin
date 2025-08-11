@@ -35,11 +35,11 @@ impl ItemBehaviour for HoneyCombItem {
         // First we try to strip the block. by getting his equivalent and applying it the axis.
         let replacement_block = get_waxed_equivalent(block);
         // If there is a strip equivalent.
-        if replacement_block.is_some() {
+        if let Some(replacement_block) = replacement_block {
             // get block state of the old log.
             // get the log properties
             // create new properties for the new log.
-            let new_block = &Block::from_id(replacement_block.unwrap());
+            let new_block = &Block::from_id(replacement_block);
 
             let new_state_id = if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
                 && block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)

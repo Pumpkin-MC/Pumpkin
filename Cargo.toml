@@ -51,7 +51,7 @@ futures = { version = "0.3", default-features = false, features = ["executor"] }
 rayon = "1.10"
 crossbeam = "0.8"
 
-uuid = { version = "1.17", features = ["serde", "v3", "v4"] }
+uuid = { version = "1.18", features = ["serde", "v3", "v4"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

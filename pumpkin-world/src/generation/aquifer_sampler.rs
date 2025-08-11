@@ -691,8 +691,8 @@ mod test {
         base_router: &ProtoNoiseRouters,
     ) -> (
         WorldAquiferSampler,
-        ChunkNoiseRouter,
-        SurfaceHeightEstimateSampler,
+        ChunkNoiseRouter<'_>,
+        SurfaceHeightEstimateSampler<'_>,
         ChunkNoiseFunctionSampleOptions,
     ) {
         let surface_config = GENERATION_SETTINGS

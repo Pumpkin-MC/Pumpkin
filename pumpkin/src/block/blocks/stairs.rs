@@ -108,28 +108,24 @@ async fn compute_stair_shape(
 
     if let Some(other_stair_props) =
         get_stair_properties_if_exists(world, &block_pos.offset(facing.to_offset())).await
+        && other_stair_props.half == half
     {
-        if other_stair_props.half == half {
-            if !left_locked && other_stair_props.facing == facing.rotate_clockwise() {
-                return StairShape::OuterRight;
-            } else if !right_locked && other_stair_props.facing == facing.rotate_counter_clockwise()
-            {
-                return StairShape::OuterLeft;
-            }
+        if !left_locked && other_stair_props.facing == facing.rotate_clockwise() {
+            return StairShape::OuterRight;
+        } else if !right_locked && other_stair_props.facing == facing.rotate_counter_clockwise() {
+            return StairShape::OuterLeft;
         }
     }
 
     if let Some(other_stair_props) =
         get_stair_properties_if_exists(world, &block_pos.offset(facing.opposite().to_offset()))
             .await
+        && other_stair_props.half == half
     {
-        if other_stair_props.half == half {
-            if !right_locked && other_stair_props.facing == facing.rotate_clockwise() {
-                return StairShape::InnerRight;
-            } else if !left_locked && other_stair_props.facing == facing.rotate_counter_clockwise()
-            {
-                return StairShape::InnerLeft;
-            }
+        if !right_locked && other_stair_props.facing == facing.rotate_clockwise() {
+            return StairShape::InnerRight;
+        } else if !left_locked && other_stair_props.facing == facing.rotate_counter_clockwise() {
+            return StairShape::InnerLeft;
         }
     }
 

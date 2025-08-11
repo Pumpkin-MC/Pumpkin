@@ -313,14 +313,12 @@ pub async fn drop_loot(
         }
     }
 
-    if experience {
-        if let Some(experience) = &block.experience {
-            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
-            let amount = experience.experience.get(&mut random);
-            // TODO: Silk touch gives no exp
-            if amount > 0 {
-                ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
-            }
+    if experience && let Some(experience) = &block.experience {
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+        let amount = experience.experience.get(&mut random);
+        // TODO: Silk touch gives no exp
+        if amount > 0 {
+            ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
         }
     }
 }

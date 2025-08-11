@@ -61,13 +61,13 @@ impl BlockBehaviour for FurnaceBlock {
         &self,
         args: crate::block::NormalUseArgs<'_>,
     ) -> crate::block::registry::BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(inventory) = block_entity.clone().get_inventory() {
-                let furnace_screen_factory = FurnaceScreenFactory::new(inventory, block_entity);
-                args.player
-                    .open_handled_screen(&furnace_screen_factory)
-                    .await;
-            }
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            && let Some(inventory) = block_entity.clone().get_inventory()
+        {
+            let furnace_screen_factory = FurnaceScreenFactory::new(inventory, block_entity);
+            args.player
+                .open_handled_screen(&furnace_screen_factory)
+                .await;
         }
         crate::block::registry::BlockActionResult::Consume
     }
