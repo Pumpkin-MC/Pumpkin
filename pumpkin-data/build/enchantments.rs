@@ -7,6 +7,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct Enchantment {
+    id: u8,
     anvil_cost: u32,
     supported_items: String,
     max_level: i32,
@@ -56,41 +57,67 @@ pub(crate) fn build() -> TokenStream {
 
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
+    let mut id_to_type = TokenStream::new();
 
     for (name, enchantment) in enchantments.iter() {
+        let id = enchantment.id;
         let raw_name = name.strip_prefix("minecraft:").unwrap();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
         let anvil_cost = enchantment.anvil_cost;
-        let supported_items = enchantment.supported_items.clone();
+        let supported_items = format_ident!(
+            "{}",
+            enchantment
+                .supported_items
+                .strip_prefix("#")
+                .unwrap()
+                .replace(":", "_")
+                .replace("/", "_")
+                .to_uppercase()
+        );
         let max_level = enchantment.max_level;
         let slots = enchantment.slots.clone();
         let slots = slots.iter().map(|slot| slot.to_tokens());
 
         variants.extend([quote! {
             pub const #format_name: Enchantment = Enchantment {
-               name: #name,
-               anvil_cost: #anvil_cost,
-               supported_items: #supported_items,
-               max_level: #max_level,
-               slots: &[#(#slots),*]
+                id: #id,
+                name: #name,
+                anvil_cost: #anvil_cost,
+                supported_items: &Item::#supported_items,
+                max_level: #max_level,
+                slots: &[#(#slots),*]
             };
         }]);
 
-        name_to_type.extend(quote! { #name => Some(Self::#format_name), });
+        name_to_type.extend(quote! { #name => Some(&Self::#format_name), });
+        id_to_type.extend(quote! { #id => Some(&Self::#format_name), });
     }
 
     quote! {
-        use std::hash::Hash;
-        #[derive(Debug, Clone)]
+        use std::hash::{Hash, Hasher};
+        use crate::tag::{Item, Tag};
+
+        #[derive(Debug)]
         pub struct Enchantment {
+            pub id: u8,
             pub name: &'static str,
             pub anvil_cost: u32,
-            pub supported_items: &'static str,
+            pub supported_items: &'static Tag,
             pub max_level: i32,
             pub slots: &'static [AttributeModifierSlot]
             // TODO: add more
         }
-
+        impl PartialEq for Enchantment {
+            fn eq(&self, other: &Self) -> bool {
+                self.id == other.id
+            }
+        }
+        impl Eq for Enchantment {}
+        impl Hash for Enchantment {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.id.hash(state);
+            }
+        }
         #[derive(Debug, Clone, Hash)]
         pub enum AttributeModifierSlot {
             Any,
@@ -109,9 +136,15 @@ pub(crate) fn build() -> TokenStream {
         impl Enchantment {
             #variants
 
-            pub fn from_name(name: &str) -> Option<Self> {
+            pub fn from_name(name: &str) -> Option<&'static Self> {
                 match name {
                     #name_to_type
+                    _ => None
+                }
+            }
+            pub fn from_id(id: u8) -> Option<&'static Self> {
+                match id {
+                    #id_to_type
                     _ => None
                 }
             }
