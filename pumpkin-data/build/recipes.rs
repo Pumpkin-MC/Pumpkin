@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
@@ -77,7 +77,7 @@ pub struct CraftingShapedRecipeStruct {
     category: Option<RecipeCategoryTypes>,
     group: Option<String>,
     show_notification: Option<bool>,
-    key: HashMap<String, RecipeIngredientTypes>,
+    key: BTreeMap<String, RecipeIngredientTypes>,
     pattern: Vec<String>,
     result: RecipeResultStruct,
 }

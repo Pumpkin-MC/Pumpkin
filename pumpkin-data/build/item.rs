@@ -6,7 +6,7 @@ use pumpkin_util::text::TextContent;
 use pumpkin_util::{registry::RegistryEntryList, text::TextComponent};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
 
 #[derive(Deserialize, Clone)]
@@ -406,7 +406,7 @@ pub enum Operation {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/items.json");
 
-    let items: HashMap<String, Item> =
+    let items: BTreeMap<String, Item> =
         serde_json::from_str(&fs::read_to_string("../assets/items.json").unwrap())
             .expect("Failed to parse items.json");
 

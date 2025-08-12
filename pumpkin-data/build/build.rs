@@ -2,7 +2,12 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use rayon::prelude::*;
-use std::{fs, io::Write, path::Path, process::Command};
+use std::{
+    fs,
+    io::Write,
+    path::Path,
+    process::{Command, Stdio},
+};
 
 mod attributes;
 mod biome;
@@ -92,7 +97,9 @@ pub fn main() {
     ];
 
     build_functions.par_iter().for_each(|(build_fn, file)| {
-        write_generated_file(build_fn(), file);
+        let formatted_code = format_code(&build_fn().to_string());
+
+        write_generated_file(&formatted_code, file);
     });
 }
 
@@ -108,16 +115,46 @@ pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
     variants
 }
 
-pub fn write_generated_file(content: TokenStream, out_file: &str) {
+pub fn write_generated_file(new_code: &str, out_file: &str) {
     let path = Path::new(OUT_DIR).join(out_file);
-    let code = content.to_string();
 
-    let mut file = fs::File::create(&path).unwrap();
-    if let Err(e) = file.write_all(code.as_bytes()) {
-        println!("cargo::error={e}");
+    if path.exists()
+        && let Ok(existing_code) = fs::read_to_string(&path)
+        && existing_code == new_code
+    {
+        return; // No changes, so we skip writing.
     }
 
-    // Try to format the output for debugging purposes.
-    // Doesn't matter if rustfmt is unavailable.
-    let _ = Command::new("rustfmt").arg(&path).output();
+    fs::write(&path, new_code)
+        .unwrap_or_else(|_| panic!("Failed to write to file: {}", path.display()));
+}
+
+pub fn format_code(unformatted_code: &str) -> String {
+    let mut child = Command::new("rustfmt")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn rustfmt process.");
+
+    child
+        .stdin
+        .take()
+        .expect("Failed to take rustfmt stdin")
+        .write_all(unformatted_code.as_bytes())
+        .expect("Failed to write to rustfmt stdin.");
+
+    let output = child
+        .wait_with_output()
+        .expect("Failed to wait for rustfmt process.");
+
+    if output.status.success() {
+        String::from_utf8(output.stdout).expect("rustfmt output was not valid UTF-8.")
+    } else {
+        panic!(
+            "rustfmt failed with status: {}\n--- stderr ---\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
