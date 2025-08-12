@@ -1,5 +1,3 @@
-# In your .github/workflows/release-per-commit.yml file
-
 name: Release per-commit
 
 on:
@@ -9,9 +7,6 @@ on:
       - completed
 
 jobs:
-  # The rest of your jobs would go here
-  # ...
-
   upload-artifacts:
     if: success() && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'master'
     name: Download & Upload Builds
