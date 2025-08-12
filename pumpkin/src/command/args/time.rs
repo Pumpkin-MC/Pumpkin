@@ -12,7 +12,7 @@ use crate::server::Server;
 pub struct TimeArgumentConsumer;
 
 impl GetClientSideArgParser for TimeArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Time { min: 0 }
     }
 

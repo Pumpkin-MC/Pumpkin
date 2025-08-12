@@ -16,10 +16,10 @@ impl EndPortal {
 
     pub async fn get_new_portal(world: &Arc<World>, pos: BlockPos) {
         let mid_pos = Self::get_mid_pos(world, pos);
-        if let Some(mid_pos) = mid_pos.await {
-            if Self::is_valid_portal(world, mid_pos).await {
-                Self::create_portal(world, mid_pos).await;
-            }
+        if let Some(mid_pos) = mid_pos.await
+            && Self::is_valid_portal(world, mid_pos).await
+        {
+            Self::create_portal(world, mid_pos).await;
         }
     }
 

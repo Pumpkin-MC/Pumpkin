@@ -136,14 +136,14 @@ impl RedstoneGateBlockProperties for ComparatorLikeProperties {
 #[async_trait]
 impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
     async fn get_output_level(&self, world: &World, pos: BlockPos) -> u8 {
-        if let Some(blockentity) = world.get_block_entity(&pos).await {
-            if blockentity.resource_location() == ComparatorBlockEntity::ID {
-                let comparator = blockentity
-                    .as_any()
-                    .downcast_ref::<ComparatorBlockEntity>()
-                    .unwrap();
-                return comparator.output_signal.load(Ordering::Relaxed);
-            }
+        if let Some(blockentity) = world.get_block_entity(&pos).await
+            && blockentity.resource_location() == ComparatorBlockEntity::ID
+        {
+            let comparator = blockentity
+                .as_any()
+                .downcast_ref::<ComparatorBlockEntity>()
+                .unwrap();
+            return comparator.output_signal.load(Ordering::Relaxed);
         }
         0
     }
@@ -219,8 +219,8 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
         let source_pos = pos.offset(facing.to_offset());
         let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
 
-        if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(source_block) {
-            if let Some(level) = pumpkin_block
+        if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(source_block)
+            && let Some(level) = pumpkin_block
                 .get_comparator_output(GetComparatorOutputArgs {
                     world,
                     block: source_block,
@@ -228,9 +228,8 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                     position: &source_pos,
                 })
                 .await
-            {
-                return level;
-            }
+        {
+            return level;
         }
 
         if redstone_level < 15 && source_state.is_solid() {
@@ -322,11 +321,11 @@ impl ComparatorBlock {
                 entity.get_entity().entity_type == &EntityType::ITEM_FRAME
                     && entity.get_entity().get_horizontal_facing() == facing
             });
-        if let Some(_itemframe) = itemframes.next() {
-            if itemframes.next().is_none() {
-                // TODO itemframe.getComparatorPower()
-                return Some(1);
-            }
+        if let Some(_itemframe) = itemframes.next()
+            && itemframes.next().is_none()
+        {
+            // TODO itemframe.getComparatorPower()
+            return Some(1);
         }
         None
     }
@@ -334,17 +333,17 @@ impl ComparatorBlock {
     async fn update(&self, world: &Arc<World>, pos: BlockPos, state: &BlockState, block: &Block) {
         let future_level = i32::from(self.calculate_output_signal(world, pos, state, block).await);
         let mut now_level = 0;
-        if let Some(blockentity) = world.get_block_entity(&pos).await {
-            if blockentity.resource_location() == ComparatorBlockEntity::ID {
-                let comparator = blockentity
-                    .as_any()
-                    .downcast_ref::<ComparatorBlockEntity>()
-                    .unwrap();
-                now_level = i32::from(comparator.output_signal.load(Ordering::Relaxed));
-                comparator
-                    .output_signal
-                    .store(future_level as u8, Ordering::Relaxed);
-            }
+        if let Some(blockentity) = world.get_block_entity(&pos).await
+            && blockentity.resource_location() == ComparatorBlockEntity::ID
+        {
+            let comparator = blockentity
+                .as_any()
+                .downcast_ref::<ComparatorBlockEntity>()
+                .unwrap();
+            now_level = i32::from(comparator.output_signal.load(Ordering::Relaxed));
+            comparator
+                .output_signal
+                .store(future_level as u8, Ordering::Relaxed);
         }
         let mut props = ComparatorLikeProperties::from_state_id(state.id, block);
         if now_level != future_level || props.mode == ComparatorMode::Compare {

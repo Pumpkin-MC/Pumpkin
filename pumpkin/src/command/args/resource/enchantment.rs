@@ -16,7 +16,7 @@ use crate::server::Server;
 pub struct EnchantmentArgumentConsumer;
 
 impl GetClientSideArgParser for EnchantmentArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Resource {
             identifier: "enchantment",
         }
