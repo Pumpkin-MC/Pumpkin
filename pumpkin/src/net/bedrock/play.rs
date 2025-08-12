@@ -85,7 +85,7 @@ impl BedrockClient {
                 packet.position.y.floor() as i32,
                 packet.position.z.floor() as i32,
             ),
-            view_distance.get() as u32,
+            u32::from(view_distance.get()),
         ))
         .await;
         let new_pos = packet.position.to_f64();

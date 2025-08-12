@@ -1292,7 +1292,7 @@ impl World {
             .await;
         client
             .send_game_packet(&CChunkRadiusUpdate {
-                chunk_radius: VarInt(player.config.read().await.view_distance.get() as _),
+                chunk_radius: VarInt(player.config.read().await.view_distance.get().into()),
             })
             .await;
         chunker::be_update_position(&player).await;
@@ -1312,7 +1312,7 @@ impl World {
             .write_game_packet_to_set(
                 &CNetworkChunkPublisherUpdate::new(
                     BlockPos::new(0, 100, 0),
-                    player.config.read().await.view_distance.get() as u32,
+                    u32::from(player.config.read().await.view_distance.get()),
                 ),
                 &mut frame_set,
             )

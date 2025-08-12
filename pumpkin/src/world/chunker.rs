@@ -87,7 +87,6 @@ pub async fn be_update_position(player: &Arc<Player>) {
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical != new_cylindrical {
-        println!("not same");
         let mut loading_chunks = Vec::new();
         let mut unloading_chunks = Vec::new();
 
