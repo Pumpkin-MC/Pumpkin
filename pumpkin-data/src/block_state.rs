@@ -123,6 +123,19 @@ impl BlockState {
 
         Some(shapes)
     }
+
+    /// Returns whether a block prevents a wire from connect diagonally.
+    pub fn blocks_wire(&self) -> bool {
+        // TODO: check minecraft java code to see if this is correct
+        self.is_solid() && self.opacity == 15
+    }
+
+    /// Returns whether a block if below a wire prevents its signal going down.
+    /// For java this is basically just the inverse of blocks_wire,
+    /// but on bedrock redstone should be able to go down solid sides of blocks including glass
+    pub fn blocks_wire_down(&self) -> bool {
+        !self.blocks_wire()
+    }
 }
 
 #[derive(Clone, Debug)]
