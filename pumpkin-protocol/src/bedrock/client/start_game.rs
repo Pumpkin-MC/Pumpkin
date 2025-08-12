@@ -50,6 +50,7 @@ pub struct CStartGame {
 
     pub enable_clientside_generation: bool,
     pub blocknetwork_ids_are_hashed: bool,
+    pub tick_death_system_enabled: bool,
     pub server_auth_sounds: bool,
 }
 

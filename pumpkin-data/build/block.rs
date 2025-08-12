@@ -838,8 +838,7 @@ pub(crate) fn build() -> TokenStream {
                     let start_id = id as u16 + i as u16;
                     block_state_to_bedrock.push((state.id, start_id))
                 } else {
-                    let start_id = id as u16 + state_count as u16 - 1;
-                    block_state_to_bedrock.push((state.id, start_id))
+                    block_state_to_bedrock.push((state.id, id as u16))
                 }
             }
             //else {

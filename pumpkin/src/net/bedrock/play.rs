@@ -20,7 +20,7 @@ use pumpkin_protocol::{
     codec::{bedrock_block_pos::NetworkPos, var_long::VarLong},
     java::client::play::CSystemChatMessage,
 };
-use pumpkin_util::text::TextComponent;
+use pumpkin_util::{math::position::BlockPos, text::TextComponent};
 
 use crate::{
     command::CommandSender,
@@ -66,7 +66,7 @@ impl BedrockClient {
             );
             self.send_game_packet(&CNetworkChunkPublisherUpdate::new(
                 player.get_entity().block_pos.load(),
-                chunk_radius.0 as _,
+                chunk_radius.0 as u32,
             ))
             .await;
             chunker::be_update_position(player).await;
@@ -77,12 +77,27 @@ impl BedrockClient {
         if !player.has_client_loaded() {
             return;
         }
-        let pos = packet.position;
-        player.living_entity.entity.set_pos(pos.to_f64());
+        let config = player.config.read().await;
+        let view_distance = config.view_distance;
+        self.send_game_packet(&CNetworkChunkPublisherUpdate::new(
+            BlockPos::new(
+                packet.position.x.floor() as i32,
+                packet.position.y.floor() as i32,
+                packet.position.z.floor() as i32,
+            ),
+            view_distance.get() as u32,
+        ))
+        .await;
+        let new_pos = packet.position.to_f64();
+        let old_pos = player.position();
 
-        chunker::update_position(player).await;
+        if new_pos != old_pos {
+            player.living_entity.entity.set_pos(new_pos);
+            chunker::be_update_position(player).await;
+        }
+
         //self.send_game_packet(&CMovePlayer {
-        //     player_runtime_id: VarULong(player.entity_id() as u64),
+        //    player_runtime_id: VarULong(player.entity_id() as u64),
         //    position: packet.position + Vector3::new(10.0, 0.0, 0.0),
         //    pitch: packet.pitch,
         //    yaw: packet.yaw,

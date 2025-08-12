@@ -52,6 +52,7 @@ use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
+use pumpkin_protocol::bedrock::client::chunk_radius_update::CChunkRadiusUpdate;
 use pumpkin_protocol::bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate;
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::{
@@ -1285,7 +1286,13 @@ impl World {
                 // TODO The client needs extra biome data for this
                 enable_clientside_generation: false,
                 blocknetwork_ids_are_hashed: false,
+                tick_death_system_enabled: false,
                 server_auth_sounds: false,
+            })
+            .await;
+        client
+            .send_game_packet(&CChunkRadiusUpdate {
+                chunk_radius: VarInt(player.config.read().await.view_distance.get() as _),
             })
             .await;
         chunker::be_update_position(&player).await;
@@ -1303,7 +1310,10 @@ impl World {
         let mut frame_set = FrameSet::default();
         client
             .write_game_packet_to_set(
-                &CNetworkChunkPublisherUpdate::new(BlockPos::new(0, 100, 0), 16),
+                &CNetworkChunkPublisherUpdate::new(
+                    BlockPos::new(0, 100, 0),
+                    player.config.read().await.view_distance.get() as u32,
+                ),
                 &mut frame_set,
             )
             .await;

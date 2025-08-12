@@ -688,6 +688,10 @@ impl Level {
         chunks: &[Vector2<i32>],
         channel: mpsc::UnboundedSender<(SyncChunk, bool)>,
     ) {
+        if chunks.is_empty() {
+            return;
+        }
+
         // First send all chunks that we have cached
         // We expect best case scenario to have all cached
         let mut remaining_chunks = Vec::new();

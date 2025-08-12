@@ -54,6 +54,9 @@ impl Cylindrical {
     }
 
     pub fn is_within_distance(&self, x: i32, z: i32) -> bool {
+        if self.view_distance.get() == 1 {
+            return false;
+        }
         let rel_x = ((x - self.center.x).abs() as i64 - 2).max(0);
         let rel_z = ((z - self.center.y).abs() as i64 - 2).max(0);
 
@@ -64,6 +67,9 @@ impl Cylindrical {
 
     /// Returns an iterator of all chunks within this cylinder
     pub fn all_chunks_within(&self) -> Vec<Vector2<i32>> {
+        if self.view_distance.get() == 1 {
+            return Vec::new();
+        }
         // I came up with this values by testing
         // for view distances 2-32 it usually gives 5 - 20 chunks more than needed if the player is on ground
         // this looks scary but this few calculations are definitely faster than ~5 reallocations
