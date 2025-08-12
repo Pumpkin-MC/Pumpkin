@@ -120,9 +120,10 @@ pub fn write_generated_file(new_code: &str, out_file: &str) {
 
     if path.exists()
         && let Ok(existing_code) = fs::read_to_string(&path)
-            && existing_code == new_code {
-                return; // No changes, so we skip writing.
-            }
+        && existing_code == new_code
+    {
+        return; // No changes, so we skip writing.
+    }
 
     fs::write(&path, new_code)
         .unwrap_or_else(|_| panic!("Failed to write to file: {}", path.display()));
