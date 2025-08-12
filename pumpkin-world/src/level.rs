@@ -844,7 +844,7 @@ impl Level {
                     //     });
                     // }
 
-                    if !send_chunk(true, result.0, &channel) {
+                    if channel.send((result.0, true)).is_err() {
                         // Stop any additional queued generations
                         cloned_continue_to_generate.store(false, Ordering::Relaxed);
                     }
