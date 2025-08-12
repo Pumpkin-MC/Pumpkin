@@ -1,6 +1,6 @@
 use pumpkin_util::math::lerp;
 
-use crate::generation::noise_router::{
+use crate::generation::noise::router::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
     chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
     proto_noise_router::ProtoNoiseFunctionComponent,

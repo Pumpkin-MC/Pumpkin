@@ -18,7 +18,7 @@ use crate::{
 
 use super::{
     noise::perlin::DoublePerlinNoiseSampler,
-    noise_router::{
+    noise::router::{
         proto_noise_router::DoublePerlinNoiseBuilder,
         surface_height_sampler::SurfaceHeightEstimateSampler,
     },

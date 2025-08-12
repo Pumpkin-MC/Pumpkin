@@ -5,7 +5,7 @@ use crate::{
     biome::BiomeSupplier,
     dimension::Dimension,
     generation::{
-        biome_coords, noise_router::multi_noise_sampler::MultiNoiseSampler, section_coords,
+        biome_coords, noise::router::multi_noise_sampler::MultiNoiseSampler, section_coords,
     },
 };
 

@@ -6,14 +6,14 @@ use std::path::Path;
 use std::sync::LazyLock;
 
 use crate::generation::GlobalRandomConfig;
-use crate::generation::noise_router::chunk_density_function::ChunkNoiseFunctionBuilderOptions;
-use crate::generation::noise_router::chunk_density_function::{
+use crate::generation::noise::router::chunk_density_function::ChunkNoiseFunctionBuilderOptions;
+use crate::generation::noise::router::chunk_density_function::{
     ChunkNoiseFunctionSampleOptions, SampleAction,
 };
-use crate::generation::noise_router::chunk_noise_router::{
+use crate::generation::noise::router::chunk_noise_router::{
     ChunkNoiseDensityFunction, ChunkNoiseFunctionComponent,
 };
-use crate::generation::noise_router::proto_noise_router::{
+use crate::generation::noise::router::proto_noise_router::{
     ProtoNoiseFunctionComponent, ProtoNoiseRouters,
 };
 
