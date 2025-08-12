@@ -14,7 +14,7 @@ use super::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSid
 pub struct GamemodeArgumentConsumer;
 
 impl GetClientSideArgParser for GamemodeArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Gamemode
     }
 
@@ -33,10 +33,10 @@ impl ArgumentConsumer for GamemodeArgumentConsumer {
     ) -> Option<Arg<'a>> {
         let s = args.pop()?;
 
-        if let Ok(id) = s.parse::<i8>() {
-            if let Ok(gamemode) = GameMode::try_from(id) {
-                return Some(Arg::GameMode(gamemode));
-            }
+        if let Ok(id) = s.parse::<i8>()
+            && let Ok(gamemode) = GameMode::try_from(id)
+        {
+            return Some(Arg::GameMode(gamemode));
         }
 
         GameMode::from_str(s).map_or_else(|_| None, |gamemode| Some(Arg::GameMode(gamemode)))

@@ -108,7 +108,7 @@ impl CustomBossbars {
         &mut self,
         server: &Server,
         resource_location: String,
-    ) -> Result<(), BossbarUpdateError> {
+    ) -> Result<(), BossbarUpdateError<'_>> {
         let bossbar = self.custom_bossbars.get_cloned(&resource_location);
         if let Some(bossbar) = bossbar {
             self.custom_bossbars.remove(&resource_location);
@@ -144,7 +144,7 @@ impl CustomBossbars {
         resource_location: String,
         max_value: u32,
         value: u32,
-    ) -> Result<(), BossbarUpdateError> {
+    ) -> Result<(), BossbarUpdateError<'_>> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.value == value && bossbar.max == max_value {
@@ -193,7 +193,7 @@ impl CustomBossbars {
         server: &Server,
         resource_location: String,
         new_visibility: bool,
-    ) -> Result<(), BossbarUpdateError> {
+    ) -> Result<(), BossbarUpdateError<'_>> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.visible == new_visibility && new_visibility {
@@ -232,7 +232,7 @@ impl CustomBossbars {
         server: &Server,
         resource_location: &str,
         new_title: TextComponent,
-    ) -> Result<(), BossbarUpdateError> {
+    ) -> Result<(), BossbarUpdateError<'_>> {
         let bossbar = self.custom_bossbars.get_mut(resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.bossbar_data.title == new_title {
@@ -271,7 +271,7 @@ impl CustomBossbars {
         server: &Server,
         resource_location: String,
         new_color: BossbarColor,
-    ) -> Result<(), BossbarUpdateError> {
+    ) -> Result<(), BossbarUpdateError<'_>> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.bossbar_data.color == new_color {
@@ -311,7 +311,7 @@ impl CustomBossbars {
         server: &Server,
         resource_location: String,
         new_division: BossbarDivisions,
-    ) -> Result<(), BossbarUpdateError> {
+    ) -> Result<(), BossbarUpdateError<'_>> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             if bossbar.bossbar_data.division == new_division {
@@ -351,7 +351,7 @@ impl CustomBossbars {
         server: &Server,
         resource_location: String,
         new_players: Vec<Uuid>,
-    ) -> Result<(), BossbarUpdateError> {
+    ) -> Result<(), BossbarUpdateError<'_>> {
         let bossbar = self.custom_bossbars.get_mut(&resource_location);
         if let Some(bossbar) = bossbar {
             // Get the difference between the old and new player list and remove bossbars from old players.

@@ -17,7 +17,7 @@ use super::{
 pub struct MsgArgConsumer;
 
 impl GetClientSideArgParser for MsgArgConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::String(StringProtoArgBehavior::GreedyPhrase)
     }
 

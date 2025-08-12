@@ -18,7 +18,7 @@ use super::{
 pub struct SimpleArgConsumer;
 
 impl GetClientSideArgParser for SimpleArgConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::String(StringProtoArgBehavior::SingleWord)
     }
 

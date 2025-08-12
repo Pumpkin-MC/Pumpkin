@@ -107,18 +107,18 @@ impl BlockBehaviour for SeaPickleBlock {
     }
 
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        if args.player.get_entity().pose.load() != EntityPose::Crouching {
-            if let BlockIsReplacing::Itself(state_id) = args.replacing {
-                let mut sea_pickle_prop = SeaPickleProperties::from_state_id(state_id, args.block);
-                if sea_pickle_prop.pickles != Integer1To4::L4 {
-                    sea_pickle_prop.pickles = match sea_pickle_prop.pickles {
-                        Integer1To4::L1 => Integer1To4::L2,
-                        Integer1To4::L2 => Integer1To4::L3,
-                        _ => Integer1To4::L4,
-                    };
-                }
-                return sea_pickle_prop.to_state_id(args.block);
+        if args.player.get_entity().pose.load() != EntityPose::Crouching
+            && let BlockIsReplacing::Itself(state_id) = args.replacing
+        {
+            let mut sea_pickle_prop = SeaPickleProperties::from_state_id(state_id, args.block);
+            if sea_pickle_prop.pickles != Integer1To4::L4 {
+                sea_pickle_prop.pickles = match sea_pickle_prop.pickles {
+                    Integer1To4::L1 => Integer1To4::L2,
+                    Integer1To4::L2 => Integer1To4::L3,
+                    _ => Integer1To4::L4,
+                };
             }
+            return sea_pickle_prop.to_state_id(args.block);
         }
 
         let mut sea_pickle_prop = SeaPickleProperties::default(args.block);

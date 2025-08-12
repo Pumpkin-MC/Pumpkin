@@ -41,7 +41,7 @@ macro_rules! global_path {
 
 // TODO: is there a way to do in-file benches?
 pub use generation::{
-    GlobalRandomConfig, noise_router::proto_noise_router::ProtoNoiseRouters,
+    GlobalRandomConfig, noise::router::proto_noise_router::ProtoNoiseRouters,
     proto_chunk::ProtoChunk, settings::GENERATION_SETTINGS, settings::GeneratorSetting,
 };
 

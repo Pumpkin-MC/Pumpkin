@@ -13,7 +13,7 @@ use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, Sugg
 pub struct SoundCategoryArgumentConsumer;
 
 impl GetClientSideArgParser for SoundCategoryArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         // ResourceLocation is used for enumerated string values
         ArgumentType::ResourceLocation
     }

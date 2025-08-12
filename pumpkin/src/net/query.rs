@@ -108,75 +108,74 @@ async fn handle_packet(
                 }
             }
             PacketType::Status => {
-                if let Ok(packet) = SStatusRequest::decode(&mut raw_packet).await {
-                    if clients
+                if let Ok(packet) = SStatusRequest::decode(&mut raw_packet).await
+                    && clients
                         .read()
                         .await
                         .get(&packet.challenge_token)
                         .is_some_and(|token_bound_ip: &SocketAddr| token_bound_ip == &addr)
-                    {
-                        if packet.is_full_request {
-                            // Get 4 players
-                            let mut players: Vec<CString> = Vec::new();
-                            for world in server.worlds.read().await.iter() {
-                                let mut world_players = world
-                                    .players
-                                    .read()
-                                    .await
-                                    // Although there is no documented limit, we will limit to 4 players
-                                    .values()
-                                    .take(4 - players.len())
-                                    .map(|player| {
-                                        CString::new(player.gameprofile.name.as_str()).unwrap()
-                                    })
-                                    .collect::<Vec<_>>();
-
-                                players.append(&mut world_players); // Append players from this world
-
-                                if players.len() >= 4 {
-                                    break; // Stop if we've collected 4 players
-                                }
-                            }
-
-                            let plugins = PLUGIN_MANAGER
-                                .active_plugins()
+                {
+                    if packet.is_full_request {
+                        // Get 4 players
+                        let mut players: Vec<CString> = Vec::new();
+                        for world in server.worlds.read().await.iter() {
+                            let mut world_players = world
+                                .players
+                                .read()
                                 .await
-                                .into_iter()
-                                .map(|meta| meta.name.to_string())
-                                .reduce(|acc, name| format!("{acc}, {name}"))
-                                .unwrap_or_default();
+                                // Although there is no documented limit, we will limit to 4 players
+                                .values()
+                                .take(4 - players.len())
+                                .map(|player| {
+                                    CString::new(player.gameprofile.name.as_str()).unwrap()
+                                })
+                                .collect::<Vec<_>>();
 
-                            let response = CFullStatus {
-                                session_id: packet.session_id,
-                                hostname: CString::new(BASIC_CONFIG.motd.as_str())?,
-                                version: CString::new(CURRENT_MC_VERSION)?,
-                                plugins: CString::new(plugins)?,
-                                map: CString::new("world")?, // TODO: Get actual world name
-                                num_players: server.get_player_count().await,
-                                max_players: BASIC_CONFIG.max_players as usize,
-                                host_port: bound_addr.port(),
-                                host_ip: CString::new(bound_addr.ip().to_string())?,
-                                players,
-                            };
+                            players.append(&mut world_players); // Append players from this world
 
-                            let _ = socket
-                                .send_to(response.encode().await.as_slice(), addr)
-                                .await;
-                        } else {
-                            let response = CBasicStatus {
-                                session_id: packet.session_id,
-                                motd: CString::new(BASIC_CONFIG.motd.as_str())?,
-                                map: CString::new("world")?,
-                                num_players: server.get_player_count().await,
-                                max_players: BASIC_CONFIG.max_players as usize,
-                                host_port: bound_addr.port(),
-                                host_ip: CString::new(bound_addr.ip().to_string())?,
-                            };
-
-                            let _ = socket
-                                .send_to(response.encode().await.as_slice(), addr)
-                                .await;
+                            if players.len() >= 4 {
+                                break; // Stop if we've collected 4 players
+                            }
                         }
+
+                        let plugins = PLUGIN_MANAGER
+                            .active_plugins()
+                            .await
+                            .into_iter()
+                            .map(|meta| meta.name.to_string())
+                            .reduce(|acc, name| format!("{acc}, {name}"))
+                            .unwrap_or_default();
+
+                        let response = CFullStatus {
+                            session_id: packet.session_id,
+                            hostname: CString::new(BASIC_CONFIG.motd.as_str())?,
+                            version: CString::new(CURRENT_MC_VERSION)?,
+                            plugins: CString::new(plugins)?,
+                            map: CString::new("world")?, // TODO: Get actual world name
+                            num_players: server.get_player_count().await,
+                            max_players: BASIC_CONFIG.max_players as usize,
+                            host_port: bound_addr.port(),
+                            host_ip: CString::new(bound_addr.ip().to_string())?,
+                            players,
+                        };
+
+                        let _ = socket
+                            .send_to(response.encode().await.as_slice(), addr)
+                            .await;
+                    } else {
+                        let response = CBasicStatus {
+                            session_id: packet.session_id,
+                            motd: CString::new(BASIC_CONFIG.motd.as_str())?,
+                            map: CString::new("world")?,
+                            num_players: server.get_player_count().await,
+                            max_players: BASIC_CONFIG.max_players as usize,
+                            host_port: bound_addr.port(),
+                            host_ip: CString::new(bound_addr.ip().to_string())?,
+                        };
+
+                        let _ = socket
+                            .send_to(response.encode().await.as_slice(), addr)
+                            .await;
                     }
                 }
             }
