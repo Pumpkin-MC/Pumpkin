@@ -180,7 +180,7 @@ impl JavaClient {
             if id == &confirm_teleport.teleport_id {
                 // We should set the position now to what we requested in the teleport packet.
                 // This may fix issues when the client sends the position while being teleported.
-                player.living_entity.set_pos(*position);
+                player.living_entity.entity.set_pos(*position);
 
                 *awaiting_teleport = None;
             } else {
@@ -294,7 +294,7 @@ impl JavaClient {
                 let pos = event.to;
                 let entity = &player.living_entity.entity;
                 let last_pos = entity.pos.load();
-                player.living_entity.set_pos(pos);
+                player.living_entity.entity.set_pos(pos);
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed) && packet.collision & FLAG_ON_GROUND == 0 && height_difference > 0.0 {
@@ -395,7 +395,7 @@ impl JavaClient {
                 let pos = event.to;
                 let entity = &player.living_entity.entity;
                 let last_pos = entity.pos.load();
-                player.living_entity.set_pos(pos);
+                player.living_entity.entity.set_pos(pos);
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed)
@@ -756,10 +756,10 @@ impl JavaClient {
                 gameprofile.id,
                 err
             );
-            if err.is_kick() {
-                if let Some(reason) = err.client_kick_reason() {
-                    self.kick(TextComponent::text(reason)).await;
-                }
+            if err.is_kick()
+                && let Some(reason) = err.client_kick_reason()
+            {
+                self.kick(TextComponent::text(reason)).await;
             }
             return;
         }
@@ -879,10 +879,10 @@ impl JavaClient {
                 player.gameprofile.id,
                 err
             );
-            if err.is_kick() {
-                if let Some(reason) = err.client_kick_reason() {
-                    self.kick(TextComponent::text(reason)).await;
-                }
+            if err.is_kick()
+                && let Some(reason) = err.client_kick_reason()
+            {
+                self.kick(TextComponent::text(reason)).await;
             }
             return;
         }

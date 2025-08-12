@@ -62,10 +62,10 @@ impl Ticker {
                 Duration::from_nanos(manager.nanoseconds_per_tick() as u64)
             };
 
-            if let Some(sleep_time) = tick_interval.checked_sub(elapsed) {
-                if !sleep_time.is_zero() {
-                    sleep(sleep_time).await;
-                }
+            if let Some(sleep_time) = tick_interval.checked_sub(elapsed)
+                && !sleep_time.is_zero()
+            {
+                sleep(sleep_time).await;
             }
 
             self.last_tick = Instant::now();

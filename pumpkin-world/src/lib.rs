@@ -1,5 +1,6 @@
 use dimension::Dimension;
 use generation::settings::GenerationSettings;
+use pumpkin_data::BlockState;
 use pumpkin_util::math::vector2::Vector2;
 
 pub mod biome;
@@ -21,6 +22,9 @@ pub mod world_info;
 pub type BlockId = u16;
 pub type BlockStateId = u16;
 
+pub const CURRENT_MC_VERSION: &str = "1.21.7";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
+
 #[macro_export]
 macro_rules! global_path {
     ($path:expr) => {{
@@ -40,12 +44,23 @@ pub use generation::{
     GlobalRandomConfig, noise_router::proto_noise_router::ProtoNoiseRouters,
     proto_chunk::ProtoChunk, settings::GENERATION_SETTINGS, settings::GeneratorSetting,
 };
+
+use crate::generation::proto_chunk::TerrainCache;
 pub fn bench_create_and_populate_noise(
     base_router: &ProtoNoiseRouters,
     random_config: &GlobalRandomConfig,
     settings: &GenerationSettings,
+    terrain_cache: &TerrainCache,
+    default_block: &'static BlockState,
 ) {
-    let mut chunk = ProtoChunk::new(Vector2::new(0, 0), base_router, random_config, settings);
+    let mut chunk = ProtoChunk::new(
+        Vector2::new(0, 0),
+        base_router,
+        random_config,
+        settings,
+        terrain_cache,
+        default_block,
+    );
     chunk.populate_noise();
 }
 
@@ -53,8 +68,17 @@ pub fn bench_create_and_populate_biome(
     base_router: &ProtoNoiseRouters,
     random_config: &GlobalRandomConfig,
     settings: &GenerationSettings,
+    terrain_cache: &TerrainCache,
+    default_block: &'static BlockState,
 ) {
-    let mut chunk = ProtoChunk::new(Vector2::new(0, 0), base_router, random_config, settings);
+    let mut chunk = ProtoChunk::new(
+        Vector2::new(0, 0),
+        base_router,
+        random_config,
+        settings,
+        terrain_cache,
+        default_block,
+    );
     chunk.populate_biomes(Dimension::Overworld);
 }
 
@@ -62,8 +86,17 @@ pub fn bench_create_and_populate_noise_with_surface(
     base_router: &ProtoNoiseRouters,
     random_config: &GlobalRandomConfig,
     settings: &GenerationSettings,
+    terrain_cache: &TerrainCache,
+    default_block: &'static BlockState,
 ) {
-    let mut chunk = ProtoChunk::new(Vector2::new(0, 0), base_router, random_config, settings);
+    let mut chunk = ProtoChunk::new(
+        Vector2::new(0, 0),
+        base_router,
+        random_config,
+        settings,
+        terrain_cache,
+        default_block,
+    );
     chunk.populate_biomes(Dimension::Overworld);
     chunk.populate_noise();
     chunk.build_surface();

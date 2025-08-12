@@ -1,4 +1,3 @@
-use super::CURRENT_MC_VERSION;
 use crate::entity::player::Player;
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
@@ -9,6 +8,7 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
+use pumpkin_world::CURRENT_MC_VERSION;
 use std::{fs::File, io::Read, path::Path};
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
@@ -46,7 +46,7 @@ impl CachedBranding {
             cached_server_brand,
         }
     }
-    pub fn get_branding(&self) -> CPluginMessage {
+    pub fn get_branding(&self) -> CPluginMessage<'_> {
         CPluginMessage::new("minecraft:brand", &self.cached_server_brand)
     }
     const BRAND: &str = "Pumpkin";

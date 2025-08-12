@@ -175,15 +175,13 @@ impl BlockBehaviour for FireBlock {
 
         let dimension = args.world.dimension_type;
         // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
-        if dimension == VanillaDimensionType::Overworld
-            || dimension == VanillaDimensionType::TheNether
-        {
-            if let Some(portal) =
+        if (dimension == VanillaDimensionType::Overworld
+            || dimension == VanillaDimensionType::TheNether)
+            && let Some(portal) =
                 NetherPortal::get_new_portal(args.world, args.position, HorizontalAxis::X).await
-            {
-                portal.create(args.world).await;
-                return;
-            }
+        {
+            portal.create(args.world).await;
+            return;
         }
 
         args.world

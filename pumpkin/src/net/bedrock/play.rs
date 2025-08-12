@@ -81,21 +81,21 @@ impl BedrockClient {
             return;
         }
         let pos = packet.position;
-        let entity = player.get_entity();
+        player.living_entity.entity.set_pos(pos.to_f64());
 
-        let old_block_pos = entity.block_pos.load();
-        player.living_entity.set_pos(pos.to_f64());
-        let new_block_pos = entity.block_pos.load();
-
-        if old_block_pos != new_block_pos {
-            self.send_game_packet(&CNetworkChunkPublisherUpdate::new(
-                new_block_pos,
-                NonZeroU32::from(player.config.read().await.view_distance).get(),
-            ))
-            .await;
-
-            chunker::be_update_position(player).await;
-        }
+        chunker::update_position(player).await;
+        //self.send_game_packet(&CMovePlayer {
+        //     player_runtime_id: VarULong(player.entity_id() as u64),
+        //    position: packet.position + Vector3::new(10.0, 0.0, 0.0),
+        //    pitch: packet.pitch,
+        //    yaw: packet.yaw,
+        //    y_head_rotation: packet.head_rotation,
+        //    position_mode: 1,
+        //    on_ground: false,
+        //    riding_runtime_id: VarULong(0),
+        //    tick: packet.client_tick,
+        //})
+        //.await;
     }
 
     pub async fn handle_interaction(&self, _player: &Arc<Player>, packet: SInteraction) {

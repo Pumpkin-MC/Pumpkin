@@ -88,11 +88,13 @@ use super::combat::{self, AttackType, player_attack_sound};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
-use super::{Entity, EntityBase, NBTStorage};
+use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
+
+pub const DATA_VERSION: i32 = 4438; // 1.21.7
 
 enum BatchState {
     Initial,
@@ -540,10 +542,11 @@ impl Player {
         block_pos: BlockPos,
         yaw: f32,
     ) -> bool {
-        if let Some(respawn_point) = self.respawn_point.load() {
-            if dimension == respawn_point.dimension && block_pos == respawn_point.position {
-                return false;
-            }
+        if let Some(respawn_point) = self.respawn_point.load()
+            && dimension == respawn_point.dimension
+            && block_pos == respawn_point.position
+        {
+            return false;
         }
 
         self.respawn_point.store(Some(RespawnPoint {
@@ -589,6 +592,7 @@ impl Player {
 
         self.get_entity().set_pose(EntityPose::Sleeping).await;
         self.living_entity
+            .entity
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
         self.get_entity()
             .send_meta_data(&[Metadata::new(
@@ -600,6 +604,29 @@ impl Player {
         self.get_entity().set_velocity(Vector3::default()).await;
 
         self.sleeping_since.store(Some(0));
+    }
+
+    pub async fn get_off_ground_speed(&self) -> f64 {
+        let sprinting = self.get_entity().sprinting.load(Ordering::Relaxed);
+
+        if !self.get_entity().has_vehicle().await {
+            let fly_speed = {
+                let abilities = self.abilities.lock().await;
+
+                abilities.flying.then_some(f64::from(abilities.fly_speed))
+            };
+
+            if let Some(flying) = fly_speed {
+                return if sprinting { flying * 2.0 } else { flying };
+            }
+        }
+
+        if sprinting { 0.025_999_999 } else { 0.02 }
+    }
+
+    pub async fn is_flying(&self) -> bool {
+        let abilities = self.abilities.lock().await;
+        abilities.flying
     }
 
     pub async fn wake_up(&self) {
@@ -777,10 +804,10 @@ impl Player {
         }
 
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
-        if let Some(sleeping_since) = self.sleeping_since.load() {
-            if sleeping_since < 101 {
-                self.sleeping_since.store(Some(sleeping_since + 1));
-            }
+        if let Some(sleeping_since) = self.sleeping_since.load()
+            && sleeping_since < 101
+        {
+            self.sleeping_since.store(Some(sleeping_since + 1));
         }
 
         if self.mining.load(Ordering::Relaxed) {
@@ -1044,29 +1071,12 @@ impl Player {
     pub async fn teleport_world(
         self: &Arc<Self>,
         new_world: Arc<World>,
-        position: Option<Vector3<f64>>,
+        position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.read().await.clone();
         let info = &new_world.level_info.read().await;
-        let position = if let Some(pos) = position {
-            pos
-        } else {
-            Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(
-                    new_world
-                        .get_top_block(Vector2::new(
-                            f64::from(info.spawn_x) as i32,
-                            f64::from(info.spawn_z) as i32,
-                        ))
-                        .await
-                        + 1,
-                ),
-                f64::from(info.spawn_z) + 0.5,
-            )
-        };
         let yaw = yaw.unwrap_or(info.spawn_angle);
         let pitch = pitch.unwrap_or(10.0);
 
@@ -1095,7 +1105,7 @@ impl Player {
                 new_world.players.write().await.insert(uuid, self.clone());
                 self.unload_watched_chunks(&current_world).await;
 
-                let last_pos = self.living_entity.last_pos.load();
+                let last_pos = self.living_entity.entity.last_pos.load();
                 let death_dimension = self.world().await.dimension_type.resource_location();
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
@@ -1119,7 +1129,7 @@ impl Player {
                     ;
                 self.send_permission_lvl_update().await;
                 self.clone().request_teleport(position, yaw, pitch).await;
-                self.living_entity.last_pos.store(position);
+                self.living_entity.entity.last_pos.store(position);
                 self.send_abilities_update().await;
                 self.enqueue_set_held_item_packet(&CSetSelectedSlot::new(
                    self.get_inventory().get_selected_slot() as i8,
@@ -1154,7 +1164,7 @@ impl Player {
                     .teleport_id_count
                     .fetch_add(1, Ordering::Relaxed);
                 let teleport_id = i + 1;
-                self.living_entity.set_pos(position);
+                self.living_entity.entity.set_pos(position);
                 let entity = &self.living_entity.entity;
                 entity.set_rotation(yaw, pitch);
                 *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
@@ -1168,37 +1178,6 @@ impl Player {
                         // TODO
                         &[],
                     )).await;
-            }
-        }}
-    }
-
-    /// Teleports the player to a different position with an optional yaw and pitch.
-    /// This method is identical to `entity.teleport()` but emits a `PlayerTeleportEvent` instead of a `EntityTeleportEvent`.
-    pub async fn teleport(self: &Arc<Self>, position: Vector3<f64>, yaw: f32, pitch: f32) {
-        send_cancellable! {{
-            PlayerTeleportEvent {
-                player: self.clone(),
-                from: self.living_entity.entity.pos.load(),
-                to: position,
-                cancelled: false,
-            };
-            'after: {
-                let position = event.to;
-                let entity = self.get_entity();
-                self.request_teleport(position, yaw, pitch).await;
-                entity
-                    .world
-                    .read()
-                    .await
-                    .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
-                        self.living_entity.entity.entity_id.into(),
-                        position,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        yaw,
-                        pitch,
-                        entity.on_ground.load(Ordering::SeqCst),
-                    ))
-                    .await;
             }
         }}
     }
@@ -1285,10 +1264,6 @@ impl Player {
             self.client_loaded_timeout
                 .store(timeout.saturating_sub(1), Ordering::Relaxed);
         }
-    }
-
-    pub async fn kill(&self) {
-        self.living_entity.kill().await;
     }
 
     async fn handle_killed(&self, death_msg: TextComponent) {
@@ -1929,6 +1904,7 @@ impl PartialEq for Player {
 #[async_trait]
 impl NBTStorage for Player {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int("DataVersion", DATA_VERSION);
         self.living_entity.write_nbt(nbt).await;
         self.inventory.write_nbt(nbt).await;
 
@@ -1994,6 +1970,8 @@ impl NBTStorage for Player {
     }
 }
 
+impl NBTStorageInit for Player {}
+
 #[async_trait]
 impl NBTStorage for PlayerInventory {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
@@ -2012,40 +1990,92 @@ impl NBTStorage for PlayerInventory {
             }
         }
 
-        for (i, slot) in &self.equipment_slots {
+        let mut equipment_compound = NbtCompound::new();
+        for slot in self.equipment_slots.values() {
             let equipment_binding = self.entity_equipment.lock().await;
             let stack_binding = equipment_binding.get(slot);
             let stack = stack_binding.lock().await;
             if !stack.is_empty() {
                 let mut item_compound = NbtCompound::new();
-                item_compound.put_byte("Slot", *i as i8);
                 stack.write_item_stack(&mut item_compound);
-                vec.push(NbtTag::Compound(item_compound));
+                match slot {
+                    EquipmentSlot::OffHand(_) => {
+                        equipment_compound.put_component("offhand", item_compound);
+                    }
+                    EquipmentSlot::Feet(_) => {
+                        equipment_compound.put_component("feet", item_compound);
+                    }
+                    EquipmentSlot::Legs(_) => {
+                        equipment_compound.put_component("legs", item_compound);
+                    }
+                    EquipmentSlot::Chest(_) => {
+                        equipment_compound.put_component("chest", item_compound);
+                    }
+                    EquipmentSlot::Head(_) => {
+                        equipment_compound.put_component("head", item_compound);
+                    }
+                    _ => {
+                        warn!("Invalid equipment slot for a player {slot:?}");
+                    }
+                }
             }
         }
-
-        // Save the inventory list
+        nbt.put_component("equipment", equipment_compound);
         nbt.put("Inventory", NbtTag::List(vec));
     }
 
-    async fn read_nbt_non_mut(&self, nbt: &mut NbtCompound) {
+    async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
         // Read selected hotbar slot
         self.set_selected_slot(nbt.get_int("SelectedItemSlot").unwrap_or(0) as u8);
         // Process inventory list
         if let Some(inventory_list) = nbt.get_list("Inventory") {
             for tag in inventory_list {
-                if let Some(item_compound) = tag.extract_compound() {
-                    if let Some(slot_byte) = item_compound.get_byte("Slot") {
-                        let slot = slot_byte as usize;
-                        if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
-                            self.set_stack(slot, item_stack).await;
-                        }
+                if let Some(item_compound) = tag.extract_compound()
+                    && let Some(slot_byte) = item_compound.get_byte("Slot")
+                {
+                    let slot = slot_byte as usize;
+                    if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
+                        self.set_stack(slot, item_stack).await;
                     }
                 }
             }
         }
+
+        if let Some(equipment) = nbt.get_compound("equipment") {
+            if let Some(offhand) = equipment.get_compound("offhand")
+                && let Some(item_stack) = ItemStack::read_item_stack(offhand)
+            {
+                self.set_stack(40, item_stack).await;
+            }
+
+            if let Some(head) = equipment.get_compound("head")
+                && let Some(item_stack) = ItemStack::read_item_stack(head)
+            {
+                self.set_stack(39, item_stack).await;
+            }
+
+            if let Some(chest) = equipment.get_compound("chest")
+                && let Some(item_stack) = ItemStack::read_item_stack(chest)
+            {
+                self.set_stack(38, item_stack).await;
+            }
+
+            if let Some(legs) = equipment.get_compound("legs")
+                && let Some(item_stack) = ItemStack::read_item_stack(legs)
+            {
+                self.set_stack(37, item_stack).await;
+            }
+
+            if let Some(feet) = equipment.get_compound("feet")
+                && let Some(item_stack) = ItemStack::read_item_stack(feet)
+            {
+                self.set_stack(36, item_stack).await;
+            }
+        }
     }
 }
+
+impl NBTStorageInit for PlayerInventory {}
 
 #[async_trait]
 impl EntityBase for Player {
@@ -2057,7 +2087,7 @@ impl EntityBase for Player {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> bool {
-        if self.abilities.lock().await.invulnerable {
+        if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
             return false;
         }
         let world = self.living_entity.entity.world.read().await;
@@ -2082,12 +2112,44 @@ impl EntityBase for Player {
 
     async fn teleport(
         self: Arc<Self>,
-        position: Option<Vector3<f64>>,
+        position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
     ) {
-        self.teleport_world(world, position, yaw, pitch).await;
+        if Arc::ptr_eq(&world, &self.world().await) {
+            // Same world
+            let yaw = yaw.unwrap_or(self.living_entity.entity.yaw.load());
+            let pitch = pitch.unwrap_or(self.living_entity.entity.pitch.load());
+            send_cancellable! {{
+                PlayerTeleportEvent {
+                    player: self.clone(),
+                    from: self.living_entity.entity.pos.load(),
+                    to: position,
+                    cancelled: false,
+                };
+                'after: {
+                    let position = event.to;
+                    let entity = self.get_entity();
+                    self.request_teleport(position, yaw, pitch).await;
+                    entity
+                        .world
+                        .read()
+                        .await
+                        .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
+                            self.living_entity.entity.entity_id.into(),
+                            position,
+                            Vector3::new(0.0, 0.0, 0.0),
+                            yaw,
+                            pitch,
+                            entity.on_ground.load(Ordering::SeqCst),
+                        ))
+                        .await;
+                }
+            }}
+        } else {
+            self.teleport_world(world, position, yaw, pitch).await;
+        }
     }
 
     fn get_entity(&self) -> &Entity {
@@ -2124,6 +2186,10 @@ impl EntityBase for Player {
         ));
         name.insertion(self.gameprofile.name.clone())
     }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -2155,7 +2221,7 @@ pub struct Abilities {
 
 #[async_trait]
 impl NBTStorage for Abilities {
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
         let mut component = NbtCompound::new();
         component.put_bool("invulnerable", self.invulnerable);
         component.put_bool("flying", self.flying);
@@ -2167,18 +2233,20 @@ impl NBTStorage for Abilities {
         nbt.put_component("abilities", component);
     }
 
-    async fn read_nbt(&mut self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         if let Some(component) = nbt.get_compound("abilities") {
             self.invulnerable = component.get_bool("invulnerable").unwrap_or(false);
             self.flying = component.get_bool("flying").unwrap_or(false);
             self.allow_flying = component.get_bool("mayfly").unwrap_or(false);
             self.creative = component.get_bool("instabuild").unwrap_or(false);
             self.allow_modify_world = component.get_bool("mayBuild").unwrap_or(false);
-            self.fly_speed = component.get_float("flySpeed").unwrap_or(0.0);
-            self.walk_speed = component.get_float("walk_speed").unwrap_or(0.0);
+            self.fly_speed = component.get_float("flySpeed").unwrap_or(0.05);
+            self.walk_speed = component.get_float("walkSpeed").unwrap_or(0.1);
         }
     }
 }
+
+impl NBTStorageInit for Abilities {}
 
 impl Default for Abilities {
     fn default() -> Self {

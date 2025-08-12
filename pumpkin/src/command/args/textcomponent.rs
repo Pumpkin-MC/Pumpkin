@@ -10,7 +10,7 @@ use pumpkin_util::text::TextComponent;
 pub struct TextComponentArgConsumer;
 
 impl GetClientSideArgParser for TextComponentArgConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Component
     }
 

@@ -213,19 +213,19 @@ impl ReadlineLogWrapper {
 impl Log for ReadlineLogWrapper {
     fn log(&self, record: &log::Record) {
         self.internal.log(record);
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
+        if let Ok(mut lock) = self.readline.lock()
+            && let Some(rl) = lock.as_mut()
+        {
+            let _ = rl.flush();
         }
     }
 
     fn flush(&self) {
         self.internal.flush();
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
+        if let Ok(mut lock) = self.readline.lock()
+            && let Some(rl) = lock.as_mut()
+        {
+            let _ = rl.flush();
         }
     }
 

@@ -53,20 +53,20 @@ trait LootPoolEntryExt {
 
 impl LootPoolEntryExt for LootPoolEntry {
     fn get_loot(&self, params: &LootContextParameters) -> Option<Vec<ItemStack>> {
-        if let Some(conditions) = self.conditions {
-            if !conditions.iter().all(|cond| cond.is_fulfilled(params)) {
-                return None;
-            }
+        if let Some(conditions) = self.conditions
+            && !conditions.iter().all(|cond| cond.is_fulfilled(params))
+        {
+            return None;
         }
 
         let mut stacks = self.content.get_stacks(params);
 
         if let Some(functions) = self.functions {
             for function in functions {
-                if let Some(conditions) = function.conditions {
-                    if !conditions.iter().all(|cond| cond.is_fulfilled(params)) {
-                        continue;
-                    }
+                if let Some(conditions) = function.conditions
+                    && !conditions.iter().all(|cond| cond.is_fulfilled(params))
+                {
+                    continue;
                 }
 
                 match &function.content {

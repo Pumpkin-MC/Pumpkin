@@ -84,12 +84,12 @@ const fn to_data3d(facing: Facing) -> i32 {
 #[async_trait]
 impl BlockBehaviour for DropperBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(inventory) = block_entity.get_inventory() {
-                args.player
-                    .open_handled_screen(&DropperScreenFactory(inventory))
-                    .await;
-            }
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            && let Some(inventory) = block_entity.get_inventory()
+        {
+            args.player
+                .open_handled_screen(&DropperScreenFactory(inventory))
+                .await;
         }
         BlockActionResult::Success
     }
@@ -157,32 +157,30 @@ impl BlockBehaviour for DropperBlock {
                             .offset(props.facing.to_block_direction().to_offset()),
                     )
                     .await
+                    && let Some(container) = entity.get_inventory()
                 {
-                    if let Some(container) = entity.get_inventory() {
-                        // TODO check WorldlyContainer
-                        let mut is_full = true;
-                        for i in 0..container.size() {
-                            let bind = container.get_stack(i).await;
-                            let item = bind.lock().await;
-                            if item.item_count < item.get_max_stack_size() {
-                                is_full = false;
-                                break;
-                            }
+                    // TODO check WorldlyContainer
+                    let mut is_full = true;
+                    for i in 0..container.size() {
+                        let bind = container.get_stack(i).await;
+                        let item = bind.lock().await;
+                        if item.item_count < item.get_max_stack_size() {
+                            is_full = false;
+                            break;
                         }
-                        if is_full {
-                            return;
-                        }
-                        //TODO WorldlyContainer
-                        let backup = item.clone();
-                        let one_item = item.split(1);
-                        if HopperBlockEntity::add_one_item(dropper, container.as_ref(), one_item)
-                            .await
-                        {
-                            return;
-                        }
-                        *item = backup;
+                    }
+                    if is_full {
                         return;
                     }
+                    //TODO WorldlyContainer
+                    let backup = item.clone();
+                    let one_item = item.split(1);
+                    if HopperBlockEntity::add_one_item(dropper, container.as_ref(), one_item).await
+                    {
+                        return;
+                    }
+                    *item = backup;
+                    return;
                 }
                 let drop_item = item.split(1);
                 let facing = to_normal(props.facing);

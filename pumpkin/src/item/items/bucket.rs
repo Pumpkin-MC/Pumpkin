@@ -22,7 +22,6 @@ use crate::world::World;
 
 pub struct EmptyBucketItem;
 pub struct FilledBucketItem;
-pub struct MilkBucketItem;
 
 impl ItemMetadata for EmptyBucketItem {
     fn ids() -> Box<[u16]> {
@@ -47,11 +46,11 @@ impl ItemMetadata for FilledBucketItem {
     }
 }
 
-impl ItemMetadata for MilkBucketItem {
-    fn ids() -> Box<[u16]> {
-        [Item::MILK_BUCKET.id].into()
-    }
-}
+// impl ItemMetadata for MilkBucketItem {
+//     fn ids() -> Box<[u16]> {
+//         [Item::MILK_BUCKET.id].into()
+//     }
+// }
 
 fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     let start_pos = player.eye_position();
