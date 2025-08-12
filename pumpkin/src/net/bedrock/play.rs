@@ -1,7 +1,4 @@
-use std::{
-    num::NonZero,
-    sync::Arc,
-};
+use std::{num::NonZero, sync::Arc};
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_macros::send_cancellable;
