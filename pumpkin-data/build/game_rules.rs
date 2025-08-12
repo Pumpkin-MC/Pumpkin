@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro2::TokenStream;
@@ -8,7 +8,7 @@ use serde_json::Value;
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/game_rules.json");
 
-    let game_rules: HashMap<String, Value> =
+    let game_rules: BTreeMap<String, Value> =
         serde_json::from_str(&fs::read_to_string("../assets/game_rules.json").unwrap())
             .expect("Failed to parse game_rules.json");
 

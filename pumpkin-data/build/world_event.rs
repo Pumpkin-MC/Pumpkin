@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
@@ -7,7 +7,7 @@ use quote::{format_ident, quote};
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/world_event.json");
 
-    let events: HashMap<String, u16> =
+    let events: BTreeMap<String, u16> =
         serde_json::from_str(&fs::read_to_string("../assets/world_event.json").unwrap())
             .expect("Failed to parse world_event.json");
     let mut variants = TokenStream::new();
