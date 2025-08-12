@@ -48,10 +48,39 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --verbose
+  github-release-draft:
+    name: 'Create GitHub Release Draft'
+    runs-on: ubuntu-latest
+    if: success() && github.ref == 'refs/heads/master'
+    env:
+      NIGHTLY_REPO: ${{ github.repository_owner }}/pumpkin-commit-builds
+    outputs:
+      release-id: ${{ steps.create-release.outputs.release-id }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Create Release Draft
+        id: create-release
+        env:
+          NIGHTLY_REPO: ${{ github.repository_owner }}/pumpkin-commit-builds
+          GITHUB_TOKEN: ${{ secrets.COMMIT_REPO_TOKEN }}
+        run: |
+          RELEASE_TAG="per-commit-${{ github.sha }}"
+          RELEASE_TITLE="Build ${{ github.sha }}"
+          REPO_NAME="${{ env.NIGHTLY_REPO }}"
+          echo "Creating draft release with tag: ${RELEASE_TAG} in repo: ${REPO_NAME}"
+          RELEASE_URL=$(gh release create "${RELEASE_TAG}" \
+            --draft \
+            --title "${RELEASE_TITLE}" \
+            --notes "Per-commit build based on ${{ github.repository }}@${{ github.sha }}" \
+            --repo "${REPO_NAME}")
+          RELEASE_ID=$(gh release view "${RELEASE_TAG}" --repo "${REPO_NAME}" --json id | jq -r '.id')
 
+          echo "release-id=${RELEASE_ID}" >> ${GITHUB_OUTPUT}
   build_release:
     name: Build project in release (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: github-release-draft
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -62,12 +91,13 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --verbose --release
-      - name: Export executable
-        uses: actions/upload-artifact@v4
-        with:
-          name: pumpkin-${{ matrix.os }}
-          compression-level: 9
-          path: target/release/pumpkin*
+      - name: Upload Commit
+        env:
+          NIGHTLY_REPO: ${{ github.repository_owner }}/pumpkin-commit-builds
+          GITHUB_TOKEN: ${{ secrets.COMMIT_REPO_TOKEN }}
+        run: |
+          gh release upload ${{ needs.github-release-draft.outputs.release-id }} \
+            pumpkin-${{ matrix.os }} --repo ${{ env.NIGHTLY_REPO }}
   clippy_release:
     name: Run lints in release mode
     runs-on: ubuntu-latest
@@ -80,79 +110,3 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --release --all-targets --all-features
-  release_on_push:
-    name: Create & Upload Release
-    runs-on: ubuntu-latest
-    # This job only runs after all `build_release` jobs have completed successfully
-    needs: [build_release]
-    # This job only runs on a successful push to the master branch
-    if: success() && github.event_name == 'push' && github.ref == 'refs/heads/master'
-    env:
-      NIGHTLY_REPO: ${{ github.repository_owner }}/pumpkin-commit-builds
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v5
-        # Creates a draft release for the current commit
-      - name: Create Draft GitHub Release
-        id: create-release
-        run: |
-          RELEASE_TAG="per-commit-${{ github.sha }}"
-          RELEASE_TITLE="Build ${{ github.sha }}"
-          
-          # Using gh CLI to create a new draft release
-          RELEASE_URL=$(gh release create "${RELEASE_TAG}" \
-            --draft \
-            --title "${RELEASE_TITLE}" \
-            --notes 'Per-commit build based on ${{ github.repository }}@${{ github.sha }}' \
-            --repo ${{ env.NIGHTLY_REPO }})
-
-          # Extract the release ID from the API response
-          TEMP_TAG=$(basename "$RELEASE_URL")
-          RELEASE_ID=$( \
-            gh api -H "Accept: application/vnd.github+json" \
-            "/repos/${NIGHTLY_REPO}/releases/tags/${TEMP_TAG}" \
-            | jq '.id' \
-          )
-          
-          echo "Release ID obtained: ${RELEASE_ID}"
-          echo "release-id=${RELEASE_ID}" >> ${GITHUB_OUTPUT}
-        env:
-          GITHUB_TOKEN: ${{ secrets.COMMIT_REPO_TOKEN }}
-
-      - name: Download all executables
-        uses: actions/download-artifact@v5
-        with:
-          path: pumpkin
-          pattern: pumpkin-*
-          merge-multiple: true
-
-      # Upload the artifacts from the downloaded directory
-      - name: Upload Linux executable to release
-        run: |
-          gh release upload ${{ steps.create-release.outputs.release-id }} pumpkin/pumpkin-ubuntu-latest --repo ${{ env.NIGHTLY_REPO }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.COMMIT_REPO_TOKEN }}
-
-      - name: Upload Windows executable to release
-        run: |
-          gh release upload ${{ steps.create-release.outputs.release-id }} pumpkin/pumpkin-windows-latest.exe --repo ${{ env.NIGHTLY_REPO }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.COMMIT_REPO_TOKEN }}
-
-      - name: Upload macOS executable to release
-        run: |
-          gh release upload ${{ steps.create-release.outputs.release-id }} pumpkin/pumpkin-macos-latest --repo ${{ env.NIGHTLY_REPO }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.COMMIT_REPO_TOKEN }}
-
-      # Publish the release
-      - name: Publish as latest
-        run: |
-          gh api \
-            --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${NIGHTLY_REPO}/releases/${RELEASE_ID}" \
-            -F draft=false -F prerelease=true
-        env:
-          GITHUB_TOKEN: ${{ secrets.COMMIT_REPO_TOKEN }}
-          RELEASE_ID: ${{ steps.create-release.outputs.release-id }}
