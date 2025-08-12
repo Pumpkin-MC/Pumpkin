@@ -202,7 +202,6 @@ impl ChunkData {
             .iter()
             .enumerate()
             .map(|(i, section)| ChunkSectionNBT {
-                // negative number canot be shifted to divide them
                 y: (i as i8) + section_coords::block_to_section(self.section.min_y) as i8,
                 block_states: Some(section.block_states.to_disk_nbt()),
                 biomes: Some(section.biomes.to_disk_nbt()),

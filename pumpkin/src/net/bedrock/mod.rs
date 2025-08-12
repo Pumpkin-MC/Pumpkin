@@ -354,7 +354,7 @@ impl BedrockClient {
         let mut frame_set_buf = Vec::new();
         frame_set.write_packet_data(&mut frame_set_buf, id).unwrap();
 
-        // I dont know if thats the right place to make ecryption & decoding
+        // I dont know if thats the right place to make encryption & decoding
         if let Err(err) = self
             .network_writer
             .lock()
