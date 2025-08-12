@@ -1,4 +1,7 @@
-use std::{num::NonZero, sync::Arc};
+use std::{
+    num::{NonZero, NonZeroU32},
+    sync::Arc,
+};
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_macros::send_cancellable;
@@ -85,7 +88,7 @@ impl BedrockClient {
                 packet.position.y.floor() as i32,
                 packet.position.z.floor() as i32,
             ),
-            u32::from(view_distance.get()),
+            NonZeroU32::from(view_distance).into(),
         ))
         .await;
         let new_pos = packet.position.to_f64();

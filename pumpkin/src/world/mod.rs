@@ -1,3 +1,4 @@
+use std::num::NonZeroU32;
 use std::sync::Weak;
 use std::sync::atomic::Ordering::Relaxed;
 use std::time::Duration;
@@ -1312,7 +1313,7 @@ impl World {
             .write_game_packet_to_set(
                 &CNetworkChunkPublisherUpdate::new(
                     BlockPos::new(0, 100, 0),
-                    u32::from(player.config.read().await.view_distance.get()),
+                    NonZeroU32::from(player.config.read().await.view_distance).into(),
                 ),
                 &mut frame_set,
             )
