@@ -441,8 +441,8 @@ impl PistonBehavior {
 }
 
 impl BlockState {
-    const HAS_RANDOM_TICKS  : u16 = 1 << 9;
-    
+    const HAS_RANDOM_TICKS: u16 = 1 << 9;
+
     fn has_random_ticks(&self) -> bool {
         self.state_flags & Self::HAS_RANDOM_TICKS != 0
     }

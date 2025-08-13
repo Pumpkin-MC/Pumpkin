@@ -155,23 +155,22 @@ pub struct BlockStateRef {
 }
 
 //This is the Layout of state_props in the right order
-const IS_AIR            : u16 = 1 <<  0;
-const BURNABLE          : u16 = 1 <<  1;
-const TOOL_REQUIRED     : u16 = 1 <<  2;
-const SIDED_TRANSPARENCY: u16 = 1 <<  3;
-const REPLACEABLE       : u16 = 1 <<  4;
-const IS_LIQUID         : u16 = 1 <<  5;
-const IS_SOLID          : u16 = 1 <<  6;
-const IS_FULL_CUBE      : u16 = 1 <<  7;
-const IS_SOLID_BLOCK    : u16 = 1 <<  8;
-const HAS_RANDOM_TICKS  : u16 = 1 <<  9;
+const IS_AIR: u16 = 1 << 0;
+const BURNABLE: u16 = 1 << 1;
+const TOOL_REQUIRED: u16 = 1 << 2;
+const SIDED_TRANSPARENCY: u16 = 1 << 3;
+const REPLACEABLE: u16 = 1 << 4;
+const IS_LIQUID: u16 = 1 << 5;
+const IS_SOLID: u16 = 1 << 6;
+const IS_FULL_CUBE: u16 = 1 << 7;
+const IS_SOLID_BLOCK: u16 = 1 << 8;
+const HAS_RANDOM_TICKS: u16 = 1 << 9;
 
-
-const DOWN_SIDE_SOLID   : u8 = 1 << 0;
-const UP_SIDE_SOLID     : u8 = 1 << 1;
-const NORTH_SIDE_SOLID  : u8 = 1 << 2;
-const SOUTH_SIDE_SOLID  : u8 = 1 << 3;
-const WEST_SIDE_SOLID   : u8 = 1 << 4;
-const EAST_SIDE_SOLID   : u8 = 1 << 5;
-const DOWN_CENTER_SOLID : u8 = 1 << 6;
-const UP_CENTER_SOLID   : u8 = 1 << 7;
+const DOWN_SIDE_SOLID: u8 = 1 << 0;
+const UP_SIDE_SOLID: u8 = 1 << 1;
+const NORTH_SIDE_SOLID: u8 = 1 << 2;
+const SOUTH_SIDE_SOLID: u8 = 1 << 3;
+const WEST_SIDE_SOLID: u8 = 1 << 4;
+const EAST_SIDE_SOLID: u8 = 1 << 5;
+const DOWN_CENTER_SOLID: u8 = 1 << 6;
+const UP_CENTER_SOLID: u8 = 1 << 7;

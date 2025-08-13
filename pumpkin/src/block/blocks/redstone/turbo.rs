@@ -385,9 +385,7 @@ impl RedstoneWireTurbo {
                 if !neighbor.blocks_wire() {
                     let neighbor_down = neighbors[Self::RS_NEIGHBORS_DN[m]];
                     block_power = self.get_max_current_strength(neighbor_down, block_power);
-                } else if !center_up.blocks_wire()
-                    && !neighbor.blocks_wire_down()
-                {
+                } else if !center_up.blocks_wire() && !neighbor.blocks_wire_down() {
                     let neighbor_up = neighbors[Self::RS_NEIGHBORS_UP[m]];
                     block_power = self.get_max_current_strength(neighbor_up, block_power);
                 }
