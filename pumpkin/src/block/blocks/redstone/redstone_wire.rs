@@ -521,9 +521,7 @@ async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
             get_redstone_power_no_dust(neighbor, neighbor_state, world, neighbor_pos, side).await,
         );
         if side.is_horizontal() {
-            if !up_state.blocks_wire()
-                && !neighbor_state.blocks_wire_down()
-            {
+            if !up_state.blocks_wire() && !neighbor_state.blocks_wire_down() {
                 wire_power = max_wire_power(
                     wire_power,
                     world,
