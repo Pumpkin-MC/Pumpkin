@@ -202,6 +202,10 @@ impl ItemBehaviour for EmptyBucketItem {
                 .await;
         }
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[async_trait]
@@ -295,6 +299,10 @@ impl ItemBehaviour for FilledBucketItem {
                 .set_stack(player.inventory.get_selected_slot().into(), item_stack)
                 .await;
         }
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

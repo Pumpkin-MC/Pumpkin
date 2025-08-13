@@ -3,7 +3,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
-use pumpkin_world::generation::implementation::WorldGenerator;
+use pumpkin_world::generation::generator::WorldGenerator;
 use std::sync::Arc;
 use temp_dir::TempDir;
 

@@ -85,4 +85,8 @@ impl ItemBehaviour for MinecartItem {
         ));
         world.spawn_entity(entity).await;
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

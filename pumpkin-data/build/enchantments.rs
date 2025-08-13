@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
@@ -51,7 +51,7 @@ impl AttributeModifierSlot {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/enchantments.json");
 
-    let enchantments: HashMap<String, Enchantment> =
+    let enchantments: BTreeMap<String, Enchantment> =
         serde_json::from_str(&fs::read_to_string("../assets/enchantments.json").unwrap())
             .expect("Failed to parse enchantments.json");
 

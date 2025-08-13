@@ -1,8 +1,14 @@
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicI8, Ordering},
+};
+
 use super::BlockEntity;
 use async_trait::async_trait;
 use num_derive::FromPrimitive;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
+use tokio::sync::Mutex;
 
 #[derive(Clone, Default, FromPrimitive)]
 #[repr(i8)]
@@ -68,7 +74,31 @@ impl From<&str> for DyeColor {
             "green" => DyeColor::Green,
             "red" => DyeColor::Red,
             "black" => DyeColor::Black,
-            _ => DyeColor::Black,
+            _ => DyeColor::default(),
+        }
+    }
+}
+
+impl From<i8> for DyeColor {
+    fn from(s: i8) -> Self {
+        match s {
+            0 => DyeColor::White,
+            1 => DyeColor::Orange,
+            2 => DyeColor::Magenta,
+            3 => DyeColor::LightBlue,
+            4 => DyeColor::Yellow,
+            5 => DyeColor::Lime,
+            6 => DyeColor::Pink,
+            7 => DyeColor::Gray,
+            8 => DyeColor::LightGray,
+            9 => DyeColor::Cyan,
+            10 => DyeColor::Purple,
+            11 => DyeColor::Blue,
+            12 => DyeColor::Brown,
+            13 => DyeColor::Green,
+            14 => DyeColor::Red,
+            15 => DyeColor::Black,
+            _ => DyeColor::default(),
         }
     }
 }
@@ -79,29 +109,57 @@ impl From<DyeColor> for NbtTag {
     }
 }
 
-// NBT data structure
 pub struct SignBlockEntity {
-    front_text: Text,
-    back_text: Text,
-    is_waxed: bool,
+    pub front_text: Text,
+    pub back_text: Text,
+    pub is_waxed: AtomicBool,
     position: BlockPos,
+    pub currently_editing_player: Arc<Mutex<Option<uuid::Uuid>>>,
 }
 
-#[derive(Clone, Default)]
-struct Text {
-    has_glowing_text: bool,
-    color: DyeColor,
-    messages: [String; 4],
+pub struct Text {
+    pub has_glowing_text: AtomicBool,
+    color: AtomicI8,
+    pub messages: Arc<std::sync::Mutex<[String; 4]>>,
+}
+
+impl Clone for Text {
+    fn clone(&self) -> Self {
+        Self {
+            has_glowing_text: AtomicBool::new(self.has_glowing_text.load(Ordering::Relaxed)),
+            color: AtomicI8::new(self.color.load(Ordering::Relaxed)),
+            messages: self.messages.clone(),
+        }
+    }
+}
+
+impl Default for Text {
+    fn default() -> Self {
+        Self {
+            has_glowing_text: AtomicBool::new(false),
+            color: AtomicI8::new(DyeColor::default() as i8),
+            messages: Default::default(),
+        }
+    }
 }
 
 impl From<Text> for NbtTag {
     fn from(value: Text) -> Self {
         let mut nbt = NbtCompound::new();
-        nbt.put_bool("has_glowing_text", value.has_glowing_text);
-        nbt.put_string("color", value.color.into());
+        nbt.put_bool(
+            "has_glowing_text",
+            value.has_glowing_text.load(Ordering::Relaxed),
+        );
+        nbt.put_string("color", value.get_color().into());
         nbt.put_list(
             "messages",
-            value.messages.into_iter().map(NbtTag::String).collect(),
+            value
+                .messages
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|s| NbtTag::String(s.clone()))
+                .collect(),
         );
         NbtTag::Compound(nbt)
     }
@@ -119,15 +177,15 @@ impl From<NbtTag> for Text {
             .filter_map(|tag| tag.extract_string().map(|s| s.to_string()))
             .collect();
         Self {
-            has_glowing_text,
-            color: DyeColor::from(color),
-            messages: [
+            has_glowing_text: AtomicBool::new(has_glowing_text),
+            color: AtomicI8::new(DyeColor::from(color) as i8),
+            messages: Arc::new(std::sync::Mutex::new([
                 // its important that we use unwrap_or since otherwise we may crash on older versions
                 messages.first().unwrap_or(&"".to_string()).clone(),
                 messages.get(1).unwrap_or(&"".to_string()).clone(),
                 messages.get(2).unwrap_or(&"".to_string()).clone(),
                 messages.get(3).unwrap_or(&"".to_string()).clone(),
-            ],
+            ])),
         }
     }
 }
@@ -135,10 +193,18 @@ impl From<NbtTag> for Text {
 impl Text {
     fn new(messages: [String; 4]) -> Self {
         Self {
-            has_glowing_text: false,
-            color: DyeColor::Black,
-            messages,
+            has_glowing_text: AtomicBool::new(false),
+            color: AtomicI8::new(DyeColor::default() as i8),
+            messages: Arc::new(std::sync::Mutex::new(messages)),
         }
+    }
+
+    pub fn get_color(&self) -> DyeColor {
+        self.color.load(Ordering::Relaxed).into()
+    }
+
+    pub fn set_color(&self, color: DyeColor) {
+        self.color.store(color as i8, Ordering::Relaxed);
     }
 }
 
@@ -163,21 +229,22 @@ impl BlockEntity for SignBlockEntity {
             position,
             front_text,
             back_text,
-            is_waxed,
+            is_waxed: AtomicBool::new(is_waxed),
+            currently_editing_player: Arc::new(Mutex::new(None)),
         }
     }
 
     async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         nbt.put("front_text", self.front_text.clone());
         nbt.put("back_text", self.back_text.clone());
-        nbt.put_bool("is_waxed", self.is_waxed);
+        nbt.put_bool("is_waxed", self.is_waxed.load(Ordering::Relaxed));
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
         nbt.put("front_text", self.front_text.clone());
         nbt.put("back_text", self.back_text.clone());
-        nbt.put_bool("is_waxed", self.is_waxed);
+        nbt.put_bool("is_waxed", self.is_waxed.load(Ordering::Relaxed));
         Some(nbt)
     }
 
@@ -191,7 +258,7 @@ impl SignBlockEntity {
     pub fn new(position: BlockPos, is_front: bool, messages: [String; 4]) -> Self {
         Self {
             position,
-            is_waxed: false,
+            is_waxed: AtomicBool::new(false),
             front_text: if is_front {
                 Text::new(messages.clone())
             } else {
@@ -202,14 +269,16 @@ impl SignBlockEntity {
             } else {
                 Text::default()
             },
+            currently_editing_player: Arc::new(Mutex::new(None)),
         }
     }
     pub fn empty(position: BlockPos) -> Self {
         Self {
             position,
-            is_waxed: false,
+            is_waxed: AtomicBool::new(false),
             front_text: Text::default(),
             back_text: Text::default(),
+            currently_editing_player: Arc::new(Mutex::new(None)),
         }
     }
 }
