@@ -719,12 +719,14 @@ impl LivingEntity {
         //TODO: KillCredit
         match damage_type.death_message_type {
             DeathMessageType::Default => {
-                if cause.is_some() && source.is_some() {
+                if let Some(cause) = cause
+                    && source.is_some()
+                {
                     TextComponent::translate(
                         format!("death.attack.{}.player", damage_type.message_id),
                         [
                             dyn_self.get_display_name().await,
-                            cause.unwrap().get_display_name().await,
+                            cause.get_display_name().await,
                         ],
                     )
                 } else {

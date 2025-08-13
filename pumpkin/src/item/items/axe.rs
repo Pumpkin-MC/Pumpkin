@@ -77,6 +77,10 @@ impl ItemBehaviour for AxeItem {
             return;
         }
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 fn try_use_axe(block: &Block) -> u16 {
     // Trying to get the strip equivalent

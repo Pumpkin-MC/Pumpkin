@@ -2956,6 +2956,28 @@ impl World {
         chunk.mark_dirty(true);
     }
 
+    pub async fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
+        let block_pos = block_entity.get_position();
+        let chunk = self
+            .level
+            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
+            .await;
+        let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
+        let block_entity_nbt = block_entity.chunk_data_nbt();
+
+        if let Some(nbt) = &block_entity_nbt {
+            let mut bytes = Vec::new();
+            to_bytes_unnamed(nbt, &mut bytes).unwrap();
+            self.broadcast_packet_all(&CBlockEntityData::new(
+                block_entity.get_position(),
+                VarInt(block_entity.get_id() as i32),
+                bytes.into_boxed_slice(),
+            ))
+            .await;
+        }
+        chunk.mark_dirty(true);
+    }
+
     fn intersects_aabb_with_direction(
         from: Vector3<f64>,
         to: Vector3<f64>,
@@ -3061,10 +3083,10 @@ impl World {
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
         let (collision, direction) = self.ray_outline_check(&block, from, to).await;
-        if let Some(dir) = direction {
-            if collision {
-                return Some((block, dir));
-            }
+        if let Some(dir) = direction
+            && collision
+        {
+            return Some((block, dir));
         }
 
         let difference = to.sub(&from);

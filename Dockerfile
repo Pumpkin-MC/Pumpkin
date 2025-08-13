@@ -8,6 +8,7 @@ WORKDIR /pumpkin
 COPY . /pumpkin
 
 RUN rustup show active-toolchain || rustup toolchain install
+RUN rustup component add rustfmt
 
 # build release
 RUN --mount=type=cache,sharing=private,target=/pumpkin/target \

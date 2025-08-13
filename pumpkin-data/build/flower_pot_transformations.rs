@@ -1,10 +1,10 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/flower_pot_transformations.json");
 
-    let flower_pot_transformation: HashMap<u16, u16> = serde_json::from_str(
+    let flower_pot_transformation: BTreeMap<u16, u16> = serde_json::from_str(
         &fs::read_to_string("../assets/flower_pot_transformations.json").unwrap(),
     )
     .expect("Failed to parse flower_pot_transformations.json");

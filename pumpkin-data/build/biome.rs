@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
@@ -16,7 +16,7 @@ pub struct Biome {
     features: Vec<Vec<String>>,
     creature_spawn_probability: Option<f32>,
     spawners: SpawnGroups,
-    spawn_costs: HashMap<String, SpawnCosts>,
+    spawn_costs: BTreeMap<String, SpawnCosts>,
     pub id: u8,
 }
 
@@ -161,7 +161,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/biome.json");
     println!("cargo:rerun-if-changed=../assets/multi_noise_biome_tree.json");
 
-    let biomes: HashMap<String, Biome> =
+    let biomes: BTreeMap<String, Biome> =
         serde_json::from_str(&fs::read_to_string("../assets/biome.json").unwrap())
             .expect("Failed to parse biome.json");
     let biome_trees: MultiNoiseBiomeSuppliers =

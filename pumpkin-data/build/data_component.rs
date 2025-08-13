@@ -1,13 +1,13 @@
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/data_component.json");
 
-    let data_component: HashMap<String, u8> =
+    let data_component: BTreeMap<String, u8> =
         serde_json::from_str(&fs::read_to_string("../assets/data_component.json").unwrap())
             .expect("Failed to parse data_component.json");
 

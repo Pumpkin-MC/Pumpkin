@@ -545,10 +545,11 @@ impl Player {
         block_pos: BlockPos,
         yaw: f32,
     ) -> bool {
-        if let Some(respawn_point) = self.respawn_point.load() {
-            if dimension == respawn_point.dimension && block_pos == respawn_point.position {
-                return false;
-            }
+        if let Some(respawn_point) = self.respawn_point.load()
+            && dimension == respawn_point.dimension
+            && block_pos == respawn_point.position
+        {
+            return false;
         }
 
         self.respawn_point.store(Some(RespawnPoint {
@@ -806,10 +807,10 @@ impl Player {
         }
 
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
-        if let Some(sleeping_since) = self.sleeping_since.load() {
-            if sleeping_since < 101 {
-                self.sleeping_since.store(Some(sleeping_since + 1));
-            }
+        if let Some(sleeping_since) = self.sleeping_since.load()
+            && sleeping_since < 101
+        {
+            self.sleeping_since.store(Some(sleeping_since + 1));
         }
 
         if self.mining.load(Ordering::Relaxed) {
@@ -2045,46 +2046,46 @@ impl NBTStorage for PlayerInventory {
         // Process inventory list
         if let Some(inventory_list) = nbt.get_list("Inventory") {
             for tag in inventory_list {
-                if let Some(item_compound) = tag.extract_compound() {
-                    if let Some(slot_byte) = item_compound.get_byte("Slot") {
-                        let slot = slot_byte as usize;
-                        if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
-                            self.set_stack(slot, item_stack).await;
-                        }
+                if let Some(item_compound) = tag.extract_compound()
+                    && let Some(slot_byte) = item_compound.get_byte("Slot")
+                {
+                    let slot = slot_byte as usize;
+                    if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
+                        self.set_stack(slot, item_stack).await;
                     }
                 }
             }
         }
 
         if let Some(equipment) = nbt.get_compound("equipment") {
-            if let Some(offhand) = equipment.get_compound("offhand") {
-                if let Some(item_stack) = ItemStack::read_item_stack(offhand) {
-                    self.set_stack(40, item_stack).await;
-                }
+            if let Some(offhand) = equipment.get_compound("offhand")
+                && let Some(item_stack) = ItemStack::read_item_stack(offhand)
+            {
+                self.set_stack(40, item_stack).await;
             }
 
-            if let Some(head) = equipment.get_compound("head") {
-                if let Some(item_stack) = ItemStack::read_item_stack(head) {
-                    self.set_stack(39, item_stack).await;
-                }
+            if let Some(head) = equipment.get_compound("head")
+                && let Some(item_stack) = ItemStack::read_item_stack(head)
+            {
+                self.set_stack(39, item_stack).await;
             }
 
-            if let Some(chest) = equipment.get_compound("chest") {
-                if let Some(item_stack) = ItemStack::read_item_stack(chest) {
-                    self.set_stack(38, item_stack).await;
-                }
+            if let Some(chest) = equipment.get_compound("chest")
+                && let Some(item_stack) = ItemStack::read_item_stack(chest)
+            {
+                self.set_stack(38, item_stack).await;
             }
 
-            if let Some(legs) = equipment.get_compound("legs") {
-                if let Some(item_stack) = ItemStack::read_item_stack(legs) {
-                    self.set_stack(37, item_stack).await;
-                }
+            if let Some(legs) = equipment.get_compound("legs")
+                && let Some(item_stack) = ItemStack::read_item_stack(legs)
+            {
+                self.set_stack(37, item_stack).await;
             }
 
-            if let Some(feet) = equipment.get_compound("feet") {
-                if let Some(item_stack) = ItemStack::read_item_stack(feet) {
-                    self.set_stack(36, item_stack).await;
-                }
+            if let Some(feet) = equipment.get_compound("feet")
+                && let Some(item_stack) = ItemStack::read_item_stack(feet)
+            {
+                self.set_stack(36, item_stack).await;
             }
         }
     }

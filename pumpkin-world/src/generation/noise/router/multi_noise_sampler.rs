@@ -231,7 +231,7 @@ mod test {
 
     use crate::{
         GlobalRandomConfig, biome::multi_noise::NoiseValuePoint,
-        generation::noise_router::proto_noise_router::ProtoNoiseRouters,
+        generation::noise::router::proto_noise_router::ProtoNoiseRouters,
     };
 
     use super::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions};

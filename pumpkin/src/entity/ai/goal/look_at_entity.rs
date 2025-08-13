@@ -141,12 +141,12 @@ impl Goal for LookAtEntityGoal {
 
     async fn tick(&self, mob: &dyn Mob) {
         let mob = mob.get_mob_entity();
-        if let Some(target) = self.target.lock().await.as_ref() {
-            if target.get_entity().is_alive() {
-                let target_pos = target.get_entity().pos.load();
-                mob.living_entity.entity.look_at(target_pos).await;
-                self.look_time.fetch_sub(1, Relaxed);
-            }
+        if let Some(target) = self.target.lock().await.as_ref()
+            && target.get_entity().is_alive()
+        {
+            let target_pos = target.get_entity().pos.load();
+            mob.living_entity.entity.look_at(target_pos).await;
+            self.look_time.fetch_sub(1, Relaxed);
         }
     }
 

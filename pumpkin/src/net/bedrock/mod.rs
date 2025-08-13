@@ -170,13 +170,13 @@ impl BedrockClient {
 
     pub async fn process_packet(self: &Arc<Self>, server: &Server, packet: Cursor<Vec<u8>>) {
         let packet = self.get_packet_payload(packet).await;
-        if let Some(packet) = packet {
-            if let Err(error) = self.handle_packet_payload(server, packet).await {
-                let _text = format!("Error while reading incoming packet {error}");
-                log::error!("Failed to read incoming packet with : {error}");
-                self.kick(DisconnectReason::BadPacket, error.to_string())
-                    .await;
-            }
+        if let Some(packet) = packet
+            && let Err(error) = self.handle_packet_payload(server, packet).await
+        {
+            let _text = format!("Error while reading incoming packet {error}");
+            log::error!("Failed to read incoming packet with : {error}");
+            self.kick(DisconnectReason::BadPacket, error.to_string())
+                .await;
         }
     }
 
