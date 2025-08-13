@@ -93,7 +93,7 @@ use pumpkin_data::potion::Effect;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
-pub const DATA_VERSION: i32 = 4438; // 1.21.7
+pub const DATA_VERSION: i32 = 4438; // 1.21.8
 
 enum BatchState {
     Initial,

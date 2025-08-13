@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
@@ -7,7 +7,7 @@ use quote::{format_ident, quote};
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/spawn_egg.json");
 
-    let eggs: HashMap<u16, String> =
+    let eggs: BTreeMap<u16, String> =
         serde_json::from_str(&fs::read_to_string("../assets/spawn_egg.json").unwrap())
             .expect("Failed to parse spawn_egg.json");
     let mut names = TokenStream::new();

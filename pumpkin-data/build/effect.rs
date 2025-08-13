@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use heck::{ToPascalCase, ToShoutySnakeCase};
 use proc_macro2::TokenStream;
@@ -61,7 +61,7 @@ impl MobEffectCategory {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/effect.json");
 
-    let effects: HashMap<String, Effect> =
+    let effects: BTreeMap<String, Effect> =
         serde_json::from_str(&fs::read_to_string("../assets/effect.json").unwrap())
             .expect("Failed to parse effect.json");
 

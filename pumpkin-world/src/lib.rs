@@ -22,7 +22,7 @@ pub mod world_info;
 pub type BlockId = u16;
 pub type BlockStateId = u16;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.7";
+pub const CURRENT_MC_VERSION: &str = "1.21.8";
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.94";
 
 #[macro_export]
@@ -41,7 +41,7 @@ macro_rules! global_path {
 
 // TODO: is there a way to do in-file benches?
 pub use generation::{
-    GlobalRandomConfig, noise_router::proto_noise_router::ProtoNoiseRouters,
+    GlobalRandomConfig, noise::router::proto_noise_router::ProtoNoiseRouters,
     proto_chunk::ProtoChunk, settings::GENERATION_SETTINGS, settings::GeneratorSetting,
 };
 

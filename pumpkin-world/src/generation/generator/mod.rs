@@ -8,7 +8,7 @@ use pumpkin_data::noise_router::{
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use super::{
-    biome_coords, noise_router::proto_noise_router::ProtoNoiseRouters,
+    biome_coords, noise::router::proto_noise_router::ProtoNoiseRouters,
     settings::gen_settings_from_dimension,
 };
 use crate::chunk::format::LightContainer;
@@ -102,7 +102,7 @@ impl WorldGenerator for VanillaGenerator {
         proto_chunk.populate_biomes(self.dimension);
         proto_chunk.populate_noise();
         proto_chunk.build_surface();
-        proto_chunk.generate_features(level, block_registry);
+        proto_chunk.generate_features_and_structure(level, block_registry);
 
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
             let relative_y = y as usize;

@@ -4,6 +4,7 @@ use crate::block::blocks::barrel::BarrelBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::cactus::CactusBlock;
 use crate::block::blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
+use crate::block::blocks::carved_pumpkin::CarvedPumpkinBlock;
 use crate::block::blocks::chests::ChestBlock;
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
@@ -118,11 +119,13 @@ use super::{
     PrepareArgs, UseWithItemArgs,
 };
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
+use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
 use crate::block::blocks::hopper::HopperBlock;
 use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::blocks::ladder::LadderBlock;
+use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
@@ -139,6 +142,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SaplingBlock);
     manager.register(CactusBlock);
     manager.register(CarpetBlock);
+    manager.register(CarvedPumpkinBlock);
     manager.register(CampfireBlock);
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
@@ -206,6 +210,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(LecternBlock);
     manager.register(StemBlock);
     manager.register(AttachedStemBlock);
+    manager.register(ChainBlock);
+    manager.register(LanternBlock);
+
     manager.register(FallingBlock);
 
     // Fire
@@ -252,6 +259,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 }
 
 // ActionResult.java
+#[derive(PartialEq)]
 pub enum BlockActionResult {
     /// Action was successful | Same as SUCCESS in vanilla
     Success,

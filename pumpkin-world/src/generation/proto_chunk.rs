@@ -12,6 +12,8 @@ use pumpkin_util::{
 };
 
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
+use crate::generation::structure::STRUCTURE_SETS;
+use crate::generation::structure::placement::StructurePlacementCalculator;
 use crate::{
     BlockStateId,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier, hash_seed},
@@ -30,7 +32,7 @@ use super::{
     chunk_noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
     feature::placed_features::PLACED_FEATURES,
     height_limit::HeightLimitView,
-    noise_router::{
+    noise::router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
         proto_noise_router::{DoublePerlinNoiseBuilder, ProtoNoiseRouters},
         surface_height_sampler::{
@@ -380,7 +382,7 @@ impl<'a> ProtoChunk<'a> {
             local_pos.z & 15,
         );
         if local_pos.y < 0 || local_pos.y >= self.height() as i32 {
-            return RawBlockState::AIR;
+            return RawBlockState(Block::VOID_AIR.default_state.id);
         }
         let index = self.local_pos_to_block_index(&local_pos);
         RawBlockState(self.flat_block_map[index])
@@ -436,9 +438,6 @@ impl<'a> ProtoChunk<'a> {
         let start_biome_x = biome_coords::from_block(start_block_x);
         let start_biome_z = biome_coords::from_block(start_block_z);
 
-        #[cfg(debug_assertions)]
-        let mut indices = (0..self.flat_biome_map.len()).collect::<Vec<_>>();
-
         for i in bottom_section..=top_section {
             let start_block_y = section_coords::section_to_block(i);
             let start_biome_y = biome_coords::from_block(start_block_y);
@@ -447,7 +446,6 @@ impl<'a> ProtoChunk<'a> {
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
-                        // panic!("{}:{}", start_y, y);
                         let biome_pos =
                             Vector3::new(start_biome_x + x, start_biome_y + y, start_biome_z + z);
                         let biome = if dimension == Dimension::End {
@@ -463,7 +461,7 @@ impl<'a> ProtoChunk<'a> {
                                 dimension,
                             )
                         };
-                        //panic!("Populating biome: {:?} -> {:?}", biome_pos, biome);
+                        //dbg!("Populating biome: {:?} -> {:?}", biome_pos, biome);
 
                         let local_biome_pos = Vector3 {
                             x,
@@ -473,16 +471,11 @@ impl<'a> ProtoChunk<'a> {
                         };
                         let index = self.local_biome_pos_to_biome_index(&local_biome_pos);
 
-                        #[cfg(debug_assertions)]
-                        indices.retain(|i| *i != index);
                         self.flat_biome_map[index] = biome;
                     }
                 }
             }
         }
-
-        #[cfg(debug_assertions)]
-        assert!(indices.is_empty(), "Not all biome indices were set!");
     }
 
     pub fn populate_noise(&mut self) {
@@ -711,7 +704,7 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
-    /// This generates "Features," also known as decorations, which include things like trees, grass, ores, and more.
+    /// This generates "Structure Pieces" and "Features" also known as decorations, which include things like trees, grass, ores, and more.
     /// Essentially, it encompasses everything above the surface or underground. It's crucial that this step is executed after biomes are generated,
     /// as the decoration directly depends on the biome. Similarly, running this after the surface is built is logical, as it often involves checking block types.
     /// For example, flowers are typically placed only on grass blocks.
@@ -720,7 +713,11 @@ impl<'a> ProtoChunk<'a> {
     ///
     /// 1. First, we determine **whether** to generate a feature and **at which block positions** to place it.
     /// 2. Then, using the second file, we determine **how** to generate the feature.
-    pub fn generate_features(&mut self, level: &Arc<Level>, block_registry: &dyn BlockRegistryExt) {
+    pub fn generate_features_and_structure(
+        &mut self,
+        level: &Arc<Level>,
+        block_registry: &dyn BlockRegistryExt,
+    ) {
         let chunk_pos = self.chunk_pos;
         let min_y = self.noise_sampler.min_y();
         let height = self.noise_sampler.height();
@@ -751,6 +748,17 @@ impl<'a> ProtoChunk<'a> {
                 &mut random,
                 block_pos,
             );
+        }
+    }
+
+    pub fn set_structure_starts(&self) {
+        for (_name, set) in STRUCTURE_SETS.iter() {
+            let calculator = StructurePlacementCalculator {
+                seed: self.random_config.seed as i64,
+            };
+            if !set.placement.should_generate(calculator, self.chunk_pos) {
+                continue; // ??
+            }
         }
     }
 
@@ -801,7 +809,7 @@ mod test {
         dimension::Dimension,
         generation::{
             GlobalRandomConfig,
-            noise_router::{
+            noise::router::{
                 density_function::{NoiseFunctionComponentRange, PassThrough},
                 proto_noise_router::{ProtoNoiseFunctionComponent, ProtoNoiseRouters},
             },
