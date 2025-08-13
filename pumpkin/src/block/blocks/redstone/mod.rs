@@ -68,7 +68,7 @@ pub async fn get_redstone_power(
     pos: &BlockPos,
     facing: BlockDirection,
 ) -> u8 {
-    if state.is_solid() {
+    if state.is_solid_block() {
         return std::cmp::max(
             get_max_strong_power(world, pos, true).await,
             get_weak_power(block, state, world, pos, facing, true).await,
@@ -84,7 +84,7 @@ async fn get_redstone_power_no_dust(
     pos: BlockPos,
     facing: BlockDirection,
 ) -> u8 {
-    if state.is_solid() {
+    if state.is_solid_block() {
         return std::cmp::max(
             get_max_strong_power(world, &pos, false).await,
             get_weak_power(block, state, world, &pos, facing, false).await,
@@ -189,7 +189,7 @@ pub async fn diode_get_input_strength(world: &World, pos: &BlockPos, facing: Blo
     let input_pos = pos.offset(facing.to_offset());
     let (input_block, input_state) = world.get_block_and_state(&input_pos).await;
     let power: u8 = get_redstone_power(input_block, input_state, world, &input_pos, facing).await;
-    if power == 0 && input_state.is_solid() {
+    if power == 0 && input_state.is_solid_block() {
         return get_max_weak_power(world, &input_pos, true).await;
     }
     power

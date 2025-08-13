@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block,
-    block_properties::{HorizontalFacing, RailShape, StraightRailShape},
+    block_properties::{HorizontalFacing, RailShape, StraightRailShape}, Block, BlockDirection
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
@@ -40,7 +39,7 @@ pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &
 
 pub(super) async fn can_place_rail_at(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
     let state = world.get_block_state(&pos.down()).await;
-    state.is_solid()
+    state.is_side_solid(BlockDirection::Up)
 }
 
 pub(super) async fn compute_placed_rail_shape(
