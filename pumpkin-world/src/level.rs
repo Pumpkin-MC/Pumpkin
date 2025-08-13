@@ -511,6 +511,9 @@ impl Level {
         chunks: Vec<Vector2<i32>>,
     ) -> UnboundedReceiver<(SyncChunk, bool)> {
         let (sender, receiver) = mpsc::unbounded_channel();
+        if chunks.is_empty() {
+            return receiver;
+        }
         // Put this in another thread so we aren't blocking on it
         let level = self.clone();
         self.spawn_task(async move {
@@ -689,28 +692,18 @@ impl Level {
             return;
         }
 
-        // If false, stop loading chunks because the channel has closed.
-        let send_chunk =
-            move |is_new: bool,
-                  chunk: SyncChunk,
-                  channel: &mpsc::UnboundedSender<(SyncChunk, bool)>| {
-                channel.send((chunk, is_new)).is_ok()
-            };
-
         // First send all chunks that we have cached
         // We expect best case scenario to have all cached
         let mut remaining_chunks = Vec::new();
         for chunk in chunks {
-            let is_ok = if let Some(chunk) = self.loaded_chunks.get(chunk) {
-                send_chunk(false, chunk.value().clone(), &channel)
+            if let Some(chunk) = self.loaded_chunks.get(chunk) {
+                if channel.send((chunk.value().clone(), false)).is_err() {
+                    println!("sending failed");
+                    return;
+                }
             } else {
                 remaining_chunks.push(*chunk);
-                true
             };
-
-            if !is_ok {
-                return;
-            }
         }
 
         if remaining_chunks.is_empty() {
@@ -720,8 +713,8 @@ impl Level {
         // These just pass data between async tasks, each of which do not block on anything, so
         // these do not need to hold a lot
         let (load_bridge_send, mut load_bridge_recv) =
-            tokio::sync::mpsc::channel::<LoadedData<SyncChunk, ChunkReadingError>>(16);
-        let (generate_bridge_send, mut generate_bridge_recv) = tokio::sync::mpsc::channel(16);
+            mpsc::channel::<LoadedData<SyncChunk, ChunkReadingError>>(16);
+        let (generate_bridge_send, mut generate_bridge_recv) = mpsc::channel(16);
 
         let load_channel = channel.clone();
         let loaded_chunks = self.loaded_chunks.clone();
@@ -736,7 +729,7 @@ impl Level {
                             .or_insert(chunk)
                             .value()
                             .clone();
-                        send_chunk(false, value, &load_channel)
+                        load_channel.send((value, false)).is_ok()
                     }
                     LoadedData::Missing(pos) => generate_bridge_send.send(pos).await.is_ok(),
                     LoadedData::Error((pos, error)) => {
@@ -760,6 +753,7 @@ impl Level {
 
                 if !is_ok {
                     // This isn't recoverable, so stop listening
+                    println!("sending failed");
                     return;
                 }
             }
@@ -854,7 +848,7 @@ impl Level {
                     //     });
                     // }
 
-                    if !send_chunk(true, result.0, &channel) {
+                    if channel.send((result.0, true)).is_err() {
                         // Stop any additional queued generations
                         cloned_continue_to_generate.store(false, Ordering::Relaxed);
                     }

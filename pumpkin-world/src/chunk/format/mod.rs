@@ -134,37 +134,31 @@ impl ChunkData {
         }
 
         let light_engine = ChunkLight {
-            block_light: (0..chunk_data.sections.len() + 2)
-                .map(|index| {
-                    chunk_data
-                        .sections
-                        .iter()
-                        .find(|section| {
-                            section.y as i32 == index as i32 + chunk_data.min_y_section - 1
-                        })
-                        .and_then(|section| section.block_light.clone())
+            block_light: chunk_data
+                .sections
+                .iter()
+                .map(|x| {
+                    x.block_light
+                        .clone()
                         .map(LightContainer::new)
                         .unwrap_or_default()
                 })
                 .collect(),
-            sky_light: (0..chunk_data.sections.len() + 2)
-                .map(|index| {
-                    chunk_data
-                        .sections
-                        .iter()
-                        .find(|section| {
-                            section.y as i32 == index as i32 + chunk_data.min_y_section - 1
-                        })
-                        .and_then(|section| section.sky_light.clone())
+            sky_light: chunk_data
+                .sections
+                .iter()
+                .map(|x| {
+                    x.sky_light
+                        .clone()
                         .map(LightContainer::new)
                         .unwrap_or_default()
                 })
                 .collect(),
         };
+
         let sub_chunks = chunk_data
             .sections
             .into_iter()
-            .filter(|section| section.y >= chunk_data.min_y_section as i8)
             .map(|section| SubChunk {
                 block_states: section
                     .block_states
@@ -202,30 +196,23 @@ impl ChunkData {
     }
 
     async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        let sections: Vec<_> = (0..self.section.sections.len() + 2)
-            .map(|i| {
-                let has_blocks = i >= 1 && i - 1 < self.section.sections.len();
-                let section = has_blocks.then(|| &self.section.sections[i - 1]);
-
-                ChunkSectionNBT {
-                    y: (i as i8) - 1i8 + section_coords::block_to_section(self.section.min_y) as i8,
-                    block_states: section.map(|section| section.block_states.to_disk_nbt()),
-                    biomes: section.map(|section| section.biomes.to_disk_nbt()),
-                    block_light: match self.light_engine.block_light[i].clone() {
-                        LightContainer::Empty(_) => None,
-                        LightContainer::Full(data) => Some(data),
-                    },
-                    sky_light: match self.light_engine.sky_light[i].clone() {
-                        LightContainer::Empty(_) => None,
-                        LightContainer::Full(data) => Some(data),
-                    },
-                }
-            })
-            .filter(|nbt| {
-                nbt.block_states.is_some()
-                    || nbt.biomes.is_some()
-                    || nbt.block_light.is_some()
-                    || nbt.sky_light.is_some()
+        let sections: Vec<_> = self
+            .section
+            .sections
+            .iter()
+            .enumerate()
+            .map(|(i, section)| ChunkSectionNBT {
+                y: (i as i8) + section_coords::block_to_section(self.section.min_y) as i8,
+                block_states: Some(section.block_states.to_disk_nbt()),
+                biomes: Some(section.biomes.to_disk_nbt()),
+                block_light: match self.light_engine.block_light[i].clone() {
+                    LightContainer::Empty(_) => None,
+                    LightContainer::Full(data) => Some(data),
+                },
+                sky_light: match self.light_engine.sky_light[i].clone() {
+                    LightContainer::Empty(_) => None,
+                    LightContainer::Full(data) => Some(data),
+                },
             })
             .collect();
 
