@@ -31,7 +31,7 @@ impl DataComponentCodec<Self> for MaxStackSizeImpl {
                 .ok_or(de::Error::custom("No MaxStackSize VarInt!"))?
                 .0,
         )
-            .map_err(|_| de::Error::custom("No MaxStackSize VarInt!"))?;
+        .map_err(|_| de::Error::custom("No MaxStackSize VarInt!"))?;
         Ok(Self { size })
     }
 }
