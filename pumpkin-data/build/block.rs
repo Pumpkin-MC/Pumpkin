@@ -406,7 +406,7 @@ impl ToTokens for CollisionShape {
 #[derive(Deserialize, Clone, Debug)]
 pub struct BlockState {
     pub id: u16,
-    pub state_flags: u8,
+    pub state_flags: u16,
     pub side_flags: u8,
     pub instrument: String, // TODO: make this an enum
     pub luminance: u8,
@@ -414,7 +414,6 @@ pub struct BlockState {
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
     pub outline_shapes: Vec<u16>,
-    pub has_random_ticks: bool,
     pub opacity: Option<u8>,
     pub block_entity_type: Option<u16>,
 }
@@ -442,6 +441,12 @@ impl PistonBehavior {
 }
 
 impl BlockState {
+    const HAS_RANDOM_TICKS  : u16 = 1 << 9;
+    
+    fn has_random_ticks(&self) -> bool {
+        self.state_flags & Self::HAS_RANDOM_TICKS != 0
+    }
+
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
@@ -474,7 +479,6 @@ impl BlockState {
             .outline_shapes
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
-        let has_random_ticks = self.has_random_ticks;
         let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
@@ -488,7 +492,6 @@ impl BlockState {
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],
                 outline_shapes: &[#(#outline_shapes),*],
-                has_random_tick: #has_random_ticks,
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
             }
@@ -687,7 +690,7 @@ pub(crate) fn build() -> TokenStream {
 
         // Collect state IDs that have random ticks.
         for state in &block.states {
-            if state.has_random_ticks {
+            if state.has_random_ticks() {
                 let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
                 random_tick_states.push(state_id);
             }
