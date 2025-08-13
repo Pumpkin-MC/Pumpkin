@@ -7,8 +7,8 @@ use pumpkin_util::resource_location::ResourceLocation;
 /// Stores some arbitrary data on the client, which persists between server transfers.
 /// The Notchian (vanilla) client only accepts cookies of up to 5 KiB in size.
 pub struct CStoreCookie<'a> {
-    key: &'a ResourceLocation,
-    payload: &'a [u8], // 5120,
+    pub key: &'a ResourceLocation,
+    pub payload: &'a [u8], // 5120,
 }
 
 impl<'a> CStoreCookie<'a> {

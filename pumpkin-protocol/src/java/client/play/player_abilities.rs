@@ -5,9 +5,9 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_PLAYER_ABILITIES)]
 pub struct CPlayerAbilities {
-    flags: i8,
-    flying_speed: f32,
-    field_of_view: f32,
+    pub flags: i8,
+    pub flying_speed: f32,
+    pub field_of_view: f32,
 }
 
 impl CPlayerAbilities {

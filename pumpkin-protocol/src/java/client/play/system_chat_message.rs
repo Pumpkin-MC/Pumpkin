@@ -7,8 +7,8 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_SYSTEM_CHAT)]
 pub struct CSystemChatMessage<'a> {
-    content: &'a TextComponent,
-    overlay: bool,
+    pub content: &'a TextComponent,
+    pub overlay: bool,
 }
 
 impl<'a> CSystemChatMessage<'a> {

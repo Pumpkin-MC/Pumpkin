@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_LEVEL_EVENT)]
 pub struct CLevelEvent {
-    event: i32,
-    location: BlockPos,
-    data: i32,
-    disable_relative_volume: bool,
+    pub event: i32,
+    pub location: BlockPos,
+    pub data: i32,
+    pub disable_relative_volume: bool,
 }
 
 impl CLevelEvent {

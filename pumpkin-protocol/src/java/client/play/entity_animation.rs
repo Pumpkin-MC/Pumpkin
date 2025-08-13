@@ -7,9 +7,9 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_ANIMATE)]
 pub struct CEntityAnimation {
-    entity_id: VarInt,
+    pub entity_id: VarInt,
     /// See `Animation`
-    animation: u8,
+    pub animation: u8,
 }
 
 impl CEntityAnimation {

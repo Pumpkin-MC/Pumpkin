@@ -8,16 +8,16 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_ADD_ENTITY)]
 pub struct CSpawnEntity {
-    entity_id: VarInt,
+    pub entity_id: VarInt,
     #[serde(with = "uuid::serde::compact")]
-    entity_uuid: uuid::Uuid,
-    r#type: VarInt,
-    position: Vector3<f64>,
-    pitch: u8,    // angle
-    yaw: u8,      // angle
-    head_yaw: u8, // angle
-    data: VarInt,
-    velocity: Vector3<i16>,
+    pub entity_uuid: uuid::Uuid,
+    pub r#type: VarInt,
+    pub position: Vector3<f64>,
+    pub pitch: u8,    // angle
+    pub yaw: u8,      // angle
+    pub head_yaw: u8, // angle
+    pub data: VarInt,
+    pub velocity: Vector3<i16>,
 }
 
 impl CSpawnEntity {

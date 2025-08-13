@@ -7,7 +7,7 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_SET_BORDER_WARNING_DELAY)]
 pub struct CSetBorderWarningDelay {
-    warning_time: VarInt,
+    pub warning_time: VarInt,
 }
 
 impl CSetBorderWarningDelay {

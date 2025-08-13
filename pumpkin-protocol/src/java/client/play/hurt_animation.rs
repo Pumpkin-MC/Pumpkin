@@ -7,8 +7,8 @@ use crate::VarInt;
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_HURT_ANIMATION)]
 pub struct CHurtAnimation {
-    entity_id: VarInt,
-    yaw: f32,
+    pub entity_id: VarInt,
+    pub yaw: f32,
 }
 
 impl CHurtAnimation {

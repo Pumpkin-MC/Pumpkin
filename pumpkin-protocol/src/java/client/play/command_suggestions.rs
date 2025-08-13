@@ -8,10 +8,10 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_COMMAND_SUGGESTIONS)]
 pub struct CCommandSuggestions {
-    id: VarInt,
-    start: VarInt,
-    length: VarInt,
-    matches: Box<[CommandSuggestion]>,
+    pub id: VarInt,
+    pub start: VarInt,
+    pub length: VarInt,
+    pub matches: Box<[CommandSuggestion]>,
 }
 
 impl CCommandSuggestions {

@@ -9,10 +9,10 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_DISGUISED_CHAT)]
 pub struct CDisguisedChatMessage<'a> {
-    message: &'a TextComponent,
-    chat_type: VarInt,
-    sender_name: &'a TextComponent,
-    target_name: Option<&'a TextComponent>,
+    pub message: &'a TextComponent,
+    pub chat_type: VarInt,
+    pub sender_name: &'a TextComponent,
+    pub target_name: Option<&'a TextComponent>,
 }
 
 impl<'a> CDisguisedChatMessage<'a> {

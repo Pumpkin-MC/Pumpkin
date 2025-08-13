@@ -7,7 +7,7 @@ use serde::Serialize;
 #[packet(LOGIN_COOKIE_REQUEST)]
 /// Requests a cookie that was previously stored.
 pub struct CLoginCookieRequest<'a> {
-    key: &'a ResourceLocation,
+    pub key: &'a ResourceLocation,
 }
 
 impl<'a> CLoginCookieRequest<'a> {

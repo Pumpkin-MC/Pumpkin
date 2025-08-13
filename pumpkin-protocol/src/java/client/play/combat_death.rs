@@ -8,8 +8,8 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_PLAYER_COMBAT_KILL)]
 pub struct CCombatDeath<'a> {
-    player_id: VarInt,
-    message: &'a TextComponent,
+    pub player_id: VarInt,
+    pub message: &'a TextComponent,
 }
 
 impl<'a> CCombatDeath<'a> {

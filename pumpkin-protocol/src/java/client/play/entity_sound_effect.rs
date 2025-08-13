@@ -8,12 +8,12 @@ use crate::{IdOr, SoundEvent, VarInt};
 #[derive(Deserialize)]
 #[packet(PLAY_SOUND_ENTITY)]
 pub struct CEntitySoundEffect {
-    sound_event: IdOr<SoundEvent>,
-    sound_category: VarInt,
-    entity_id: VarInt,
-    volume: f32,
-    pitch: f32,
-    seed: f64,
+    pub sound_event: IdOr<SoundEvent>,
+    pub sound_category: VarInt,
+    pub entity_id: VarInt,
+    pub volume: f32,
+    pub pitch: f32,
+    pub seed: f64,
 }
 
 impl CEntitySoundEffect {

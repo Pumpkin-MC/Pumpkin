@@ -7,7 +7,7 @@ use serde::Serialize;
 #[packet(PLAY_COOKIE_REQUEST)]
 /// Requests a cookie that was previously stored.
 pub struct CPlayCookieRequest<'a> {
-    key: &'a ResourceLocation,
+    pub key: &'a ResourceLocation,
 }
 
 impl<'a> CPlayCookieRequest<'a> {

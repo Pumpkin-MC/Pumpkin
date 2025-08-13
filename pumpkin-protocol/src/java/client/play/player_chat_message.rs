@@ -13,21 +13,21 @@ use crate::{
 #[packet(PLAY_PLAYER_CHAT)]
 pub struct CPlayerChatMessage {
     /// An index that increases for every message sent TO the client
-    global_index: VarInt,
-    sender: uuid::Uuid,
+    pub global_index: VarInt,
+    pub sender: uuid::Uuid,
     /// An index that increases for every message sent BY the client
-    index: VarInt,
-    message_signature: Option<Box<[u8]>>, // always 256
-    message: String,
-    timestamp: i64,
-    salt: i64,
-    previous_messages: Box<[PreviousMessage]>, // max 20
-    unsigned_content: Option<TextComponent>,
-    filter_type: FilterType,
+    pub index: VarInt,
+    pub message_signature: Option<Box<[u8]>>, // always 256
+    pub message: String,
+    pub timestamp: i64,
+    pub salt: i64,
+    pub previous_messages: Box<[PreviousMessage]>, // max 20
+    pub unsigned_content: Option<TextComponent>,
+    pub filter_type: FilterType,
     /// This should not be zero, (index + 1)
-    chat_type: VarInt,
-    sender_name: TextComponent,
-    target_name: Option<TextComponent>,
+    pub chat_type: VarInt,
+    pub sender_name: TextComponent,
+    pub target_name: Option<TextComponent>,
 }
 
 impl CPlayerChatMessage {

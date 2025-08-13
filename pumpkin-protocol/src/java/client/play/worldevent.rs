@@ -7,10 +7,10 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_LEVEL_EVENT)]
 pub struct CWorldEvent {
-    event: i32,
-    location: BlockPos,
-    data: i32,
-    disable_relative_volume: bool,
+    pub event: i32,
+    pub location: BlockPos,
+    pub data: i32,
+    pub disable_relative_volume: bool,
 }
 
 impl CWorldEvent {

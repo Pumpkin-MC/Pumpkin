@@ -7,7 +7,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_SET_TITLE_TEXT)]
 pub struct CTitleText<'a> {
-    title: &'a TextComponent,
+    pub title: &'a TextComponent,
 }
 
 impl<'a> CTitleText<'a> {

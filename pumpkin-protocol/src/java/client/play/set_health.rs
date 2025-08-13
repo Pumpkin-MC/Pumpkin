@@ -7,9 +7,9 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_SET_HEALTH)]
 pub struct CSetHealth {
-    health: f32,
-    food: VarInt,
-    food_saturation: f32,
+    pub health: f32,
+    pub food: VarInt,
+    pub food_saturation: f32,
 }
 
 impl CSetHealth {

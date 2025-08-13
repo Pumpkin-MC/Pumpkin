@@ -8,11 +8,11 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_DAMAGE_EVENT)]
 pub struct CDamageEvent {
-    entity_id: VarInt,
-    source_type_id: VarInt,
-    source_cause_id: VarInt,
-    source_direct_id: VarInt,
-    source_position: Option<Vector3<f64>>,
+    pub entity_id: VarInt,
+    pub source_type_id: VarInt,
+    pub source_cause_id: VarInt,
+    pub source_direct_id: VarInt,
+    pub source_position: Option<Vector3<f64>>,
 }
 
 impl CDamageEvent {
