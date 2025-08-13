@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use proc_macro2::{Span, TokenStream};
 use pumpkin_util::loot_table::LootNumberProviderTypes;
@@ -174,7 +174,7 @@ pub enum LootConditionStruct {
     #[serde(rename = "minecraft:block_state_property")]
     BlockStateProperty {
         block: String,
-        properties: HashMap<String, String>,
+        properties: BTreeMap<String, String>,
     },
     #[serde(rename = "minecraft:match_tool")]
     MatchTool,

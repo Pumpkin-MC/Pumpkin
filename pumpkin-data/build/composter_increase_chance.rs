@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -6,7 +6,7 @@ use quote::quote;
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/composter_increase_chance.json");
 
-    let composter_increase_chance: HashMap<u16, f32> = serde_json::from_str(
+    let composter_increase_chance: BTreeMap<u16, f32> = serde_json::from_str(
         &fs::read_to_string("../assets/composter_increase_chance.json").unwrap(),
     )
     .expect("Failed to parse composter_increase_chance.json");

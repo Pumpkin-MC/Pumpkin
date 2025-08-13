@@ -20,4 +20,8 @@ impl ItemBehaviour for TridentItem {
     fn can_mine(&self, player: &Player) -> bool {
         player.gamemode.load() != GameMode::Creative
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

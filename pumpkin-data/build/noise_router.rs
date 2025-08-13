@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fs,
     hash::{DefaultHasher, Hash, Hasher},
 };
@@ -100,7 +100,7 @@ impl SplineRepr {
     fn into_token_stream(
         self,
         stack: &mut Vec<TokenStream>,
-        hash_to_index_map: &mut HashMap<u64, usize>,
+        hash_to_index_map: &mut BTreeMap<u64, usize>,
     ) -> TokenStream {
         match self {
             Self::Fixed { value } => {
@@ -564,7 +564,7 @@ impl DensityFunctionRepr {
     fn get_index_for_component(
         self,
         stack: &mut Vec<TokenStream>,
-        hash_to_index_map: &mut HashMap<u64, usize>,
+        hash_to_index_map: &mut BTreeMap<u64, usize>,
     ) -> usize {
         if let Some(index) = hash_to_index_map.get(&self.unique_id()) {
             *index
@@ -581,7 +581,7 @@ impl DensityFunctionRepr {
     fn into_token_stream(
         self,
         stack: &mut Vec<TokenStream>,
-        hash_to_index_map: &mut HashMap<u64, usize>,
+        hash_to_index_map: &mut BTreeMap<u64, usize>,
     ) -> TokenStream {
         match self {
             Self::Spline { spline, data } => {
@@ -885,7 +885,7 @@ struct NoiseRouterRepr {
 impl NoiseRouterRepr {
     fn into_token_stream(self) -> TokenStream {
         let mut noise_component_stack = Vec::new();
-        let mut noise_lookup_map = HashMap::new();
+        let mut noise_lookup_map = BTreeMap::new();
 
         // The aquifer sampler is called most often
         let final_density = self
@@ -926,13 +926,13 @@ impl NoiseRouterRepr {
             .get_index_for_component(&mut noise_component_stack, &mut noise_lookup_map);
 
         let mut surface_component_stack = Vec::new();
-        let mut surface_lookup_map = HashMap::new();
+        let mut surface_lookup_map = BTreeMap::new();
         let _ = self
             .initial_density_without_jaggedness
             .get_index_for_component(&mut surface_component_stack, &mut surface_lookup_map);
 
         let mut multinoise_component_stack = Vec::new();
-        let mut multinoise_lookup_map = HashMap::new();
+        let mut multinoise_lookup_map = BTreeMap::new();
         let ridges = self
             .ridges
             .get_index_for_component(&mut multinoise_component_stack, &mut multinoise_lookup_map);

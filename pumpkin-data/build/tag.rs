@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use crate::biome::Biome;
 use crate::block::BlockAssets;
@@ -38,7 +38,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/biome.json");
     println!("cargo:rerun-if-changed=../assets/fluids.json");
 
-    let tags: HashMap<String, HashMap<String, Vec<String>>> =
+    let tags: BTreeMap<String, BTreeMap<String, Vec<String>>> =
         serde_json::from_str(&fs::read_to_string("../assets/tags.json").unwrap())
             .expect("Failed to parse tags.json");
 
@@ -46,11 +46,11 @@ pub(crate) fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
 
-    let items: HashMap<String, Item> =
+    let items: BTreeMap<String, Item> =
         serde_json::from_str(&fs::read_to_string("../assets/items.json").unwrap())
             .expect("Failed to parse items.json");
 
-    let biomes: HashMap<String, Biome> =
+    let biomes: BTreeMap<String, Biome> =
         serde_json::from_str(&fs::read_to_string("../assets/biome.json").unwrap())
             .expect("Failed to parse biome.json");
 
@@ -77,7 +77,7 @@ pub(crate) fn build() -> TokenStream {
         let key_pascal = format_ident!("{}", key.to_pascal_case());
         let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
 
-        // Create a HashMap to store tag name -> index mapping
+        // Create a BTreeMap to store tag name -> index mapping
         let mut tag_values = Vec::new();
 
         // Collect all unique tags

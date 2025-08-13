@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use proc_macro2::TokenStream;
 use pumpkin_util::HeightMap;
@@ -154,7 +154,7 @@ impl ToTokens for NamedEntityType<'_> {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/entities.json");
 
-    let json: HashMap<String, EntityType> =
+    let json: BTreeMap<String, EntityType> =
         serde_json::from_str(&fs::read_to_string("../assets/entities.json").unwrap())
             .expect("Failed to parse entities.json");
 

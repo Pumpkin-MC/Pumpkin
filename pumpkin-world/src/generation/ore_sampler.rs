@@ -4,9 +4,9 @@ use pumpkin_util::{
     random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
 
-use crate::generation::noise_router::chunk_noise_router::ChunkNoiseRouter;
+use crate::generation::noise::router::chunk_noise_router::ChunkNoiseRouter;
 
-use super::noise_router::{
+use super::noise::router::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions, density_function::NoisePos,
 };
 
