@@ -48,22 +48,21 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
 
         if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
             if Self::is_slot_used(properties, slot) {
-                if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-                    if let Some(block_entity) = block_entity
+                if let Some(block_entity) = args.world.get_block_entity(args.position).await
+                    && let Some(block_entity) = block_entity
                         .as_any()
                         .downcast_ref::<ChiseledBookshelfBlockEntity>()
-                    {
-                        Self::try_remove_book(
-                            args.world,
-                            args.player,
-                            args.position,
-                            block_entity,
-                            properties,
-                            slot,
-                        )
-                        .await;
-                        return BlockActionResult::Success;
-                    }
+                {
+                    Self::try_remove_book(
+                        args.world,
+                        args.player,
+                        args.position,
+                        block_entity,
+                        properties,
+                        slot,
+                    )
+                    .await;
+                    return BlockActionResult::Success;
                 }
             } else {
                 return BlockActionResult::Consume;
@@ -88,23 +87,22 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
         if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
             if Self::is_slot_used(properties, slot) {
                 return BlockActionResult::PassToDefaultBlockAction;
-            } else if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-                if let Some(block_entity) = block_entity
+            } else if let Some(block_entity) = args.world.get_block_entity(args.position).await
+                && let Some(block_entity) = block_entity
                     .as_any()
                     .downcast_ref::<ChiseledBookshelfBlockEntity>()
-                {
-                    Self::try_add_book(
-                        args.world,
-                        args.player,
-                        args.position,
-                        block_entity,
-                        properties,
-                        slot,
-                        args.item_stack,
-                    )
-                    .await;
-                    return BlockActionResult::Success;
-                }
+            {
+                Self::try_add_book(
+                    args.world,
+                    args.player,
+                    args.position,
+                    block_entity,
+                    properties,
+                    slot,
+                    args.item_stack,
+                )
+                .await;
+                return BlockActionResult::Success;
             }
         }
 
@@ -117,13 +115,12 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
     }
 
     async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(block_entity) = block_entity
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            && let Some(block_entity) = block_entity
                 .as_any()
                 .downcast_ref::<ChiseledBookshelfBlockEntity>()
-            {
-                return Some((block_entity.last_interacted_slot.load(Ordering::Relaxed) + 1) as u8);
-            }
+        {
+            return Some((block_entity.last_interacted_slot.load(Ordering::Relaxed) + 1) as u8);
         }
         None
     }

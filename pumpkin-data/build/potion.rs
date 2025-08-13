@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
@@ -52,7 +52,7 @@ impl Effect {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/potion.json");
 
-    let potions: HashMap<String, Potion> =
+    let potions: BTreeMap<String, Potion> =
         serde_json::from_str(&fs::read_to_string("../assets/potion.json").unwrap())
             .expect("Failed to parse potion.json");
 

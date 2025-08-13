@@ -4,7 +4,7 @@ use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     fs,
     io::{Cursor, Read},
     panic,
@@ -675,11 +675,11 @@ pub(crate) fn build() -> TokenStream {
     let mut block_state_to_bedrock = Vec::new();
 
     // Used to create property `enum`s.
-    let mut property_enums: HashMap<String, PropertyStruct> = HashMap::new();
+    let mut property_enums: BTreeMap<String, PropertyStruct> = BTreeMap::new();
     // Property implementation for a block.
     let mut block_properties: Vec<BlockPropertyStruct> = Vec::new();
     // Mapping of a collection of property hashes -> blocks that have these properties.
-    let mut property_collection_map: HashMap<Vec<i32>, PropertyCollectionData> = HashMap::new();
+    let mut property_collection_map: BTreeMap<Vec<i32>, PropertyCollectionData> = BTreeMap::new();
     // Validator that we have no `enum` collisions.
     let mut optimized_blocks: Vec<Block> = Vec::new();
     for block in blocks_assets.blocks.clone() {
@@ -910,7 +910,7 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
-        use std::collections::HashMap;
+        use std::collections::BTreeMap;
         use phf;
 
 
@@ -1043,6 +1043,16 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
+             #[doc = r" Get a raw ID from an State ID."]
+            #[inline]
+            pub const fn get_raw_id_from_state_id(state_id: u16) -> u16 {
+                if state_id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+                    0
+                } else {
+                    Self::RAW_ID_FROM_STATE_ID[state_id as usize]
+                }
+            }
+
             #[doc = r" Get a block from a state id."]
             #[inline]
             pub const fn from_state_id(id: u16) -> &'static Self {
@@ -1159,8 +1169,8 @@ pub(crate) fn build() -> TokenStream {
     }
 }
 
-fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> HashMap<String, (u32, u32)> {
-    let mut block_data: HashMap<String, (u32, u32)> = HashMap::new();
+fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> BTreeMap<String, (u32, u32)> {
+    let mut block_data: BTreeMap<String, (u32, u32)> = BTreeMap::new();
     let mut current_id = 0;
 
     while read_byte(reader) == 10 {

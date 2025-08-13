@@ -7,13 +7,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Current version)](https://img.shields.io/badge/current_version-1.21.8-blue)
 
-
 </div>
 
 [Pumpkin](https://pumpkinmc.org/) is a Minecraft server built entirely in Rust, offering a fast, efficient,
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
 <div align="center">
-    
+
 ![chunk loading](/assets/pumpkin_chunk_loading.GIF)
 
 </div>
@@ -49,7 +48,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] World Loading
   - [x] World Time
   - [x] World Borders
-  - [x] World Saving 
+  - [x] World Saving
   - [x] Lighting
   - [x] Entity Spawning
   - [x] Item drops (W.I.P)
@@ -74,7 +73,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Experience
   - [x] Hunger
   - [X] Off Hand
-  - [ ] Advancements 
+  - [ ] Advancements
   - [ ] Eating
 - Entities
   - [x] Non-Living (Minecart, Eggs...) (W.I.P)
@@ -113,7 +112,7 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Docs
 
-Pumpkin's documentation can be found at https://pumpkinmc.org/
+Pumpkin's documentation can be found at <https://pumpkinmc.org/>
 
 ## Communication
 

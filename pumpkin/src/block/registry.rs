@@ -11,6 +11,7 @@ use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
 use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
+use crate::block::blocks::falling::FallingBlock;
 use crate::block::blocks::farmland::FarmlandBlock;
 use crate::block::blocks::fence_gates::FenceGateBlock;
 use crate::block::blocks::fences::FenceBlock;
@@ -210,6 +211,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChainBlock);
     manager.register(LanternBlock);
 
+    manager.register(FallingBlock);
+
     // Fire
     manager.register(SoulFireBlock);
     manager.register(FireBlock);
@@ -254,6 +257,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 }
 
 // ActionResult.java
+#[derive(PartialEq)]
 pub enum BlockActionResult {
     /// Action was successful | Same as SUCCESS in vanilla
     Success,

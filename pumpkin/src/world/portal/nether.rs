@@ -71,20 +71,22 @@ impl NetherPortal {
         first_axis: HorizontalAxis,
     ) -> Option<Self> {
         // We check both axis here X and Z
-        if let Some(portal) = Self::get_on_axis(world, pos, first_axis).await {
-            if portal.is_valid() && portal.found_portal_blocks == 0 {
-                return Some(portal);
-            }
+        if let Some(portal) = Self::get_on_axis(world, pos, first_axis).await
+            && portal.is_valid()
+            && portal.found_portal_blocks == 0
+        {
+            return Some(portal);
         }
         let next_axis = if first_axis == HorizontalAxis::X {
             HorizontalAxis::Z
         } else {
             HorizontalAxis::X
         };
-        if let Some(portal) = Self::get_on_axis(world, pos, next_axis).await {
-            if portal.is_valid() && portal.found_portal_blocks == 0 {
-                return Some(portal);
-            }
+        if let Some(portal) = Self::get_on_axis(world, pos, next_axis).await
+            && portal.is_valid()
+            && portal.found_portal_blocks == 0
+        {
+            return Some(portal);
         }
         None
     }

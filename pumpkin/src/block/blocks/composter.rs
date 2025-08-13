@@ -50,24 +50,16 @@ impl BlockBehaviour for ComposterBlock {
             self.clear_composter(args.world, args.position, state_id, args.block)
                 .await;
         }
-        if level < 7 {
-            if let Some(chance) =
+        if level < 7
+            && let Some(chance) =
                 get_composter_increase_chance_from_item_id(args.item_stack.lock().await.item.id)
-            {
-                if level == 0 || rand::rng().random_bool(f64::from(chance)) {
-                    self.update_level_composter(
-                        args.world,
-                        args.position,
-                        state_id,
-                        args.block,
-                        level + 1,
-                    )
-                    .await;
-                    args.world
-                        .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
-                        .await;
-                }
-            }
+            && (level == 0 || rand::rng().random_bool(f64::from(chance)))
+        {
+            self.update_level_composter(args.world, args.position, state_id, args.block, level + 1)
+                .await;
+            args.world
+                .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
+                .await;
         }
         BlockActionResult::Consume
     }

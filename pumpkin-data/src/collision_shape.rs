@@ -11,6 +11,13 @@ impl CollisionShape {
         unimplemented!()
     }
 
+    pub fn to_bounding_box(&self) -> BoundingBox {
+        BoundingBox {
+            min: self.min,
+            max: self.max,
+        }
+    }
+
     pub fn new(min: Vector3<f64>, max: Vector3<f64>) -> Self {
         Self { min, max }
     }

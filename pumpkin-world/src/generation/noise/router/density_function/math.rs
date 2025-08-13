@@ -1,6 +1,6 @@
 use pumpkin_data::noise_router::{BinaryData, BinaryOperation, ClampData, LinearData, UnaryData};
 
-use crate::generation::noise_router::{
+use crate::generation::noise::router::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
     chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
 };

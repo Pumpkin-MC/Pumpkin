@@ -11,7 +11,7 @@ use pumpkin_util::{
 
 use crate::generation::{
     noise::perlin::DoublePerlinNoiseSampler,
-    noise_router::{
+    noise::router::{
         chunk_density_function::ChunkNoiseFunctionSampleOptions,
         chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
     },

@@ -20,6 +20,7 @@ use super::{
     dispatcher::CommandError,
     tree::{CommandTree, RawArgs},
 };
+use crate::entity::EntityBase;
 use crate::world::bossbar::{BossbarColor, BossbarDivisions};
 use crate::{entity::player::Player, server::Server};
 
@@ -72,7 +73,7 @@ pub trait ArgumentConsumer: Sync + GetClientSideArgParser {
 
 pub trait GetClientSideArgParser {
     /// Return the parser the client should use while typing a command in chat.
-    fn get_client_side_parser(&self) -> ArgumentType;
+    fn get_client_side_parser(&self) -> ArgumentType<'_>;
     /// Usually this should return None. This can be used to force suggestions to be processed on serverside.
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders>;
 }
@@ -83,8 +84,8 @@ pub trait DefaultNameArgConsumer: ArgumentConsumer {
 
 #[derive(Clone)]
 pub enum Arg<'a> {
-    Entities(Vec<Arc<Player>>),
-    Entity(Arc<Player>),
+    Entities(Vec<Arc<dyn EntityBase>>),
+    Entity(Arc<dyn EntityBase>),
     Players(Vec<Arc<Player>>),
     BlockPos(BlockPos),
     Pos3D(Vector3<f64>),

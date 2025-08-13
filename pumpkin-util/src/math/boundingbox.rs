@@ -1,9 +1,44 @@
+use crate::math::{vector2::Vector2, vector3::Axis};
+
 use super::{position::BlockPos, vector3::Vector3};
 
 #[derive(Clone, Copy, Debug)]
 pub struct BoundingBox {
     pub min: Vector3<f64>,
     pub max: Vector3<f64>,
+}
+
+#[derive(Clone, Copy, Debug)]
+
+struct BoundingPlane {
+    pub min: Vector2<f64>,
+    pub max: Vector2<f64>,
+}
+
+impl BoundingPlane {
+    pub fn intersects(&self, other: &Self) -> bool {
+        self.min.x < other.max.x
+            && self.max.x > other.min.x
+            && self.min.y < other.max.y
+            && self.max.y > other.min.y
+    }
+
+    // Projecting a 3D box into 2D
+    pub fn from_box(bounding_box: &BoundingBox, excluded: Axis) -> Self {
+        let [axis1, axis2] = Axis::excluding(excluded);
+
+        Self {
+            min: Vector2::new(
+                bounding_box.get_side(false).get_axis(axis1),
+                bounding_box.get_side(false).get_axis(axis2),
+            ),
+
+            max: Vector2::new(
+                bounding_box.get_side(true).get_axis(axis1),
+                bounding_box.get_side(true).get_axis(axis2),
+            ),
+        }
+    }
 }
 
 impl BoundingBox {
@@ -54,6 +89,88 @@ impl BoundingBox {
                 position.z as f64 + 1.0,
             ),
         }
+    }
+
+    pub fn get_side(&self, max: bool) -> Vector3<f64> {
+        if max { self.max } else { self.min }
+    }
+
+    pub fn calculate_collision_time(
+        &self,
+        other: &Self,
+        movement: Vector3<f64>,
+        axis: Axis,
+        max_time: f64, // Start with 1.0
+    ) -> Option<f64> {
+        let movement_on_axis = movement.get_axis(axis);
+
+        if movement_on_axis == 0.0 {
+            return None;
+        }
+
+        let move_positive = movement_on_axis.is_sign_positive();
+
+        let self_plane_const = self.get_side(move_positive).get_axis(axis);
+
+        let other_plane_const = other.get_side(!move_positive).get_axis(axis);
+
+        let collision_time = (other_plane_const - self_plane_const) / movement_on_axis;
+
+        if collision_time < 0.0 || collision_time >= max_time {
+            return None;
+        }
+
+        let self_moved = self.shift(movement * collision_time);
+
+        let self_plane_moved = BoundingPlane::from_box(&self_moved, axis);
+
+        let other_plane = BoundingPlane::from_box(other, axis);
+
+        if !self_plane_moved.intersects(&other_plane) {
+            return None;
+        }
+
+        Some(collision_time)
+    }
+
+    pub fn min_block_pos(&self) -> BlockPos {
+        BlockPos::floored_v(self.min)
+    }
+
+    pub fn max_block_pos(&self) -> BlockPos {
+        BlockPos::ceiled_v(self.max)
+    }
+
+    pub fn shift(&self, delta: Vector3<f64>) -> Self {
+        Self {
+            min: self.min + delta,
+
+            max: self.max + delta,
+        }
+    }
+
+    pub fn stretch(&self, other: Vector3<f64>) -> Self {
+        let mut new = *self;
+
+        if other.x < 0.0 {
+            new.min.x += other.x;
+        } else if other.x > 0.0 {
+            new.max.x += other.x;
+        }
+
+        if other.y < 0.0 {
+            new.min.y += other.y;
+        } else if other.y > 0.0 {
+            new.max.y += other.y;
+        }
+
+        if other.z < 0.0 {
+            new.min.z += other.z;
+        } else if other.z > 0.0 {
+            new.max.z += other.z;
+        }
+
+        new
     }
 
     pub fn from_block_raw(position: &BlockPos) -> Self {

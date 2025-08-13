@@ -29,10 +29,10 @@ pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &
         _ => None,
     };
 
-    if let Some(direction) = rail_leaning_direction {
-        if !can_place_rail_at(world, &pos.offset(direction.to_offset()).up()).await {
-            return false;
-        }
+    if let Some(direction) = rail_leaning_direction
+        && !can_place_rail_at(world, &pos.offset(direction.to_offset()).up()).await
+    {
+        return false;
     }
 
     true

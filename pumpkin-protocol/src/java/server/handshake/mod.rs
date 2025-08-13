@@ -1,6 +1,9 @@
 use std::io::Read;
 
-use crate::{ConnectionState, ReadingError, ServerPacket, VarInt, ser::NetworkReadExt};
+use crate::{
+    ClientPacket, ConnectionState, ReadingError, ServerPacket, VarInt, ser::NetworkReadExt,
+    ser::NetworkWriteExt,
+};
 use pumpkin_data::packet::serverbound::HANDSHAKE_INTENTION;
 use pumpkin_macros::packet;
 
@@ -24,5 +27,18 @@ impl ServerPacket for SHandShake {
                 .try_into()
                 .map_err(|_| ReadingError::Message("Invalid status".to_string()))?,
         })
+    }
+}
+
+impl ClientPacket for SHandShake {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.protocol_version)?;
+        write.write_string(&self.server_address)?;
+        write.write_u16_be(self.server_port)?;
+        write.write_var_int(&VarInt(self.next_state as i32))?;
+        Ok(())
     }
 }
