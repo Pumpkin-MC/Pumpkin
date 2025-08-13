@@ -10,7 +10,7 @@ use crate::{
     generation::{
         chunk_noise::WATER_BLOCK, height_limit::HeightLimitView,
         noise::perlin::DoublePerlinNoiseSampler,
-        noise_router::proto_noise_router::DoublePerlinNoiseBuilder,
+        noise::router::proto_noise_router::DoublePerlinNoiseBuilder,
     },
 };
 

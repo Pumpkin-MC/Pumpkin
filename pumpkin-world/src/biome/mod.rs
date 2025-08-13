@@ -6,7 +6,7 @@ use pumpkin_data::chunk::{Biome, BiomeTree, NETHER_BIOME_SOURCE, OVERWORLD_BIOME
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
-    dimension::Dimension, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
+    dimension::Dimension, generation::noise::router::multi_noise_sampler::MultiNoiseSampler,
 };
 pub mod end;
 pub mod multi_noise;
@@ -65,7 +65,7 @@ mod test {
         chunk::palette::BIOME_NETWORK_MAX_BITS,
         dimension::Dimension,
         generation::{
-            noise_router::{
+            noise::router::{
                 multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
                 proto_noise_router::ProtoNoiseRouters,
             },

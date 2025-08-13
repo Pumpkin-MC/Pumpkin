@@ -227,9 +227,9 @@ impl FromStr for TargetSelector {
             }
             Ok(selector)
         } else if let Ok(uuid) = Uuid::parse_str(arg) {
-            return Ok(Self::new(EntitySelectorType::Uuid(uuid)));
+            Ok(Self::new(EntitySelectorType::Uuid(uuid)))
         } else {
-            return Ok(Self::new(EntitySelectorType::NamedPlayer(arg.to_string())));
+            Ok(Self::new(EntitySelectorType::NamedPlayer(arg.to_string())))
         }
     }
 }
@@ -240,7 +240,7 @@ impl FromStr for TargetSelector {
 pub struct EntitiesArgumentConsumer;
 
 impl GetClientSideArgParser for EntitiesArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         // todo: investigate why this does not accept target selectors
         ArgumentType::Entity { flags: 0 }
     }

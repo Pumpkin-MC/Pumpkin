@@ -3,7 +3,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     fs,
 };
 use syn::{Ident, LitInt, LitStr};
@@ -357,13 +357,14 @@ pub(crate) fn build() -> TokenStream {
     let mut fluid_properties_from_props_and_name = TokenStream::new();
 
     // Used to create property `enum`s.
-    let mut property_enums: HashMap<String, PropertyStruct> = HashMap::new();
+    let mut property_enums: BTreeMap<String, PropertyStruct> = BTreeMap::new();
     // Property implementation for a fluid.
     let mut fluid_properties: Vec<FluidPropertyStruct> = Vec::new();
     // Mapping of a collection of property names -> fluids that have these properties.
-    let mut property_collection_map: HashMap<Vec<String>, PropertyCollectionData> = HashMap::new();
+    let mut property_collection_map: BTreeMap<Vec<String>, PropertyCollectionData> =
+        BTreeMap::new();
     // Validator that we have no `enum` collisions.
-    let mut enum_to_values: HashMap<String, Vec<String>> = HashMap::new();
+    let mut enum_to_values: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     // Collect unique fluid states to create partial states
     let mut unique_states = Vec::new();

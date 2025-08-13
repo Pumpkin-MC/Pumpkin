@@ -10,7 +10,7 @@ use super::{
         WorldAquiferSampler,
     },
     biome_coords,
-    noise_router::{
+    noise::router::{
         chunk_density_function::{
             ChunkNoiseFunctionBuilderOptions, ChunkNoiseFunctionSampleOptions, SampleAction,
             WrapperData,

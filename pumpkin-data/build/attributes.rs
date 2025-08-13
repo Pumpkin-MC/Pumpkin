@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 
 #[derive(Deserialize)]
@@ -13,7 +13,7 @@ struct Attributes {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/attributes.json");
 
-    let attributes: HashMap<String, Attributes> =
+    let attributes: BTreeMap<String, Attributes> =
         serde_json::from_str(&fs::read_to_string("../assets/attributes.json").unwrap())
             .expect("Failed to parse attributes.json");
 

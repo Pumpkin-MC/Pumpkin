@@ -2,7 +2,7 @@ use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 use syn::{Ident, LitInt};
 
 #[derive(Deserialize)]
@@ -50,7 +50,7 @@ pub enum DeathMessageType {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/damage_type.json");
 
-    let damage_types: HashMap<String, DamageTypeEntry> =
+    let damage_types: BTreeMap<String, DamageTypeEntry> =
         serde_json::from_str(&fs::read_to_string("../assets/damage_type.json").unwrap())
             .expect("Failed to parse damage_type.json");
 

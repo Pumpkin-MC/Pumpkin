@@ -41,7 +41,7 @@ mod test {
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
         dimension::Dimension,
         generation::{
-            noise_router::{
+            noise::router::{
                 multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
                 proto_noise_router::ProtoNoiseRouters,
             },

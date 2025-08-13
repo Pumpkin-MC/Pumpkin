@@ -200,13 +200,13 @@ impl BlockBehaviour for PistonBlock {
             let pos = pos.offset_dir(dir.to_offset(), 2);
             let (block, state) = world.get_block_and_state(&pos).await;
             let mut bl2 = false;
-            if block == &Block::MOVING_PISTON {
-                if let Some(entity) = world.get_block_entity(&pos).await {
-                    let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
-                    if piston.facing == dir && piston.extending {
-                        piston.finish(world.clone()).await;
-                        bl2 = true;
-                    }
+            if block == &Block::MOVING_PISTON
+                && let Some(entity) = world.get_block_entity(&pos).await
+            {
+                let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
+                if piston.facing == dir && piston.extending {
+                    piston.finish(world.clone()).await;
+                    bl2 = true;
                 }
             }
             if !bl2 {
@@ -295,15 +295,15 @@ async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
 
         if new_block == &Block::MOVING_PISTON {
             let new_props = MovingPistonLikeProperties::from_state_id(new_state, new_block);
-            if new_props.facing == props.facing {
-                if let Some(entity) = world.get_block_entity(&new_pos).await {
-                    let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
-                    if piston.extending && piston.current_progress.load() < 0.5
-                    // TODO: more stuff...
-                    {
-                        // Piston reduced too quickly, if its a stick piston no blocks will be dragged
-                        r#type = 2;
-                    }
+            if new_props.facing == props.facing
+                && let Some(entity) = world.get_block_entity(&new_pos).await
+            {
+                let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
+                if piston.extending && piston.current_progress.load() < 0.5
+                // TODO: more stuff...
+                {
+                    // Piston reduced too quickly, if its a stick piston no blocks will be dragged
+                    r#type = 2;
                 }
             }
         }

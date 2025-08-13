@@ -7,7 +7,7 @@ use crate::{
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, get_world_gen, implementation::WorldGenerator},
+    generation::{Seed, generator::WorldGenerator, get_world_gen},
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
@@ -602,7 +602,7 @@ impl Level {
             relative.y,
             relative.z as usize,
         ) else {
-            return RawBlockState(Block::AIR.default_state.id);
+            return RawBlockState(Block::VOID_AIR.default_state.id);
         };
 
         RawBlockState(id)

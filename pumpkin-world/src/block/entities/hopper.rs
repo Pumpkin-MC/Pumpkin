@@ -163,24 +163,24 @@ impl HopperBlockEntity {
     async fn suck_in_items(&self, world: &Arc<dyn SimpleWorld>) -> bool {
         // TODO getEntityContainer
         let pos_up = &self.position.up();
-        if let Some(entity) = world.get_block_entity(pos_up).await {
-            if let Some(container) = entity.get_inventory() {
-                // TODO check WorldlyContainer
-                for i in 0..container.size() {
-                    let bind = container.get_stack(i).await;
-                    let mut item = bind.lock().await;
-                    if !item.is_empty() && container.can_transfer_to(self, i, &item) {
-                        //TODO WorldlyContainer
-                        let backup = item.clone();
-                        let one_item = item.split(1);
-                        if Self::add_one_item(container.as_ref(), self, one_item).await {
-                            return true;
-                        }
-                        *item = backup;
+        if let Some(entity) = world.get_block_entity(pos_up).await
+            && let Some(container) = entity.get_inventory()
+        {
+            // TODO check WorldlyContainer
+            for i in 0..container.size() {
+                let bind = container.get_stack(i).await;
+                let mut item = bind.lock().await;
+                if !item.is_empty() && container.can_transfer_to(self, i, &item) {
+                    //TODO WorldlyContainer
+                    let backup = item.clone();
+                    let one_item = item.split(1);
+                    if Self::add_one_item(container.as_ref(), self, one_item).await {
+                        return true;
                     }
+                    *item = backup;
                 }
-                return false;
             }
+            return false;
         }
         let (block, state) = world.get_block_and_state(pos_up).await;
         if !(state.is_solid()
@@ -200,32 +200,31 @@ impl HopperBlockEntity {
         if let Some(entity) = world
             .get_block_entity(&self.position.offset(to_offset(&self.facing)))
             .await
+            && let Some(container) = entity.get_inventory()
         {
-            if let Some(container) = entity.get_inventory() {
-                // TODO check WorldlyContainer
-                let mut is_full = true;
-                for i in 0..container.size() {
-                    let bind = container.get_stack(i).await;
-                    let item = bind.lock().await;
-                    if item.item_count < item.get_max_stack_size() {
-                        is_full = false;
-                        break;
-                    }
+            // TODO check WorldlyContainer
+            let mut is_full = true;
+            for i in 0..container.size() {
+                let bind = container.get_stack(i).await;
+                let item = bind.lock().await;
+                if item.item_count < item.get_max_stack_size() {
+                    is_full = false;
+                    break;
                 }
-                if is_full {
-                    return false;
-                }
-                for i in &self.items {
-                    let mut item = i.lock().await;
-                    if !item.is_empty() {
-                        //TODO WorldlyContainer
-                        let backup = item.clone();
-                        let one_item = item.split(1);
-                        if Self::add_one_item(self, container.as_ref(), one_item).await {
-                            return true;
-                        }
-                        *item = backup;
+            }
+            if is_full {
+                return false;
+            }
+            for i in &self.items {
+                let mut item = i.lock().await;
+                if !item.is_empty() {
+                    //TODO WorldlyContainer
+                    let backup = item.clone();
+                    let one_item = item.split(1);
+                    if Self::add_one_item(self, container.as_ref(), one_item).await {
+                        return true;
                     }
+                    *item = backup;
                 }
             }
         }
@@ -247,37 +246,34 @@ impl HopperBlockEntity {
                     success = true;
                 }
                 if success {
-                    if to_empty {
-                        if let Some(hopper) = to.as_any().downcast_ref::<HopperBlockEntity>() {
-                            if hopper
+                    if to_empty
+                        && let Some(hopper) = to.as_any().downcast_ref::<HopperBlockEntity>()
+                        && hopper
+                            .cooldown_time
+                            .load(std::sync::atomic::Ordering::Relaxed)
+                            <= 8
+                    {
+                        if let Some(from_hopper) = from.as_any().downcast_ref::<HopperBlockEntity>()
+                        {
+                            if from_hopper
                                 .cooldown_time
                                 .load(std::sync::atomic::Ordering::Relaxed)
-                                <= 8
+                                >= hopper
+                                    .cooldown_time
+                                    .load(std::sync::atomic::Ordering::Relaxed)
                             {
-                                if let Some(from_hopper) =
-                                    from.as_any().downcast_ref::<HopperBlockEntity>()
-                                {
-                                    if from_hopper
-                                        .cooldown_time
-                                        .load(std::sync::atomic::Ordering::Relaxed)
-                                        >= hopper
-                                            .cooldown_time
-                                            .load(std::sync::atomic::Ordering::Relaxed)
-                                    {
-                                        hopper
-                                            .cooldown_time
-                                            .store(7, std::sync::atomic::Ordering::Relaxed);
-                                    } else {
-                                        hopper
-                                            .cooldown_time
-                                            .store(8, std::sync::atomic::Ordering::Relaxed);
-                                    }
-                                } else {
-                                    hopper
-                                        .cooldown_time
-                                        .store(8, std::sync::atomic::Ordering::Relaxed);
-                                }
+                                hopper
+                                    .cooldown_time
+                                    .store(7, std::sync::atomic::Ordering::Relaxed);
+                            } else {
+                                hopper
+                                    .cooldown_time
+                                    .store(8, std::sync::atomic::Ordering::Relaxed);
                             }
+                        } else {
+                            hopper
+                                .cooldown_time
+                                .store(8, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
                     to.mark_dirty();

@@ -31,7 +31,7 @@ impl BedrockClient {
             &CConnectionRequestAccepted::new(
                 self.address,
                 0,
-                [SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 19132)); 10],
+                [SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 19132)); 10],
                 packet.time,
                 UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
             ),
