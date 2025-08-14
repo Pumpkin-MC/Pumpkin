@@ -2509,8 +2509,9 @@ impl World {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
             if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await
-                && neighbor_light > current_light + 1 {
-                    self.queue_increase(neighbor_pos, neighbor_light);
+                && neighbor_light > current_light + 1
+            {
+                self.queue_increase(neighbor_pos, neighbor_light);
             }
         }
     }
