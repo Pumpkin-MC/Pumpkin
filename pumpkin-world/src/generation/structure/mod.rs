@@ -6,6 +6,7 @@ use serde::Deserialize;
 use crate::generation::structure::placement::StructurePlacement;
 
 pub mod placement;
+pub mod structures;
 
 #[derive(Deserialize)]
 pub struct StructureSet {
