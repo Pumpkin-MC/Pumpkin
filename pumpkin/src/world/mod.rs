@@ -12,7 +12,6 @@ pub mod loot;
 pub mod portal;
 pub mod time;
 
-use crate::block::RandomTickArgs;
 use crate::world::loot::LootContextParameters;
 use crate::{
     PLUGIN_MANAGER,
