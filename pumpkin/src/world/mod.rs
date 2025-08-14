@@ -12,6 +12,7 @@ pub mod loot;
 pub mod portal;
 pub mod time;
 
+use crate::block::RandomTickArgs;
 use crate::world::loot::LootContextParameters;
 use crate::{
     PLUGIN_MANAGER,
@@ -35,6 +36,7 @@ use crate::{block::BlockEvent, entity::item::ItemEntity};
 use async_trait::async_trait;
 use border::Worldborder;
 use bytes::BufMut;
+use crossbeam::queue::SegQueue;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -106,6 +108,7 @@ use pumpkin_util::{
     math::{position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
+use pumpkin_world::chunk::palette::BlockPalette;
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, GENERATION_SETTINGS, GeneratorSetting, biome,
     block::entities::BlockEntity, chunk::io::Dirtiable, inventory::Inventory, item::ItemStack,
@@ -189,6 +192,8 @@ pub struct World {
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
     pub server: Weak<Server>,
+    decrease_queue: SegQueue<(BlockPos, u8)>,
+    increase_queue: SegQueue<(BlockPos, u8)>,
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
@@ -232,6 +237,8 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
+            decrease_queue: SegQueue::new(),
+            increase_queue: SegQueue::new(),
             server,
         }
     }
@@ -690,19 +697,18 @@ impl World {
             }
         }
 
-        /* TODO: Fix this deadlock
         for scheduled_tick in tick_data.random_ticks {
-            let block = self.get_block(&scheduled_tick.block_pos).await;
+            let block = self.get_block(&scheduled_tick.position).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
                     .random_tick(RandomTickArgs {
                         world: self,
                         block,
-                        position: &scheduled_tick.block_pos,
+                        position: &scheduled_tick.position,
                     })
                     .await;
             }
-        } */
+        }
 
         let spawn_entity_clock_start = tokio::time::Instant::now();
 
@@ -2380,6 +2386,181 @@ impl World {
         .await;
     }
 
+    pub fn queue_decrease(self: &Arc<Self>, pos: BlockPos, level: u8) {
+        self.decrease_queue.push((pos, level));
+    }
+
+    pub fn queue_increase(self: &Arc<Self>, pos: BlockPos, level: u8) {
+        self.increase_queue.push((pos, level));
+    }
+
+    pub async fn perform_updates(self: &Arc<Self>) -> i32 {
+        let mut updates = 0;
+
+        updates += self.perform_decrease_updates().await;
+
+        updates += self.perform_increase_updates().await;
+
+        updates
+    }
+
+    async fn perform_decrease_updates(self: &Arc<Self>) -> i32 {
+        let mut updates = 0;
+
+        while let Some((pos, expected_light)) = self.decrease_queue.pop() {
+            self.propagate_decrease(&pos, expected_light).await;
+            updates += 1;
+        }
+
+        updates
+    }
+
+    async fn perform_increase_updates(self: &Arc<Self>) -> i32 {
+        let mut updates = 0;
+
+        while let Some((pos, expected_light)) = self.increase_queue.pop() {
+            self.propagate_increase(&pos, expected_light).await;
+            updates += 1;
+        }
+
+        updates
+    }
+
+    async fn propagate_increase(self: &Arc<Self>, pos: &BlockPos, light_level: u8) {
+        for dir in BlockDirection::all() {
+            let neighbor_pos = pos.offset(dir.to_offset());
+
+            if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await {
+                let neighbor_state = self.get_block_state(&neighbor_pos).await;
+                let new_light = light_level.saturating_sub(neighbor_state.opacity.max(1));
+
+                if new_light > neighbor_light {
+                    // TODO: Add shape checking for non-trivial blocks
+
+                    self.set_block_light_level(&neighbor_pos, new_light)
+                        .await
+                        .unwrap();
+
+                    if new_light > 1 {
+                        self.queue_increase(neighbor_pos, new_light);
+                    }
+                }
+            }
+        }
+    }
+
+    async fn propagate_decrease(self: &Arc<Self>, pos: &BlockPos, removed_light_level: u8) {
+        for dir in BlockDirection::all() {
+            let neighbor_pos = pos.offset(dir.to_offset());
+
+            if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await {
+                if neighbor_light == 0 {
+                    continue; // Skip if already 0
+                }
+
+                let neighbor_state = self.get_block_state(&neighbor_pos).await;
+                let opacity = neighbor_state.opacity.max(1);
+
+                let expected_from_removed_source = removed_light_level.saturating_sub(opacity);
+
+                if neighbor_light <= expected_from_removed_source {
+                    let neighbor_luminance = neighbor_state.luminance;
+
+                    self.set_block_light_level(&neighbor_pos, 0).await.unwrap();
+
+                    if neighbor_luminance == 0 {
+                        self.queue_decrease(neighbor_pos, neighbor_light);
+                    } else {
+                        self.set_block_light_level(&neighbor_pos, neighbor_luminance)
+                            .await
+                            .unwrap();
+                        self.queue_increase(neighbor_pos, neighbor_luminance);
+                    }
+                } else {
+                    self.queue_increase(neighbor_pos, neighbor_light);
+                }
+            }
+        }
+    }
+
+    pub async fn check_block(self: &Arc<Self>, pos: BlockPos) {
+        let current_light = self.get_block_light_level(&pos).await.unwrap_or(0);
+        let block_state = self.get_block_state(&pos).await;
+        let expected_light = block_state.luminance; // Simplified - vanilla considers surrounding light too
+
+        if expected_light < current_light {
+            // Light should decrease
+            self.set_block_light_level(&pos, 0).await.unwrap();
+            self.queue_decrease(pos, current_light);
+        }
+
+        if expected_light > 0 {
+            // Light should be emitted
+            self.set_block_light_level(&pos, expected_light)
+                .await
+                .unwrap();
+            self.queue_increase(pos, expected_light);
+        }
+
+        self.check_neighbors(pos, current_light).await;
+    }
+
+    pub async fn check_neighbors(self: &Arc<Self>, pos: BlockPos, current_light: u8) {
+        for dir in BlockDirection::all() {
+            let neighbor_pos = pos.offset(dir.to_offset());
+            if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await
+                && neighbor_light > current_light + 1 {
+                    self.queue_increase(neighbor_pos, neighbor_light);
+            }
+        }
+    }
+
+    pub async fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.level.get_chunk(chunk_coordinate).await;
+        let Ok(chunk) = tokio::time::timeout(std::time::Duration::from_secs(1), chunk.read()).await
+        else {
+            panic!("Timed out while waiting to acquire chunk read lock")
+        };
+        let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+        // +1 since block light has 1 section padding on both top and bottom
+        if section_index + 1 >= chunk.light_engine.block_light.len() {
+            return None;
+        }
+        Some(chunk.light_engine.block_light[section_index + 1].get(
+            relative.x as usize,
+            (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE,
+            relative.z as usize,
+        ))
+    }
+
+    pub async fn set_block_light_level(
+        &self,
+        position: &BlockPos,
+        light_level: u8,
+    ) -> Result<(), String> {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.level.get_chunk(chunk_coordinate).await;
+        let Ok(mut chunk) =
+            tokio::time::timeout(std::time::Duration::from_secs(1), chunk.write()).await
+        else {
+            panic!("Timed out while waiting to acquire chunk write lock")
+        };
+        let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+        if section_index >= chunk.light_engine.block_light.len() {
+            return Err("Invalid section index".to_string());
+        }
+        let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
+        chunk.light_engine.block_light[section_index + 1].set(
+            relative.x as usize,
+            relative_y,
+            relative.z as usize,
+            light_level,
+        );
+        chunk.mark_dirty(true);
+        Ok(())
+    }
+
     /// Sets a block and returns the old block id
     #[allow(clippy::too_many_lines)]
     pub async fn set_block_state(
@@ -2510,6 +2691,9 @@ impl World {
                     .await;
             }
         }
+
+        self.check_block(*position).await;
+        self.perform_updates().await;
 
         replaced_block_state_id
     }

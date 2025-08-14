@@ -455,7 +455,7 @@ impl LightContainer {
             }
             Self::Empty(default) => {
                 if value != *default {
-                    *self = Self::new_filled(*default);
+                    *self = Self::new_filled(0);
                     self.set(x, y, z, value);
                 }
             }
@@ -465,7 +465,7 @@ impl LightContainer {
 
 impl Default for LightContainer {
     fn default() -> Self {
-        Self::new_empty(15)
+        Self::new_empty(0)
     }
 }
 

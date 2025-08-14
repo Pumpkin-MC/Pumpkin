@@ -17,6 +17,7 @@ pub struct BlockState {
     pub has_random_tick: bool,
     /// u8::MAX is used as None
     pub opacity: u8,
+    pub is_trivial: bool,
     /// u16::MAX is used as None
     pub block_entity_type: u16,
 }
