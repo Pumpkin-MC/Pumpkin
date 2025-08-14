@@ -322,7 +322,7 @@
     "max": 4
   },
   {
-    "hash_key": 146563111,
+    "hash_key": 1344788747,
     "enum_name": "orientation",
     "serialized_name": "orientation",
     "type": "enum",
@@ -353,7 +353,7 @@
     ]
   },
   {
-    "hash_key": -766979691,
+    "hash_key": 2006010701,
     "enum_name": "attachment",
     "serialized_name": "attachment",
     "type": "enum",
@@ -758,7 +758,7 @@
     ]
   },
   {
-    "hash_key": 1656828680,
+    "hash_key": 247868904,
     "enum_name": "comparator_mode",
     "serialized_name": "mode",
     "type": "enum",
@@ -843,7 +843,7 @@
     ]
   },
   {
-    "hash_key": 2026825382,
+    "hash_key": -572638057,
     "enum_name": "structure_block_mode",
     "serialized_name": "mode",
     "type": "enum",
@@ -855,7 +855,7 @@
     ]
   },
   {
-    "hash_key": 405780334,
+    "hash_key": 696702354,
     "enum_name": "bamboo_leaves",
     "serialized_name": "leaves",
     "type": "enum",
@@ -866,7 +866,7 @@
     ]
   },
   {
-    "hash_key": -1094852523,
+    "hash_key": 1919256138,
     "enum_name": "tilt",
     "serialized_name": "tilt",
     "type": "enum",
@@ -888,7 +888,7 @@
     ]
   },
   {
-    "hash_key": 444264353,
+    "hash_key": -1368161770,
     "enum_name": "thickness",
     "serialized_name": "thickness",
     "type": "enum",
@@ -901,7 +901,7 @@
     ]
   },
   {
-    "hash_key": -936140443,
+    "hash_key": 435163277,
     "enum_name": "sculk_sensor_phase",
     "serialized_name": "sculk_sensor_phase",
     "type": "enum",
@@ -968,7 +968,7 @@
     "type": "boolean"
   },
   {
-    "hash_key": 257254714,
+    "hash_key": -1120962099,
     "enum_name": "trial_spawner_state",
     "serialized_name": "trial_spawner_state",
     "type": "enum",
@@ -982,7 +982,7 @@
     ]
   },
   {
-    "hash_key": 1309319134,
+    "hash_key": -1089556328,
     "enum_name": "vault_state",
     "serialized_name": "vault_state",
     "type": "enum",
@@ -1011,7 +1011,7 @@
     "type": "boolean"
   },
   {
-    "hash_key": 1861432019,
+    "hash_key": -991182527,
     "enum_name": "test_block_mode",
     "serialized_name": "mode",
     "type": "enum",

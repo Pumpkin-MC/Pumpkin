@@ -416,7 +416,6 @@ pub struct BlockState {
     pub outline_shapes: Vec<u16>,
     pub has_random_ticks: bool,
     pub opacity: Option<u8>,
-    pub is_trivial: bool,
     pub block_entity_type: Option<u16>,
 }
 
@@ -476,7 +475,6 @@ impl BlockState {
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
         let has_random_ticks = self.has_random_ticks;
-        let is_trivial = self.is_trivial;
         let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
@@ -492,7 +490,6 @@ impl BlockState {
                 outline_shapes: &[#(#outline_shapes),*],
                 has_random_tick: #has_random_ticks,
                 opacity: #opacity,
-                is_trivial: #is_trivial,
                 block_entity_type: #block_entity_type,
             }
         });
