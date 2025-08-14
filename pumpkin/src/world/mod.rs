@@ -697,6 +697,7 @@ impl World {
             }
         }
 
+        /* TODO: Fix this deadlock
         for scheduled_tick in tick_data.random_ticks {
             let block = self.get_block(&scheduled_tick.position).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
@@ -708,7 +709,7 @@ impl World {
                     })
                     .await;
             }
-        }
+        } */
 
         let spawn_entity_clock_start = tokio::time::Instant::now();
 
@@ -2486,16 +2487,14 @@ impl World {
     pub async fn check_block(self: &Arc<Self>, pos: BlockPos) {
         let current_light = self.get_block_light_level(&pos).await.unwrap_or(0);
         let block_state = self.get_block_state(&pos).await;
-        let expected_light = block_state.luminance; // Simplified - vanilla considers surrounding light too
+        let expected_light = block_state.luminance;
 
         if expected_light < current_light {
-            // Light should decrease
             self.set_block_light_level(&pos, 0).await.unwrap();
             self.queue_decrease(pos, current_light);
         }
 
         if expected_light > 0 {
-            // Light should be emitted
             self.set_block_light_level(&pos, expected_light)
                 .await
                 .unwrap();
