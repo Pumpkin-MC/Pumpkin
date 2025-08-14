@@ -348,7 +348,7 @@ impl JavaClient {
                     Vector3::new(0.0, 0.0, 0.0),
                     player.living_entity.entity.yaw.load(),
                     player.living_entity.entity.pitch.load(),
-                    &[],
+                    Vec::new(),
                 )).await;
             }
         }}
@@ -480,7 +480,7 @@ impl JavaClient {
             Vector3::new(0.0, 0.0, 0.0),
             player.living_entity.entity.yaw.load(),
             player.living_entity.entity.pitch.load(),
-            &[],
+            Vec::new(),
         ))
         .await;
     }
