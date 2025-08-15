@@ -278,7 +278,7 @@ pub async fn get_side(world: &World, pos: &BlockPos, side: BlockDirection) -> Wi
     let up_pos = pos.offset(BlockDirection::Up.to_offset());
     let up_state = world.get_block_state(&up_pos).await;
 
-    if !up_state.blocks_wire()
+    if !up_state.is_solid_block()
         && state.is_side_solid(side.opposite())
         && can_connect_diagonal_to(
             world
@@ -287,7 +287,7 @@ pub async fn get_side(world: &World, pos: &BlockPos, side: BlockDirection) -> Wi
         )
     {
         WireConnection::Up
-    } else if !state.blocks_wire()
+    } else if !state.is_solid_block()
         && can_connect_diagonal_to(
             world
                 .get_block(&neighbor_pos.offset(BlockDirection::Down.to_offset()))
@@ -521,7 +521,7 @@ async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
             get_redstone_power_no_dust(neighbor, neighbor_state, world, neighbor_pos, side).await,
         );
         if side.is_horizontal() {
-            if !up_state.blocks_wire() && !neighbor_state.blocks_wire_down() {
+            if !up_state.is_solid_block() && neighbor_state.is_solid_block() {
                 wire_power = max_wire_power(
                     wire_power,
                     world,
@@ -530,7 +530,7 @@ async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
                 .await;
             }
 
-            if !neighbor_state.blocks_wire() {
+            if !neighbor_state.is_solid_block() {
                 wire_power = max_wire_power(
                     wire_power,
                     world,
