@@ -350,7 +350,8 @@ mod tests {
     #[tokio::test]
     async fn test_encode_without_compression_and_encryption() {
         // Create a CStatusResponse packet
-        let packet = CStatusResponse::new(String::from("{\"description\": \"A Minecraft Server\"}"));
+        let packet =
+            CStatusResponse::new(String::from("{\"description\": \"A Minecraft Server\"}"));
 
         // Build the packet without compression and encryption
         let packet_bytes = build_packet_with_encoder(&packet, None, None).await;
@@ -382,7 +383,8 @@ mod tests {
     #[tokio::test]
     async fn test_encode_with_compression() {
         // Create a CStatusResponse packet
-        let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".parse().unwrap());
+        let packet =
+            CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".parse().unwrap());
 
         // Build the packet with compression enabled
         let packet_bytes = build_packet_with_encoder(&packet, Some((0, 6)), None).await;
@@ -429,7 +431,8 @@ mod tests {
     #[tokio::test]
     async fn test_encode_with_encryption() {
         // Create a CStatusResponse packet
-        let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".parse().unwrap());
+        let packet =
+            CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".parse().unwrap());
 
         // Encryption key and IV (IV is the same as key in this case)
         let key = [0x00u8; 16]; // Example key
@@ -465,7 +468,8 @@ mod tests {
     #[tokio::test]
     async fn test_encode_with_compression_and_encryption() {
         // Create a CStatusResponse packet
-        let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".parse().unwrap());
+        let packet =
+            CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".parse().unwrap());
 
         // Encryption key and IV (IV is the same as key in this case)
         let key = [0x01u8; 16]; // Example key
