@@ -15,8 +15,8 @@ use crate::{
 
 #[packet(PLAY_SET_EQUIPMENT)]
 pub struct CSetEquipment {
-    entity_id: VarInt,
-    equipment: Vec<(i8, ItemStackSerializer<'static>)>,
+    pub entity_id: VarInt,
+    pub equipment: Vec<(i8, ItemStackSerializer<'static>)>,
 }
 
 impl CSetEquipment {

@@ -12,6 +12,8 @@ use pumpkin_util::{
 };
 
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
+use crate::generation::structure::STRUCTURE_SETS;
+use crate::generation::structure::placement::StructurePlacementCalculator;
 use crate::{
     BlockStateId,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier, hash_seed},
@@ -702,7 +704,7 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
-    /// This generates "Features," also known as decorations, which include things like trees, grass, ores, and more.
+    /// This generates "Structure Pieces" and "Features" also known as decorations, which include things like trees, grass, ores, and more.
     /// Essentially, it encompasses everything above the surface or underground. It's crucial that this step is executed after biomes are generated,
     /// as the decoration directly depends on the biome. Similarly, running this after the surface is built is logical, as it often involves checking block types.
     /// For example, flowers are typically placed only on grass blocks.
@@ -711,7 +713,11 @@ impl<'a> ProtoChunk<'a> {
     ///
     /// 1. First, we determine **whether** to generate a feature and **at which block positions** to place it.
     /// 2. Then, using the second file, we determine **how** to generate the feature.
-    pub fn generate_features(&mut self, level: &Arc<Level>, block_registry: &dyn BlockRegistryExt) {
+    pub fn generate_features_and_structure(
+        &mut self,
+        level: &Arc<Level>,
+        block_registry: &dyn BlockRegistryExt,
+    ) {
         let chunk_pos = self.chunk_pos;
         let min_y = self.noise_sampler.min_y();
         let height = self.noise_sampler.height();
@@ -742,6 +748,17 @@ impl<'a> ProtoChunk<'a> {
                 &mut random,
                 block_pos,
             );
+        }
+    }
+
+    pub fn set_structure_starts(&self) {
+        for (_name, set) in STRUCTURE_SETS.iter() {
+            let calculator = StructurePlacementCalculator {
+                seed: self.random_config.seed as i64,
+            };
+            if !set.placement.should_generate(calculator, self.chunk_pos) {
+                continue; // ??
+            }
         }
     }
 

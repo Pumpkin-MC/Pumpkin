@@ -19,6 +19,7 @@ pub mod rule;
 mod rule_test;
 mod seed;
 pub mod settings;
+pub mod structure;
 mod surface;
 pub mod y_offset;
 
@@ -71,6 +72,10 @@ pub mod section_coords {
     #[inline]
     pub fn block_to_section<T: PrimInt>(coord: T) -> T {
         coord >> 4
+    }
+
+    pub fn get_offset_pos(chunk_coord: i32, offset: i32) -> i32 {
+        section_to_block(chunk_coord) + offset
     }
 
     #[inline]

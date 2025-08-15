@@ -5,7 +5,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_CLEAR_TITLES)]
 pub struct CClearTitle {
-    reset: bool,
+    pub reset: bool,
 }
 
 impl CClearTitle {

@@ -109,11 +109,8 @@ impl BoundingBox {
         }
 
         let move_positive = movement_on_axis.is_sign_positive();
-
         let self_plane_const = self.get_side(move_positive).get_axis(axis);
-
         let other_plane_const = other.get_side(!move_positive).get_axis(axis);
-
         let collision_time = (other_plane_const - self_plane_const) / movement_on_axis;
 
         if collision_time < 0.0 || collision_time >= max_time {

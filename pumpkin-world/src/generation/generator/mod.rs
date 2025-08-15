@@ -102,7 +102,7 @@ impl WorldGenerator for VanillaGenerator {
         proto_chunk.populate_biomes(self.dimension);
         proto_chunk.populate_noise();
         proto_chunk.build_surface();
-        proto_chunk.generate_features(level, block_registry);
+        proto_chunk.generate_features_and_structure(level, block_registry);
 
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
             let relative_y = y as usize;

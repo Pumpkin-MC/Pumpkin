@@ -5,8 +5,8 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_TICKING_STATE)]
 pub struct CTickingState {
-    tick_rate: f32,
-    is_frozen: bool,
+    pub tick_rate: f32,
+    pub is_frozen: bool,
 }
 
 impl CTickingState {

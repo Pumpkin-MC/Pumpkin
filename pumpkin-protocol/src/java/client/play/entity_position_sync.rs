@@ -10,12 +10,12 @@ use crate::VarInt;
 #[packet(PLAY_ENTITY_POSITION_SYNC)]
 #[derive(Serialize)]
 pub struct CEntityPositionSync {
-    entity_id: VarInt,
-    position: Vector3<f64>,
-    delta: Vector3<f64>,
-    yaw: f32,
-    pitch: f32,
-    on_ground: bool,
+    pub entity_id: VarInt,
+    pub position: Vector3<f64>,
+    pub delta: Vector3<f64>,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub on_ground: bool,
 }
 
 impl CEntityPositionSync {

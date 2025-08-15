@@ -11,8 +11,8 @@ use crate::codec::{var_int::VarInt, var_long::VarLong};
 
 #[packet(PLAY_SECTION_BLOCKS_UPDATE)]
 pub struct CMultiBlockUpdate {
-    chunk_section: Vector3<i32>,
-    positions_to_state_ids: Vec<(i16, i32)>,
+    pub chunk_section: Vector3<i32>,
+    pub positions_to_state_ids: Vec<(i16, i32)>,
 }
 
 impl CMultiBlockUpdate {

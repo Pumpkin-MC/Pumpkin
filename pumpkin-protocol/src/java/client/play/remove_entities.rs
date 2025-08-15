@@ -7,7 +7,7 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_REMOVE_ENTITIES)]
 pub struct CRemoveEntities<'a> {
-    entity_ids: &'a [VarInt],
+    pub entity_ids: &'a [VarInt],
 }
 
 impl<'a> CRemoveEntities<'a> {

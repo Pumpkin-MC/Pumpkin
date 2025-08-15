@@ -4,9 +4,9 @@ use crate::inventory::{Clearable, Inventory, split_stack};
 use crate::item::ItemStack;
 use crate::world::SimpleWorld;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, HopperFacing, HopperLikeProperties};
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -184,9 +184,7 @@ impl HopperBlockEntity {
         }
         let (block, state) = world.get_block_and_state(pos_up).await;
         if !(state.is_solid()
-            && block
-                .is_tagged_with("minecraft:does_not_block_hoppers")
-                .unwrap())
+            && block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS))
         {
             // TODO getItemsAtAndAbove(level, hopper)
             return false;

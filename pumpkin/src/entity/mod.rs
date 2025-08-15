@@ -1130,10 +1130,10 @@ impl Entity {
 
         let block = world.get_block(&self.block_pos.load()).await;
 
-        let m1 = block.velocity_multiplier;
+        let multiplier = block.velocity_multiplier;
 
-        if m1 != 1f32 || block == &Block::WATER || block == &Block::BUBBLE_COLUMN {
-            m1
+        if multiplier != 1.0 || block == &Block::WATER || block == &Block::BUBBLE_COLUMN {
+            multiplier
         } else {
             let (_pos, block, _state) = self.get_block_with_y_offset(0.500_001).await;
 
@@ -1166,10 +1166,7 @@ impl Entity {
     // Move by a delta, adjust for collisions, and send
 
     // Does not send movement. That must be done separately
-
     async fn move_entity(&self, caller: Arc<dyn EntityBase>, mut motion: Vector3<f64>) {
-        // TODO: Player movement checking (anticheat)
-
         if caller.get_player().is_some() {
             return;
         }

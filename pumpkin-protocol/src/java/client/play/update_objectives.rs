@@ -8,11 +8,11 @@ use crate::{ClientPacket, NumberFormat, VarInt, WritingError, ser::NetworkWriteE
 
 #[packet(PLAY_SET_OBJECTIVE)]
 pub struct CUpdateObjectives {
-    objective_name: String,
-    mode: u8,
-    display_name: TextComponent,
-    render_type: VarInt,
-    number_format: Option<NumberFormat>,
+    pub objective_name: String,
+    pub mode: u8,
+    pub display_name: TextComponent,
+    pub render_type: VarInt,
+    pub number_format: Option<NumberFormat>,
 }
 
 impl CUpdateObjectives {

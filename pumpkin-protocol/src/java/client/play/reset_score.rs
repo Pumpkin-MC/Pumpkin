@@ -5,8 +5,8 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_RESET_SCORE)]
 pub struct CResetScore {
-    entity_name: String,
-    objective_name: Option<String>,
+    pub entity_name: String,
+    pub objective_name: Option<String>,
 }
 
 impl CResetScore {

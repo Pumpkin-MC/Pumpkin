@@ -18,7 +18,7 @@ impl Dimension {
         mut base_directory: PathBuf,
         block_registry: Arc<dyn BlockRegistryExt>,
         seed: i64,
-    ) -> Level {
+    ) -> Arc<Level> {
         match self {
             Dimension::Overworld => {}
             Dimension::Nether => base_directory.push("DIM-1"),

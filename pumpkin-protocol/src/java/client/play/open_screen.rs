@@ -9,9 +9,9 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_OPEN_SCREEN)]
 pub struct COpenScreen<'a> {
-    sync_id: VarInt,
-    window_type: VarInt,
-    window_title: &'a TextComponent,
+    pub sync_id: VarInt,
+    pub window_type: VarInt,
+    pub window_title: &'a TextComponent,
 }
 
 impl<'a> COpenScreen<'a> {

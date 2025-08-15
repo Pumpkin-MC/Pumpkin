@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_GAME_EVENT)]
 pub struct CGameEvent {
-    event: u8,
-    value: f32,
+    pub event: u8,
+    pub value: f32,
 }
 
 /// You need to implement all the random stuff somewhere, right?

@@ -197,7 +197,7 @@ pub struct World {
 impl World {
     #[must_use]
     pub fn load(
-        level: Level,
+        level: Arc<Level>,
         level_info: Arc<RwLock<LevelData>>,
         dimension_type: VanillaDimensionType,
         block_registry: Arc<BlockRegistry>,
@@ -218,7 +218,7 @@ impl World {
         };
 
         Self {
-            level: Arc::new(level),
+            level,
             level_info,
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
@@ -950,13 +950,9 @@ impl World {
 
     pub fn check_outline<F>(
         bounding_box: &BoundingBox,
-
         pos: BlockPos,
-
         state: &BlockState,
-
         use_outline_shape: bool,
-
         mut using_outline_shape: F,
     ) -> bool
     where
@@ -969,7 +965,6 @@ impl World {
         }
 
         let mut inside = false;
-
         'shapes: for shape in state.get_block_outline_shapes().unwrap() {
             let outline_shape = shape.at_pos(pos);
 
@@ -1019,10 +1014,8 @@ impl World {
     }
 
     // For adjusting movement
-
     pub async fn get_block_collisions(
         self: &Arc<Self>,
-
         bounding_box: BoundingBox,
     ) -> (Vec<BoundingBox>, Vec<(usize, BlockPos)>) {
         let mut collisions = Vec::new();

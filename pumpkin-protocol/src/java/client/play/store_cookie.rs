@@ -8,8 +8,8 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_STORE_COOKIE)]
 pub struct CStoreCookie<'a> {
-    key: &'a ResourceLocation,
-    payload: &'a [u8], // 5120,
+    pub key: &'a ResourceLocation,
+    pub payload: &'a [u8], // 5120,
 }
 
 impl<'a> CStoreCookie<'a> {

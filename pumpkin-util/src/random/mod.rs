@@ -68,6 +68,30 @@ pub fn get_decorator_seed(population_seed: u64, index: usize, step: usize) -> u6
         .wrapping_add(10_000u64.wrapping_mul(step as u64))
 }
 
+#[inline]
+pub fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: i32) -> u64 {
+    let region_x_long: u64 = region_x as u64;
+    let region_z_long: u64 = region_z as u64;
+    let salt_long: u64 = salt as u64;
+    region_x_long
+        .wrapping_mul(341873128712)
+        .wrapping_add(region_z_long.wrapping_mul(132897987541))
+        .wrapping_add(world_seed)
+        .wrapping_add(salt_long)
+}
+
+#[inline]
+pub fn get_carver_seed(
+    random: &mut RandomGenerator,
+    world_seed: u64,
+    chunk_x: i32,
+    chunk_z: i32,
+) -> u64 {
+    let x = random.next_i64();
+    let z = random.next_i64();
+    (chunk_x as u64).wrapping_mul(x as u64) ^ (chunk_z as u64).wrapping_mul(z as u64) ^ world_seed
+}
+
 #[enum_dispatch]
 pub trait RandomImpl {
     fn split(&mut self) -> Self;

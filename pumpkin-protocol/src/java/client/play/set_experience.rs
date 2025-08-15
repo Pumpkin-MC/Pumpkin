@@ -7,9 +7,9 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_SET_EXPERIENCE)]
 pub struct CSetExperience {
-    progress: f32,
-    total_experience: VarInt,
-    level: VarInt,
+    pub progress: f32,
+    pub total_experience: VarInt,
+    pub level: VarInt,
 }
 
 impl CSetExperience {

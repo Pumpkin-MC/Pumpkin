@@ -14,11 +14,10 @@ use pumpkin_world::{
 use tokio::{runtime::Runtime, sync::RwLock};
 
 async fn test_reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
-    let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
     let level = level.clone();
-    tokio::spawn(async move { level.fetch_chunks(&positions, send).await });
+    let mut receiver = level.receive_chunks(positions);
 
-    while let Some(x) = recv.recv().await {
+    while let Some(x) = receiver.recv().await {
         // Don't compile me away!
         let _ = x;
     }
@@ -100,7 +99,6 @@ fn initialize_level(
     // Initial writes
     let mut chunks = Vec::new();
     async_handler.block_on(async {
-        let (send, mut recv) = tokio::sync::mpsc::unbounded_channel();
         let block_registry = Arc::new(BlockRegistry);
 
         // Our data dir is empty, so we're generating new chunks here
@@ -113,14 +111,12 @@ fn initialize_level(
         println!("Level Seed is: {}", level_to_save.seed.0);
 
         let level_to_fetch = level_to_save.clone();
-        tokio::spawn(async move {
-            let chunks_to_generate = (MIN_CHUNK..MAX_CHUNK)
-                .flat_map(|x| (MIN_CHUNK..MAX_CHUNK).map(move |z| Vector2::new(x, z)))
-                .collect::<Vec<_>>();
-            level_to_fetch.fetch_chunks(&chunks_to_generate, send).await;
-        });
+        let chunks_to_generate = (MIN_CHUNK..MAX_CHUNK)
+            .flat_map(|x| (MIN_CHUNK..MAX_CHUNK).map(move |z| Vector2::new(x, z)))
+            .collect::<Vec<_>>();
+        let mut receiver = level_to_fetch.receive_chunks(chunks_to_generate);
 
-        while let Some((chunk, _)) = recv.recv().await {
+        while let Some((chunk, _)) = receiver.recv().await {
             let pos = chunk.read().await.position;
             chunks.push((pos, chunk));
         }

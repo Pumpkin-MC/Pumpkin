@@ -5,7 +5,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_SET_HELD_SLOT)]
 pub struct CSetSelectedSlot {
-    slot: i8,
+    pub slot: i8,
 }
 
 impl CSetSelectedSlot {

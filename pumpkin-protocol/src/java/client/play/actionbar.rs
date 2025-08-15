@@ -7,7 +7,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_SET_ACTION_BAR_TEXT)]
 pub struct CActionBar<'a> {
-    action_bar: &'a TextComponent,
+    pub action_bar: &'a TextComponent,
 }
 
 impl<'a> CActionBar<'a> {

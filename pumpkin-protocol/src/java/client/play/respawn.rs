@@ -8,17 +8,17 @@ use crate::VarInt;
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_RESPAWN)]
 pub struct CRespawn {
-    dimension_type: VarInt,
-    dimension_name: ResourceLocation,
-    hashed_seed: i64,
-    game_mode: u8,
-    previous_gamemode: i8,
-    debug: bool,
-    is_flat: bool,
-    death_dimension_name: Option<(ResourceLocation, BlockPos)>,
-    portal_cooldown: VarInt,
-    sealevel: VarInt,
-    data_kept: u8,
+    pub dimension_type: VarInt,
+    pub dimension_name: ResourceLocation,
+    pub hashed_seed: i64,
+    pub game_mode: u8,
+    pub previous_gamemode: i8,
+    pub debug: bool,
+    pub is_flat: bool,
+    pub death_dimension_name: Option<(ResourceLocation, BlockPos)>,
+    pub portal_cooldown: VarInt,
+    pub sealevel: VarInt,
+    pub data_kept: u8,
 }
 
 impl CRespawn {

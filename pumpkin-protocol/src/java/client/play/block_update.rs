@@ -9,8 +9,8 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_BLOCK_UPDATE)]
 pub struct CBlockUpdate {
-    location: BlockPos,
-    block_id: VarInt,
+    pub location: BlockPos,
+    pub block_id: VarInt,
 }
 
 impl CBlockUpdate {

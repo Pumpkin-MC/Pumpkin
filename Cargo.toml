@@ -48,7 +48,7 @@ bytes = "1.10"
 
 # Concurrency/Parallelism and Synchronization
 futures = { version = "0.3", default-features = false, features = ["executor"] }
-rayon = "1.10"
+rayon = "1.11"
 crossbeam = "0.8"
 
 uuid = { version = "1.18", features = ["serde", "v3", "v4"] }

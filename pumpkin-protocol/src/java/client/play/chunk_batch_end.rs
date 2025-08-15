@@ -7,7 +7,7 @@ use crate::codec::var_int::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_CHUNK_BATCH_FINISHED)]
 pub struct CChunkBatchEnd {
-    batch_size: VarInt,
+    pub batch_size: VarInt,
 }
 
 impl CChunkBatchEnd {

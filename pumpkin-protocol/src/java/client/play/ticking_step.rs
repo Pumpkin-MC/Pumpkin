@@ -7,7 +7,7 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_TICKING_STEP)]
 pub struct CTickingStep {
-    tick_steps: VarInt,
+    pub tick_steps: VarInt,
 }
 
 impl CTickingStep {

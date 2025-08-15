@@ -13,7 +13,7 @@ use pumpkin_util::resource_location::ResourceLocation;
 
 #[packet(CONFIG_UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {
-    tags: &'a [pumpkin_data::tag::RegistryKey],
+    pub tags: &'a [pumpkin_data::tag::RegistryKey],
 }
 
 impl<'a> CUpdateTags<'a> {

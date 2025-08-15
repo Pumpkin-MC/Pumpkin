@@ -8,8 +8,8 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_SET_PLAYER_INVENTORY)]
 pub struct CSetPlayerInventory<'a> {
-    slot: VarInt,
-    item: &'a ItemStackSerializer<'a>,
+    pub slot: VarInt,
+    pub item: &'a ItemStackSerializer<'a>,
 }
 
 impl<'a> CSetPlayerInventory<'a> {
