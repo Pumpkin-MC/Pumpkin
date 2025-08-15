@@ -350,7 +350,7 @@ mod tests {
     #[tokio::test]
     async fn test_encode_without_compression_and_encryption() {
         // Create a CStatusResponse packet
-        let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}");
+        let packet = CStatusResponse::new(String::from("{\"description\": \"A Minecraft Server\"}"));
 
         // Build the packet without compression and encryption
         let packet_bytes = build_packet_with_encoder(&packet, None, None).await;
@@ -382,7 +382,7 @@ mod tests {
     #[tokio::test]
     async fn test_encode_with_compression() {
         // Create a CStatusResponse packet
-        let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}");
+        let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".parse().unwrap());
 
         // Build the packet with compression enabled
         let packet_bytes = build_packet_with_encoder(&packet, Some((0, 6)), None).await;
@@ -429,7 +429,7 @@ mod tests {
     #[tokio::test]
     async fn test_encode_with_encryption() {
         // Create a CStatusResponse packet
-        let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}");
+        let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".parse().unwrap());
 
         // Encryption key and IV (IV is the same as key in this case)
         let key = [0x00u8; 16]; // Example key
@@ -465,7 +465,7 @@ mod tests {
     #[tokio::test]
     async fn test_encode_with_compression_and_encryption() {
         // Create a CStatusResponse packet
-        let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}");
+        let packet = CStatusResponse::new("{\"description\": \"A Minecraft Server\"}".parse().unwrap());
 
         // Encryption key and IV (IV is the same as key in this case)
         let key = [0x01u8; 16]; // Example key
@@ -519,7 +519,7 @@ mod tests {
     #[tokio::test]
     async fn test_encode_with_zero_length_payload() {
         // Create a CStatusResponse packet with empty payload
-        let packet = CStatusResponse::new("");
+        let packet = CStatusResponse::new(String::from(""));
 
         // Build the packet without compression and encryption
         let packet_bytes = build_packet_with_encoder(&packet, None, None).await;
@@ -557,7 +557,7 @@ mod tests {
         // Maximum allowed string length is 32767 bytes
         let max_string_length = 32767;
         let payload_str = "A".repeat(max_string_length);
-        let packet = CStatusResponse::new(&payload_str);
+        let packet = CStatusResponse::new(payload_str);
 
         // Build the packet without compression and encryption
         let packet_bytes = build_packet_with_encoder(&packet, None, None).await;
@@ -608,7 +608,7 @@ mod tests {
     #[tokio::test]
     async fn test_encode_small_payload_no_compression() {
         // Create a CStatusResponse packet with small payload
-        let packet = CStatusResponse::new("Hi");
+        let packet = CStatusResponse::new(String::from("Hi"));
 
         // Build the packet with compression enabled
         // Compression threshold is set to a value higher than payload length
