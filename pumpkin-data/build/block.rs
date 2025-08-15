@@ -450,10 +450,7 @@ impl BlockState {
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
-        let state_flags = LitInt::new(
-            &((self.state_flags >> 0) & 0xff).to_string(),
-            Span::call_site(),
-        );
+        let state_flags = LitInt::new(&(self.state_flags & 0xff).to_string(), Span::call_site());
         let state_flags2 = LitInt::new(
             &((self.state_flags >> 8) & 0xff).to_string(),
             Span::call_site(),
