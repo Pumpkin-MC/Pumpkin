@@ -6,8 +6,7 @@ use crate::{Block, BlockDirection, CollisionShape};
 #[derive(Debug)]
 pub struct BlockState {
     pub id: u16,
-    pub state_flags: u8,
-    pub state_flags2: u8,
+    pub state_flags: u16,
     pub side_flags: u8,
     pub instrument: Instrument,
     pub luminance: u8,
@@ -76,11 +75,11 @@ impl BlockState {
     /// Solid blocks conduct redstone and block redstone wire.
     /// Non-solid blocks don't allow redstone wire on top to propagate their signal downwards in java.
     pub const fn is_solid_block(&self) -> bool {
-        self.state_flags2 & IS_SOLID_BLOCK != 0
+        self.state_flags & IS_SOLID_BLOCK != 0
     }
 
     pub const fn has_random_ticks(&self) -> bool {
-        self.state_flags2 & HAS_RANDOM_TICKS != 0
+        self.state_flags & HAS_RANDOM_TICKS != 0
     }
 
     ///isSideSolidFullSquare() in Java!
@@ -145,18 +144,16 @@ pub struct BlockStateRef {
 
 //This is the Layout of state_props in the right order
 // state_flags
-const IS_AIR: u8 = 1 << 0;
-const BURNABLE: u8 = 1 << 1;
-const TOOL_REQUIRED: u8 = 1 << 2;
-const SIDED_TRANSPARENCY: u8 = 1 << 3;
-const REPLACEABLE: u8 = 1 << 4;
-const IS_LIQUID: u8 = 1 << 5;
-const IS_SOLID: u8 = 1 << 6;
-const IS_FULL_CUBE: u8 = 1 << 7;
-
-// state_flags2
-const IS_SOLID_BLOCK: u8 = 1 << 0;
-const HAS_RANDOM_TICKS: u8 = 1 << 1;
+const IS_AIR: u16 = 1 << 0;
+const BURNABLE: u16 = 1 << 1;
+const TOOL_REQUIRED: u16 = 1 << 2;
+const SIDED_TRANSPARENCY: u16 = 1 << 3;
+const REPLACEABLE: u16 = 1 << 4;
+const IS_LIQUID: u16 = 1 << 5;
+const IS_SOLID: u16 = 1 << 6;
+const IS_FULL_CUBE: u16 = 1 << 7;
+const IS_SOLID_BLOCK: u16 = 1 << 8;
+const HAS_RANDOM_TICKS: u16 = 1 << 9;
 
 // side_flags
 const DOWN_SIDE_SOLID: u8 = 1 << 0;
