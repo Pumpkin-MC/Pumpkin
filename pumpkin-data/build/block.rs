@@ -450,12 +450,7 @@ impl BlockState {
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
-        let state_flags = LitInt::new(&(self.state_flags & 0xff).to_string(), Span::call_site());
-        let state_flags2 = LitInt::new(
-            &((self.state_flags >> 8) & 0xff).to_string(),
-            Span::call_site(),
-        );
-
+        let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
         let side_flags = LitInt::new(&self.side_flags.to_string(), Span::call_site());
         let instrument = format_ident!("{}", self.instrument.to_upper_camel_case());
         let luminance = LitInt::new(&self.luminance.to_string(), Span::call_site());
@@ -490,7 +485,6 @@ impl BlockState {
             BlockState {
                 id: #id,
                 state_flags: #state_flags,
-                state_flags2: #state_flags2,
                 side_flags: #side_flags,
                 instrument: Instrument::#instrument,
                 luminance: #luminance,
