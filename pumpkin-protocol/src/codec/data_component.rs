@@ -1,9 +1,8 @@
 use crate::codec::var_int::VarInt;
-use bytes::BufMut;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    DataComponentImpl, EnchantmentsImpl, MaxStackSizeImpl, get,
+    DamageImpl, DataComponentImpl, EnchantmentsImpl, MaxStackSizeImpl, get,
 };
 use serde::de;
 use serde::de::SeqAccess;
@@ -12,18 +11,12 @@ use std::borrow::Cow;
 
 trait DataComponentCodec<Impl: DataComponentImpl> {
     fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error>;
-    fn hash_serialize(&self, seq: &mut Vec<u8>);
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Impl, A::Error>;
 }
 
 impl DataComponentCodec<Self> for MaxStackSizeImpl {
     fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
         seq.serialize_field::<VarInt>("", &VarInt::from(self.size))
-    }
-    fn hash_serialize(&self, seq: &mut Vec<u8>) {
-        // net.minecraft.util.HashOps#createInt
-        seq.push(8u8);
-        seq.put_slice(&(self.size as i32).to_le_bytes());
     }
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
         let size = u8::try_from(
@@ -36,6 +29,19 @@ impl DataComponentCodec<Self> for MaxStackSizeImpl {
     }
 }
 
+impl DataComponentCodec<Self> for DamageImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.damage))
+    }
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let damage = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No damage VarInt!"))?
+            .0;
+        Ok(Self { damage })
+    }
+}
+
 impl DataComponentCodec<Self> for EnchantmentsImpl {
     fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
         seq.serialize_field::<VarInt>("", &VarInt::from(self.enchantment.len() as i32))?;
@@ -44,9 +50,6 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
             seq.serialize_field::<VarInt>("", &VarInt::from(*level))?;
         }
         Ok(())
-    }
-    fn hash_serialize(&self, _seq: &mut Vec<u8>) {
-        todo!();
     }
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
         let len = seq
@@ -83,7 +86,8 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
     match id {
         DataComponent::MaxStackSize => Ok(MaxStackSizeImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Enchantments => Ok(EnchantmentsImpl::deserialize(seq)?.to_dyn()),
-        _ => todo!(),
+        DataComponent::Damage => Ok(DamageImpl::deserialize(seq)?.to_dyn()),
+        _ => todo!("{} not yet implemented", id.to_name()),
     }
 }
 pub fn serialize<T: SerializeStruct>(
@@ -94,13 +98,7 @@ pub fn serialize<T: SerializeStruct>(
     match id {
         DataComponent::MaxStackSize => get::<MaxStackSizeImpl>(value).serialize(seq),
         DataComponent::Enchantments => get::<EnchantmentsImpl>(value).serialize(seq),
-        _ => todo!(),
-    }
-}
-pub fn hash_serialize(id: DataComponent, value: &dyn DataComponentImpl, seq: &mut Vec<u8>) {
-    match id {
-        DataComponent::MaxStackSize => get::<MaxStackSizeImpl>(value).hash_serialize(seq),
-        DataComponent::Enchantments => get::<EnchantmentsImpl>(value).hash_serialize(seq),
-        _ => todo!(),
+        DataComponent::Damage => get::<DamageImpl>(value).serialize(seq),
+        _ => todo!("{} not yet implemented", id.to_name()),
     }
 }

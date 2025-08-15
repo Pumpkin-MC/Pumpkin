@@ -6,12 +6,12 @@ use quote::{format_ident, quote};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-struct Enchantment {
-    id: u8,
-    anvil_cost: u32,
-    supported_items: String,
-    max_level: i32,
-    slots: Vec<AttributeModifierSlot>, // TODO: add more
+pub struct Enchantment {
+    pub id: u8,
+    pub anvil_cost: u32,
+    pub supported_items: String,
+    pub max_level: i32,
+    pub slots: Vec<AttributeModifierSlot>, // TODO: add more
 }
 
 #[derive(Deserialize, Clone)]
@@ -82,6 +82,7 @@ pub(crate) fn build() -> TokenStream {
             pub const #format_name: Enchantment = Enchantment {
                 id: #id,
                 name: #name,
+                registry_key: #raw_name,
                 anvil_cost: #anvil_cost,
                 supported_items: &Item::#supported_items,
                 max_level: #max_level,
@@ -95,17 +96,32 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use std::hash::{Hash, Hasher};
-        use crate::tag::{Item, Tag};
+        use crate::tag::{Item, Tag, Taggable, RegistryKey};
 
         #[derive(Debug)]
         pub struct Enchantment {
             pub id: u8,
             pub name: &'static str,
+            pub registry_key: &'static str,
             pub anvil_cost: u32,
             pub supported_items: &'static Tag,
             pub max_level: i32,
             pub slots: &'static [AttributeModifierSlot]
             // TODO: add more
+        }
+        impl Taggable for Enchantment {
+            #[inline]
+            fn tag_key() -> RegistryKey {
+                RegistryKey::Enchantment
+            }
+            #[inline]
+            fn registry_key(&self) -> &str {
+                self.registry_key
+            }
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id as u16
+            }
         }
         impl PartialEq for Enchantment {
             fn eq(&self, other: &Self) -> bool {

@@ -1,7 +1,5 @@
 use crate::VarInt;
-use crate::codec::data_component::{deserialize, hash_serialize, serialize};
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
+use crate::codec::data_component::{deserialize, serialize};
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
@@ -57,6 +55,9 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                             .map_err(|_| de::Error::custom("Unknown component id VarInt!"))?;
                         let id = DataComponent::try_from_id(id)
                             .ok_or(de::Error::custom("Unknown component id VarInt!"))?;
+                        let _byte_len = seq
+                            .next_element::<VarInt>()?
+                            .ok_or(de::Error::custom("No data len VarInt!"))?;
                         patch.push((id, Some(deserialize(id, &mut seq)?)))
                     }
                     for _ in 0..num_components_to_remove {
@@ -191,14 +192,10 @@ impl OptionalItemStackHash {
             }
             for (other_id, data) in &other.patch {
                 if let Some(data) = data {
-                    let mut buf = Vec::new();
-                    hash_serialize(*other_id, data.as_ref(), &mut buf);
-                    let mut digest = Digest::new(Crc32Iscsi);
-                    digest.update(buf.as_slice());
-                    let checksum = digest.finalize();
+                    let checksum = data.get_hash();
                     for (id, hash) in &hash.components.added {
                         if id == &VarInt::from(other_id.to_id()) {
-                            if hash != &(checksum as i32) {
+                            if hash != &checksum {
                                 return false;
                             } else {
                                 break;

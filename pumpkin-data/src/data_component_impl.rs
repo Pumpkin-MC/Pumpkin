@@ -4,8 +4,10 @@ use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::*;
 use crate::entity_type::EntityType;
-use crate::tag::Tag;
+use crate::tag::{Tag, Taggable};
 use crate::{AttributeModifierSlot, Block, Enchantment};
+use crc_fast::CrcAlgorithm::Crc32Iscsi;
+use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::registry::RegistryEntryList;
@@ -22,6 +24,9 @@ pub trait DataComponentImpl: Send + Sync + Debug {
     fn write_data(&self) -> NbtTag {
         todo!()
     }
+    fn get_hash(&self) -> i32 {
+        todo!()
+    }
     fn get_enum() -> DataComponent
     where
         Self: Sized;
@@ -34,9 +39,11 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
     match id {
         MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
+        Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         _ => todo!(),
     }
 }
+// Also Pumpkin\pumpkin-protocol\src\codec\data_component.rs
 
 impl Clone for Box<dyn DataComponentImpl> {
     fn clone(&self) -> Self {
@@ -89,6 +96,9 @@ impl DataComponentImpl for MaxStackSizeImpl {
     fn write_data(&self) -> NbtTag {
         NbtTag::Int(self.size as i32)
     }
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.size as i32) as i32
+    }
     #[inline]
     fn get_enum() -> DataComponent
     where
@@ -138,7 +148,18 @@ impl DataComponentImpl for MaxDamageImpl {
 pub struct DamageImpl {
     pub damage: i32,
 }
+impl DamageImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_int().map(|damage| Self { damage })
+    }
+}
 impl DataComponentImpl for DamageImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.damage)
+    }
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.damage) as i32
+    }
     #[inline]
     fn get_enum() -> DataComponent
     where
@@ -211,6 +232,42 @@ impl EnchantmentsImpl {
         })
     }
 }
+
+fn get_str_hash(val: &str) -> u32 {
+    let mut tmp = Vec::with_capacity(val.len() << 1);
+    let byte = val.as_bytes();
+    for i in byte {
+        tmp.push(*i);
+        tmp.push(0);
+    }
+    let mut digest = Digest::new(Crc32Iscsi);
+    digest.update(&[12u8]);
+    digest.update(&(val.len() as u32).to_le_bytes());
+    digest.update(tmp.as_slice());
+    digest.finalize() as u32
+}
+
+fn get_i32_hash(val: i32) -> u32 {
+    let mut digest = Digest::new(Crc32Iscsi);
+    digest.update(&[8u8]);
+    digest.update(&val.to_le_bytes());
+    digest.finalize() as u32
+}
+
+#[test]
+fn test_hash() {
+    assert_eq!(get_str_hash("minecraft:sharpness"), 2734053906u32);
+    assert_eq!(get_i32_hash(3), 3795317917u32);
+    assert_eq!(
+        EnchantmentsImpl {
+            enchantment: Cow::Borrowed(&[(&Enchantment::SHARPNESS, 2)]),
+        }
+        .get_hash(),
+        -1580618251i32
+    );
+    assert_eq!(MaxStackSizeImpl { size: 99 }.get_hash(), -1632321551i32);
+}
+
 impl DataComponentImpl for EnchantmentsImpl {
     fn write_data(&self) -> NbtTag {
         let mut data = NbtCompound::new();
@@ -218,6 +275,16 @@ impl DataComponentImpl for EnchantmentsImpl {
             data.put_int(enc.name, *level);
         }
         NbtTag::Compound(data)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        for (enc, level) in self.enchantment.iter() {
+            digest.update(&get_str_hash(enc.name).to_le_bytes());
+            digest.update(&get_i32_hash(*level).to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        digest.finalize() as i32
     }
     #[inline]
     fn get_enum() -> DataComponent

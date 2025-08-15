@@ -348,6 +348,10 @@ impl JavaClient {
         self.send_packet_now(&CUpdateTags::new(&[
             pumpkin_data::tag::RegistryKey::Block,
             pumpkin_data::tag::RegistryKey::Fluid,
+            pumpkin_data::tag::RegistryKey::Enchantment,
+            pumpkin_data::tag::RegistryKey::WorldgenBiome,
+            pumpkin_data::tag::RegistryKey::Item,
+            pumpkin_data::tag::RegistryKey::EntityType,
         ]))
         .await;
 
@@ -379,7 +383,7 @@ impl JavaClient {
         self.send_packet_now(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
             id: "core",
-            version: "1.21",
+            version: "1.21.6",
         }]))
         .await;
     }
