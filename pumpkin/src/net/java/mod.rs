@@ -255,7 +255,7 @@ impl JavaClient {
             ConnectionState::Login => {
                 // TextComponent implements Serialize and writes in bytes instead of String, that's the reasib we only use content
                 self.send_packet_now(&CLoginDisconnect::new(
-                    &serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
                 ))
                 .await;
             }
