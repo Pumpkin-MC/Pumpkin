@@ -1,6 +1,6 @@
 use std::{
     fs::OpenOptions,
-    io::Read,
+    io::{Cursor, Read},
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -38,7 +38,7 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
         data: LevelData,
     }
 
-    let info: LevelDat = pumpkin_nbt::from_bytes(raw_nbt)
+    let info: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(raw_nbt))
         .map_err(|e|{
             log::error!("The level.dat file does not have a data version! This means it is either corrupt or very old (read unsupported)");
             WorldInfoError::DeserializationError(e.to_string())})?;
@@ -65,7 +65,7 @@ fn check_file_level_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
         data: LevelData,
     }
 
-    let info: LevelDat = pumpkin_nbt::from_bytes(raw_nbt)
+    let info: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(raw_nbt))
         .map_err(|e|{
             log::error!("The level.dat file does not have a level version! This means it is either corrupt or very old (read unsupported)");
             WorldInfoError::DeserializationError(e.to_string())})?;
@@ -91,7 +91,7 @@ impl WorldInfoReader for AnvilLevelInfo {
 
         check_file_data_version(&buf)?;
         check_file_level_version(&buf)?;
-        let info = pumpkin_nbt::from_bytes::<LevelDat>(&buf[..])
+        let info = pumpkin_nbt::from_bytes::<LevelDat>(Cursor::new(buf))
             .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
 
         // TODO: check version
@@ -143,7 +143,11 @@ pub struct LevelDat {
 #[cfg(test)]
 mod test {
 
-    use std::{fs, sync::LazyLock};
+    use std::{
+        fs,
+        io::{Cursor, Read},
+        sync::LazyLock,
+    };
 
     use flate2::read::GzDecoder;
     use pumpkin_data::game_rules::GameRuleRegistry;
@@ -281,8 +285,10 @@ mod test {
         let raw_compressed_nbt = fs::read("assets/level_1_21_4.dat").unwrap();
         assert!(!raw_compressed_nbt.is_empty());
 
-        let decoder = GzDecoder::new(&raw_compressed_nbt[..]);
-        let level_dat: LevelDat = from_bytes(decoder).expect("Failed to decode from file");
+        let mut decoder = GzDecoder::new(&raw_compressed_nbt[..]);
+        let mut buf = Vec::new();
+        decoder.read_to_end(&mut buf).unwrap();
+        let level_dat: LevelDat = from_bytes(Cursor::new(buf)).expect("Failed to decode from file");
 
         assert_eq!(level_dat, *LEVEL_DAT);
     }
@@ -295,7 +301,7 @@ mod test {
         assert!(!serialized.is_empty());
 
         let level_dat_again: LevelDat =
-            from_bytes(&serialized[..]).expect("Failed to decode from bytes");
+            from_bytes(Cursor::new(serialized)).expect("Failed to decode from bytes");
 
         assert_eq!(level_dat_again, *LEVEL_DAT);
     }

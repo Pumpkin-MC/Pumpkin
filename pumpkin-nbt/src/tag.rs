@@ -108,12 +108,15 @@ impl NbtTag {
         Ok(())
     }
 
-    pub fn deserialize<R: Read>(reader: &mut NbtReadHelper<R>) -> Result<NbtTag, Error> {
+    pub fn deserialize<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<NbtTag, Error> {
         let tag_id = reader.get_u8_be()?;
         Self::deserialize_data(reader, tag_id)
     }
 
-    pub fn skip_data<R: Read>(reader: &mut NbtReadHelper<R>, tag_id: u8) -> Result<(), Error> {
+    pub fn skip_data<R: Read + Seek>(
+        reader: &mut NbtReadHelper<R>,
+        tag_id: u8,
+    ) -> Result<(), Error> {
         match tag_id {
             END_ID => Ok(()),
             BYTE_ID => reader.skip_bytes(1),
@@ -127,11 +130,11 @@ impl NbtTag {
                 if len < 0 {
                     return Err(Error::NegativeLength(len));
                 }
-                reader.skip_bytes(len as u64)
+                reader.skip_bytes(len as i64)
             }
             STRING_ID => {
                 let len = reader.get_u16_be()?;
-                reader.skip_bytes(len as u64)
+                reader.skip_bytes(len as i64)
             }
             LIST_ID => {
                 let tag_type_id = reader.get_u8_be()?;
@@ -153,7 +156,7 @@ impl NbtTag {
                     return Err(Error::NegativeLength(len));
                 }
 
-                reader.skip_bytes(len as u64 * 4)
+                reader.skip_bytes(len as i64 * 4)
             }
             LONG_ARRAY_ID => {
                 let len = reader.get_i32_be()?;
@@ -161,13 +164,13 @@ impl NbtTag {
                     return Err(Error::NegativeLength(len));
                 }
 
-                reader.skip_bytes(len as u64 * 8)
+                reader.skip_bytes(len as i64 * 8)
             }
             _ => Err(Error::UnknownTagId(tag_id)),
         }
     }
 
-    pub fn deserialize_data<R: Read>(
+    pub fn deserialize_data<R: Read + Seek>(
         reader: &mut NbtReadHelper<R>,
         tag_id: u8,
     ) -> Result<NbtTag, Error> {

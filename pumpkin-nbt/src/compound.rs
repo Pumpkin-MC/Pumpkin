@@ -5,7 +5,7 @@ use crate::deserializer::NbtReadHelper;
 use crate::serializer::WriteAdaptor;
 use crate::tag::NbtTag;
 use crate::{END_ID, Error, Nbt, get_nbt_string};
-use std::io::{ErrorKind, Read, Write};
+use std::io::{ErrorKind, Read, Seek, Write};
 use std::vec::IntoIter;
 
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
@@ -20,7 +20,7 @@ impl NbtCompound {
         }
     }
 
-    pub fn skip_content<R: Read>(reader: &mut NbtReadHelper<R>) -> Result<(), Error> {
+    pub fn skip_content<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<(), Error> {
         loop {
             let tag_id = match reader.get_u8_be() {
                 Ok(id) => id,
@@ -43,7 +43,7 @@ impl NbtCompound {
             }
 
             let len = reader.get_u16_be()?;
-            reader.skip_bytes(len as u64)?;
+            reader.skip_bytes(len as i64)?;
 
             NbtTag::skip_data(reader, tag_id)?;
         }
@@ -51,7 +51,7 @@ impl NbtCompound {
         Ok(())
     }
 
-    pub fn deserialize_content<R: Read>(
+    pub fn deserialize_content<R: Read + Seek>(
         reader: &mut NbtReadHelper<R>,
     ) -> Result<NbtCompound, Error> {
         let mut compound = NbtCompound::new();
