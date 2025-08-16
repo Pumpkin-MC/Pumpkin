@@ -197,9 +197,9 @@ impl PumpkinServer {
             });
         }
 
-        // Setup the TCP server socket with dual-stack support
+        // Setup the TCP server socket
         let listener = if advanced_config().networking.networks.ipv6_enabled {
-            // Try IPv6 first with dual-stack
+            // Try IPv6 first
             match tokio::net::TcpListener::bind(SocketAddrV6::new(
                 Ipv6Addr::UNSPECIFIED,
                 BASIC_CONFIG.java_edition_port,
@@ -210,7 +210,7 @@ impl PumpkinServer {
             {
                 Ok(listener) => {
                     log::info!(
-                        "Server listening on IPv6 (dual-stack) port {}",
+                        "Server listening on IPv6 port {}",
                         BASIC_CONFIG.java_edition_port
                     );
                     listener
@@ -264,9 +264,9 @@ impl PumpkinServer {
             });
         };
 
-        // Setup the UDP socket with dual-stack support for Bedrock
+        // Setup the UDP socket for Bedrock
         let udp_socket = if advanced_config().networking.networks.ipv6_enabled {
-            // Try IPv6 first with dual-stack
+            // Try IPv6 first
             match UdpSocket::bind(SocketAddrV6::new(
                 Ipv6Addr::UNSPECIFIED,
                 BASIC_CONFIG.bedrock_edition_port,
@@ -277,7 +277,7 @@ impl PumpkinServer {
             {
                 Ok(socket) => {
                     log::info!(
-                        "Bedrock server listening on IPv6 (dual-stack) port {}",
+                        "Bedrock server listening on IPv6 port {}",
                         BASIC_CONFIG.bedrock_edition_port
                     );
                     socket
