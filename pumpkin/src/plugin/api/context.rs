@@ -22,6 +22,7 @@ use super::{Event, EventPriority, PluginMetadata};
 /// - `metadata`: Metadata of the plugin.
 /// - `server`: A reference to the server on which the plugin operates.
 /// - `handlers`: A map of event handlers, protected by a read-write lock for safe access across threads.
+#[derive(Clone)]
 pub struct Context {
     metadata: PluginMetadata<'static>,
     pub server: Arc<Server>,

@@ -15,6 +15,8 @@ use key_store::KeyStore;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 
 use crate::command::CommandSender;
+use crate::plugin::task::TaskScheduler;
+
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::CChangeDifficulty;
@@ -99,6 +101,8 @@ pub struct Server {
     /// Random unique Server ID used by Bedrock Edition
     pub server_guid: u64,
     tasks: TaskTracker,
+    /// Used to track scheduled tasks
+    pub task_scheduler: TaskScheduler,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<RwLock<LevelData>>,
@@ -190,6 +194,7 @@ impl Server {
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info: level_info.clone(),
             _locker: Arc::new(locker),
+            task_scheduler: TaskScheduler::new(),
         };
 
         let server = Arc::new(server);
@@ -598,6 +603,8 @@ impl Server {
     pub async fn tick(self: &Arc<Self>) {
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds().await;
+            self.task_scheduler.tick().await;
+
             // Always run player and network ticking, even when game is frozen
         } else {
             self.tick_players_and_network().await;

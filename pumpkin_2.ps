@@ -1,0 +1,58 @@
+diff --git a/pumpkin/src/plugin/api/task/macros.rs b/pumpkin/src/plugin/api/task/macros.rs
+index 48c9e536..dc77206e 100644
+--- a/pumpkin/src/plugin/api/task/macros.rs
++++ b/pumpkin/src/plugin/api/task/macros.rs
+@@ -2,7 +2,7 @@
+ macro_rules! run_task_later {
+     ($server:expr, $delay_ticks:expr, $body:block) => {{
+         use async_trait::async_trait;
+-        use pumpkin::plugin::api::task::TaskHandler;
++        use $crate::plugin::api::task::TaskHandler;
+         use std::future::Future;
+         use std::pin::Pin;
+         use std::sync::{
+@@ -49,30 +49,32 @@ macro_rules! run_task_later {
+ 
+ #[macro_export]
+ macro_rules! run_task_timer {
+-    ($server:expr, $interval_ticks:expr, $body:block) => {{
++    ($server:expr, $interval_ticks:expr, $closure:expr) => {{
+         use std::sync::{Arc, Mutex};
+-
+         let server = Arc::clone(&$server);
+         let task_cell = Arc::new(Mutex::new(None::<Arc<dyn Fn() + Send + Sync + 'static>>));
+-
++        let user_closure = Arc::new($closure);
+         let task = {
+             let task_cell = Arc::clone(&task_cell);
+             let server = Arc::clone(&server);
+-
++            let user_closure = Arc::clone(&user_closure);
+             Arc::new(move || {
+-                run_task_later!(server.clone(), 0, $body);
+-
+-                if let Some(task) = task_cell.lock().unwrap().as_ref() {
+-                    run_task_later!(server.clone(), $interval_ticks, {
+-                        task();
++                let user_closure_for_task = Arc::clone(&user_closure);
++                let task_guard = task_cell.lock().unwrap();
++                if let Some(task) = task_guard.as_ref() {
++                    let task_clone = Arc::clone(task);
++                    drop(task_guard); // Release the lock before the async block
++                    $crate::run_task_later!(server.clone(), $interval_ticks, {
++                        user_closure_for_task().await;
++                        task_clone();
+                     });
+                 }
+             }) as Arc<dyn Fn() + Send + Sync + 'static>
+         };
+-
+         *task_cell.lock().unwrap() = Some(task.clone());
+-        run_task_later!(server, $interval_ticks, {
+-            task();
++        let task_clone_for_initial = Arc::clone(&task);
++        $crate::run_task_later!(server, $interval_ticks, {
++            task_clone_for_initial();
+         });
+     }};
+ }
