@@ -232,7 +232,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
             return level;
         }
 
-        if redstone_level < 15 && source_state.is_solid() {
+        if redstone_level < 15 && source_state.is_solid_block() {
             let source_pos = source_pos.offset(facing.to_offset());
             let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
 

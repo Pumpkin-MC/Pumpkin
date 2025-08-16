@@ -210,7 +210,7 @@
     "type": "boolean"
   },
   {
-    "hash_key": 1113709830,
+    "hash_key": -345518141,
     "enum_name": "horizontal_axis",
     "serialized_name": "axis",
     "type": "enum",
@@ -220,7 +220,7 @@
     ]
   },
   {
-    "hash_key": -929870136,
+    "hash_key": 1136350348,
     "enum_name": "axis",
     "serialized_name": "axis",
     "type": "enum",
@@ -267,7 +267,7 @@
     "type": "boolean"
   },
   {
-    "hash_key": 615899206,
+    "hash_key": -122500183,
     "enum_name": "facing",
     "serialized_name": "facing",
     "type": "enum",
@@ -281,7 +281,7 @@
     ]
   },
   {
-    "hash_key": -1836519164,
+    "hash_key": 442763041,
     "enum_name": "hopper_facing",
     "serialized_name": "facing",
     "type": "enum",
@@ -294,7 +294,7 @@
     ]
   },
   {
-    "hash_key": 1449460846,
+    "hash_key": -964161874,
     "enum_name": "horizontal_facing",
     "serialized_name": "facing",
     "type": "enum",
@@ -322,7 +322,7 @@
     "max": 4
   },
   {
-    "hash_key": 704752987,
+    "hash_key": 1433802136,
     "enum_name": "orientation",
     "serialized_name": "orientation",
     "type": "enum",
@@ -342,7 +342,7 @@
     ]
   },
   {
-    "hash_key": -589629896,
+    "hash_key": 164601017,
     "enum_name": "block_face",
     "serialized_name": "face",
     "type": "enum",
@@ -353,7 +353,7 @@
     ]
   },
   {
-    "hash_key": -706159110,
+    "hash_key": -1479871907,
     "enum_name": "attachment",
     "serialized_name": "attachment",
     "type": "enum",
@@ -365,7 +365,7 @@
     ]
   },
   {
-    "hash_key": -1010454105,
+    "hash_key": 1242384140,
     "enum_name": "east_wall_shape",
     "serialized_name": "east",
     "type": "enum",
@@ -376,7 +376,7 @@
     ]
   },
   {
-    "hash_key": -2146472545,
+    "hash_key": 106365700,
     "enum_name": "north_wall_shape",
     "serialized_name": "north",
     "type": "enum",
@@ -387,7 +387,7 @@
     ]
   },
   {
-    "hash_key": -2003237417,
+    "hash_key": 249600828,
     "enum_name": "south_wall_shape",
     "serialized_name": "south",
     "type": "enum",
@@ -398,7 +398,7 @@
     ]
   },
   {
-    "hash_key": -993711563,
+    "hash_key": 1259126682,
     "enum_name": "west_wall_shape",
     "serialized_name": "west",
     "type": "enum",
@@ -409,7 +409,7 @@
     ]
   },
   {
-    "hash_key": -891207346,
+    "hash_key": 1326347552,
     "enum_name": "east_wire_connection",
     "serialized_name": "east",
     "type": "enum",
@@ -420,7 +420,7 @@
     ]
   },
   {
-    "hash_key": -2027225786,
+    "hash_key": 190329112,
     "enum_name": "north_wire_connection",
     "serialized_name": "north",
     "type": "enum",
@@ -431,7 +431,7 @@
     ]
   },
   {
-    "hash_key": -1883990658,
+    "hash_key": 333564240,
     "enum_name": "south_wire_connection",
     "serialized_name": "south",
     "type": "enum",
@@ -442,7 +442,7 @@
     ]
   },
   {
-    "hash_key": -874464804,
+    "hash_key": 1343090094,
     "enum_name": "west_wire_connection",
     "serialized_name": "west",
     "type": "enum",
@@ -453,7 +453,7 @@
     ]
   },
   {
-    "hash_key": 1994141019,
+    "hash_key": -985505033,
     "enum_name": "double_block_half",
     "serialized_name": "half",
     "type": "enum",
@@ -463,7 +463,7 @@
     ]
   },
   {
-    "hash_key": 1394210966,
+    "hash_key": -603716111,
     "enum_name": "block_half",
     "serialized_name": "half",
     "type": "enum",
@@ -473,7 +473,7 @@
     ]
   },
   {
-    "hash_key": -862394631,
+    "hash_key": 1721731568,
     "enum_name": "rail_shape",
     "serialized_name": "shape",
     "type": "enum",
@@ -491,7 +491,7 @@
     ]
   },
   {
-    "hash_key": -460429633,
+    "hash_key": -1225380339,
     "enum_name": "straight_rail_shape",
     "serialized_name": "shape",
     "type": "enum",
@@ -737,7 +737,7 @@
     "max": 15
   },
   {
-    "hash_key": -73964960,
+    "hash_key": -535087379,
     "enum_name": "bed_part",
     "serialized_name": "part",
     "type": "enum",
@@ -747,7 +747,7 @@
     ]
   },
   {
-    "hash_key": 1679311508,
+    "hash_key": 540703261,
     "enum_name": "chest_type",
     "serialized_name": "type",
     "type": "enum",
@@ -758,7 +758,7 @@
     ]
   },
   {
-    "hash_key": -2002778816,
+    "hash_key": 418273440,
     "enum_name": "comparator_mode",
     "serialized_name": "mode",
     "type": "enum",
@@ -768,7 +768,7 @@
     ]
   },
   {
-    "hash_key": -1919073909,
+    "hash_key": -2001835059,
     "enum_name": "door_hinge",
     "serialized_name": "hinge",
     "type": "enum",
@@ -778,7 +778,7 @@
     ]
   },
   {
-    "hash_key": 33001972,
+    "hash_key": 398721620,
     "enum_name": "instrument",
     "serialized_name": "instrument",
     "type": "enum",
@@ -809,7 +809,7 @@
     ]
   },
   {
-    "hash_key": 1871285261,
+    "hash_key": 1933275976,
     "enum_name": "piston_type",
     "serialized_name": "type",
     "type": "enum",
@@ -819,7 +819,7 @@
     ]
   },
   {
-    "hash_key": -905394011,
+    "hash_key": 873087795,
     "enum_name": "slab_type",
     "serialized_name": "type",
     "type": "enum",
@@ -830,7 +830,7 @@
     ]
   },
   {
-    "hash_key": -1740411902,
+    "hash_key": 1011244390,
     "enum_name": "stair_shape",
     "serialized_name": "shape",
     "type": "enum",
@@ -843,7 +843,7 @@
     ]
   },
   {
-    "hash_key": -1314672541,
+    "hash_key": 916732131,
     "enum_name": "structure_block_mode",
     "serialized_name": "mode",
     "type": "enum",
@@ -855,7 +855,7 @@
     ]
   },
   {
-    "hash_key": -920727949,
+    "hash_key": 308052410,
     "enum_name": "bamboo_leaves",
     "serialized_name": "leaves",
     "type": "enum",
@@ -866,7 +866,7 @@
     ]
   },
   {
-    "hash_key": 2128694890,
+    "hash_key": 1137523819,
     "enum_name": "tilt",
     "serialized_name": "tilt",
     "type": "enum",
@@ -878,7 +878,7 @@
     ]
   },
   {
-    "hash_key": -1223244732,
+    "hash_key": 927991866,
     "enum_name": "vertical_direction",
     "serialized_name": "vertical_direction",
     "type": "enum",
@@ -888,7 +888,7 @@
     ]
   },
   {
-    "hash_key": -533147979,
+    "hash_key": -773192484,
     "enum_name": "thickness",
     "serialized_name": "thickness",
     "type": "enum",
@@ -901,7 +901,7 @@
     ]
   },
   {
-    "hash_key": -1245005409,
+    "hash_key": -853514466,
     "enum_name": "sculk_sensor_phase",
     "serialized_name": "sculk_sensor_phase",
     "type": "enum",
@@ -968,7 +968,7 @@
     "type": "boolean"
   },
   {
-    "hash_key": -357089177,
+    "hash_key": -914915143,
     "enum_name": "trial_spawner_state",
     "serialized_name": "trial_spawner_state",
     "type": "enum",
@@ -982,7 +982,7 @@
     ]
   },
   {
-    "hash_key": 1811178115,
+    "hash_key": -1540764535,
     "enum_name": "vault_state",
     "serialized_name": "vault_state",
     "type": "enum",
@@ -994,7 +994,7 @@
     ]
   },
   {
-    "hash_key": -336895357,
+    "hash_key": -82121400,
     "enum_name": "creaking_heart_state",
     "serialized_name": "creaking_heart_state",
     "type": "enum",
@@ -1011,7 +1011,7 @@
     "type": "boolean"
   },
   {
-    "hash_key": 1836955881,
+    "hash_key": 1475742886,
     "enum_name": "test_block_mode",
     "serialized_name": "mode",
     "type": "enum",

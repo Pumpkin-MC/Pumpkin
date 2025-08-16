@@ -373,21 +373,19 @@ impl RedstoneWireTurbo {
         if wire_power < 15 {
             let neighbors = self.nodes[upd.index].neighbors.as_ref().unwrap();
 
-            let center_up = &self.nodes[neighbors[1].index].state;
+            let center_up = self.nodes[neighbors[1].index].state;
 
             for m in 0..4 {
                 let n = Self::RS_NEIGHBORS[m];
 
                 let neighbor_id = neighbors[n];
-                let neighbor = &self.get_node(neighbor_id).state;
+                let neighbor = self.get_node(neighbor_id).state;
                 block_power = self.get_max_current_strength(neighbor_id, block_power);
 
-                if !neighbor.is_solid() {
+                if !neighbor.is_solid_block() {
                     let neighbor_down = neighbors[Self::RS_NEIGHBORS_DN[m]];
                     block_power = self.get_max_current_strength(neighbor_down, block_power);
-                } else if !center_up.is_solid()
-                /* TODO:  && !neighbor.is_transparent()*/
-                {
+                } else if !center_up.is_solid_block() && neighbor.is_solid_block() {
                     let neighbor_up = neighbors[Self::RS_NEIGHBORS_UP[m]];
                     block_power = self.get_max_current_strength(neighbor_up, block_power);
                 }
