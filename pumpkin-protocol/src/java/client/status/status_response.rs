@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 #[packet(STATUS_STATUS_RESPONSE)]
-pub struct CStatusResponse<'a> {
-    pub json_response: &'a str, // 32767
+pub struct CStatusResponse {
+    pub json_response: String, // 32767
 }
-impl<'a> CStatusResponse<'a> {
-    pub fn new(json_response: &'a str) -> Self {
+impl CStatusResponse {
+    pub fn new(json_response: String) -> Self {
         Self { json_response }
     }
 }

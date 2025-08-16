@@ -1175,7 +1175,7 @@ impl Player {
                         yaw,
                         pitch,
                         // TODO
-                        &[],
+                        Vec::new(),
                     )).await;
             }
         }}
