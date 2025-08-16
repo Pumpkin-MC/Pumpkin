@@ -20,12 +20,12 @@ use rustyline_async::{Readline, ReadlineEvent};
 use simplelog::SharedLogger;
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
-use std::net::{Ipv4Addr, SocketAddrV4};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -197,13 +197,42 @@ impl PumpkinServer {
             });
         }
 
-        // Setup the TCP server socket.
-        let listener = tokio::net::TcpListener::bind(SocketAddrV4::new(
-            Ipv4Addr::new(0, 0, 0, 0),
-            BASIC_CONFIG.java_edition_port,
-        ))
-        .await
-        .expect("Failed to start `TcpListener`");
+        // Setup the TCP server socket with dual-stack support
+        let listener = if advanced_config().networking.networks.ipv6_enabled {
+            // Try IPv6 first with dual-stack
+            match tokio::net::TcpListener::bind(SocketAddrV6::new(
+                Ipv6Addr::UNSPECIFIED,
+                BASIC_CONFIG.java_edition_port,
+                0,
+                0,
+            ))
+            .await
+            {
+                Ok(listener) => {
+                    log::info!(
+                        "Server listening on IPv6 (dual-stack) port {}",
+                        BASIC_CONFIG.java_edition_port
+                    );
+                    listener
+                }
+                Err(e) => {
+                    log::warn!("Failed to bind IPv6 socket, falling back to IPv4: {e}");
+                    tokio::net::TcpListener::bind(SocketAddrV4::new(
+                        Ipv4Addr::UNSPECIFIED,
+                        BASIC_CONFIG.java_edition_port,
+                    ))
+                    .await
+                    .expect("Failed to start `TcpListener` on IPv4")
+                }
+            }
+        } else {
+            tokio::net::TcpListener::bind(SocketAddrV4::new(
+                Ipv4Addr::UNSPECIFIED,
+                BASIC_CONFIG.java_edition_port,
+            ))
+            .await
+            .expect("Failed to start `TcpListener`")
+        };
         // In the event the user puts 0 for their port, this will allow us to know what port it is running on
         let addr = listener
             .local_addr()
@@ -235,12 +264,42 @@ impl PumpkinServer {
             });
         };
 
-        let udp_socket = UdpSocket::bind(SocketAddrV4::new(
-            Ipv4Addr::new(0, 0, 0, 0),
-            BASIC_CONFIG.bedrock_edition_port,
-        ))
-        .await
-        .expect("Failed to bind UDP Socket");
+        // Setup the UDP socket with dual-stack support for Bedrock
+        let udp_socket = if advanced_config().networking.networks.ipv6_enabled {
+            // Try IPv6 first with dual-stack
+            match UdpSocket::bind(SocketAddrV6::new(
+                Ipv6Addr::UNSPECIFIED,
+                BASIC_CONFIG.bedrock_edition_port,
+                0,
+                0,
+            ))
+            .await
+            {
+                Ok(socket) => {
+                    log::info!(
+                        "Bedrock server listening on IPv6 (dual-stack) port {}",
+                        BASIC_CONFIG.bedrock_edition_port
+                    );
+                    socket
+                }
+                Err(e) => {
+                    log::warn!("Failed to bind IPv6 UDP socket, falling back to IPv4: {e}");
+                    UdpSocket::bind(SocketAddrV4::new(
+                        Ipv4Addr::UNSPECIFIED,
+                        BASIC_CONFIG.bedrock_edition_port,
+                    ))
+                    .await
+                    .expect("Failed to bind UDP Socket on IPv4")
+                }
+            }
+        } else {
+            UdpSocket::bind(SocketAddrV4::new(
+                Ipv4Addr::UNSPECIFIED,
+                BASIC_CONFIG.bedrock_edition_port,
+            ))
+            .await
+            .expect("Failed to bind UDP Socket")
+        };
 
         Self {
             server: server.clone(),
@@ -530,6 +589,12 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
 
 fn scrub_address(ip: &str) -> String {
     ip.chars()
-        .map(|ch| if ch == '.' || ch == ':' { ch } else { 'x' })
+        .map(|ch| {
+            if ch == '.' || ch == ':' || ch == '[' || ch == ']' {
+                ch
+            } else {
+                'x'
+            }
+        })
         .collect()
 }
