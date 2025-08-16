@@ -37,7 +37,9 @@ impl BlockBehaviour for CampfireBlock {
         if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit
             && args.entity.get_living_entity().is_some()
         {
-            args.entity.damage(1.0, DamageType::CAMPFIRE).await;
+            args.entity
+                .damage(args.entity, 1.0, DamageType::CAMPFIRE)
+                .await;
         }
     }
 

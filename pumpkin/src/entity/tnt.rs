@@ -100,6 +100,7 @@ impl EntityBase for TNTEntity {
 
     async fn damage_with_context(
         &self,
+        _dyn_self: &dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
@@ -123,5 +124,9 @@ impl EntityBase for TNTEntity {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    async fn kill(&self) {
+        self.entity.remove().await;
     }
 }

@@ -69,7 +69,9 @@ impl BlockBehaviour for CactusBlock {
     }
 
     async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        args.entity.damage(1.0, DamageType::CACTUS).await;
+        args.entity
+            .damage(args.entity, 1.0, DamageType::CACTUS)
+            .await;
     }
 
     async fn get_state_for_neighbor_update(

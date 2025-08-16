@@ -1,11 +1,14 @@
 use super::{Entity, EntityBase, NBTStorage, ai::path::Navigator, living::LivingEntity};
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
+use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::server::Server;
 use crate::world::World;
+use crate::world::loot::LootContextParameters;
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
@@ -56,6 +59,55 @@ impl MobEntity {
 
     pub fn set_attacking(&self, _attacking: bool) {
         // TODO: set to data tracker
+    }
+
+    fn get_base_mob_experience_drop(entity_type: &EntityType) -> u32 {
+        if entity_type.id == EntityType::SLIME.id {
+            1 // Slimes drop 1-3 experience depending on size
+        } else if entity_type.id == EntityType::ENDERMITE.id || entity_type.id == EntityType::VEX.id
+        {
+            3
+        } else if entity_type.id == EntityType::GHAST.id
+            || entity_type.id == EntityType::PIGLIN.id
+            || entity_type.id == EntityType::PHANTOM.id
+            || entity_type.id == EntityType::WARDEN.id
+            || entity_type.id == EntityType::ILLUSIONER.id
+            || entity_type.id == EntityType::ZOMBIE.id
+            || entity_type.id == EntityType::ZOGLIN.id
+            || entity_type.id == EntityType::SHULKER.id
+            || entity_type.id == EntityType::HOGLIN.id
+            || entity_type.id == EntityType::ZOMBIFIED_PIGLIN.id
+            || entity_type.id == EntityType::ZOMBIE_VILLAGER.id
+            || entity_type.id == EntityType::WITHER_SKELETON.id
+            || entity_type.id == EntityType::WITCH.id
+            || entity_type.id == EntityType::VINDICATOR.id
+            || entity_type.id == EntityType::STRAY.id
+            || entity_type.id == EntityType::SPIDER.id
+            || entity_type.id == EntityType::SKELETON.id
+            || entity_type.id == EntityType::PILLAGER.id
+            || entity_type.id == EntityType::HUSK.id
+            || entity_type.id == EntityType::EVOKER.id
+            || entity_type.id == EntityType::ENDERMAN.id
+            || entity_type.id == EntityType::DROWNED.id
+            || entity_type.id == EntityType::CREEPER.id
+            || entity_type.id == EntityType::CAVE_SPIDER.id
+            || entity_type.id == EntityType::BOGGED.id
+        {
+            5
+        } else if entity_type.id == EntityType::EVOKER.id
+            || entity_type.id == EntityType::BREEZE.id
+            || entity_type.id == EntityType::GUARDIAN.id
+            || entity_type.id == EntityType::ELDER_GUARDIAN.id
+            || entity_type.id == EntityType::BLAZE.id
+        {
+            10
+        } else if entity_type.id == EntityType::PIGLIN_BRUTE.id
+            || entity_type.id == EntityType::RAVAGER.id
+        {
+            20
+        } else {
+            0
+        }
     }
 }
 
@@ -113,6 +165,7 @@ where
 
     async fn damage_with_context(
         &self,
+        dyn_self: &dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -121,8 +174,21 @@ where
     ) -> bool {
         self.get_mob_entity()
             .living_entity
-            .damage_with_context(amount, damage_type, position, source, cause)
+            .damage_with_context(dyn_self, amount, damage_type, position, source, cause)
             .await
+    }
+
+    async fn on_death(
+        &self,
+        dyn_self: &dyn EntityBase,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) {
+        self.get_mob_entity()
+            .living_entity
+            .on_death(dyn_self, damage_type, source, cause)
+            .await;
     }
 
     fn get_entity(&self) -> &Entity {
@@ -139,6 +205,28 @@ where
 
     fn get_gravity(&self) -> f64 {
         self.get_mob_entity().living_entity.get_gravity()
+    }
+
+    async fn kill(&self) {
+        self.get_mob_entity().living_entity.kill().await;
+    }
+
+    async fn drop_loot(&self, dyn_self: &dyn EntityBase, params: LootContextParameters) {
+        self.get_mob_entity()
+            .living_entity
+            .drop_loot(dyn_self, params)
+            .await;
+    }
+
+    async fn drop_experience(&self, _dyn_self: &dyn EntityBase) {
+        let entity = &self.get_mob_entity().living_entity.entity;
+        let base_experience = MobEntity::get_base_mob_experience_drop(entity.entity_type);
+        ExperienceOrbEntity::spawn(
+            &*entity.world.read().await,
+            entity.pos.load(),
+            base_experience,
+        )
+        .await;
     }
 }
 
