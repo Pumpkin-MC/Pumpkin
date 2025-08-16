@@ -42,6 +42,12 @@ pub(crate) fn build() -> TokenStream {
             pub id: u8,
             pub default_value: f64,
         }
+        impl PartialEq for Attributes {
+            fn eq(&self, other: &Self) -> bool {
+                self.id == other.id
+            }
+        }
+        impl Eq for Attributes {}
         impl Hash for Attributes {
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
                 self.id.hash(state);

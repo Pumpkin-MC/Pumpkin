@@ -11,16 +11,6 @@ use pumpkin_util::GameMode;
 
 mod categories;
 
-#[derive(serde::Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-/// Item Rarity
-pub enum Rarity {
-    Common,
-    UnCommon,
-    Rare,
-    Epic,
-}
-
 #[derive(Clone, Debug)]
 pub struct ItemStack {
     pub item_count: u8,
@@ -148,7 +138,33 @@ impl ItemStack {
     }
 
     pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
-        self.item == other.item //TODO: && self.item.components == other.item.components
+        if self.item != other.item || self.patch.len() != other.patch.len() {
+            return false;
+        }
+        for (id, data) in &self.patch {
+            let mut not_find = true;
+            'out: for (other_id, other_data) in &other.patch {
+                if id == other_id {
+                    if let (Some(data), Some(other_data)) = (data, other_data) {
+                        if data.equal(other_data.as_ref()) {
+                            return false;
+                        } else {
+                            not_find = false;
+                            break 'out;
+                        }
+                    } else if data.is_none() && other_data.is_none() {
+                        not_find = false;
+                        break 'out;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+            if not_find {
+                return false;
+            }
+        }
+        true
     }
 
     pub fn are_equal(&self, other: &Self) -> bool {

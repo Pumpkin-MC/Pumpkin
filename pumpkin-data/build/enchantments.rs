@@ -134,7 +134,7 @@ pub(crate) fn build() -> TokenStream {
                 self.id.hash(state);
             }
         }
-        #[derive(Debug, Clone, Hash)]
+        #[derive(Debug, Clone, Hash, PartialEq)]
         pub enum AttributeModifierSlot {
             Any,
             MainHand,
