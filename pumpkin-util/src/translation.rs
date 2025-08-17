@@ -20,7 +20,6 @@ static PUMPKIN_ES_ES_JSON: &str = include_str!("../../assets/translations/es_es.
 static PUMPKIN_ZH_CN_JSON: &str = include_str!("../../assets/translations/zh_cn.json");
 static PUMPKIN_TR_TR_JSON: &str = include_str!("../../assets/translations/tr_tr.json");
 
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct SubstitutionRange {
     pub start: usize,
