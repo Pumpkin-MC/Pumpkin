@@ -425,6 +425,22 @@ impl ChunkSections {
             .get(index)
             .map(|section| section.biomes.get(scale_x, scale_y, scale_z))
     }
+
+    pub fn get_top_y(&self, relative_x: usize, relative_z: usize, first_y: i32) -> Option<i32> {
+        debug_assert!(relative_x < BlockPalette::SIZE);
+        debug_assert!(relative_z < BlockPalette::SIZE);
+
+        let mut y = first_y;
+        while y >= self.min_y {
+            if let Some(block_state_id) = self.get_block_absolute_y(relative_x, y, relative_z)
+                && !BlockState::from_id(block_state_id).is_air()
+            {
+                return Some(y);
+            }
+            y -= 1;
+        }
+        None
+    }
 }
 
 impl ChunkData {

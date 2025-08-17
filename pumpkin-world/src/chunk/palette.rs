@@ -239,6 +239,13 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             }
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Homogeneous(value) => *value == V::default(),
+            Self::Heterogeneous(_) => false,
+        }
+    }
 }
 
 impl<V: Default + Hash + Eq + Copy, const DIM: usize> Default for PalettedContainer<V, DIM> {

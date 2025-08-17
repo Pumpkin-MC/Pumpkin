@@ -191,8 +191,8 @@ pub struct World {
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
     pub server: Weak<Server>,
-    decrease_queue: SegQueue<(BlockPos, u8)>,
-    increase_queue: SegQueue<(BlockPos, u8)>,
+    decrease_block_light_queue: SegQueue<(BlockPos, u8)>,
+    increase_block_light_queue: SegQueue<(BlockPos, u8)>,
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
@@ -236,8 +236,8 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
-            decrease_queue: SegQueue::new(),
-            increase_queue: SegQueue::new(),
+            decrease_block_light_queue: SegQueue::new(),
+            increase_block_light_queue: SegQueue::new(),
             server,
         }
     }
@@ -2386,47 +2386,49 @@ impl World {
         .await;
     }
 
-    pub fn queue_decrease(self: &Arc<Self>, pos: BlockPos, level: u8) {
-        self.decrease_queue.push((pos, level));
+    pub fn queue_block_light_decrease(self: &Arc<Self>, pos: BlockPos, level: u8) {
+        self.decrease_block_light_queue.push((pos, level));
     }
 
-    pub fn queue_increase(self: &Arc<Self>, pos: BlockPos, level: u8) {
-        self.increase_queue.push((pos, level));
+    pub fn queue_block_light_increase(self: &Arc<Self>, pos: BlockPos, level: u8) {
+        self.increase_block_light_queue.push((pos, level));
     }
 
-    pub async fn perform_updates(self: &Arc<Self>) -> i32 {
+    pub async fn perform_block_light_updates(self: &Arc<Self>) -> i32 {
         let mut updates = 0;
 
-        updates += self.perform_decrease_updates().await;
+        updates += self.perform_block_light_decrease_updates().await;
 
-        updates += self.perform_increase_updates().await;
+        updates += self.perform_block_light_increase_updates().await;
 
         updates
     }
 
-    async fn perform_decrease_updates(self: &Arc<Self>) -> i32 {
+    async fn perform_block_light_decrease_updates(self: &Arc<Self>) -> i32 {
         let mut updates = 0;
 
-        while let Some((pos, expected_light)) = self.decrease_queue.pop() {
-            self.propagate_decrease(&pos, expected_light).await;
+        while let Some((pos, expected_light)) = self.decrease_block_light_queue.pop() {
+            self.propagate_block_light_decrease(&pos, expected_light)
+                .await;
             updates += 1;
         }
 
         updates
     }
 
-    async fn perform_increase_updates(self: &Arc<Self>) -> i32 {
+    async fn perform_block_light_increase_updates(self: &Arc<Self>) -> i32 {
         let mut updates = 0;
 
-        while let Some((pos, expected_light)) = self.increase_queue.pop() {
-            self.propagate_increase(&pos, expected_light).await;
+        while let Some((pos, expected_light)) = self.increase_block_light_queue.pop() {
+            self.propagate_block_light_increase(&pos, expected_light)
+                .await;
             updates += 1;
         }
 
         updates
     }
 
-    async fn propagate_increase(self: &Arc<Self>, pos: &BlockPos, light_level: u8) {
+    async fn propagate_block_light_increase(self: &Arc<Self>, pos: &BlockPos, light_level: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
@@ -2442,14 +2444,18 @@ impl World {
                         .unwrap();
 
                     if new_light > 1 {
-                        self.queue_increase(neighbor_pos, new_light);
+                        self.queue_block_light_increase(neighbor_pos, new_light);
                     }
                 }
             }
         }
     }
 
-    async fn propagate_decrease(self: &Arc<Self>, pos: &BlockPos, removed_light_level: u8) {
+    async fn propagate_block_light_decrease(
+        self: &Arc<Self>,
+        pos: &BlockPos,
+        removed_light_level: u8,
+    ) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
@@ -2469,49 +2475,52 @@ impl World {
                     self.set_block_light_level(&neighbor_pos, 0).await.unwrap();
 
                     if neighbor_luminance == 0 {
-                        self.queue_decrease(neighbor_pos, neighbor_light);
+                        self.queue_block_light_decrease(neighbor_pos, neighbor_light);
                     } else {
                         self.set_block_light_level(&neighbor_pos, neighbor_luminance)
                             .await
                             .unwrap();
-                        self.queue_increase(neighbor_pos, neighbor_luminance);
+                        self.queue_block_light_increase(neighbor_pos, neighbor_luminance);
                     }
                 } else {
-                    self.queue_increase(neighbor_pos, neighbor_light);
+                    self.queue_block_light_increase(neighbor_pos, neighbor_light);
                 }
             }
         }
     }
 
-    pub async fn check_block(self: &Arc<Self>, pos: BlockPos) {
+    pub async fn check_block_light_updates(self: &Arc<Self>, pos: BlockPos) {
         let current_light = self.get_block_light_level(&pos).await.unwrap_or(0);
         let block_state = self.get_block_state(&pos).await;
         let expected_light = block_state.luminance;
 
         if expected_light < current_light {
             self.set_block_light_level(&pos, 0).await.unwrap();
-            self.queue_decrease(pos, current_light);
+            self.queue_block_light_decrease(pos, current_light);
         }
 
         if expected_light > 0 {
             self.set_block_light_level(&pos, expected_light)
                 .await
                 .unwrap();
-            self.queue_increase(pos, expected_light);
+            self.queue_block_light_increase(pos, expected_light);
         }
 
-        self.check_neighbors(pos, current_light).await;
+        //TODO check sky light updates
+
+        self.check_neighbors_light_updates(pos, current_light).await;
     }
 
-    pub async fn check_neighbors(self: &Arc<Self>, pos: BlockPos, current_light: u8) {
+    pub async fn check_neighbors_light_updates(self: &Arc<Self>, pos: BlockPos, current_light: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
             if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await
                 && neighbor_light > current_light + 1
             {
-                self.queue_increase(neighbor_pos, neighbor_light);
+                self.queue_block_light_increase(neighbor_pos, neighbor_light);
             }
         }
+        // TODO check sky light updates
     }
 
     pub async fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
@@ -2691,8 +2700,8 @@ impl World {
             }
         }
 
-        self.check_block(*position).await;
-        self.perform_updates().await;
+        self.check_block_light_updates(*position).await;
+        self.perform_block_light_updates().await;
 
         replaced_block_state_id
     }
