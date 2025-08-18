@@ -9,6 +9,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::WorldgenBiome::MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::GameMode;
+use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -505,14 +506,34 @@ pub async fn is_valid_spawn_position_for_type(
     distance: f64,
 ) -> bool {
     // TODO !SpawnPlacements.checkSpawnRules(entityType, level, EntitySpawnReason.NATURAL, pos, level.random)
-    // TODO level.noCollision(entityType.getSpawnAABB(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5))
-    !(category == &MobCategory::MISC
-        || (!entity_type.can_spawn_far_from_player
-            && distance
-                > f64::from(entity_type.category.despawn_distance)
-                    * f64::from(entity_type.category.despawn_distance))
-        || !entity_type.summonable
-        || !is_spawn_position_ok(world, block_pos, entity_type).await)
+    if category == &MobCategory::MISC {
+        return false;
+    }
+    if !entity_type.can_spawn_far_from_player
+        && distance
+            > f64::from(entity_type.category.despawn_distance)
+                * f64::from(entity_type.category.despawn_distance)
+    {
+        return false;
+    }
+    if !entity_type.summonable {
+        return false;
+    }
+    if !is_spawn_position_ok(world, block_pos, entity_type).await {
+        return false;
+    }
+    // TODO: we should use getSpawnBox, but this is only modified for slimes and magma slimes
+    world
+        .is_space_empty(BoundingBox::new_from_pos(
+            f64::from(block_pos.0.x) + 0.5,
+            f64::from(block_pos.0.y),
+            f64::from(block_pos.0.z) + 0.5,
+            &EntityDimensions {
+                width: entity_type.dimension[0],
+                height: entity_type.dimension[1],
+            },
+        ))
+        .await
 }
 
 pub async fn is_spawn_position_ok(
@@ -536,6 +557,7 @@ pub async fn is_spawn_position_ok(
             let down = world.get_block_state(&block_pos.down()).await;
             let up = world.get_block_state(&block_pos.up()).await;
             let cur = world.get_block_state(block_pos).await;
+            // TODO: blockState.allowsSpawning
             if down.is_side_solid(BlockDirection::Up) {
                 is_valid_empty_spawn_block(cur) && is_valid_empty_spawn_block(up)
             } else {
@@ -548,16 +570,10 @@ pub async fn is_spawn_position_ok(
 
 #[must_use]
 pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
-    if state.is_solid() {
-        false
-    } else if false {
-        // TODO isSignalSource
-        false
-    } else if state.is_liquid() {
-        false
-    } else {
-        // TODO !entityType.isBlockDangerous(blockState);
-        !Block::from_state_id(state.id)
-            .is_tagged_with_by_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE)
+    // TODO: emitsRedstonePower
+    if state.is_full_cube() || state.is_liquid() {
+        return false;
     }
+    // TODO !entityType.isBlockDangerous(blockState);
+    !Block::from_state_id(state.id).is_tagged_with_by_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE)
 }

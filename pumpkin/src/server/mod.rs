@@ -213,10 +213,10 @@ impl Server {
         log::info!("Loading End: {seed}");
         let end = World::load(
             Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
+            level_info,
             VanillaDimensionType::TheEnd,
-            block_registry.clone(),
-            weak.clone(),
+            block_registry,
+            weak,
         );
         *server
             .worlds
@@ -239,13 +239,14 @@ impl Server {
     pub async fn get_world_from_dimension(&self, dimension: VanillaDimensionType) -> Arc<World> {
         // TODO: this is really bad
         let world_guard = self.worlds.read().await;
-        let world = match dimension {
+        match dimension {
             VanillaDimensionType::Overworld => world_guard.first(),
             VanillaDimensionType::OverworldCaves => todo!(),
             VanillaDimensionType::TheEnd => world_guard.get(2),
             VanillaDimensionType::TheNether => world_guard.get(1),
-        };
-        world.cloned().unwrap()
+        }
+        .cloned()
+        .unwrap()
     }
 
     #[allow(clippy::if_then_some_else_none)]
@@ -291,27 +292,36 @@ impl Server {
                     (world, Some(data))
                 } else {
                     log::warn!("Invalid dimension key in player data: {dimension_key}");
-                    let default_world_guard = self.worlds.read().await;
-                    let default_world = default_world_guard
+                    let default_world = self
+                        .worlds
+                        .read()
+                        .await
                         .first()
-                        .expect("Default world should exist");
-                    (default_world.clone(), Some(data))
+                        .expect("Default world should exist")
+                        .clone();
+                    (default_world, Some(data))
                 }
             } else {
                 // Player data exists but doesn't have a "Dimension" key.
-                let default_world_guard = self.worlds.read().await;
-                let default_world = default_world_guard
+                let default_world = self
+                    .worlds
+                    .read()
+                    .await
                     .first()
-                    .expect("Default world should exist");
-                (default_world.clone(), Some(data))
+                    .expect("Default world should exist")
+                    .clone();
+                (default_world, Some(data))
             }
         } else {
             // No player data found or an error occurred, default to the Overworld.
-            let default_world_guard = self.worlds.read().await;
-            let default_world = default_world_guard
+            let default_world = self
+                .worlds
+                .read()
+                .await
                 .first()
-                .expect("Default world should exist");
-            (default_world.clone(), None)
+                .expect("Default world should exist")
+                .clone();
+            (default_world, None)
         };
 
         let mut player = Player::new(
@@ -457,6 +467,7 @@ impl Server {
                 level_info.difficulty_locked,
             ))
             .await;
+            drop(level_info);
         }
     }
 
@@ -708,15 +719,7 @@ impl Server {
             EntitySelectorType::AllEntities => {
                 let mut entities = Vec::new();
                 for world in self.worlds.read().await.iter() {
-                    entities.extend(
-                        world
-                            .entities
-                            .read()
-                            .await
-                            .values()
-                            .cloned()
-                            .collect::<Vec<_>>(),
-                    );
+                    entities.extend(world.entities.read().await.values().cloned());
                     entities.extend(
                         world
                             .players
@@ -724,8 +727,7 @@ impl Server {
                             .await
                             .values()
                             .cloned()
-                            .map(|p| p as Arc<dyn EntityBase>)
-                            .collect::<Vec<_>>(),
+                            .map(|p| p as Arc<dyn EntityBase>),
                     );
                 }
                 entities.into_iter()

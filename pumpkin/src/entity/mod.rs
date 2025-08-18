@@ -757,8 +757,6 @@ impl Entity {
 
         let max = aabb.max_block_pos();
 
-        let world = self.world.read().await;
-
         let mut eye_level_box = aabb;
 
         let eye_height = f64::from(self.standing_eye_height);
@@ -767,6 +765,7 @@ impl Entity {
 
         eye_level_box.max.y = eye_level_box.min.y;
 
+        let world = self.world.read().await;
         for x in min.0.x..=max.0.x {
             for y in min.0.y..=max.0.y {
                 for z in min.0.z..=max.0.z {
@@ -1126,9 +1125,12 @@ impl Entity {
 
     #[allow(clippy::float_cmp)]
     async fn get_velocity_multiplier(&self) -> f32 {
-        let world = self.world.read().await;
-
-        let block = world.get_block(&self.block_pos.load()).await;
+        let block = self
+            .world
+            .read()
+            .await
+            .get_block(&self.block_pos.load())
+            .await;
 
         let multiplier = block.velocity_multiplier;
 
@@ -1143,9 +1145,10 @@ impl Entity {
 
     #[allow(clippy::float_cmp)]
     async fn get_jump_velocity_multiplier(&self) -> f32 {
-        let world = self.world.read().await;
-
-        let f = world
+        let f = self
+            .world
+            .read()
+            .await
             .get_block(&self.block_pos.load())
             .await
             .jump_velocity_multiplier;
@@ -1302,6 +1305,7 @@ impl Entity {
                         portal_manager.portal_world.clone(),
                     )
                     .await;
+                drop(portal_manager);
             } else if portal_manager.ticks_in_portal == 0 {
                 should_remove = true;
             }

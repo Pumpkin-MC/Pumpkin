@@ -342,8 +342,7 @@ impl JavaClient {
             }
             ConnectionState::Config => self.handle_config_packet(server, packet).await,
             ConnectionState::Play => {
-                let player = self.player.lock().await;
-                if let Some(player) = player.as_ref() {
+                if let Some(player) = self.player.lock().await.as_ref() {
                     match self.handle_play_packet(player, server, packet).await {
                         Ok(()) => {}
                         Err(e) => {

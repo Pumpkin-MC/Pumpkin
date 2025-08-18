@@ -93,7 +93,7 @@ impl CommandExecutor for AngleWorldSpawnExecutor {
 }
 
 async fn setworldspawn(
-    sender: &mut CommandSender,
+    sender: &CommandSender,
     server: &Server,
     block_pos: BlockPos,
     yaw: f32,

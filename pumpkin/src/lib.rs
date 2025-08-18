@@ -190,6 +190,9 @@ impl PumpkinServer {
         }
 
         if rcon.enabled {
+            log::warn!(
+                "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
+            );
             let rcon_server = server.clone();
             server.spawn_task(async move {
                 RCONServer::run(&rcon, rcon_server).await.unwrap();

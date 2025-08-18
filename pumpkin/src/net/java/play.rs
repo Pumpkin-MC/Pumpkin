@@ -183,6 +183,7 @@ impl JavaClient {
                 player.living_entity.entity.set_pos(*position);
 
                 *awaiting_teleport = None;
+                drop(awaiting_teleport);
             } else {
                 self.kick(TextComponent::text("Wrong teleport id")).await;
             }
@@ -542,8 +543,7 @@ impl JavaClient {
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
                 server.spawn_task(async move {
-                    let dispatcher = server_clone.command_dispatcher.read().await;
-                    dispatcher
+                    server_clone.command_dispatcher.read().await
                         .handle_command(
                             &mut CommandSender::Player(player_clone),
                             &server_clone,
@@ -888,10 +888,7 @@ impl JavaClient {
         }
 
         // Update the chat session fields
-        let mut chat_session = player.chat_session.lock().await; // Await the lock
-
-        // Update the chat session fields
-        *chat_session = ChatSession::new(
+        *player.chat_session.lock().await = ChatSession::new(
             session.session_id,
             session.expires_at,
             session.public_key.clone(),
@@ -1246,8 +1243,10 @@ impl JavaClient {
                     }
                     player.mining.store(false, Ordering::Relaxed);
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world.read().await;
-                    world
+                    entity
+                        .world
+                        .read()
+                        .await
                         .set_block_breaking(entity, player_action.position, -1)
                         .await;
                     self.update_sequence(player, player_action.sequence.0);
@@ -1272,14 +1271,14 @@ impl JavaClient {
                     world.set_block_breaking(entity, location, -1).await;
 
                     let (block, state) = world.get_block_and_state(&location).await;
-                    let drop = player.gamemode.load() != GameMode::Creative
+                    let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
 
                     world
                         .break_block(
                             &location,
                             Some(player.clone()),
-                            if drop {
+                            if block_drop {
                                 BlockFlags::NOTIFY_NEIGHBORS
                             } else {
                                 BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
@@ -1448,14 +1447,16 @@ impl JavaClient {
             .await;
 
         // Check if the item is a block, because not every item can be placed :D
-        if let Some(block) = Block::from_item_id(item.lock().await.item.id) {
+        let item_id = item.lock().await.item.id;
+        if let Some(block) = Block::from_item_id(item_id) {
             should_try_decrement = self
                 .run_is_block_place(player, block, server, use_item_on, position, face)
                 .await?;
         }
 
         // Check if the item is a spawn egg
-        if let Some(entity) = entity_from_egg(item.lock().await.item.id) {
+        let item_id = item.lock().await.item.id;
+        if let Some(entity) = entity_from_egg(item_id) {
             self.spawn_entity_from_egg(player, entity, position, face)
                 .await;
             should_try_decrement = true;
@@ -1655,6 +1656,7 @@ impl JavaClient {
                 .await;
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
             player_screen_handler.send_content_updates().await;
+            drop(player_screen_handler);
         } else if is_negative && is_legal {
             // Item drop
             player.drop_item(item_stack).await;
@@ -1663,8 +1665,11 @@ impl JavaClient {
     }
 
     pub async fn handle_chunk_batch(&self, player: &Player, packet: SChunkBatch) {
-        let mut chunk_manager = player.chunk_manager.lock().await;
-        chunk_manager.handle_acknowledge(packet.chunks_per_tick);
+        player
+            .chunk_manager
+            .lock()
+            .await
+            .handle_acknowledge(packet.chunks_per_tick);
         log::trace!(
             "Client requested {} chunks per tick",
             packet.chunks_per_tick
@@ -1686,7 +1691,7 @@ impl JavaClient {
         packet: SCommandSuggestion,
         server: &Arc<Server>,
     ) {
-        let mut src = CommandSender::Player(player.clone());
+        let src = CommandSender::Player(player.clone());
         let Some(cmd) = &packet.command.get(1..) else {
             return;
         };
@@ -1696,8 +1701,12 @@ impl JavaClient {
             return;
         };
 
-        let dispatcher = server.command_dispatcher.read().await;
-        let suggestions = dispatcher.find_suggestions(&mut src, server, cmd).await;
+        let suggestions = server
+            .command_dispatcher
+            .read()
+            .await
+            .find_suggestions(&src, server, cmd)
+            .await;
 
         let response = CCommandSuggestions::new(
             packet.id,
@@ -1762,7 +1771,6 @@ impl JavaClient {
         face: BlockDirection,
     ) -> Result<bool, BlockPlacingError> {
         let entity = &player.living_entity.entity;
-        let world = &entity.world.read().await;
 
         // Check if the block is under the world
         if location.0.y + face.to_offset().y < i32::from(Self::WORLD_LOWEST_Y) {
@@ -1792,6 +1800,8 @@ impl JavaClient {
         }
 
         let clicked_block_pos = BlockPos(location.0);
+        let world = &entity.world.read().await;
+
         let (clicked_block, clicked_block_state) =
             world.get_block_and_state(&clicked_block_pos).await;
 

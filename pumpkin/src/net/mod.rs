@@ -194,7 +194,7 @@ pub async fn can_not_join(
             Some(expires) => text.add_child(TextComponent::translate(
                 "multiplayer.disconnect.banned.expiration",
                 [TextComponent::text(
-                    expires.format(FORMAT_DESCRIPTION).unwrap().to_string(),
+                    expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],
             )),
             None => text,
@@ -214,8 +214,7 @@ pub async fn can_not_join(
         }
     }
 
-    let mut banned_ips = BANNED_IP_LIST.write().await;
-    if let Some(entry) = banned_ips.get_entry(&address.ip()) {
+    if let Some(entry) = BANNED_IP_LIST.write().await.get_entry(&address.ip()) {
         let text = TextComponent::translate(
             "multiplayer.disconnect.banned_ip.reason",
             [TextComponent::text(entry.reason.clone())],
@@ -224,7 +223,7 @@ pub async fn can_not_join(
             Some(expires) => text.add_child(TextComponent::translate(
                 "multiplayer.disconnect.banned_ip.expiration",
                 [TextComponent::text(
-                    expires.format(FORMAT_DESCRIPTION).unwrap().to_string(),
+                    expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],
             )),
             None => text,

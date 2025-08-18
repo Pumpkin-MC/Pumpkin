@@ -327,6 +327,7 @@ impl JavaClient {
                     self.finish_login(&profile).await;
                     *self.gameprofile.lock().await = Some(profile);
                     *address = new_address;
+                    drop(address);
                 }
                 Err(error) => self.kick(TextComponent::text(error.to_string())).await,
             }

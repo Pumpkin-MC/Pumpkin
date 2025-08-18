@@ -83,7 +83,7 @@ impl CommandDispatcher {
     /// - do not query suggestions for the same consumer multiple times just because they are on different paths through the tree
     pub(crate) async fn find_suggestions<'a>(
         &'a self,
-        src: &mut CommandSender,
+        src: &CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) -> Vec<CommandSuggestion> {
@@ -357,7 +357,7 @@ impl CommandDispatcher {
     }
 
     async fn try_find_suggestions_on_path<'a>(
-        src: &mut CommandSender,
+        src: &CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,

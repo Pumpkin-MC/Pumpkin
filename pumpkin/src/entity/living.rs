@@ -164,14 +164,15 @@ impl LivingEntity {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
-        let mut effects = self.active_effects.lock().await;
-        effects.insert(effect.effect_type, effect);
+        self.active_effects
+            .lock()
+            .await
+            .insert(effect.effect_type, effect);
         // TODO broadcast metadata
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
-        let mut effects = self.active_effects.lock().await;
-        effects.remove(&effect_type);
+        self.active_effects.lock().await.remove(&effect_type);
         self.entity
             .world
             .read()

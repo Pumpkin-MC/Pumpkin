@@ -103,7 +103,8 @@ impl CandleCakeBlock {
 #[async_trait]
 impl BlockBehaviour for CandleCakeBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        match args.item_stack.lock().await.item.id {
+        let item_id = args.item_stack.lock().await.item.id;
+        match item_id {
             id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
                 BlockActionResult::Pass
             } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL

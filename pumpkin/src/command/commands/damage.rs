@@ -36,7 +36,7 @@ struct LocationExecutor;
 struct EntityExecutor(bool);
 
 async fn send_damage_result(
-    sender: &mut CommandSender,
+    sender: &CommandSender,
     success: bool,
     amount: f32,
     target_name: TextComponent,

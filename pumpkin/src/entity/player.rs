@@ -1075,8 +1075,7 @@ impl Player {
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.read().await.clone();
-        let info = &new_world.level_info.read().await;
-        let yaw = yaw.unwrap_or(info.spawn_angle);
+        let yaw = yaw.unwrap_or(new_world.level_info.read().await.spawn_angle);
         let pitch = pitch.unwrap_or(10.0);
 
         send_cancellable! {{
@@ -1212,8 +1211,7 @@ impl Player {
     }
 
     pub async fn add_exhaustion(&self, exhaustion: f32) {
-        let abilities = self.abilities.lock().await;
-        if abilities.invulnerable {
+        if self.abilities.lock().await.invulnerable {
             return;
         }
         self.hunger_manager.add_exhaustion(exhaustion);
@@ -1456,7 +1454,7 @@ impl Player {
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
         // should be locked first otherwise cause deadlock in tick() (this thread lock stack, that thread lock screen_handler)
-        let screen_binding = self.current_screen_handler.lock().await;
+
         let binding = self.inventory.held_item();
         let mut item_stack = binding.lock().await;
 
@@ -1467,6 +1465,7 @@ impl Player {
             item_stack.decrement(drop_amount);
             let selected_slot = self.inventory.get_selected_slot();
             let inv: Arc<dyn Inventory> = self.inventory.clone();
+            let screen_binding = self.current_screen_handler.lock().await;
             let mut screen_handler = screen_binding.lock().await;
             let slot_index = screen_handler
                 .get_slot_index(&inv, selected_slot as usize)
@@ -1838,6 +1837,7 @@ impl Player {
             screen_handler.update_to_client().await;
         } else {
             screen_handler.send_content_updates().await;
+            drop(screen_handler);
         }
     }
 
@@ -1963,18 +1963,19 @@ impl NBTStorage for PlayerInventory {
                 let mut item_compound = NbtCompound::new();
                 item_compound.put_byte("Slot", i as i8);
                 stack.write_item_stack(&mut item_compound);
+                drop(stack);
                 vec.push(NbtTag::Compound(item_compound));
             }
         }
 
         let mut equipment_compound = NbtCompound::new();
         for slot in self.equipment_slots.values() {
-            let equipment_binding = self.entity_equipment.lock().await;
-            let stack_binding = equipment_binding.get(slot);
+            let stack_binding = self.entity_equipment.lock().await.get(slot);
             let stack = stack_binding.lock().await;
             if !stack.is_empty() {
                 let mut item_compound = NbtCompound::new();
                 stack.write_item_stack(&mut item_compound);
+                drop(stack);
                 match slot {
                     EquipmentSlot::OffHand(_) => {
                         equipment_compound.put_component("offhand", item_compound);
@@ -2067,8 +2068,12 @@ impl EntityBase for Player {
         if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
             return false;
         }
-        let world = self.living_entity.entity.world.read().await;
-        let dyn_self = world
+        let dyn_self = self
+            .living_entity
+            .entity
+            .world
+            .read()
+            .await
             .get_entity_by_id(self.living_entity.entity.entity_id)
             .await
             .expect("Entity not found in world");
@@ -2380,14 +2385,14 @@ impl LastSeen {
     pub async fn indexed_for(&self, recipient: &Arc<Player>) -> Box<[PreviousMessage]> {
         let mut indexed = Vec::new();
         for signature in &self.0 {
-            if let Some(index) = recipient
+            let index = recipient
                 .signature_cache
                 .lock()
                 .await
                 .full_cache
                 .iter()
-                .position(|s| s == signature)
-            {
+                .position(|s| s == signature);
+            if let Some(index) = index {
                 indexed.push(PreviousMessage {
                     // Send ID reference to recipient's cache (index + 1 because 0 is reserved for full signature)
                     id: VarInt(1 + index as i32),

@@ -737,6 +737,7 @@ impl<'a> ProtoChunk<'a> {
             Xoroshiro::get_population_seed(self.random_config.seed, block_pos.0.x, block_pos.0.z);
 
         for (_structure, (pos, stype)) in self.structure_starts.clone() {
+            dbg!("generating structure");
             stype.generate(pos.clone(), self);
         }
 
