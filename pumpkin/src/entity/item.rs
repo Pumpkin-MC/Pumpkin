@@ -283,7 +283,7 @@ impl EntityBase for ItemEntity {
             if on_ground {
                 let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).await.1;
 
-                friction *= f64::from(block_affecting_velo.slipperiness);
+                friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
             }
 
             velo = velo.multiply(friction, 0.98, friction);

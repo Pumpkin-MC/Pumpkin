@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
@@ -11,6 +12,7 @@ use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::Locale;
 
 pub mod args;
 pub mod client_suggestions;
@@ -103,6 +105,15 @@ impl CommandSender {
             // TODO: maybe return first world when console
             Self::Console | Self::Rcon(..) => None,
             Self::Player(p) => Some(p.living_entity.entity.world.read().await.clone()),
+        }
+    }
+
+    pub async fn get_locale(&self) -> Locale {
+        match self {
+            Self::Console | Self::Rcon(..) => Locale::EnUs, // Default locale for console and RCON
+            Self::Player(player) => {
+                Locale::from_str(&player.config.read().await.locale).unwrap_or(Locale::EnUs)
+            }
         }
     }
 }

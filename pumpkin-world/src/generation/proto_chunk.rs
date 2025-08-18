@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -12,8 +13,9 @@ use pumpkin_util::{
 };
 
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
-use crate::generation::structure::STRUCTURE_SETS;
 use crate::generation::structure::placement::StructurePlacementCalculator;
+use crate::generation::structure::structures::StructurePosition;
+use crate::generation::structure::{STRUCTURE_SETS, STRUCTURES, Structure, StructureType};
 use crate::{
     BlockStateId,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier, hash_seed},
@@ -124,6 +126,7 @@ pub struct ProtoChunk<'a> {
     pub flat_motion_blocking_height_map: Box<[i16]>,
     pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
     // may want to use chunk status
+    structure_starts: HashMap<Structure, (StructurePosition, StructureType)>,
 }
 
 pub struct TerrainCache {
@@ -234,6 +237,7 @@ impl<'a> ProtoChunk<'a> {
             flat_ocean_floor_height_map: default_heightmap.clone(),
             flat_motion_blocking_height_map: default_heightmap.clone(),
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
+            structure_starts: HashMap::new(),
         }
     }
 
@@ -732,6 +736,10 @@ impl<'a> ProtoChunk<'a> {
         let population_seed =
             Xoroshiro::get_population_seed(self.random_config.seed, block_pos.0.x, block_pos.0.z);
 
+        for (_structure, (pos, stype)) in self.structure_starts.clone() {
+            stype.generate(pos.clone(), self);
+        }
+
         // TODO: This needs to be different depending on what biomes are in the chunk -> affects the
         // random
         for (name, feature) in PLACED_FEATURES.iter() {
@@ -751,14 +759,33 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
-    pub fn set_structure_starts(&self) {
-        for (_name, set) in STRUCTURE_SETS.iter() {
+    pub fn set_structure_starts(&mut self) {
+        for (name, set) in STRUCTURE_SETS.iter() {
             let calculator = StructurePlacementCalculator {
                 seed: self.random_config.seed as i64,
             };
+            // for structure in &set.structures {
+            //     let start = self.structure_starts.get(STRUCTURES.get(name).unwrap());
+            // }
             if !set.placement.should_generate(calculator, self.chunk_pos) {
                 continue; // ??
             }
+
+            if set.structures.len() == 1 {
+                let position = set.structures[0]
+                    .structure
+                    .get_structure_position(name, self);
+                if let Some(position) = position
+                    && !position.generator.pieces_positions.is_empty()
+                {
+                    self.structure_starts.insert(
+                        STRUCTURES.get(name).unwrap().clone(),
+                        (position, set.structures[0].structure.clone()),
+                    );
+                }
+                return;
+            }
+            // TODO: handle multiple structures
         }
     }
 

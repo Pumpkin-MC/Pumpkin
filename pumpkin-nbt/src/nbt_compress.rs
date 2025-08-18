@@ -1,7 +1,7 @@
 use crate::deserializer::NbtReadHelper;
 use crate::{Error, Nbt, NbtCompound, deserializer, serializer};
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Seek, Write};
 
 /// Reads a GZipped NBT compound tag from any reader.
 ///
@@ -12,10 +12,12 @@ use std::io::{Read, Write};
 /// # Returns
 ///
 /// A Result containing either the parsed NbtCompound or an Error
-pub fn read_gzip_compound_tag(input: impl Read) -> Result<NbtCompound, Error> {
+pub fn read_gzip_compound_tag(input: impl Read + Seek) -> Result<NbtCompound, Error> {
     // Create a GZip decoder and directly chain it to the NBT reader
-    let decoder = GzDecoder::new(input);
-    let mut reader = NbtReadHelper::new(decoder);
+    let mut decoder = GzDecoder::new(input);
+    let mut buf = Vec::new();
+    decoder.read_to_end(&mut buf).map_err(Error::Incomplete)?;
+    let mut reader = NbtReadHelper::new(Cursor::new(buf));
 
     // Read the NBT data directly from the decoder stream
     let nbt = Nbt::read(&mut reader)?;
@@ -67,8 +69,10 @@ pub fn write_gzip_compound_tag_to_bytes(compound: &NbtCompound) -> Result<Vec<u8
 /// A Result containing either the deserialized type or an Error
 pub fn from_gzip_bytes<'a, T: serde::Deserialize<'a>, R: Read>(input: R) -> Result<T, Error> {
     // Create a GZip decoder and directly use it for deserialization
-    let decoder = GzDecoder::new(input);
-    deserializer::from_bytes(decoder)
+    let mut decoder = GzDecoder::new(input);
+    let mut buf = Vec::new();
+    decoder.read_to_end(&mut buf).map_err(Error::Incomplete)?;
+    deserializer::from_bytes(Cursor::new(buf))
 }
 
 /// Writes a Rust type as GZipped NBT to any writer.

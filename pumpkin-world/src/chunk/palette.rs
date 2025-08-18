@@ -1,8 +1,4 @@
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, hash_map::Entry},
-    hash::Hash,
-};
+use std::{collections::HashMap, hash::Hash};
 
 use pumpkin_data::{Block, BlockState, chunk::Biome};
 use pumpkin_util::encompassing_bits;
@@ -17,7 +13,8 @@ type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
 #[derive(Debug, Clone)]
 pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
     cube: Box<AbstractCube<V, DIM>>,
-    counts: HashMap<V, u16>,
+    palette: Vec<V>,
+    counts: Vec<u16>,
 }
 
 impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
@@ -36,19 +33,26 @@ impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
         debug_assert!(z < DIM);
 
         let original = self.cube[y][z][x];
-        if let Entry::Occupied(mut entry) = self.counts.entry(original) {
-            let count = entry.get_mut();
-            *count -= 1;
-            if *count == 0 {
-                let _ = entry.remove();
-            }
+        let original_index = self.palette.iter().position(|v| v == &original).unwrap();
+        self.counts[original_index] -= 1;
+
+        if self.counts[original_index] == 0 {
+            // Remove from palette and counts Vecs if the count hits zero.
+            self.palette.swap_remove(original_index);
+            self.counts.swap_remove(original_index);
         }
 
+        // Set the new value in the cube
         self.cube[y][z][x] = value;
-        self.counts
-            .entry(value)
-            .and_modify(|count| *count += 1)
-            .or_insert(1);
+
+        // Find or add the new value to the palette.
+        if let Some(new_index) = self.palette.iter().position(|v| v == &value) {
+            self.counts[new_index] += 1;
+        } else {
+            self.palette.push(value);
+            self.counts.push(1);
+        }
+
         original
     }
 }
@@ -66,19 +70,31 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
     pub const VOLUME: usize = DIM * DIM * DIM;
 
     fn from_cube(cube: Box<AbstractCube<V, DIM>>) -> Self {
-        let counts =
-            cube.as_flattened()
-                .as_flattened()
-                .iter()
-                .fold(HashMap::new(), |mut acc, key| {
-                    acc.entry(*key).and_modify(|count| *count += 1).or_insert(1);
-                    acc
-                });
+        let mut palette: Vec<V> = Vec::new();
+        let mut counts: Vec<u16> = Vec::new();
 
-        if counts.len() == 1 {
-            Self::Homogeneous(*counts.keys().next().unwrap())
+        // Iterate over the flattened cube to populate the palette and counts
+        for val in cube.as_flattened().as_flattened().iter() {
+            if let Some(index) = palette.iter().position(|v| v == val) {
+                // Value already exists, increment its count
+                counts[index] += 1;
+            } else {
+                // New value, add it to the palette and start its count
+                palette.push(*val);
+                counts.push(1);
+            }
+        }
+
+        if palette.len() == 1 {
+            // Fast path: the cube is homogeneous, so we can store just one value
+            Self::Homogeneous(palette[0])
         } else {
-            Self::Heterogeneous(Box::new(HeterogeneousPaletteData { cube, counts }))
+            // Heterogeneous cube, store the full data
+            Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+                cube,
+                palette,
+                counts,
+            }))
         }
     }
 
@@ -96,7 +112,8 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 debug_assert!(bits_per_entry >= encompassing_bits(data.counts.len()));
                 debug_assert!(bits_per_entry <= 15);
 
-                let palette: Box<[V]> = data.counts.keys().copied().collect();
+                let palette: Box<[V]> = data.palette.iter().copied().collect();
+
                 let key_to_index_map: HashMap<V, usize> = palette
                     .iter()
                     .enumerate()
@@ -128,62 +145,79 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
     }
 
     pub fn from_palette_and_packed_data(
-        palette: &[V],
+        palette_slice: &[V],
         packed_data: &[i64],
         minimum_bits_per_entry: u8,
     ) -> Self {
-        if palette.is_empty() {
+        if palette_slice.is_empty() {
             log::warn!("No palette data! Defaulting...");
-            Self::Homogeneous(V::default())
-        } else if palette.len() == 1 {
-            Self::Homogeneous(palette[0])
-        } else {
-            let bits_per_key = encompassing_bits(palette.len()).max(minimum_bits_per_entry);
-            let index_mask = (1 << bits_per_key) - 1;
-            let keys_per_i64 = 64 / bits_per_key;
+            return Self::Homogeneous(V::default());
+        }
 
-            let expected_i64_count = Self::VOLUME.div_ceil(keys_per_i64 as usize);
+        if palette_slice.len() == 1 {
+            return Self::Homogeneous(palette_slice[0]);
+        }
 
-            match packed_data.len().cmp(&expected_i64_count) {
-                Ordering::Greater => {
-                    // Handled by the zip
-                    log::warn!("Filled the section but there is still more data! Ignoring...");
-                }
-                Ordering::Less => {
-                    // Handled by the array initialization and zip
-                    log::warn!(
-                        "Ran out of packed indices, but did not fill the section ({} vs {} for {}). Defaulting...",
-                        packed_data.len() * keys_per_i64 as usize,
-                        Self::VOLUME,
-                        palette.len(),
-                    );
-                }
-                // This is what we want!
-                Ordering::Equal => {}
+        let bits_per_key = encompassing_bits(palette_slice.len()).max(minimum_bits_per_entry);
+        let index_mask = (1 << bits_per_key) - 1;
+        let keys_per_i64 = 64 / bits_per_key;
+
+        let mut decompressed_values = Vec::with_capacity(Self::VOLUME);
+
+        // We already have the palette from the input `palette_slice`.
+        // The counts will be created in the next step.
+
+        let mut packed_data_iter = packed_data.iter();
+        let mut current_packed_word = *packed_data_iter.next().unwrap_or(&0);
+
+        for i in 0..Self::VOLUME {
+            let bit_index_in_word = i % keys_per_i64 as usize;
+
+            if bit_index_in_word == 0 && i > 0 {
+                current_packed_word = *packed_data_iter.next().unwrap_or(&0);
             }
 
-            // TODO: Can we do this all with an `array::from_fn` or something?
-            let mut cube = Box::new([[[V::default(); DIM]; DIM]; DIM]);
-            cube.as_flattened_mut()
-                .as_flattened_mut()
-                .chunks_mut(keys_per_i64 as usize)
-                .zip(packed_data)
-                .for_each(|(values, packed)| {
-                    values.iter_mut().enumerate().for_each(|(index, value)| {
-                        let lookup_index =
-                            (*packed as u64 >> (index as u64 * bits_per_key as u64)) & index_mask;
+            let lookup_index = (current_packed_word as u64
+                >> (bit_index_in_word as u64 * bits_per_key as u64))
+                & index_mask;
 
-                        if let Some(v) = palette.get(lookup_index as usize) {
-                            *value = *v;
-                        } else {
-                            // The cube is already initialized to the default
-                            log::warn!("Lookup index out of bounds! Defaulting...");
-                        }
-                    });
+            let value = palette_slice
+                .get(lookup_index as usize)
+                .copied()
+                .unwrap_or_else(|| {
+                    log::warn!("Lookup index out of bounds! Defaulting...");
+                    V::default()
                 });
 
-            Self::from_cube(cube)
+            decompressed_values.push(value);
         }
+
+        // Now, with all decompressed values, build the counts.
+        let mut counts = vec![0; palette_slice.len()];
+
+        for &value in &decompressed_values {
+            // This is the key optimization: find the index in the palette Vec
+            // and increment the corresponding count.
+            if let Some(index) = palette_slice.iter().position(|v| v == &value) {
+                counts[index] += 1;
+            } else {
+                // This case should ideally not happen if the palette is complete.
+                log::warn!("Decompressed value not found in palette!");
+            }
+        }
+
+        let mut cube = Box::new([[[V::default(); DIM]; DIM]; DIM]);
+        cube.as_flattened_mut()
+            .as_flattened_mut()
+            .copy_from_slice(&decompressed_values);
+
+        let palette_vec: Vec<V> = palette_slice.to_vec();
+
+        Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+            cube,
+            palette: palette_vec,
+            counts,
+        }))
     }
 
     pub fn get(&self, x: usize, y: usize, z: usize) -> V {
@@ -211,7 +245,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             Self::Heterogeneous(data) => {
                 let original = data.set(x, y, z, value);
                 if data.counts.len() == 1 {
-                    *self = Self::Homogeneous(*data.counts.keys().next().unwrap());
+                    *self = Self::Homogeneous(data.palette[0]);
                 }
                 original
             }
@@ -391,51 +425,48 @@ impl BlockPalette {
                 packed_data: Box::new([]),
             },
             Self::Heterogeneous(data) => {
-                let bits_per_entry = encompassing_bits(data.counts.len());
-                let palette: Box<[u16]> = data.counts.keys().copied().collect();
-                let key_to_index_map: HashMap<_, usize> = palette
+                let bits_per_entry = encompassing_bits(data.palette.len());
+
+                let key_to_index_map: HashMap<_, usize> = data
+                    .palette
                     .iter()
                     .enumerate()
                     .map(|(index, key)| (*key, index))
                     .collect();
 
                 let blocks_per_word = 32 / bits_per_entry;
+                let expected_word_count = Self::VOLUME.div_ceil(blocks_per_word as usize);
+                let mut packed_data = Vec::with_capacity(expected_word_count);
 
-                // Direktes Verarbeiten in der Reihenfolge [x][y][z] ohne Kopie
-                let mut packed_data = Vec::new();
-                let mut current_word = 0;
-                let mut current_index = 0;
+                let mut current_word: u32 = 0;
+                let mut current_index_in_word = 0;
 
-                for x in 0..16 {
-                    for y in 0..16 {
-                        for z in 0..16 {
-                            let key = data.cube[z][y][x]; // Zugriff in [x][y][z]-Reihenfolge
-                            let key_index = key_to_index_map.get(&key).unwrap();
-                            debug_assert!((1 << bits_per_entry) > *key_index);
+                for key in data.cube.as_flattened().as_flattened().iter() {
+                    let key_index = key_to_index_map.get(key).unwrap();
+                    debug_assert!((1 << bits_per_entry) > *key_index);
 
-                            let packed_offset_index = (*key_index as u32)
-                                << (bits_per_entry as u32 * current_index as u32);
-                            current_word |= packed_offset_index;
+                    current_word |=
+                        (*key_index as u32) << (bits_per_entry as u32 * current_index_in_word);
+                    current_index_in_word += 1;
 
-                            current_index += 1;
-                            if current_index == blocks_per_word {
-                                packed_data.push(current_word);
-                                current_word = 0;
-                                current_index = 0;
-                            }
-                        }
+                    if current_index_in_word == blocks_per_word as u32 {
+                        packed_data.push(current_word);
+                        current_word = 0;
+                        current_index_in_word = 0;
                     }
                 }
-                if current_index > 0 {
+
+                // Push any remaining bits if the volume isn't a multiple of blocks_per_word
+                if current_index_in_word > 0 {
                     packed_data.push(current_word);
                 }
 
                 BeNetworkSerialization {
                     bits_per_entry,
                     palette: NetworkPalette::Indirect(
-                        palette
-                            .into_iter()
-                            .map(BlockState::to_be_network_id)
+                        data.palette
+                            .iter()
+                            .map(|&id| BlockState::to_be_network_id(id))
                             .collect(),
                     ),
                     packed_data: packed_data.into_boxed_slice(),
@@ -454,13 +485,14 @@ impl BlockPalette {
                 }
             }
             Self::Heterogeneous(data) => data
-                .counts
+                .palette
                 .iter()
-                .map(|(registry_id, count)| {
+                .zip(data.counts.iter())
+                .filter_map(|(registry_id, count)| {
                     if !BlockState::from_id(*registry_id).is_air() {
-                        *count
+                        Some(*count)
                     } else {
-                        0
+                        None
                     }
                 })
                 .sum(),

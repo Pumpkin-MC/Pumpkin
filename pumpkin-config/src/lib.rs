@@ -5,6 +5,7 @@ use logging::LoggingConfig;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::{env, fs, num::NonZeroU8, path::Path, sync::LazyLock};
 pub mod fun;
@@ -105,11 +106,11 @@ pub struct BasicConfiguration {
     // Whether Java Edition Client's are Accepted
     pub java_edition: bool,
     /// The address and port to which the Java Edition server will bind
-    pub java_edition_port: u16,
+    pub java_edition_address: SocketAddr,
     // Whether Bedrock Edition Client's are Accepted
     pub bedrock_edition: bool,
-    /// The address and port to which the Bedrock Edition server will bind
-    pub bedrock_edition_port: u16,
+    // Whether Bedrock Edition Client's are Accepted
+    pub bedrock_edition_address: SocketAddr,
     /// The seed for world generation.
     pub seed: String,
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
@@ -158,9 +159,9 @@ impl Default for BasicConfiguration {
     fn default() -> Self {
         Self {
             java_edition: true,
-            java_edition_port: 25565,
+            java_edition_address: "0.0.0.0:25565".parse().unwrap(),
             bedrock_edition: true,
-            bedrock_edition_port: 19132,
+            bedrock_edition_address: "0.0.0.0:19132".parse().unwrap(),
             seed: "".to_string(),
             max_players: 1000,
             view_distance: NonZeroU8::new(16).unwrap(),

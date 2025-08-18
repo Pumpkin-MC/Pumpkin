@@ -29,8 +29,7 @@ impl ReplaceBlobsFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let target = self.target.get_state();
-        let target = Block::from_state_id(target.id);
+        let target = self.target.get_block();
         let state = self.state.get_state();
         let Some(pos) = Self::move_down_to_target(pos, chunk, target) else {
             return false;
