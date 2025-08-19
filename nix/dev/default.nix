@@ -19,9 +19,6 @@
 
         # Rust
         rustfmt.enable = true;
-
-        # TOML
-        taplo.enable = true;
       };
 
       checks = self'.packages;
