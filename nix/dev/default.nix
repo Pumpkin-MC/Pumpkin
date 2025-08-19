@@ -19,6 +19,11 @@
 
         # Rust
         rustfmt.enable = true;
+
+        taplo = {
+          enable = true;
+          settings.formatting.indent_string = "    ";
+        };
       };
 
       checks = self'.packages;

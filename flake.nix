@@ -27,7 +27,7 @@
       nixpkgs,
       ...
     }:
-    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+    flake-parts.lib.mkFlake { inherit inputs; } {
       systems = nixpkgs.lib.systems.flakeExposed;
 
       imports = [ flake-parts.flakeModules.partitions ];
