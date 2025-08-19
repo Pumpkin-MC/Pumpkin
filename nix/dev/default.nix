@@ -23,5 +23,15 @@
         # TOML
         taplo.enable = true;
       };
+
+      checks = self'.packages;
+
+      devShells.default = pkgs.mkShell {
+        name = "pumpkin";
+
+        inputsFrom = [ self'.packages.default ];
+
+        packages = [ pkgs.nil ];
+      };
     };
 }
