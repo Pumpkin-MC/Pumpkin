@@ -27,7 +27,6 @@
         workspace-manifest =
           (pkgs.lib.importTOML ./Cargo.toml).workspace.package;
       in {
-        formatter = pkgs.nixfmt-rfc-style;
         _module.args.pkgs = import nixpkgs {
           inherit system;
         };
@@ -39,6 +38,17 @@
               toolchain
               pkg-config
             ];
+      imports = [ flake-parts.flakeModules.partitions ];
+
+      partitionedAttrs = {
+        formatter = "dev";
+      };
+
+      partitions.dev = {
+        extraInputsFlake = ./nix/dev;
+        module.imports = [ ./nix/dev ];
+      };
+
           };
 
         packages.default =
