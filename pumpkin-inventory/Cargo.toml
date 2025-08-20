@@ -16,3 +16,4 @@ tokio.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 crossbeam-utils = "0.8.21"
+
