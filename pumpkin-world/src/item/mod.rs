@@ -1,13 +1,16 @@
-use pumpkin_data::Block;
 use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component::DataComponent::Enchantments;
 use pumpkin_data::data_component_impl::{
-    ConsumableImpl, DataComponentImpl, IDSet, MaxStackSizeImpl, ToolImpl, get, read_data,
+    ConsumableImpl, DataComponentImpl, EnchantmentsImpl, IDSet, MaxStackSizeImpl, ToolImpl, get, get_mut, read_data,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
+use std::borrow::Cow;
+use std::cmp::{max, min};
 
 mod categories;
 
@@ -68,6 +71,19 @@ impl ItemStack {
         for (id, component) in self.item.components {
             if id == to_get_id {
                 return Some(get::<T>(*component));
+            }
+        }
+        None
+    }
+    pub fn get_data_component_mut<T: DataComponentImpl + 'static>(&mut self) -> Option<&mut T> {
+        let to_get_id = &T::get_enum();
+        for (id, component) in self.patch.iter_mut() {
+            if id == to_get_id {
+                return if let Some(component) = component {
+                    Some(get_mut::<T>(component.as_mut()))
+                } else {
+                    None
+                };
             }
         }
         None
@@ -154,6 +170,32 @@ impl ItemStack {
         self.item_count = self.item_count.saturating_add(amount);
     }
 
+    pub fn enchant(&mut self, enchantment: &'static Enchantment, level: i32) {
+        // TODO itemstack may not send update packet to client
+        if level <= 0 {
+            return;
+        }
+        let level = min(level, 255);
+        if let Some(data) = self.get_data_component_mut::<EnchantmentsImpl>() {
+            for (enc, old_level) in data.enchantment.to_mut() {
+                if *enc == enchantment {
+                    *old_level = max(*old_level, level);
+                    return;
+                }
+            }
+            data.enchantment.to_mut().push((enchantment, level));
+        } else {
+            self.patch.push((
+                Enchantments,
+                Some(
+                    EnchantmentsImpl {
+                        enchantment: Cow::Owned(vec![(enchantment, level)]),
+                    }
+                    .to_dyn(),
+                ),
+            ));
+        }
+    }
     pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
         if self.item != other.item || self.patch.len() != other.patch.len() {
             return false;

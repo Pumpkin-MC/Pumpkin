@@ -18,6 +18,7 @@ pub mod defaultgamemode;
 mod deop;
 mod difficulty;
 mod effect;
+mod enchant;
 mod experience;
 mod fill;
 mod gamemode;
@@ -80,6 +81,7 @@ pub async fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(time::init_command_tree(), "minecraft:command.time");
     dispatcher.register(tick::init_command_tree(), "minecraft:command.tick");
     dispatcher.register(give::init_command_tree(), "minecraft:command.give");
+    dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
     dispatcher.register(setblock::init_command_tree(), "minecraft:command.setblock");
     dispatcher.register(seed::init_command_tree(), "minecraft:command.seed");
@@ -381,6 +383,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.data",
             "Query and modify data of entities and blocks",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.enchant",
+            "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();

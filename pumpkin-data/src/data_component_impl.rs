@@ -32,6 +32,7 @@ pub trait DataComponentImpl: Send + Sync + Debug {
     fn get_enum() -> DataComponent
     where
         Self: Sized;
+    fn get_self_enum(&self) -> DataComponent; // only for debugging
     fn to_dyn(self) -> Box<dyn DataComponentImpl>;
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl>;
     fn as_any(&self) -> &dyn Any;
@@ -59,6 +60,9 @@ macro_rules! default_impl {
         {
             $t
         }
+        fn get_self_enum(&self) -> DataComponent {
+            $t
+        }
         fn to_dyn(self) -> Box<dyn DataComponentImpl> {
             Box::new(self)
         }
@@ -82,7 +86,13 @@ impl Clone for Box<dyn DataComponentImpl> {
 
 #[inline]
 pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
-    value.as_any().downcast_ref::<T>().unwrap()
+    value.as_any().downcast_ref::<T>().unwrap_or_else(|| {
+        panic!(
+            "you are trying to cast {} to {}",
+            value.get_self_enum().to_name(),
+            T::get_enum().to_name()
+        )
+    })
 }
 #[inline]
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {

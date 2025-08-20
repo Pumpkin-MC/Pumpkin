@@ -124,7 +124,7 @@ impl Registry {
         let mut registry_entries: Vec<RegistryEntry> = SYNCED_REGISTRIES
             .chat_type
             .iter()
-            .map(|(name, nbt)| RegistryEntry::from_nbt(name, nbt))
+            .map(|(name, _nbt)| RegistryEntry::none(name))
             .collect();
 
         // Custom RAW registry type that removes the vanilla sender name. Allows custom formatting.
