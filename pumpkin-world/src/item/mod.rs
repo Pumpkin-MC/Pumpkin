@@ -1,7 +1,8 @@
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component::DataComponent::Enchantments;
 use pumpkin_data::data_component_impl::{
-    ConsumableImpl, DataComponentImpl, EnchantmentsImpl, IDSet, MaxStackSizeImpl, ToolImpl, get, get_mut, read_data,
+    ConsumableImpl, DataComponentImpl, EnchantmentsImpl, IDSet, MaxStackSizeImpl, ToolImpl, get,
+    get_mut, read_data,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
