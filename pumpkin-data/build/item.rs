@@ -234,7 +234,7 @@ impl ToTokens for ItemComponents {
         };
 
         if self.blocks_attacks.is_some() {
-            tokens.extend(quote! { (Consumable, &BlocksAttacksImpl), });
+            tokens.extend(quote! { (BlocksAttacks, &BlocksAttacksImpl), });
         };
 
         if let Some(equippable) = &self.equippable {

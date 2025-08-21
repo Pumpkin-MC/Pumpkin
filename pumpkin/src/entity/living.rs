@@ -179,8 +179,10 @@ impl LivingEntity {
     }
 
     pub async fn clear_active_hand(&self) {
-        self.set_living_flag(Self::USING_ITEM_FLAG, false).await;
+        *self.item_in_use.lock().await = None;
         self.item_use_time.store(0, Ordering::Relaxed);
+
+        self.set_living_flag(Self::USING_ITEM_FLAG, false).await;
     }
 
     pub async fn heal(&self, additional_health: f32) {
@@ -1017,7 +1019,7 @@ impl EntityBase for LivingEntity {
         self.tick_effects().await;
         // Current active item
         {
-            let mut item_in_use = self.item_in_use.lock().await;
+            let item_in_use = self.item_in_use.lock().await.clone();
             if let Some(item) = item_in_use.as_ref()
                 && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
             {
@@ -1040,7 +1042,6 @@ impl EntityBase for LivingEntity {
                 }
 
                 self.clear_active_hand().await;
-                *item_in_use = None;
             }
         }
 
