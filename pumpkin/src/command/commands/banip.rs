@@ -72,7 +72,7 @@ impl CommandExecutor for ReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_REASON.into())));
         };
 
-        ban_ip(sender, server, target, Some(reason.to_string())).await;
+        ban_ip(sender, server, target, Some(reason.clone())).await;
         Ok(())
     }
 }

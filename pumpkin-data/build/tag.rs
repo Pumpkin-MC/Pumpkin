@@ -2,6 +2,8 @@ use std::{collections::BTreeMap, fs};
 
 use crate::biome::Biome;
 use crate::block::BlockAssets;
+use crate::enchantments::Enchantment;
+use crate::entity_type::EntityType;
 use crate::fluid::Fluid;
 use crate::item::Item;
 use heck::ToPascalCase;
@@ -37,6 +39,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/items.json");
     println!("cargo:rerun-if-changed=../assets/biome.json");
     println!("cargo:rerun-if-changed=../assets/fluids.json");
+    println!("cargo:rerun-if-changed=../assets/entities.json");
 
     let tags: BTreeMap<String, BTreeMap<String, Vec<String>>> =
         serde_json::from_str(&fs::read_to_string("../assets/tags.json").unwrap())
@@ -59,6 +62,14 @@ pub(crate) fn build() -> TokenStream {
             Ok(fluids) => fluids,
             Err(e) => panic!("Failed to parse fluids.json: {e}"),
         };
+
+    let enchantments: BTreeMap<String, Enchantment> =
+        serde_json::from_str(&fs::read_to_string("../assets/enchantments.json").unwrap())
+            .expect("Failed to parse enchantments.json");
+
+    let entities: BTreeMap<String, EntityType> =
+        serde_json::from_str(&fs::read_to_string("../assets/entities.json").unwrap())
+            .expect("Failed to parse entities.json");
 
     let registry_key_enum = EnumCreator {
         name: "RegistryKey".to_string(),
@@ -107,6 +118,14 @@ pub(crate) fn build() -> TokenStream {
                     }).collect::<Vec<_>>(),
                     t if t == "block" => values.iter().map(|v| {
                         let id = blocks_assets.blocks.iter().find(|i| { &i.name == v }).unwrap().id;
+                        quote! { #id }
+                    }).collect::<Vec<_>>(),
+                    t if t == "enchantment" => values.iter().map(|v| {
+                        let id = enchantments.get(&("minecraft:".to_string() + v)).unwrap().id as u16;
+                        quote! { #id }
+                    }).collect::<Vec<_>>(),
+                    t if t == "entity_type" => values.iter().map(|v| {
+                        let id = entities.get(v).unwrap().id;
                         quote! { #id }
                     }).collect::<Vec<_>>(),
                     &_ => Vec::new(),

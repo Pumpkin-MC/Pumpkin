@@ -53,7 +53,6 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_registry::VanillaDimensionType;
-use pumpkin_util::GameMode;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -62,6 +61,7 @@ use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::entity::entity_data_flags::{
@@ -200,7 +200,7 @@ pub struct Player {
     /// The player's game profile information, including their username and UUID.
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
-    pub client: ClientPlatform,
+    pub client: Arc<ClientPlatform>,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
@@ -278,7 +278,7 @@ pub struct Player {
 
 impl Player {
     pub async fn new(
-        client: ClientPlatform,
+        client: Arc<ClientPlatform>,
         gameprofile: GameProfile,
         config: PlayerConfig,
         world: Arc<World>,
@@ -308,7 +308,10 @@ impl Player {
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
         ));
 
-        let inventory = Arc::new(PlayerInventory::new(living_entity.entity_equipment.clone()));
+        let inventory = Arc::new(PlayerInventory::new(
+            living_entity.entity_equipment.clone(),
+            living_entity.equipment_slots.clone(),
+        ));
 
         let player_screen_handler = Arc::new(Mutex::new(
             PlayerScreenHandler::new(&inventory, None, 0).await,
@@ -397,9 +400,8 @@ impl Player {
     }
 
     /// Removes the [`Player`] out of the current [`World`].
-    #[allow(unused_variables)]
     pub async fn remove(self: &Arc<Self>) {
-        let world = self.world().await;
+        let world = self.world();
         world.remove_player(self, true).await;
 
         let cylindrical = self.watched_section.load();
@@ -437,7 +439,7 @@ impl Player {
     }
 
     pub async fn attack(&self, victim: Arc<dyn EntityBase>) {
-        let world = self.world().await;
+        let world = self.world();
         let victim_entity = victim.get_entity();
         let attacker_entity = &self.living_entity.entity;
         let config = &advanced_config().pvp;
@@ -493,6 +495,7 @@ impl Player {
 
         if !victim
             .damage_with_context(
+                victim.clone(),
                 damage as f32,
                 DamageType::PLAYER_ATTACK,
                 None,
@@ -513,22 +516,17 @@ impl Player {
 
         if victim.get_living_entity().is_some() {
             let mut knockback_strength = 1.0;
-            player_attack_sound(&pos, &world, attack_type).await;
+            player_attack_sound(&pos, world, attack_type).await;
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
+                    combat::spawn_sweep_particle(attacker_entity, world, &pos).await;
                 }
                 _ => {}
             }
             if config.knockback {
-                combat::handle_knockback(
-                    attacker_entity,
-                    &world,
-                    victim_entity,
-                    knockback_strength,
-                )
-                .await;
+                combat::handle_knockback(attacker_entity, world, victim_entity, knockback_strength)
+                    .await;
             }
         }
 
@@ -564,7 +562,7 @@ impl Player {
     pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32)> {
         let respawn_point = self.respawn_point.load()?;
 
-        let block = self.world().await.get_block(&respawn_point.position).await;
+        let block = self.world().get_block(&respawn_point.position).await;
 
         if respawn_point.dimension == VanillaDimensionType::Overworld
             && block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BEDS)
@@ -629,14 +627,14 @@ impl Player {
     }
 
     pub async fn wake_up(&self) {
-        let world = self.world().await;
+        let world = self.world();
         let respawn_point = self
             .respawn_point
             .load()
             .expect("Player waking up should have it's respawn point set on the bed.");
 
         let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position).await;
-        BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
+        BedBlock::set_occupied(false, world, bed, &respawn_point.position, bed_state).await;
 
         self.living_entity
             .entity
@@ -760,7 +758,7 @@ impl Player {
 
         let chunk_of_chunks = {
             let mut chunk_manager = self.chunk_manager.lock().await;
-            if let ClientPlatform::Java(_) = &self.client {
+            if let ClientPlatform::Java(_) = self.client.as_ref() {
                 // Java clients can only send a limited amount of chunks per tick.
                 // If we have sent too many chunks without receiving an ack, we stop sending chunks.
                 chunk_manager
@@ -773,7 +771,7 @@ impl Player {
 
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             let chunk_count = chunk_of_chunks.len();
-            match &self.client {
+            match self.client.as_ref() {
                 ClientPlatform::Java(java_client) => {
                     java_client.send_packet_now(&CChunkBatchStart).await;
                     for chunk in chunk_of_chunks {
@@ -811,7 +809,7 @@ impl Player {
 
         if self.mining.load(Ordering::Relaxed) {
             let pos = self.mining_pos.lock().await;
-            let world = self.world().await;
+            let world = self.world();
             let state = world.get_block_state(&pos).await;
             // Is the block broken?
             if state.is_air() {
@@ -824,7 +822,7 @@ impl Player {
             } else {
                 self.continue_mining(
                     *pos,
-                    &world,
+                    world,
                     state,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
@@ -835,7 +833,7 @@ impl Player {
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
         self.living_entity.tick(self.clone(), server).await;
-        self.hunger_manager.tick(self.as_ref()).await;
+        self.hunger_manager.tick(self).await;
 
         // experience handling
         self.tick_experience().await;
@@ -847,7 +845,7 @@ impl Player {
         // TODO This should only be handled by the ClientPlatform
         let now = Instant::now();
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
-            if matches!(self.client, ClientPlatform::Bedrock(_)) {
+            if matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
                 return;
             }
             // We never got a response from the last keep alive we sent.
@@ -934,8 +932,8 @@ impl Player {
         self.living_entity.entity.entity_id
     }
 
-    pub async fn world(&self) -> Arc<World> {
-        self.living_entity.entity.world.read().await.clone()
+    pub fn world(&self) -> &Arc<World> {
+        &self.living_entity.entity.world
     }
 
     pub fn position(&self) -> Vector3<f64> {
@@ -998,14 +996,13 @@ impl Player {
             PermissionLvl::Four => EntityStatus::SetOpLevel4,
         };
         self.world()
-            .await
             .send_entity_status(&self.living_entity.entity, status)
             .await;
     }
 
     /// Sets the player's difficulty level.
     pub async fn send_difficulty_update(&self) {
-        let world = self.world().await;
+        let world = self.world();
         let level_info = world.level_info.read().await;
         self.client
             .enqueue_packet(&CChangeDifficulty::new(
@@ -1029,7 +1026,7 @@ impl Player {
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
-        match &self.client {
+        match self.client.as_ref() {
             ClientPlatform::Java(java_client) => {
                 java_client
                     .enqueue_packet(&CUpdateTime::new(
@@ -1074,9 +1071,8 @@ impl Player {
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
-        let current_world = self.living_entity.entity.world.read().await.clone();
-        let info = &new_world.level_info.read().await;
-        let yaw = yaw.unwrap_or(info.spawn_angle);
+        let current_world = self.living_entity.entity.world.clone();
+        let yaw = yaw.unwrap_or(new_world.level_info.read().await.spawn_angle);
         let pitch = pitch.unwrap_or(10.0);
 
         send_cancellable! {{
@@ -1100,12 +1096,18 @@ impl Player {
                 self.set_client_loaded(false);
                 let uuid = self.gameprofile.id;
                 current_world.remove_player(self, false).await;
-                *self.living_entity.entity.world.write().await = new_world.clone();
-                new_world.players.write().await.insert(uuid, self.clone());
+                new_world.players.write().await.insert(uuid, Arc::new(Self::new(
+                            self.client.clone(),
+                            self.gameprofile.clone(),
+                            self.config.read().await.clone(),
+                            new_world.clone(),
+                            self.gamemode.load(),
+                        )
+                        .await));
                 self.unload_watched_chunks(&current_world).await;
 
                 let last_pos = self.living_entity.entity.last_pos.load();
-                let death_dimension = self.world().await.dimension_type.resource_location();
+                let death_dimension = self.world().dimension_type.resource_location();
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
                     last_pos.y.round() as i32,
@@ -1212,8 +1214,7 @@ impl Player {
     }
 
     pub async fn add_exhaustion(&self, exhaustion: f32) {
-        let abilities = self.abilities.lock().await;
-        if abilities.invulnerable {
+        if self.abilities.lock().await.invulnerable {
             return;
         }
         self.hunger_manager.add_exhaustion(exhaustion);
@@ -1307,8 +1308,6 @@ impl Player {
                 self.living_entity
                     .entity
                     .world
-                    .read()
-                    .await
                     .broadcast_packet_all(&CPlayerInfoUpdate::new(
                         PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
                         &[pumpkin_protocol::java::client::play::Player {
@@ -1427,7 +1426,7 @@ impl Player {
             + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
         let entity = Entity::new(
             Uuid::new_v4(),
-            self.world().await,
+            self.world().clone(),
             item_pos,
             &EntityType::ITEM,
             false,
@@ -1451,12 +1450,12 @@ impl Player {
         // TODO: Merge stacks together
         let item_entity =
             Arc::new(ItemEntity::new_with_velocity(entity, item_stack, velocity, 40).await);
-        self.world().await.spawn_entity(item_entity).await;
+        self.world().spawn_entity(item_entity).await;
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
         // should be locked first otherwise cause deadlock in tick() (this thread lock stack, that thread lock screen_handler)
-        let screen_binding = self.current_screen_handler.lock().await;
+
         let binding = self.inventory.held_item();
         let mut item_stack = binding.lock().await;
 
@@ -1467,6 +1466,7 @@ impl Player {
             item_stack.decrement(drop_amount);
             let selected_slot = self.inventory.get_selected_slot();
             let inv: Arc<dyn Inventory> = self.inventory.clone();
+            let screen_binding = self.current_screen_handler.lock().await;
             let mut screen_handler = screen_binding.lock().await;
             let slot_index = screen_handler
                 .get_slot_index(&inv, selected_slot as usize)
@@ -1838,6 +1838,7 @@ impl Player {
             screen_handler.update_to_client().await;
         } else {
             screen_handler.send_content_updates().await;
+            drop(screen_handler);
         }
     }
 
@@ -1855,7 +1856,7 @@ impl Player {
 
     /// Swing the hand of the player
     pub async fn swing_hand(&self, hand: Hand, all: bool) {
-        let world = self.world().await;
+        let world = self.world();
         let entity_id = VarInt(self.entity_id());
 
         let animation = match hand {
@@ -1906,11 +1907,7 @@ impl NBTStorage for Player {
 
         nbt.put_string(
             "Dimension",
-            self.world()
-                .await
-                .dimension_type
-                .resource_location()
-                .to_string(),
+            self.world().dimension_type.resource_location().to_string(),
         );
     }
 
@@ -1963,18 +1960,19 @@ impl NBTStorage for PlayerInventory {
                 let mut item_compound = NbtCompound::new();
                 item_compound.put_byte("Slot", i as i8);
                 stack.write_item_stack(&mut item_compound);
+                drop(stack);
                 vec.push(NbtTag::Compound(item_compound));
             }
         }
 
         let mut equipment_compound = NbtCompound::new();
         for slot in self.equipment_slots.values() {
-            let equipment_binding = self.entity_equipment.lock().await;
-            let stack_binding = equipment_binding.get(slot);
+            let stack_binding = self.entity_equipment.lock().await.get(slot);
             let stack = stack_binding.lock().await;
             if !stack.is_empty() {
                 let mut item_compound = NbtCompound::new();
                 stack.write_item_stack(&mut item_compound);
+                drop(stack);
                 match slot {
                     EquipmentSlot::OffHand(_) => {
                         equipment_compound.put_component("offhand", item_compound);
@@ -2058,6 +2056,7 @@ impl NBTStorageInit for PlayerInventory {}
 impl EntityBase for Player {
     async fn damage_with_context(
         &self,
+        caller: Arc<dyn EntityBase>,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -2067,14 +2066,16 @@ impl EntityBase for Player {
         if self.abilities.lock().await.invulnerable && damage_type != DamageType::GENERIC_KILL {
             return false;
         }
-        let world = self.living_entity.entity.world.read().await;
-        let dyn_self = world
+        let dyn_self = self
+            .living_entity
+            .entity
+            .world
             .get_entity_by_id(self.living_entity.entity.entity_id)
             .await
             .expect("Entity not found in world");
         let result = self
             .living_entity
-            .damage_with_context(amount, damage_type, position, source, cause)
+            .damage_with_context(caller, amount, damage_type, position, source, cause)
             .await;
         if result {
             let health = self.living_entity.health.load();
@@ -2094,7 +2095,7 @@ impl EntityBase for Player {
         pitch: Option<f32>,
         world: Arc<World>,
     ) {
-        if Arc::ptr_eq(&world, &self.world().await) {
+        if Arc::ptr_eq(&world, self.world()) {
             // Same world
             let yaw = yaw.unwrap_or(self.living_entity.entity.yaw.load());
             let pitch = pitch.unwrap_or(self.living_entity.entity.pitch.load());
@@ -2111,8 +2112,6 @@ impl EntityBase for Player {
                     self.request_teleport(position, yaw, pitch).await;
                     entity
                         .world
-                        .read()
-                        .await
                         .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
                             self.living_entity.entity.entity_id.into(),
                             position,
@@ -2264,29 +2263,6 @@ impl Abilities {
     }
 }
 
-/// Represents the player's dominant hand.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Hand {
-    /// Usually the player's off-hand.
-    Left,
-    /// Usually the player's primary hand.
-    Right,
-}
-
-pub struct InvalidHand;
-
-impl TryFrom<i32> for Hand {
-    type Error = InvalidHand;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::Left),
-            1 => Ok(Self::Right),
-            _ => Err(InvalidHand),
-        }
-    }
-}
-
 /// Represents the player's respawn point.
 #[derive(Copy, Debug, Clone, PartialEq)]
 pub struct RespawnPoint {
@@ -2380,14 +2356,14 @@ impl LastSeen {
     pub async fn indexed_for(&self, recipient: &Arc<Player>) -> Box<[PreviousMessage]> {
         let mut indexed = Vec::new();
         for signature in &self.0 {
-            if let Some(index) = recipient
+            let index = recipient
                 .signature_cache
                 .lock()
                 .await
                 .full_cache
                 .iter()
-                .position(|s| s == signature)
-            {
+                .position(|s| s == signature);
+            if let Some(index) = index {
                 indexed.push(PreviousMessage {
                     // Send ID reference to recipient's cache (index + 1 because 0 is reserved for full signature)
                     id: VarInt(1 + index as i32),

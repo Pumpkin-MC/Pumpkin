@@ -5,10 +5,10 @@ use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::{OakDoorLikeProperties, PaleOakWoodLikeProperties};
-use pumpkin_data::item::Item;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 pub struct AxeItem;
@@ -24,7 +24,7 @@ impl ItemBehaviour for AxeItem {
     #[allow(clippy::too_many_lines)]
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -32,7 +32,7 @@ impl ItemBehaviour for AxeItem {
         _server: &Server,
     ) {
         // I tried to follow mojang order of doing things.
-        let world = player.world().await;
+        let world = player.world();
         let replacement_block = try_use_axe(block);
         // First we try to strip the block. by getting his equivalent and applying it the axis.
 

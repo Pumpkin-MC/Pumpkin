@@ -74,7 +74,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Hunger
   - [X] Off Hand
   - [ ] Advancements
-  - [ ] Eating
+  - [x] Eating
 - Entities
   - [x] Non-Living (Minecart, Eggs...) (W.I.P)
   - [x] Entity Effects

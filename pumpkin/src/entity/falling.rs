@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use pumpkin_data::Block;
-use pumpkin_data::{damage::DamageType, entity::EntityType};
+use pumpkin_data::entity::EntityType;
 use pumpkin_protocol::java::client::play::{MetaDataType, Metadata};
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 use std::sync::{Arc, atomic::Ordering};
 use uuid::Uuid;
@@ -71,8 +71,6 @@ impl EntityBase for FallingEntity {
             entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
             entity
                 .world
-                .read()
-                .await
                 .set_block_state(
                     &self.entity.block_pos.load(),
                     self.block_state_id,
@@ -97,17 +95,6 @@ impl EntityBase for FallingEntity {
                 self.entity.block_pos.load(),
             )])
             .await;
-    }
-
-    async fn damage_with_context(
-        &self,
-        _amount: f32,
-        _damage_type: DamageType,
-        _position: Option<Vector3<f64>>,
-        _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        false
     }
 
     fn get_entity(&self) -> &Entity {

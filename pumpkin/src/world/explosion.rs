@@ -6,7 +6,6 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::{
     block::{ExplodeArgs, drop_loot},
-    server::Server,
     world::loot::LootContextParameters,
 };
 
@@ -74,14 +73,14 @@ impl Explosion {
         map
     }
 
-    pub async fn explode(&self, server: &Server, world: &Arc<World>) {
+    pub async fn explode(&self, world: &Arc<World>) {
         let blocks = self.get_blocks_to_destroy(world).await;
         // TODO: Entity damage, fire
         for (pos, (block, state)) in blocks {
             if state.is_air() {
                 continue;
             }
-            let pumpkin_block = server.block_registry.get_pumpkin_block(block);
+            let pumpkin_block = world.block_registry.get_pumpkin_block(block);
 
             world.set_block_state(&pos, 0, BlockFlags::NOTIFY_ALL).await;
 

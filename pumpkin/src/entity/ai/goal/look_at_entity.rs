@@ -95,7 +95,7 @@ impl Goal for LookAtEntityGoal {
         }
         drop(mob_target);
 
-        let world = mob_entity.living_entity.entity.world.read().await;
+        let world = &mob_entity.living_entity.entity.world;
         if self.target_type == &EntityType::PLAYER {
             *target = world
                 .get_closest_player(mob_entity.living_entity.entity.pos.load(), self.range)

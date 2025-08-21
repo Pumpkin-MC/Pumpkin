@@ -1,5 +1,5 @@
 use core::f32;
-use std::sync::atomic::Ordering;
+use std::sync::{Arc, atomic::Ordering};
 
 use crate::entity::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use async_trait::async_trait;
@@ -41,6 +41,7 @@ impl EntityBase for PaintingEntity {
 
     async fn damage_with_context(
         &self,
+        _caller: Arc<dyn EntityBase>,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,

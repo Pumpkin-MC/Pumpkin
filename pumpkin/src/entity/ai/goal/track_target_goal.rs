@@ -66,25 +66,24 @@ impl TrackTargetGoal {
         false
     }
 
-    pub async fn can_track(
+    pub fn can_track(
         &self,
         mob: &dyn Mob,
         target: Option<&LivingEntity>,
-        target_predicate: TargetPredicate,
+        target_predicate: &TargetPredicate,
     ) -> bool {
         if target.is_none() {
             return false;
         }
         let mob_entity = mob.get_mob_entity();
         let target = target.unwrap();
-        let world = mob_entity.living_entity.entity.world.read().await;
+        let world = &mob_entity.living_entity.entity.world;
         if !target_predicate.test(world.clone(), Some(&mob_entity.living_entity), target) {
             return false;
         } /*else if (!this.mob.isInPositionTargetRange(target.getBlockPos())) {
         return false;
         }*/
         // TODO: implement this
-        drop(world); // Drop the lock because is useless now
 
         if self.check_can_navigate {
             if self.check_can_navigate_cooldown.fetch_sub(1, Relaxed) - 1 <= 0 {

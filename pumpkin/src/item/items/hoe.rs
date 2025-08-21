@@ -26,7 +26,7 @@ impl ItemMetadata for HoeItem {
 impl ItemBehaviour for HoeItem {
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
@@ -41,7 +41,7 @@ impl ItemBehaviour for HoeItem {
             || block == &Block::ROOTED_DIRT
         {
             let mut future_block = block;
-            let world = player.world().await;
+            let world = player.world();
 
             //Only rooted can be right-clicked on the bottom of the block
             if face == BlockDirection::Down {

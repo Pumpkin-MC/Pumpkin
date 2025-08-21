@@ -36,7 +36,7 @@ struct LocationExecutor;
 struct EntityExecutor(bool);
 
 async fn send_damage_result(
-    sender: &mut CommandSender,
+    sender: &CommandSender,
     success: bool,
     amount: f32,
     target_name: TextComponent,
@@ -89,7 +89,14 @@ impl CommandExecutor for LocationExecutor {
         let location = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
         let success = target
-            .damage_with_context(amount, damage_type, Some(location), None, None)
+            .damage_with_context(
+                target.clone(),
+                amount,
+                damage_type,
+                Some(location),
+                None,
+                None,
+            )
             .await;
 
         send_damage_result(sender, success, amount, target.get_display_name().await).await;
@@ -134,6 +141,7 @@ impl CommandExecutor for EntityExecutor {
 
         let success = target
             .damage_with_context(
+                target.clone(),
                 amount,
                 damage_type,
                 None,

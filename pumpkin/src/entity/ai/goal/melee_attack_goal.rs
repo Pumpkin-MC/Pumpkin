@@ -49,7 +49,7 @@ impl MeleeAttackGoal {
 impl Goal for MeleeAttackGoal {
     async fn can_start(&self, mob: &dyn Mob) -> bool {
         let time = {
-            let world = mob.get_entity().world.read().await;
+            let world = &mob.get_entity().world;
             let level_time = world.level_time.lock().await;
             level_time.world_age
         };

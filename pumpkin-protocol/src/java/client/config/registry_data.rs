@@ -1,9 +1,8 @@
+use crate::ser::network_serialize_no_prefix;
 use pumpkin_data::packet::clientbound::CONFIG_REGISTRY_DATA;
 use pumpkin_macros::packet;
 use pumpkin_util::resource_location::ResourceLocation;
 use serde::Serialize;
-
-use crate::ser::network_serialize_no_prefix;
 
 #[derive(Serialize)]
 #[packet(CONFIG_REGISTRY_DATA)]
@@ -36,6 +35,12 @@ impl RegistryEntry {
         RegistryEntry {
             entry_id: ResourceLocation::vanilla(name),
             data: Some(data_buf.into_boxed_slice()),
+        }
+    }
+    pub fn none(name: &str) -> Self {
+        RegistryEntry {
+            entry_id: ResourceLocation::vanilla(name),
+            data: None,
         }
     }
     pub fn from_nbt_custom(name: &str, nbt: &impl Serialize) -> Self {

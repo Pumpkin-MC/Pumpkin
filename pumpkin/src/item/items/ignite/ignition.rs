@@ -4,7 +4,6 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
@@ -14,7 +13,6 @@ pub struct Ignition;
 impl Ignition {
     pub async fn ignite_block<F, Fut>(
         ignite_logic: F,
-        _item: &Item,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
@@ -24,26 +22,26 @@ impl Ignition {
         F: FnOnce(Arc<World>, BlockPos, u16) -> Fut,
         Fut: Future<Output = ()>,
     {
-        let world = player.world().await;
+        let world = player.world();
         let pos = location.offset(face.to_offset());
 
         if world.get_fluid(&location).await.name != Fluid::EMPTY.name {
             return;
         }
-        let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
+        let fire_block = FireBlockBase::get_fire_type(world, &pos).await;
 
         let state_id = world.get_block_state_id(&location).await;
 
         if let Some(new_state_id) = can_be_lit(block, state_id) {
-            ignite_logic(world, location, new_state_id).await;
+            ignite_logic(world.clone(), location, new_state_id).await;
             return;
         }
 
         let state_id = FireBlock
-            .get_state_for_position(&world, &fire_block, &pos)
+            .get_state_for_position(world, &fire_block, &pos)
             .await;
-        if FireBlockBase::can_place_at(&world, &pos).await {
-            ignite_logic(world, pos, state_id).await;
+        if FireBlockBase::can_place_at(world, &pos).await {
+            ignite_logic(world.clone(), pos, state_id).await;
         }
     }
 }

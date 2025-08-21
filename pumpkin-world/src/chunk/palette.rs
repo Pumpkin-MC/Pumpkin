@@ -112,34 +112,27 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 debug_assert!(bits_per_entry >= encompassing_bits(data.counts.len()));
                 debug_assert!(bits_per_entry <= 15);
 
-                let palette: Box<[V]> = data.palette.iter().copied().collect();
-
-                let key_to_index_map: HashMap<V, usize> = palette
-                    .iter()
-                    .enumerate()
-                    .map(|(index, key)| (*key, index))
-                    .collect();
-
+                // Don't use HashMap's here, because its slow
                 let blocks_per_i64 = 64 / bits_per_entry;
 
-                let packed_indices = data
+                let packed_indices: Box<[i64]> = data
                     .cube
                     .as_flattened()
                     .as_flattened()
                     .chunks(blocks_per_i64 as usize)
                     .map(|chunk| {
                         chunk.iter().enumerate().fold(0, |acc, (index, key)| {
-                            let key_index = key_to_index_map.get(key).unwrap();
-                            debug_assert!((1 << bits_per_entry) > *key_index);
+                            let key_index = data.palette.iter().position(|&x| x == *key).unwrap();
+                            debug_assert!((1 << bits_per_entry) > key_index);
 
                             let packed_offset_index =
-                                (*key_index as u64) << (bits_per_entry as u64 * index as u64);
+                                (key_index as u64) << (bits_per_entry as u64 * index as u64);
                             acc | packed_offset_index as i64
                         })
                     })
                     .collect();
 
-                (palette, packed_indices)
+                (data.palette.clone().into_boxed_slice(), packed_indices)
             }
         }
     }

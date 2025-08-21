@@ -83,7 +83,7 @@ impl CommandDispatcher {
     /// - do not query suggestions for the same consumer multiple times just because they are on different paths through the tree
     pub(crate) async fn find_suggestions<'a>(
         &'a self,
-        src: &mut CommandSender,
+        src: &CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) -> Vec<CommandSuggestion> {
@@ -357,7 +357,7 @@ impl CommandDispatcher {
     }
 
     async fn try_find_suggestions_on_path<'a>(
-        src: &mut CommandSender,
+        src: &CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,
@@ -411,15 +411,13 @@ impl CommandDispatcher {
 
         for name in names {
             self.commands
-                .insert(name.to_string(), Command::Alias(primary_name.to_string()));
-            self.permissions
-                .insert(name.to_string(), permission.clone());
+                .insert(name.clone(), Command::Alias(primary_name.clone()));
+            self.permissions.insert(name.clone(), permission.clone());
         }
 
-        self.permissions
-            .insert(primary_name.to_string(), permission);
+        self.permissions.insert(primary_name.clone(), permission);
         self.commands
-            .insert(primary_name.to_string(), Command::Tree(tree));
+            .insert(primary_name.clone(), Command::Tree(tree));
     }
 
     /// Remove a command from the dispatcher by its primary name.

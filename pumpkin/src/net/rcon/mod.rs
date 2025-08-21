@@ -126,8 +126,10 @@ impl RCONClient {
                     let output_clone = output.clone();
                     let packet_body = packet.get_body().to_owned();
                     tokio::spawn(async move {
-                        let dispatcher = server_clone.command_dispatcher.read().await;
-                        dispatcher
+                        server_clone
+                            .command_dispatcher
+                            .read()
+                            .await
                             .handle_command(
                                 &mut crate::command::CommandSender::Rcon(output_clone),
                                 &server_clone,

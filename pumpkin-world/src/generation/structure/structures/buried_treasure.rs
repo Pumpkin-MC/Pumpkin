@@ -3,25 +3,25 @@ use pumpkin_util::{
     HeightMap,
     math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
 };
+use serde::Deserialize;
 
 use crate::{
     ProtoChunk,
     generation::{
         height_limit::HeightLimitView,
         positions::chunk_pos::{get_center_x, get_center_z, get_offset_x, get_offset_z},
-        structure::structures::{Structure, StructurePiecesCollector, StructurePosition},
+        structure::structures::{StructureGenerator, StructurePiecesCollector, StructurePosition},
     },
 };
 
-pub struct BuriedTreasureGenerator {
-    position: BlockPos,
-}
+#[derive(Deserialize, Clone)]
+pub struct BuriedTreasureGenerator;
 
-impl Structure for BuriedTreasureGenerator {
+impl StructureGenerator for BuriedTreasureGenerator {
     fn get_structure_position(&self, chunk: &ProtoChunk) -> super::StructurePosition {
         let x = get_center_x(chunk.chunk_pos.x);
         let z = get_center_z(chunk.chunk_pos.y);
-        let y = chunk.get_top_y(&HeightMap::OceanFloorWg, &Vector2::new(x, z));
+        let y = chunk.get_top_y(&HeightMap::OceanFloorWg, &Vector2::new(x, z)) - 1;
         let generator = StructurePiecesCollector {
             pieces_positions: vec![BlockPos::new(
                 get_offset_x(chunk.chunk_pos.x, 9),
@@ -35,12 +35,12 @@ impl Structure for BuriedTreasureGenerator {
         }
     }
 
-    fn generate(&self, chunk: &mut crate::ProtoChunk) {
+    fn generate(&self, position: BlockPos, chunk: &mut crate::ProtoChunk) {
         let y = chunk.get_top_y(
             &HeightMap::OceanFloorWg,
-            &Vector2::new(self.position.0.x, self.position.0.z),
+            &Vector2::new(position.0.x, position.0.z),
         );
-        let mut pos = BlockPos::new(self.position.0.x, y, self.position.0.z);
+        let mut pos = BlockPos::new(position.0.x, y, position.0.z);
         for _ in y..chunk.bottom_y() as i32 {
             let state = chunk.get_block_state(&pos.0);
             let down_raw_state = chunk.get_block_state(&pos.down().0);

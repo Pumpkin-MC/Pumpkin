@@ -59,7 +59,7 @@ impl CommandExecutor for ReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_REASON.into())));
         };
 
-        ban_player(sender, &targets[0], Some(reason.to_string())).await;
+        ban_player(sender, &targets[0], Some(reason.clone())).await;
         Ok(())
     }
 }

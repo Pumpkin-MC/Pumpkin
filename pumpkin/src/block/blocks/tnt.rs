@@ -58,8 +58,8 @@ impl BlockBehaviour for TNTBlock {
         if item != &Item::FLINT_AND_STEEL || item == &Item::FIRE_CHARGE {
             return BlockActionResult::Pass;
         }
-        let world = args.player.world().await;
-        Self::prime(&world, args.position).await;
+        let world = args.player.world();
+        Self::prime(world, args.position).await;
 
         BlockActionResult::Consume
     }

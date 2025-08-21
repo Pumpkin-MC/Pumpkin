@@ -3,6 +3,7 @@ use crate::screen_handler::InventoryPlayer;
 use async_trait::async_trait;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_protocol::java::client::play::CSetPlayerInventory;
+use pumpkin_util::Hand;
 use pumpkin_world::inventory::split_stack;
 use pumpkin_world::inventory::{Clearable, Inventory};
 use pumpkin_world::item::ItemStack;
@@ -16,22 +17,25 @@ use tokio::sync::Mutex;
 #[derive(Debug)]
 pub struct PlayerInventory {
     pub main_inventory: [Arc<Mutex<ItemStack>>; Self::MAIN_SIZE],
-    pub equipment_slots: HashMap<usize, EquipmentSlot>,
+    pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
     selected_slot: AtomicU8,
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
 }
 
 impl PlayerInventory {
-    const MAIN_SIZE: usize = 36;
+    pub const MAIN_SIZE: usize = 36;
     const HOTBAR_SIZE: usize = 9;
-    const OFF_HAND_SLOT: usize = 40;
+    pub const OFF_HAND_SLOT: usize = 40;
 
     // TODO: Add inventory load from nbt
-    pub fn new(entity_equipment: Arc<Mutex<EntityEquipment>>) -> Self {
+    pub fn new(
+        entity_equipment: Arc<Mutex<EntityEquipment>>,
+        equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
+    ) -> Self {
         Self {
             // Normal syntax can't be used here because Arc doesn't implement Copy
             main_inventory: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
-            equipment_slots: Self::build_equipment_slots(),
+            equipment_slots,
             selected_slot: AtomicU8::new(0),
             entity_equipment,
         }
@@ -43,6 +47,13 @@ impl PlayerInventory {
             .get(self.get_selected_slot() as usize)
             .unwrap()
             .clone()
+    }
+
+    pub async fn get_stack_in_hand(&self, hand: Hand) -> Arc<Mutex<ItemStack>> {
+        match hand {
+            Hand::Left => self.off_hand_item().await,
+            Hand::Right => self.held_item(),
+        }
     }
 
     /// getOffHandStack in source
@@ -69,28 +80,6 @@ impl PlayerInventory {
 
     pub fn is_valid_hotbar_index(slot: usize) -> bool {
         slot < Self::HOTBAR_SIZE
-    }
-
-    fn build_equipment_slots() -> HashMap<usize, EquipmentSlot> {
-        let mut equipment_slots = HashMap::new();
-        equipment_slots.insert(
-            EquipmentSlot::FEET.get_offset_entity_slot_id(Self::MAIN_SIZE as i32) as usize,
-            EquipmentSlot::FEET,
-        );
-        equipment_slots.insert(
-            EquipmentSlot::LEGS.get_offset_entity_slot_id(Self::MAIN_SIZE as i32) as usize,
-            EquipmentSlot::LEGS,
-        );
-        equipment_slots.insert(
-            EquipmentSlot::CHEST.get_offset_entity_slot_id(Self::MAIN_SIZE as i32) as usize,
-            EquipmentSlot::CHEST,
-        );
-        equipment_slots.insert(
-            EquipmentSlot::HEAD.get_offset_entity_slot_id(Self::MAIN_SIZE as i32) as usize,
-            EquipmentSlot::HEAD,
-        );
-        equipment_slots.insert(PlayerInventory::OFF_HAND_SLOT, EquipmentSlot::OFF_HAND);
-        equipment_slots
     }
 
     async fn add_stack(&self, stack: ItemStack) -> usize {

@@ -1,5 +1,5 @@
 use pumpkin_protocol::bedrock::server::text::SText;
-use pumpkin_util::PermissionLvl;
+use pumpkin_util::{Hand, PermissionLvl};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
@@ -14,7 +14,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
 use crate::entity::EntityBase;
-use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
+use crate::entity::player::{ChatMode, ChatSession, Player};
 use crate::entity::r#type::from_type;
 use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
@@ -27,7 +27,7 @@ use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, FoodImpl};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -183,6 +183,7 @@ impl JavaClient {
                 player.living_entity.entity.set_pos(*position);
 
                 *awaiting_teleport = None;
+                drop(awaiting_teleport);
             } else {
                 self.kick(TextComponent::text("Wrong teleport id")).await;
             }
@@ -302,7 +303,7 @@ impl JavaClient {
                 }
 
                 entity.on_ground.store(packet.collision & FLAG_ON_GROUND != 0, Ordering::Relaxed);
-                let world = &player.world().await;
+                let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
                 if !self.sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0).await {
@@ -326,6 +327,7 @@ impl JavaClient {
                 if !player.abilities.lock().await.flying {
                     player.living_entity
                         .update_fall_distance(
+                            player.clone(),
                             height_difference,
                             packet.collision & FLAG_ON_GROUND != 0,
                             player.gamemode.load() == GameMode::Creative,
@@ -415,7 +417,7 @@ impl JavaClient {
                 let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
                 let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
                 // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
-                let world = &entity.world.read().await;
+                let world = &entity.world;
 
                 // TODO: Warn when player moves to quickly
                 if !self
@@ -450,6 +452,7 @@ impl JavaClient {
                 if !player.abilities.lock().await.flying {
                     player.living_entity
                         .update_fall_distance(
+                            player.clone(),
                             height_difference,
                             (packet.collision & FLAG_ON_GROUND) != 0,
                             player.gamemode.load() == GameMode::Creative,
@@ -509,7 +512,7 @@ impl JavaClient {
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
-        let world = &entity.world.read().await;
+        let world = &entity.world;
         let packet =
             CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
         world
@@ -542,8 +545,7 @@ impl JavaClient {
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
                 server.spawn_task(async move {
-                    let dispatcher = server_clone.command_dispatcher.read().await;
-                    dispatcher
+                    server_clone.command_dispatcher.read().await
                         .handle_command(
                             &mut CommandSender::Player(player_clone),
                             &server_clone,
@@ -580,7 +582,7 @@ impl JavaClient {
             return;
         }
 
-        let world = player.world().await;
+        let world = player.world();
         let block = world.get_block(&pick_item.pos).await;
 
         if block.item_id == 0 {
@@ -626,7 +628,7 @@ impl JavaClient {
     pub async fn handle_set_command_block(&self, player: &Arc<Player>, command: SSetCommandBlock) {
         // TODO: check things
         let pos = command.pos;
-        if let Some(block_entity) = player.world().await.get_block_entity(&pos).await {
+        if let Some(block_entity) = player.world().get_block_entity(&pos).await {
             if block_entity.resource_location() != CommandBlockEntity::ID {
                 log::warn!(
                     "Client tried to change Command block but not Command block entity found"
@@ -706,7 +708,6 @@ impl JavaClient {
         let (yaw, pitch) = player.rotation();
         let hit_result = player
             .world()
-            .await
             .raycast(
                 player.eye_position(),
                 player
@@ -724,7 +725,7 @@ impl JavaClient {
                 player,
                 InteractAction::LeftClickBlock,
                 &item,
-                player.world().await.get_block(&hit_pos).await,
+                player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
             )
         } else {
@@ -784,7 +785,7 @@ impl JavaClient {
                 );
 
                 let entity = &player.living_entity.entity;
-                let world = &entity.world.read().await;
+                let world = &entity.world;
                 if BASIC_CONFIG.allow_chat_reports {
                     world.broadcast_secure_player_chat(player, &chat_message, decorated_message).await;
                 } else {
@@ -888,10 +889,7 @@ impl JavaClient {
         }
 
         // Update the chat session fields
-        let mut chat_session = player.chat_session.lock().await; // Await the lock
-
-        // Update the chat session fields
-        *chat_session = ChatSession::new(
+        *player.chat_session.lock().await = ChatSession::new(
             session.session_id,
             session.expires_at,
             session.public_key.clone(),
@@ -1043,7 +1041,7 @@ impl JavaClient {
                 if player.living_entity.health.load() > 0.0 {
                     return;
                 }
-                player.world().await.respawn_player(player, false).await;
+                player.world().respawn_player(player, false).await;
 
                 let screen_handler = player.current_screen_handler.lock().await;
                 let mut screen_handler = screen_handler.lock().await;
@@ -1093,7 +1091,7 @@ impl JavaClient {
 
                 // TODO: set as camera entity when spectator
 
-                let world = &entity.world.read().await;
+                let world = &entity.world;
                 let player_victim = world.get_player_by_id(entity_id.0).await;
                 if entity_id.0 == player.entity_id() {
                     // This can't be triggered from a non-modded client.
@@ -1167,7 +1165,7 @@ impl JavaClient {
                     }
                     let position = player_action.position;
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world.read().await;
+                    let world = &entity.world;
                     let (block, state) = world.get_block_and_state(&position).await;
 
                     let inventory = player.inventory();
@@ -1246,8 +1244,8 @@ impl JavaClient {
                     }
                     player.mining.store(false, Ordering::Relaxed);
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world.read().await;
-                    world
+                    entity
+                        .world
                         .set_block_breaking(entity, player_action.position, -1)
                         .await;
                     self.update_sequence(player, player_action.sequence.0);
@@ -1266,20 +1264,20 @@ impl JavaClient {
 
                     // Block break & play sound
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world.read().await;
+                    let world = &entity.world;
 
                     player.mining.store(false, Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
 
                     let (block, state) = world.get_block_and_state(&location).await;
-                    let drop = player.gamemode.load() != GameMode::Creative
+                    let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
 
                     world
                         .break_block(
                             &location,
                             Some(player.clone()),
-                            if drop {
+                            if block_drop {
                                 BlockFlags::NOTIFY_NEIGHBORS
                             } else {
                                 BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
@@ -1300,8 +1298,8 @@ impl JavaClient {
                 Status::DropItemStack => {
                     player.drop_held_item(true).await;
                 }
-                Status::ShootArrowOrFinishEating => {
-                    log::debug!("todo");
+                Status::ReleaseItemInUse => {
+                    player.living_entity.clear_active_hand().await;
                 }
                 Status::SwapItem => {
                     player.swap_item().await;
@@ -1399,7 +1397,7 @@ impl JavaClient {
         };
 
         let entity = &player.living_entity.entity;
-        let world = entity.world.read().await;
+        let world = &entity.world;
         let block = world.get_block(&position).await;
 
         let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
@@ -1413,7 +1411,7 @@ impl JavaClient {
                     &cursor_pos,
                     &face,
                     &item,
-                    &world,
+                    world,
                     block,
                     server,
                 )
@@ -1422,7 +1420,6 @@ impl JavaClient {
                 // TODO: Trigger ANY_BLOCK_USE Criteria
 
                 if matches!(result, BlockActionResult::SuccessServer) {
-                    drop(world); // IMPORTANT: We need to drop this to prevent a deadlock
                     player.swing_hand(hand, true).await;
                 }
                 return Ok(());
@@ -1435,27 +1432,23 @@ impl JavaClient {
             return Ok(());
         }
 
+        let mut stack = item.lock().await;
         server
             .item_registry
-            .use_on_block(
-                item.lock().await.item,
-                player,
-                position,
-                face,
-                block,
-                server,
-            )
+            .use_on_block(&mut stack, player, position, face, block, server)
             .await;
 
         // Check if the item is a block, because not every item can be placed :D
-        if let Some(block) = Block::from_item_id(item.lock().await.item.id) {
+        let item_id = stack.item.id;
+        if let Some(block) = Block::from_item_id(item_id) {
             should_try_decrement = self
                 .run_is_block_place(player, block, server, use_item_on, position, face)
                 .await?;
         }
 
         // Check if the item is a spawn egg
-        if let Some(entity) = entity_from_egg(item.lock().await.item.id) {
+        let item_id = stack.item.id;
+        if let Some(entity) = entity_from_egg(item_id) {
             self.spawn_entity_from_egg(player, entity, position, face)
                 .await;
             should_try_decrement = true;
@@ -1465,7 +1458,7 @@ impl JavaClient {
             // TODO: Config
             // Decrease block count
             if player.gamemode.load() != GameMode::Creative {
-                item.lock().await.decrement(1);
+                stack.decrement(1);
             }
         }
 
@@ -1525,7 +1518,7 @@ impl JavaClient {
     }
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
-        let world = &player.living_entity.entity.world.read().await;
+        let world = &player.living_entity.entity.world;
         let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
             return;
         };
@@ -1576,7 +1569,6 @@ impl JavaClient {
 
         let hit_result = player
             .world()
-            .await
             .raycast(
                 player.eye_position(),
                 player.eye_position().add(
@@ -1595,7 +1587,7 @@ impl JavaClient {
                 player,
                 InteractAction::RightClickBlock,
                 &item_in_hand,
-                player.world().await.get_block(&hit_pos).await,
+                player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
             )
         } else {
@@ -1607,11 +1599,30 @@ impl JavaClient {
                 None,
             )
         };
+        let held = item_in_hand.lock().await;
+        if held.get_data_component::<ConsumableImpl>().is_some() {
+            // If its food we want to make sure we can actually consume it
+            if let Some(food) = held.get_data_component::<FoodImpl>() {
+                if player.abilities.lock().await.invulnerable
+                    || food.can_always_eat
+                    || player.hunger_manager.level.load() < 20
+                {
+                    player
+                        .living_entity
+                        .set_active_hand(hand, held.clone())
+                        .await;
+                }
+            } else {
+                player
+                    .living_entity
+                    .set_active_hand(hand, held.clone())
+                    .await;
+            }
+        }
 
         send_cancellable! {{
             event;
             'after: {
-                let held = item_in_hand.lock().await;
                 let item = held.item;
                 drop(held);
                 server.item_registry.on_use(item, player).await;
@@ -1655,6 +1666,7 @@ impl JavaClient {
                 .await;
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
             player_screen_handler.send_content_updates().await;
+            drop(player_screen_handler);
         } else if is_negative && is_legal {
             // Item drop
             player.drop_item(item_stack).await;
@@ -1663,8 +1675,11 @@ impl JavaClient {
     }
 
     pub async fn handle_chunk_batch(&self, player: &Player, packet: SChunkBatch) {
-        let mut chunk_manager = player.chunk_manager.lock().await;
-        chunk_manager.handle_acknowledge(packet.chunks_per_tick);
+        player
+            .chunk_manager
+            .lock()
+            .await
+            .handle_acknowledge(packet.chunks_per_tick);
         log::trace!(
             "Client requested {} chunks per tick",
             packet.chunks_per_tick
@@ -1686,7 +1701,7 @@ impl JavaClient {
         packet: SCommandSuggestion,
         server: &Arc<Server>,
     ) {
-        let mut src = CommandSender::Player(player.clone());
+        let src = CommandSender::Player(player.clone());
         let Some(cmd) = &packet.command.get(1..) else {
             return;
         };
@@ -1696,8 +1711,12 @@ impl JavaClient {
             return;
         };
 
-        let dispatcher = server.command_dispatcher.read().await;
-        let suggestions = dispatcher.find_suggestions(&mut src, server, cmd).await;
+        let suggestions = server
+            .command_dispatcher
+            .read()
+            .await
+            .find_suggestions(&src, server, cmd)
+            .await;
 
         let response = CCommandSuggestions::new(
             packet.id,
@@ -1735,9 +1754,9 @@ impl JavaClient {
         // Create rotation like Vanilla
         let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
 
-        let world = player.world().await;
+        let world = player.world();
         // Create a new mob and UUID based on the spawn egg id
-        let mob = from_type(entity_type, pos, &world, Uuid::new_v4()).await;
+        let mob = from_type(entity_type, pos, world, Uuid::new_v4()).await;
 
         // Set the rotation
         mob.get_entity().set_rotation(yaw, 0.0);
@@ -1762,7 +1781,6 @@ impl JavaClient {
         face: BlockDirection,
     ) -> Result<bool, BlockPlacingError> {
         let entity = &player.living_entity.entity;
-        let world = &entity.world.read().await;
 
         // Check if the block is under the world
         if location.0.y + face.to_offset().y < i32::from(Self::WORLD_LOWEST_Y) {
@@ -1792,6 +1810,8 @@ impl JavaClient {
         }
 
         let clicked_block_pos = BlockPos(location.0);
+        let world = &entity.world;
+
         let (clicked_block, clicked_block_state) =
             world.get_block_and_state(&clicked_block_pos).await;
 

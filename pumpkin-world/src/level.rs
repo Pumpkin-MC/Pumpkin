@@ -656,7 +656,7 @@ impl Level {
         let (sender, receiver) = mpsc::unbounded_channel();
         let level = self.clone();
 
-        log::debug!("Receiving chunks: {}", chunks.len());
+        log::trace!("Receiving chunks: {}", chunks.len());
 
         self.spawn_task(async move {
             let cancel_notifier = level.shutdown_notifier.notified();
@@ -848,8 +848,7 @@ impl Level {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.get_chunk(chunk_coordinate).await;
 
-        let chunk = chunk.read().await;
-        let Some(id) = chunk.section.get_block_absolute_y(
+        let Some(id) = chunk.read().await.section.get_block_absolute_y(
             relative.x as usize,
             relative.y,
             relative.z as usize,
@@ -863,8 +862,7 @@ impl Level {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.get_chunk(chunk_coordinate).await;
 
-        let chunk = chunk.read().await;
-        let Some(id) = chunk.section.get_rough_biome_absolute_y(
+        let Some(id) = chunk.read().await.section.get_rough_biome_absolute_y(
             relative.x as usize,
             relative.y,
             relative.z as usize,

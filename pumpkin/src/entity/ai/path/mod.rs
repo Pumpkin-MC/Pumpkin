@@ -35,7 +35,7 @@ impl Navigator {
             let mut best_move = Vector3::new(0.0, 0.0, 0.0);
             let mut lowest_cost = f64::MAX;
 
-            let world = entity.entity.world.read().await;
+            let world = &entity.entity.world;
 
             for x in -1..=1 {
                 for z in -1..=1 {

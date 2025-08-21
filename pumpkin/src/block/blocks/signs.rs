@@ -55,7 +55,7 @@ impl BlockBehaviour for SignBlock {
     }
 
     async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        match &args.player.client {
+        match args.player.client.as_ref() {
             crate::net::ClientPlatform::Java(java) => {
                 java.send_sign_packet(*args.position, true).await;
             }
@@ -100,7 +100,7 @@ impl BlockBehaviour for SignBlock {
 
         let is_facing_front_text =
             is_facing_front_text(args.world, args.position, args.block, args.player).await;
-        match &args.player.client {
+        match args.player.client.as_ref() {
             crate::net::ClientPlatform::Java(java) => {
                 java.send_sign_packet(*args.position, is_facing_front_text)
                     .await;
