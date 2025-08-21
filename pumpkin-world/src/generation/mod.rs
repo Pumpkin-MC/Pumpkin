@@ -23,7 +23,7 @@ pub mod structure;
 mod surface;
 pub mod y_offset;
 
-use derive_getters::Getters;
+
 use generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
 use pumpkin_util::random::{
     RandomDeriver, RandomDeriverImpl, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
@@ -37,9 +37,8 @@ pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<dyn WorldGenerator
     Box::new(VanillaGenerator::new(seed, dimension))
 }
 
-#[derive(Getters)]
 pub struct GlobalRandomConfig {
-    seed: u64,
+    pub seed: u64,
     base_random_deriver: RandomDeriver,
     aquifer_random_deriver: RandomDeriver,
     ore_random_deriver: RandomDeriver,
@@ -63,6 +62,10 @@ impl GlobalRandomConfig {
             aquifer_random_deriver: aquifer_deriver,
             ore_random_deriver: ore_deriver,
         }
+    }
+
+    pub fn seed(&self) -> u64 {
+        self.seed
     }
 }
 

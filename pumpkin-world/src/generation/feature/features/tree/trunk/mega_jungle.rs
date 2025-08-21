@@ -26,7 +26,7 @@ impl MegaJungleTrunkPlacer {
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         force_dirt: bool,

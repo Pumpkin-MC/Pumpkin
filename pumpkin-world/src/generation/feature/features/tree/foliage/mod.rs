@@ -80,7 +80,7 @@ impl FoliagePlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate_square<T: LeaveValidator>(
         validator: &T,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         center_pos: BlockPos,
@@ -105,7 +105,7 @@ impl FoliagePlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         node: &TreeNode,
@@ -134,7 +134,7 @@ impl FoliagePlacer {
     }
 
     pub fn place_foliage_block(
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut ProtoChunk,
         _level: &Arc<Level>,
         pos: BlockPos,
         block_state: &BlockState,
@@ -182,7 +182,7 @@ impl FoliageType {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         node: &TreeNode,

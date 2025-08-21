@@ -22,7 +22,7 @@ impl GiantTrunkPlacer {
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut ProtoChunk,
         _level: &Arc<Level>,
         _random: &mut RandomGenerator,
         force_dirt: bool,

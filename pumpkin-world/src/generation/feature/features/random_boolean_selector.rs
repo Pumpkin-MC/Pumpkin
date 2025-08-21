@@ -21,7 +21,7 @@ impl RandomBooleanFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut ProtoChunk,
         level: &Arc<Level>,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,

@@ -8,7 +8,7 @@ use pumpkin_data::noise_router::{
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use super::{
-    biome_coords, noise::router::proto_noise_router::ProtoNoiseRouters,
+    noise::router::proto_noise_router::ProtoNoiseRouters,
     settings::gen_settings_from_dimension,
 };
 use crate::chunk::format::LightContainer;
@@ -91,18 +91,84 @@ impl WorldGenerator for VanillaGenerator {
         let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
         let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
 
+        // Calculate biome mixer seed
+        use crate::biome::hash_seed;
+        let biome_mixer_seed = hash_seed(self.random_config.seed);
+        
         let mut proto_chunk = ProtoChunk::new(
             *at,
-            &self.base_router,
-            &self.random_config,
             generation_settings,
-            &self.terrain_cache,
             self.default_block,
+            biome_mixer_seed,
         );
-        proto_chunk.populate_biomes(self.dimension);
-        proto_chunk.populate_noise();
-        proto_chunk.build_surface();
-        proto_chunk.generate_features_and_structure(level, block_registry);
+
+        // Create the required components for generation
+        use crate::generation::chunk_noise::{ChunkNoiseGenerator, CHUNK_DIM};
+        use crate::generation::noise::router::{
+            multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+            surface_height_sampler::{SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions},
+        };
+        use crate::generation::{biome_coords, positions::chunk_pos, aquifer_sampler::{FluidLevel, FluidLevelSampler}};
+        use crate::generation::proto_chunk::StandardChunkFluidLevelSampler;
+
+        let generation_shape = &generation_settings.shape;
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(at);
+        let start_z = chunk_pos::start_block_z(at);
+
+        // Multi-noise sampler for biomes
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+        );
+        let mut multi_noise_sampler =
+            MultiNoiseSampler::generate(&self.base_router.multi_noise, &multi_noise_config);
+
+        // Noise sampler
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(
+                generation_settings.sea_level,
+                generation_settings.default_fluid.name,
+            ),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA), 
+        )));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &self.base_router.noise,
+            &self.random_config,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            generation_settings.aquifers_enabled,
+            generation_settings.ore_veins_enabled,
+        );
+
+        // Surface height estimator
+        let surface_config = SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler =
+            SurfaceHeightEstimateSampler::generate(&self.base_router.surface_estimator, &surface_config);
+
+        proto_chunk.populate_biomes(self.dimension, &mut multi_noise_sampler);
+        proto_chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
+        proto_chunk.build_surface(generation_settings, &self.random_config, &self.terrain_cache, &mut surface_height_estimate_sampler);
+        proto_chunk.generate_features_and_structure(level, block_registry, &self.random_config);
 
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
             let relative_y = y as usize;
