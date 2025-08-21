@@ -12,6 +12,9 @@ use pumpkin_util::{
     random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
 };
 
+use crate::chunk::format::LightContainer;
+use crate::chunk::palette::{BiomePalette, BlockPalette};
+use crate::chunk::{ChunkData, ChunkLight, ChunkSections, SubChunk};
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::structure::placement::StructurePlacementCalculator;
 use crate::generation::structure::structures::StructurePosition;
@@ -34,8 +37,7 @@ use super::{
     chunk_noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
     feature::placed_features::PLACED_FEATURES,
     noise::router::{
-        multi_noise_sampler::MultiNoiseSampler,
-        proto_noise_router::DoublePerlinNoiseBuilder,
+        multi_noise_sampler::MultiNoiseSampler, proto_noise_router::DoublePerlinNoiseBuilder,
         surface_height_sampler::SurfaceHeightEstimateSampler,
     },
     positions::chunk_pos::{start_block_x, start_block_z},
@@ -370,11 +372,14 @@ impl ProtoChunk {
         self.flat_biome_map[index]
     }
 
-    pub fn populate_biomes(&mut self, dimension: Dimension, multi_noise_sampler: &mut MultiNoiseSampler) {
+    pub fn populate_biomes(
+        &mut self,
+        dimension: Dimension,
+        multi_noise_sampler: &mut MultiNoiseSampler,
+    ) {
         let min_y = self.bottom_y();
         let bottom_section = section_coords::block_to_section(min_y) as i32;
-        let top_section =
-            section_coords::block_to_section(min_y as i32 + self.height() as i32 - 1);
+        let top_section = section_coords::block_to_section(min_y as i32 + self.height() as i32 - 1);
 
         let start_block_x = chunk_pos::start_block_x(&self.chunk_pos);
         let start_block_z = chunk_pos::start_block_z(&self.chunk_pos);
@@ -393,11 +398,7 @@ impl ProtoChunk {
                         let biome_pos =
                             Vector3::new(start_biome_x + x, start_biome_y + y, start_biome_z + z);
                         let biome = if dimension == Dimension::End {
-                            TheEndBiomeSupplier::biome(
-                                &biome_pos,
-                                multi_noise_sampler,
-                                dimension,
-                            )
+                            TheEndBiomeSupplier::biome(&biome_pos, multi_noise_sampler, dimension)
                         } else {
                             MultiNoiseBiomeSupplier::biome(
                                 &biome_pos,
@@ -422,7 +423,11 @@ impl ProtoChunk {
         }
     }
 
-    pub fn populate_noise(&mut self, noise_sampler: &mut ChunkNoiseGenerator, surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler) {
+    pub fn populate_noise(
+        &mut self,
+        noise_sampler: &mut ChunkNoiseGenerator,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+    ) {
         let horizontal_cell_block_count = noise_sampler.horizontal_cell_block_count();
         let vertical_cell_block_count = noise_sampler.vertical_cell_block_count();
         let horizontal_cells = CHUNK_DIM / horizontal_cell_block_count;
@@ -448,8 +453,7 @@ impl ProtoChunk {
                     (start_cell_z + cell_z as i32) * horizontal_cell_block_count as i32;
 
                 for cell_y in (0..cell_height).rev() {
-                    noise_sampler
-                        .on_sampled_cell_corners(cell_x, cell_y, cell_z);
+                    noise_sampler.on_sampled_cell_corners(cell_x, cell_y, cell_z);
                     let sample_start_y =
                         (minimum_cell_y as i32 + cell_y as i32) * vertical_cell_block_count as i32;
 
@@ -527,7 +531,13 @@ impl ProtoChunk {
     /// This stage also generates larger decorative structures, such as badlands pillars and icebergs.
     ///
     /// It is crucial that biome assignments are determined before this process begins.
-    pub fn build_surface(&mut self, settings: &GenerationSettings, random_config: &GlobalRandomConfig, terrain_cache: &TerrainCache, surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler) {
+    pub fn build_surface(
+        &mut self,
+        settings: &GenerationSettings,
+        random_config: &GlobalRandomConfig,
+        terrain_cache: &TerrainCache,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+    ) {
         let start_x = chunk_pos::start_block_x(&self.chunk_pos);
         let start_z = chunk_pos::start_block_z(&self.chunk_pos);
         let min_y = self.bottom_y();
@@ -620,7 +630,11 @@ impl ProtoChunk {
 
                     if state.id == self.default_block.id {
                         context.biome = self.get_biome_for_terrain_gen(&context.block_pos);
-                        let new_state = settings.surface_rule.try_apply(self, &mut context, surface_height_estimate_sampler);
+                        let new_state = settings.surface_rule.try_apply(
+                            self,
+                            &mut context,
+                            surface_height_estimate_sampler,
+                        );
 
                         if let Some(state) = new_state {
                             self.set_block_state(&pos, state);
@@ -628,10 +642,8 @@ impl ProtoChunk {
                     }
                 }
                 if this_biome == &Biome::FROZEN_OCEAN || this_biome == &Biome::DEEP_FROZEN_OCEAN {
-                    let surface_estimate = estimate_surface_height(
-                        &mut context,
-                        surface_height_estimate_sampler,
-                    );
+                    let surface_estimate =
+                        estimate_surface_height(&mut context, surface_height_estimate_sampler);
 
                     terrain_cache.terrain_builder.place_iceberg(
                         self,
@@ -819,15 +831,17 @@ impl StagedChunk {
                     biome_coords::from_block(start_z),
                 );
                 let horizontal_biome_end = biome_coords::from_block(16);
-                let multi_noise_config = super::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
-                    biome_pos.x,
-                    biome_pos.y,
-                    horizontal_biome_end as usize,
-                );
-                let mut multi_noise_sampler = super::noise::router::multi_noise_sampler::MultiNoiseSampler::generate(
-                    &noise_router.multi_noise,
-                    &multi_noise_config,
-                );
+                let multi_noise_config =
+                    super::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
+                        biome_pos.x,
+                        biome_pos.y,
+                        horizontal_biome_end as usize,
+                    );
+                let mut multi_noise_sampler =
+                    super::noise::router::multi_noise_sampler::MultiNoiseSampler::generate(
+                        &noise_router.multi_noise,
+                        &multi_noise_config,
+                    );
 
                 chunk.populate_biomes(dimension, &mut multi_noise_sampler);
                 Ok(StagedChunk::Biomes(chunk))
@@ -836,17 +850,20 @@ impl StagedChunk {
                 // Generate noise
                 let chunk_pos = chunk.chunk_pos;
                 let generation_shape = &settings.shape;
-                let horizontal_cell_count = super::chunk_noise::CHUNK_DIM / generation_shape.horizontal_cell_block_count();
+                let horizontal_cell_count =
+                    super::chunk_noise::CHUNK_DIM / generation_shape.horizontal_cell_block_count();
                 let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
                 let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
 
-                let sampler = super::aquifer_sampler::FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
-                    super::aquifer_sampler::FluidLevel::new(
-                        settings.sea_level,
-                        settings.default_fluid.name,
+                let sampler = super::aquifer_sampler::FluidLevelSampler::Chunk(Box::new(
+                    StandardChunkFluidLevelSampler::new(
+                        super::aquifer_sampler::FluidLevel::new(
+                            settings.sea_level,
+                            settings.default_fluid.name,
+                        ),
+                        super::aquifer_sampler::FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
                     ),
-                    super::aquifer_sampler::FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
-                )));
+                ));
 
                 let mut noise_sampler = super::chunk_noise::ChunkNoiseGenerator::new(
                     &noise_router.noise,
@@ -889,7 +906,8 @@ impl StagedChunk {
                 let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
                 let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
                 let generation_shape = &settings.shape;
-                let horizontal_cell_count = super::chunk_noise::CHUNK_DIM / generation_shape.horizontal_cell_block_count();
+                let horizontal_cell_count =
+                    super::chunk_noise::CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
                 let biome_pos = Vector2::new(
                     biome_coords::from_block(start_x),
@@ -911,12 +929,16 @@ impl StagedChunk {
                     &surface_config,
                 );
 
-                chunk.build_surface(settings, random_config, terrain_cache, &mut surface_height_estimate_sampler);
+                chunk.build_surface(
+                    settings,
+                    random_config,
+                    terrain_cache,
+                    &mut surface_height_estimate_sampler,
+                );
                 Ok(StagedChunk::Surface(chunk))
             }
             StagedChunk::Surface(mut chunk) => {
                 // Generate features and structures
-                chunk.set_structure_starts(random_config);
                 chunk.generate_features_and_structure(level, block_registry, random_config);
                 Ok(StagedChunk::Features(chunk))
             }
@@ -924,9 +946,7 @@ impl StagedChunk {
                 // Mark as fully generated
                 Ok(StagedChunk::Full(chunk))
             }
-            StagedChunk::Full(_) => {
-                Err("Chunk is already fully generated")
-            }
+            StagedChunk::Full(_) => Err("Chunk is already fully generated"),
         }
     }
 
@@ -935,7 +955,7 @@ impl StagedChunk {
         match self {
             StagedChunk::Empty(_) => "Empty",
             StagedChunk::Biomes(_) => "Biomes",
-            StagedChunk::Noise(_) => "Noise", 
+            StagedChunk::Noise(_) => "Noise",
             StagedChunk::Surface(_) => "Surface",
             StagedChunk::Features(_) => "Features",
             StagedChunk::Full(_) => "Full",
@@ -972,9 +992,75 @@ impl StagedChunk {
     }
 
     /// Finalize the chunk, extracting the ProtoChunk if fully generated
-    pub fn finalize(self) -> Result<ProtoChunk, Self> {
+    pub fn finalize(
+        self,
+        generation_settings: &GenerationSettings,
+        dimension: Dimension,
+    ) -> Result<ChunkData, Self> {
         match self {
-            StagedChunk::Full(chunk) => Ok(chunk),
+            StagedChunk::Full(proto_chunk) => {
+                let height: usize = match dimension {
+                    Dimension::Overworld => 384,
+                    Dimension::Nether | Dimension::End => 256,
+                };
+                let sub_chunks = height / BlockPalette::SIZE;
+                let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
+                let mut sections =
+                    ChunkSections::new(sections, generation_settings.shape.min_y as i32);
+
+                for y in 0..biome_coords::from_block(generation_settings.shape.height) {
+                    let relative_y = y as usize;
+                    let section_index = relative_y / BiomePalette::SIZE;
+                    let relative_y = relative_y % BiomePalette::SIZE;
+                    if let Some(section) = sections.sections.get_mut(section_index) {
+                        for z in 0..BiomePalette::SIZE {
+                            for x in 0..BiomePalette::SIZE {
+                                let absolute_y = biome_coords::from_block(
+                                    generation_settings.shape.min_y as i32,
+                                ) + y as i32;
+                                let biome = proto_chunk
+                                    .get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
+                                section.biomes.set(x, relative_y, z, biome.id);
+                            }
+                        }
+                    }
+                }
+                for y in 0..generation_settings.shape.height {
+                    let relative_y = (y as i32 - sections.min_y) as usize;
+                    let section_index = relative_y / BlockPalette::SIZE;
+                    let relative_y = relative_y % BlockPalette::SIZE;
+                    if let Some(section) = sections.sections.get_mut(section_index) {
+                        for z in 0..BlockPalette::SIZE {
+                            for x in 0..BlockPalette::SIZE {
+                                let absolute_y = generation_settings.shape.min_y as i32 + y as i32;
+                                let block = proto_chunk
+                                    .get_block_state(&Vector3::new(x as i32, absolute_y, z as i32));
+                                section.block_states.set(x, relative_y, z, block.0);
+                            }
+                        }
+                    }
+                }
+                let mut chunk = ChunkData {
+                    light_engine: ChunkLight {
+                        sky_light: (0..sections.sections.len() + 2)
+                            .map(|_| LightContainer::new_filled(15))
+                            .collect(),
+                        block_light: (0..sections.sections.len() + 2)
+                            .map(|_| LightContainer::new_empty(15))
+                            .collect(),
+                    },
+                    section: sections,
+                    heightmap: Default::default(),
+                    position: proto_chunk.chunk_pos,
+                    dirty: true,
+                    block_ticks: Default::default(),
+                    fluid_ticks: Default::default(),
+                    block_entities: Default::default(),
+                };
+
+                chunk.heightmap = chunk.calculate_heightmap();
+                Ok(chunk)
+            }
             other => Err(other),
         }
     }
@@ -989,11 +1075,19 @@ impl StagedChunk {
         terrain_cache: &TerrainCache,
         noise_router: &super::noise::router::proto_noise_router::ProtoNoiseRouters,
         dimension: crate::dimension::Dimension,
-    ) -> Result<ProtoChunk, &'static str> {
+    ) -> Result<ChunkData, &'static str> {
         while !self.is_complete() {
-            self = self.advance(level, block_registry, settings, random_config, terrain_cache, noise_router, dimension)?;
+            self = self.advance(
+                level,
+                block_registry,
+                settings,
+                random_config,
+                terrain_cache,
+                noise_router,
+                dimension,
+            )?;
         }
-        self.finalize().map_err(|_| "Failed to finalize chunk")
+        self.finalize(settings, dimension).map_err(|_| "Failed to finalize chunk")
     }
 }
 
@@ -1010,11 +1104,11 @@ impl StagedChunk {
         noise_router: &super::noise::router::proto_noise_router::ProtoNoiseRouters,
         dimension: crate::dimension::Dimension,
         default_block: &'static BlockState,
-    ) -> Result<ProtoChunk, &'static str> {
+    ) -> Result<ChunkData, &'static str> {
         // Calculate biome mixer seed
         use crate::biome::hash_seed;
         let biome_mixer_seed = hash_seed(random_config.seed);
-        
+
         // Create staged chunk and advance through all stages
         let staged_chunk = StagedChunk::new(chunk_pos, settings, default_block, biome_mixer_seed);
         staged_chunk.advance_to_completion(
@@ -1036,7 +1130,7 @@ mod test {
     TODO: Update all tests to work with the new ProtoChunk API that doesn't use lifetimes.
     The new API requires passing noise samplers and other dependencies as parameters to methods
     instead of storing them in the struct.
-    
+
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
         LazyLock::new(|| GlobalRandomConfig::new(SEED, false)); // TODO: use legacy when needed
@@ -1710,4 +1804,3 @@ mod test {
             });
     */
 }
-

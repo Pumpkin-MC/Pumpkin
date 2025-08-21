@@ -75,7 +75,7 @@ pub struct Structure {
 }
 
 pub static STRUCTURES: LazyLock<HashMap<String, Structure>> =
-    LazyLock::new(|| read_data_from_file!("../../../assets/structure.json"));
+    LazyLock::new(|| read_data_from_file!("../../../../assets/structure.json"));
 
 pub static STRUCTURE_SETS: LazyLock<HashMap<String, StructureSet>> =
-    LazyLock::new(|| read_data_from_file!("../../../assets/structure_set.json"));
+    LazyLock::new(|| read_data_from_file!("../../../../assets/structure_set.json"));

@@ -7,7 +7,7 @@ use crate::{
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, generator::WorldGenerator, get_world_gen},
+    generation::{Seed, generator::WorldGenerator, get_world_gen, proto_chunk::StagedChunk},
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
@@ -67,6 +67,7 @@ pub struct Level {
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
     loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    pending_chunks: Arc<DashMap<Vector2<i32>, StagedChunk>>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
@@ -161,6 +162,7 @@ impl Level {
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
+            pending_chunks: Arc::new(DashMap::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
@@ -193,12 +195,11 @@ impl Level {
                     );
 
                     // Generate chunk
-                    let mut chunk = level_clone.world_gen.generate_chunk(
+                    let chunk = level_clone.world_gen.generate_chunk(
                         &level_clone,
                         level_clone.block_registry.as_ref(),
                         &pos,
                     );
-                    chunk.heightmap = chunk.calculate_heightmap();
                     let arc_chunk = Arc::new(RwLock::new(chunk));
 
                     // Insert into loaded chunks

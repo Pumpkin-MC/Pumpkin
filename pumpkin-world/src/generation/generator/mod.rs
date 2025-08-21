@@ -8,8 +8,7 @@ use pumpkin_data::noise_router::{
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use super::{
-    biome_coords,
-    noise::router::proto_noise_router::ProtoNoiseRouters,
+    biome_coords, noise::router::proto_noise_router::ProtoNoiseRouters,
     settings::gen_settings_from_dimension,
 };
 use crate::chunk::format::LightContainer;
@@ -37,6 +36,8 @@ pub trait WorldGenerator: Sync + Send {
         block_registry: &dyn BlockRegistryExt,
         at: &Vector2<i32>,
     ) -> ChunkData;
+
+    fn new_staged_chunk(&self, at: &Vector2<i32>) -> StagedChunk;
 }
 
 pub struct VanillaGenerator {
@@ -84,16 +85,8 @@ impl WorldGenerator for VanillaGenerator {
     ) -> ChunkData {
         let generation_settings = gen_settings_from_dimension(&self.dimension);
 
-        let height: usize = match self.dimension {
-            Dimension::Overworld => 384,
-            Dimension::Nether | Dimension::End => 256,
-        };
-        let sub_chunks = height / BlockPalette::SIZE;
-        let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
-        let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
-
         // Use StagedChunk for type-safe generation pipeline
-        let proto_chunk = StagedChunk::generate_complete_from_vanilla_generator(
+        StagedChunk::generate_complete_from_vanilla_generator(
             *at,
             level,
             block_registry,
@@ -103,56 +96,14 @@ impl WorldGenerator for VanillaGenerator {
             &self.base_router,
             self.dimension,
             self.default_block,
-        ).expect("Failed to generate chunk through staged pipeline");
+        )
+        .expect("Failed to generate chunk through staged pipeline")
+    }
 
-        for y in 0..biome_coords::from_block(generation_settings.shape.height) {
-            let relative_y = y as usize;
-            let section_index = relative_y / BiomePalette::SIZE;
-            let relative_y = relative_y % BiomePalette::SIZE;
-            if let Some(section) = sections.sections.get_mut(section_index) {
-                for z in 0..BiomePalette::SIZE {
-                    for x in 0..BiomePalette::SIZE {
-                        let absolute_y =
-                            biome_coords::from_block(generation_settings.shape.min_y as i32)
-                                + y as i32;
-                        let biome =
-                            proto_chunk.get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
-                        section.biomes.set(x, relative_y, z, biome.id);
-                    }
-                }
-            }
-        }
-        for y in 0..generation_settings.shape.height {
-            let relative_y = (y as i32 - sections.min_y) as usize;
-            let section_index = relative_y / BlockPalette::SIZE;
-            let relative_y = relative_y % BlockPalette::SIZE;
-            if let Some(section) = sections.sections.get_mut(section_index) {
-                for z in 0..BlockPalette::SIZE {
-                    for x in 0..BlockPalette::SIZE {
-                        let absolute_y = generation_settings.shape.min_y as i32 + y as i32;
-                        let block = proto_chunk
-                            .get_block_state(&Vector3::new(x as i32, absolute_y, z as i32));
-                        section.block_states.set(x, relative_y, z, block.0);
-                    }
-                }
-            }
-        }
-        ChunkData {
-            light_engine: ChunkLight {
-                sky_light: (0..sections.sections.len() + 2)
-                    .map(|_| LightContainer::new_filled(15))
-                    .collect(),
-                block_light: (0..sections.sections.len() + 2)
-                    .map(|_| LightContainer::new_empty(15))
-                    .collect(),
-            },
-            section: sections,
-            heightmap: Default::default(),
-            position: *at,
-            dirty: true,
-            block_ticks: Default::default(),
-            fluid_ticks: Default::default(),
-            block_entities: Default::default(),
-        }
+    fn new_staged_chunk(&self, at: &Vector2<i32>) -> StagedChunk {
+        let settings = gen_settings_from_dimension(&self.dimension);
+        use crate::biome::hash_seed;
+        let biome_mixer_seed = hash_seed(self.random_config.seed);
+        StagedChunk::new(*at, settings, self.default_block, biome_mixer_seed)
     }
 }
