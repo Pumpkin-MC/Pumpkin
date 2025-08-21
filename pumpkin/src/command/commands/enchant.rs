@@ -9,7 +9,6 @@ use crate::command::tree::CommandTree;
 use crate::command::tree::builder::argument_default_name;
 use crate::command::{CommandError, CommandExecutor, CommandSender};
 use pumpkin_data::data_component_impl::EnchantmentsImpl;
-use pumpkin_util::text::color::{Color, NamedColor};
 
 const NAMES: [&str; 1] = ["enchant"];
 const DESCRIPTION: &str = "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.";
@@ -48,10 +47,7 @@ impl CommandExecutor for Executor {
                     ),
                 };
 
-                sender
-                    .send_message(err_msg.color(Color::Named(NamedColor::Red)))
-                    .await;
-                return Ok(());
+                return Err(CommandError::CommandFailed(Box::new(err_msg)));
             }
         };
 
@@ -63,8 +59,7 @@ impl CommandExecutor for Executor {
                     TextComponent::text(enchantment.max_level.to_string()),
                 ],
             );
-            sender.send_message(msg).await;
-            return Ok(());
+            return Err(CommandError::CommandFailed(Box::new(msg)));
         }
 
         let only_one = targets.len() == 1;
@@ -94,8 +89,7 @@ impl CommandExecutor for Executor {
                         "commands.enchant.failed.itemless",
                         [targets[0].get_display_name().await],
                     );
-                    sender.send_message(msg).await;
-                    return Ok(());
+                    return Err(CommandError::CommandFailed(Box::new(msg)));
                 }
                 continue;
             }
@@ -105,8 +99,7 @@ impl CommandExecutor for Executor {
                         "commands.enchant.failed.incompatible",
                         [item.item.translated_name()],
                     );
-                    sender.send_message(msg).await;
-                    return Ok(());
+                    return Err(CommandError::CommandFailed(Box::new(msg)));
                 }
                 continue;
             }
@@ -119,8 +112,7 @@ impl CommandExecutor for Executor {
                         "commands.enchant.failed.incompatible",
                         [item.item.translated_name()],
                     );
-                    sender.send_message(msg).await;
-                    return Ok(());
+                    return Err(CommandError::CommandFailed(Box::new(msg)));
                 }
             } else {
                 item.enchant(enchantment, level);
@@ -129,8 +121,7 @@ impl CommandExecutor for Executor {
         }
         if success == 0 {
             let msg = TextComponent::translate("commands.enchant.failed", []);
-            sender.send_message(msg).await;
-            return Ok(());
+            return Err(CommandError::CommandFailed(Box::new(msg)));
         }
         if only_one {
             let msg = TextComponent::translate(
