@@ -4,7 +4,6 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
@@ -14,7 +13,6 @@ pub struct Ignition;
 impl Ignition {
     pub async fn ignite_block<F, Fut>(
         ignite_logic: F,
-        _item: &Item,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,

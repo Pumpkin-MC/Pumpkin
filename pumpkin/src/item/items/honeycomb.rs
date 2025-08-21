@@ -17,6 +17,7 @@ use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 pub struct HoneyCombItem;
@@ -31,7 +32,7 @@ impl ItemMetadata for HoneyCombItem {
 impl ItemBehaviour for HoneyCombItem {
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,

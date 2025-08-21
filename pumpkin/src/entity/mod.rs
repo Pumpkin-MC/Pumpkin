@@ -106,8 +106,13 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     /// Returns if damage was successful or not
-    async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-        self.damage_with_context(amount, damage_type, None, None, None)
+    async fn damage(
+        &self,
+        caller: Arc<dyn EntityBase>,
+        amount: f32,
+        damage_type: DamageType,
+    ) -> bool {
+        self.damage_with_context(caller, amount, damage_type, None, None, None)
             .await
     }
 
@@ -129,12 +134,16 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     async fn damage_with_context(
         &self,
-        amount: f32,
-        damage_type: DamageType,
-        position: Option<Vector3<f64>>,
-        source: Option<&dyn EntityBase>,
-        cause: Option<&dyn EntityBase>,
-    ) -> bool;
+        _caller: Arc<dyn EntityBase>,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        // Just do nothing
+        false
+    }
 
     /// Called when a player collides with a entity
     async fn on_player_collision(&self, _player: &Arc<Player>) {}
@@ -181,9 +190,11 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     /// Kills the Entity.
-    async fn kill(&self) {
+    async fn kill(&self, caller: Arc<dyn EntityBase>) {
         if let Some(living) = self.get_living_entity() {
-            living.damage(f32::MAX, DamageType::GENERIC_KILL).await;
+            living
+                .damage(caller, f32::MAX, DamageType::GENERIC_KILL)
+                .await;
         } else {
             // TODO this should be removed once all entities are implemented
             self.get_entity().remove().await;
@@ -1174,7 +1185,12 @@ impl Entity {
 
         if let Some(living) = caller.get_living_entity() {
             living
-                .update_fall_distance(final_move.y, self.on_ground.load(Ordering::SeqCst), false)
+                .update_fall_distance(
+                    caller.clone(),
+                    final_move.y,
+                    self.on_ground.load(Ordering::SeqCst),
+                    false,
+                )
                 .await;
         }
     }
@@ -1694,10 +1710,12 @@ impl Entity {
         vehicle.is_some()
     }
 
-    pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
+    pub async fn check_out_of_world(&self, dyn_self: Arc<dyn EntityBase>) {
         if self.pos.load().y < f64::from(self.world.generation_settings().shape.min_y) - 64.0 {
             // Tick out of world damage
-            dyn_self.damage(4.0, DamageType::OUT_OF_WORLD).await;
+            dyn_self
+                .damage(dyn_self.clone(), 4.0, DamageType::OUT_OF_WORLD)
+                .await;
         }
     }
 
@@ -1792,21 +1810,10 @@ impl NBTStorage for Entity {
 
 #[async_trait]
 impl EntityBase for Entity {
-    async fn damage_with_context(
-        &self,
-        _amount: f32,
-        _damage_type: DamageType,
-        _position: Option<Vector3<f64>>,
-        _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        false
-    }
-
     async fn tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
         self.tick_portal(&caller).await;
         self.update_fluid_state(&caller).await;
-        self.check_out_of_world(&*caller).await;
+        self.check_out_of_world(caller.clone()).await;
         let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
         if fire_ticks > 0 {
             if self.entity_type.fire_immune {
@@ -1816,7 +1823,9 @@ impl EntityBase for Entity {
                 }
             } else {
                 if fire_ticks % 20 == 0 {
-                    caller.damage(1.0, DamageType::ON_FIRE).await;
+                    caller
+                        .damage(caller.clone(), 1.0, DamageType::ON_FIRE)
+                        .await;
                 }
 
                 self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);

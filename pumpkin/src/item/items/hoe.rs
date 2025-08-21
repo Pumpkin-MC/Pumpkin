@@ -26,7 +26,7 @@ impl ItemMetadata for HoeItem {
 impl ItemBehaviour for HoeItem {
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,

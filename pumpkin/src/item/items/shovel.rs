@@ -4,11 +4,11 @@ use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
-use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
 
@@ -24,7 +24,7 @@ impl ItemMetadata for ShovelItem {
 impl ItemBehaviour for ShovelItem {
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,

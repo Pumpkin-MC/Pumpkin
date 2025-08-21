@@ -30,7 +30,7 @@ impl CommandExecutor for Executor {
 
         let target_count = targets.len();
         for target in targets {
-            target.kill().await;
+            target.kill(target.clone()).await;
         }
 
         let msg = if target_count == 1 {
@@ -62,7 +62,7 @@ impl CommandExecutor for SelfExecutor {
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
         let target = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
-        target.kill().await;
+        target.kill(target.clone()).await;
 
         sender
             .send_message(TextComponent::translate(

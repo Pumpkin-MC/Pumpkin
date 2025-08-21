@@ -73,12 +73,6 @@ pub struct SyncedRegistry {
     instrument: IndexMap<String, Instrument>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct DataPool<T> {
-    data: T,
-    weight: i32,
-}
-
 // TODO: remove in favor of numerical registry ids for `minecraft:dimension_type`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VanillaDimensionType {

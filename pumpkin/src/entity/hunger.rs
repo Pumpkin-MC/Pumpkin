@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::{EntityBase, NBTStorage, NBTStorageInit, player::Player};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
@@ -27,7 +29,7 @@ impl Default for HungerManager {
 }
 
 impl HungerManager {
-    pub async fn tick(&self, player: &Player) {
+    pub async fn tick(&self, player: &Arc<Player>) {
         let saturation = self.saturation.load();
         let level = self.level.load();
         let exhaustion = self.exhaustion.load();
@@ -68,7 +70,7 @@ impl HungerManager {
                     || (difficulty == Difficulty::Hard)
                     || (health > 1.0 && difficulty == Difficulty::Normal)
                 {
-                    player.damage(1.0, DamageType::STARVE).await;
+                    player.damage(player.clone(), 1.0, DamageType::STARVE).await;
                 }
                 self.tick_timer.store(0);
             }

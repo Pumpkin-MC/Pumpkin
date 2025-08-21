@@ -39,6 +39,8 @@ pub struct ItemComponents {
     pub consumable: Option<Consumable>,
     #[serde(rename = "minecraft:blocks_attacks")]
     pub blocks_attacks: Option<BlocksAttacks>,
+    #[serde(rename = "minecraft:death_protection")]
+    pub death_protection: Option<DeathProtection>,
 }
 
 impl ToTokens for ItemComponents {
@@ -237,6 +239,10 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (BlocksAttacks, &BlocksAttacksImpl), });
         };
 
+        if self.death_protection.is_some() {
+            tokens.extend(quote! { (DeathProtection, &DeathProtectionImpl), });
+        };
+
         if let Some(equippable) = &self.equippable {
             let slot = match equippable.slot.as_str() {
                 "mainhand" => quote! { &EquipmentSlot::MAIN_HAND },
@@ -395,6 +401,11 @@ fn _true() -> bool {
 #[derive(Deserialize, Clone, Debug)]
 pub struct Consumable {
     consume_seconds: Option<f32>, // TODO
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct DeathProtection {
+    // TODO
 }
 
 #[derive(Deserialize, Clone, Debug)]

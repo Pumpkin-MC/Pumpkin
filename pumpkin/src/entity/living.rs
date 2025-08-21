@@ -1,4 +1,7 @@
 use pumpkin_data::potion::Effect;
+use pumpkin_inventory::build_equipment_slots;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -10,7 +13,6 @@ use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
-use crate::entity::player::Hand;
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use async_trait::async_trait;
@@ -18,7 +20,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;
-use pumpkin_data::data_component_impl::{EquipmentSlot, FoodImpl};
+use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::sound::SoundCategory;
@@ -59,6 +61,7 @@ pub struct LivingEntity {
     pub active_effects: Mutex<HashMap<&'static StatusEffect, Effect>>,
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
+    pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
 
     pub movement_speed: AtomicCell<f64>,
 
@@ -112,6 +115,7 @@ impl LivingEntity {
             livings_flags: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
+            equipment_slots: Arc::new(build_equipment_slots()),
             jumping: AtomicBool::new(false),
             jumping_cooldown: AtomicU8::new(0),
             climbing: AtomicBool::new(false),
@@ -336,7 +340,7 @@ impl LivingEntity {
         let suffocating = self.entity.tick_block_collisions(&caller, server).await;
 
         if suffocating {
-            self.damage(1.0, DamageType::IN_WALL).await;
+            self.damage(caller, 1.0, DamageType::IN_WALL).await;
         }
     }
 
@@ -680,6 +684,7 @@ impl LivingEntity {
 
     pub async fn update_fall_distance(
         &self,
+        caller: Arc<dyn EntityBase>,
         height_difference: f64,
         ground: bool,
         dont_damage: bool,
@@ -700,7 +705,7 @@ impl LivingEntity {
 
             // TODO: Play block fall sound
             if damage > 0.0 {
-                let check_damage = self.damage(damage, DamageType::FALL).await; // Fall
+                let check_damage = self.damage(caller, damage, DamageType::FALL).await; // Fall
                 if check_damage {
                     self.entity
                         .play_sound(Self::get_fall_sound(fall_distance as i32))
@@ -843,6 +848,57 @@ impl LivingEntity {
         }
     }
 
+    async fn try_use_death_protector(&self, caller: &Arc<dyn EntityBase>) -> bool {
+        for hand in Hand::all() {
+            let stack = self.get_stack_in_hand(caller, hand).await;
+            let mut stack = stack.lock().await;
+            // TODO: effects...
+            if stack.get_data_component::<DeathProtectionImpl>().is_some() {
+                stack.decrement(1);
+                self.set_health(1.0).await;
+                self.entity
+                    .world
+                    .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
+                    .await;
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub async fn held_item(&self, caller: &Arc<dyn EntityBase>) -> Arc<Mutex<ItemStack>> {
+        if let Some(player) = caller.get_player() {
+            return player.inventory.held_item();
+        }
+        // TODO: this is wrong
+        let slot = self
+            .equipment_slots
+            .get(&PlayerInventory::OFF_HAND_SLOT)
+            .unwrap();
+        self.entity_equipment.lock().await.get(slot)
+    }
+
+    pub async fn get_stack_in_hand(
+        &self,
+        caller: &Arc<dyn EntityBase>,
+        hand: Hand,
+    ) -> Arc<Mutex<ItemStack>> {
+        match hand {
+            Hand::Left => self.off_hand_item().await,
+            Hand::Right => self.held_item(caller).await,
+        }
+    }
+
+    /// getOffHandStack in source
+    pub async fn off_hand_item(&self) -> Arc<Mutex<ItemStack>> {
+        let slot = self
+            .equipment_slots
+            .get(&PlayerInventory::OFF_HAND_SLOT)
+            .unwrap();
+        self.entity_equipment.lock().await.get(slot)
+    }
+
     pub fn is_part_of_game(&self) -> bool {
         self.is_spectator() && self.entity.is_alive()
     }
@@ -914,6 +970,7 @@ impl NBTStorage for LivingEntity {
 impl EntityBase for LivingEntity {
     async fn damage_with_context(
         &self,
+        caller: Arc<dyn EntityBase>,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -996,7 +1053,7 @@ impl EntityBase for LivingEntity {
             self.set_health(new_health).await;
         }
 
-        if new_health <= 0.0 {
+        if new_health <= 0.0 && !self.try_use_death_protector(&caller).await {
             self.on_death(damage_type, source, cause).await;
         }
 

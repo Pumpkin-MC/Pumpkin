@@ -113,6 +113,7 @@ where
 
     async fn damage_with_context(
         &self,
+        caller: Arc<dyn EntityBase>,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -121,7 +122,7 @@ where
     ) -> bool {
         self.get_mob_entity()
             .living_entity
-            .damage_with_context(amount, damage_type, position, source, cause)
+            .damage_with_context(caller, amount, damage_type, position, source, cause)
             .await
     }
 

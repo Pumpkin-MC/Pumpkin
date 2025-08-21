@@ -53,7 +53,6 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_registry::VanillaDimensionType;
-use pumpkin_util::GameMode;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -62,6 +61,7 @@ use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::entity::entity_data_flags::{
@@ -308,7 +308,10 @@ impl Player {
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
         ));
 
-        let inventory = Arc::new(PlayerInventory::new(living_entity.entity_equipment.clone()));
+        let inventory = Arc::new(PlayerInventory::new(
+            living_entity.entity_equipment.clone(),
+            living_entity.equipment_slots.clone(),
+        ));
 
         let player_screen_handler = Arc::new(Mutex::new(
             PlayerScreenHandler::new(&inventory, None, 0).await,
@@ -492,6 +495,7 @@ impl Player {
 
         if !victim
             .damage_with_context(
+                victim.clone(),
                 damage as f32,
                 DamageType::PLAYER_ATTACK,
                 None,
@@ -829,7 +833,7 @@ impl Player {
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
         self.living_entity.tick(self.clone(), server).await;
-        self.hunger_manager.tick(self.as_ref()).await;
+        self.hunger_manager.tick(self).await;
 
         // experience handling
         self.tick_experience().await;
@@ -2052,6 +2056,7 @@ impl NBTStorageInit for PlayerInventory {}
 impl EntityBase for Player {
     async fn damage_with_context(
         &self,
+        caller: Arc<dyn EntityBase>,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -2070,7 +2075,7 @@ impl EntityBase for Player {
             .expect("Entity not found in world");
         let result = self
             .living_entity
-            .damage_with_context(amount, damage_type, position, source, cause)
+            .damage_with_context(caller, amount, damage_type, position, source, cause)
             .await;
         if result {
             let health = self.living_entity.health.load();
@@ -2254,29 +2259,6 @@ impl Abilities {
                 self.creative = false;
                 self.invulnerable = false;
             }
-        }
-    }
-}
-
-/// Represents the player's dominant hand.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Hand {
-    /// Usually the player's off-hand.
-    Left,
-    /// Usually the player's primary hand.
-    Right,
-}
-
-pub struct InvalidHand;
-
-impl TryFrom<i32> for Hand {
-    type Error = InvalidHand;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::Left),
-            1 => Ok(Self::Right),
-            _ => Err(InvalidHand),
         }
     }
 }

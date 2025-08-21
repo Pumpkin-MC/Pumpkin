@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use pumpkin_data::block_properties::{
     BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
 };
-use pumpkin_data::damage::DamageType;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
@@ -68,8 +67,9 @@ impl BlockBehaviour for CactusBlock {
         }
     }
 
-    async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        args.entity.damage(1.0, DamageType::CACTUS).await;
+    async fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {
+        // TODO
+        //args.entity.damage(1.0, DamageType::CACTUS).await;
     }
 
     async fn get_state_for_neighbor_update(

@@ -11,6 +11,7 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::item::ItemStack;
 
 pub trait ItemMetadata {
     fn ids() -> Box<[u16]>;
@@ -22,7 +23,7 @@ pub trait ItemBehaviour: Send + Sync {
 
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         _player: &Player,
         _location: BlockPos,
         _face: BlockDirection,

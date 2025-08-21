@@ -140,3 +140,32 @@ macro_rules! assert_eq_delta {
         }
     };
 }
+
+/// Represents the player's dominant hand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hand {
+    /// Usually the player's off-hand.
+    Left,
+    /// Usually the player's primary hand.
+    Right,
+}
+
+impl Hand {
+    pub fn all() -> [Self; 2] {
+        [Self::Right, Self::Left]
+    }
+}
+
+pub struct InvalidHand;
+
+impl TryFrom<i32> for Hand {
+    type Error = InvalidHand;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Left),
+            1 => Ok(Self::Right),
+            _ => Err(InvalidHand),
+        }
+    }
+}

@@ -4,6 +4,7 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::item::ItemStack;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -32,17 +33,17 @@ impl ItemRegistry {
 
     pub async fn use_on_block(
         &self,
-        item: &Item,
+        stack: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
         block: &Block,
         server: &Server,
     ) {
-        let pumpkin_item = self.get_pumpkin_item(item);
+        let pumpkin_item = self.get_pumpkin_item(stack.item);
         if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item
-                .use_on_block(item, player, location, face, block, server)
+                .use_on_block(stack, player, location, face, block, server)
                 .await;
         }
     }

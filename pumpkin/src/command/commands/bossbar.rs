@@ -77,7 +77,7 @@ impl CommandExecutor for AddExecuter {
                 sender,
                 TextComponent::translate(
                     "commands.bossbar.create.failed",
-                    [TextComponent::text(namespace.to_string())],
+                    [TextComponent::text(namespace.clone())],
                 ),
             )
             .await;
@@ -89,12 +89,12 @@ impl CommandExecutor for AddExecuter {
             .bossbars
             .lock()
             .await
-            .create_bossbar(namespace.to_string(), bossbar.clone());
+            .create_bossbar(namespace.clone(), bossbar.clone());
 
         sender
             .send_message(TextComponent::translate(
                 "commands.bossbar.create.success",
-                [bossbar_prefix(bossbar.title.clone(), namespace.to_string())],
+                [bossbar_prefix(bossbar.title.clone(), namespace.clone())],
             ))
             .await;
 
@@ -119,7 +119,7 @@ impl CommandExecutor for GetExecuter {
         let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
             handle_bossbar_error(
                 sender,
-                BossbarUpdateError::InvalidResourceLocation(namespace.to_string()),
+                BossbarUpdateError::InvalidResourceLocation(namespace.clone()),
             )
             .await;
             return Ok(());
@@ -131,10 +131,7 @@ impl CommandExecutor for GetExecuter {
                     .send_message(TextComponent::translate(
                         "commands.bossbar.get.max",
                         [
-                            bossbar_prefix(
-                                bossbar.bossbar_data.title.clone(),
-                                namespace.to_string(),
-                            ),
+                            bossbar_prefix(bossbar.bossbar_data.title.clone(), namespace.clone()),
                             TextComponent::text(bossbar.max.to_string()),
                         ],
                     ))
@@ -147,10 +144,7 @@ impl CommandExecutor for GetExecuter {
                     .send_message(TextComponent::translate(
                         "commands.bossbar.get.value",
                         [
-                            bossbar_prefix(
-                                bossbar.bossbar_data.title.clone(),
-                                namespace.to_string(),
-                            ),
+                            bossbar_prefix(bossbar.bossbar_data.title.clone(), namespace.clone()),
                             TextComponent::text(bossbar.value.to_string()),
                         ],
                     ))
@@ -168,7 +162,7 @@ impl CommandExecutor for GetExecuter {
                         state,
                         [bossbar_prefix(
                             bossbar.bossbar_data.title.clone(),
-                            namespace.to_string(),
+                            namespace.clone(),
                         )],
                     ))
                     .await;
@@ -215,13 +209,13 @@ impl CommandExecutor for ListExecuter {
             if i == 0 {
                 bossbars_text = bossbars_text.add_child(bossbar_prefix(
                     bossbar.bossbar_data.title.clone(),
-                    bossbar.namespace.to_string(),
+                    bossbar.namespace.clone(),
                 ));
             } else {
                 bossbars_text =
                     bossbars_text.add_child(TextComponent::text(", ").add_child(bossbar_prefix(
                         bossbar.bossbar_data.title.clone(),
-                        bossbar.namespace.to_string(),
+                        bossbar.namespace.clone(),
                     )));
             }
         }
@@ -267,7 +261,7 @@ impl CommandExecutor for RemoveExecuter {
                 "commands.bossbar.remove.success",
                 [bossbar_prefix(
                     bossbar.bossbar_data.title.clone(),
-                    namespace.to_string(),
+                    namespace.clone(),
                 )],
             ))
             .await;
@@ -276,7 +270,7 @@ impl CommandExecutor for RemoveExecuter {
             .bossbars
             .lock()
             .await
-            .remove_bossbar(server, namespace.to_string())
+            .remove_bossbar(server, namespace.clone())
             .await
         {
             Ok(()) => {}
@@ -470,7 +464,7 @@ impl CommandExecutor for SetExecuter {
                                 namespace.to_string(),
                             ),
                             TextComponent::text(count.to_string()),
-                            TextComponent::text(player_names.join(", ").to_string()),
+                            TextComponent::text(player_names.join(", ").clone()),
                         ],
                     ))
                     .await;

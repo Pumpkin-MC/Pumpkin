@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{BlockProperties, CampfireLikeProperties},
-    damage::DamageType,
     fluid::Fluid,
 };
 use pumpkin_world::{BlockStateId, tick::TickPriority};
@@ -37,7 +36,8 @@ impl BlockBehaviour for CampfireBlock {
         if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit
             && args.entity.get_living_entity().is_some()
         {
-            args.entity.damage(1.0, DamageType::CAMPFIRE).await;
+            // TODO
+            //args.entity.damage(args.entity, 1.0, DamageType::CAMPFIRE).await;
         }
     }
 

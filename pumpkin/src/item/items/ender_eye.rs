@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::{server::Server, world::portal::end::EndPortal};
 use pumpkin_data::{Block, BlockDirection, item::Item};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -21,7 +22,7 @@ impl ItemMetadata for EnderEyeItem {
 impl ItemBehaviour for EnderEyeItem {
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,

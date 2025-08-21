@@ -18,7 +18,6 @@
 #![deny(clippy::needless_pass_by_ref_mut)]
 #![deny(clippy::needless_collect)]
 #![deny(clippy::redundant_clone)]
-#![deny(clippy::branches_sharing_code)]
 #![deny(clippy::set_contains_or_insert)]
 #![deny(clippy::significant_drop_in_scrutinee)]
 // use log crate

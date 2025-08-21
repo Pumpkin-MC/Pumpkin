@@ -9,13 +9,13 @@ use crate::{
         banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST,
         op_data::OPERATOR_CONFIG, whitelist_data::WHITELIST_CONFIG,
     },
-    entity::player::{ChatMode, Hand},
+    entity::player::ChatMode,
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
 };
 
 use pumpkin_protocol::{ClientPacket, Property};
-use pumpkin_util::{ProfileAction, text::TextComponent};
+use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;

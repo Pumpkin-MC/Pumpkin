@@ -571,6 +571,9 @@ pub struct GliderImpl;
 pub struct TooltipStyleImpl;
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct DeathProtectionImpl;
+impl DataComponentImpl for DeathProtectionImpl {
+    default_impl!(DeathProtection);
+}
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct BlocksAttacksImpl;
 
