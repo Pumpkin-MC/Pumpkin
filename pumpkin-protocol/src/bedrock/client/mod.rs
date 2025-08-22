@@ -19,3 +19,4 @@ pub mod set_player_gamemode;
 pub mod set_time;
 pub mod start_game;
 pub mod update_artributes;
+pub mod update_abilities;
