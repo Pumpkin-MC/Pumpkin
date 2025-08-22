@@ -5,7 +5,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_SET_BORDER_SIZE)]
 pub struct CSetBorderSize {
-    diameter: f64,
+    pub diameter: f64,
 }
 
 impl CSetBorderSize {

@@ -6,7 +6,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(CONFIG_SERVER_LINKS)]
 pub struct CConfigServerLinks<'a> {
-    links: &'a [Link<'a>],
+    pub links: &'a [Link<'a>],
 }
 
 impl<'a> CConfigServerLinks<'a> {

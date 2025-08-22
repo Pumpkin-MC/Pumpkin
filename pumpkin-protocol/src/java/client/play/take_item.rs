@@ -7,11 +7,11 @@ use serde::Serialize;
 #[packet(PLAY_TAKE_ITEM_ENTITY)]
 pub struct CTakeItemEntity {
     /// The entity id of the item entity.
-    entity_id: VarInt,
+    pub entity_id: VarInt,
     /// The entity id of the entity who is collecting the item.
-    collector_entity_id: VarInt,
+    pub collector_entity_id: VarInt,
     /// The Number of items in the Stack
-    stack_amount: VarInt,
+    pub stack_amount: VarInt,
 }
 
 impl CTakeItemEntity {

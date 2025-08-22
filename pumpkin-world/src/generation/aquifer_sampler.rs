@@ -688,7 +688,7 @@ mod test {
     });
 
     fn create_aquifer(
-        base_router: &ProtoNoiseRouters,
+        base_router: &'_ ProtoNoiseRouters,
     ) -> (
         WorldAquiferSampler,
         ChunkNoiseRouter<'_>,

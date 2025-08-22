@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "赋予每个人托管快速高效的 \nMinecraft 服务器的能力。\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %1$s, 协议 %2$s)\n",
+    "commands.pumpkin.github": "[GitHub 仓库]",
+    "commands.pumpkin.website": "[网页]",
+    "commands.pumpkin.version.hover": "点击以复制版本。",
+    "commands.pumpkin.description.hover": "点击以复制描述。",
+    "commands.pumpkin.minecraft_version.hover": "点击以复制 Minecraft 的版本。",
+    "commands.pumpkin.github.hover": "点击以打开仓库。",
+    "commands.pumpkin.website.hover": "点击以打开网页。"
+}

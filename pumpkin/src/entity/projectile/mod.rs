@@ -5,7 +5,6 @@ use std::{
 
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use async_trait::async_trait;
-use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;
 
 pub struct ThrownItemEntity {
@@ -85,22 +84,15 @@ impl EntityBase for ThrownItemEntity {
         &self.entity
     }
 
-    async fn damage_with_context(
-        &self,
-        _amount: f32,
-        _damage_type: DamageType,
-        _position: Option<Vector3<f64>>,
-        _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        false
-    }
-
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    fn get_gravity(&self) -> f64 {
+        0.03
     }
 }

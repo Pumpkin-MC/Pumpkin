@@ -54,6 +54,15 @@ macro_rules! read_data_from_file {
     }};
 }
 
+/// Includes a JSON file on build time. Use this for static files.
+#[macro_export]
+macro_rules! include_json_static {
+    ($path:expr, $ty:ty) => {{
+        serde_json::from_str::<$ty>(include_str!($path))
+            .expect(concat!("Could not parse JSON file: ", $path))
+    }};
+}
+
 /// The minimum number of bits required to represent this number
 #[inline]
 pub fn encompassing_bits(count: usize) -> u8 {
@@ -139,4 +148,33 @@ macro_rules! assert_eq_delta {
             panic!("{} vs {} ({} vs {})", $x, $y, ($x - $y).abs(), $d);
         }
     };
+}
+
+/// Represents the player's dominant hand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hand {
+    /// Usually the player's off-hand.
+    Left,
+    /// Usually the player's primary hand.
+    Right,
+}
+
+impl Hand {
+    pub fn all() -> [Self; 2] {
+        [Self::Right, Self::Left]
+    }
+}
+
+pub struct InvalidHand;
+
+impl TryFrom<i32> for Hand {
+    type Error = InvalidHand;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Left),
+            1 => Ok(Self::Right),
+            _ => Err(InvalidHand),
+        }
+    }
 }

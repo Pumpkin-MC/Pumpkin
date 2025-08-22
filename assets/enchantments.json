@@ -31,7 +31,8 @@
           "operation": "add_multiplied_total"
         }
       ]
-    }
+    },
+    "id": 0
   },
   "minecraft:bane_of_arthropods": {
     "description": {
@@ -110,7 +111,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 1
   },
   "minecraft:binding_curse": {
     "description": {
@@ -133,7 +135,8 @@
     "max_level": 1,
     "effects": {
       "minecraft:prevent_armor_change": {}
-    }
+    },
+    "id": 2
   },
   "minecraft:blast_protection": {
     "description": {
@@ -195,7 +198,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 3
   },
   "minecraft:breach": {
     "description": {
@@ -230,7 +234,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 4
   },
   "minecraft:channeling": {
     "description": {
@@ -343,7 +348,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 5
   },
   "minecraft:density": {
     "description": {
@@ -378,7 +384,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 6
   },
   "minecraft:depth_strider": {
     "description": {
@@ -413,7 +420,8 @@
           "operation": "add_value"
         }
       ]
-    }
+    },
+    "id": 7
   },
   "minecraft:efficiency": {
     "description": {
@@ -446,7 +454,8 @@
           "operation": "add_value"
         }
       ]
-    }
+    },
+    "id": 8
   },
   "minecraft:feather_falling": {
     "description": {
@@ -495,7 +504,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 9
   },
   "minecraft:fire_aspect": {
     "description": {
@@ -538,7 +548,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 10
   },
   "minecraft:fire_protection": {
     "description": {
@@ -605,7 +616,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 11
   },
   "minecraft:flame": {
     "description": {
@@ -635,7 +647,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 12
   },
   "minecraft:fortune": {
     "description": {
@@ -656,7 +669,8 @@
     "supported_items": "#minecraft:enchantable/mining_loot",
     "weight": 2,
     "max_level": 3,
-    "exclusive_set": "#minecraft:exclusive_set/mining"
+    "exclusive_set": "#minecraft:exclusive_set/mining",
+    "id": 13
   },
   "minecraft:frost_walker": {
     "description": {
@@ -781,7 +795,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 14
   },
   "minecraft:impaling": {
     "description": {
@@ -823,7 +838,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 15
   },
   "minecraft:infinity": {
     "description": {
@@ -860,7 +876,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 16
   },
   "minecraft:knockback": {
     "description": {
@@ -894,7 +911,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 17
   },
   "minecraft:looting": {
     "description": {
@@ -936,7 +954,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 18
   },
   "minecraft:loyalty": {
     "description": {
@@ -970,7 +989,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 19
   },
   "minecraft:luck_of_the_sea": {
     "description": {
@@ -1004,7 +1024,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 20
   },
   "minecraft:lure": {
     "description": {
@@ -1038,7 +1059,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 21
   },
   "minecraft:mending": {
     "description": {
@@ -1068,7 +1090,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 22
   },
   "minecraft:multishot": {
     "description": {
@@ -1115,7 +1138,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 23
   },
   "minecraft:piercing": {
     "description": {
@@ -1150,7 +1174,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 24
   },
   "minecraft:power": {
     "description": {
@@ -1191,7 +1216,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 25
   },
   "minecraft:projectile_protection": {
     "description": {
@@ -1241,7 +1267,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 26
   },
   "minecraft:protection": {
     "description": {
@@ -1287,7 +1314,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 27
   },
   "minecraft:punch": {
     "description": {
@@ -1328,7 +1356,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 28
   },
   "minecraft:quick_charge": {
     "description": {
@@ -1373,7 +1402,8 @@
           "end": "minecraft:item.crossbow.loading_end"
         }
       ]
-    }
+    },
+    "id": 29
   },
   "minecraft:respiration": {
     "description": {
@@ -1407,7 +1437,8 @@
           "operation": "add_value"
         }
       ]
-    }
+    },
+    "id": 30
   },
   "minecraft:riptide": {
     "description": {
@@ -1443,7 +1474,8 @@
         },
         "type": "minecraft:add"
       }
-    }
+    },
+    "id": 31
   },
   "minecraft:sharpness": {
     "description": {
@@ -1479,7 +1511,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 32
   },
   "minecraft:silk_touch": {
     "description": {
@@ -1510,7 +1543,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 33
   },
   "minecraft:smite": {
     "description": {
@@ -1553,7 +1587,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 34
   },
   "minecraft:soul_speed": {
     "description": {
@@ -1807,7 +1842,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 35
   },
   "minecraft:sweeping_edge": {
     "description": {
@@ -1849,7 +1885,8 @@
           "operation": "add_value"
         }
       ]
-    }
+    },
+    "id": 36
   },
   "minecraft:swift_sneak": {
     "description": {
@@ -1883,7 +1920,8 @@
           "operation": "add_value"
         }
       ]
-    }
+    },
+    "id": 37
   },
   "minecraft:thorns": {
     "description": {
@@ -1938,7 +1976,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 38
   },
   "minecraft:unbreaking": {
     "description": {
@@ -2013,7 +2052,8 @@
           }
         }
       ]
-    }
+    },
+    "id": 39
   },
   "minecraft:vanishing_curse": {
     "description": {
@@ -2036,7 +2076,8 @@
     "max_level": 1,
     "effects": {
       "minecraft:prevent_equipment_drop": {}
-    }
+    },
+    "id": 40
   },
   "minecraft:wind_burst": {
     "description": {
@@ -2104,6 +2145,7 @@
           }
         }
       ]
-    }
+    },
+    "id": 41
   }
 }

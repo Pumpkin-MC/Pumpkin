@@ -7,6 +7,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 use crate::entity::player::Player;
@@ -27,7 +28,7 @@ impl ItemMetadata for FireChargeItem {
 impl ItemBehaviour for FireChargeItem {
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
@@ -44,7 +45,6 @@ impl ItemBehaviour for FireChargeItem {
                     .play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos)
                     .await;
             },
-            _item,
             player,
             location,
             face,

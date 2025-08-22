@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -12,6 +13,9 @@ use pumpkin_util::{
 };
 
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
+use crate::generation::structure::placement::StructurePlacementCalculator;
+use crate::generation::structure::structures::StructurePosition;
+use crate::generation::structure::{STRUCTURE_SETS, STRUCTURES, Structure, StructureType};
 use crate::{
     BlockStateId,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier, hash_seed},
@@ -122,6 +126,7 @@ pub struct ProtoChunk<'a> {
     pub flat_motion_blocking_height_map: Box<[i16]>,
     pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
     // may want to use chunk status
+    structure_starts: HashMap<Structure, (StructurePosition, StructureType)>,
 }
 
 pub struct TerrainCache {
@@ -232,6 +237,7 @@ impl<'a> ProtoChunk<'a> {
             flat_ocean_floor_height_map: default_heightmap.clone(),
             flat_motion_blocking_height_map: default_heightmap.clone(),
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
+            structure_starts: HashMap::new(),
         }
     }
 
@@ -707,7 +713,7 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
-    /// This generates "Features," also known as decorations, which include things like trees, grass, ores, and more.
+    /// This generates "Structure Pieces" and "Features" also known as decorations, which include things like trees, grass, ores, and more.
     /// Essentially, it encompasses everything above the surface or underground. It's crucial that this step is executed after biomes are generated,
     /// as the decoration directly depends on the biome. Similarly, running this after the surface is built is logical, as it often involves checking block types.
     /// For example, flowers are typically placed only on grass blocks.
@@ -716,7 +722,11 @@ impl<'a> ProtoChunk<'a> {
     ///
     /// 1. First, we determine **whether** to generate a feature and **at which block positions** to place it.
     /// 2. Then, using the second file, we determine **how** to generate the feature.
-    pub fn generate_features(&mut self, level: &Arc<Level>, block_registry: &dyn BlockRegistryExt) {
+    pub fn generate_features_and_structure(
+        &mut self,
+        level: &Arc<Level>,
+        block_registry: &dyn BlockRegistryExt,
+    ) {
         let chunk_pos = self.chunk_pos;
         let min_y = self.noise_sampler.min_y();
         let height = self.noise_sampler.height();
@@ -730,6 +740,11 @@ impl<'a> ProtoChunk<'a> {
 
         let population_seed =
             Xoroshiro::get_population_seed(self.random_config.seed, block_pos.0.x, block_pos.0.z);
+
+        for (_structure, (pos, stype)) in self.structure_starts.clone() {
+            dbg!("generating structure");
+            stype.generate(pos.clone(), self);
+        }
 
         // TODO: This needs to be different depending on what biomes are in the chunk -> affects the
         // random
@@ -747,6 +762,36 @@ impl<'a> ProtoChunk<'a> {
                 &mut random,
                 block_pos,
             );
+        }
+    }
+
+    pub fn set_structure_starts(&mut self) {
+        for (name, set) in STRUCTURE_SETS.iter() {
+            let calculator = StructurePlacementCalculator {
+                seed: self.random_config.seed as i64,
+            };
+            // for structure in &set.structures {
+            //     let start = self.structure_starts.get(STRUCTURES.get(name).unwrap());
+            // }
+            if !set.placement.should_generate(calculator, self.chunk_pos) {
+                continue; // ??
+            }
+
+            if set.structures.len() == 1 {
+                let position = set.structures[0]
+                    .structure
+                    .get_structure_position(name, self);
+                if let Some(position) = position
+                    && !position.generator.pieces_positions.is_empty()
+                {
+                    self.structure_starts.insert(
+                        STRUCTURES.get(name).unwrap().clone(),
+                        (position, set.structures[0].structure.clone()),
+                    );
+                }
+                return;
+            }
+            // TODO: handle multiple structures
         }
     }
 

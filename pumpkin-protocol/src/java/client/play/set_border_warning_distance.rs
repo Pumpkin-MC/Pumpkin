@@ -7,7 +7,7 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_SET_BORDER_WARNING_DISTANCE)]
 pub struct CSetBorderWarningDistance {
-    warning_blocks: VarInt,
+    pub warning_blocks: VarInt,
 }
 
 impl CSetBorderWarningDistance {

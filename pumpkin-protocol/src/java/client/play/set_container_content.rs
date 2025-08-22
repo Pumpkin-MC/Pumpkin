@@ -8,10 +8,10 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_CONTAINER_SET_CONTENT)]
 pub struct CSetContainerContent<'a> {
-    window_id: VarInt,
-    state_id: VarInt,
-    slot_data: &'a [ItemStackSerializer<'a>],
-    carried_item: &'a ItemStackSerializer<'a>,
+    pub window_id: VarInt,
+    pub state_id: VarInt,
+    pub slot_data: &'a [ItemStackSerializer<'a>],
+    pub carried_item: &'a ItemStackSerializer<'a>,
 }
 
 impl<'a> CSetContainerContent<'a> {

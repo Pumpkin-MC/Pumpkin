@@ -54,7 +54,7 @@ rsa = { version = "=0.10.0-rc.4", features = ["sha1"] }
 rsa-der = "0.3"
 
 # authentication
-ureq = { version = "3.0.12", features = [
+ureq = { version = "3.1.0", features = [
     "json",
 ] }
 

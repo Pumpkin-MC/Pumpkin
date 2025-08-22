@@ -8,10 +8,10 @@ use crate::{VarInt, ser::network_serialize_no_prefix};
 #[derive(Serialize)]
 #[packet(PLAY_BLOCK_ENTITY_DATA)]
 pub struct CBlockEntityData {
-    location: BlockPos,
-    r#type: VarInt,
+    pub location: BlockPos,
+    pub r#type: VarInt,
     #[serde(serialize_with = "network_serialize_no_prefix")]
-    nbt_data: Box<[u8]>,
+    pub nbt_data: Box<[u8]>,
 }
 
 impl CBlockEntityData {

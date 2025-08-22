@@ -22,7 +22,7 @@ pub mod world_info;
 pub type BlockId = u16;
 pub type BlockStateId = u16;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.7";
+pub const CURRENT_MC_VERSION: &str = "1.21.8";
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.100";
 
 #[macro_export]

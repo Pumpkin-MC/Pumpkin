@@ -7,9 +7,9 @@ use crate::codec::var_long::VarLong;
 #[derive(Serialize)]
 #[packet(PLAY_SET_BORDER_LERP_SIZE)]
 pub struct CSetBorderLerpSize {
-    old_diameter: f64,
-    new_diameter: f64,
-    speed: VarLong,
+    pub old_diameter: f64,
+    pub new_diameter: f64,
+    pub speed: VarLong,
 }
 
 impl CSetBorderLerpSize {

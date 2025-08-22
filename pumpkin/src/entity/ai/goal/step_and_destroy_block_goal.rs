@@ -93,7 +93,7 @@ pub trait Stepping: Send + Sync {
 #[async_trait]
 impl Goal for StepAndDestroyBlockGoal {
     async fn can_start(&self, mob: &dyn Mob) -> bool {
-        let world = mob.get_entity().world.read().await;
+        let world = &mob.get_entity().world;
         let level_info = world.level_info.read().await;
         if !level_info.game_rules.mob_griefing {
             false
@@ -129,7 +129,7 @@ impl Goal for StepAndDestroyBlockGoal {
     async fn tick(&self, mob: &dyn Mob) {
         self.move_to_target_pos_goal.tick(mob).await;
         let mob_entity = mob.get_mob_entity();
-        let world = mob.get_entity().world.read().await;
+        let world = &mob.get_entity().world;
         let block_pos = mob.get_entity().block_pos.load();
         let tweak_pos = self.tweak_to_proper_pos(block_pos, world.clone()).await;
         // TODO: drop world?

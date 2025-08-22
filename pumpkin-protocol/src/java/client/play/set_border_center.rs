@@ -5,8 +5,8 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_SET_BORDER_CENTER)]
 pub struct CSetBorderCenter {
-    x: f64,
-    z: f64,
+    pub x: f64,
+    pub z: f64,
 }
 
 impl CSetBorderCenter {

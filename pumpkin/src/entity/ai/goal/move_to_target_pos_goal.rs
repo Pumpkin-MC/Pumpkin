@@ -82,7 +82,7 @@ impl MoveToTargetPosGoal {
                         block_pos_mutable.0.z = block_pos.0.z + n;
                         // Make sure the world lock is dropped
                         {
-                            let world = mob.get_entity().world.read().await;
+                            let world = &mob.get_entity().world;
                             let can_target = if let Some(x) = self.move_to_target_pos.upgrade() {
                                 x.is_target_pos(world.clone(), block_pos_mutable).await
                             } else {
@@ -144,7 +144,7 @@ impl Goal for MoveToTargetPosGoal {
     }
 
     async fn should_continue(&self, mob: &dyn Mob) -> bool {
-        let world = mob.get_entity().world.read().await;
+        let world = &mob.get_entity().world;
         let can_target = if let Some(x) = self.move_to_target_pos.upgrade() {
             x.is_target_pos(world.clone(), self.target_pos.load()).await
         } else {

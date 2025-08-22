@@ -8,10 +8,10 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_CONTAINER_SET_SLOT)]
 pub struct CSetContainerSlot<'a> {
-    window_id: i8,
-    state_id: VarInt,
-    slot: i16,
-    slot_data: &'a ItemStackSerializer<'a>,
+    pub window_id: i8,
+    pub state_id: VarInt,
+    pub slot: i16,
+    pub slot_data: &'a ItemStackSerializer<'a>,
 }
 
 impl<'a> CSetContainerSlot<'a> {

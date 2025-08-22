@@ -154,9 +154,7 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                     let item_display = snbt_colorful_display(item, depth + 1)
                         .map_err(|string| format!("Error displaying item.{key}: {string}"))?;
                     content = content
-                        .add_child(
-                            TextComponent::text(key.to_string()).color_named(NamedColor::Aqua),
-                        )
+                        .add_child(TextComponent::text(key.clone()).color_named(NamedColor::Aqua))
                         .add_child(TextComponent::text(": "))
                         .add_child(item_display);
 
@@ -176,7 +174,7 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
         NbtTag::IntArray(value) => {
             let int_array_format = TextComponent::text("I").color_named(NamedColor::Red);
             let mut content = TextComponent::text("[")
-                .add_child(int_array_format.clone())
+                .add_child(int_array_format)
                 .add_child(TextComponent::text("; "));
 
             for (index, int) in value.iter().take(128).enumerate() {

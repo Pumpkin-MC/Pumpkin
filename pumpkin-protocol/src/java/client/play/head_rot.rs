@@ -7,8 +7,8 @@ use crate::VarInt;
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_ROTATE_HEAD)]
 pub struct CHeadRot {
-    entity_id: VarInt,
-    head_yaw: u8,
+    pub entity_id: VarInt,
+    pub head_yaw: u8,
 }
 
 impl CHeadRot {

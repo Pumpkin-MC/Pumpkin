@@ -73,7 +73,7 @@ impl ActiveTargetGoal {
 
     async fn find_closest_target(&self, mob: &MobEntity) {
         let mut target = self.target.lock().await;
-        let world = mob.living_entity.entity.world.read().await;
+        let world = &mob.living_entity.entity.world;
         if self.target_type == &EntityType::PLAYER {
             *target = world
                 .get_closest_player(

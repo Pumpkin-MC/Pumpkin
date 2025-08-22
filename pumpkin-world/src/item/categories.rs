@@ -1,54 +1,42 @@
+use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 
 use crate::item::ItemStack;
 
-const SWORDS_TAG: &str = "#minecraft:swords";
-const HEAD_ARMOR_TAG: &str = "#minecraft:head_armor";
-const SKULL_TAG: &str = "#minecraft:skulls";
-const CHEST_ARMOR_TAG: &str = "#minecraft:chest_armor";
-const LEG_ARMOR_TAG: &str = "#minecraft:leg_armor";
-const FOOT_ARMOR_TAG: &str = "#minecraft:foot_armor";
-
 impl ItemStack {
     #[inline]
     pub fn is_sword(&self) -> bool {
-        self.item.is_tagged_with(SWORDS_TAG).expect(
-            "This is a default minecraft tag that should have been gotten from the extractor",
-        )
+        self.item
+            .is_tagged_with_by_tag(&tag::Item::MINECRAFT_SWORDS)
     }
 
     #[inline]
     pub fn is_helmet(&self) -> bool {
-        self.item.is_tagged_with(HEAD_ARMOR_TAG).expect(
-            "This is a default minecraft tag that should have been gotten from the extractor",
-        )
+        self.item
+            .is_tagged_with_by_tag(&tag::Item::MINECRAFT_HEAD_ARMOR)
     }
 
     #[inline]
     pub fn is_skull(&self) -> bool {
-        self.item.is_tagged_with(SKULL_TAG).expect(
-            "This is a default minecraft tag that should have been gotten from the extractor",
-        )
+        self.item
+            .is_tagged_with_by_tag(&tag::Item::MINECRAFT_SKULLS)
     }
 
     #[inline]
     pub fn is_chestplate(&self) -> bool {
-        self.item.is_tagged_with(CHEST_ARMOR_TAG).expect(
-            "This is a default minecraft tag that should have been gotten from the extractor",
-        )
+        self.item
+            .is_tagged_with_by_tag(&tag::Item::MINECRAFT_CHEST_ARMOR)
     }
 
     #[inline]
     pub fn is_leggings(&self) -> bool {
-        self.item.is_tagged_with(LEG_ARMOR_TAG).expect(
-            "This is a default minecraft tag that should have been gotten from the extractor",
-        )
+        self.item
+            .is_tagged_with_by_tag(&tag::Item::MINECRAFT_LEG_ARMOR)
     }
 
     #[inline]
     pub fn is_boots(&self) -> bool {
-        self.item.is_tagged_with(FOOT_ARMOR_TAG).expect(
-            "This is a default minecraft tag that should have been gotten from the extractor",
-        )
+        self.item
+            .is_tagged_with_by_tag(&tag::Item::MINECRAFT_FOOT_ARMOR)
     }
 }

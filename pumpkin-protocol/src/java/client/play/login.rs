@@ -9,28 +9,28 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_LOGIN)]
 pub struct CLogin<'a> {
-    entity_id: i32,
-    is_hardcore: bool,
-    dimension_names: &'a [ResourceLocation],
-    max_players: VarInt,
-    view_distance: VarInt,
-    simulated_distance: VarInt,
-    reduced_debug_info: bool,
-    enabled_respawn_screen: bool,
-    limited_crafting: bool,
+    pub entity_id: i32,
+    pub is_hardcore: bool,
+    pub dimension_names: &'a [ResourceLocation],
+    pub max_players: VarInt,
+    pub view_distance: VarInt,
+    pub simulated_distance: VarInt,
+    pub reduced_debug_info: bool,
+    pub enabled_respawn_screen: bool,
+    pub limited_crafting: bool,
     // Spawn info
-    dimension_type: VarInt,
-    dimension_name: ResourceLocation,
+    pub dimension_type: VarInt,
+    pub dimension_name: ResourceLocation,
     /// First 8 bytes of the SHA-256 hash of the world's seed. Used client side for biome noise
-    hashed_seed: i64,
-    game_mode: u8,
-    previous_gamemode: i8,
-    debug: bool,
-    is_flat: bool,
-    death_dimension_name: Option<(ResourceLocation, BlockPos)>,
-    portal_cooldown: VarInt,
-    sealevel: VarInt,
-    enforce_secure_chat: bool,
+    pub hashed_seed: i64,
+    pub game_mode: u8,
+    pub previous_gamemode: i8,
+    pub debug: bool,
+    pub is_flat: bool,
+    pub death_dimension_name: Option<(ResourceLocation, BlockPos)>,
+    pub portal_cooldown: VarInt,
+    pub sealevel: VarInt,
+    pub enforce_secure_chat: bool,
 }
 
 impl<'a> CLogin<'a> {

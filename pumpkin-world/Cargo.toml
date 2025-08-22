@@ -26,7 +26,7 @@ crossbeam.workspace = true
 
 num-derive = "0.4"
 sha2 = "0.10"
-bitflags = "2.9.1"
+bitflags = "2.9.2"
 
 dashmap = "6.1"
 
@@ -46,6 +46,7 @@ lru = "0.16.0"
 
 tokio-util = { version = "0.7.16", features = ["rt"] }
 rand = "0.9.2"
+num_cpus = "1.17.0"
 
 [dev-dependencies]
 criterion = { version = "0.7", default-features = false, features = ["html_reports", "async_tokio"] }

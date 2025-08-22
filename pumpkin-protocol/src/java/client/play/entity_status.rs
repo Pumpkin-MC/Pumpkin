@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_ENTITY_EVENT)]
 pub struct CEntityStatus {
-    entity_id: i32,
-    entity_status: i8,
+    pub entity_id: i32,
+    pub entity_status: i8,
 }
 
 impl CEntityStatus {

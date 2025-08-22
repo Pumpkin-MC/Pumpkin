@@ -45,7 +45,7 @@ struct Executor {
 }
 
 impl Executor {
-    async fn handle_query(&self, sender: &mut CommandSender, target: &Player, exp_type: ExpType) {
+    async fn handle_query(&self, sender: &CommandSender, target: &Player, exp_type: ExpType) {
         match exp_type {
             ExpType::Levels => {
                 let level = target.experience_level.load(Ordering::Relaxed);

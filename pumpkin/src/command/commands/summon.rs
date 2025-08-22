@@ -55,7 +55,7 @@ impl CommandExecutor for Executor {
             CommandSender::Player(player) => {
                 let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
 
-                (player.world().await, pos)
+                (player.world().clone(), pos)
             }
         };
         let mob = from_type(entity, pos, &world, Uuid::new_v4()).await;

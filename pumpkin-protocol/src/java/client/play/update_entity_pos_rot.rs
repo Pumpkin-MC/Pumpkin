@@ -8,11 +8,11 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_MOVE_ENTITY_POS_ROT)]
 pub struct CUpdateEntityPosRot {
-    entity_id: VarInt,
-    delta: Vector3<i16>,
-    yaw: u8,
-    pitch: u8,
-    on_ground: bool,
+    pub entity_id: VarInt,
+    pub delta: Vector3<i16>,
+    pub yaw: u8,
+    pub pitch: u8,
+    pub on_ground: bool,
 }
 
 impl CUpdateEntityPosRot {

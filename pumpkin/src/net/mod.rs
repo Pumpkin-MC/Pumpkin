@@ -9,13 +9,13 @@ use crate::{
         banned_ip_data::BANNED_IP_LIST, banned_player_data::BANNED_PLAYER_LIST,
         op_data::OPERATOR_CONFIG, whitelist_data::WHITELIST_CONFIG,
     },
-    entity::player::{ChatMode, Hand},
+    entity::player::ChatMode,
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
 };
 
 use pumpkin_protocol::{ClientPacket, Property};
-use pumpkin_util::{ProfileAction, text::TextComponent};
+use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;
@@ -194,7 +194,7 @@ pub async fn can_not_join(
             Some(expires) => text.add_child(TextComponent::translate(
                 "multiplayer.disconnect.banned.expiration",
                 [TextComponent::text(
-                    expires.format(FORMAT_DESCRIPTION).unwrap().to_string(),
+                    expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],
             )),
             None => text,
@@ -214,8 +214,7 @@ pub async fn can_not_join(
         }
     }
 
-    let mut banned_ips = BANNED_IP_LIST.write().await;
-    if let Some(entry) = banned_ips.get_entry(&address.ip()) {
+    if let Some(entry) = BANNED_IP_LIST.write().await.get_entry(&address.ip()) {
         let text = TextComponent::translate(
             "multiplayer.disconnect.banned_ip.reason",
             [TextComponent::text(entry.reason.clone())],
@@ -224,7 +223,7 @@ pub async fn can_not_join(
             Some(expires) => text.add_child(TextComponent::translate(
                 "multiplayer.disconnect.banned_ip.expiration",
                 [TextComponent::text(
-                    expires.format(FORMAT_DESCRIPTION).unwrap().to_string(),
+                    expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],
             )),
             None => text,

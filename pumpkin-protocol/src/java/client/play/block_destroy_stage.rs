@@ -9,9 +9,9 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_BLOCK_DESTRUCTION)]
 pub struct CSetBlockDestroyStage {
-    entity_id: VarInt,
-    location: BlockPos,
-    destroy_stage: i8,
+    pub entity_id: VarInt,
+    pub location: BlockPos,
+    pub destroy_stage: i8,
 }
 
 impl CSetBlockDestroyStage {

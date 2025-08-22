@@ -9,10 +9,10 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_BLOCK_EVENT)]
 pub struct CBlockEvent {
-    location: BlockPos,
-    action_id: u8,
-    action_parameter: u8,
-    block_type: VarInt,
+    pub location: BlockPos,
+    pub action_id: u8,
+    pub action_parameter: u8,
+    pub block_type: VarInt,
 }
 
 impl CBlockEvent {

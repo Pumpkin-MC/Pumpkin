@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use pumpkin_util::{math::position::BlockPos, random::RandomGenerator, read_data_from_file};
+use pumpkin_util::{include_json_static, math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
 use crate::{ProtoChunk, level::Level, world::BlockRegistryExt};
@@ -73,8 +73,9 @@ use super::features::{
     weeping_vines::WeepingVinesFeature,
 };
 
-pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> =
-    LazyLock::new(|| read_data_from_file!("../../../../assets/configured_features.json"));
+pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> = LazyLock::new(
+    || include_json_static!("../../../../assets/configured_features.json", HashMap<String, ConfiguredFeature>),
+);
 
 // Yes this may look ugly and you wonder why this is hard coded, but its makes sense to hardcode since we have to add logic for these in code
 #[derive(Deserialize)]

@@ -1,6 +1,6 @@
 use std::{
     fmt::Display,
-    io::{self, Read, Write},
+    io::{self, Read, Seek, Write},
     ops::Deref,
 };
 
@@ -83,7 +83,7 @@ impl Nbt {
         }
     }
 
-    pub fn read<R: Read>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error> {
+    pub fn read<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error> {
         let tag_type_id = reader.get_u8_be()?;
 
         if tag_type_id != COMPOUND_ID {
@@ -97,7 +97,7 @@ impl Nbt {
     }
 
     /// Reads an NBT tag that doesn't contain the name of the root `Compound`.
-    pub fn read_unnamed<R: Read>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error> {
+    pub fn read_unnamed<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error> {
         let tag_type_id = reader.get_u8_be()?;
 
         if tag_type_id != COMPOUND_ID {
@@ -174,7 +174,7 @@ impl AsMut<NbtCompound> for Nbt {
     }
 }
 
-pub fn get_nbt_string<R: Read>(bytes: &mut NbtReadHelper<R>) -> Result<String, Error> {
+pub fn get_nbt_string<R: Read + Seek>(bytes: &mut NbtReadHelper<R>) -> Result<String, Error> {
     let len = bytes.get_u16_be()? as usize;
     let string_bytes = bytes.read_boxed_slice(len)?;
     let string = cesu8::from_java_cesu8(&string_bytes).map_err(|_| Error::Cesu8DecodingError)?;
@@ -204,6 +204,8 @@ impl_array!(nbt_byte_array, NBT_BYTE_ARRAY_TAG);
 
 #[cfg(test)]
 mod test {
+
+    use std::io::Cursor;
 
     use crate::Error;
     use crate::deserializer::from_bytes;
@@ -238,7 +240,7 @@ mod test {
 
         let mut bytes = Vec::new();
         to_bytes_unnamed(&test, &mut bytes).unwrap();
-        let recreated_struct: Test = from_bytes_unnamed(&bytes[..]).unwrap();
+        let recreated_struct: Test = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
 
         assert_eq!(test, recreated_struct);
     }
@@ -263,7 +265,7 @@ mod test {
 
         let mut bytes = Vec::new();
         to_bytes_unnamed(&test, &mut bytes).unwrap();
-        let recreated_struct: TestArray = from_bytes_unnamed(&bytes[..]).unwrap();
+        let recreated_struct: TestArray = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
 
         assert_eq!(test, recreated_struct);
     }
@@ -282,7 +284,7 @@ mod test {
 
         let mut bytes = Vec::new();
         to_bytes_named(&test, name, &mut bytes).unwrap();
-        let recreated_struct: Test = from_bytes(&bytes[..]).unwrap();
+        let recreated_struct: Test = from_bytes(Cursor::new(bytes)).unwrap();
 
         assert_eq!(test, recreated_struct);
     }
@@ -298,7 +300,7 @@ mod test {
 
         let mut bytes = Vec::new();
         to_bytes_named(&test, name, &mut bytes).unwrap();
-        let recreated_struct: TestArray = from_bytes(&bytes[..]).unwrap();
+        let recreated_struct: TestArray = from_bytes(Cursor::new(bytes)).unwrap();
 
         assert_eq!(test, recreated_struct);
     }
@@ -358,7 +360,7 @@ mod test {
 
         let mut bytes = Vec::new();
         to_bytes_unnamed(&list_compound, &mut bytes).unwrap();
-        let recreated_struct: TestList = from_bytes_unnamed(&bytes[..]).unwrap();
+        let recreated_struct: TestList = from_bytes_unnamed(Cursor::new(bytes)).unwrap();
         assert_eq!(list_compound, recreated_struct);
     }
 
@@ -396,7 +398,7 @@ mod test {
 
         let mut bytes = Vec::new();
         to_bytes_named(&list_compound, "a".to_string(), &mut bytes).unwrap();
-        let recreated_struct: TestList = from_bytes(&bytes[..]).unwrap();
+        let recreated_struct: TestList = from_bytes(Cursor::new(bytes)).unwrap();
         assert_eq!(list_compound, recreated_struct);
     }
 
@@ -511,7 +513,7 @@ mod test {
         let mut bytes = Vec::new();
         to_bytes(&value, &mut bytes).unwrap();
 
-        let reconstructed = from_bytes(&bytes[..]).unwrap();
+        let reconstructed = from_bytes(Cursor::new(bytes)).unwrap();
         assert_eq!(value, reconstructed);
     }
 

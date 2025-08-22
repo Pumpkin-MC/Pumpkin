@@ -15,6 +15,11 @@
 #![deny(clippy::branches_sharing_code)]
 #![deny(clippy::equatable_if_let)]
 #![deny(clippy::option_if_let_else)]
+#![deny(clippy::needless_pass_by_ref_mut)]
+#![deny(clippy::needless_collect)]
+#![deny(clippy::redundant_clone)]
+#![deny(clippy::set_contains_or_insert)]
+#![deny(clippy::significant_drop_in_scrutinee)]
 // use log crate
 #![deny(clippy::print_stdout)]
 #![deny(clippy::print_stderr)]
@@ -150,7 +155,7 @@ async fn main() {
     log::info!(
         "Server is now running. Connect using port: {}{}{}",
         if BASIC_CONFIG.java_edition {
-            format!("Java Edition: {}", BASIC_CONFIG.java_edition_port)
+            format!("Java Edition: {}", BASIC_CONFIG.java_edition_address)
         } else {
             String::new()
         },
@@ -160,7 +165,7 @@ async fn main() {
             ""
         },
         if BASIC_CONFIG.bedrock_edition {
-            format!("Bedrock Edition: {}", BASIC_CONFIG.bedrock_edition_port)
+            format!("Bedrock Edition: {}", BASIC_CONFIG.bedrock_edition_address)
         } else {
             String::new()
         }

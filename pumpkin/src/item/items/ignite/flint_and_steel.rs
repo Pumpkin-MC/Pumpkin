@@ -8,6 +8,7 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
@@ -25,7 +26,7 @@ impl ItemMetadata for FlintAndSteelItem {
 impl ItemBehaviour for FlintAndSteelItem {
     async fn use_on_block(
         &self,
-        item: &Item,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
@@ -38,7 +39,6 @@ impl ItemBehaviour for FlintAndSteelItem {
                     .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
             },
-            item,
             player,
             location,
             face,

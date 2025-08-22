@@ -379,7 +379,7 @@ impl BedrockClient {
         self.tasks.wait().await;
         self.be_clients.lock().await.remove(&self.address);
 
-        if let Some(player) = self.player.lock().await.clone() {
+        if let Some(player) = self.player.lock().await.as_ref() {
             player.remove().await;
         }
     }

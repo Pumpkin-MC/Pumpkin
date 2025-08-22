@@ -7,11 +7,14 @@ build = "build/build.rs"
 [dependencies]
 phf = { version = "0.12.1", features = ["macros"] }
 pumpkin-util = { path = "../pumpkin-util" }
+pumpkin-nbt = { path = "../pumpkin-nbt" }
 
 serde.workspace = true
+crc-fast = "1.4.0"
 
 [build-dependencies]
 pumpkin-util = { path = "../pumpkin-util" }
+pumpkin-nbt = { path = "../pumpkin-nbt" }
 
 serde.workspace = true
 serde_json.workspace = true
@@ -21,4 +24,5 @@ heck = "0.5"
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = "2.0"
+
 rayon.workspace = true

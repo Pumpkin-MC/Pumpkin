@@ -43,6 +43,10 @@ impl BlockStateCodec {
         BlockState::from_id(state_id)
     }
 
+    pub fn get_block(&self) -> &'static Block {
+        self.name
+    }
+
     /// Prefer this over `get_state` when the only the state ID is needed
     pub fn get_state_id(&self) -> BlockStateId {
         let block = self.name;

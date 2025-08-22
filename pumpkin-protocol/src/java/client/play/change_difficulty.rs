@@ -5,8 +5,8 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_CHANGE_DIFFICULTY)]
 pub struct CChangeDifficulty {
-    difficulty: u8,
-    locked: bool,
+    pub difficulty: u8,
+    pub locked: bool,
 }
 
 impl CChangeDifficulty {

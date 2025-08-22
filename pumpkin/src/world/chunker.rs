@@ -27,15 +27,26 @@ pub async fn update_position(player: &Arc<Player>) {
     let client = player.client.java();
 
     if old_cylindrical != new_cylindrical {
-        client
-            .send_packet_now(&CCenterChunk {
-                chunk_x: new_chunk_center.x.into(),
-                chunk_z: new_chunk_center.y.into(),
-            })
-            .await;
+        match player.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                client
+                    .send_packet_now(&CCenterChunk {
+                        chunk_x: new_chunk_center.x.into(),
+                        chunk_z: new_chunk_center.y.into(),
+                    })
+                    .await;
+            }
+            ClientPlatform::Bedrock(client) => {
+                client
+                    .send_game_packet(&CNetworkChunkPublisherUpdate::new(
+                        BlockPos::new(pos.x as i32, pos.y as i32, pos.z as i32),
+                        NonZeroU32::from(view_distance).get(),
+                    ))
+                    .await;
+            }
+        }
         let mut loading_chunks = Vec::new();
         let mut unloading_chunks = Vec::new();
-
         Cylindrical::for_each_changed_chunk(
             old_cylindrical,
             new_cylindrical,
@@ -45,7 +56,7 @@ pub async fn update_position(player: &Arc<Player>) {
 
         // Make sure the watched section and the chunk watcher updates are async atomic. We want to
         // ensure what we unload when the player disconnects is correct.
-        let level = &entity.world.read().await.level;
+        let level = &entity.world.level;
         level.mark_chunks_as_newly_watched(&loading_chunks).await;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks).await;
 
@@ -61,67 +72,17 @@ pub async fn update_position(player: &Arc<Player>) {
         if !chunks_to_clean.is_empty() {
             level.clean_chunks(&chunks_to_clean).await;
             for chunk in unloading_chunks {
-                client
+                player
+                    .client
                     .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                     .await;
             }
         }
 
         if !loading_chunks.is_empty() {
-            entity.world.read().await.spawn_world_chunks(
-                player.clone(),
-                loading_chunks,
-                new_chunk_center,
-            );
-        }
-    }
-}
-
-pub async fn be_update_position(player: &Arc<Player>) {
-    let entity = &player.living_entity.entity;
-
-    let view_distance = get_view_distance(player).await;
-    let new_chunk_center = entity.chunk_pos.load();
-
-    let old_cylindrical = player.watched_section.load();
-    let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
-
-    if old_cylindrical != new_cylindrical {
-        let mut loading_chunks = Vec::new();
-        let mut unloading_chunks = Vec::new();
-
-        Cylindrical::for_each_changed_chunk(
-            old_cylindrical,
-            new_cylindrical,
-            &mut loading_chunks,
-            &mut unloading_chunks,
-        );
-
-        // Make sure the watched section and the chunk watcher updates are async atomic. We want to
-        // ensure what we unload when the player disconnects is correct.
-        let level = &entity.world.read().await.level;
-        level.mark_chunks_as_newly_watched(&loading_chunks).await;
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks).await;
-
-        {
-            // After marking the chunks as watched, remove chunks that we are already in the process
-            // of sending.
-            let chunk_manager = player.chunk_manager.lock().await;
-            loading_chunks.retain(|pos| !chunk_manager.is_chunk_pending(pos));
-        };
-
-        player.watched_section.store(new_cylindrical);
-
-        if !chunks_to_clean.is_empty() {
-            level.clean_chunks(&chunks_to_clean).await;
-        }
-
-        if !loading_chunks.is_empty() {
-            entity.world.read().await.spawn_world_chunks(
-                player.clone(),
-                loading_chunks,
-                new_chunk_center,
-            );
+            entity
+                .world
+                .spawn_world_chunks(player.clone(), loading_chunks, new_chunk_center);
         }
     }
 }

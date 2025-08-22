@@ -159,7 +159,6 @@ impl BedrockClient {
                 );
 
                 let entity = &player.living_entity.entity;
-                let world = &entity.world.read().await;
                 if BASIC_CONFIG.allow_chat_reports {
                     //TODO Alex help, what is this?
                     //world.broadcast_secure_player_chat(player, &message, decorated_message).await;
@@ -173,7 +172,7 @@ impl BedrockClient {
                         message, gameprofile.name.clone()
                     );
 
-                    world.broadcast_editioned(&je_packet, &be_packet).await;
+                    entity.world.broadcast_editioned(&je_packet, &be_packet).await;
                 }
             }
         }}

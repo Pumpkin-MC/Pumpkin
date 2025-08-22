@@ -6,6 +6,7 @@ permissions:
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 env:
   CLICOLOR: 1
@@ -16,6 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Actions Repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Spell Check Repo
-      uses: crate-ci/typos@v1.35.3
+      uses: crate-ci/typos@v1.35.4

@@ -1,25 +1,19 @@
-use pumpkin_data::Block;
 use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component::DataComponent::Enchantments;
 use pumpkin_data::data_component_impl::{
-    DataComponentImpl, IDSet, MaxStackSizeImpl, ToolImpl, get,
+    BlocksAttacksImpl, ConsumableImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
+    MaxStackSizeImpl, ToolImpl, get, get_mut, read_data,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
+use std::borrow::Cow;
+use std::cmp::{max, min};
 
 mod categories;
-
-#[derive(serde::Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-/// Item Rarity
-pub enum Rarity {
-    Common,
-    UnCommon,
-    Rare,
-    Epic,
-}
 
 #[derive(Clone, Debug)]
 pub struct ItemStack {
@@ -52,6 +46,18 @@ impl ItemStack {
         }
     }
 
+    pub fn new_with_component(
+        item_count: u8,
+        item: &'static Item,
+        component: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>,
+    ) -> Self {
+        Self {
+            item_count,
+            item,
+            patch: component,
+        }
+    }
+
     pub fn get_data_component<T: DataComponentImpl + 'static>(&self) -> Option<&T> {
         let to_get_id = &T::get_enum();
         for (id, component) in &self.patch {
@@ -70,6 +76,19 @@ impl ItemStack {
         }
         None
     }
+    pub fn get_data_component_mut<T: DataComponentImpl + 'static>(&mut self) -> Option<&mut T> {
+        let to_get_id = &T::get_enum();
+        for (id, component) in self.patch.iter_mut() {
+            if id == to_get_id {
+                return if let Some(component) = component {
+                    Some(get_mut::<T>(component.as_mut()))
+                } else {
+                    None
+                };
+            }
+        }
+        None
+    }
 
     pub const EMPTY: &'static ItemStack = &ItemStack {
         item_count: 0,
@@ -83,6 +102,16 @@ impl ItemStack {
         } else {
             1
         }
+    }
+
+    pub fn get_max_use_time(&self) -> i32 {
+        if let Some(value) = self.get_data_component::<ConsumableImpl>() {
+            return value.consume_ticks();
+        }
+        if self.get_data_component::<BlocksAttacksImpl>().is_some() {
+            return 72000;
+        }
+        0
     }
 
     pub fn get_item(&self) -> &Item {
@@ -127,6 +156,12 @@ impl ItemStack {
         self.item_count = count;
     }
 
+    pub fn decrement_unless_creative(&mut self, gamemode: GameMode, amount: u8) {
+        if gamemode != GameMode::Creative {
+            self.item_count = self.item_count.saturating_sub(amount);
+        }
+    }
+
     pub fn decrement(&mut self, amount: u8) {
         self.item_count = self.item_count.saturating_sub(amount);
     }
@@ -135,8 +170,60 @@ impl ItemStack {
         self.item_count = self.item_count.saturating_add(amount);
     }
 
+    pub fn enchant(&mut self, enchantment: &'static Enchantment, level: i32) {
+        // TODO itemstack may not send update packet to client
+        if level <= 0 {
+            return;
+        }
+        let level = min(level, 255);
+        if let Some(data) = self.get_data_component_mut::<EnchantmentsImpl>() {
+            for (enc, old_level) in data.enchantment.to_mut() {
+                if *enc == enchantment {
+                    *old_level = max(*old_level, level);
+                    return;
+                }
+            }
+            data.enchantment.to_mut().push((enchantment, level));
+        } else {
+            self.patch.push((
+                Enchantments,
+                Some(
+                    EnchantmentsImpl {
+                        enchantment: Cow::Owned(vec![(enchantment, level)]),
+                    }
+                    .to_dyn(),
+                ),
+            ));
+        }
+    }
     pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
-        self.item == other.item //TODO: && self.item.components == other.item.components
+        if self.item != other.item || self.patch.len() != other.patch.len() {
+            return false;
+        }
+        for (id, data) in &self.patch {
+            let mut not_find = true;
+            'out: for (other_id, other_data) in &other.patch {
+                if id == other_id {
+                    if let (Some(data), Some(other_data)) = (data, other_data) {
+                        if data.equal(other_data.as_ref()) {
+                            return false;
+                        } else {
+                            not_find = false;
+                            break 'out;
+                        }
+                    } else if data.is_none() && other_data.is_none() {
+                        not_find = false;
+                        break 'out;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+            if not_find {
+                return false;
+            }
+        }
+        true
     }
 
     pub fn are_equal(&self, other: &Self) -> bool {
@@ -207,9 +294,16 @@ impl ItemStack {
         compound.put_int("count", self.item_count as i32);
 
         // Create a tag compound for additional data
-        let tag = NbtCompound::new();
+        let mut tag = NbtCompound::new();
 
-        // TODO: Store custom data like enchantments, display name, etc. would go here
+        for (id, data) in &self.patch {
+            if let Some(data) = data {
+                tag.put(id.to_name(), data.write_data());
+            } else {
+                let name = '!'.to_string() + id.to_name();
+                tag.put(name.as_str(), NbtCompound::new());
+            }
+        }
 
         // Store custom data like enchantments, display name, etc. would go here
         compound.put_component("components", tag);
@@ -228,11 +322,20 @@ impl ItemStack {
         let count = compound.get_int("count")? as u8;
 
         // Create the item stack
-        let item_stack = Self::new(count, item);
+        let mut item_stack = Self::new(count, item);
 
         // Process any additional data in the components compound
-        if let Some(_tag) = compound.get_compound("components") {
-            // TODO: Process additional components like damage, enchantments, etc.
+        if let Some(tag) = compound.get_compound("components") {
+            for (name, data) in &tag.child_tags {
+                if let Some(name) = name.strip_prefix("!") {
+                    item_stack
+                        .patch
+                        .push((DataComponent::try_from_name(name)?, None));
+                } else {
+                    let id = DataComponent::try_from_name(name)?;
+                    item_stack.patch.push((id, Some(read_data(id, data)?)));
+                }
+            }
         }
 
         Some(item_stack)

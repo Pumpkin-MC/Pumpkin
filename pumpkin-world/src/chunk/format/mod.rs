@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, io::Cursor, path::PathBuf};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -80,7 +80,7 @@ impl ChunkData {
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
         // TODO: Implement chunk stages?
-        if from_bytes::<ChunkStatusWrapper>(chunk_data)
+        if from_bytes::<ChunkStatusWrapper>(Cursor::new(chunk_data))
             .map_err(ChunkParsingError::FailedReadStatus)?
             .status
             != ChunkStatus::Full
@@ -88,7 +88,7 @@ impl ChunkData {
             return Err(ChunkParsingError::ChunkNotGenerated);
         }
 
-        let chunk_data = from_bytes::<ChunkNbt>(chunk_data)
+        let chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.light_correct {
@@ -285,7 +285,7 @@ impl ChunkEntityData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_entity_data = pumpkin_nbt::from_bytes::<EntityNbt>(chunk_data)
+        let chunk_entity_data = pumpkin_nbt::from_bytes::<EntityNbt>(Cursor::new(chunk_data))
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_entity_data.position[0] != position.x

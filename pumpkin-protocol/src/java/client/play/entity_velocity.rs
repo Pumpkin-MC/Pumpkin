@@ -8,8 +8,8 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_SET_ENTITY_MOTION)]
 pub struct CEntityVelocity {
-    entity_id: VarInt,
-    velocity: Vector3<i16>,
+    pub entity_id: VarInt,
+    pub velocity: Vector3<i16>,
 }
 
 impl CEntityVelocity {

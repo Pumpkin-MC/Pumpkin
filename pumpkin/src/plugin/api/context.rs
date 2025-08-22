@@ -187,9 +187,8 @@ impl Context {
             ));
         }
 
-        let manager = self.permission_manager.read().await;
-        let mut registry = manager.registry.write().await;
-        registry.register_permission(permission)
+        let registry = &self.permission_manager.read().await.registry;
+        registry.write().await.register_permission(permission)
     }
 
     /// Check if a player has a permission

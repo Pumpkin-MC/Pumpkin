@@ -111,7 +111,7 @@ pub enum Arg<'a> {
     SoundCategory(SoundCategory),
     DamageType(DamageType),
     Effect(&'static StatusEffect),
-    Enchantment(Enchantment),
+    Enchantment(&'static Enchantment),
 }
 
 /// see [`crate::commands::tree::builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree::builder::NonLeafNodeBuilder::execute`]

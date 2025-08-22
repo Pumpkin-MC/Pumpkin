@@ -5,7 +5,11 @@ use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
 use crate::{
-    entity::{Entity, EntityBase, decoration::painting::PaintingEntity, mob::zombie::Zombie},
+    entity::{
+        Entity, EntityBase,
+        decoration::{end_crystal::EndCrystalEntity, painting::PaintingEntity},
+        mob::zombie::Zombie,
+    },
     world::World,
 };
 
@@ -21,6 +25,7 @@ pub async fn from_type(
     let mob: Arc<dyn EntityBase> = match entity_type.id {
         id if id == EntityType::ZOMBIE.id => Zombie::make(entity).await,
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
+        id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
         // TODO
         _ => Arc::new(entity), // Fallback Entity
     };

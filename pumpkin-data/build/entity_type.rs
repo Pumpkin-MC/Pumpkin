@@ -18,6 +18,7 @@ pub struct EntityType {
     pub loot_table: Option<LootTableStruct>,
     pub summonable: bool,
     pub fire_immune: bool,
+    pub saveable: bool,
     pub category: MobCategory,
     pub can_spawn_far_from_player: bool,
     pub dimension: [f32; 2],
@@ -106,6 +107,7 @@ impl ToTokens for NamedEntityType<'_> {
             MobCategory::MISC => quote! { MobCategory::MISC },
         };
 
+        let saveable = entity.saveable;
         let summonable = entity.summonable;
         let fire_immune = entity.fire_immune;
         let eye_height = entity.eye_height;
@@ -136,6 +138,7 @@ impl ToTokens for NamedEntityType<'_> {
                 max_health: #max_health,
                 attackable: #attackable,
                 mob: #mob,
+                saveable: #saveable,
                 limit_per_chunk: #limit_per_chunk,
                 summonable: #summonable,
                 fire_immune: #fire_immune,
@@ -192,6 +195,7 @@ pub(crate) fn build() -> TokenStream {
             pub max_health: Option<f32>,
             pub attackable: Option<bool>,
             pub mob: bool,
+            pub saveable: bool,
             pub limit_per_chunk: i32,
             pub summonable: bool,
             pub fire_immune: bool,

@@ -10,6 +10,6 @@ pub struct BlockStateMatchRuleTest {
 
 impl BlockStateMatchRuleTest {
     pub fn test(&self, state: &BlockState) -> bool {
-        state.id == self.block_state.get_state().id
+        state.id == self.block_state.get_state_id()
     }
 }
