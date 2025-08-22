@@ -427,19 +427,27 @@ impl BlockPalette {
                 let mut current_word: u32 = 0;
                 let mut current_index_in_word = 0;
 
-                for key in data.cube.as_flattened().as_flattened().iter() {
-                    let key_index = key_to_index_map.get(key).unwrap();
-                    debug_assert!((1 << bits_per_entry) > *key_index);
+                for x in 0..16 {
+                    for y in 0..16 {
+                        for z in 0..16 {
+                            // Java has it in y, z, x order, so we need to convert it back to x, y, z
+                            // Please test your code on bedrock before merging
+                            let key = data.get(x, z, y);
+                            let key_index = key_to_index_map.get(&key).unwrap();
+                            debug_assert!((1 << bits_per_entry) > *key_index);
 
-                    current_word |=
-                        (*key_index as u32) << (bits_per_entry as u32 * current_index_in_word);
-                    current_index_in_word += 1;
+                            current_word |=
+                                (*key_index as u32) << (bits_per_entry as u32 * current_index_in_word);
+                            current_index_in_word += 1;
 
-                    if current_index_in_word == blocks_per_word as u32 {
-                        packed_data.push(current_word);
-                        current_word = 0;
-                        current_index_in_word = 0;
+                            if current_index_in_word == blocks_per_word as u32 {
+                                packed_data.push(current_word);
+                                current_word = 0;
+                                current_index_in_word = 0;
+                            }
+                        }
                     }
+
                 }
 
                 // Push any remaining bits if the volume isn't a multiple of blocks_per_word

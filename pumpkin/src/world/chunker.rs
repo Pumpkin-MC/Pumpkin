@@ -1,10 +1,16 @@
-use std::{num::NonZeroU8, sync::Arc};
+use std::{
+    num::{NonZeroU8, NonZeroU32},
+    sync::Arc,
+};
 
 use pumpkin_config::BASIC_CONFIG;
-use pumpkin_protocol::java::client::play::{CCenterChunk, CUnloadChunk};
+use pumpkin_protocol::{
+    bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
+    java::client::play::{CCenterChunk, CUnloadChunk},
+};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
-use crate::entity::player::Player;
+use crate::{entity::player::Player, net::ClientPlatform};
 
 pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
     player
@@ -20,14 +26,13 @@ pub async fn update_position(player: &Arc<Player>) {
 
     let view_distance = get_view_distance(player).await;
     let new_chunk_center = entity.chunk_pos.load();
+    let pos = entity.block_pos.load();
 
     let old_cylindrical = player.watched_section.load();
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
-    let client = player.client.java();
-
     if old_cylindrical != new_cylindrical {
-        match player.client.as_ref() {
+        match &player.client {
             ClientPlatform::Java(client) => {
                 client
                     .send_packet_now(&CCenterChunk {
@@ -39,7 +44,7 @@ pub async fn update_position(player: &Arc<Player>) {
             ClientPlatform::Bedrock(client) => {
                 client
                     .send_game_packet(&CNetworkChunkPublisherUpdate::new(
-                        BlockPos::new(pos.x as i32, pos.y as i32, pos.z as i32),
+                        pos,
                         NonZeroU32::from(view_distance).get(),
                     ))
                     .await;

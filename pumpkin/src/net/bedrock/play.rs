@@ -72,7 +72,7 @@ impl BedrockClient {
                 chunk_radius.0 as u32,
             ))
             .await;
-            chunker::be_update_position(player).await;
+            chunker::update_position(player).await;
         }
     }
 
@@ -96,7 +96,7 @@ impl BedrockClient {
 
         if new_pos != old_pos {
             player.living_entity.entity.set_pos(new_pos);
-            chunker::be_update_position(player).await;
+            chunker::update_position(player).await;
         }
 
         //self.send_game_packet(&CMovePlayer {

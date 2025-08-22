@@ -200,7 +200,7 @@ pub struct Player {
     /// The player's game profile information, including their username and UUID.
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
-    pub client: Arc<ClientPlatform>,
+    pub client: ClientPlatform,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
@@ -278,7 +278,7 @@ pub struct Player {
 
 impl Player {
     pub async fn new(
-        client: Arc<ClientPlatform>,
+        client: ClientPlatform,
         gameprofile: GameProfile,
         config: PlayerConfig,
         world: Arc<World>,
@@ -759,7 +759,7 @@ impl Player {
 
         let chunk_of_chunks = {
             let mut chunk_manager = self.chunk_manager.lock().await;
-            if let ClientPlatform::Java(_) = self.client.as_ref() {
+            if let ClientPlatform::Java(_) = self.client {
                 // Java clients can only send a limited amount of chunks per tick.
                 // If we have sent too many chunks without receiving an ack, we stop sending chunks.
                 chunk_manager
@@ -772,7 +772,7 @@ impl Player {
 
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             let chunk_count = chunk_of_chunks.len();
-            match self.client.as_ref() {
+            match &self.client {
                 ClientPlatform::Java(java_client) => {
                     java_client.send_packet_now(&CChunkBatchStart).await;
                     for chunk in chunk_of_chunks {
@@ -846,7 +846,7 @@ impl Player {
         // TODO This should only be handled by the ClientPlatform
         let now = Instant::now();
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
-            if matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
+            if matches!(self.client, ClientPlatform::Bedrock(_)) {
                 return;
             }
             // We never got a response from the last keep alive we sent.
@@ -1027,7 +1027,7 @@ impl Player {
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
-        match self.client.as_ref() {
+        match &self.client {
             ClientPlatform::Java(java_client) => {
                 java_client
                     .enqueue_packet(&CUpdateTime::new(

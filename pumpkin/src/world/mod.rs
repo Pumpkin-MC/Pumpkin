@@ -392,7 +392,7 @@ impl World {
         let current_players = self.players.read().await;
 
         for (_, player) in current_players.iter() {
-            match player.client.as_ref() {
+            match &player.client {
                 ClientPlatform::Java(client) => client.enqueue_packet(je_packet).await,
                 ClientPlatform::Bedrock(client) => client.send_game_packet(be_packet).await,
             }
@@ -1298,7 +1298,7 @@ impl World {
                 chunk_radius: VarInt(player.config.read().await.view_distance.get().into()),
             })
             .await;
-        chunker::be_update_position(&player).await;
+        chunker::update_position(&player).await;
         client
             .send_game_packet(&CreativeContent {
                 groups: &[Group {
@@ -1684,7 +1684,7 @@ impl World {
         yaw: f32,
         pitch: f32,
     ) {
-        if let ClientPlatform::Java(client) = player.client.as_ref() {
+        if let ClientPlatform::Java(client) = &player.client {
             self.worldborder.lock().await.init_client(client).await;
         }
 
@@ -1866,6 +1866,7 @@ impl World {
 
         let level = self.level.clone();
         let world = self.clone();
+        let world1 = self.clone();
         let player1 = player.clone();
 
         player.clone().spawn_task(async move {
