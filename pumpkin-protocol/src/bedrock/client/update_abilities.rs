@@ -5,6 +5,8 @@ use crate::serial::PacketWrite;
 #[packet(187)]
 #[derive(PacketWrite)]
 pub struct CUpdateAbilities {
+    // https://mojang.github.io/bedrock-protocol-docs/html/UpdateAbilitiesPacket.html
+    // https://mojang.github.io/bedrock-protocol-docs/html/SerializedAbilitiesData.html
     pub target_player_raw_id: i64,
     pub player_permission: u8,
     pub command_permission: u8,

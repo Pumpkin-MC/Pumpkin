@@ -993,7 +993,6 @@ impl Player {
             ClientPlatform::Bedrock(bedrock) => {
                 let mut ability_value = 0;
                 let abilities = &self.abilities.lock().await;
-                dbg!(abilities.flying);
 
                 if abilities.invulnerable {
                     ability_value |= 1 << Ability::Invulnerable as u32;
@@ -1007,10 +1006,24 @@ impl Player {
                     ability_value |= 1 << Ability::MayFly as u32;
                 }
 
+                if abilities.creative {
+                    ability_value |= 1 << Ability::OperatorCommands as u32;
+                    ability_value |= 1 << Ability::Teleport as u32;
+                    ability_value |= 1 << Ability::Invulnerable as u32;
+                }
+
+                // Todo: Integrate this into the system
+                ability_value |= 1 << Ability::AttackMobs as u32;
+                ability_value |= 1 << Ability::AttackPlayers as u32;
+                ability_value |= 1 << Ability::Build as u32;
+                ability_value |= 1 << Ability::DoorsAndSwitches as u32;
+                ability_value |= 1 << Ability::Instabuild as u32;
+                ability_value |= 1 << Ability::Mine as u32;
+
                 let packet = CUpdateAbilities {
-                    target_player_raw_id: self.entity_id() as _,
-                    player_permission: self.permission_lvl.load() as _,
-                    command_permission: 0,
+                    target_player_raw_id: self.entity_id().into(),
+                    player_permission: 2,
+                    command_permission: 4,
                     layers: vec![AbilityLayer {
                         serialized_layer: 1,
                         abilities_set: (1 << Ability::AbilityCount as u32) - 1,

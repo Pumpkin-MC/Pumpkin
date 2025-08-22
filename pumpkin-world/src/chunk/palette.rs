@@ -436,8 +436,8 @@ impl BlockPalette {
                             let key_index = key_to_index_map.get(&key).unwrap();
                             debug_assert!((1 << bits_per_entry) > *key_index);
 
-                            current_word |=
-                                (*key_index as u32) << (bits_per_entry as u32 * current_index_in_word);
+                            current_word |= (*key_index as u32)
+                                << (bits_per_entry as u32 * current_index_in_word);
                             current_index_in_word += 1;
 
                             if current_index_in_word == blocks_per_word as u32 {
@@ -447,7 +447,6 @@ impl BlockPalette {
                             }
                         }
                     }
-
                 }
 
                 // Push any remaining bits if the volume isn't a multiple of blocks_per_word

@@ -1257,7 +1257,7 @@ impl World {
 
         client
             .send_game_packet(&CStartGame {
-                entity_id: VarLong(1),
+                entity_id: VarLong(runtime_id as _),
                 runtime_entity_id: VarULong(runtime_id),
                 player_gamemode: player.gamemode.load(),
                 position: Vector3::new(0.0, 100.0, 0.0),
@@ -1345,6 +1345,12 @@ impl World {
             .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
             .await;
         client.send_frame_set(frame_set, 0x84).await;
+
+        {
+            let mut abilities = player.abilities.lock().await;
+            abilities.set_for_gamemode(player.gamemode.load());
+        };
+
         player.send_abilities_update().await;
     }
 

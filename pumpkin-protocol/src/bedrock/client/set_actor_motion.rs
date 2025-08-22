@@ -5,7 +5,7 @@ use crate::{codec::var_ulong::VarULong, serial::PacketWrite};
 
 #[derive(PacketWrite)]
 #[packet(40)]
-pub struct SetActorMotion {
+pub struct CSetActorMotion {
     pub target_runtime_id: VarULong,
     pub motion: Vector3<f32>,
     pub tick: VarULong,

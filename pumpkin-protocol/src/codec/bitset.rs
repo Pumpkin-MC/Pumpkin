@@ -1,7 +1,4 @@
-use std::{
-    io::{Error, ErrorKind, Read},
-    usize,
-};
+use std::io::{Error, ErrorKind, Read};
 
 use crate::serial::PacketRead;
 
@@ -11,13 +8,6 @@ pub struct Bitset<const N: usize> {
 }
 
 impl<const N: usize> Bitset<N> {
-    pub const fn new() -> Self {
-        if N > 80 {
-            panic!()
-        }
-        Self { bits: 0 }
-    }
-
     pub fn get<T: Into<usize>>(&self, index: T) -> bool {
         let index: usize = index.into();
         if index > N {
@@ -39,9 +29,18 @@ impl<const N: usize> Bitset<N> {
     }
 }
 
+impl<const N: usize> Default for Bitset<N> {
+    fn default() -> Self {
+        if N > 80 {
+            panic!()
+        }
+        Self { bits: 0 }
+    }
+}
+
 impl<const N: usize> PacketRead for Bitset<N> {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let mut bitset = Bitset::<N>::new();
+        let mut bitset = Bitset::<N>::default();
 
         for i in 0..N.div_ceil(8) {
             let byte = u8::read(reader)?;

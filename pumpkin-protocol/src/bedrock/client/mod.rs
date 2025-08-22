@@ -1,5 +1,6 @@
 pub mod chunk_radius_update;
 pub mod container_open;
+pub mod correct_player_move;
 pub mod creative_content;
 pub mod disconnect_player;
 pub mod gamerules_changed;
