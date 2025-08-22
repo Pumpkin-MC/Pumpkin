@@ -1345,6 +1345,7 @@ impl World {
             .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
             .await;
         client.send_frame_set(frame_set, 0x84).await;
+        player.send_abilities_update().await;
     }
 
     #[expect(clippy::too_many_lines)]

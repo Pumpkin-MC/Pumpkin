@@ -15,7 +15,7 @@ use pumpkin_protocol::{
             command_request::SCommandRequest,
             container_close::SContainerClose,
             interaction::{Action, SInteraction},
-            player_auth_input::SPlayerAuthInput,
+            player_auth_input::{InputData, SPlayerAuthInput},
             request_chunk_radius::SRequestChunkRadius,
             text::SText,
         },
@@ -23,7 +23,10 @@ use pumpkin_protocol::{
     codec::{bedrock_block_pos::NetworkPos, var_long::VarLong},
     java::client::play::CSystemChatMessage,
 };
-use pumpkin_util::{math::position::BlockPos, text::TextComponent};
+use pumpkin_util::{
+    math::position::BlockPos,
+    text::TextComponent,
+};
 
 use crate::{
     command::CommandSender,
@@ -99,18 +102,28 @@ impl BedrockClient {
             chunker::update_position(player).await;
         }
 
-        //self.send_game_packet(&CMovePlayer {
-        //    player_runtime_id: VarULong(player.entity_id() as u64),
-        //    position: packet.position + Vector3::new(10.0, 0.0, 0.0),
-        //    pitch: packet.pitch,
-        //    yaw: packet.yaw,
-        //    y_head_rotation: packet.head_rotation,
-        //    position_mode: 1,
-        //    on_ground: false,
-        //    riding_runtime_id: VarULong(0),
-        //    tick: packet.client_tick,
-        //})
-        //.await;
+        let input_data = packet.input_data;
+        let entity = player.get_entity();
+
+        if input_data.get(InputData::StartSprinting) {
+            entity.set_sprinting(true).await;
+        } else if input_data.get(InputData::StopSprinting) {
+            entity.set_sprinting(false).await;
+        }
+
+        if input_data.get(InputData::StartFlying) {
+            player.abilities.lock().await.flying = true;
+            player.send_abilities_update().await;
+        } else if input_data.get(InputData::StopFlying) {
+            player.abilities.lock().await.flying = false;
+            player.send_abilities_update().await;
+        }
+
+        if input_data.get(InputData::StartSneaking) {
+            entity.set_sneaking(true).await;
+        } else if input_data.get(InputData::StopSneaking) {
+            entity.set_sneaking(false).await;
+        }
     }
 
     pub async fn handle_interaction(&self, _player: &Arc<Player>, packet: SInteraction) {

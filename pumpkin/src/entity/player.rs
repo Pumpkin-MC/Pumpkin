@@ -11,6 +11,9 @@ use crossbeam::atomic::AtomicCell;
 use log::warn;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
+use pumpkin_protocol::bedrock::client::update_abilities::{
+    Ability, AbilityLayer, CUpdateAbilities,
+};
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
@@ -963,28 +966,64 @@ impl Player {
 
     /// Updates the current abilities the player has.
     pub async fn send_abilities_update(&self) {
-        let mut b = 0i8;
-        let abilities = &self.abilities.lock().await;
+        match &self.client {
+            ClientPlatform::Java(java) => {
+                let mut b = 0;
+                let abilities = &self.abilities.lock().await;
 
-        if abilities.invulnerable {
-            b |= 1;
+                if abilities.invulnerable {
+                    b |= 1;
+                }
+                if abilities.flying {
+                    b |= 2;
+                }
+                if abilities.allow_flying {
+                    b |= 4;
+                }
+                if abilities.creative {
+                    b |= 8;
+                }
+                java.enqueue_packet(&CPlayerAbilities::new(
+                    b,
+                    abilities.fly_speed,
+                    abilities.walk_speed,
+                ))
+                .await;
+            }
+            ClientPlatform::Bedrock(bedrock) => {
+                let mut ability_value = 0;
+                let abilities = &self.abilities.lock().await;
+                dbg!(abilities.flying);
+
+                if abilities.invulnerable {
+                    ability_value |= 1 << Ability::Invulnerable as u32;
+                }
+
+                if abilities.flying {
+                    ability_value |= 1 << Ability::Flying as u32;
+                }
+
+                if abilities.allow_flying {
+                    ability_value |= 1 << Ability::MayFly as u32;
+                }
+
+                let packet = CUpdateAbilities {
+                    target_player_raw_id: self.entity_id() as _,
+                    player_permission: self.permission_lvl.load() as _,
+                    command_permission: 0,
+                    layers: vec![AbilityLayer {
+                        serialized_layer: 1,
+                        abilities_set: (1 << Ability::AbilityCount as u32) - 1,
+                        ability_value,
+                        fly_speed: 0.05,
+                        vertical_fly_speed: 1.0,
+                        walk_speed: 0.1,
+                    }],
+                };
+
+                bedrock.send_game_packet(&packet).await;
+            }
         }
-        if abilities.flying {
-            b |= 2;
-        }
-        if abilities.allow_flying {
-            b |= 4;
-        }
-        if abilities.creative {
-            b |= 8;
-        }
-        self.client
-            .enqueue_packet(&CPlayerAbilities::new(
-                b,
-                abilities.fly_speed,
-                abilities.walk_speed,
-            ))
-            .await;
     }
 
     /// Updates the client of the player's current permission level.
