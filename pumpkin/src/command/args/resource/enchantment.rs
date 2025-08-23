@@ -60,7 +60,7 @@ impl DefaultNameArgConsumer for EnchantmentArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for EnchantmentArgumentConsumer {
-    type Data = &'a Enchantment;
+    type Data = &'static Enchantment;
 
     fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

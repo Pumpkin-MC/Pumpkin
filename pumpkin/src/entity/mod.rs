@@ -47,7 +47,7 @@ use std::sync::{
         Ordering::{self, Relaxed},
     },
 };
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 
 pub mod ai;
 pub mod decoration;
@@ -106,8 +106,13 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     /// Returns if damage was successful or not
-    async fn damage(&self, amount: f32, damage_type: DamageType) -> bool {
-        self.damage_with_context(amount, damage_type, None, None, None)
+    async fn damage(
+        &self,
+        caller: Arc<dyn EntityBase>,
+        amount: f32,
+        damage_type: DamageType,
+    ) -> bool {
+        self.damage_with_context(caller, amount, damage_type, None, None, None)
             .await
     }
 
@@ -129,12 +134,16 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     async fn damage_with_context(
         &self,
-        amount: f32,
-        damage_type: DamageType,
-        position: Option<Vector3<f64>>,
-        source: Option<&dyn EntityBase>,
-        cause: Option<&dyn EntityBase>,
-    ) -> bool;
+        _caller: Arc<dyn EntityBase>,
+        _amount: f32,
+        _damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        // Just do nothing
+        false
+    }
 
     /// Called when a player collides with a entity
     async fn on_player_collision(&self, _player: &Arc<Player>) {}
@@ -181,9 +190,11 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     /// Kills the Entity.
-    async fn kill(&self) {
+    async fn kill(&self, caller: Arc<dyn EntityBase>) {
         if let Some(living) = self.get_living_entity() {
-            living.damage(f32::MAX, DamageType::GENERIC_KILL).await;
+            living
+                .damage(caller, f32::MAX, DamageType::GENERIC_KILL)
+                .await;
         } else {
             // TODO this should be removed once all entities are implemented
             self.get_entity().remove().await;
@@ -234,7 +245,7 @@ pub struct Entity {
     /// The type of entity (e.g., player, zombie, item)
     pub entity_type: &'static EntityType,
     /// The world in which the entity exists.
-    pub world: Arc<RwLock<Arc<World>>>,
+    pub world: Arc<World>,
     /// The entity's current position in the world
     pub pos: AtomicCell<Vector3<f64>>,
     /// The last known position of the entity.
@@ -351,7 +362,7 @@ impl Entity {
                 get_section_cord(floor_z),
             )),
             sneaking: AtomicBool::new(false),
-            world: Arc::new(RwLock::new(world)),
+            world,
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
             yaw: AtomicCell::new(0.0),
@@ -394,11 +405,19 @@ impl Entity {
         self.send_velocity().await;
     }
 
+    /// Sets a custom name for the entity, typically used with nametags
+    pub async fn set_custom_name(&self, name: TextComponent) {
+        self.send_meta_data(&[Metadata::new(
+            2,
+            MetaDataType::OptionalTextComponent,
+            Some(name),
+        )])
+        .await;
+    }
+
     pub async fn send_velocity(&self) {
         let velocity = self.velocity.load();
         self.world
-            .read()
-            .await
             .broadcast_packet_all(&CEntityVelocity::new(self.entity_id.into(), velocity))
             .await;
     }
@@ -486,8 +505,6 @@ impl Entity {
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
 
         self.world
-            .read()
-            .await
             .broadcast_packet_all(&CUpdateEntityRot::new(
                 self.entity_id.into(),
                 yaw,
@@ -501,8 +518,6 @@ impl Entity {
 
     pub async fn send_head_rot(&self, head_yaw: u8) {
         self.world
-            .read()
-            .await
             .broadcast_packet_all(&CHeadRot::new(self.entity_id.into(), head_yaw))
             .await;
     }
@@ -531,8 +546,6 @@ impl Entity {
 
         let (collisions, block_positions) = self
             .world
-            .read()
-            .await
             .get_block_collisions(bounding_box.stretch(movement))
             .await;
 
@@ -757,8 +770,6 @@ impl Entity {
 
         let max = aabb.max_block_pos();
 
-        let world = self.world.read().await;
-
         let mut eye_level_box = aabb;
 
         let eye_height = f64::from(self.standing_eye_height);
@@ -772,7 +783,7 @@ impl Entity {
                 for z in min.0.z..=max.0.z {
                     let pos = BlockPos::new(x, y, z);
 
-                    let (block, state) = world.get_block_and_state(&pos).await;
+                    let (block, state) = self.world.get_block_and_state(&pos).await;
 
                     let collided = World::check_outline(
                         &bounding_box,
@@ -785,11 +796,11 @@ impl Entity {
                     );
 
                     if collided {
-                        world
+                        self.world
                             .block_registry
                             .on_entity_collision(
                                 block,
-                                &world,
+                                &self.world,
                                 caller.as_ref(),
                                 &pos,
                                 state,
@@ -828,8 +839,6 @@ impl Entity {
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
 
         self.world
-            .read()
-            .await
             .broadcast_packet_all(&CUpdateEntityPosRot::new(
                 self.entity_id.into(),
                 Vector3::new(converted.x, converted.y, converted.z),
@@ -860,8 +869,6 @@ impl Entity {
         );
 
         self.world
-            .read()
-            .await
             .broadcast_packet_all(&CUpdateEntityPos::new(
                 self.entity_id.into(),
                 Vector3::new(converted.x, converted.y, converted.z),
@@ -901,14 +908,12 @@ impl Entity {
 
         let max = bounding_box.max_block_pos();
 
-        let world = self.world.read().await;
-
         for x in min.0.x..=max.0.x {
             for y in min.0.y..=max.0.y {
                 for z in min.0.z..=max.0.z {
                     let pos = BlockPos::new(x, y, z);
 
-                    let (fluid, state) = world.get_fluid_and_fluid_state(&pos).await;
+                    let (fluid, state) = self.world.get_fluid_and_fluid_state(&pos).await;
 
                     if fluid.id != Fluid::EMPTY.id {
                         let marginal_height =
@@ -930,7 +935,7 @@ impl Entity {
                             }
 
                             let mut fluid_velo =
-                                world.get_fluid_velocity(pos, &fluid, &state).await;
+                                self.world.get_fluid_velocity(pos, &fluid, &state).await;
 
                             if fluid_height[i] < 0.4 {
                                 fluid_velo = fluid_velo * fluid_height[i];
@@ -950,18 +955,17 @@ impl Entity {
         // BTreeMap auto-sorts water before lava as in vanilla
 
         for (_, fluid) in fluids {
-            world
+            self.world
                 .block_registry
                 .on_entity_collision_fluid(&fluid, caller.as_ref())
                 .await;
         }
 
-        let lava_speed =
-            if self.world.read().await.dimension_type == VanillaDimensionType::TheNether {
-                0.007
-            } else {
-                0.002_333_333
-            };
+        let lava_speed = if self.world.dimension_type == VanillaDimensionType::TheNether {
+            0.007
+        } else {
+            0.002_333_333
+        };
 
         self.push_by_fluid(0.014, fluid_push[0], fluid_n[0]);
 
@@ -1036,12 +1040,7 @@ impl Entity {
     ) {
         if let Some(mut supporting_block) = self.supporting_block_pos.load() {
             if offset > 1.0e-5 {
-                let (block, state) = self
-                    .world
-                    .read()
-                    .await
-                    .get_block_and_state(&supporting_block)
-                    .await;
+                let (block, state) = self.world.get_block_and_state(&supporting_block).await;
 
                 // if let Some(props) = block.properties(state.id) {
                 //     let name = props.;
@@ -1081,7 +1080,7 @@ impl Entity {
         if let (Some(b), Some(s)) = (block, state) {
             (pos, b, s)
         } else {
-            let (b, s) = self.world.read().await.get_block_and_state(&pos).await;
+            let (b, s) = self.world.get_block_and_state(&pos).await;
 
             (pos, b, s)
         }
@@ -1126,9 +1125,7 @@ impl Entity {
 
     #[allow(clippy::float_cmp)]
     async fn get_velocity_multiplier(&self) -> f32 {
-        let world = self.world.read().await;
-
-        let block = world.get_block(&self.block_pos.load()).await;
+        let block = self.world.get_block(&self.block_pos.load()).await;
 
         let multiplier = block.velocity_multiplier;
 
@@ -1143,9 +1140,8 @@ impl Entity {
 
     #[allow(clippy::float_cmp)]
     async fn get_jump_velocity_multiplier(&self) -> f32 {
-        let world = self.world.read().await;
-
-        let f = world
+        let f = self
+            .world
             .get_block(&self.block_pos.load())
             .await
             .jump_velocity_multiplier;
@@ -1199,7 +1195,12 @@ impl Entity {
 
         if let Some(living) = caller.get_living_entity() {
             living
-                .update_fall_distance(final_move.y, self.on_ground.load(Ordering::SeqCst), false)
+                .update_fall_distance(
+                    caller.clone(),
+                    final_move.y,
+                    self.on_ground.load(Ordering::SeqCst),
+                    false,
+                )
                 .await;
         }
     }
@@ -1222,8 +1223,6 @@ impl Entity {
 
             if self
                 .world
-                .read()
-                .await
                 .get_block_state(&block_pos.offset(offset))
                 .await
                 .is_full_cube()
@@ -1285,7 +1284,7 @@ impl Entity {
                 };
                 // TODO: this is bad
                 let scale_factor_current =
-                    if self.world.read().await.dimension_type == VanillaDimensionType::TheNether {
+                    if self.world.dimension_type == VanillaDimensionType::TheNether {
                         8.0
                     } else {
                         1.0
@@ -1302,6 +1301,7 @@ impl Entity {
                         portal_manager.portal_world.clone(),
                     )
                     .await;
+                drop(portal_manager);
             } else if portal_manager.ticks_in_portal == 0 {
                 should_remove = true;
             }
@@ -1360,7 +1360,7 @@ impl Entity {
 
     /// Removes the `Entity` from their current `World`
     pub async fn remove(&self) {
-        self.world.read().await.remove_entity(self).await;
+        self.world.remove_entity(self).await;
     }
 
     pub fn create_spawn_packet(&self) -> CSpawnEntity {
@@ -1584,8 +1584,6 @@ impl Entity {
     /// Plays sound at this entity's position with the entity's sound category
     pub async fn play_sound(&self, sound: Sound) {
         self.world
-            .read()
-            .await
             .play_sound(sound, SoundCategory::Neutral, &self.pos.load())
             .await;
     }
@@ -1600,8 +1598,6 @@ impl Entity {
         }
         buf.put_u8(255);
         self.world
-            .read()
-            .await
             .broadcast_packet_all(&CSetEntityMetadata::new(self.entity_id.into(), buf.into()))
             .await;
     }
@@ -1630,7 +1626,7 @@ impl Entity {
             (aabb.max.y - 0.001).floor() as i32,
             (aabb.max.z - 0.001).floor() as i32,
         );
-        let world = entity.get_entity().world.read().await;
+        let world = &entity.get_entity().world;
 
         for x in blockpos.0.x..=blockpos1.0.x {
             for y in blockpos.0.y..=blockpos1.0.y {
@@ -1643,7 +1639,7 @@ impl Entity {
                         if outlines.is_empty() {
                             world
                                 .block_registry
-                                .on_entity_collision(block, &world, entity, &pos, state, server)
+                                .on_entity_collision(block, world, entity, &pos, state, server)
                                 .await;
                             let fluid = world.get_fluid(&pos).await;
                             world
@@ -1657,7 +1653,7 @@ impl Entity {
                             if outline_aabb.intersects(&aabb) {
                                 world
                                     .block_registry
-                                    .on_entity_collision(block, &world, entity, &pos, state, server)
+                                    .on_entity_collision(block, world, entity, &pos, state, server)
                                     .await;
                                 let fluid = world.get_fluid(&pos).await;
                                 world
@@ -1670,7 +1666,7 @@ impl Entity {
                     } else {
                         world
                             .block_registry
-                            .on_entity_collision(block, &world, entity, &pos, state, server)
+                            .on_entity_collision(block, world, entity, &pos, state, server)
                             .await;
                         let fluid = world.get_fluid(&pos).await;
                         world
@@ -1692,8 +1688,6 @@ impl Entity {
     ) {
         // TODO: handle world change
         self.world
-            .read()
-            .await
             .broadcast_packet_all(&CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
@@ -1726,12 +1720,12 @@ impl Entity {
         vehicle.is_some()
     }
 
-    pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
-        if self.pos.load().y
-            < f64::from(self.world.read().await.generation_settings().shape.min_y) - 64.0
-        {
+    pub async fn check_out_of_world(&self, dyn_self: Arc<dyn EntityBase>) {
+        if self.pos.load().y < f64::from(self.world.generation_settings().shape.min_y) - 64.0 {
             // Tick out of world damage
-            dyn_self.damage(4.0, DamageType::OUT_OF_WORLD).await;
+            dyn_self
+                .damage(dyn_self.clone(), 4.0, DamageType::OUT_OF_WORLD)
+                .await;
         }
     }
 
@@ -1826,21 +1820,10 @@ impl NBTStorage for Entity {
 
 #[async_trait]
 impl EntityBase for Entity {
-    async fn damage_with_context(
-        &self,
-        _amount: f32,
-        _damage_type: DamageType,
-        _position: Option<Vector3<f64>>,
-        _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        false
-    }
-
     async fn tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
         self.tick_portal(&caller).await;
         self.update_fluid_state(&caller).await;
-        self.check_out_of_world(&*caller).await;
+        self.check_out_of_world(caller.clone()).await;
         let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
         if fire_ticks > 0 {
             if self.entity_type.fire_immune {
@@ -1850,7 +1833,9 @@ impl EntityBase for Entity {
                 }
             } else {
                 if fire_ticks % 20 == 0 {
-                    caller.damage(1.0, DamageType::ON_FIRE).await;
+                    caller
+                        .damage(caller.clone(), 1.0, DamageType::ON_FIRE)
+                        .await;
                 }
 
                 self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);

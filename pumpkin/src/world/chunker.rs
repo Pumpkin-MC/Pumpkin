@@ -33,7 +33,7 @@ pub async fn update_position(player: &Arc<Player>) {
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical != new_cylindrical {
-        match &player.client {
+        match player.client.as_ref() {
             ClientPlatform::Java(client) => {
                 client
                     .send_packet_now(&CCenterChunk {
@@ -66,7 +66,7 @@ pub async fn update_position(player: &Arc<Player>) {
 
         // Make sure the watched section and the chunk watcher updates are async atomic. We want to
         // ensure what we unload when the player disconnects is correct.
-        let level = &entity.world.read().await.level;
+        let level = &entity.world.level;
         level.mark_chunks_as_newly_watched(&loading_chunks).await;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks).await;
 
@@ -90,11 +90,9 @@ pub async fn update_position(player: &Arc<Player>) {
         }
 
         if !loading_chunks.is_empty() {
-            entity.world.read().await.spawn_world_chunks(
-                player.clone(),
-                loading_chunks,
-                new_chunk_center,
-            );
+            entity
+                .world
+                .spawn_world_chunks(player.clone(), loading_chunks, new_chunk_center);
         }
     }
 }

@@ -6,7 +6,7 @@ use crate::{Block, BlockDirection, CollisionShape};
 #[derive(Debug)]
 pub struct BlockState {
     pub id: u16,
-    pub state_flags: u8,
+    pub state_flags: u16,
     pub side_flags: u8,
     pub instrument: Instrument,
     pub luminance: u8,
@@ -14,7 +14,6 @@ pub struct BlockState {
     pub hardness: f32,
     pub collision_shapes: &'static [u16],
     pub outline_shapes: &'static [u16],
-    pub has_random_tick: bool,
     /// u8::MAX is used as None
     pub opacity: u8,
     /// u16::MAX is used as None
@@ -63,12 +62,24 @@ impl BlockState {
         self.state_flags & IS_LIQUID != 0
     }
 
+    /// Returns the legacy value for whether a block is solid.
     pub const fn is_solid(&self) -> bool {
         self.state_flags & IS_SOLID != 0
     }
 
     pub const fn is_full_cube(&self) -> bool {
         self.state_flags & IS_FULL_CUBE != 0
+    }
+
+    /// Returns whether the block is solid.
+    /// Solid blocks conduct redstone and block redstone wire.
+    /// Non-solid blocks don't allow redstone wire on top to propagate their signal downwards in java.
+    pub const fn is_solid_block(&self) -> bool {
+        self.state_flags & IS_SOLID_BLOCK != 0
+    }
+
+    pub const fn has_random_ticks(&self) -> bool {
+        self.state_flags & HAS_RANDOM_TICKS != 0
     }
 
     ///isSideSolidFullSquare() in Java!
@@ -132,20 +143,24 @@ pub struct BlockStateRef {
 }
 
 //This is the Layout of state_props in the right order
-const IS_AIR: u8 = 0b00000001;
-const BURNABLE: u8 = 0b00000010;
-const TOOL_REQUIRED: u8 = 0b00000100;
-const SIDED_TRANSPARENCY: u8 = 0b00001000;
-const REPLACEABLE: u8 = 0b00010000;
-const IS_LIQUID: u8 = 0b00100000;
-const IS_SOLID: u8 = 0b01000000;
-const IS_FULL_CUBE: u8 = 0b10000000;
+// state_flags
+const IS_AIR: u16 = 1 << 0;
+const BURNABLE: u16 = 1 << 1;
+const TOOL_REQUIRED: u16 = 1 << 2;
+const SIDED_TRANSPARENCY: u16 = 1 << 3;
+const REPLACEABLE: u16 = 1 << 4;
+const IS_LIQUID: u16 = 1 << 5;
+const IS_SOLID: u16 = 1 << 6;
+const IS_FULL_CUBE: u16 = 1 << 7;
+const IS_SOLID_BLOCK: u16 = 1 << 8;
+const HAS_RANDOM_TICKS: u16 = 1 << 9;
 
-const DOWN_SIDE_SOLID: u8 = 0b00000001;
-const UP_SIDE_SOLID: u8 = 0b00000010;
-const NORTH_SIDE_SOLID: u8 = 0b00000100;
-const SOUTH_SIDE_SOLID: u8 = 0b00001000;
-const WEST_SIDE_SOLID: u8 = 0b00010000;
-const EAST_SIDE_SOLID: u8 = 0b00100000;
-const DOWN_CENTER_SOLID: u8 = 0b01000000;
-const UP_CENTER_SOLID: u8 = 0b10000000;
+// side_flags
+const DOWN_SIDE_SOLID: u8 = 1 << 0;
+const UP_SIDE_SOLID: u8 = 1 << 1;
+const NORTH_SIDE_SOLID: u8 = 1 << 2;
+const SOUTH_SIDE_SOLID: u8 = 1 << 3;
+const WEST_SIDE_SOLID: u8 = 1 << 4;
+const EAST_SIDE_SOLID: u8 = 1 << 5;
+const DOWN_CENTER_SOLID: u8 = 1 << 6;
+const UP_CENTER_SOLID: u8 = 1 << 7;

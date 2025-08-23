@@ -2,6 +2,8 @@ use std::{collections::BTreeMap, fs};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::TextContent::Translate;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
@@ -10,6 +12,8 @@ pub struct Enchantment {
     pub id: u8,
     pub anvil_cost: u32,
     pub supported_items: String,
+    pub description: TextComponent,
+    pub exclusive_set: Option<String>,
     pub max_level: i32,
     pub slots: Vec<AttributeModifierSlot>, // TODO: add more
 }
@@ -77,34 +81,74 @@ pub(crate) fn build() -> TokenStream {
         let max_level = enchantment.max_level;
         let slots = enchantment.slots.clone();
         let slots = slots.iter().map(|slot| slot.to_tokens());
+        let Translate { translate, with: _ } = &enchantment.description.0.content else {
+            panic!()
+        };
+        let translate = translate.to_string();
 
-        variants.extend([quote! {
-            pub const #format_name: Enchantment = Enchantment {
-                id: #id,
-                name: #name,
-                registry_key: #raw_name,
-                anvil_cost: #anvil_cost,
-                supported_items: &Item::#supported_items,
-                max_level: #max_level,
-                slots: &[#(#slots),*]
-            };
-        }]);
+        if let Some(exclusive_set) = &enchantment.exclusive_set {
+            let exclusive_set = format_ident!(
+                "{}",
+                exclusive_set
+                    .strip_prefix("#")
+                    .unwrap()
+                    .replace(":", "_")
+                    .replace("/", "_")
+                    .to_uppercase()
+            );
+            variants.extend([quote! {
+                pub const #format_name: Self = Self {
+                    id: #id,
+                    name: #name,
+                    registry_key: #raw_name,
+                    description: #translate,
+                    anvil_cost: #anvil_cost,
+                    supported_items: &ItemTag::#supported_items,
+                    exclusive_set: Some(&EnchantmentTag::#exclusive_set),
+                    max_level: #max_level,
+                    slots: &[#(#slots),*]
+                };
+            }]);
+        } else {
+            variants.extend([quote! {
+                pub const #format_name: Self = Self {
+                    id: #id,
+                    name: #name,
+                    description: #translate,
+                    registry_key: #raw_name,
+                    anvil_cost: #anvil_cost,
+                    supported_items: &ItemTag::#supported_items,
+                    exclusive_set: None,
+                    max_level: #max_level,
+                    slots: &[#(#slots),*]
+                };
+            }]);
+        }
 
         name_to_type.extend(quote! { #name => Some(&Self::#format_name), });
         id_to_type.extend(quote! { #id => Some(&Self::#format_name), });
     }
 
     quote! {
+        use crate::item::Item;
+        use crate::tag::Enchantment as EnchantmentTag;
+        use crate::tag::Item as ItemTag;
+        use crate::tag::{RegistryKey, Tag, Taggable};
+        use crate::data_component_impl::EnchantmentsImpl;
+        use pumpkin_util::text::TextComponent;
+        use pumpkin_util::text::color::NamedColor;
         use std::hash::{Hash, Hasher};
-        use crate::tag::{Item, Tag, Taggable, RegistryKey};
+        use std::slice::Iter;
 
         #[derive(Debug)]
         pub struct Enchantment {
             pub id: u8,
             pub name: &'static str,
             pub registry_key: &'static str,
+            pub description: &'static str, // TODO use TextComponent
             pub anvil_cost: u32,
             pub supported_items: &'static Tag,
+            pub exclusive_set: Option<&'static Tag>,
             pub max_level: i32,
             pub slots: &'static [AttributeModifierSlot]
             // TODO: add more
@@ -163,6 +207,44 @@ pub(crate) fn build() -> TokenStream {
                     #id_to_type
                     _ => None
                 }
+            }
+
+            pub fn can_enchant(&self, item: &'static Item) -> bool {
+                self.supported_items.1.contains(&item.id)
+            }
+            pub fn are_compatible(&self, other: &'static Enchantment) -> bool {
+                if self == other {
+                    return false;
+                }
+                if let Some(tag) = self.exclusive_set && tag.1.contains(&(other.id as u16)) {
+                    return false;
+                }
+                if let Some(tag) = other.exclusive_set && tag.1.contains(&(self.id as u16)) {
+                    return false;
+                }
+                true
+            }
+            pub fn is_enchantment_compatible(&self, other: &EnchantmentsImpl) -> bool {
+                for (i, _) in other.enchantment.iter() {
+                    if !self.are_compatible(i) {
+                        return false;
+                    }
+                }
+                true
+            }
+            pub fn get_fullname(&self, level: i32) -> TextComponent {
+                let mut ret = TextComponent::translate(self.description, []).color_named(
+                    if self.is_tagged_with_by_tag(&EnchantmentTag::MINECRAFT_CURSE) {
+                        NamedColor::Red
+                    } else {
+                        NamedColor::Gray
+                    }
+                );
+                if level != 1 || self.max_level != 1 {
+                    ret = ret.add_text(" ")
+                        .add_child(TextComponent::translate("enchantment.level.".to_string() + &level.to_string(), []));
+                }
+                ret
             }
         }
     }

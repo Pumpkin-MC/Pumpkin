@@ -15,6 +15,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::item::ItemStack;
 use uuid::Uuid;
 
 pub struct MinecartItem;
@@ -51,14 +52,14 @@ impl ItemMetadata for MinecartItem {
 impl ItemBehaviour for MinecartItem {
     async fn use_on_block(
         &self,
-        item: &Item,
+        item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         block: &Block,
         _server: &Server,
     ) {
-        let world = player.world().await;
+        let world = player.world();
 
         if !block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_RAILS) {
             return;
@@ -74,7 +75,7 @@ impl ItemBehaviour for MinecartItem {
                 .is_ascending()
         };
         let height = if is_ascending { 0.5 } else { 0.0 };
-        let entity_type = Self::item_to_entity(item);
+        let entity_type = Self::item_to_entity(item.item);
         let pos = location.to_f64();
         let entity = Arc::new(Entity::new(
             Uuid::new_v4(),

@@ -5,7 +5,7 @@ use std::sync::{
 };
 
 use async_trait::async_trait;
-use pumpkin_data::{damage::DamageType, entity::EntityType};
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -89,8 +89,6 @@ impl EntityBase for ExperienceOrbEntity {
         let no_clip = !self
             .entity
             .world
-            .read()
-            .await
             .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
             .await;
         // TODO: isSubmergedIn
@@ -125,17 +123,6 @@ impl EntityBase for ExperienceOrbEntity {
                 self.entity.remove().await;
             }
         }
-    }
-
-    async fn damage_with_context(
-        &self,
-        _amount: f32,
-        _damage_type: DamageType,
-        _position: Option<Vector3<f64>>,
-        _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        false
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {

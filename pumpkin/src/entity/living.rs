@@ -1,6 +1,10 @@
 use pumpkin_data::potion::Effect;
+use pumpkin_inventory::build_equipment_slots;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::sync::atomic::{
     AtomicBool, AtomicU8,
     Ordering::{Relaxed, SeqCst},
@@ -16,7 +20,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::sound::SoundCategory;
@@ -47,6 +51,8 @@ pub struct LivingEntity {
     pub last_damage_taken: AtomicCell<f32>,
     /// The current health level of the entity.
     pub health: AtomicCell<f32>,
+    pub item_use_time: AtomicI32,
+    pub item_in_use: Mutex<Option<ItemStack>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
@@ -55,6 +61,7 @@ pub struct LivingEntity {
     pub active_effects: Mutex<HashMap<&'static StatusEffect, Effect>>,
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
+    pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
 
     pub movement_speed: AtomicCell<f64>,
 
@@ -68,6 +75,7 @@ pub struct LivingEntity {
     pub climbing_pos: AtomicCell<Option<BlockPos>>,
 
     water_movement_speed_multiplier: f32,
+    livings_flags: AtomicU8,
 }
 
 #[async_trait]
@@ -78,6 +86,11 @@ pub trait LivingEntityTrait: EntityBase {
 }
 
 impl LivingEntity {
+    const USING_ITEM_FLAG: i32 = 1;
+    const OFF_HAND_ACTIVE_FLAG: i32 = 2;
+    #[allow(dead_code)]
+    const USING_RIPTIDE_FLAG: i32 = 4;
+
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -97,8 +110,12 @@ impl LivingEntity {
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),
+            item_use_time: AtomicI32::new(0),
+            item_in_use: Mutex::new(None),
+            livings_flags: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
+            equipment_slots: Arc::new(build_equipment_slots()),
             jumping: AtomicBool::new(false),
             jumping_cooldown: AtomicU8::new(0),
             climbing: AtomicBool::new(false),
@@ -121,8 +138,6 @@ impl LivingEntity {
             .collect();
         self.entity
             .world
-            .read()
-            .await
             .broadcast_packet_except(
                 &[self.entity.entity_uuid],
                 &CSetEquipment::new(self.entity_id().into(), equipment),
@@ -135,14 +150,43 @@ impl LivingEntity {
         // TODO: Only nearby
         self.entity
             .world
-            .read()
-            .await
             .broadcast_packet_all(&CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
                 stack_amount.try_into().unwrap(),
             ))
             .await;
+    }
+
+    /// Sends the Hand animation to all others, used when Eating for example
+    pub async fn set_active_hand(&self, hand: Hand, stack: ItemStack) {
+        self.item_use_time
+            .store(stack.get_max_use_time(), Ordering::Relaxed);
+        *self.item_in_use.lock().await = Some(stack);
+        self.set_living_flag(Self::USING_ITEM_FLAG, true).await;
+        self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left)
+            .await;
+    }
+
+    async fn set_living_flag(&self, flag: i32, value: bool) {
+        let index = flag as u8;
+        let mut b = self.livings_flags.load(Ordering::Relaxed);
+        if value {
+            b |= index;
+        } else {
+            b &= !index;
+        }
+        self.livings_flags.store(b, Ordering::Relaxed);
+        self.entity
+            .send_meta_data(&[Metadata::new(8, MetaDataType::Byte, b)])
+            .await;
+    }
+
+    pub async fn clear_active_hand(&self) {
+        *self.item_in_use.lock().await = None;
+        self.item_use_time.store(0, Ordering::Relaxed);
+
+        self.set_living_flag(Self::USING_ITEM_FLAG, false).await;
     }
 
     pub async fn heal(&self, additional_health: f32) {
@@ -164,18 +208,17 @@ impl LivingEntity {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
-        let mut effects = self.active_effects.lock().await;
-        effects.insert(effect.effect_type, effect);
+        self.active_effects
+            .lock()
+            .await
+            .insert(effect.effect_type, effect);
         // TODO broadcast metadata
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) {
-        let mut effects = self.active_effects.lock().await;
-        effects.remove(&effect_type);
+        self.active_effects.lock().await.remove(&effect_type);
         self.entity
             .world
-            .read()
-            .await
             .send_remove_mob_effect(&self.entity, effect_type)
             .await;
     }
@@ -192,16 +235,14 @@ impl LivingEntity {
 
     // Check if the entity is in water
     pub async fn is_in_water(&self) -> bool {
-        let world = self.entity.world.read().await;
         let block_pos = self.entity.block_pos.load();
-        world.get_block(&block_pos).await == &Block::WATER
+        self.entity.world.get_block(&block_pos).await == &Block::WATER
     }
 
     // Check if the entity is in powder snow
     pub async fn is_in_powder_snow(&self) -> bool {
-        let world = self.entity.world.read().await;
         let block_pos = self.entity.block_pos.load();
-        world.get_block(&block_pos).await == &Block::POWDER_SNOW
+        self.entity.world.get_block(&block_pos).await == &Block::POWDER_SNOW
     }
 
     async fn get_effective_gravity(&self, caller: &Arc<dyn EntityBase>) -> f64 {
@@ -299,7 +340,7 @@ impl LivingEntity {
         let suffocating = self.entity.tick_block_collisions(&caller, server).await;
 
         if suffocating {
-            self.damage(1.0, DamageType::IN_WALL).await;
+            self.damage(caller, 1.0, DamageType::IN_WALL).await;
         }
     }
 
@@ -461,8 +502,6 @@ impl LivingEntity {
             && !self
                 .entity
                 .world
-                .read()
-                .await
                 .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
                 .await
         {
@@ -645,6 +684,7 @@ impl LivingEntity {
 
     pub async fn update_fall_distance(
         &self,
+        caller: Arc<dyn EntityBase>,
         height_difference: f64,
         ground: bool,
         dont_damage: bool,
@@ -665,7 +705,7 @@ impl LivingEntity {
 
             // TODO: Play block fall sound
             if damage > 0.0 {
-                let check_damage = self.damage(damage, DamageType::FALL).await; // Fall
+                let check_damage = self.damage(caller, damage, DamageType::FALL).await; // Fall
                 if check_damage {
                     self.entity
                         .play_sound(Self::get_fall_sound(fall_distance as i32))
@@ -741,7 +781,7 @@ impl LivingEntity {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) {
-        let world = self.entity.world.read().await;
+        let world = &self.entity.world;
         let dyn_self = world
             .get_entity_by_id(self.entity.entity_id)
             .await
@@ -783,10 +823,9 @@ impl LivingEntity {
 
     async fn drop_loot(&self, params: LootContextParameters) {
         if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
-            let world = self.entity.world.read().await;
             let pos = self.entity.block_pos.load();
             for stack in loot_table.get_loot(params) {
-                world.drop_stack(&pos, stack).await;
+                self.entity.world.drop_stack(&pos, stack).await;
             }
         }
     }
@@ -807,6 +846,57 @@ impl LivingEntity {
         for effect_type in effects_to_remove {
             self.remove_effect(effect_type).await;
         }
+    }
+
+    async fn try_use_death_protector(&self, caller: &Arc<dyn EntityBase>) -> bool {
+        for hand in Hand::all() {
+            let stack = self.get_stack_in_hand(caller, hand).await;
+            let mut stack = stack.lock().await;
+            // TODO: effects...
+            if stack.get_data_component::<DeathProtectionImpl>().is_some() {
+                stack.decrement(1);
+                self.set_health(1.0).await;
+                self.entity
+                    .world
+                    .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
+                    .await;
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub async fn held_item(&self, caller: &Arc<dyn EntityBase>) -> Arc<Mutex<ItemStack>> {
+        if let Some(player) = caller.get_player() {
+            return player.inventory.held_item();
+        }
+        // TODO: this is wrong
+        let slot = self
+            .equipment_slots
+            .get(&PlayerInventory::OFF_HAND_SLOT)
+            .unwrap();
+        self.entity_equipment.lock().await.get(slot)
+    }
+
+    pub async fn get_stack_in_hand(
+        &self,
+        caller: &Arc<dyn EntityBase>,
+        hand: Hand,
+    ) -> Arc<Mutex<ItemStack>> {
+        match hand {
+            Hand::Left => self.off_hand_item().await,
+            Hand::Right => self.held_item(caller).await,
+        }
+    }
+
+    /// getOffHandStack in source
+    pub async fn off_hand_item(&self) -> Arc<Mutex<ItemStack>> {
+        let slot = self
+            .equipment_slots
+            .get(&PlayerInventory::OFF_HAND_SLOT)
+            .unwrap();
+        self.entity_equipment.lock().await.get(slot)
     }
 
     pub fn is_part_of_game(&self) -> bool {
@@ -880,6 +970,7 @@ impl NBTStorage for LivingEntity {
 impl EntityBase for LivingEntity {
     async fn damage_with_context(
         &self,
+        caller: Arc<dyn EntityBase>,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -905,7 +996,7 @@ impl EntityBase for LivingEntity {
             return false; // Fire resistance
         }
 
-        let world = self.entity.world.read().await;
+        let world = &self.entity.world;
 
         let last_damage = self.last_damage_taken.load();
         let play_sound;
@@ -934,8 +1025,6 @@ impl EntityBase for LivingEntity {
 
         self.entity
             .world
-            .read()
-            .await
             .broadcast_packet_all(&CDamageEvent::new(
                 self.entity.entity_id.into(),
                 damage_type.id.into(),
@@ -948,8 +1037,6 @@ impl EntityBase for LivingEntity {
         if play_sound {
             self.entity
                 .world
-                .read()
-                .await
                 .play_sound(
                     // Sound::EntityPlayerHurt,
                     Sound::EntityGenericHurt,
@@ -966,7 +1053,7 @@ impl EntityBase for LivingEntity {
             self.set_health(new_health).await;
         }
 
-        if new_health <= 0.0 {
+        if new_health <= 0.0 && !self.try_use_death_protector(&caller).await {
             self.on_death(damage_type, source, cause).await;
         }
 
@@ -987,6 +1074,34 @@ impl EntityBase for LivingEntity {
             self.entity.send_velocity().await;
         }
         self.tick_effects().await;
+        // Current active item
+        {
+            let item_in_use = self.item_in_use.lock().await.clone();
+            if let Some(item) = item_in_use.as_ref()
+                && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
+            {
+                // Consume item
+                if let Some(food) = item.get_data_component::<FoodImpl>()
+                    && let Some(player) = caller.get_player()
+                {
+                    player
+                        .hunger_manager
+                        .eat(player, food.nutrition as u8, food.saturation)
+                        .await;
+                }
+                if let Some(player) = caller.get_player() {
+                    player
+                        .inventory
+                        .held_item()
+                        .lock()
+                        .await
+                        .decrement_unless_creative(player.gamemode.load(), 1);
+                }
+
+                self.clear_active_hand().await;
+            }
+        }
+
         if self.hurt_cooldown.load(Relaxed) > 0 {
             self.hurt_cooldown.fetch_sub(1, Relaxed);
         }
@@ -996,8 +1111,6 @@ impl EntityBase for LivingEntity {
                 // Spawn Death particles
                 self.entity
                     .world
-                    .read()
-                    .await
                     .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
                     .await;
                 self.entity.remove().await;

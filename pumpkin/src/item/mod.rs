@@ -2,7 +2,9 @@ pub mod items;
 pub mod registry;
 
 use std::any::Any;
+use std::sync::Arc;
 
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
@@ -11,6 +13,7 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::item::ItemStack;
 
 pub trait ItemMetadata {
     fn ids() -> Box<[u16]>;
@@ -22,12 +25,20 @@ pub trait ItemBehaviour: Send + Sync {
 
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         _player: &Player,
         _location: BlockPos,
         _face: BlockDirection,
         _block: &Block,
         _server: &Server,
+    ) {
+    }
+
+    async fn use_on_entity(
+        &self,
+        _item: &mut ItemStack,
+        _player: &Player,
+        _entity: Arc<dyn EntityBase>,
     ) {
     }
 

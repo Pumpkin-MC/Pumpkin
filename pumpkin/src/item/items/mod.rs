@@ -2,6 +2,7 @@ pub mod axe;
 pub mod bucket;
 pub mod dye;
 pub mod egg;
+pub mod end_crystal;
 pub mod ender_eye;
 pub mod glowing_ink_sac;
 pub mod hoe;
@@ -10,12 +11,15 @@ pub mod ignite;
 pub mod ink_sac;
 pub mod mace;
 pub mod minecart;
+pub mod name_tag;
 pub mod shovel;
 pub mod snowball;
 pub mod swords;
 pub mod trident;
 
+use crate::item::items::end_crystal::EndCrystalItem;
 use crate::item::items::minecart::MinecartItem;
+use crate::item::items::name_tag::NameTagItem;
 
 use super::registry::ItemRegistry;
 use axe::AxeItem;
@@ -51,8 +55,10 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(FilledBucketItem);
     manager.register(ShovelItem);
     manager.register(AxeItem);
+    manager.register(EndCrystalItem);
     manager.register(MinecartItem);
     manager.register(HoneyCombItem);
+    manager.register(NameTagItem);
     manager.register(EnderEyeItem);
     manager.register(FireChargeItem);
     manager.register(DyeItem);

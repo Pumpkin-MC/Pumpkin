@@ -1,13 +1,17 @@
-use pumpkin_data::Block;
 use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component::DataComponent::Enchantments;
 use pumpkin_data::data_component_impl::{
-    DataComponentImpl, IDSet, MaxStackSizeImpl, ToolImpl, get, read_data,
+    BlocksAttacksImpl, ConsumableImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
+    MaxStackSizeImpl, ToolImpl, get, get_mut, read_data,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
+use std::borrow::Cow;
+use std::cmp::{max, min};
 
 mod categories;
 
@@ -72,6 +76,19 @@ impl ItemStack {
         }
         None
     }
+    pub fn get_data_component_mut<T: DataComponentImpl + 'static>(&mut self) -> Option<&mut T> {
+        let to_get_id = &T::get_enum();
+        for (id, component) in self.patch.iter_mut() {
+            if id == to_get_id {
+                return if let Some(component) = component {
+                    Some(get_mut::<T>(component.as_mut()))
+                } else {
+                    None
+                };
+            }
+        }
+        None
+    }
 
     pub const EMPTY: &'static ItemStack = &ItemStack {
         item_count: 0,
@@ -85,6 +102,16 @@ impl ItemStack {
         } else {
             1
         }
+    }
+
+    pub fn get_max_use_time(&self) -> i32 {
+        if let Some(value) = self.get_data_component::<ConsumableImpl>() {
+            return value.consume_ticks();
+        }
+        if self.get_data_component::<BlocksAttacksImpl>().is_some() {
+            return 72000;
+        }
+        0
     }
 
     pub fn get_item(&self) -> &Item {
@@ -129,6 +156,12 @@ impl ItemStack {
         self.item_count = count;
     }
 
+    pub fn decrement_unless_creative(&mut self, gamemode: GameMode, amount: u8) {
+        if gamemode != GameMode::Creative {
+            self.item_count = self.item_count.saturating_sub(amount);
+        }
+    }
+
     pub fn decrement(&mut self, amount: u8) {
         self.item_count = self.item_count.saturating_sub(amount);
     }
@@ -137,6 +170,32 @@ impl ItemStack {
         self.item_count = self.item_count.saturating_add(amount);
     }
 
+    pub fn enchant(&mut self, enchantment: &'static Enchantment, level: i32) {
+        // TODO itemstack may not send update packet to client
+        if level <= 0 {
+            return;
+        }
+        let level = min(level, 255);
+        if let Some(data) = self.get_data_component_mut::<EnchantmentsImpl>() {
+            for (enc, old_level) in data.enchantment.to_mut() {
+                if *enc == enchantment {
+                    *old_level = max(*old_level, level);
+                    return;
+                }
+            }
+            data.enchantment.to_mut().push((enchantment, level));
+        } else {
+            self.patch.push((
+                Enchantments,
+                Some(
+                    EnchantmentsImpl {
+                        enchantment: Cow::Owned(vec![(enchantment, level)]),
+                    }
+                    .to_dyn(),
+                ),
+            ));
+        }
+    }
     pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
         if self.item != other.item || self.patch.len() != other.patch.len() {
             return false;

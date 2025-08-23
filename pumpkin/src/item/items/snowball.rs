@@ -24,7 +24,7 @@ const POWER: f32 = 1.5;
 impl ItemBehaviour for SnowBallItem {
     async fn normal_use(&self, _block: &Item, player: &Player) {
         let position = player.position();
-        let world = player.world().await;
+        let world = player.world();
         world
             .play_sound(
                 Sound::EntitySnowballThrow,

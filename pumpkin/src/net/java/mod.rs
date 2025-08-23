@@ -255,7 +255,7 @@ impl JavaClient {
             ConnectionState::Login => {
                 // TextComponent implements Serialize and writes in bytes instead of String, that's the reasib we only use content
                 self.send_packet_now(&CLoginDisconnect::new(
-                    &serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
                 ))
                 .await;
             }
@@ -342,8 +342,7 @@ impl JavaClient {
             }
             ConnectionState::Config => self.handle_config_packet(server, packet).await,
             ConnectionState::Play => {
-                let player = self.player.lock().await;
-                if let Some(player) = player.as_ref() {
+                if let Some(player) = self.player.lock().await.as_ref() {
                     match self.handle_play_packet(player, server, packet).await {
                         Ok(()) => {}
                         Err(e) => {
@@ -572,7 +571,7 @@ impl JavaClient {
                     .await;
             }
             SInteract::PACKET_ID => {
-                self.handle_interact(player, SInteract::read(payload)?)
+                self.handle_interact(player, SInteract::read(payload)?, server)
                     .await;
             }
             SKeepAlive::PACKET_ID => {

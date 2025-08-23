@@ -74,7 +74,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
             let base_entity = target.get_entity();
             let yaw = base_entity.yaw.load();
             let pitch = base_entity.pitch.load();
-            let world = base_entity.world.read().await.clone();
+            let world = base_entity.world.clone();
             target
                 .clone()
                 .teleport(pos, yaw.into(), pitch.into(), world)
@@ -110,7 +110,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
             CommandSender::Rcon(_) | CommandSender::Console => {
                 server.worlds.read().await.first().unwrap().clone()
             }
-            CommandSender::Player(player) => player.world().await,
+            CommandSender::Player(player) => player.world().clone(),
         };
 
         for target in targets {
@@ -152,7 +152,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
                     pos,
                     Some(yaw),
                     Some(pitch),
-                    facing_entity.get_entity().world.read().await.clone(),
+                    facing_entity.get_entity().world.clone(),
                 )
                 .await;
         }
@@ -217,7 +217,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
             CommandSender::Rcon(_) | CommandSender::Console => {
                 server.worlds.read().await.first().unwrap().clone()
             }
-            CommandSender::Player(player) => player.world().await,
+            CommandSender::Player(player) => player.world().clone(),
         };
         for target in targets {
             let yaw = target.get_entity().yaw.load();
@@ -244,7 +244,7 @@ impl CommandExecutor for SelfToEntityExecutor {
     ) -> Result<(), CommandError> {
         let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
         let pos = destination.get_entity().pos.load();
-        let world = destination.get_entity().world.read().await.clone();
+        let world = destination.get_entity().world.clone();
 
         match sender {
             CommandSender::Player(player) => {
@@ -292,7 +292,7 @@ impl CommandExecutor for SelfToPosExecutor {
                 }
                 player
                     .clone()
-                    .teleport(pos, Some(yaw), Some(pitch), player.world().await)
+                    .teleport(pos, Some(yaw), Some(pitch), player.world().clone())
                     .await;
             }
             _ => {

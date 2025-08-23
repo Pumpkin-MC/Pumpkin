@@ -91,8 +91,6 @@ impl ItemEntity {
         let items: Vec<_> = self
             .entity
             .world
-            .read()
-            .await
             .entities
             .read()
             .await
@@ -239,8 +237,6 @@ impl EntityBase for ItemEntity {
         let no_clip = !self
             .entity
             .world
-            .read()
-            .await
             .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
             .await;
 
@@ -316,7 +312,7 @@ impl EntityBase for ItemEntity {
                 2
             };
 
-            if age % n == 0 && self.can_merge().await {
+            if age.is_multiple_of(n) && self.can_merge().await {
                 self.try_merge().await;
             }
         }
@@ -356,6 +352,7 @@ impl EntityBase for ItemEntity {
 
     async fn damage_with_context(
         &self,
+        _caller: Arc<dyn EntityBase>,
         amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
@@ -370,7 +367,12 @@ impl EntityBase for ItemEntity {
         true
     }
 
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
+    async fn damage(
+        &self,
+        _caller: Arc<dyn EntityBase>,
+        _amount: f32,
+        _damage_type: DamageType,
+    ) -> bool {
         false
     }
 

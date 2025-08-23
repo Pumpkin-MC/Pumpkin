@@ -289,6 +289,7 @@ impl World {
             chunk.mark_dirty(true);
             if old_chunk == current_chunk_coordinate {
                 chunk.data.remove(&entity.entity_uuid);
+                drop(chunk);
             } else {
                 let chunk = self.level.get_entity_chunk(current_chunk_coordinate).await;
                 let mut chunk = chunk.write().await;
@@ -395,7 +396,7 @@ impl World {
         let current_players = self.players.read().await;
 
         for (_, player) in current_players.iter() {
-            match &player.client {
+            match player.client.as_ref() {
                 ClientPlatform::Java(client) => client.enqueue_packet(je_packet).await,
                 ClientPlatform::Bedrock(client) => client.send_game_packet(be_packet).await,
             }
@@ -439,10 +440,13 @@ impl World {
                 .await
                 .add_seen_signature(&chat_message.signature.clone().unwrap()); // Unwrap is safe because we check for None in validate_chat_message
 
-            let recipient_signature_cache = &mut recipient.signature_cache.lock().await;
             if recipient.gameprofile.id != sender.gameprofile.id {
                 // Sender may update recipient on signatures recipient hasn't seen
-                recipient_signature_cache.cache_signatures(sender_last_seen.as_ref());
+                recipient
+                    .signature_cache
+                    .lock()
+                    .await
+                    .cache_signatures(sender_last_seen.as_ref());
             }
             recipient.chat_session.lock().await.messages_received += 1;
         }
@@ -593,9 +597,11 @@ impl World {
 
                 if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
                     weather.reset_weather_cycle(self).await;
+                    drop(weather);
                 }
             } else if level_time.world_age % 20 == 0 {
                 level_time.send_time(self).await;
+                drop(level_time);
             }
         }
 
@@ -1252,6 +1258,8 @@ impl World {
             scenario_id: String::new(),
             owner_id: String::new(),
         };
+        drop(level_info);
+        drop(weather);
 
         let client = player.client.bedrock();
         client
@@ -1442,9 +1450,7 @@ impl World {
                 f64::from(info.spawn_z) + 0.5,
             );
             let yaw = info.spawn_angle;
-            let pitch = 0.0;
-
-            (position, yaw, pitch)
+            (position, yaw, 0.0) // Pitch
         };
 
         let velocity = player.living_entity.entity.velocity.load();
@@ -1476,11 +1482,9 @@ impl World {
             }],
         ))
         .await;
-
+        let current_players = self.players.read().await;
         // Here, we send all the infos of players who already joined.
         {
-            let current_players = self.players.read().await;
-
             let mut current_player_data = Vec::new();
 
             for (_, player) in current_players
@@ -1505,6 +1509,7 @@ impl World {
                         signature: chat_session.signature.clone(),
                     })));
                 }
+                drop(chat_session);
 
                 current_player_data.push((&player.gameprofile.id, player_actions));
             }
@@ -1550,7 +1555,7 @@ impl World {
 
         // Spawn players for our client.
         let id = player.gameprofile.id;
-        for (_, existing_player) in self.players.read().await.iter().filter(|c| c.0 != &id) {
+        for (_, existing_player) in current_players.iter().filter(|c| c.0 != &id) {
             let entity = &existing_player.living_entity.entity;
             let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
@@ -1569,34 +1574,37 @@ impl World {
                     entity.velocity.load(),
                 ))
                 .await;
-            let config = existing_player.config.read().await;
-            let mut buf = Vec::new();
-            for meta in [
-                Metadata::new(
-                    DATA_PLAYER_MODE_CUSTOMISATION,
-                    MetaDataType::Byte,
-                    config.skin_parts,
-                ),
-                Metadata::new(
-                    DATA_PLAYER_MAIN_HAND,
-                    MetaDataType::Byte,
-                    config.main_hand as u8,
-                ),
-            ] {
-                let mut serializer_buf = Vec::new();
+            {
+                let config = existing_player.config.read().await;
+                let mut buf = Vec::new();
+                for meta in [
+                    Metadata::new(
+                        DATA_PLAYER_MODE_CUSTOMISATION,
+                        MetaDataType::Byte,
+                        config.skin_parts,
+                    ),
+                    Metadata::new(
+                        DATA_PLAYER_MAIN_HAND,
+                        MetaDataType::Byte,
+                        config.main_hand as u8,
+                    ),
+                ] {
+                    let mut serializer_buf = Vec::new();
 
-                let mut serializer = Serializer::new(&mut serializer_buf);
-                meta.serialize(&mut serializer).unwrap();
-                buf.extend(serializer_buf);
+                    let mut serializer = Serializer::new(&mut serializer_buf);
+                    meta.serialize(&mut serializer).unwrap();
+                    buf.extend(serializer_buf);
+                }
+                drop(config);
+                // END
+                buf.put_u8(255);
+                client
+                    .enqueue_packet(&CSetEntityMetadata::new(
+                        existing_player.get_entity().entity_id.into(),
+                        buf.into(),
+                    ))
+                    .await;
             }
-            // END
-            buf.put_u8(255);
-            client
-                .enqueue_packet(&CSetEntityMetadata::new(
-                    existing_player.get_entity().entity_id.into(),
-                    buf.into(),
-                ))
-                .await;
         }
         player.send_client_information().await;
 
@@ -1628,6 +1636,7 @@ impl World {
             // Calculate rain and thunder levels directly from public fields
             let rain_level = weather.rain_level.clamp(0.0, 1.0);
             let thunder_level = weather.thunder_level.clamp(0.0, 1.0);
+            drop(weather);
 
             client
                 .enqueue_packet(&CGameEvent::new(GameEvent::RainLevelChange, rain_level))
@@ -1664,8 +1673,7 @@ impl World {
         ));
 
         for (slot, item_arc_mutex) in &from.inventory.entity_equipment.lock().await.equipment {
-            let item_guard = item_arc_mutex.lock().await;
-            let item_stack = item_guard.clone();
+            let item_stack = item_arc_mutex.lock().await.clone();
             equipment_list.push((slot.discriminant(), item_stack));
         }
 
@@ -1687,7 +1695,7 @@ impl World {
         yaw: f32,
         pitch: f32,
     ) {
-        if let ClientPlatform::Java(client) = &player.client {
+        if let ClientPlatform::Java(client) = player.client.as_ref() {
             self.worldborder.lock().await.init_client(client).await;
         }
 
@@ -1724,9 +1732,9 @@ impl World {
         player.set_health(20.0).await;
     }
 
-    pub async fn explode(self: &Arc<Self>, server: &Server, position: Vector3<f64>, power: f32) {
+    pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
         let explosion = Explosion::new(power, position);
-        explosion.explode(server, self).await;
+        explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion
         } else {
@@ -1751,7 +1759,7 @@ impl World {
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.entity.last_pos.load();
-        let death_dimension = player.world().await.dimension_type.resource_location();
+        let death_dimension = player.world().dimension_type.resource_location();
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,
@@ -1835,6 +1843,7 @@ impl World {
                     .is_some_and(|since| since >= 100)
             })
             .count();
+        drop(players);
 
         // TODO: sleep ratio
         sleeping_player_count == player_count
@@ -1949,8 +1958,8 @@ impl World {
         });
         let mut entity_receiver = self.level.receive_entity_chunks(chunks);
         let level = self.level.clone();
-        let player = player1.clone();
-        let world = world1.clone();
+        let player = player1;
+        let world = world1;
         player.clone().spawn_task(async move {
             'main: loop {
                 let recv_result = tokio::select! {
@@ -1977,9 +1986,8 @@ impl World {
                     );
                     let mut ids = Vec::new();
                     // Remove all the entities from the world
-                    let entity_chunk = chunk.read().await;
                     let mut entities = world.entities.write().await;
-                    for (uuid, entity_nbt) in &entity_chunk.data {
+                    for (uuid, entity_nbt) in &chunk.read().await.data {
                         let Some(id) = entity_nbt.get_string("id") else {
                             log::warn!("Entity has no ID");
                             continue;
@@ -2279,9 +2287,7 @@ impl World {
             let event = PLUGIN_MANAGER.fire(event).await;
 
             if !event.cancelled {
-                let current_players = current_players.clone();
-                let players = current_players.read().await;
-                for player in players.values() {
+                for player in current_players.read().await.values() {
                     player.send_system_message(&event.join_message).await;
                 }
                 log::info!("{}", event.join_message.to_pretty_console());
@@ -2336,6 +2342,7 @@ impl World {
                 for player in players.values() {
                     player.send_system_message(&event.leave_message).await;
                 }
+                drop(players);
                 log::info!("{}", event.leave_message.to_pretty_console());
             }
         }
@@ -2358,6 +2365,7 @@ impl World {
         entity.write_nbt(&mut nbt).await;
         chunk.data.insert(base_entity.entity_uuid, nbt);
         chunk.mark_dirty(true);
+        drop(chunk);
 
         let mut current_entities = self.entities.write().await;
         current_entities.insert(base_entity.entity_uuid, entity);

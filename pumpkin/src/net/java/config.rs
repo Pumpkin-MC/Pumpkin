@@ -1,7 +1,7 @@
 use std::{num::NonZeroU8, sync::Arc};
 
 use crate::{
-    entity::player::{ChatMode, Hand},
+    entity::player::ChatMode,
     net::{ClientPlatform, PlayerConfig, can_not_join, java::JavaClient},
     server::Server,
 };
@@ -15,7 +15,7 @@ use pumpkin_protocol::{
         SConfigResourcePack, SKnownPacks, SPluginMessage,
     },
 };
-use pumpkin_util::text::TextComponent;
+use pumpkin_util::{Hand, text::TextComponent};
 
 impl JavaClient {
     pub async fn handle_client_information_config(

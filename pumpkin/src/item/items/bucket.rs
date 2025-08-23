@@ -97,7 +97,7 @@ fn set_waterlogged(block: &Block, state: u16, waterlogged: bool) -> u16 {
 #[async_trait]
 impl ItemBehaviour for EmptyBucketItem {
     async fn normal_use(&self, _item: &Item, player: &Player) {
-        let world = player.world().await.clone();
+        let world = player.world();
         let (start_pos, end_pos) = get_start_and_end_pos(player);
 
         let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
@@ -211,7 +211,7 @@ impl ItemBehaviour for EmptyBucketItem {
 #[async_trait]
 impl ItemBehaviour for FilledBucketItem {
     async fn normal_use(&self, item: &Item, player: &Player) {
-        let world = player.world().await.clone();
+        let world = player.world();
         let (start_pos, end_pos) = get_start_and_end_pos(player);
         let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
             let state_id = world_inner.get_block_state_id(pos).await;

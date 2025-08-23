@@ -302,16 +302,13 @@ impl PluginManager {
     }
 
     /// Start loading a plugin asynchronously
+    #[allow(clippy::too_many_lines)]
     async fn start_loading_plugin(
         &self,
         path: &Path,
     ) -> Result<tokio::task::JoinHandle<()>, ManagerError> {
-        let loaders = self.loaders.read().await;
-        for loader in loaders.iter() {
+        for loader in self.loaders.read().await.iter() {
             if loader.can_load(path) {
-                let server = self.server.read().await;
-                let self_ref = self.self_ref.read().await;
-
                 let (mut instance, metadata, loader_data) = loader.load(path).await?;
 
                 // Mark plugin as loading
@@ -320,15 +317,25 @@ impl PluginManager {
                     .await
                     .insert(metadata.name.to_string(), PluginState::Loading);
 
-                let self_ref = self_ref
-                    .as_ref()
+                let self_ref = self
+                    .self_ref
+                    .read()
+                    .await
+                    .clone()
                     .ok_or(ManagerError::ServerNotInitialized)?;
 
                 let context = Arc::new(Context::new(
                     metadata.clone(),
-                    Arc::clone(server.as_ref().ok_or(ManagerError::ServerNotInitialized)?),
+                    Arc::clone(
+                        &self
+                            .server
+                            .read()
+                            .await
+                            .clone()
+                            .ok_or(ManagerError::ServerNotInitialized)?,
+                    ),
                     Arc::clone(&self.handlers),
-                    Arc::clone(self_ref),
+                    Arc::clone(&self_ref),
                     Arc::clone(&PERMISSION_MANAGER),
                 ));
 
@@ -352,7 +359,7 @@ impl PluginManager {
                 self.unloaded_files.write().await.remove(path);
 
                 // Spawn async task for plugin initialization
-                let self_ref_clone = Arc::clone(self_ref);
+                let self_ref_clone = Arc::clone(&self_ref);
                 let state_notify = Arc::clone(&self.state_notify);
                 let plugin_name = metadata.name.to_string();
                 let loader_clone = loader.clone();
@@ -447,7 +454,7 @@ impl PluginManager {
                     PluginState::Loaded => return Ok(()),
                     PluginState::Failed(error) => {
                         return Err(ManagerError::LoaderError(
-                            LoaderError::InitializationFailed(error.clone()),
+                            LoaderError::InitializationFailed(error),
                         ));
                     }
                     PluginState::Loading => {

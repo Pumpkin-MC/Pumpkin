@@ -32,6 +32,7 @@ pub trait DataComponentImpl: Send + Sync + Debug {
     fn get_enum() -> DataComponent
     where
         Self: Sized;
+    fn get_self_enum(&self) -> DataComponent; // only for debugging
     fn to_dyn(self) -> Box<dyn DataComponentImpl>;
     fn clone_dyn(&self) -> Box<dyn DataComponentImpl>;
     fn as_any(&self) -> &dyn Any;
@@ -59,6 +60,9 @@ macro_rules! default_impl {
         {
             $t
         }
+        fn get_self_enum(&self) -> DataComponent {
+            $t
+        }
         fn to_dyn(self) -> Box<dyn DataComponentImpl> {
             Box::new(self)
         }
@@ -82,7 +86,13 @@ impl Clone for Box<dyn DataComponentImpl> {
 
 #[inline]
 pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
-    value.as_any().downcast_ref::<T>().unwrap()
+    value.as_any().downcast_ref::<T>().unwrap_or_else(|| {
+        panic!(
+            "you are trying to cast {} to {}",
+            value.get_self_enum().to_name(),
+            T::get_enum().to_name()
+        )
+    })
 }
 #[inline]
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
@@ -141,7 +151,13 @@ impl DataComponentImpl for DamageImpl {
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct UnbreakableImpl;
 #[derive(Clone, Debug, Hash, PartialEq)]
-pub struct CustomNameImpl;
+pub struct CustomNameImpl {
+    // TODO make TextComponent const
+    pub name: &'static str,
+}
+impl DataComponentImpl for CustomNameImpl {
+    default_impl!(CustomName);
+}
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct ItemNameImpl {
     // TODO make TextComponent const
@@ -288,8 +304,26 @@ impl Hash for FoodImpl {
         self.can_always_eat.hash(state);
     }
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
-pub struct ConsumableImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConsumableImpl {
+    pub consume_seconds: f32,
+    // TODO: more
+}
+
+impl ConsumableImpl {
+    pub fn consume_ticks(&self) -> i32 {
+        (self.consume_seconds * 20.0) as i32
+    }
+}
+
+impl DataComponentImpl for ConsumableImpl {
+    default_impl!(Consumable);
+}
+impl Hash for ConsumableImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        unsafe { (*(&self.consume_seconds as *const f32 as *const u32)).hash(state) };
+    }
+}
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct UseRemainderImpl;
 #[derive(Clone, Debug, Hash, PartialEq)]
@@ -543,8 +577,15 @@ pub struct GliderImpl;
 pub struct TooltipStyleImpl;
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct DeathProtectionImpl;
+impl DataComponentImpl for DeathProtectionImpl {
+    default_impl!(DeathProtection);
+}
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct BlocksAttacksImpl;
+
+impl DataComponentImpl for BlocksAttacksImpl {
+    default_impl!(BlocksAttacks);
+}
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct StoredEnchantmentsImpl;
 #[derive(Clone, Debug, Hash, PartialEq)]

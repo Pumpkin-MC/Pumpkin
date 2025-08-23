@@ -51,7 +51,7 @@ impl CommandExecutor for Executor {
                     .cloned()
                     .ok_or(CommandError::InvalidRequirement)?
             }
-            CommandSender::Player(player) => player.world().await,
+            CommandSender::Player(player) => player.world().clone(),
         };
         let success = match mode {
             Mode::Destroy => {

@@ -48,7 +48,7 @@ impl JukeboxBlock {
 #[async_trait]
 impl BlockBehaviour for JukeboxBlock {
     async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let world = &args.player.living_entity.entity.world.read().await;
+        let world = &args.player.living_entity.entity.world;
 
         // if the jukebox already has a record, stop playing
         if self.has_record(args.block, args.position, world).await {

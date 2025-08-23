@@ -100,11 +100,11 @@ impl CommandSender {
     }
 
     #[must_use]
-    pub async fn world(&self) -> Option<Arc<World>> {
+    pub fn world(&self) -> Option<Arc<World>> {
         match self {
             // TODO: maybe return first world when console
             Self::Console | Self::Rcon(..) => None,
-            Self::Player(p) => Some(p.living_entity.entity.world.read().await.clone()),
+            Self::Player(p) => Some(p.living_entity.entity.world.clone()),
         }
     }
 

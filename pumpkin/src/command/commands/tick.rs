@@ -56,7 +56,7 @@ struct TickExecutor(SubCommand);
 impl TickExecutor {
     async fn handle_query(
         &self,
-        sender: &mut CommandSender,
+        sender: &CommandSender,
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
     ) -> Result<(), CommandError> {
@@ -102,7 +102,7 @@ impl TickExecutor {
     }
     async fn handle_non_sprinting_status(
         &self,
-        sender: &mut CommandSender,
+        sender: &CommandSender,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         avg_tick_nanos: i64,
     ) {
@@ -121,7 +121,7 @@ impl TickExecutor {
         }
     }
 
-    async fn send_percentiles(&self, sender: &mut CommandSender, server: &crate::server::Server) {
+    async fn send_percentiles(&self, sender: &CommandSender, server: &crate::server::Server) {
         let tick_count = server.tick_count.load(Ordering::Relaxed);
         let sample_size = (tick_count as usize).min(100);
 
@@ -149,7 +149,7 @@ impl TickExecutor {
     }
     async fn handle_step_command(
         &self,
-        sender: &mut CommandSender,
+        sender: &CommandSender,
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         ticks: i32,
@@ -173,7 +173,7 @@ impl TickExecutor {
     }
     async fn handle_sprint_command(
         &self,
-        sender: &mut CommandSender,
+        sender: &CommandSender,
         server: &crate::server::Server,
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         ticks: i32,
