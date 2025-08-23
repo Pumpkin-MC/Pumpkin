@@ -779,22 +779,28 @@ impl BlockAccessor for ProtoChunk {
     }
 }
 
+#[derive(Debug)]
+pub enum ChunkStage {
+    /// Initial empty chunk, ready for biome population
+    Empty,
+    /// Chunk with biomes populated, ready for noise generation
+    Biomes,
+    /// Chunk with terrain noise generated, ready for surface building
+    Noise,
+    /// Chunk with surface built, ready for features and structures
+    Surface,
+    /// Chunk with features and structures, ready for finalization
+    Features,
+    /// Fully generated chunk
+    Full,
+}
+
 /// Represents the different stages of chunk generation
 /// This provides type safety and ensures chunks progress through the correct stages
 #[derive(Debug)]
-pub enum StagedChunk {
-    /// Initial empty chunk, ready for biome population
-    Empty(ProtoChunk),
-    /// Chunk with biomes populated, ready for noise generation
-    Biomes(ProtoChunk),
-    /// Chunk with terrain noise generated, ready for surface building
-    Noise(ProtoChunk),
-    /// Chunk with surface built, ready for features and structures
-    Surface(ProtoChunk),
-    /// Chunk with features and structures, ready for finalization
-    Features(ProtoChunk),
-    /// Fully generated chunk
-    Full(ProtoChunk),
+pub struct StagedChunk {
+    pub proto_chunk: ProtoChunk,
+    pub stage: ChunkStage,
 }
 
 impl StagedChunk {
@@ -806,12 +812,15 @@ impl StagedChunk {
         biome_mixer_seed: i64,
     ) -> Self {
         let proto_chunk = ProtoChunk::new(chunk_pos, settings, default_block, biome_mixer_seed);
-        StagedChunk::Empty(proto_chunk)
+        StagedChunk {
+            proto_chunk,
+            stage: ChunkStage::Empty,
+        }
     }
 
     /// Advance the chunk to the next generation stage
     pub fn advance(
-        self,
+        &mut self,
         level: &Arc<Level>,
         block_registry: &dyn BlockRegistryExt,
         settings: &GenerationSettings,
@@ -819,9 +828,10 @@ impl StagedChunk {
         terrain_cache: &TerrainCache,
         noise_router: &super::noise::router::proto_noise_router::ProtoNoiseRouters,
         dimension: crate::dimension::Dimension,
-    ) -> Result<Self, &'static str> {
-        match self {
-            StagedChunk::Empty(mut chunk) => {
+    ) -> Result<(), &'static str> {
+        let chunk = &mut self.proto_chunk;
+        match self.stage {
+            ChunkStage::Empty => {
                 // Populate biomes
                 let chunk_pos = chunk.chunk_pos;
                 let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
@@ -844,9 +854,8 @@ impl StagedChunk {
                     );
 
                 chunk.populate_biomes(dimension, &mut multi_noise_sampler);
-                Ok(StagedChunk::Biomes(chunk))
             }
-            StagedChunk::Biomes(mut chunk) => {
+            ChunkStage::Biomes => {
                 // Generate noise
                 let chunk_pos = chunk.chunk_pos;
                 let generation_shape = &settings.shape;
@@ -898,9 +907,8 @@ impl StagedChunk {
                 );
 
                 chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
-                Ok(StagedChunk::Noise(chunk))
             }
-            StagedChunk::Noise(mut chunk) => {
+            ChunkStage::Noise => {
                 // Build surface
                 let chunk_pos = chunk.chunk_pos;
                 let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
@@ -935,60 +943,35 @@ impl StagedChunk {
                     terrain_cache,
                     &mut surface_height_estimate_sampler,
                 );
-                Ok(StagedChunk::Surface(chunk))
             }
-            StagedChunk::Surface(mut chunk) => {
+            ChunkStage::Surface => {
                 // Generate features and structures
                 chunk.generate_features_and_structure(level, block_registry, random_config);
-                Ok(StagedChunk::Features(chunk))
             }
-            StagedChunk::Features(chunk) => {
+            ChunkStage::Features => {
                 // Mark as fully generated
-                Ok(StagedChunk::Full(chunk))
             }
-            StagedChunk::Full(_) => Err("Chunk is already fully generated"),
+            ChunkStage::Full => {
+                return Err("Chunk is already fully generated");
+            }
         }
-    }
 
-    /// Get the current generation stage as a string
-    pub fn stage_name(&self) -> &'static str {
-        match self {
-            StagedChunk::Empty(_) => "Empty",
-            StagedChunk::Biomes(_) => "Biomes",
-            StagedChunk::Noise(_) => "Noise",
-            StagedChunk::Surface(_) => "Surface",
-            StagedChunk::Features(_) => "Features",
-            StagedChunk::Full(_) => "Full",
-        }
+        Ok(())
     }
 
     /// Check if the chunk is fully generated
     pub fn is_complete(&self) -> bool {
-        matches!(self, StagedChunk::Full(_))
+        matches!(self.stage, ChunkStage::Full)
     }
 
     /// Get an immutable reference to the underlying ProtoChunk
     pub fn proto_chunk(&self) -> &ProtoChunk {
-        match self {
-            StagedChunk::Empty(chunk) => chunk,
-            StagedChunk::Biomes(chunk) => chunk,
-            StagedChunk::Noise(chunk) => chunk,
-            StagedChunk::Surface(chunk) => chunk,
-            StagedChunk::Features(chunk) => chunk,
-            StagedChunk::Full(chunk) => chunk,
-        }
+        &self.proto_chunk
     }
 
     /// Get a mutable reference to the underlying ProtoChunk
     pub fn proto_chunk_mut(&mut self) -> &mut ProtoChunk {
-        match self {
-            StagedChunk::Empty(chunk) => chunk,
-            StagedChunk::Biomes(chunk) => chunk,
-            StagedChunk::Noise(chunk) => chunk,
-            StagedChunk::Surface(chunk) => chunk,
-            StagedChunk::Features(chunk) => chunk,
-            StagedChunk::Full(chunk) => chunk,
-        }
+        &mut self.proto_chunk
     }
 
     /// Finalize the chunk, extracting the ProtoChunk if fully generated
@@ -997,8 +980,9 @@ impl StagedChunk {
         generation_settings: &GenerationSettings,
         dimension: Dimension,
     ) -> Result<ChunkData, Self> {
-        match self {
-            StagedChunk::Full(proto_chunk) => {
+        match self.stage {
+            ChunkStage::Full => {
+                let proto_chunk = &self.proto_chunk;
                 let height: usize = match dimension {
                     Dimension::Overworld => 384,
                     Dimension::Nether | Dimension::End => 256,
@@ -1061,7 +1045,7 @@ impl StagedChunk {
                 chunk.heightmap = chunk.calculate_heightmap();
                 Ok(chunk)
             }
-            other => Err(other),
+            _ => Err(self),
         }
     }
 
@@ -1077,7 +1061,7 @@ impl StagedChunk {
         dimension: crate::dimension::Dimension,
     ) -> Result<ChunkData, &'static str> {
         while !self.is_complete() {
-            self = self.advance(
+            self.advance(
                 level,
                 block_registry,
                 settings,
@@ -1087,7 +1071,8 @@ impl StagedChunk {
                 dimension,
             )?;
         }
-        self.finalize(settings, dimension).map_err(|_| "Failed to finalize chunk")
+        self.finalize(settings, dimension)
+            .map_err(|_| "Failed to finalize chunk")
     }
 }
 
