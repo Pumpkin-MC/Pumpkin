@@ -85,7 +85,7 @@ impl ItemBehaviour for HoeItem {
                     Uuid::new_v4(),
                     world.clone(),
                     location,
-                    &EntityType::SNOWBALL,
+                    &EntityType::ITEM,
                     false,
                 );
                 // TODO: Merge stacks together

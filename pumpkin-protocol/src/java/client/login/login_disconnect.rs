@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 #[packet(LOGIN_LOGIN_DISCONNECT)]
-pub struct CLoginDisconnect<'a> {
-    pub json_reason: &'a str,
+pub struct CLoginDisconnect {
+    pub json_reason: String,
 }
 
-impl<'a> CLoginDisconnect<'a> {
+impl CLoginDisconnect {
     // input json!
-    pub fn new(json_reason: &'a str) -> Self {
+    pub fn new(json_reason: String) -> Self {
         Self { json_reason }
     }
 }

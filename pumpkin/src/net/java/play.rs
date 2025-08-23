@@ -350,7 +350,7 @@ impl JavaClient {
                     Vector3::new(0.0, 0.0, 0.0),
                     player.living_entity.entity.yaw.load(),
                     player.living_entity.entity.pitch.load(),
-                    &[],
+                    Vec::new(),
                 )).await;
             }
         }}
@@ -483,7 +483,7 @@ impl JavaClient {
             Vector3::new(0.0, 0.0, 0.0),
             player.living_entity.entity.yaw.load(),
             player.living_entity.entity.pitch.load(),
-            &[],
+            Vec::new(),
         ))
         .await;
     }
@@ -1065,15 +1065,21 @@ impl JavaClient {
         }
     }
 
-    pub async fn handle_interact(&self, player: &Player, interact: SInteract) {
+    pub async fn handle_interact(
+        &self,
+        player: &Player,
+        interact: SInteract,
+        server: &Arc<Server>,
+    ) {
         if !player.has_client_loaded() {
             return;
         }
+        let entity_id = interact.entity_id;
 
         let sneaking = interact.sneaking;
-        let entity = &player.living_entity.entity;
-        if entity.sneaking.load(Ordering::Relaxed) != sneaking {
-            entity.set_sneaking(sneaking).await;
+        let player_entity = &player.living_entity.entity;
+        if player_entity.sneaking.load(Ordering::Relaxed) != sneaking {
+            player_entity.set_sneaking(sneaking).await;
         }
         let Ok(action) = ActionType::try_from(interact.r#type.0) else {
             self.kick(TextComponent::text("Invalid action type")).await;
@@ -1082,7 +1088,6 @@ impl JavaClient {
 
         match action {
             ActionType::Attack => {
-                let entity_id = interact.entity_id;
                 let config = &advanced_config().pvp;
                 // TODO: do validation and stuff
                 if !config.enabled {
@@ -1091,7 +1096,7 @@ impl JavaClient {
 
                 // TODO: set as camera entity when spectator
 
-                let world = &entity.world;
+                let world = &player_entity.world;
                 let player_victim = world.get_player_by_id(entity_id.0).await;
                 if entity_id.0 == player.entity_id() {
                     // This can't be triggered from a non-modded client.
@@ -1137,7 +1142,16 @@ impl JavaClient {
                 }
             }
             ActionType::Interact | ActionType::InteractAt => {
-                log::debug!("todo");
+                // TODO: split this up
+                let entity = player.world().get_player_by_id(entity_id.0).await;
+                if let Some(entity) = entity {
+                    let held = player.inventory.held_item();
+                    let mut stack = held.lock().await;
+                    server
+                        .item_registry
+                        .use_on_entity(&mut stack, player, entity)
+                        .await;
+                }
             }
         }
     }
@@ -1425,14 +1439,14 @@ impl JavaClient {
                 return Ok(());
             }
         }
+        let mut stack = item.lock().await;
 
-        if item.lock().await.is_empty() {
+        if stack.is_empty() {
             // TODO item cool down
             // If the hand is empty we stop here
             return Ok(());
         }
 
-        let mut stack = item.lock().await;
         server
             .item_registry
             .use_on_block(&mut stack, player, position, face, block, server)
