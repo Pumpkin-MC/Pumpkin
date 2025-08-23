@@ -38,12 +38,7 @@ impl CakeBlock {
                 if hunger_level >= 20 {
                     return BlockActionResult::Pass;
                 }
-                player.hunger_manager.level.store(20.min(hunger_level + 2));
-                player
-                    .hunger_manager
-                    .saturation
-                    .store(player.hunger_manager.saturation.load() + 0.4);
-                player.send_health().await;
+                player.hunger_manager.eat(player, 2, 0.4).await;
             }
             GameMode::Creative | GameMode::Spectator => {}
         }
