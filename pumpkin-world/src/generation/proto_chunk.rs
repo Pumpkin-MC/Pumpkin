@@ -789,8 +789,6 @@ pub enum ChunkStage {
     Noise,
     /// Chunk with surface built, ready for features and structures
     Surface,
-    /// Chunk with features and structures, ready for finalization
-    Features,
     /// Fully generated chunk
     Full,
 }
@@ -854,6 +852,7 @@ impl StagedChunk {
                     );
 
                 chunk.populate_biomes(dimension, &mut multi_noise_sampler);
+                self.stage = ChunkStage::Biomes;
             }
             ChunkStage::Biomes => {
                 // Generate noise
@@ -907,6 +906,7 @@ impl StagedChunk {
                 );
 
                 chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
+                self.stage = ChunkStage::Noise;
             }
             ChunkStage::Noise => {
                 // Build surface
@@ -943,13 +943,12 @@ impl StagedChunk {
                     terrain_cache,
                     &mut surface_height_estimate_sampler,
                 );
+                self.stage = ChunkStage::Surface;
             }
             ChunkStage::Surface => {
                 // Generate features and structures
                 chunk.generate_features_and_structure(level, block_registry, random_config);
-            }
-            ChunkStage::Features => {
-                // Mark as fully generated
+                self.stage = ChunkStage::Full;
             }
             ChunkStage::Full => {
                 return Err("Chunk is already fully generated");
