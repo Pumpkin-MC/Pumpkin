@@ -465,7 +465,7 @@ impl LightContainer {
 
 impl Default for LightContainer {
     fn default() -> Self {
-        Self::new_empty(0)
+        Self::new_empty(15)
     }
 }
 
