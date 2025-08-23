@@ -151,7 +151,13 @@ impl DataComponentImpl for DamageImpl {
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct UnbreakableImpl;
 #[derive(Clone, Debug, Hash, PartialEq)]
-pub struct CustomNameImpl;
+pub struct CustomNameImpl {
+    // TODO make TextComponent const
+    pub name: &'static str,
+}
+impl DataComponentImpl for CustomNameImpl {
+    default_impl!(CustomName);
+}
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct ItemNameImpl {
     // TODO make TextComponent const

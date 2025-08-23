@@ -2,7 +2,9 @@ pub mod items;
 pub mod registry;
 
 use std::any::Any;
+use std::sync::Arc;
 
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use async_trait::async_trait;
@@ -29,6 +31,14 @@ pub trait ItemBehaviour: Send + Sync {
         _face: BlockDirection,
         _block: &Block,
         _server: &Server,
+    ) {
+    }
+
+    async fn use_on_entity(
+        &self,
+        _item: &mut ItemStack,
+        _player: &Player,
+        _entity: Arc<dyn EntityBase>,
     ) {
     }
 

@@ -91,4 +91,8 @@ impl EntityBase for ThrownItemEntity {
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
+
+    fn get_gravity(&self) -> f64 {
+        0.03
+    }
 }

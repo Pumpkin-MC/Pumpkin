@@ -6,6 +6,7 @@ permissions:
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 env:
   CLICOLOR: 1

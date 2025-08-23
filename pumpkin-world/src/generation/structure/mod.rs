@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use pumpkin_data::{chunk::Biome, tag::Taggable};
-use pumpkin_util::read_data_from_file;
+use pumpkin_util::include_json_static;
 use serde::Deserialize;
 
 use crate::{
@@ -74,8 +74,10 @@ pub struct Structure {
     biomes: String,
 }
 
-pub static STRUCTURES: LazyLock<HashMap<String, Structure>> =
-    LazyLock::new(|| read_data_from_file!("../../../../assets/structure.json"));
+pub static STRUCTURES: LazyLock<HashMap<String, Structure>> = LazyLock::new(
+    || include_json_static!("../../../../assets/structures.json", HashMap<String, Structure>),
+);
 
-pub static STRUCTURE_SETS: LazyLock<HashMap<String, StructureSet>> =
-    LazyLock::new(|| read_data_from_file!("../../../../assets/structure_set.json"));
+pub static STRUCTURE_SETS: LazyLock<HashMap<String, StructureSet>> = LazyLock::new(
+    || include_json_static!("../../../../assets/structure_set.json", HashMap<String, StructureSet>),
+);
