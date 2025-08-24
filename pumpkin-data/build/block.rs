@@ -460,7 +460,7 @@ impl BlockState {
                 let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
                 quote! { #opacity }
             }
-            None => quote! { u8::MAX },
+            None => quote! { 0 },
         };
         let block_entity_type = match self.block_entity_type {
             Some(block_entity_type) => {
