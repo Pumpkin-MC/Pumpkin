@@ -33,6 +33,13 @@ pub async fn update_position(player: &Arc<Player>) {
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical != new_cylindrical {
+        const PLAYER_LOADING_LEVEL: i8 = 20;
+        {
+            let mut level = player.world().level.chunk_loading.lock().unwrap();
+            level.remove_ticket(old_cylindrical.center, 25);
+            level.add_ticket(new_chunk_center, 25);
+            drop(level);
+        }
         match player.client.as_ref() {
             ClientPlatform::Java(client) => {
                 client
@@ -80,7 +87,7 @@ pub async fn update_position(player: &Arc<Player>) {
         player.watched_section.store(new_cylindrical);
 
         if !chunks_to_clean.is_empty() {
-            level.clean_chunks(&chunks_to_clean).await;
+            // level.clean_chunks(&chunks_to_clean).await;
             for chunk in unloading_chunks {
                 player
                     .client

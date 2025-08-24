@@ -2,6 +2,7 @@ use pumpkin_data::Block;
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
+use crate::generation::proto_chunk::GenerationCache;
 use crate::{ProtoChunk, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
@@ -9,9 +10,9 @@ pub struct EndPlatformFeature;
 
 impl EndPlatformFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut T,
         _block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -27,7 +28,7 @@ impl EndPlatformFeature {
                     } else {
                         Block::AIR.default_state
                     };
-                    if chunk.get_block_state(&pos.0).0 == state.id {
+                    if GenerationCache::get_block_state(chunk, &pos.0).0 == state.id {
                         continue;
                     }
                     chunk.set_block_state(&pos.0, state);

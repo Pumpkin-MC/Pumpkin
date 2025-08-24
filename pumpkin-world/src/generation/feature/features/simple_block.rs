@@ -2,6 +2,7 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
+use crate::generation::proto_chunk::GenerationCache;
 use crate::{
     ProtoChunk,
     generation::block_state_provider::BlockStateProvider,
@@ -15,10 +16,10 @@ pub struct SimpleBlockFeature {
 }
 
 impl SimpleBlockFeature {
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &mut ProtoChunk,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {

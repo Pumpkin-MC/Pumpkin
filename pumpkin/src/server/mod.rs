@@ -199,27 +199,28 @@ impl Server {
             block_registry.clone(),
             weak.clone(),
         );
-        log::info!("Loading Nether: {seed}");
-        let nether = World::load(
-            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info.clone(),
-            VanillaDimensionType::TheNether,
-            block_registry.clone(),
-            weak.clone(),
-        );
-        log::info!("Loading End: {seed}");
-        let end = World::load(
-            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
-            level_info,
-            VanillaDimensionType::TheEnd,
-            block_registry,
-            weak,
-        );
+        // log::info!("Loading Nether: {seed}");
+        // let nether = World::load(
+        //     Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
+        //     level_info.clone(),
+        //     VanillaDimensionType::TheNether,
+        //     block_registry.clone(),
+        //     weak.clone(),
+        // );
+        // log::info!("Loading End: {seed}");
+        // let end = World::load(
+        //     Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
+        //     level_info,
+        //     VanillaDimensionType::TheEnd,
+        //     block_registry,
+        //     weak,
+        // );
         *server
             .worlds
             .try_write()
             .expect("Nothing should hold a lock of worlds before server startup") =
-            vec![overworld.into(), nether.into(), end.into()];
+            vec![overworld.into()];
+        // vec![overworld.into(), nether.into(), end.into()];
         server
     }
 
@@ -230,6 +231,7 @@ impl Server {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
+        log::info!("spawn 1 new task");
         self.tasks.spawn(task)
     }
 

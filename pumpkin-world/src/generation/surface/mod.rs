@@ -162,7 +162,12 @@ pub enum MaterialCondition {
 }
 
 impl MaterialCondition {
-    pub fn test(&self, chunk: &mut ProtoChunk, context: &mut MaterialRuleContext, surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler) -> bool {
+    pub fn test(
+        &self,
+        chunk: &mut ProtoChunk,
+        context: &mut MaterialRuleContext,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+    ) -> bool {
         match self {
             MaterialCondition::Biome(biome) => biome.test(context),
             MaterialCondition::NoiseThreshold(noise_threshold) => noise_threshold.test(context),
@@ -204,7 +209,9 @@ impl MaterialCondition {
                     sub_height >= add_height + 4
                 }
             }
-            MaterialCondition::Not(not) => not.test(chunk, context, surface_height_estimate_sampler),
+            MaterialCondition::Not(not) => {
+                not.test(chunk, context, surface_height_estimate_sampler)
+            }
             MaterialCondition::Hole(hole) => hole.test(context),
             MaterialCondition::AbovePreliminarySurface(above) => {
                 above.test(context, surface_height_estimate_sampler)
@@ -249,8 +256,15 @@ pub struct NotMaterialCondition {
 }
 
 impl NotMaterialCondition {
-    pub fn test(&self, chunk: &mut ProtoChunk, context: &mut MaterialRuleContext, surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler) -> bool {
-        !self.invert.test(chunk, context, surface_height_estimate_sampler)
+    pub fn test(
+        &self,
+        chunk: &mut ProtoChunk,
+        context: &mut MaterialRuleContext,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+    ) -> bool {
+        !self
+            .invert
+            .test(chunk, context, surface_height_estimate_sampler)
     }
 }
 

@@ -5,6 +5,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
+use crate::generation::proto_chunk::GenerationCache;
 use crate::{
     ProtoChunk,
     generation::{block_predicate::BlockPredicate, block_state_provider::BlockStateProvider},
@@ -27,9 +28,9 @@ struct Layer {
 
 impl BlockColumnFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut T,
         block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,

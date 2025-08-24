@@ -5,6 +5,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
+use crate::generation::proto_chunk::GenerationCache;
 use crate::{ProtoChunk, generation::block_state_provider::BlockStateProvider};
 
 #[derive(Deserialize)]
@@ -15,9 +16,9 @@ pub struct AttachedToLogsTreeDecorator {
 }
 
 impl AttachedToLogsTreeDecorator {
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         _root_positions: Vec<BlockPos>,
         log_positions: Vec<BlockPos>,
@@ -27,7 +28,9 @@ impl AttachedToLogsTreeDecorator {
             // TODO: random
             let pos = pos.offset(self.directions[0].to_offset());
             if random.next_f32() > self.probability
-                || !chunk.get_block_state(&pos.0).to_state().is_air()
+                || !GenerationCache::get_block_state(chunk, &pos.0)
+                    .to_state()
+                    .is_air()
             {
                 continue;
             }

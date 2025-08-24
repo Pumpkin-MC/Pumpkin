@@ -600,13 +600,13 @@ impl World {
         }
 
         let chunk_start = tokio::time::Instant::now();
-        log::trace!("Ticking chunks");
+        // log::debug!("Ticking chunks");
         self.tick_chunks().await;
         let elapsed = chunk_start.elapsed();
 
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
 
-        log::trace!("Ticking players");
+        // log::debug!("Ticking players");
         // player ticks
         for player in players_to_tick {
             player.tick(server).await;
@@ -614,7 +614,7 @@ impl World {
 
         let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
 
-        log::trace!("Ticking entities");
+        // log::debug!("Ticking entities");
         // Entity ticks
         for entity in entities_to_tick {
             entity.get_entity().age.fetch_add(1, Relaxed);
@@ -635,7 +635,14 @@ impl World {
             }
         }
 
-        log::trace!(
+        let a = self.level.chunk_loading.lock().unwrap().get_cloned_level();
+        if let Some(channel) = self.level.sender.lock().unwrap().as_ref() {
+            channel.set(a);
+        } else {
+            panic!();
+        }
+
+        log::debug!(
             "Ticking world took {:?}, loaded chunks: {}, chunk tick took {:?}",
             start.elapsed(),
             self.level.loaded_chunk_count(),
@@ -754,7 +761,7 @@ impl World {
             );
 
         // log::debug!("spawning list size {}", spawn_list.len());
-        log::debug!("spawning counter {:?}", spawn_state.mob_category_counts);
+        log::trace!("spawning counter {:?}", spawn_state.mob_category_counts);
 
         spawning_chunks.shuffle(&mut rng());
 
@@ -763,7 +770,7 @@ impl World {
             self.tick_spawning_chunk(pos, chunk, &spawn_list, &mut spawn_state)
                 .await;
         }
-        log::debug!(
+        log::trace!(
             "Spawning entity took {:?}, getting chunks {:?}, spawning chunks: {}, avg {:?} per chunk",
             spawn_entity_clock_start.elapsed(),
             get_chunks_clock,
@@ -1907,7 +1914,7 @@ impl World {
                                 "Received chunk {:?}, but it is no longer watched... cleaning",
                                 &position
                             );
-                            level.clean_chunk(&position).await;
+                            // level.clean_chunk(&position).await;
                             continue 'main;
                         }
                     }};

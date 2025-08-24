@@ -1,5 +1,5 @@
 use core::f32;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::num::NonZeroU8;
 use std::ops::AddAssign;
@@ -102,6 +102,7 @@ enum BatchState {
 }
 
 pub struct ChunkManager {
+    unique: HashSet<Vector2<i32>>,
     chunks_per_tick: usize,
     chunk_queue: VecDeque<(Vector2<i32>, SyncChunk)>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
@@ -114,6 +115,7 @@ impl ChunkManager {
     #[must_use]
     pub fn new(chunks_per_tick: usize) -> Self {
         Self {
+            unique: HashSet::new(),
             chunks_per_tick,
             chunk_queue: VecDeque::new(),
             entity_chunk_queue: VecDeque::new(),
@@ -405,6 +407,13 @@ impl Player {
         world.remove_player(self, true).await;
 
         let cylindrical = self.watched_section.load();
+        self.get_entity()
+            .world
+            .level
+            .chunk_loading
+            .lock()
+            .unwrap()
+            .remove_ticket(cylindrical.center, 25);
 
         // Radial chunks are all of the chunks the player is theoretically viewing.
         // Given enough time, all of these chunks will be in memory.
@@ -421,7 +430,7 @@ impl Player {
         // Decrement the value of watched chunks
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
-        level.clean_chunks(&chunks_to_clean).await;
+        // level.clean_chunks(&chunks_to_clean).await;
         level.clean_entity_chunks(&chunks_to_clean).await;
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
@@ -730,6 +739,14 @@ impl Player {
     // TODO Abstract the chunk sending
     #[allow(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
+        let mut temp = self.chunk_manager.lock().await;
+        for i in self.world().level.loaded_chunks.iter() {
+            if !temp.unique.contains(i.key()) {
+                temp.unique.insert(*i.key());
+                temp.chunk_queue.push_back((*i.key(), i.value().clone()));
+            }
+        }
+        drop(temp);
         self.current_screen_handler
             .lock()
             .await
@@ -1050,7 +1067,7 @@ impl Player {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
-        level.clean_chunks(&chunks_to_clean).await;
+        // level.clean_chunks(&chunks_to_clean).await;
         for chunk in chunks_to_clean {
             self.client
                 .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))

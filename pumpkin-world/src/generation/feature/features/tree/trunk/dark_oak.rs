@@ -7,6 +7,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
+use crate::generation::proto_chunk::GenerationCache;
 use crate::{
     ProtoChunk,
     generation::feature::features::tree::{TreeFeature, TreeNode, trunk::TrunkPlacer},
@@ -18,12 +19,11 @@ pub struct DarkOakTrunkPlacer;
 
 impl DarkOakTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
-        _level: &Arc<Level>,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         force_dirt: bool,
         dirt_state: &BlockState,
@@ -70,7 +70,7 @@ impl DarkOakTrunkPlacer {
             }
             let pos = BlockPos::new(x, y_height, z);
             // TODO: support multiple chunks
-            let state = chunk.get_block_state(&pos.0);
+            let state = GenerationCache::get_block_state(chunk, &pos.0);
             if !TreeFeature::is_air_or_leaves(state.to_state(), state.to_block()) {
                 continue;
             }

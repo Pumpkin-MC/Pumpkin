@@ -7,6 +7,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
+use crate::generation::proto_chunk::GenerationCache;
 use crate::{
     ProtoChunk,
     generation::feature::features::tree::{TreeNode, trunk::TrunkPlacer},
@@ -21,13 +22,12 @@ pub struct BendingTrunkPlacer {
 
 impl BendingTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
-        _level: &Arc<Level>,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         force_dirt: bool,
         dirt_state: &BlockState,

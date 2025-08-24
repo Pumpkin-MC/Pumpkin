@@ -6,6 +6,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
+use crate::generation::proto_chunk::GenerationCache;
 use crate::{
     ProtoChunk, generation::feature::placed_features::PlacedFeatureWrapper, level::Level,
     world::BlockRegistryExt,
@@ -25,10 +26,9 @@ struct RandomFeatureEntry {
 
 impl RandomFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk,
-        level: &Arc<Level>,
+        chunk: &mut T,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
@@ -42,7 +42,6 @@ impl RandomFeature {
             }
             return feature.feature.get().generate(
                 chunk,
-                level,
                 block_registry,
                 min_y,
                 height,
@@ -53,7 +52,6 @@ impl RandomFeature {
         }
         self.default.get().generate(
             chunk,
-            level,
             block_registry,
             min_y,
             height,

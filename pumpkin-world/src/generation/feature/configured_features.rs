@@ -6,8 +6,6 @@ use std::{
 use pumpkin_util::{include_json_static, math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
-use crate::{ProtoChunk, level::Level, world::BlockRegistryExt};
-
 use super::features::{
     bamboo::BambooFeature,
     basalt_columns::BasaltColumnsFeature,
@@ -72,6 +70,8 @@ use super::features::{
     waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature,
     weeping_vines::WeepingVinesFeature,
 };
+use crate::generation::proto_chunk::GenerationCache;
+use crate::{ProtoChunk, level::Level, world::BlockRegistryExt};
 
 pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> = LazyLock::new(
     || include_json_static!("../../../../assets/configured_features.json", HashMap<String, ConfiguredFeature>),
@@ -211,10 +211,9 @@ pub enum ConfiguredFeature {
 
 impl ConfiguredFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk,
-        level: &Arc<Level>,
+        chunk: &mut T,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
@@ -273,7 +272,6 @@ impl ConfiguredFeature {
             Self::SimpleBlock(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::Flower(feature) => feature.generate(
                 chunk,
-                level,
                 block_registry,
                 min_y,
                 height,
@@ -283,7 +281,6 @@ impl ConfiguredFeature {
             ),
             Self::NoBonemealFlower(feature) => feature.generate(
                 chunk,
-                level,
                 block_registry,
                 min_y,
                 height,
@@ -314,7 +311,6 @@ impl ConfiguredFeature {
             ),
             Self::RandomPatch(feature) => feature.generate(
                 chunk,
-                level,
                 block_registry,
                 min_y,
                 height,
@@ -324,7 +320,6 @@ impl ConfiguredFeature {
             ),
             Self::RandomBooleanSelector(feature) => feature.generate(
                 chunk,
-                level,
                 block_registry,
                 min_y,
                 height,
@@ -333,11 +328,10 @@ impl ConfiguredFeature {
                 pos,
             ),
             Self::Tree(feature) => {
-                feature.generate(chunk, level, min_y, height, feature_name, random, pos)
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
             Self::RandomSelector(feature) => feature.generate(
                 chunk,
-                level,
                 block_registry,
                 min_y,
                 height,
@@ -347,7 +341,6 @@ impl ConfiguredFeature {
             ),
             Self::SimpleRandomSelector(feature) => feature.generate(
                 chunk,
-                level,
                 block_registry,
                 min_y,
                 height,

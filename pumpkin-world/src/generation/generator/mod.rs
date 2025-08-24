@@ -41,13 +41,13 @@ pub trait WorldGenerator: Sync + Send {
 }
 
 pub struct VanillaGenerator {
-    random_config: GlobalRandomConfig,
-    base_router: ProtoNoiseRouters,
-    dimension: Dimension,
+    pub random_config: GlobalRandomConfig,
+    pub base_router: ProtoNoiseRouters,
+    pub dimension: Dimension,
 
-    terrain_cache: TerrainCache,
+    pub terrain_cache: TerrainCache,
 
-    default_block: &'static BlockState,
+    pub default_block: &'static BlockState,
 }
 
 impl GeneratorInit for VanillaGenerator {

@@ -3,9 +3,9 @@ use pumpkin_data::{Block, BlockDirection, BlockState, tag::Taggable};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
 
+use crate::generation::proto_chunk::GenerationCache;
 use crate::{
-    ProtoChunk, block::BlockStateCodec, generation::height_limit::HeightLimitView,
-    world::BlockRegistryExt,
+    block::BlockStateCodec, generation::height_limit::HeightLimitView, world::BlockRegistryExt,
 };
 
 #[derive(Deserialize)]
@@ -44,10 +44,10 @@ pub enum BlockPredicate {
 }
 
 impl BlockPredicate {
-    pub fn test(
+    pub fn test<T: GenerationCache>(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &T,
         pos: &BlockPos,
     ) -> bool {
         match self {
@@ -76,7 +76,7 @@ pub struct MatchingBlocksBlockPredicate {
 }
 
 impl MatchingBlocksBlockPredicate {
-    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+    pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let block = self.offset.get_block(chunk, pos);
         match &self.blocks {
             MatchingBlocksWrapper::Single(single_block) => {
@@ -96,7 +96,7 @@ pub struct InsideWorldBoundsBlockPredicate {
 }
 
 impl InsideWorldBoundsBlockPredicate {
-    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+    pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let pos = pos.offset(self.offset);
         !chunk.out_of_height(pos.0.y as i16)
     }
@@ -110,7 +110,7 @@ pub struct MatchingBlockTagPredicate {
 }
 
 impl MatchingBlockTagPredicate {
-    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+    pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let block = self.offset.get_block(chunk, pos);
         block.is_tagged_with(&self.tag).unwrap()
     }
@@ -124,7 +124,7 @@ pub struct HasSturdyFacePredicate {
 }
 
 impl HasSturdyFacePredicate {
-    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+    pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let state = self.offset.get_state(chunk, pos);
         state.is_side_solid(self.direction)
     }
@@ -136,10 +136,10 @@ pub struct AnyOfBlockPredicate {
 }
 
 impl AnyOfBlockPredicate {
-    pub fn test(
+    pub fn test<T: GenerationCache>(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &T,
         pos: &BlockPos,
     ) -> bool {
         for predicate in &self.predicates {
@@ -158,10 +158,10 @@ pub struct AllOfBlockPredicate {
 }
 
 impl AllOfBlockPredicate {
-    pub fn test(
+    pub fn test<T: GenerationCache>(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &T,
         pos: &BlockPos,
     ) -> bool {
         for predicate in &self.predicates {
@@ -180,10 +180,10 @@ pub struct NotBlockPredicate {
 }
 
 impl NotBlockPredicate {
-    pub fn test(
+    pub fn test<T: GenerationCache>(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &T,
         pos: &BlockPos,
     ) -> bool {
         !self.predicate.test(block_registry, chunk, pos)
@@ -197,7 +197,7 @@ pub struct SolidBlockPredicate {
 }
 
 impl SolidBlockPredicate {
-    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+    pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let state = self.offset.get_state(chunk, pos);
         state.is_solid()
     }
@@ -211,10 +211,10 @@ pub struct WouldSurviveBlockPredicate {
 }
 
 impl WouldSurviveBlockPredicate {
-    pub fn test(
+    pub fn test<T: GenerationCache>(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &T,
         pos: &BlockPos,
     ) -> bool {
         let block = self.state.get_block();
@@ -230,7 +230,7 @@ pub struct ReplaceableBlockPredicate {
 }
 
 impl ReplaceableBlockPredicate {
-    pub fn test(&self, chunk: &ProtoChunk, pos: &BlockPos) -> bool {
+    pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let state = self.offset.get_state(chunk, pos);
         state.replaceable()
     }
@@ -248,13 +248,13 @@ impl OffsetBlocksBlockPredicate {
         }
         *pos
     }
-    pub fn get_block(&self, chunk: &ProtoChunk, pos: &BlockPos) -> &'static Block {
+    pub fn get_block<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> &'static Block {
         let pos = self.get(pos);
-        chunk.get_block_state(&pos.0).to_block()
+        GenerationCache::get_block_state(chunk, &pos.0).to_block()
     }
-    pub fn get_state(&self, chunk: &ProtoChunk, pos: &BlockPos) -> &'static BlockState {
+    pub fn get_state<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> &'static BlockState {
         let pos = self.get(pos);
-        chunk.get_block_state(&pos.0).to_state()
+        GenerationCache::get_block_state(chunk, &pos.0).to_state()
     }
 }
 

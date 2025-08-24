@@ -23,7 +23,6 @@ pub mod structure;
 mod surface;
 pub mod y_offset;
 
-
 use generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
 use pumpkin_util::random::{
     RandomDeriver, RandomDeriverImpl, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
@@ -32,7 +31,7 @@ pub use seed::Seed;
 
 use crate::dimension::Dimension;
 
-pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<dyn WorldGenerator> {
+pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<VanillaGenerator> {
     // TODO decide which WorldGenerator to pick based on config.
     Box::new(VanillaGenerator::new(seed, dimension))
 }
