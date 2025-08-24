@@ -16,7 +16,7 @@ pub fn event(item: TokenStream) -> TokenStream {
     let name = &input.ident;
 
     quote! {
-        impl crate::plugin::Event for #name {
+        impl crate::plugin::Payload for #name {
             fn get_name_static() -> &'static str {
                 stringify!(#name)
             }
