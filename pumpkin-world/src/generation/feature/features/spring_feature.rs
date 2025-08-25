@@ -3,7 +3,7 @@ use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{ProtoChunk, block::BlockStateCodec, world::BlockRegistryExt};
+use crate::{block::BlockStateCodec, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct SpringFeatureFeature {

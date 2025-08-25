@@ -29,8 +29,7 @@ impl BlockRegistryExt for BlockRegistry {
 }
 
 fn chunk_generation_seed(seed: i64) {
-    let generator: Arc<dyn WorldGenerator> =
-        get_world_gen(Seed(seed as u64), Dimension::Overworld).into();
+    let generator = get_world_gen(Seed(seed as u64), Dimension::Overworld);
     let temp_dir = TempDir::new().unwrap();
     let block_registry = Arc::new(BlockRegistry);
     let level = Arc::new(Level::from_root_folder(

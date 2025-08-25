@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use acacia::AcaciaFoliagePlacer;
 use blob::BlobFoliagePlacer;
@@ -20,7 +19,6 @@ use spruce::SpruceFoliagePlacer;
 
 use super::{TreeFeature, TreeNode};
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{ProtoChunk, level::Level};
 
 mod acacia;
 mod blob;

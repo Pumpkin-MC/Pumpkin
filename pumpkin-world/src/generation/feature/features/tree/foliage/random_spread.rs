@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use pumpkin_data::BlockState;
 use pumpkin_util::{
@@ -9,7 +8,7 @@ use serde::Deserialize;
 
 use super::FoliagePlacer;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{ProtoChunk, generation::feature::features::tree::TreeNode, level::Level};
+use crate::generation::feature::features::tree::TreeNode;
 
 #[derive(Deserialize)]
 pub struct RandomSpreadFoliagePlacer {

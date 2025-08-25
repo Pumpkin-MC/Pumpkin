@@ -10,7 +10,6 @@ use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{
-    ProtoChunk,
     block::BlockStateCodec,
     generation::{height_limit::HeightLimitView, rule::RuleTest},
     world::BlockRegistryExt,

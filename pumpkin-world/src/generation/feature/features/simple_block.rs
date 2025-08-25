@@ -4,7 +4,6 @@ use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{
-    ProtoChunk,
     generation::block_state_provider::BlockStateProvider,
     world::{BlockAccessor, BlockRegistryExt},
 };

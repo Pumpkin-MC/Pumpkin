@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use super::TreeDecorator;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{ProtoChunk, generation::block_state_provider::BlockStateProvider};
+use crate::generation::block_state_provider::BlockStateProvider;
 
 #[derive(Deserialize)]
 pub struct PlaceOnGroundTreeDecorator {

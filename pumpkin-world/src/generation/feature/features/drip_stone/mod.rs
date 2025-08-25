@@ -1,4 +1,3 @@
-use crate::ProtoChunk;
 use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::tag;
 use pumpkin_data::{Block, tag::Taggable};

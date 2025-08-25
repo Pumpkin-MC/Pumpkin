@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use fancy::FancyTrunkPlacer;
 use pumpkin_data::tag;
@@ -12,15 +11,11 @@ use straight::StraightTrunkPlacer;
 
 use super::{TreeFeature, TreeNode};
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{
-    ProtoChunk,
-    generation::feature::features::tree::trunk::{
+use crate::generation::feature::features::tree::trunk::{
         bending::BendingTrunkPlacer, cherry::CherryTrunkPlacer, dark_oak::DarkOakTrunkPlacer,
         forking::ForkingTrunkPlacer, giant::GiantTrunkPlacer, mega_jungle::MegaJungleTrunkPlacer,
         upwards_branching::UpwardsBranchingTrunkPlacer,
-    },
-    level::Level,
-};
+    };
 
 mod bending;
 mod cherry;

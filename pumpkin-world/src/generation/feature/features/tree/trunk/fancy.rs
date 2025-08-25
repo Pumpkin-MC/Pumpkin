@@ -1,5 +1,4 @@
 use core::f32;
-use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockState,
@@ -13,11 +12,7 @@ use serde::Deserialize;
 
 use super::TrunkPlacer;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{
-    ProtoChunk,
-    generation::feature::features::tree::{TreeFeature, TreeNode},
-    level::Level,
-};
+use crate::generation::feature::features::tree::{TreeFeature, TreeNode};
 
 #[derive(Deserialize)]
 pub struct FancyTrunkPlacer;

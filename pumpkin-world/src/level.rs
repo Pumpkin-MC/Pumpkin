@@ -1,5 +1,4 @@
 use crate::generation::generator::VanillaGenerator;
-use crate::generation::settings::gen_settings_from_dimension;
 use crate::level::new_chunk_system::{ChunkLoading, GenerationSchedule, LevelChannel};
 use crate::{
     BlockStateId,
@@ -10,7 +9,7 @@ use crate::{
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, generator::WorldGenerator, get_world_gen, proto_chunk::StagedChunk},
+    generation::{Seed, generator::WorldGenerator, get_world_gen},
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
@@ -23,9 +22,7 @@ use pumpkin_data::biome::Biome;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
-use std::collections::VecDeque;
 use std::sync::Mutex;
-use std::time::Duration;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -34,7 +31,6 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
-use tokio::time::sleep;
 use tokio::{
     select,
     sync::{
@@ -55,17 +51,17 @@ pub mod new_chunk_system {
     use crate::chunk::io::FileIO;
     use crate::chunk::io::LoadedData::Loaded;
     use crate::dimension::Dimension;
-    use crate::generation::biome_coords;
+    
     use crate::generation::height_limit::HeightLimitView;
-    use crate::generation::positions::chunk_pos;
+    
     use crate::generation::proto_chunk::{
-        GenerationCache, StagedChunk, StandardChunkFluidLevelSampler, TerrainCache,
+        GenerationCache, StagedChunk, TerrainCache,
     };
     use crate::generation::settings::{GenerationSettings, gen_settings_from_dimension};
     use crate::level::new_chunk_system::StagedChunkEnum::{
         Biomes, Empty, Features, Noise, Surface,
     };
-    use crate::level::{Level, LevelFolder, SyncChunk};
+    use crate::level::{Level, SyncChunk};
     use crate::world::{BlockAccessor, BlockRegistryExt};
     use crate::{GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
     use async_trait::async_trait;
@@ -75,26 +71,26 @@ pub mod new_chunk_system {
     use log::debug;
     use num_traits::abs;
     use pumpkin_data::biome::Biome;
-    use pumpkin_data::data_component_impl::get;
-    use pumpkin_data::particle::Particle::SonicBoom;
+    
+    
     use pumpkin_data::{Block, BlockState};
     use pumpkin_util::HeightMap;
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector2::Vector2;
     use pumpkin_util::math::vector3::Vector3;
-    use std::char::MAX;
+    
     use std::cmp::{PartialEq, max, min};
     use std::collections::hash_map::Entry;
     use std::collections::{HashMap, HashSet, VecDeque};
     use std::mem::swap;
     use std::sync::{Arc, Condvar, Mutex};
-    use std::thread::ThreadId;
+    
     use std::time::{Duration, Instant};
     use std::{ptr, thread};
     use tokio::runtime::{Builder, Runtime};
     use tokio::sync::RwLock;
     use tokio::task;
-    use tokio::task::spawn_blocking;
+    
     use tokio_util::task::TaskTracker;
 
     type ChunkPos = Vector2<i32>;
@@ -103,6 +99,12 @@ pub mod new_chunk_system {
     pub struct ChunkLoading {
         pub pos_level: ChunkLevel,
         pub ticket: HashMap<ChunkPos, Vec<i8>>, // TODO lifetime & id
+    }
+
+    impl Default for ChunkLoading {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 
     impl ChunkLoading {
@@ -351,6 +353,12 @@ pub mod new_chunk_system {
         pub notify: Condvar,
     }
 
+    impl Default for LevelChannel {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl LevelChannel {
         pub fn new() -> Self {
             Self {
@@ -410,7 +418,7 @@ pub mod new_chunk_system {
 
     impl HeightLimitView for Cache {
         fn height(&self) -> u16 {
-            let mid = (self.size * self.size >> 1) as usize;
+            let mid = ((self.size * self.size) >> 1) as usize;
             match &self.chunks[mid] {
                 Chunk::Proto(chunk) => chunk.proto_chunk().height(),
                 _ => panic!(),
@@ -418,7 +426,7 @@ pub mod new_chunk_system {
         }
 
         fn bottom_y(&self) -> i8 {
-            let mid = (self.size * self.size >> 1) as usize;
+            let mid = ((self.size * self.size) >> 1) as usize;
             match &self.chunks[mid] {
                 Chunk::Proto(chunk) => chunk.proto_chunk().bottom_y(),
                 _ => panic!(),
@@ -447,7 +455,7 @@ pub mod new_chunk_system {
 
     impl GenerationCache for Cache {
         fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk {
-            let mid = (self.size * self.size >> 1) as usize;
+            let mid = ((self.size * self.size) >> 1) as usize;
             match &mut self.chunks[mid] {
                 Chunk::Proto(chunk) => chunk.proto_chunk_mut(),
                 _ => panic!(),
@@ -622,7 +630,7 @@ pub mod new_chunk_system {
             noise_router: &ProtoNoiseRouters,
             dimension: Dimension,
         ) {
-            let mid = (self.size * self.size >> 1) as usize;
+            let mid = ((self.size * self.size) >> 1) as usize;
             match stage {
                 Empty => panic!(),
                 Biomes => match &mut self.chunks[mid] {
@@ -750,11 +758,7 @@ pub mod new_chunk_system {
         ) -> Option<Chunk> {
             if let Some(data) = loaded_chunks.get(&pos) {
                 Some(Chunk::Level(data.clone()))
-            } else if let Some(data) = proto_chunks.remove(&pos) {
-                Some(Chunk::Proto(data))
-            } else {
-                None
-            }
+            } else { proto_chunks.remove(&pos).map(Chunk::Proto) }
         }
 
         fn get_chunk_stage_id(
@@ -787,27 +791,25 @@ pub mod new_chunk_system {
         }
 
         fn resort_work(&mut self, new_level: ChunkLevel) {
-            for (pos, _) in &self.last_level {
-                if !new_level.contains_key(pos) {
-                    if let Some(chunk) =
+            for pos in self.last_level.keys() {
+                if !new_level.contains_key(pos)
+                    && let Some(chunk) =
                         Self::get_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
                     {
                         self.unload_chunks.insert(*pos, chunk);
                     }
-                }
             }
             for (pos, level) in &new_level {
                 let old_level = *self
                     .last_level
-                    .get(&pos)
+                    .get(pos)
                     .unwrap_or(&ChunkLoading::MAX_LEVEL);
-                if old_level == ChunkLoading::MAX_LEVEL {
-                    if let Some(chunk) = self.unload_chunks.remove(&pos) {
+                if old_level == ChunkLoading::MAX_LEVEL
+                    && let Some(chunk) = self.unload_chunks.remove(pos) {
                         Self::add_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos, chunk);
                     }
-                }
-                if old_level != *level {
-                    if !self.loaded_chunks.contains_key(pos) {
+                if old_level != *level
+                    && !self.loaded_chunks.contains_key(pos) {
                         let next_stage = StagedChunkEnum::level_to_stage(old_level);
                         let new_highest_stage = StagedChunkEnum::level_to_stage(*level);
                         if next_stage == new_highest_stage {
@@ -839,7 +841,6 @@ pub mod new_chunk_system {
                             }
                         };
                     }
-                }
             }
             for (pos, level, _) in self.queue.iter_mut() {
                 *level = *new_level.get(pos).unwrap();
@@ -881,22 +882,20 @@ pub mod new_chunk_system {
                         log::info!("io thread stop");
                         break;
                     }
-                } else {
-                    if send
-                        .send((
+                } else if send
+                    .send((
+                        pos,
+                        RecvChunk::IO(Chunk::Proto(StagedChunk::new(
                             pos,
-                            RecvChunk::IO(Chunk::Proto(StagedChunk::new(
-                                pos,
-                                gen_settings_from_dimension(&level.world_gen.dimension),
-                                level.world_gen.default_block,
-                                biome_mixer_seed,
-                            ))),
-                        ))
-                        .is_err()
-                    {
-                        log::info!("io thread stop");
-                        break;
-                    }
+                            gen_settings_from_dimension(&level.world_gen.dimension),
+                            level.world_gen.default_block,
+                            biome_mixer_seed,
+                        ))),
+                    ))
+                    .is_err()
+                {
+                    log::info!("io thread stop");
+                    break;
                 }
             }
         }
@@ -936,7 +935,7 @@ pub mod new_chunk_system {
         }
 
         fn drop_mark(&mut self, stage: StagedChunkEnum, pos: ChunkPos) {
-            let mut mark = self.task_mark.get_mut(&pos).unwrap();
+            let mark = self.task_mark.get_mut(&pos).unwrap();
             debug_assert!((*mark >> (stage as u8) & 1) == 1);
             *mark -= 1 << (stage as u8);
             if *mark == 0 {
@@ -1138,15 +1137,13 @@ pub mod new_chunk_system {
                         debug!("receive new level");
                         self.resort_work(new_level);
                     }
-                } else {
-                    if let Some(new_level) = self.send_level.get() {
-                        debug!("receive new level");
-                        self.resort_work(new_level);
-                    } else if nothing && self.running_task_count > 0 {
-                        debug!("nothing to do. thread sleep.");
-                        if let Ok((pos, data)) = self.recv_chunk.recv() {
-                            self.receive_chunk(pos, data);
-                        }
+                } else if let Some(new_level) = self.send_level.get() {
+                    debug!("receive new level");
+                    self.resort_work(new_level);
+                } else if nothing && self.running_task_count > 0 {
+                    debug!("nothing to do. thread sleep.");
+                    if let Ok((pos, data)) = self.recv_chunk.recv() {
+                        self.receive_chunk(pos, data);
                     }
                 }
             }

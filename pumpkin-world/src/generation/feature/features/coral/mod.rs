@@ -1,4 +1,3 @@
-use crate::ProtoChunk;
 use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,

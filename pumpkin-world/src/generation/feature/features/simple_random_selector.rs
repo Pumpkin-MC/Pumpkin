@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use pumpkin_util::{
     math::position::BlockPos,
@@ -8,7 +7,7 @@ use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{
-    ProtoChunk, generation::feature::placed_features::PlacedFeature, level::Level,
+    generation::feature::placed_features::PlacedFeature,
     world::BlockRegistryExt,
 };
 

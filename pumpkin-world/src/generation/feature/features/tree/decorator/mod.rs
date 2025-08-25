@@ -1,4 +1,3 @@
-use crate::ProtoChunk;
 use crate::generation::proto_chunk::GenerationCache;
 use alter_ground::AlterGroundTreeDecorator;
 use attached_to_leaves::AttachedToLeavesTreeDecorator;

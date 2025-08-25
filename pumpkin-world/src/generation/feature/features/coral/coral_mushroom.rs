@@ -1,4 +1,3 @@
-use crate::ProtoChunk;
 use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},

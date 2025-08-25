@@ -23,7 +23,7 @@ pub mod structure;
 mod surface;
 pub mod y_offset;
 
-use generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+use generator::{GeneratorInit, VanillaGenerator};
 use pumpkin_util::random::{
     RandomDeriver, RandomDeriverImpl, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
 };

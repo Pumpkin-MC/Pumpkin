@@ -1,5 +1,4 @@
 use core::f32;
-use std::sync::Arc;
 
 use pumpkin_data::BlockState;
 use pumpkin_util::{
@@ -9,14 +8,10 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{
-    ProtoChunk,
-    generation::feature::features::tree::{
+use crate::generation::feature::features::tree::{
         TreeNode,
         trunk::{TrunkPlacer, giant::GiantTrunkPlacer},
-    },
-    level::Level,
-};
+    };
 
 #[derive(Deserialize)]
 pub struct MegaJungleTrunkPlacer;

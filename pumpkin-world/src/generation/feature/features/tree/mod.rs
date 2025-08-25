@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
@@ -9,11 +8,7 @@ use serde::Deserialize;
 use trunk::TrunkPlacer;
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{
-    ProtoChunk,
-    generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize},
-    level::Level,
-};
+use crate::generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize};
 
 mod decorator;
 mod foliage;

@@ -5,22 +5,18 @@ use pumpkin_data::BlockState;
 use pumpkin_data::noise_router::{
     END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
 };
-use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+use pumpkin_util::math::vector2::Vector2;
 
 use super::{
-    biome_coords, noise::router::proto_noise_router::ProtoNoiseRouters,
+    noise::router::proto_noise_router::ProtoNoiseRouters,
     settings::gen_settings_from_dimension,
 };
-use crate::chunk::format::LightContainer;
 use crate::generation::proto_chunk::TerrainCache;
 use crate::level::Level;
 use crate::world::BlockRegistryExt;
-use crate::{chunk::ChunkLight, dimension::Dimension};
+use crate::dimension::Dimension;
 use crate::{
-    chunk::{
-        ChunkData, ChunkSections, SubChunk,
-        palette::{BiomePalette, BlockPalette},
-    },
+    chunk::ChunkData,
     generation::{GlobalRandomConfig, Seed, proto_chunk::StagedChunk},
 };
 

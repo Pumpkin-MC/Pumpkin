@@ -11,7 +11,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{ProtoChunk, world::BlockRegistryExt};
+use crate::world::BlockRegistryExt;
 
 #[derive(Deserialize)]
 pub struct BambooFeature {

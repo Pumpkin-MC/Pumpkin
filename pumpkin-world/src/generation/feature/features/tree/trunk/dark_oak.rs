@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_util::{
@@ -8,11 +7,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{
-    ProtoChunk,
-    generation::feature::features::tree::{TreeFeature, TreeNode, trunk::TrunkPlacer},
-    level::Level,
-};
+use crate::generation::feature::features::tree::{TreeFeature, TreeNode, trunk::TrunkPlacer};
 
 #[derive(Deserialize)]
 pub struct DarkOakTrunkPlacer;

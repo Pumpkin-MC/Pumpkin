@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, LazyLock},
+    sync::LazyLock,
 };
 
 use pumpkin_util::{include_json_static, math::position::BlockPos, random::RandomGenerator};
@@ -71,7 +71,7 @@ use super::features::{
     weeping_vines::WeepingVinesFeature,
 };
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{ProtoChunk, level::Level, world::BlockRegistryExt};
+use crate::world::BlockRegistryExt;
 
 pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> = LazyLock::new(
     || include_json_static!("../../../../assets/configured_features.json", HashMap<String, ConfiguredFeature>),

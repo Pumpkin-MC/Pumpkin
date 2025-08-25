@@ -7,7 +7,6 @@ use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{
-    ProtoChunk,
     generation::{height_limit::HeightLimitView, section_coords},
     world::BlockRegistryExt,
 };

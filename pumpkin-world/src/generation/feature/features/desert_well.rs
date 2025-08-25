@@ -6,10 +6,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{
-    ProtoChunk,
-    generation::{chunk_noise::WATER_BLOCK, height_limit::HeightLimitView},
-};
+use crate::generation::{chunk_noise::WATER_BLOCK, height_limit::HeightLimitView};
 // TODO: remove .to_state()
 
 #[derive(Deserialize)]

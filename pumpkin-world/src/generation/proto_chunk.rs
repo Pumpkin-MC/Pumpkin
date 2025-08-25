@@ -36,7 +36,6 @@ use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::structure::placement::StructurePlacementCalculator;
 use crate::generation::structure::structures::StructurePosition;
 use crate::generation::structure::{STRUCTURE_SETS, STRUCTURES, Structure, StructureType};
-use crate::level::new_chunk_system::StagedChunkEnum;
 use crate::{
     BlockStateId,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier},
@@ -1114,7 +1113,7 @@ impl StagedChunk {
                 );
                 Ok(StagedChunk::Surface(chunk))
             }
-            StagedChunk::Surface(mut chunk) => {
+            StagedChunk::Surface(chunk) => {
                 // Generate features and structures
                 // chunk.generate_features_and_structure(level, block_registry, random_config);
                 Ok(StagedChunk::Features(chunk))
