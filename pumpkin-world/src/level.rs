@@ -87,11 +87,13 @@ pub mod new_chunk_system {
     use std::collections::hash_map::Entry;
     use std::collections::{HashMap, HashSet, VecDeque};
     use std::mem::swap;
-    use std::ptr;
     use std::sync::{Arc, Condvar, Mutex};
+    use std::thread::ThreadId;
     use std::time::{Duration, Instant};
+    use std::{ptr, thread};
     use tokio::runtime::{Builder, Runtime};
     use tokio::sync::RwLock;
+    use tokio::task;
     use tokio::task::spawn_blocking;
     use tokio_util::task::TaskTracker;
 
@@ -757,7 +759,7 @@ pub mod new_chunk_system {
 
         fn get_chunk_stage_id(
             loaded_chunks: &Arc<DashMap<Vector2<i32>, SyncChunk>>,
-            proto_chunks: &mut HashMap<ChunkPos, StagedChunk>,
+            proto_chunks: &HashMap<ChunkPos, StagedChunk>,
             pos: ChunkPos,
         ) -> u8 {
             if loaded_chunks.contains_key(&pos) {
@@ -865,7 +867,7 @@ pub mod new_chunk_system {
             use crate::biome::hash_seed;
             let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
             let (t_send, mut t_recv) = tokio::sync::mpsc::channel(2);
-            while let Ok(pos) = recv.recv() {
+            while let Ok(pos) = task::block_in_place(|| recv.recv()) {
                 debug!("io thread receive chunk pos {pos:?}");
                 level
                     .chunk_saver
@@ -904,20 +906,30 @@ pub mod new_chunk_system {
             send: Sender<(ChunkPos, RecvChunk)>,
             level: Arc<Level>,
         ) {
-            log::info!("generation thread start");
+            log::info!(
+                "generation thread start id: {:?} name: {}",
+                thread::current().id(),
+                thread::current().name().unwrap_or("unknown")
+            );
+
+            let settings = gen_settings_from_dimension(&level.world_gen.dimension);
             while let Ok((pos, mut cache, stage)) = recv.recv() {
                 debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
                 cache.advance(
                     stage,
                     level.block_registry.as_ref(),
-                    gen_settings_from_dimension(&level.world_gen.dimension),
+                    settings,
                     &level.world_gen.random_config,
                     &level.world_gen.terrain_cache,
                     &level.world_gen.base_router,
                     level.world_gen.dimension,
                 );
                 if send.send((pos, RecvChunk::Generation(cache))).is_err() {
-                    log::info!("generation thread stop");
+                    log::info!(
+                        "generation thread stop id: {:?} name: {}",
+                        thread::current().id(),
+                        thread::current().name().unwrap_or("unknown")
+                    );
                     break;
                 }
             }
@@ -932,85 +944,112 @@ pub mod new_chunk_system {
             }
         }
 
+        fn receive_chunk(&mut self, pos: ChunkPos, data: RecvChunk) {
+            debug!("receive chunk pos {pos:?}");
+            match data {
+                RecvChunk::IO(chunk) => match chunk {
+                    Chunk::Level(data) => {
+                        self.loaded_chunks.insert(pos, data);
+                        self.task_mark.remove(&pos);
+                    }
+                    Chunk::Proto(data) => {
+                        self.proto_chunks.insert(pos, data);
+                        // i think we don't need to remove mark here
+                    }
+                },
+                RecvChunk::Generation(data) => {
+                    let mut dx = 0;
+                    let mut dy = 0;
+                    for chunk in data.chunks {
+                        let new_pos = ChunkPos::new(data.x + dx, data.y + dy);
+                        match chunk {
+                            Chunk::Level(chunk) => {
+                                if new_pos == pos {
+                                    // other chunk is borrowed by arc. don't need to return
+                                    self.loaded_chunks.insert(new_pos, chunk);
+                                    self.task_mark.remove(&new_pos);
+                                }
+                            }
+                            Chunk::Proto(chunk) => {
+                                self.proto_chunks.insert(new_pos, chunk);
+                            }
+                        }
+                        self.occupied.remove(&new_pos);
+                        dy += 1;
+                        if dy == data.size {
+                            dy = 0;
+                            dx += 1;
+                        }
+                    }
+                }
+            }
+            self.running_task_count -= 1;
+        }
+
+        fn dump_debug_info(&self, sx: i32, tx: i32, sy: i32, ty: i32) {
+            debug!("queue len {}", self.queue.len());
+            // debug!("queue {:?}", self.queue);
+            debug!("running tasks {}", self.running_task_count);
+            let mut s = String::new();
+            for x in sx..=tx {
+                for y in sy..=ty {
+                    s += Self::get_chunk_stage_id(
+                        &self.loaded_chunks,
+                        &self.proto_chunks,
+                        ChunkPos::new(x, y),
+                    )
+                    .to_string()
+                    .as_str();
+                    s += " ";
+                }
+                s += "\n";
+            }
+            debug!("chunk stage:\n{s}\n");
+
+            s.clear();
+            for x in sx..=tx {
+                for y in sy..=ty {
+                    s += self
+                        .last_level
+                        .get(&ChunkPos::new(x, y))
+                        .unwrap_or(&ChunkLoading::MAX_LEVEL)
+                        .to_string()
+                        .as_str();
+                    s += " ";
+                }
+                s += "\n";
+            }
+            debug!("last loading level:\n{s}\n");
+        }
+
         fn work(mut self) {
-            log::info!("schedule thread start");
+            log::info!(
+                "schedule thread start id: {:?} name: {}",
+                thread::current().id(),
+                thread::current().name().unwrap_or("unknown")
+            );
             if let Some(new_level) = self.send_level.wait_and_get() {
                 debug!("receive new level");
                 self.resort_work(new_level);
             }
             let mut clock = Instant::now();
             loop {
-                // TODO lock the thread
+                let mut nothing = true;
                 let mut len = self.queue.len();
                 let mut i = 0;
+
                 let now = Instant::now();
                 if now - clock > Duration::from_secs(5) {
-                    debug!("queue len {len}");
-                    debug!("running tasks {}", self.running_task_count);
-                    for x in -20..=20 {
-                        let mut s = String::new();
-                        for y in -20..=20 {
-                            s += Self::get_chunk_stage_id(
-                                &self.loaded_chunks,
-                                &mut self.proto_chunks,
-                                ChunkPos::new(x, y),
-                            )
-                            .to_string()
-                            .as_str();
-                            s += " ";
-                        }
-                        log::info!("{s}");
-                    }
+                    self.dump_debug_info(-20, 20, -20, 20);
                     clock = now;
                 }
-                // debug!("queue {:?}", self.queue);
                 'outer: while i < len {
                     while let Ok((pos, data)) = self.recv_chunk.try_recv() {
-                        debug!("receive chunk pos {pos:?}");
-                        match data {
-                            RecvChunk::IO(chunk) => match chunk {
-                                Chunk::Level(data) => {
-                                    self.loaded_chunks.insert(pos, data);
-                                    self.task_mark.remove(&pos);
-                                }
-                                Chunk::Proto(data) => {
-                                    self.proto_chunks.insert(pos, data);
-                                    // 感觉不在这里移除mark不会有什么副作用
-                                }
-                            },
-                            RecvChunk::Generation(data) => {
-                                let mut id = 0;
-                                for chunk in data.chunks {
-                                    let pos = ChunkPos::new(
-                                        data.x + id / data.size,
-                                        data.y + id % data.size,
-                                    );
-                                    match chunk {
-                                        Chunk::Level(data) => {
-                                            log::debug!("loaded chunk add {pos:?}");
-                                            self.loaded_chunks.insert(pos, data);
-                                            self.task_mark.remove(&pos);
-                                        }
-                                        Chunk::Proto(chunk) => {
-                                            if id == data.size * data.size / 2 {
-                                                log::debug!(
-                                                    "proto chunk add {pos:?} {:?}",
-                                                    StagedChunkEnum::from(chunk.stage_id())
-                                                );
-                                            }
-                                            self.proto_chunks.insert(pos, chunk);
-                                            // 感觉不在这里移除mark不会有什么副作用
-                                        }
-                                    }
-                                    self.occupied.remove(&pos);
-                                    id += 1;
-                                }
-                            }
-                        }
-                        self.running_task_count -= 1;
+                        self.receive_chunk(pos, data);
                     }
+
                     let (pos, _, stage) = self.queue[i];
-                    // debug!("receive request pos {pos:?} stage {stage:?} queue len {len}");
+
                     let level = *self
                         .last_level
                         .get(&pos)
@@ -1021,6 +1060,7 @@ pub mod new_chunk_system {
                         len -= 1;
                         continue;
                     }
+
                     let highest_stage = StagedChunkEnum::level_to_stage(level);
                     if (highest_stage as u8) < (stage as u8) {
                         self.drop_mark(stage, pos);
@@ -1028,6 +1068,7 @@ pub mod new_chunk_system {
                         len -= 1;
                         continue;
                     }
+
                     let current_stage =
                         Self::get_chunk_stage_id(&self.loaded_chunks, &mut self.proto_chunks, pos);
                     if current_stage >= (stage as u8) {
@@ -1036,13 +1077,16 @@ pub mod new_chunk_system {
                         len -= 1;
                         continue;
                     }
-                    if stage == StagedChunkEnum::Empty {
+
+                    if stage == Empty {
+                        nothing = false;
                         self.running_task_count += 1;
                         self.io.send(pos).expect("oi thread close unexpectedly");
                         self.queue.remove(i);
                         len -= 1;
                         continue;
                     }
+
                     let radius = stage.get_radius();
                     let depend = stage.get_dependencies();
                     for dx in -radius..=radius {
@@ -1061,7 +1105,7 @@ pub mod new_chunk_system {
                             }
                         }
                     }
-                    let mut cache = Cache::new(pos.x - radius, pos.y - radius, radius * 2 + 1);
+                    let mut cache = Cache::new(pos.x - radius, pos.y - radius, (radius << 1) + 1);
                     for dx in -radius..=radius {
                         for dy in -radius..=radius {
                             let new_pos = pos.add_raw(dx, dy);
@@ -1084,6 +1128,12 @@ pub mod new_chunk_system {
                     len -= 1;
                 }
                 if len == 0 {
+                    debug!("the queue is empty. thread sleep");
+                    while self.running_task_count > 0 {
+                        while let Ok((pos, data)) = self.recv_chunk.recv() {
+                            self.receive_chunk(pos, data);
+                        }
+                    }
                     if let Some(new_level) = self.send_level.wait_and_get() {
                         debug!("receive new level");
                         self.resort_work(new_level);
@@ -1092,6 +1142,11 @@ pub mod new_chunk_system {
                     if let Some(new_level) = self.send_level.get() {
                         debug!("receive new level");
                         self.resort_work(new_level);
+                    } else if nothing && self.running_task_count > 0 {
+                        debug!("nothing to do. thread sleep.");
+                        if let Ok((pos, data)) = self.recv_chunk.recv() {
+                            self.receive_chunk(pos, data);
+                        }
                     }
                 }
             }
