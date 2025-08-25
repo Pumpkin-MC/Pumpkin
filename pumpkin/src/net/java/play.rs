@@ -15,7 +15,6 @@ use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
 use crate::entity::EntityBase;
 use crate::entity::player::{ChatMode, ChatSession, Player};
-use crate::entity::r#type::from_type;
 use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
@@ -28,7 +27,6 @@ use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, FoodImpl};
-use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState};
@@ -60,7 +58,6 @@ use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -1460,14 +1457,6 @@ impl JavaClient {
                 .await?;
         }
 
-        // Check if the item is a spawn egg
-        let item_id = stack.item.id;
-        if let Some(entity) = entity_from_egg(item_id) {
-            self.spawn_entity_from_egg(player, entity, position, face)
-                .await;
-            should_try_decrement = true;
-        }
-
         if should_try_decrement {
             // TODO: Config
             // Decrease block count
@@ -1749,36 +1738,6 @@ impl JavaClient {
             packet.key,
             packet.payload.as_ref().map(|p| p.len())
         );
-    }
-
-    async fn spawn_entity_from_egg(
-        &self,
-        player: &Player,
-        entity_type: &'static EntityType,
-        location: BlockPos,
-        face: BlockDirection,
-    ) {
-        let world_pos = BlockPos(location.0 + face.to_offset());
-        // Align the position like Vanilla does
-        let pos = Vector3::new(
-            f64::from(world_pos.0.x) + 0.5,
-            f64::from(world_pos.0.y),
-            f64::from(world_pos.0.z) + 0.5,
-        );
-        // Create rotation like Vanilla
-        let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
-
-        let world = player.world();
-        // Create a new mob and UUID based on the spawn egg id
-        let mob = from_type(entity_type, pos, world, Uuid::new_v4()).await;
-
-        // Set the rotation
-        mob.get_entity().set_rotation(yaw, 0.0);
-
-        // Broadcast the new mob to all players
-        world.spawn_entity(mob).await;
-
-        // TODO: send/configure additional commands/data based on the type of entity (horse, slime, etc)
     }
 
     const WORLD_LOWEST_Y: i8 = -64;

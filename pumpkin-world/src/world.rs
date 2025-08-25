@@ -4,8 +4,11 @@ use crate::block::entities::BlockEntity;
 use crate::{BlockStateId, inventory::Inventory};
 use async_trait::async_trait;
 use bitflags::bitflags;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use thiserror::Error;
@@ -58,7 +61,17 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
         except: Option<BlockDirection>,
     );
 
+    async fn is_space_empty(&self, bounding_box: BoundingBox) -> bool;
+
+    async fn spawn_from_type(
+        self: Arc<Self>,
+        entity_type: &'static EntityType,
+        position: Vector3<f64>,
+    );
+
     async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8);
+
+    async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32);
 
     async fn remove_block_entity(&self, block_pos: &BlockPos);
     async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>>;
@@ -82,7 +95,6 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
     );
 }
 
-#[async_trait]
 pub trait BlockRegistryExt: Send + Sync {
     fn can_place_at(
         &self,

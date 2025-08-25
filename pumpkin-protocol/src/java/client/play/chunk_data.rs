@@ -118,7 +118,6 @@ impl ClientPacket for CChunkData<'_> {
             write.write_slice(&blocks_and_biomes_buf)?;
         }
 
-        // TODO: block entities
         write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
         for block_entity in self.0.block_entities.values() {
             let block_entity = &block_entity;

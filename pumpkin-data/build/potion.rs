@@ -59,10 +59,10 @@ pub(crate) fn build() -> TokenStream {
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
 
-    for (name, potion) in potions.iter() {
+    for (name, potion) in potions.into_iter() {
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let id = potion.id;
-        let slots = potion.effects.clone();
+        let slots = potion.effects;
         let slots = slots.iter().map(|slot| slot.to_tokens());
 
         variants.extend([quote! {
