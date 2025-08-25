@@ -35,7 +35,7 @@ impl LevelTime {
     pub async fn send_time(&self, world: &World) {
         let current_players = world.players.read().await;
         for player in current_players.values() {
-            match player.client.as_ref() {
+            match &player.client {
                 ClientPlatform::Java(java_client) => {
                     java_client
                         .enqueue_packet(&CUpdateTime::new(self.world_age, self.time_of_day, true))

@@ -322,7 +322,7 @@ impl Server {
         };
 
         let mut player = Player::new(
-            Arc::new(client),
+            client,
             profile,
             config.clone().unwrap_or_default(),
             world.clone(),

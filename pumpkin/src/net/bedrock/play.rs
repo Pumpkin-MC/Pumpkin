@@ -1,19 +1,27 @@
-use std::{num::NonZero, sync::Arc};
+use std::{
+    num::{NonZero, NonZeroU32},
+    sync::Arc,
+};
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     bedrock::{
-        client::{chunk_radius_update::CChunkRadiusUpdate, container_open::CContainerOpen},
+        client::{
+            chunk_radius_update::CChunkRadiusUpdate, container_open::CContainerOpen,
+            network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
+            set_actor_motion::CSetActorMotion,
+        },
         server::{
+            command_request::SCommandRequest,
             container_close::SContainerClose,
             interaction::{Action, SInteraction},
-            player_auth_input::SPlayerAuthInput,
+            player_auth_input::{InputData, SPlayerAuthInput},
             request_chunk_radius::SRequestChunkRadius,
             text::SText,
         },
     },
-    codec::{bedrock_block_pos::NetworkPos, var_long::VarLong},
+    codec::{bedrock_block_pos::NetworkPos, var_long::VarLong, var_ulong::VarULong},
     java::client::play::CSystemChatMessage,
 };
 use pumpkin_util::{
@@ -22,8 +30,12 @@ use pumpkin_util::{
 };
 
 use crate::{
-    entity::player::Player, net::bedrock::BedrockClient,
-    plugin::player::player_chat::PlayerChatEvent, server::seasonal_events, world::chunker,
+    command::CommandSender,
+    entity::{EntityBase, player::Player},
+    net::{DisconnectReason, bedrock::BedrockClient},
+    plugin::player::{player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent},
+    server::{Server, seasonal_events},
+    world::chunker,
 };
 
 impl BedrockClient {
@@ -32,32 +44,96 @@ impl BedrockClient {
         player: &Arc<Player>,
         packet: SRequestChunkRadius,
     ) {
-        dbg!(&packet);
-        player.config.write().await.view_distance =
-            NonZero::new(packet.chunk_radius.0 as u8).unwrap();
-        self.send_game_packet(&CChunkRadiusUpdate {
-            chunk_radius: packet.chunk_radius,
-        })
-        .await;
+        let chunk_radius = packet.chunk_radius;
+        if chunk_radius.0 < 1 {
+            self.kick(
+                DisconnectReason::Kicked,
+                "Cannot have zero or negative view distance!".to_string(),
+            )
+            .await;
+            return;
+        }
+
+        self.send_game_packet(&CChunkRadiusUpdate { chunk_radius })
+            .await;
+
+        let old_view_distance = {
+            let mut config = player.config.write().await;
+            let old_view_distance = config.view_distance;
+            config.view_distance = NonZero::new(chunk_radius.0 as u8).unwrap();
+            old_view_distance
+        };
+
+        if old_view_distance.get() != chunk_radius.0 as u8 {
+            log::debug!(
+                "Player {} updated their render distance: {} -> {}.",
+                player.gameprofile.name,
+                old_view_distance,
+                chunk_radius.0
+            );
+            self.send_game_packet(&CNetworkChunkPublisherUpdate::new(
+                player.get_entity().block_pos.load(),
+                chunk_radius.0 as u32,
+            ))
+            .await;
+            chunker::update_position(player).await;
+        }
     }
 
     pub async fn player_pos_update(&self, player: &Arc<Player>, packet: SPlayerAuthInput) {
-        let pos = packet.position;
-        player.living_entity.entity.set_pos(pos.to_f64());
+        if !player.has_client_loaded() {
+            return;
+        }
+        let config = player.config.read().await;
+        let view_distance = config.view_distance;
+        self.send_game_packet(&CNetworkChunkPublisherUpdate::new(
+            BlockPos::new(
+                packet.position.x.floor() as i32,
+                packet.position.y.floor() as i32,
+                packet.position.z.floor() as i32,
+            ),
+            NonZeroU32::from(view_distance).into(),
+        ))
+        .await;
+        let new_pos = packet.position.to_f64();
+        let old_pos = player.position();
 
-        chunker::update_position(player).await;
-        //self.send_game_packet(&CMovePlayer {
-        //     player_runtime_id: VarULong(player.entity_id() as u64),
-        //    position: packet.position + Vector3::new(10.0, 0.0, 0.0),
-        //    pitch: packet.pitch,
-        //    yaw: packet.yaw,
-        //    y_head_rotation: packet.head_rotation,
-        //    position_mode: 1,
-        //    on_ground: false,
-        //    riding_runtime_id: VarULong(0),
-        //    tick: packet.client_tick,
-        //})
-        //.await;
+        if new_pos != old_pos {
+            player.living_entity.entity.set_pos(new_pos);
+            chunker::update_position(player).await;
+        }
+
+        let input_data = packet.input_data;
+        let entity = player.get_entity();
+
+        if input_data.get(InputData::StartSprinting) {
+            entity.set_sprinting(true).await;
+        } else if input_data.get(InputData::StopSprinting) {
+            entity.set_sprinting(false).await;
+        }
+
+        if input_data.get(InputData::StartFlying) {
+            player.abilities.lock().await.flying = true;
+            player.send_abilities_update().await;
+        } else if input_data.get(InputData::StopFlying) {
+            player.abilities.lock().await.flying = false;
+            player.send_abilities_update().await;
+        }
+
+        if input_data.get(InputData::StartSneaking) {
+            entity.set_sneaking(true).await;
+        } else if input_data.get(InputData::StopSneaking) {
+            entity.set_sneaking(false).await;
+        }
+
+        if !player.abilities.lock().await.flying {
+            self.send_game_packet(&CSetActorMotion {
+                target_runtime_id: VarULong(entity.entity_id as _),
+                motion: packet.pos_delta + Vector3::new(0.0, -0.08, 0.0),
+                tick: packet.client_tick,
+            })
+            .await;
+        }
     }
 
     pub async fn handle_interaction(&self, _player: &Arc<Player>, packet: SInteraction) {
@@ -65,7 +141,7 @@ impl BedrockClient {
             self.send_game_packet(&CContainerOpen {
                 container_id: 0,
                 container_type: 0xff,
-                position: NetworkPos(BlockPos(Vector3::new(0, 0, 0))),
+                position: NetworkPos(packet.position.to_block_pos()),
                 target_entity_id: VarLong(-1),
             })
             .await;
@@ -120,6 +196,48 @@ impl BedrockClient {
                     );
 
                     entity.world.broadcast_editioned(&je_packet, &be_packet).await;
+                }
+            }
+        }}
+    }
+
+    pub async fn handle_chat_command(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        command: SCommandRequest,
+    ) {
+        let player_clone = player.clone();
+        let server_clone: Arc<Server> = server.clone();
+        send_cancellable! {{
+            PlayerCommandSendEvent {
+                player: player.clone(),
+                command: command.command.clone(),
+                cancelled: false
+            };
+
+            'after: {
+                let command = event.command;
+                let command_clone = command.clone();
+                // Some commands can take a long time to execute. If they do, they block packet processing for the player.
+                // That's why we will spawn a task instead.
+                server.spawn_task(async move {
+                    let dispatcher = server_clone.command_dispatcher.read().await;
+                    dispatcher
+                        .handle_command(
+                            &mut CommandSender::Player(player_clone),
+                            &server_clone,
+                            &command_clone,
+                        )
+                        .await;
+                });
+
+                if advanced_config().commands.log_console {
+                    log::info!(
+                        "Player ({}): executed command /{}",
+                        player.gameprofile.name,
+                        command
+                    );
                 }
             }
         }}
