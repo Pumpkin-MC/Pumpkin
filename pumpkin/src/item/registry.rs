@@ -1,3 +1,4 @@
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::Block;
@@ -45,6 +46,18 @@ impl ItemRegistry {
             pumpkin_item
                 .use_on_block(stack, player, location, face, block, server)
                 .await;
+        }
+    }
+
+    pub async fn use_on_entity(
+        &self,
+        stack: &mut ItemStack,
+        player: &Player,
+        entity: Arc<dyn EntityBase>,
+    ) {
+        let pumpkin_item = self.get_pumpkin_item(stack.item);
+        if let Some(pumpkin_item) = pumpkin_item {
+            pumpkin_item.use_on_entity(stack, player, entity).await;
         }
     }
 

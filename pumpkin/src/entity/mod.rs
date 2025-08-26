@@ -407,6 +407,16 @@ impl Entity {
         self.send_velocity().await;
     }
 
+    /// Sets a custom name for the entity, typically used with nametags
+    pub async fn set_custom_name(&self, name: TextComponent) {
+        self.send_meta_data(&[Metadata::new(
+            2,
+            MetaDataType::OptionalTextComponent,
+            Some(name),
+        )])
+        .await;
+    }
+
     pub async fn send_velocity(&self) {
         let velocity = self.velocity.load();
         self.world

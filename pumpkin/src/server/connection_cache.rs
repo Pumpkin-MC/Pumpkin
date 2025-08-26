@@ -39,7 +39,7 @@ pub struct CachedBranding {
     cached_server_brand: Box<[u8]>,
 }
 
-impl CachedBranding {
+impl<'a> CachedBranding {
     pub fn new() -> Self {
         let cached_server_brand = Self::build_brand();
         Self {
@@ -49,8 +49,8 @@ impl CachedBranding {
     pub fn get_branding(&self) -> CPluginMessage<'_> {
         CPluginMessage::new("minecraft:brand", &self.cached_server_brand)
     }
-    const BRAND: &str = "Pumpkin";
-    const BRAND_BYTES: &[u8] = Self::BRAND.as_bytes();
+    const BRAND: &'a str = "Pumpkin";
+    const BRAND_BYTES: &'a [u8] = Self::BRAND.as_bytes();
 
     fn build_brand() -> Box<[u8]> {
         let mut buf = Vec::new();
@@ -73,8 +73,8 @@ impl CachedStatus {
         }
     }
 
-    pub fn get_status(&self) -> CStatusResponse<'_> {
-        CStatusResponse::new(&self.status_response_json)
+    pub fn get_status(&self) -> CStatusResponse {
+        CStatusResponse::new(self.status_response_json.clone())
     }
 
     // TODO: Player samples

@@ -134,7 +134,7 @@ impl BlockEntity for PistonBlockEntity {
         nbt.put_float(LAST_PROGRESS, self.last_progress.load());
         nbt.put_bool(EXTENDING, self.extending);
         nbt.put_bool(SOURCE, self.source);
-        // TODO: duplicated code :c
+        // TODO: duplicated code because of async :c
         Some(nbt)
     }
 

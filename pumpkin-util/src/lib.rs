@@ -53,6 +53,15 @@ macro_rules! read_data_from_file {
     }};
 }
 
+/// Includes a JSON file on build time. Use this for static files.
+#[macro_export]
+macro_rules! include_json_static {
+    ($path:expr, $ty:ty) => {{
+        serde_json::from_str::<$ty>(include_str!($path))
+            .expect(concat!("Could not parse JSON file: ", $path))
+    }};
+}
+
 /// The minimum number of bits required to represent this number
 #[inline]
 pub fn encompassing_bits(count: usize) -> u8 {

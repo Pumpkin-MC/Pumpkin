@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use pumpkin_util::read_data_from_file;
+use pumpkin_util::include_json_static;
 use serde::Deserialize;
 
 use crate::{block::BlockStateCodec, dimension::Dimension};
@@ -8,7 +8,9 @@ use crate::{block::BlockStateCodec, dimension::Dimension};
 use super::{biome_coords::to_block, height_limit::HeightLimitView, surface::rule::MaterialRule};
 
 pub static GENERATION_SETTINGS: LazyLock<HashMap<GeneratorSetting, GenerationSettings>> =
-    LazyLock::new(|| read_data_from_file!("../../../assets/chunk_gen_settings.json"));
+    LazyLock::new(
+        || include_json_static!("../../../assets/chunk_gen_settings.json", HashMap<GeneratorSetting, GenerationSettings>),
+    );
 
 pub fn gen_settings_from_dimension(dimension: &Dimension) -> &GenerationSettings {
     match dimension {

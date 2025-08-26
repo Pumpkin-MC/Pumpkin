@@ -15,7 +15,6 @@ use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
 use crate::entity::EntityBase;
 use crate::entity::player::{ChatMode, ChatSession, Player};
-use crate::entity::r#type::from_type;
 use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
@@ -28,7 +27,6 @@ use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, FoodImpl};
-use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState};
@@ -60,7 +58,6 @@ use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -361,7 +358,7 @@ impl JavaClient {
                     Vector3::new(0.0, 0.0, 0.0),
                     player.living_entity.entity.yaw.load(),
                     player.living_entity.entity.pitch.load(),
-                    &[],
+                    Vec::new(),
                 )).await;
             }
         }}
@@ -495,7 +492,7 @@ impl JavaClient {
             Vector3::new(0.0, 0.0, 0.0),
             player.living_entity.entity.yaw.load(),
             player.living_entity.entity.pitch.load(),
-            &[],
+            Vec::new(),
         ))
         .await;
     }
@@ -1078,15 +1075,21 @@ impl JavaClient {
         }
     }
 
-    pub async fn handle_interact(&self, player: &Player, interact: SInteract) {
+    pub async fn handle_interact(
+        &self,
+        player: &Player,
+        interact: SInteract,
+        server: &Arc<Server>,
+    ) {
         if !player.has_client_loaded() {
             return;
         }
+        let entity_id = interact.entity_id;
 
         let sneaking = interact.sneaking;
-        let entity = &player.living_entity.entity;
-        if entity.sneaking.load(Ordering::Relaxed) != sneaking {
-            entity.set_sneaking(sneaking).await;
+        let player_entity = &player.living_entity.entity;
+        if player_entity.sneaking.load(Ordering::Relaxed) != sneaking {
+            player_entity.set_sneaking(sneaking).await;
         }
         let Ok(action) = ActionType::try_from(interact.r#type.0) else {
             self.kick(TextComponent::text("Invalid action type")).await;
@@ -1095,7 +1098,6 @@ impl JavaClient {
 
         match action {
             ActionType::Attack => {
-                let entity_id = interact.entity_id;
                 let config = &advanced_config().pvp;
                 // TODO: do validation and stuff
                 if !config.enabled {
@@ -1104,7 +1106,7 @@ impl JavaClient {
 
                 // TODO: set as camera entity when spectator
 
-                let world = &entity.world;
+                let world = &player_entity.world;
                 let player_victim = world.get_player_by_id(entity_id.0).await;
                 if entity_id.0 == player.entity_id() {
                     // This can't be triggered from a non-modded client.
@@ -1152,7 +1154,16 @@ impl JavaClient {
                 }
             }
             ActionType::Interact | ActionType::InteractAt => {
-                log::debug!("todo");
+                // TODO: split this up
+                let entity = player.world().get_player_by_id(entity_id.0).await;
+                if let Some(entity) = entity {
+                    let held = player.inventory.held_item();
+                    let mut stack = held.lock().await;
+                    server
+                        .item_registry
+                        .use_on_entity(&mut stack, player, entity)
+                        .await;
+                }
             }
         }
     }
@@ -1440,14 +1451,14 @@ impl JavaClient {
                 return Ok(());
             }
         }
+        let mut stack = item.lock().await;
 
-        if item.lock().await.is_empty() {
+        if stack.is_empty() {
             // TODO item cool down
             // If the hand is empty we stop here
             return Ok(());
         }
 
-        let mut stack = item.lock().await;
         server
             .item_registry
             .use_on_block(&mut stack, player, position, face, block, server)
@@ -1459,14 +1470,6 @@ impl JavaClient {
             should_try_decrement = self
                 .run_is_block_place(player, block, server, use_item_on, position, face)
                 .await?;
-        }
-
-        // Check if the item is a spawn egg
-        let item_id = stack.item.id;
-        if let Some(entity) = entity_from_egg(item_id) {
-            self.spawn_entity_from_egg(player, entity, position, face)
-                .await;
-            should_try_decrement = true;
         }
 
         if should_try_decrement {
@@ -1750,36 +1753,6 @@ impl JavaClient {
             packet.key,
             packet.payload.as_ref().map(|p| p.len())
         );
-    }
-
-    async fn spawn_entity_from_egg(
-        &self,
-        player: &Player,
-        entity_type: &'static EntityType,
-        location: BlockPos,
-        face: BlockDirection,
-    ) {
-        let world_pos = BlockPos(location.0 + face.to_offset());
-        // Align the position like Vanilla does
-        let pos = Vector3::new(
-            f64::from(world_pos.0.x) + 0.5,
-            f64::from(world_pos.0.y),
-            f64::from(world_pos.0.z) + 0.5,
-        );
-        // Create rotation like Vanilla
-        let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
-
-        let world = player.world();
-        // Create a new mob and UUID based on the spawn egg id
-        let mob = from_type(entity_type, pos, world, Uuid::new_v4()).await;
-
-        // Set the rotation
-        mob.get_entity().set_rotation(yaw, 0.0);
-
-        // Broadcast the new mob to all players
-        world.spawn_entity(mob).await;
-
-        // TODO: send/configure additional commands/data based on the type of entity (horse, slime, etc)
     }
 
     const WORLD_LOWEST_Y: i8 = -64;
