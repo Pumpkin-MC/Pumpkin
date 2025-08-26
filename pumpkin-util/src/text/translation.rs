@@ -6,13 +6,6 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-/// TODO List
-/// - Add server locale support
-/// - Use translations in the logs
-/// - Open a public translation system, maybe a Crowdin like Minecraft?
-/// - Add support for translations on commands descriptions
-/// - Integrate custom translations with the plugins API
-/// - Solve command discrepances (unquoted keys, type value)
 use crate::text::TextComponentBase;
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../../assets/en_us.json");

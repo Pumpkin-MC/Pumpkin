@@ -668,17 +668,17 @@ impl Player {
             TitleMode::Title => {
                 self.client
                     .enqueue_packet(&CTitleText::new(&text.to_send(self).await))
-                    .await
+                    .await;
             }
             TitleMode::SubTitle => {
                 self.client
                     .enqueue_packet(&CSubtitle::new(&text.to_send(self).await))
-                    .await
+                    .await;
             }
             TitleMode::ActionBar => {
                 self.client
                     .enqueue_packet(&CActionBar::new(&text.to_send(self).await))
-                    .await
+                    .await;
             }
         }
     }
@@ -1429,12 +1429,18 @@ impl Player {
         sender_name: &TextComponent,
         target_name: Option<&TextComponent>,
     ) {
+        let target_name_resolved = if let Some(a) = target_name {
+            Some(&a.clone().to_send(self).await)
+        } else {
+            None
+        };
+
         self.client
             .enqueue_packet(&CDisguisedChatMessage::new(
-                message,
+                &message.clone().to_send(self).await,
                 (chat_type + 1).into(),
-                sender_name,
-                target_name,
+                &sender_name.clone().to_send(self).await,
+                target_name_resolved,
             ))
             .await;
     }

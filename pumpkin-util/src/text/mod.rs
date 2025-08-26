@@ -81,6 +81,7 @@ pub struct TextComponentBase {
     pub extra: Vec<TextComponentBase>,
 }
 
+/// TextComponent constructors
 impl TextComponent {
     pub fn text<P: Into<Cow<'static, str>>>(plain: P) -> Self {
         Self(TextComponentBase {
@@ -145,11 +146,6 @@ impl TextComponent {
         self
     }
 
-    // REMOVE
-    pub fn get_text(self) -> String {
-        String::new()
-    }
-
     pub fn chat_decorated(format: String, player_name: String, content: String) -> Self {
         // Todo: maybe allow players to use & in chat contingent on permissions
         let with_resolved_fields = format
@@ -164,10 +160,6 @@ impl TextComponent {
             style: Style::default(),
             extra: vec![],
         })
-    }
-    // REMOVE
-    pub fn to_pretty_console(self) -> String {
-        String::new()
     }
 }
 

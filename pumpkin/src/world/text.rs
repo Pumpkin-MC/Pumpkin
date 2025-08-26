@@ -16,33 +16,37 @@ use crate::{
     command::{CommandSender, args::entities::TargetSelector},
     entity::player::Player,
 };
-
-// TODO List
-// - Add player UUID to Resolution values
-// - Add server locale
-// - Document all about TextComponents
+/// TODO List
+/// - Add server locale support
+/// - Use translations in the logs
+/// - - `Client_kick_reason` messages
+/// - Document all about `TextComponents`
+/// - Add support for translations on commands descriptions
+/// - Open a public translation system, maybe a Crowdin like Minecraft?
+/// - Integrate custom translations with the plugins API
+/// - Solve command discrepances (unquoted keys, type value)
 
 #[async_trait]
 pub trait ComponentResolution: Send + Sync {
-    async fn resolve(self, player: &Option<&Player>) -> Self;
+    async fn resolve(self, player: Option<&Player>) -> Self;
 }
 #[async_trait]
 pub trait TextResolution: Send + Sync {
-    async fn to_string(self, player: &Option<&Player>, stylized: bool) -> String;
+    async fn to_string(self, player: Option<&Player>, stylized: bool) -> String;
     async fn to_send(self, player: &Player) -> Self;
 }
 #[async_trait]
 impl TextResolution for TextComponent {
-    async fn to_string(self, player: &Option<&Player>, stylized: bool) -> String {
+    async fn to_string(self, player: Option<&Player>, stylized: bool) -> String {
         self.0.to_string(player, stylized).await
     }
     async fn to_send(self, player: &Player) -> Self {
-        TextComponent(self.0.to_send(player).await)
+        Self(self.0.to_send(player).await)
     }
 }
 #[async_trait]
 impl TextResolution for TextComponentBase {
-    async fn to_string(self, player: &Option<&Player>, stylized: bool) -> String {
+    async fn to_string(self, player: Option<&Player>, stylized: bool) -> String {
         let resolved = self.resolve(player).await;
         let mut text = match resolved.content {
             TextContent::Text { text } => text.into_owned(),
@@ -97,7 +101,7 @@ impl TextResolution for TextComponentBase {
         text
     }
     async fn to_send(self, player: &Player) -> Self {
-        let resolved = self.resolve(&Some(player)).await;
+        let resolved = self.resolve(Some(player)).await;
         let locale = player.locale().await;
         // Divide the translation into slices and inserts the substitutions
         let mut component = match resolved.content {
@@ -105,7 +109,7 @@ impl TextResolution for TextComponentBase {
                 let fallback = key.clone();
                 let translation = get_translation(key, locale, fallback);
                 if with.is_empty() || !translation.contains('%') {
-                    TextComponentBase {
+                    Self {
                         content: TextContent::Text {
                             text: Cow::Owned(translation),
                         },
@@ -122,13 +126,13 @@ impl TextResolution for TextComponentBase {
                         let range = ranges[idx];
                         if idx == 0 {
                             translation_parent = translation[..range.start].to_string();
-                        };
+                        }
                         translation_slices.push(substitute);
                         if range.end >= translation.len() - 1 {
                             continue;
                         }
 
-                        translation_slices.push(TextComponentBase {
+                        translation_slices.push(Self {
                             content: TextContent::Text {
                                 text: if idx == ranges.len() - 1 {
                                     // Last substitution, append the rest of the translation
@@ -148,7 +152,7 @@ impl TextResolution for TextComponentBase {
                     for i in resolved.extra {
                         translation_slices.push(i);
                     }
-                    TextComponentBase {
+                    Self {
                         content: TextContent::Text {
                             text: translation_parent.into(),
                         },
@@ -162,8 +166,7 @@ impl TextResolution for TextComponentBase {
         // Ensure that the extra components are translated
         let mut extra = vec![];
         for extra_component in component.extra {
-            let translated = extra_component.to_send(player).await;
-            extra.push(translated);
+            extra.push(extra_component.to_send(player).await);
         }
         component.extra = extra;
         // If the hover event is present, it will also be processed
@@ -201,7 +204,7 @@ impl TextResolution for TextComponentBase {
                     HoverEvent::ShowItem { id, count } => Some(HoverEvent::ShowItem { id, count }),
                 };
             }
-        };
+        }
 
         component
     }
@@ -209,7 +212,7 @@ impl TextResolution for TextComponentBase {
 
 #[async_trait]
 impl ComponentResolution for TextComponentBase {
-    async fn resolve(self, _player: &Option<&Player>) -> Self {
+    async fn resolve(self, _player: Option<&Player>) -> Self {
         match self.content {
             TextContent::Scoreboard { .. } => resolve_scoreboard(),
             TextContent::EntityNames {
@@ -236,20 +239,20 @@ async fn resolve_entities(
 ) -> TextComponentBase {
     match crate::server::get_server() {
         Some(server) => {
-            let selector = match selector.parse::<TargetSelector>() {
-                Ok(selector) => selector,
-                Err(_) => return TextComponentBase::default(),
+            let Ok(selector) = selector.parse::<TargetSelector>() else {
+                return TextComponentBase::default();
             };
             let sender = match sender {
                 None => None,
-                Some(sender) => match server.get_player_by_uuid(sender).await {
-                    Some(player) => Some(&CommandSender::Player(player)),
-                    None => None,
-                },
+                Some(sender) => server
+                    .get_player_by_uuid(sender)
+                    .await
+                    .map(CommandSender::Player),
             };
-            let entities = server.select_entities(&selector, sender).await;
-            let separator = match separator {
-                Some(separator) => {
+            let entities = server.select_entities(&selector, sender.as_ref()).await;
+            let separator = separator.map_or_else(
+                || TextComponent::text(", ").color_named(NamedColor::Gray).0,
+                |separator| {
                     let mut sep = TextComponentBase::default();
                     let mut first = true;
                     for part in separator {
@@ -261,9 +264,8 @@ async fn resolve_entities(
                         sep.extra.push(part);
                     }
                     sep
-                }
-                None => TextComponent::text(", ").color_named(NamedColor::Gray).0,
-            };
+                },
+            );
             let mut parent = TextComponentBase::default();
             let mut names = vec![];
             for (i, entity) in entities.iter().enumerate() {
@@ -312,23 +314,23 @@ async fn resolve_nbt(
             match source {
                 NbtSource::Entity => {
                     if let Some(entity) = value.entity {
-                        let selector = match entity.parse::<TargetSelector>() {
-                            Ok(selector) => selector,
-                            Err(_) => return TextComponentBase::default(),
+                        let Ok(selector) = entity.parse::<TargetSelector>() else {
+                            return TextComponentBase::default();
                         };
                         let sender = match value.sender {
                             None => None,
-                            Some(sender) => match server.get_player_by_uuid(sender).await {
-                                Some(player) => Some(&CommandSender::Player(player)),
-                                None => None,
-                            },
+                            Some(sender) => server
+                                .get_player_by_uuid(sender)
+                                .await
+                                .map(CommandSender::Player),
                         };
-                        let entities = server.select_entities(&selector, sender).await;
+                        let entities = server.select_entities(&selector, sender.as_ref()).await;
                         if entities.is_empty() {
                             return TextComponentBase::default();
                         }
-                        let separator = match value.separator {
-                            Some(separator) => {
+                        let separator = value.separator.map_or_else(
+                            || TextComponent::text(", ").0,
+                            |separator| {
                                 let mut sep = TextComponentBase::default();
                                 let mut first = true;
                                 for part in separator {
@@ -340,9 +342,8 @@ async fn resolve_nbt(
                                     sep.extra.push(part);
                                 }
                                 sep
-                            }
-                            None => TextComponent::text(", ").0,
-                        };
+                            },
+                        );
                         let mut text = TextComponentBase::default();
                         let mut components = vec![];
                         for (i, entity) in entities.iter().enumerate() {
@@ -356,9 +357,8 @@ async fn resolve_nbt(
                                 if j != 0 {
                                     components.push(separator.clone());
                                 }
-                                match snbt_display(tag, 0) {
-                                    Ok(display) => components.push(display.0),
-                                    Err(_) => continue,
+                                if let Ok(display) = snbt_display(tag, 0) {
+                                    components.push(display.0);
                                 }
                             }
                         }
@@ -393,7 +393,7 @@ async fn resolve_nbt(
 
 async fn translated<P: Into<Cow<'static, str>>>(
     namespaced_key: P,
-    player: &Option<&Player>,
+    player: Option<&Player>,
     fallback: P,
     with: Vec<TextComponentBase>,
     stylized: bool,

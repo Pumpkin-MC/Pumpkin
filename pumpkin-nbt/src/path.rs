@@ -66,9 +66,7 @@ fn split_path(path: &str) -> Vec<String> {
                 cur.push(ch);
             }
             ']' => {
-                if bracket > 0 {
-                    bracket -= 1;
-                }
+                bracket = bracket.saturating_sub(1);
                 cur.push(ch);
             }
             '{' => {
@@ -76,9 +74,7 @@ fn split_path(path: &str) -> Vec<String> {
                 cur.push(ch);
             }
             '}' => {
-                if brace > 0 {
-                    brace -= 1;
-                }
+                brace = brace.saturating_sub(1);
                 cur.push(ch);
             }
             _ => cur.push(ch),
@@ -135,17 +131,14 @@ fn apply_segment(current: Vec<NbtTag>, segment: &str) -> Vec<NbtTag> {
         };
         let mut out = Vec::new();
         for tag in current {
-            match tag {
-                NbtTag::Compound(ref c) => {
-                    if let Some(f) = filter {
-                        if match_compound_filter_str(c, f) {
-                            out.push(tag);
-                        }
-                    } else {
+            if let NbtTag::Compound(ref c) = tag {
+                if let Some(f) = filter {
+                    if match_compound_filter_str(c, f) {
                         out.push(tag);
                     }
+                } else {
+                    out.push(tag);
                 }
-                _ => {}
             }
         }
         return out;
@@ -226,21 +219,20 @@ fn apply_segment(current: Vec<NbtTag>, segment: &str) -> Vec<NbtTag> {
     let mut next: Vec<NbtTag> = Vec::new();
     if let Some(name) = name_opt {
         for tag in current {
-            if let NbtTag::Compound(c) = tag {
-                if let Some(child) = c.get(&name) {
-                    // If a compound filter is present at the name-level, require compound and optionally match
-                    match &name_filter_content {
-                        Some(filter_str) => {
-                            if let NbtTag::Compound(comp) = child {
-                                if filter_str.is_empty()
-                                    || match_compound_filter_str(comp, filter_str)
-                                {
-                                    next.push(child.clone());
-                                }
-                            }
+            if let NbtTag::Compound(c) = tag
+                && let Some(child) = c.get(&name)
+            {
+                // If a compound filter is present at the name-level, require compound and optionally match
+                match &name_filter_content {
+                    Some(filter_str) => {
+                        if let NbtTag::Compound(comp) = child
+                            && (filter_str.is_empty()
+                                || match_compound_filter_str(comp, filter_str))
+                        {
+                            next.push(child.clone());
                         }
-                        None => next.push(child.clone()),
                     }
+                    None => next.push(child.clone()),
                 }
             }
         }
@@ -284,7 +276,7 @@ fn apply_segment(current: Vec<NbtTag>, segment: &str) -> Vec<NbtTag> {
                             let len = list.len() as isize;
                             let mut i = idx;
                             if i < 0 {
-                                i = len + i;
+                                i += len;
                             }
                             if i >= 0 && i < len {
                                 out.push(list[i as usize].clone());
@@ -294,7 +286,7 @@ fn apply_segment(current: Vec<NbtTag>, segment: &str) -> Vec<NbtTag> {
                             let len = bytes.len() as isize;
                             let mut i = idx;
                             if i < 0 {
-                                i = len + i;
+                                i += len;
                             }
                             if i >= 0 && i < len {
                                 out.push(NbtTag::Byte(bytes[i as usize] as i8));
@@ -304,7 +296,7 @@ fn apply_segment(current: Vec<NbtTag>, segment: &str) -> Vec<NbtTag> {
                             let len = ints.len() as isize;
                             let mut i = idx;
                             if i < 0 {
-                                i = len + i;
+                                i += len;
                             }
                             if i >= 0 && i < len {
                                 out.push(NbtTag::Int(ints[i as usize]));
@@ -314,7 +306,7 @@ fn apply_segment(current: Vec<NbtTag>, segment: &str) -> Vec<NbtTag> {
                             let len = longs.len() as isize;
                             let mut i = idx;
                             if i < 0 {
-                                i = len + i;
+                                i += len;
                             }
                             if i >= 0 && i < len {
                                 out.push(NbtTag::Long(longs[i as usize]));
@@ -441,9 +433,7 @@ fn parse_simple_filter_pairs(s: &str) -> Option<Vec<(String, NbtTag)>> {
                 cur.push(ch);
             }
             '}' => {
-                if depth_brace > 0 {
-                    depth_brace -= 1;
-                }
+                depth_brace = depth_brace.saturating_sub(1);
                 cur.push(ch);
             }
             '[' => {
@@ -451,9 +441,7 @@ fn parse_simple_filter_pairs(s: &str) -> Option<Vec<(String, NbtTag)>> {
                 cur.push(ch);
             }
             ']' => {
-                if depth_bracket > 0 {
-                    depth_bracket -= 1;
-                }
+                depth_bracket = depth_bracket.saturating_sub(1);
                 cur.push(ch);
             }
             ',' if depth_brace == 0 && depth_bracket == 0 => {
@@ -496,9 +484,7 @@ fn split_key_value(s: &str) -> Option<(&str, &str)> {
             '\'' | '"' => quote = Some(ch),
             '{' => depth_brace += 1,
             '}' => {
-                if depth_brace > 0 {
-                    depth_brace -= 1
-                }
+                depth_brace = depth_brace.saturating_sub(1);
             }
             ':' if depth_brace == 0 => return Some((&s[..i], &s[i + 1..])),
             _ => {}
@@ -509,10 +495,10 @@ fn split_key_value(s: &str) -> Option<(&str, &str)> {
 
 fn parse_key_name(s: &str) -> Option<String> {
     let st = s.trim();
-    if let Some(q) = st.chars().next() {
-        if q == '"' || q == '\'' {
-            return unquote_name(st);
-        }
+    if let Some(q) = st.chars().next()
+        && (q == '"' || q == '\'')
+    {
+        return unquote_name(st);
     }
     Some(st.to_string())
 }
@@ -523,10 +509,10 @@ fn parse_simple_value(s: &str) -> Option<NbtTag> {
         return None;
     }
     // Quoted string
-    if let Some(q) = st.chars().next() {
-        if q == '"' || q == '\'' {
-            return unquote_name(st).map(NbtTag::String);
-        }
+    if let Some(q) = st.chars().next()
+        && (q == '"' || q == '\'')
+    {
+        return unquote_name(st).map(NbtTag::String);
     }
     // Numeric with suffix
     let lower = st.to_ascii_lowercase();

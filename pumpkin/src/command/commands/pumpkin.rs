@@ -32,12 +32,8 @@ impl CommandExecutor for Executor {
         _server: &crate::server::Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let player = sender.to_receiver().await;
-        let uuid = if let Some(p) = &player {
-            Some(p.get_entity().entity_uuid)
-        } else {
-            None
-        };
+        let player = sender.to_receiver();
+        let uuid = player.as_ref().map(|p| p.get_entity().entity_uuid);
         sender
             .send_message(
                 TextComponent::custom(
@@ -56,7 +52,7 @@ impl CommandExecutor for Executor {
                         "commands.pumpkin.version",
                         vec![TextComponent::text(CARGO_PKG_VERSION)],
                     )
-                    .to_string(&player, false)
+                    .to_string(player, false)
                     .await
                     .replace('\n', "")
                     .into(),
@@ -70,7 +66,7 @@ impl CommandExecutor for Executor {
                                 "commands.pumpkin.description",
                                 vec![],
                             )
-                            .to_string(&player, false)
+                            .to_string(player, false)
                             .await
                             .replace('\n', "")
                             .into(),
@@ -100,7 +96,7 @@ impl CommandExecutor for Executor {
                                 TextComponent::text(format!("{CURRENT_MC_PROTOCOL}")),
                             ],
                         )
-                        .to_string(&player, false)
+                        .to_string(player, false)
                         .await
                         .replace('\n', "")
                         .into(),

@@ -1,4 +1,4 @@
-use crate::entity::player::Player;
+use crate::{entity::player::Player, world::text::TextResolution};
 use pumpkin_protocol::java::client::play::{BosseventAction, CBossEvent};
 use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
@@ -63,7 +63,7 @@ impl Player {
         // Maybe this section could be implemented. Feel free to change it.
         let bossbar = bossbar.clone();
         let boss_action = BosseventAction::Add {
-            title: bossbar.title,
+            title: bossbar.title.to_send(self).await,
             health: bossbar.health,
             color: (bossbar.color as u8).into(),
             division: (bossbar.division as u8).into(),
@@ -88,7 +88,7 @@ impl Player {
     }
 
     pub async fn update_bossbar_title(&self, uuid: &Uuid, title: TextComponent) {
-        let boss_action = BosseventAction::UpdateTile(title);
+        let boss_action = BosseventAction::UpdateTile(title.to_send(self).await);
 
         let packet = CBossEvent::new(uuid, boss_action);
         self.client.enqueue_packet(&packet).await;

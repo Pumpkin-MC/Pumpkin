@@ -43,9 +43,9 @@ impl fmt::Display for CommandSender {
 impl CommandSender {
     pub async fn send_message(&self, text: TextComponent) {
         match self {
-            Self::Console => log::info!("{}", text.to_string(&None, true).await),
+            Self::Console => log::info!("{}", text.to_string(None, true).await),
             Self::Player(c) => c.send_system_message(text).await,
-            Self::Rcon(s) => s.lock().await.push(text.to_string(&None, true).await),
+            Self::Rcon(s) => s.lock().await.push(text.to_string(None, true).await),
         }
     }
 
@@ -115,7 +115,8 @@ impl CommandSender {
         }
     }
 
-    pub async fn to_receiver(&self) -> Option<&Player> {
+    #[must_use]
+    pub fn to_receiver(&self) -> Option<&Player> {
         match self {
             Self::Player(player) => Some(player.as_ref()),
             _ => None,

@@ -88,7 +88,7 @@ impl CommandExecutor for TitleExecutor {
         let mode = &self.0;
 
         for target in targets {
-            target.show_title(text.clone(), mode).await;
+            target.show_title(*text.clone(), mode).await;
         }
 
         let mode_name = format!("{mode:?}").to_lowercase();

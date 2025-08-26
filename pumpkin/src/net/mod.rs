@@ -12,6 +12,7 @@ use crate::{
     entity::player::ChatMode,
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
+    world::text::TextResolution,
 };
 
 use pumpkin_protocol::{ClientPacket, Property};
@@ -170,7 +171,19 @@ impl ClientPlatform {
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
         match self {
             Self::Java(java) => java.kick(message).await,
-            Self::Bedrock(bedrock) => bedrock.kick(reason, message.get_text()).await,
+            Self::Bedrock(bedrock) => {
+                bedrock
+                    .kick(
+                        reason,
+                        message
+                            .to_string(
+                                Some(bedrock.player.lock().await.clone().unwrap().as_ref()),
+                                false,
+                            )
+                            .await,
+                    )
+                    .await;
+            }
         }
     }
 }

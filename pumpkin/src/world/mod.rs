@@ -153,7 +153,7 @@ impl PumpkinError for GetBlockError {
         log::Level::Warn
     }
 
-    fn client_kick_reason(&self) -> Option<String> {
+    fn client_kick_reason(&self) -> Option<TextComponent> {
         None
     }
 }
@@ -376,11 +376,36 @@ impl World {
         chat_type: u8,
         target_name: Option<&TextComponent>,
     ) {
-        let be_packet = SText::new(message.clone().get_text(), sender_name.clone().get_text());
-        let je_packet =
-            CDisguisedChatMessage::new(message, (chat_type + 1).into(), sender_name, target_name);
+        let current_players = self.players.read().await;
 
-        self.broadcast_editioned(&je_packet, &be_packet).await;
+        for (_, player) in current_players.iter() {
+            match player.client.as_ref() {
+                ClientPlatform::Java(client) => {
+                    let message = message.clone().to_send(player.as_ref()).await;
+                    let sender_name = sender_name.clone().to_send(player.as_ref()).await;
+                    let target_name = match target_name {
+                        None => None,
+                        Some(component) => Some(&component.clone().to_send(player.as_ref()).await),
+                    };
+                    client
+                        .enqueue_packet(&CDisguisedChatMessage::new(
+                            &message,
+                            (chat_type + 1).into(),
+                            &sender_name,
+                            target_name,
+                        ))
+                        .await;
+                }
+                ClientPlatform::Bedrock(client) => {
+                    let player = Some(player.as_ref());
+                    let message = message.clone().to_string(player, false).await;
+                    let sender_name = sender_name.clone().to_string(player, false).await;
+                    client
+                        .send_game_packet(&SText::new(message, sender_name))
+                        .await;
+                }
+            }
+        }
     }
 
     // This should replace broadcast_packet_all at some point
@@ -2287,7 +2312,7 @@ impl World {
                 for player in current_players.read().await.values() {
                     player.send_system_message(event.join_message.clone()).await;
                 }
-                log::info!("{}", event.join_message.to_string(&None, true).await);
+                log::info!("{}", event.join_message.to_string(None, true).await);
             }
         });
         Ok(())
@@ -2343,7 +2368,7 @@ impl World {
                         .await;
                 }
                 drop(players);
-                log::info!("{}", event.leave_message.to_string(&None, true).await);
+                log::info!("{}", event.leave_message.to_string(None, true).await);
             }
         }
     }

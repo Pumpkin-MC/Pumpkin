@@ -96,11 +96,11 @@ impl PumpkinError for BlockPlacingError {
         }
     }
 
-    fn client_kick_reason(&self) -> Option<String> {
+    fn client_kick_reason(&self) -> Option<TextComponent> {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => None,
-            Self::InvalidBlockFace => Some("Invalid block face".into()),
-            Self::InvalidHand => Some("Invalid hand".into()),
+            Self::InvalidBlockFace => Some(TextComponent::text("Invalid block face")),
+            Self::InvalidHand => Some(TextComponent::text("Invalid hand")),
         }
     }
 }
@@ -134,41 +134,44 @@ impl PumpkinError for ChatError {
         log::Level::Warn
     }
 
-    fn client_kick_reason(&self) -> Option<String> {
+    fn client_kick_reason(&self) -> Option<TextComponent> {
         match self {
-            Self::OversizedMessage => Some("Chat message too long".into()),
-            Self::IllegalCharacters => Some(
-                TextComponent::translate("multiplayer.disconnect.illegal_characters", None, [])
-                    .get_text(),
-            ),
-            Self::UnsignedChat => Some(
-                TextComponent::translate("multiplayer.disconnect.unsigned_chat", None, [])
-                    .get_text(),
-            ),
-            Self::TooManyPendingChats => Some(
-                TextComponent::translate("multiplayer.disconnect.too_many_pending_chats", None, [])
-                    .get_text(),
-            ),
-            Self::ChatValidationFailed => Some(
-                TextComponent::translate("multiplayer.disconnect.chat_validation_failed", None, [])
-                    .get_text(),
-            ),
-            Self::OutOfOrderChat => Some(
-                TextComponent::translate("multiplayer.disconnect.out_of_order_chat", None, [])
-                    .get_text(),
-            ),
-            Self::ExpiredPublicKey => Some(
-                TextComponent::translate("multiplayer.disconnect.expired_public_key", None, [])
-                    .get_text(),
-            ),
-            Self::InvalidPublicKey => Some(
-                TextComponent::translate(
-                    "multiplayer.disconnect.invalid_public_key_signature",
-                    None,
-                    [],
-                )
-                .get_text(),
-            ),
+            Self::OversizedMessage => Some(TextComponent::text("Chat message too long")),
+            Self::IllegalCharacters => Some(TextComponent::translate(
+                "multiplayer.disconnect.illegal_characters",
+                None,
+                [],
+            )),
+            Self::UnsignedChat => Some(TextComponent::translate(
+                "multiplayer.disconnect.unsigned_chat",
+                None,
+                [],
+            )),
+            Self::TooManyPendingChats => Some(TextComponent::translate(
+                "multiplayer.disconnect.too_many_pending_chats",
+                None,
+                [],
+            )),
+            Self::ChatValidationFailed => Some(TextComponent::translate(
+                "multiplayer.disconnect.chat_validation_failed",
+                None,
+                [],
+            )),
+            Self::OutOfOrderChat => Some(TextComponent::translate(
+                "multiplayer.disconnect.out_of_order_chat",
+                None,
+                [],
+            )),
+            Self::ExpiredPublicKey => Some(TextComponent::translate(
+                "multiplayer.disconnect.expired_public_key",
+                None,
+                [],
+            )),
+            Self::InvalidPublicKey => Some(TextComponent::translate(
+                "multiplayer.disconnect.invalid_public_key_signature",
+                None,
+                [],
+            )),
         }
     }
 }
@@ -770,7 +773,7 @@ impl JavaClient {
             if err.is_kick()
                 && let Some(reason) = err.client_kick_reason()
             {
-                self.kick(TextComponent::text(reason)).await;
+                self.kick(reason).await;
             }
             return;
         }
@@ -893,7 +896,7 @@ impl JavaClient {
             if err.is_kick()
                 && let Some(reason) = err.client_kick_reason()
             {
-                self.kick(TextComponent::text(reason)).await;
+                self.kick(reason).await;
             }
             return;
         }

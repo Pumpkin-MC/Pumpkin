@@ -102,7 +102,7 @@ pub enum Arg<'a> {
     BossbarStyle(BossbarDivisions),
     Particle(Particle),
     Msg(String),
-    TextComponent(TextComponent),
+    TextComponent(Box<TextComponent>),
     Time(i32),
     Num(Result<Number, NotInBounds>),
     Bool(bool),

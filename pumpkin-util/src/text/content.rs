@@ -41,10 +41,14 @@ pub enum TextContent {
         value: NbtValue,
     },
     /// Displays a single sprite from texture atlas as a character. Sprites are rendered as 8x8 pixels squares.
+    /// ## 1.21.9+
     Sprite {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         atlas: Option<Cow<'static, str>>,
-        sprite: Cow<'static, str>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sprite: Option<SpriteType>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hat: Option<bool>,
     },
     /// A custom translated text
     /// #### Requires component resolution.
@@ -79,6 +83,22 @@ pub enum NbtSource {
     Block,
     Entity,
     Storage,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum SpriteType {
+    Atlas,
+    Player,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct SpritePlayer {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player: Option<Cow<'static, str>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<Cow<'static, str>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub properties: Option<Cow<'static, str>>,
 }
 
 impl Default for TextContent {

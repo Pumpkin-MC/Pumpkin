@@ -85,7 +85,7 @@ impl CommandExecutor for AddExecuter {
             return Ok(());
         }
 
-        let bossbar = Bossbar::new(text_component);
+        let bossbar = Bossbar::new(*text_component);
         server
             .bossbars
             .lock()
@@ -397,7 +397,7 @@ impl CommandExecutor for SetExecuter {
                     .bossbars
                     .lock()
                     .await
-                    .update_name(server, namespace, text_component.clone())
+                    .update_name(server, namespace, *text_component.clone())
                     .await
                 {
                     Ok(()) => {}
@@ -411,7 +411,7 @@ impl CommandExecutor for SetExecuter {
                     .send_message(TextComponent::translate(
                         "commands.bossbar.set.name.success",
                         None,
-                        [bossbar_prefix(text_component, namespace.to_string())],
+                        [bossbar_prefix(*text_component, namespace.to_string())],
                     ))
                     .await;
                 Ok(())
