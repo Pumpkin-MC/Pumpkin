@@ -52,6 +52,7 @@ impl Executor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.experience.query.levels",
+                        None,
                         [
                             target.get_display_name().await,
                             TextComponent::text(level.to_string()),
@@ -64,6 +65,7 @@ impl Executor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.experience.query.points",
+                        None,
                         [
                             target.get_display_name().await,
                             TextComponent::text(points.to_string()),
@@ -86,6 +88,7 @@ impl Executor {
                 if targets_len > 1 {
                     TextComponent::translate(
                         "commands.experience.add.points.success.multiple",
+                        None,
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
@@ -94,6 +97,7 @@ impl Executor {
                 } else {
                     TextComponent::translate(
                         "commands.experience.add.points.success.single",
+                        None,
                         [
                             TextComponent::text(amount.to_string()),
                             target_name.unwrap(),
@@ -105,6 +109,7 @@ impl Executor {
                 if targets_len > 1 {
                     TextComponent::translate(
                         "commands.experience.add.levels.success.multiple",
+                        None,
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
@@ -113,6 +118,7 @@ impl Executor {
                 } else {
                     TextComponent::translate(
                         "commands.experience.add.levels.success.single",
+                        None,
                         [
                             TextComponent::text(amount.to_string()),
                             target_name.unwrap(),
@@ -124,6 +130,7 @@ impl Executor {
                 if targets_len > 1 {
                     TextComponent::translate(
                         "commands.experience.set.points.success.multiple",
+                        None,
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
@@ -132,6 +139,7 @@ impl Executor {
                 } else {
                     TextComponent::translate(
                         "commands.experience.set.points.success.single",
+                        None,
                         [
                             TextComponent::text(amount.to_string()),
                             target_name.unwrap(),
@@ -143,6 +151,7 @@ impl Executor {
                 if targets_len > 1 {
                     TextComponent::translate(
                         "commands.experience.set.levels.success.multiple",
+                        None,
                         [
                             TextComponent::text(amount.to_string()),
                             TextComponent::text(targets_len.to_string()),
@@ -151,6 +160,7 @@ impl Executor {
                 } else {
                     TextComponent::translate(
                         "commands.experience.set.levels.success.single",
+                        None,
                         [
                             TextComponent::text(amount.to_string()),
                             target_name.unwrap(),
@@ -221,6 +231,7 @@ impl CommandExecutor for Executor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.experience.set.points.invalid",
+                            None,
                             [],
                         ))
                         .await;
@@ -231,6 +242,7 @@ impl CommandExecutor for Executor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.experience.set.points.invalid",
+                            None,
                             [],
                         ))
                         .await;
@@ -255,7 +267,7 @@ impl CommandExecutor for Executor {
                         Err(error_msg) => {
                             sender
                                 .send_message(
-                                    TextComponent::translate(error_msg, [])
+                                    TextComponent::translate(error_msg, None, [])
                                         .color(Color::Named(NamedColor::Red)),
                                 )
                                 .await;

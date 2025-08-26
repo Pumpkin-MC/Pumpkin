@@ -41,7 +41,7 @@ impl CommandExecutor for Executor {
             lock.banned_players.remove(idx);
         } else {
             sender
-                .send_message(TextComponent::translate("commands.pardon.failed", []))
+                .send_message(TextComponent::translate("commands.pardon.failed", None, []))
                 .await;
             return Ok(());
         }
@@ -51,6 +51,7 @@ impl CommandExecutor for Executor {
         sender
             .send_message(TextComponent::translate(
                 "commands.pardon.success",
+                None,
                 [TextComponent::text(target)],
             ))
             .await;

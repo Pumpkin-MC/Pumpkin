@@ -37,6 +37,7 @@ use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
+use std::sync::{OnceLock, Weak};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -51,6 +52,13 @@ pub mod ticker;
 use super::command::args::entities::{
     EntityFilter, EntityFilterSort, EntitySelectorType, TargetSelector, ValueCondition,
 };
+
+// Global access to the running Server instance.
+static SERVER_WEAK: OnceLock<Weak<Server>> = OnceLock::new();
+
+pub fn get_server() -> Option<Arc<Server>> {
+    SERVER_WEAK.get().and_then(Weak::upgrade)
+}
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -190,6 +198,7 @@ impl Server {
         };
 
         let server = Arc::new(server);
+        let _ = SERVER_WEAK.set(Arc::downgrade(&server));
         let weak = Arc::downgrade(&server);
         log::info!("Loading Overworld: {seed}");
         let overworld = World::load(

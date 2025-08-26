@@ -110,7 +110,7 @@ impl CommandExecutor for ListAllExecutor {
 async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSender) {
     if list.is_empty() {
         sender
-            .send_message(TextComponent::translate("commands.banlist.none", []))
+            .send_message(TextComponent::translate("commands.banlist.none", None, []))
             .await;
         return;
     }
@@ -118,6 +118,7 @@ async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSen
     sender
         .send_message(TextComponent::translate(
             "commands.banlist.list",
+            None,
             [TextComponent::text(list.len().to_string())],
         ))
         .await;
@@ -126,6 +127,7 @@ async fn handle_banlist(list: Vec<(String, String, String)>, sender: &CommandSen
         sender
             .send_message(TextComponent::translate(
                 "commands.banlist.entry",
+                None,
                 [
                     TextComponent::text(name),
                     TextComponent::text(source),

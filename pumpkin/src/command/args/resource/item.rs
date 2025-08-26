@@ -67,6 +67,7 @@ impl<'a> FindArg<'a> for ItemArgumentConsumer {
                                 Err(CommandError::CommandFailed(Box::new(
                                     TextComponent::translate(
                                         "argument.item.id.invalid",
+                                        None,
                                         [TextComponent::text((*name).to_string())],
                                     ),
                                 )))
@@ -74,6 +75,7 @@ impl<'a> FindArg<'a> for ItemArgumentConsumer {
                                 Err(CommandError::CommandFailed(Box::new(
                                     TextComponent::translate(
                                         "argument.item.id.invalid",
+                                        None,
                                         [TextComponent::text("minecraft:".to_string() + *name)],
                                     ),
                                 )))

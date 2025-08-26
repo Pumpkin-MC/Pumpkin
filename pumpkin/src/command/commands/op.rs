@@ -40,7 +40,7 @@ impl CommandExecutor for Executor {
 
             if player.permission_lvl.load() == new_level {
                 sender
-                    .send_message(TextComponent::translate("commands.op.failed", []))
+                    .send_message(TextComponent::translate("commands.op.failed", None, []))
                     .await;
                 continue;
             }
@@ -73,6 +73,7 @@ impl CommandExecutor for Executor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.op.success",
+                    None,
                     [player.get_display_name().await],
                 ))
                 .await;

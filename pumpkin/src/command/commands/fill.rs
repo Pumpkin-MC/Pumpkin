@@ -255,6 +255,7 @@ impl CommandExecutor for Executor {
         sender
             .send_message(TextComponent::translate(
                 "commands.fill.success",
+                None,
                 [TextComponent::text(placed_blocks.to_string())],
             ))
             .await;

@@ -67,6 +67,7 @@ impl CommandExecutor for QueryExecutor {
                 let curr_time = level_time.query_daytime();
                 TextComponent::translate(
                     "commands.time.query",
+                    None,
                     [TextComponent::text(curr_time.to_string())],
                 )
             }
@@ -74,6 +75,7 @@ impl CommandExecutor for QueryExecutor {
                 let curr_time = level_time.query_gametime();
                 TextComponent::translate(
                     "commands.time.query",
+                    None,
                     [TextComponent::text(curr_time.to_string())],
                 )
             }
@@ -81,6 +83,7 @@ impl CommandExecutor for QueryExecutor {
                 let curr_time = level_time.query_day();
                 TextComponent::translate(
                     "commands.time.query",
+                    None,
                     [TextComponent::text(curr_time.to_string())],
                 )
             }
@@ -131,6 +134,7 @@ impl CommandExecutor for ChangeExecutor {
                 let curr_time = level_time.query_daytime();
                 TextComponent::translate(
                     "commands.time.set",
+                    None,
                     [TextComponent::text(curr_time.to_string())],
                 )
             }
@@ -140,6 +144,7 @@ impl CommandExecutor for ChangeExecutor {
                 level_time.send_time(world).await;
                 TextComponent::translate(
                     "commands.time.set",
+                    None,
                     [TextComponent::text(time_count.to_string())],
                 )
             }

@@ -36,11 +36,13 @@ impl CommandExecutor for Executor {
         let msg = if target_count == 1 {
             TextComponent::translate(
                 "commands.kill.success.single",
+                None,
                 [targets[0].get_display_name().await],
             )
         } else {
             TextComponent::translate(
                 "commands.kill.success.multiple",
+                None,
                 [TextComponent::text(target_count.to_string())],
             )
         };
@@ -67,6 +69,7 @@ impl CommandExecutor for SelfExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.kill.success.single",
+                None,
                 [target.get_display_name().await],
             ))
             .await;

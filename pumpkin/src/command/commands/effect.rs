@@ -117,12 +117,13 @@ impl CommandExecutor for GiveExecutor {
             }
         }
 
-        let translation_name = TextComponent::translate(effect.translation_key.to_string(), []);
+        let translation_name =
+            TextComponent::translate(effect.translation_key.to_string(), None, []);
 
         if failed == targets.len() {
             sender
                 .send_message(
-                    TextComponent::translate("commands.effect.give.failed", [])
+                    TextComponent::translate("commands.effect.give.failed", None, [])
                         .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
@@ -130,6 +131,7 @@ impl CommandExecutor for GiveExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.effect.give.success.single",
+                    None,
                     [translation_name, targets[0].get_display_name().await],
                 ))
                 .await;
@@ -137,6 +139,7 @@ impl CommandExecutor for GiveExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.effect.give.success.multiple",
+                    None,
                     [
                         translation_name,
                         TextComponent::text(targets.len().to_string()),
@@ -178,8 +181,12 @@ impl CommandExecutor for ClearExecutor {
             if effect_number == 0 {
                 sender
                     .send_message(
-                        TextComponent::translate("commands.effect.clear.everything.failed", [])
-                            .color(Color::Named(NamedColor::Red)),
+                        TextComponent::translate(
+                            "commands.effect.clear.everything.failed",
+                            None,
+                            [],
+                        )
+                        .color(Color::Named(NamedColor::Red)),
                     )
                     .await;
             }
@@ -188,6 +195,7 @@ impl CommandExecutor for ClearExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.effect.clear.everything.success.single",
+                        None,
                         [targets[0].get_display_name().await],
                     ))
                     .await;
@@ -195,6 +203,7 @@ impl CommandExecutor for ClearExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.effect.clear.everything.success.multiple",
+                        None,
                         [TextComponent::text(targets.len().to_string())],
                     ))
                     .await;
@@ -219,8 +228,12 @@ impl CommandExecutor for ClearExecutor {
                 if targets.len() == 1 || !has_effect.contains(&true) {
                     sender
                         .send_message(
-                            TextComponent::translate("commands.effect.clear.specific.failed", [])
-                                .color(Color::Named(NamedColor::Red)),
+                            TextComponent::translate(
+                                "commands.effect.clear.specific.failed",
+                                None,
+                                [],
+                            )
+                            .color(Color::Named(NamedColor::Red)),
                         )
                         .await;
                 }
@@ -230,8 +243,9 @@ impl CommandExecutor for ClearExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.effect.clear.specific.success.single",
+                            None,
                             [
-                                TextComponent::translate(effect.translation_key, []),
+                                TextComponent::translate(effect.translation_key, None, []),
                                 targets[0].get_display_name().await,
                             ],
                         ))
@@ -242,8 +256,9 @@ impl CommandExecutor for ClearExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.effect.clear.specific.success.multiple",
+                            None,
                             [
-                                TextComponent::translate(effect.translation_key, []),
+                                TextComponent::translate(effect.translation_key, None, []),
                                 TextComponent::text(targets.len().to_string()),
                             ],
                         ))

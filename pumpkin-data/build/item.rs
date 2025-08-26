@@ -2,7 +2,7 @@ use crate::enchantments::AttributeModifierSlot;
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
 use pumpkin_util::registry::TagType;
-use pumpkin_util::text::TextContent;
+use pumpkin_util::text::content::TextContent;
 use pumpkin_util::{registry::RegistryEntryList, text::TextComponent};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
@@ -62,6 +62,7 @@ impl ToTokens for ItemComponents {
 
         let TextContent::Translate {
             translate: text,
+            fallback: _,
             with: _,
         } = self.item_name.clone().0.content
         else {
@@ -527,6 +528,7 @@ pub(crate) fn build() -> TokenStream {
                             None
                         }
                     ).unwrap(),
+                    None,
                     &[],
                 )
             }

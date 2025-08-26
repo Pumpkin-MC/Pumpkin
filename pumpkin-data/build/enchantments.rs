@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fs};
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::TextContent::Translate;
+use pumpkin_util::text::content::TextContent::Translate;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
@@ -81,7 +81,7 @@ pub(crate) fn build() -> TokenStream {
         let max_level = enchantment.max_level;
         let slots = enchantment.slots.clone();
         let slots = slots.iter().map(|slot| slot.to_tokens());
-        let Translate { translate, with: _ } = &enchantment.description.0.content else {
+        let Translate { translate, .. } = &enchantment.description.0.content else {
             panic!()
         };
         let translate = translate.to_string();
@@ -233,7 +233,7 @@ pub(crate) fn build() -> TokenStream {
                 true
             }
             pub fn get_fullname(&self, level: i32) -> TextComponent {
-                let mut ret = TextComponent::translate(self.description, []).color_named(
+                let mut ret = TextComponent::translate(self.description, None, []).color_named(
                     if self.is_tagged_with_by_tag(&EnchantmentTag::MINECRAFT_CURSE) {
                         NamedColor::Red
                     } else {
@@ -242,7 +242,7 @@ pub(crate) fn build() -> TokenStream {
                 );
                 if level != 1 || self.max_level != 1 {
                     ret = ret.add_text(" ")
-                        .add_child(TextComponent::translate("enchantment.level.".to_string() + &level.to_string(), []));
+                        .add_child(TextComponent::translate("enchantment.level.".to_string() + &level.to_string(), None, []));
                 }
                 ret
             }

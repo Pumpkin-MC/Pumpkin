@@ -13,6 +13,7 @@ pub trait PumpkinError: Send + std::error::Error + Display {
 
     fn severity(&self) -> log::Level;
 
+    // TRANS-TODO: This should return a TextComponent directly WTF
     fn client_kick_reason(&self) -> Option<String>;
 }
 

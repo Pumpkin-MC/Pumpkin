@@ -1,10 +1,10 @@
 use std::fmt;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use crate::world::text::TextResolution;
 use args::ConsumedArgs;
 use async_trait::async_trait;
 
@@ -12,7 +12,7 @@ use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::translation::Locale;
+use pumpkin_util::text::translation::Locale;
 
 pub mod args;
 pub mod client_suggestions;
@@ -43,9 +43,9 @@ impl fmt::Display for CommandSender {
 impl CommandSender {
     pub async fn send_message(&self, text: TextComponent) {
         match self {
-            Self::Console => log::info!("{}", text.to_pretty_console()),
-            Self::Player(c) => c.send_system_message(&text).await,
-            Self::Rcon(s) => s.lock().await.push(text.to_pretty_console()),
+            Self::Console => log::info!("{}", text.to_string(&None, true).await),
+            Self::Player(c) => c.send_system_message(text).await,
+            Self::Rcon(s) => s.lock().await.push(text.to_string(&None, true).await),
         }
     }
 
@@ -108,12 +108,17 @@ impl CommandSender {
         }
     }
 
-    pub async fn get_locale(&self) -> Locale {
+    pub async fn locale(&self) -> Locale {
         match self {
             Self::Console | Self::Rcon(..) => Locale::EnUs, // Default locale for console and RCON
-            Self::Player(player) => {
-                Locale::from_str(&player.config.read().await.locale).unwrap_or(Locale::EnUs)
-            }
+            Self::Player(player) => player.locale().await,
+        }
+    }
+
+    pub async fn to_receiver(&self) -> Option<&Player> {
+        match self {
+            Self::Player(player) => Some(player.as_ref()),
+            _ => None,
         }
     }
 }

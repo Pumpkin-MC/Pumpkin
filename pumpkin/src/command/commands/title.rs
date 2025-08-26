@@ -50,14 +50,18 @@ impl CommandExecutor for ClearOrResetExecutor {
                 } else {
                     "commands.title.cleared.single"
                 };
-                TextComponent::translate(text, [targets[0].get_display_name().await])
+                TextComponent::translate(text, None, [targets[0].get_display_name().await])
             } else {
                 let text = if reset {
                     "commands.title.reset.multiple"
                 } else {
                     "commands.title.cleared.multiple"
                 };
-                TextComponent::translate(text, [TextComponent::text(targets.len().to_string())])
+                TextComponent::translate(
+                    text,
+                    None,
+                    [TextComponent::text(targets.len().to_string())],
+                )
             })
             .await;
 
@@ -84,7 +88,7 @@ impl CommandExecutor for TitleExecutor {
         let mode = &self.0;
 
         for target in targets {
-            target.show_title(&text, mode).await;
+            target.show_title(text.clone(), mode).await;
         }
 
         let mode_name = format!("{mode:?}").to_lowercase();
@@ -92,11 +96,13 @@ impl CommandExecutor for TitleExecutor {
             .send_message(if targets.len() == 1 {
                 TextComponent::translate(
                     format!("commands.title.show.{mode_name}.single"),
+                    None,
                     [targets[0].get_display_name().await],
                 )
             } else {
                 TextComponent::translate(
                     format!("commands.title.show.{mode_name}.multiple"),
+                    None,
                     [TextComponent::text(targets.len().to_string())],
                 )
             })

@@ -38,6 +38,7 @@ impl CommandExecutor for QueryExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.gamerule.query",
+                None,
                 [key, value],
             ))
             .await;
@@ -76,6 +77,7 @@ impl CommandExecutor for SetExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.gamerule.set",
+                None,
                 [key, value],
             ))
             .await;

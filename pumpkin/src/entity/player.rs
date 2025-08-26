@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use std::f64::consts::TAU;
 use std::num::NonZeroU8;
 use std::ops::AddAssign;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
@@ -12,6 +13,7 @@ use crossbeam::atomic::AtomicCell;
 use log::warn;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
+use pumpkin_util::text::translation::Locale;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
@@ -81,6 +83,7 @@ use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
+use crate::world::text::TextResolution;
 use crate::{PERMISSION_MANAGER, block};
 
 use super::combat::{self, AttackType, player_attack_sound};
@@ -660,11 +663,23 @@ impl Player {
         self.sleeping_since.store(None);
     }
 
-    pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
+    pub async fn show_title(&self, text: TextComponent, mode: &TitleMode) {
         match mode {
-            TitleMode::Title => self.client.enqueue_packet(&CTitleText::new(text)).await,
-            TitleMode::SubTitle => self.client.enqueue_packet(&CSubtitle::new(text)).await,
-            TitleMode::ActionBar => self.client.enqueue_packet(&CActionBar::new(text)).await,
+            TitleMode::Title => {
+                self.client
+                    .enqueue_packet(&CTitleText::new(&text.to_send(self).await))
+                    .await
+            }
+            TitleMode::SubTitle => {
+                self.client
+                    .enqueue_packet(&CSubtitle::new(&text.to_send(self).await))
+                    .await
+            }
+            TitleMode::ActionBar => {
+                self.client
+                    .enqueue_packet(&CActionBar::new(&text.to_send(self).await))
+                    .await
+            }
         }
     }
 
@@ -852,7 +867,7 @@ impl Player {
             if self.wait_for_keep_alive.load(Ordering::Relaxed) {
                 self.kick(
                     DisconnectReason::Timeout,
-                    TextComponent::translate("disconnect.timeout", []),
+                    TextComponent::translate("disconnect.timeout", None, []),
                 )
                 .await;
                 return;
@@ -1204,7 +1219,7 @@ impl Player {
     }
 
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
-        self.client.kick(reason, message).await;
+        self.client.kick(reason, message.to_send(self).await).await;
     }
 
     pub fn can_food_heal(&self) -> bool {
@@ -1269,7 +1284,10 @@ impl Player {
     async fn handle_killed(&self, death_msg: TextComponent) {
         self.set_client_loaded(false);
         self.client
-            .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
+            .send_packet_now(&CCombatDeath::new(
+                self.entity_id().into(),
+                &death_msg.to_send(self).await,
+            ))
             .await;
     }
 
@@ -1488,13 +1506,13 @@ impl Player {
         // todo this.player.stopUsingItem();
     }
 
-    pub async fn send_system_message(&self, text: &TextComponent) {
+    pub async fn send_system_message(&self, text: TextComponent) {
         self.send_system_message_raw(text, false).await;
     }
 
-    pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
+    pub async fn send_system_message_raw(&self, text: TextComponent, overlay: bool) {
         self.client
-            .enqueue_packet(&CSystemChatMessage::new(text, overlay))
+            .enqueue_packet(&CSystemChatMessage::new(&text.to_send(self).await, overlay))
             .await;
     }
 
@@ -1876,6 +1894,10 @@ impl Player {
 
     pub async fn reset_state(&self) {
         self.living_entity.reset_state().await;
+    }
+
+    pub async fn locale(&self) -> Locale {
+        Locale::from_str(&self.config.read().await.locale).unwrap_or(Locale::EnUs)
     }
 }
 

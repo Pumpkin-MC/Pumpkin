@@ -38,7 +38,8 @@ impl CommandExecutor for DifficultyExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.difficulty.failure",
-                        [TextComponent::translate(translation_key, [])],
+                        None,
+                        [TextComponent::translate(translation_key, None, [])],
                     ))
                     .await;
                 return Ok(());
@@ -50,7 +51,8 @@ impl CommandExecutor for DifficultyExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.difficulty.success",
-                [TextComponent::translate(translation_key, [])],
+                None,
+                [TextComponent::translate(translation_key, None, [])],
             ))
             .await;
 

@@ -77,6 +77,7 @@ impl CommandExecutor for AddExecuter {
                 sender,
                 TextComponent::translate(
                     "commands.bossbar.create.failed",
+                    None,
                     [TextComponent::text(namespace.clone())],
                 ),
             )
@@ -94,6 +95,7 @@ impl CommandExecutor for AddExecuter {
         sender
             .send_message(TextComponent::translate(
                 "commands.bossbar.create.success",
+                None,
                 [bossbar_prefix(bossbar.title.clone(), namespace.clone())],
             ))
             .await;
@@ -130,6 +132,7 @@ impl CommandExecutor for GetExecuter {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.bossbar.get.max",
+                        None,
                         [
                             bossbar_prefix(bossbar.bossbar_data.title.clone(), namespace.clone()),
                             TextComponent::text(bossbar.max.to_string()),
@@ -143,6 +146,7 @@ impl CommandExecutor for GetExecuter {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.bossbar.get.value",
+                        None,
                         [
                             bossbar_prefix(bossbar.bossbar_data.title.clone(), namespace.clone()),
                             TextComponent::text(bossbar.value.to_string()),
@@ -160,6 +164,7 @@ impl CommandExecutor for GetExecuter {
                 sender
                     .send_message(TextComponent::translate(
                         state,
+                        None,
                         [bossbar_prefix(
                             bossbar.bossbar_data.title.clone(),
                             namespace.clone(),
@@ -189,6 +194,7 @@ impl CommandExecutor for ListExecuter {
             sender
                 .send_message(TextComponent::translate(
                     "commands.bossbar.list.bars.none",
+                    None,
                     [],
                 ))
                 .await;
@@ -198,6 +204,7 @@ impl CommandExecutor for ListExecuter {
             sender
                 .send_message(TextComponent::translate(
                     "commands.bossbar.list.bars.none",
+                    None,
                     [],
                 ))
                 .await;
@@ -223,6 +230,7 @@ impl CommandExecutor for ListExecuter {
         sender
             .send_message(TextComponent::translate(
                 "commands.bossbar.list.bars.some",
+                None,
                 [
                     TextComponent::text(bossbars.len().to_string()),
                     bossbars_text,
@@ -259,6 +267,7 @@ impl CommandExecutor for RemoveExecuter {
         sender
             .send_message(TextComponent::translate(
                 "commands.bossbar.remove.success",
+                None,
                 [bossbar_prefix(
                     bossbar.bossbar_data.title.clone(),
                     namespace.clone(),
@@ -325,6 +334,7 @@ impl CommandExecutor for SetExecuter {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.bossbar.set.color.success",
+                        None,
                         [bossbar_prefix(
                             bossbar.bossbar_data.title.clone(),
                             namespace.to_string(),
@@ -339,6 +349,7 @@ impl CommandExecutor for SetExecuter {
                         sender,
                         TextComponent::translate(
                             "parsing.int.invalid",
+                            None,
                             [TextComponent::text(i32::MAX.to_string())],
                         ),
                     )
@@ -368,6 +379,7 @@ impl CommandExecutor for SetExecuter {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.bossbar.set.max.success",
+                        None,
                         [
                             bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
@@ -398,6 +410,7 @@ impl CommandExecutor for SetExecuter {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.bossbar.set.name.success",
+                        None,
                         [bossbar_prefix(text_component, namespace.to_string())],
                     ))
                     .await;
@@ -421,6 +434,7 @@ impl CommandExecutor for SetExecuter {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.bossbar.set.players.success.none",
+                            None,
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
                                 namespace.to_string(),
@@ -458,6 +472,7 @@ impl CommandExecutor for SetExecuter {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.bossbar.set.players.success.some",
+                        None,
                         [
                             bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
@@ -488,6 +503,7 @@ impl CommandExecutor for SetExecuter {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.bossbar.set.style.success",
+                        None,
                         [bossbar_prefix(
                             bossbar.bossbar_data.title.clone(),
                             namespace.to_string(),
@@ -502,6 +518,7 @@ impl CommandExecutor for SetExecuter {
                         sender,
                         TextComponent::translate(
                             "parsing.int.invalid",
+                            None,
                             [TextComponent::text(i32::MAX.to_string())],
                         ),
                     )
@@ -526,6 +543,7 @@ impl CommandExecutor for SetExecuter {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.bossbar.set.value.success",
+                        None,
                         [
                             bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
@@ -563,6 +581,7 @@ impl CommandExecutor for SetExecuter {
                 sender
                     .send_message(TextComponent::translate(
                         state,
+                        None,
                         [bossbar_prefix(
                             bossbar.bossbar_data.title.clone(),
                             namespace.to_string(),
@@ -676,6 +695,7 @@ async fn handle_bossbar_error(sender: &CommandSender, error: BossbarUpdateError<
                 sender,
                 TextComponent::translate(
                     "commands.bossbar.unknown",
+                    None,
                     [TextComponent::text(location)],
                 ),
             )
@@ -689,7 +709,7 @@ async fn handle_bossbar_error(sender: &CommandSender, error: BossbarUpdateError<
                 write!(key, ".{variation}").unwrap();
             }
 
-            send_error_message(sender, TextComponent::translate(key, [])).await;
+            send_error_message(sender, TextComponent::translate(key, None, [])).await;
         }
     }
 }

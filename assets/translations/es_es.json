@@ -1,4 +1,8 @@
 {
+    "text.error.no_data": "[Sin datos]",
+    "text.error.no_scoreboard": "[Scoreboards no implementados]",
+    "text.error.no_nbt.block": "[NBTs de bloque no implementados]",
+    "text.error.no_nbt.storage": "[NBTs de almacenamiento no implementados]",
     "commands.pumpkin.version": "Pumpkin %s\n",
     "commands.pumpkin.description": "Dando a todos el poder de alojar servidores \nde Minecraft rápidos y eficientes.\n",
     "commands.pumpkin.minecraft_version": "(Minecraft %1$s, Protocolo %2$s)\n",

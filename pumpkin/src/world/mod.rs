@@ -10,9 +10,11 @@ pub mod chunker;
 pub mod explosion;
 pub mod loot;
 pub mod portal;
+pub mod text;
 pub mod time;
 
 use crate::world::loot::LootContextParameters;
+use crate::world::text::TextResolution;
 use crate::{
     PLUGIN_MANAGER,
     block::{
@@ -2273,6 +2275,7 @@ impl World {
         player.clone().spawn_task(async move {
             let msg_comp = TextComponent::translate(
                 "multiplayer.player.joined",
+                None,
                 [TextComponent::text(player.gameprofile.name.clone())],
             )
             .color_named(NamedColor::Yellow);
@@ -2282,9 +2285,9 @@ impl World {
 
             if !event.cancelled {
                 for player in current_players.read().await.values() {
-                    player.send_system_message(&event.join_message).await;
+                    player.send_system_message(event.join_message.clone()).await;
                 }
-                log::info!("{}", event.join_message.to_pretty_console());
+                log::info!("{}", event.join_message.to_string(&None, true).await);
             }
         });
         Ok(())
@@ -2324,6 +2327,7 @@ impl World {
         if fire_event {
             let msg_comp = TextComponent::translate(
                 "multiplayer.player.left",
+                None,
                 [TextComponent::text(player.gameprofile.name.clone())],
             )
             .color_named(NamedColor::Yellow);
@@ -2334,10 +2338,12 @@ impl World {
             if !event.cancelled {
                 let players = self.players.read().await;
                 for player in players.values() {
-                    player.send_system_message(&event.leave_message).await;
+                    player
+                        .send_system_message(event.leave_message.clone())
+                        .await;
                 }
                 drop(players);
-                log::info!("{}", event.leave_message.to_pretty_console());
+                log::info!("{}", event.leave_message.to_string(&None, true).await);
             }
         }
     }

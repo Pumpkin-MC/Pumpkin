@@ -48,6 +48,7 @@ impl CommandExecutor for Executor {
         let text = match (category, sound) {
             (Ok(c), Ok(s)) => TextComponent::translate(
                 "commands.stopsound.success.source.sound",
+                None,
                 [
                     TextComponent::text(s.to_name()),
                     TextComponent::text(c.to_name()),
@@ -55,14 +56,16 @@ impl CommandExecutor for Executor {
             ),
             (Ok(c), Err(_)) => TextComponent::translate(
                 "commands.stopsound.success.source.any",
+                None,
                 [TextComponent::text(c.to_name())],
             ),
             (Err(_), Ok(s)) => TextComponent::translate(
                 "commands.stopsound.success.sourceless.sound",
+                None,
                 [TextComponent::text(s.to_name())],
             ),
             (Err(_), Err(_)) => {
-                TextComponent::translate("commands.stopsound.success.sourceless.any", [])
+                TextComponent::translate("commands.stopsound.success.sourceless.any", None, [])
             }
         };
         sender.send_message(text).await;

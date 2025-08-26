@@ -24,6 +24,7 @@ impl CommandExecutor for Executor {
         sender
             .send_message(
                 TextComponent::translate("commands.stop.stopping", []).color_named(NamedColor::Red),
+                None,
             )
             .await;
 

@@ -43,12 +43,15 @@ async fn clear_player(target: &Player) -> u64 {
 
 async fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> TextComponent {
     match targets {
-        [target] if item_count == 0 => {
-            TextComponent::translate("clear.failed.single", [target.get_display_name().await])
-                .color_named(NamedColor::Red)
-        }
+        [target] if item_count == 0 => TextComponent::translate(
+            "clear.failed.single",
+            None,
+            [target.get_display_name().await],
+        )
+        .color_named(NamedColor::Red),
         [target] => TextComponent::translate(
             "commands.clear.success.single",
+            None,
             [
                 TextComponent::text(item_count.to_string()),
                 target.get_display_name().await,
@@ -56,11 +59,13 @@ async fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> 
         ),
         targets if item_count == 0 => TextComponent::translate(
             "clear.failed.multiple",
+            None,
             [TextComponent::text(targets.len().to_string())],
         )
         .color_named(NamedColor::Red),
         targets => TextComponent::translate(
             "commands.clear.success.multiple",
+            None,
             [
                 TextComponent::text(item_count.to_string()),
                 TextComponent::text(targets.len().to_string()),

@@ -1,9 +1,10 @@
 use std::{
-    borrow::Cow,
     collections::HashMap,
     str::FromStr,
     sync::{LazyLock, Mutex},
 };
+
+use serde::{Deserialize, Serialize};
 
 /// TODO List
 /// - Add server locale support
@@ -11,15 +12,15 @@ use std::{
 /// - Open a public translation system, maybe a Crowdin like Minecraft?
 /// - Add support for translations on commands descriptions
 /// - Integrate custom translations with the plugins API
-/// - Try to optimize code of 'to_translated'
-use crate::text::{TextComponentBase, TextContent, style::Style};
+/// - Solve command discrepances (unquoted keys, type value)
+use crate::text::TextComponentBase;
 
-static VANILLA_EN_US_JSON: &str = include_str!("../../assets/en_us.json");
-static PUMPKIN_EN_US_JSON: &str = include_str!("../../assets/translations/en_us.json");
-static PUMPKIN_ES_ES_JSON: &str = include_str!("../../assets/translations/es_es.json");
-static PUMPKIN_FR_FR_JSON: &str = include_str!("../../assets/translations/fr_fr.json");
-static PUMPKIN_ZH_CN_JSON: &str = include_str!("../../assets/translations/zh_cn.json");
-static PUMPKIN_TR_TR_JSON: &str = include_str!("../../assets/translations/tr_tr.json");
+static VANILLA_EN_US_JSON: &str = include_str!("../../../assets/en_us.json");
+static PUMPKIN_EN_US_JSON: &str = include_str!("../../../assets/translations/en_us.json");
+static PUMPKIN_ES_ES_JSON: &str = include_str!("../../../assets/translations/es_es.json");
+static PUMPKIN_FR_FR_JSON: &str = include_str!("../../../assets/translations/fr_fr.json");
+static PUMPKIN_ZH_CN_JSON: &str = include_str!("../../../assets/translations/zh_cn.json");
+static PUMPKIN_TR_TR_JSON: &str = include_str!("../../../assets/translations/tr_tr.json");
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct SubstitutionRange {
@@ -57,14 +58,14 @@ pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale:
     }
 }
 
-pub fn get_translation<P: Into<String>>(key: P, locale: Locale) -> String {
+pub fn get_translation<P: Into<String>>(key: P, locale: Locale, fallback: P) -> String {
     let translations = TRANSLATIONS.lock().unwrap();
     let key = key.into().to_lowercase();
     match translations[locale as usize].get(&key) {
         Some(translation) => translation.clone(),
         None => match translations[Locale::EnUs as usize].get(&key) {
             Some(translation) => translation.clone(),
-            None => key,
+            None => fallback.into(),
         },
     }
 }
@@ -92,14 +93,8 @@ pub fn reorder_substitutions(
         );
     }
 
-    let mut substitutions: Vec<TextComponentBase> = indices
-        .iter()
-        .map(|_| TextComponentBase {
-            content: TextContent::Text { text: "".into() },
-            style: Style::default(),
-            extra: vec![],
-        })
-        .collect();
+    let mut substitutions: Vec<TextComponentBase> =
+        vec![TextComponentBase::default(); indices.len()];
     let mut ranges: Vec<SubstitutionRange> = vec![];
 
     let bytes = translation.as_bytes();
@@ -131,54 +126,6 @@ pub fn reorder_substitutions(
         }
     }
     (substitutions, ranges)
-}
-
-pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
-    namespaced_key: P,
-    locale: Locale,
-    with: Vec<TextComponentBase>,
-) -> String {
-    let mut translation = get_translation(namespaced_key.into(), locale);
-    if with.is_empty() || !translation.contains('%') {
-        return translation;
-    }
-
-    let (substitutions, indices) = reorder_substitutions(&translation, with);
-    let mut displacement = 0;
-    for (idx, &range) in indices.iter().enumerate() {
-        let sub_idx = idx.clamp(0, substitutions.len() - 1);
-        let substitution = substitutions[sub_idx].clone().to_pretty_console();
-        translation.replace_range(
-            range.start + displacement..=range.end + displacement,
-            &substitution,
-        );
-        displacement += substitution.len() - range.len();
-    }
-    translation
-}
-
-pub fn get_translation_text<P: Into<Cow<'static, str>>>(
-    namespaced_key: P,
-    locale: Locale,
-    with: Vec<TextComponentBase>,
-) -> String {
-    let mut translation = get_translation(namespaced_key.into(), locale);
-    if with.is_empty() || !translation.contains('%') {
-        return translation;
-    }
-
-    let (substitutions, indices) = reorder_substitutions(&translation, with);
-    let mut displacement = 0i32;
-    for (idx, &range) in indices.iter().enumerate() {
-        let sub_idx = idx.clamp(0, substitutions.len() - 1);
-        let substitution = substitutions[sub_idx].clone().get_text(locale);
-        translation.replace_range(
-            range.start + displacement as usize..=range.end + displacement as usize,
-            &substitution,
-        );
-        displacement += substitution.len() as i32 - range.len() as i32;
-    }
-    translation
 }
 
 pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last() as usize]>> =
@@ -219,7 +166,8 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
         Mutex::new(array)
     });
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum Locale {
     AfZa,
     ArSa,

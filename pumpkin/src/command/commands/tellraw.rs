@@ -33,7 +33,7 @@ impl CommandExecutor for TellRawExecutor {
 
         let text = TextComponentArgConsumer::find_arg(args, ARG_MESSAGE)?;
         for target in targets {
-            target.send_system_message(&text).await;
+            target.send_system_message(text.clone()).await;
         }
         Ok(())
     }

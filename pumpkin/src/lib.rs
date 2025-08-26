@@ -285,7 +285,7 @@ impl PumpkinServer {
         {
             log::error!("Error saving all players during shutdown: {e}");
         }
-
+        // TRANS-TODO: Implement proper kick message translation
         let kick_message = TextComponent::text("Server stopped");
         for player in self.server.get_all_players().await {
             player

@@ -163,6 +163,7 @@ impl ServerTickRateManager {
 
             TextComponent::translate(
                 "commands.tick.sprint.report",
+                None,
                 [
                     TextComponent::text(format!("{tps:.2}")),
                     TextComponent::text(format!("{mspt:.2}")),
@@ -170,7 +171,7 @@ impl ServerTickRateManager {
             )
         } else {
             // This is the message for `/tick sprint stop` or a zero-tick sprint.
-            TextComponent::translate("commands.tick.sprint.stop.success", [])
+            TextComponent::translate("commands.tick.sprint.stop.success", None, [])
         };
 
         // Construct the final component with the [Server: ...] wrapper

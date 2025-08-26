@@ -1,10 +1,7 @@
 use crate::text::color::ARGBColor;
-use crate::translation::{
-    Locale, get_translation, get_translation_text, reorder_substitutions, translation_to_pretty,
-};
 use click::ClickEvent;
 use color::Color;
-use colored::Colorize;
+use content::TextContent;
 use core::str;
 use hover::HoverEvent;
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
@@ -15,11 +12,13 @@ use style::Style;
 
 pub mod click;
 pub mod color;
+pub mod content;
 pub mod hover;
 pub mod style;
+pub mod translation;
 
 /// Represents a text component
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq, Hash)]
 pub struct TextComponent(pub TextComponentBase);
 
 impl<'de> Deserialize<'de> for TextComponent {
@@ -67,175 +66,19 @@ impl<'de> Deserialize<'de> for TextComponent {
     }
 }
 
-impl Serialize for TextComponent {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_newtype_struct("TextComponent", &self.0.clone().to_translated())
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct TextComponentBase {
     /// The actual text
     #[serde(flatten)]
     pub content: TextContent,
     /// Style of the text. Bold, Italic, underline, Color...
-    /// Also has `ClickEvent
+    /// Also has Click and Hover events
     #[serde(flatten)]
     pub style: Style,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     /// Extra text components
     pub extra: Vec<TextComponentBase>,
-}
-
-impl TextComponentBase {
-    pub fn to_pretty_console(self) -> String {
-        let mut text = match self.content {
-            TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate { translate, with } => {
-                translation_to_pretty(format!("minecraft:{translate}"), Locale::EnUs, with)
-            }
-            TextContent::EntityNames {
-                selector,
-                separator: _,
-            } => selector.into_owned(),
-            TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => translation_to_pretty(key, Locale::EnUs, with),
-        };
-        let style = self.style;
-        let color = style.color;
-        if let Some(color) = color {
-            text = color.console_color(&text).to_string();
-        }
-        if style.bold.is_some() {
-            text = text.bold().to_string();
-        }
-        if style.italic.is_some() {
-            text = text.italic().to_string();
-        }
-        if style.underlined.is_some() {
-            text = text.underline().to_string();
-        }
-        if style.strikethrough.is_some() {
-            text = text.strikethrough().to_string();
-        }
-        for child in self.extra {
-            text += &*child.to_pretty_console();
-        }
-        text
-    }
-
-    pub fn get_text(self, locale: Locale) -> String {
-        match self.content {
-            TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate { translate, with } => {
-                get_translation_text(format!("minecraft:{translate}"), locale, with)
-            }
-            TextContent::EntityNames {
-                selector,
-                separator: _,
-            } => selector.into_owned(),
-            TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => get_translation_text(key, locale, with),
-        }
-    }
-
-    pub fn to_translated(self) -> Self {
-        // Divide the translation into slices and inserts the substitutions
-        let component = match self.content {
-            TextContent::Custom { key, with, locale } => {
-                let translation = get_translation(key, locale);
-                let mut translation_parent = translation.clone();
-                let mut translation_slices = vec![];
-
-                if translation.contains('%') {
-                    let (substitutions, ranges) = reorder_substitutions(&translation, with);
-                    for (idx, &range) in ranges.iter().enumerate() {
-                        if idx == 0 {
-                            translation_parent = translation[..range.start].to_string();
-                        };
-                        translation_slices.push(substitutions[idx].clone());
-                        if range.end >= translation.len() - 1 {
-                            continue;
-                        }
-
-                        translation_slices.push(TextComponentBase {
-                            content: TextContent::Text {
-                                text: if idx == ranges.len() - 1 {
-                                    // Last substitution, append the rest of the translation
-                                    Cow::Owned(translation[range.end + 1..].to_string())
-                                } else {
-                                    Cow::Owned(
-                                        translation[range.end + 1..ranges[idx + 1].start]
-                                            .to_string(),
-                                    )
-                                },
-                            },
-                            style: Style::default(),
-                            extra: vec![],
-                        });
-                    }
-                }
-                for i in self.extra {
-                    translation_slices.push(i);
-                }
-                TextComponentBase {
-                    content: TextContent::Text {
-                        text: translation_parent.into(),
-                    },
-                    style: self.style,
-                    extra: translation_slices,
-                }
-            }
-            _ => self, // If not a translation, return as is
-        };
-        // Ensure that the extra components are translated
-        let mut extra = vec![];
-        for extra_component in component.extra {
-            let translated = extra_component.to_translated();
-            extra.push(translated);
-        }
-        // If the hover event is present, it will also be translated
-        let style = match component.style.hover_event {
-            None => component.style,
-            Some(ref hover) => {
-                let mut style = component.style.clone();
-                style.hover_event = match hover {
-                    HoverEvent::ShowText { value } => {
-                        let mut hover_components = vec![];
-                        for hover_component in value {
-                            hover_components.push(hover_component.to_owned().to_translated());
-                        }
-                        Some(HoverEvent::ShowText {
-                            value: hover_components,
-                        })
-                    }
-                    HoverEvent::ShowEntity { name, id, uuid } => match name {
-                        None => Some(HoverEvent::ShowEntity {
-                            name: None,
-                            id: id.clone(),
-                            uuid: uuid.clone(),
-                        }),
-                        Some(name) => Some(HoverEvent::ShowEntity {
-                            name: Some(name.iter().map(|x| x.to_owned().to_translated()).collect()),
-                            id: id.clone(),
-                            uuid: uuid.clone(),
-                        }),
-                    },
-                    HoverEvent::ShowItem { id, count } => Some(HoverEvent::ShowItem {
-                        id: id.clone(),
-                        count: count.to_owned(),
-                    }),
-                };
-                style
-            }
-        };
-        TextComponentBase {
-            content: component.content,
-            style,
-            extra,
-        }
-    }
 }
 
 impl TextComponent {
@@ -249,11 +92,13 @@ impl TextComponent {
 
     pub fn translate<K: Into<Cow<'static, str>>, W: Into<Vec<TextComponent>>>(
         key: K,
+        fallback: Option<K>,
         with: W,
     ) -> Self {
         Self(TextComponentBase {
             content: TextContent::Translate {
                 translate: key.into(),
+                fallback: fallback.map(Into::into),
                 with: with.into().into_iter().map(|x| x.0).collect(),
             },
             style: Style::default(),
@@ -264,7 +109,6 @@ impl TextComponent {
     pub fn custom<K: Into<Cow<'static, str>>, W: Into<Vec<TextComponent>>>(
         namespace: K,
         key: K,
-        locale: Locale,
         with: W,
     ) -> Self {
         Self(TextComponentBase {
@@ -272,7 +116,6 @@ impl TextComponent {
                 key: format!("{}:{}", namespace.into(), key.into())
                     .to_lowercase()
                     .into(),
-                locale,
                 with: with.into().into_iter().map(|x| x.0).collect(),
             },
             style: Style::default(),
@@ -302,8 +145,9 @@ impl TextComponent {
         self
     }
 
+    // REMOVE
     pub fn get_text(self) -> String {
-        self.0.get_text(Locale::EnUs)
+        String::new()
     }
 
     pub fn chat_decorated(format: String, player_name: String, content: String) -> Self {
@@ -321,9 +165,9 @@ impl TextComponent {
             extra: vec![],
         })
     }
-
+    // REMOVE
     pub fn to_pretty_console(self) -> String {
-        self.0.to_pretty_console()
+        String::new()
     }
 }
 
@@ -414,35 +258,6 @@ impl TextComponent {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(untagged)]
-pub enum TextContent {
-    /// Raw text
-    Text { text: Cow<'static, str> },
-    /// Translated text
-    Translate {
-        translate: Cow<'static, str>,
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        with: Vec<TextComponentBase>,
-    },
-    /// Displays the name of one or more entities found by a selector.
-    EntityNames {
-        selector: Cow<'static, str>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        separator: Option<Cow<'static, str>>,
-    },
-    /// A keybind identifier
-    /// https://minecraft.wiki/w/Controls#Configurable_controls
-    Keybind { keybind: Cow<'static, str> },
-    /// A custom translation key
-    #[serde(skip)]
-    Custom {
-        key: Cow<'static, str>,
-        locale: Locale,
-        with: Vec<TextComponentBase>,
-    },
-}
-
 #[cfg(test)]
 mod test {
     use pumpkin_nbt::serializer::to_bytes_unnamed;
@@ -453,6 +268,7 @@ mod test {
     fn test_serialize_text_component() {
         let msg_comp = TextComponent::translate(
             "multiplayer.player.joined",
+            None,
             [TextComponent::text("NAME".to_string())],
         )
         .color_named(NamedColor::Yellow);

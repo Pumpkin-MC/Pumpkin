@@ -38,9 +38,11 @@ impl CommandExecutor for Executor {
         sender
             .send_message(TextComponent::translate(
                 "commands.seed.success",
+                None,
                 [TextComponent::text(seed.clone())
                     .hover_event(HoverEvent::show_text(TextComponent::translate(
                         Cow::from("chat.copy.click"),
+                        None,
                         [],
                     )))
                     .click_event(ClickEvent::CopyToClipboard {

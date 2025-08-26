@@ -44,7 +44,7 @@ async fn send_damage_result(
     if !success {
         sender
             .send_message(
-                TextComponent::translate("commands.damage.invulnerable", [])
+                TextComponent::translate("commands.damage.invulnerable", None, [])
                     .color(Color::Named(NamedColor::Red)),
             )
             .await;
@@ -54,6 +54,7 @@ async fn send_damage_result(
     sender
         .send_message(TextComponent::translate(
             "commands.damage.success",
+            None,
             [TextComponent::text(amount.to_string()), target_name],
         ))
         .await;
