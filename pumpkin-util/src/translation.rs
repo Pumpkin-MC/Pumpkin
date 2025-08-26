@@ -182,10 +182,15 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     translation
 }
 
-fn load_translations_from_json(json_str: &str, namespace: &str, locale: Locale, array: &mut [HashMap<String, String>]) {
+fn load_translations_from_json(
+    json_str: &str,
+    namespace: &str,
+    locale: Locale,
+    array: &mut [HashMap<String, String>],
+) {
     let translations: HashMap<String, String> = serde_json::from_str(json_str)
         .unwrap_or_else(|_| panic!("Could not parse {namespace} {locale:?} translations"));
-    
+
     for (key, value) in translations {
         array[locale as usize].insert(format!("{namespace}:{key}"), value);
     }
@@ -195,7 +200,7 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
     LazyLock::new(|| {
         let mut array: [HashMap<String, String>; Locale::last() as usize] =
             std::array::from_fn(|_| HashMap::new());
-        
+
         load_translations_from_json(VANILLA_EN_US_JSON, "minecraft", Locale::EnUs, &mut array);
         load_translations_from_json(VANILLA_ZH_CN_JSON, "minecraft", Locale::ZhCn, &mut array);
         load_translations_from_json(PUMPKIN_EN_US_JSON, "pumpkin", Locale::EnUs, &mut array);
@@ -203,7 +208,7 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last()
         load_translations_from_json(PUMPKIN_FR_FR_JSON, "pumpkin", Locale::FrFr, &mut array);
         load_translations_from_json(PUMPKIN_ZH_CN_JSON, "pumpkin", Locale::ZhCn, &mut array);
         load_translations_from_json(PUMPKIN_TR_TR_JSON, "pumpkin", Locale::TrTr, &mut array);
-        
+
         Mutex::new(array)
     });
 
