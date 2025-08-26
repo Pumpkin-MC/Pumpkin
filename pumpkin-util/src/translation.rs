@@ -14,8 +14,8 @@ use std::{
 /// - Try to optimize code of 'to_translated'
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
-static VANILLA_EN_US_JSON: &str = include_str!("../../assets/vanilla/en_us.json");
-static VANILLA_ZH_CN_JSON: &str = include_str!("../../assets/vanilla/zh_cn.json");
+static VANILLA_EN_US_JSON: &str = include_str!("../../assets/translations/vanilla/en_us.json");
+static VANILLA_ZH_CN_JSON: &str = include_str!("../../assets/translations/vanilla/zh_cn.json");
 static PUMPKIN_EN_US_JSON: &str = include_str!("../../assets/translations/en_us.json");
 static PUMPKIN_ES_ES_JSON: &str = include_str!("../../assets/translations/es_es.json");
 static PUMPKIN_FR_FR_JSON: &str = include_str!("../../assets/translations/fr_fr.json");
