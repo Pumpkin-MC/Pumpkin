@@ -14,7 +14,8 @@ use std::{
 /// - Try to optimize code of 'to_translated'
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
-static VANILLA_EN_US_JSON: &str = include_str!("../../assets/en_us.json");
+static VANILLA_EN_US_JSON: &str = include_str!("../../assets/vanilla/en_us.json");
+static VANILLA_ZH_CN_JSON: &str = include_str!("../../assets/vanilla/zh_cn.json");
 static PUMPKIN_EN_US_JSON: &str = include_str!("../../assets/translations/en_us.json");
 static PUMPKIN_ES_ES_JSON: &str = include_str!("../../assets/translations/es_es.json");
 static PUMPKIN_FR_FR_JSON: &str = include_str!("../../assets/translations/fr_fr.json");
@@ -181,41 +182,28 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     translation
 }
 
+fn load_translations_from_json(json_str: &str, namespace: &str, locale: Locale, array: &mut [HashMap<String, String>]) {
+    let translations: HashMap<String, String> = serde_json::from_str(json_str)
+        .unwrap_or_else(|_| panic!("Could not parse {namespace} {locale:?} translations"));
+    
+    for (key, value) in translations {
+        array[locale as usize].insert(format!("{namespace}:{key}"), value);
+    }
+}
+
 pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::last() as usize]>> =
     LazyLock::new(|| {
         let mut array: [HashMap<String, String>; Locale::last() as usize] =
             std::array::from_fn(|_| HashMap::new());
-        let vanilla_en_us: HashMap<String, String> =
-            serde_json::from_str(VANILLA_EN_US_JSON).expect("Could not parse en_us.json.");
-        let pumpkin_en_us: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_EN_US_JSON).expect("Could not parse en_us.json.");
-        let pumpkin_es_es: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_ES_ES_JSON).expect("Could not parse es_es.json.");
-        let pumpkin_fr_fr: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_FR_FR_JSON).expect("Could not parse fr_fr.json.");
-        let pumpkin_zh_cn: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_ZH_CN_JSON).expect("Could not parse zh_cn.json.");
-        let pumpkin_tr_tr: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_TR_TR_JSON).expect("Could not parse tr_tr.json.");
-
-        for (key, value) in vanilla_en_us {
-            array[Locale::EnUs as usize].insert(format!("minecraft:{key}"), value);
-        }
-        for (key, value) in pumpkin_en_us {
-            array[Locale::EnUs as usize].insert(format!("pumpkin:{key}"), value);
-        }
-        for (key, value) in pumpkin_es_es {
-            array[Locale::EsEs as usize].insert(format!("pumpkin:{key}"), value);
-        }
-        for (key, value) in pumpkin_fr_fr {
-            array[Locale::FrFr as usize].insert(format!("pumpkin:{key}"), value);
-        }
-        for (key, value) in pumpkin_zh_cn {
-            array[Locale::ZhCn as usize].insert(format!("pumpkin:{key}"), value);
-        }
-        for (key, value) in pumpkin_tr_tr {
-            array[Locale::TrTr as usize].insert(format!("pumpkin:{key}"), value);
-        }
+        
+        load_translations_from_json(VANILLA_EN_US_JSON, "minecraft", Locale::EnUs, &mut array);
+        load_translations_from_json(VANILLA_ZH_CN_JSON, "minecraft", Locale::ZhCn, &mut array);
+        load_translations_from_json(PUMPKIN_EN_US_JSON, "pumpkin", Locale::EnUs, &mut array);
+        load_translations_from_json(PUMPKIN_ES_ES_JSON, "pumpkin", Locale::EsEs, &mut array);
+        load_translations_from_json(PUMPKIN_FR_FR_JSON, "pumpkin", Locale::FrFr, &mut array);
+        load_translations_from_json(PUMPKIN_ZH_CN_JSON, "pumpkin", Locale::ZhCn, &mut array);
+        load_translations_from_json(PUMPKIN_TR_TR_JSON, "pumpkin", Locale::TrTr, &mut array);
+        
         Mutex::new(array)
     });
 
