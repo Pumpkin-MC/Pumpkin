@@ -20,7 +20,7 @@ use uuid::Uuid;
 pub struct ArmorStandItem;
 
 impl ArmorStandItem {
-    fn calculate_placement_position(location: &BlockPos, face: &BlockDirection) -> BlockPos {
+    fn calculate_placement_position(location: &BlockPos, face: BlockDirection) -> BlockPos {
         match face {
             BlockDirection::Up => location.offset(Vector3::new(0, 1, 0)),
             BlockDirection::Down => location.offset(Vector3::new(0, -1, 0)),
@@ -50,7 +50,7 @@ impl ItemBehaviour for ArmorStandItem {
         _server: &Server
     ) {
         let world = player.world();
-        let position = Self::calculate_placement_position(&location, &face).to_f64();
+        let position = Self::calculate_placement_position(&location, face).to_f64();
 
         let bottom_center = Vector3::new(
             position.x,
@@ -59,8 +59,8 @@ impl ItemBehaviour for ArmorStandItem {
         );
 
         let armor_stand_dimensions = EntityType::ARMOR_STAND.dimension;
-        let width = armor_stand_dimensions[0] as f64;
-        let height = armor_stand_dimensions[1] as f64;
+        let width = f64::from(armor_stand_dimensions[0]);
+        let height = f64::from(armor_stand_dimensions[1]);
 
         let bounding_box = BoundingBox::new(
             Vector3::new(
@@ -75,7 +75,7 @@ impl ItemBehaviour for ArmorStandItem {
             )
         );
 
-        if world.is_space_empty(bounding_box.clone()).await && world.get_entities_at_box(&bounding_box).await.is_empty() {
+        if world.is_space_empty(bounding_box).await && world.get_entities_at_box(&bounding_box).await.is_empty() {
             let (player_yaw, _) = player.rotation();
             let rotation = ((wrap_degrees(player_yaw - 180.0) + 22.5) / 45.0).floor() * 45.0;
 

@@ -24,81 +24,76 @@ pub enum EquipmentSlot {
 impl EquipmentSlot {
     pub const NO_MAX_COUNT: i32 = 0;
 
-    pub fn slot_type(&self) -> EquipmentSlotType {
+    #[must_use] pub fn slot_type(&self) -> EquipmentSlotType {
         match self {
-            EquipmentSlot::MainHand | EquipmentSlot::OffHand => EquipmentSlotType::Hand,
-            EquipmentSlot::Feet | EquipmentSlot::Legs | EquipmentSlot::Chest | EquipmentSlot::Head => {
+            Self::MainHand | Self::OffHand => EquipmentSlotType::Hand,
+            Self::Feet | Self::Legs | Self::Chest | Self::Head => {
                 EquipmentSlotType::HumanoidArmor
             }
-            EquipmentSlot::Body => EquipmentSlotType::AnimalArmor,
-            EquipmentSlot::Saddle => EquipmentSlotType::Saddle,
+            Self::Body => EquipmentSlotType::AnimalArmor,
+            Self::Saddle => EquipmentSlotType::Saddle,
         }
     }
 
-    pub fn entity_slot_id(&self) -> i32 {
+    #[must_use] pub fn entity_slot_id(&self) -> i32 {
         match self {
-            EquipmentSlot::MainHand => 0,
-            EquipmentSlot::OffHand => 1,
-            EquipmentSlot::Feet => 0,
-            EquipmentSlot::Legs => 1,
-            EquipmentSlot::Chest => 2,
-            EquipmentSlot::Head => 3,
-            EquipmentSlot::Body => 0,
-            EquipmentSlot::Saddle => 0,
+            Self::MainHand | Self::Feet | Self::Body | Self::Saddle => 0,
+            Self::OffHand | Self::Legs => 1,
+            Self::Chest => 2,
+            Self::Head => 3,
         }
     }
 
-    pub fn max_count(&self) -> i32 {
+    #[must_use] pub fn max_count(&self) -> i32 {
         match self {
-            EquipmentSlot::MainHand => Self::NO_MAX_COUNT,
-            EquipmentSlot::OffHand => Self::NO_MAX_COUNT,
-            EquipmentSlot::Feet | EquipmentSlot::Legs | EquipmentSlot::Chest | EquipmentSlot::Head => 1,
-            EquipmentSlot::Body => 1,
-            EquipmentSlot::Saddle => 1,
+            Self::OffHand | Self::MainHand => Self::NO_MAX_COUNT,
+            Self::Feet | Self::Legs | Self::Chest | Self::Head | Self::Body | Self::Saddle => 1,
         }
     }
 
-    pub fn index(&self) -> i32 {
+    #[must_use] pub fn index(&self) -> i32 {
         match self {
-            EquipmentSlot::MainHand => 0,
-            EquipmentSlot::OffHand => 5,
-            EquipmentSlot::Feet => 1,
-            EquipmentSlot::Legs => 2,
-            EquipmentSlot::Chest => 3,
-            EquipmentSlot::Head => 4,
-            EquipmentSlot::Body => 6,
-            EquipmentSlot::Saddle => 7,
+            Self::MainHand => 0,
+            Self::OffHand => 5,
+            Self::Feet => 1,
+            Self::Legs => 2,
+            Self::Chest => 3,
+            Self::Head => 4,
+            Self::Body => 6,
+            Self::Saddle => 7,
         }
     }
 
-    pub fn name(&self) -> &'static str {
+    #[must_use] pub fn name(&self) -> &'static str {
         match self {
-            EquipmentSlot::MainHand => "mainhand",
-            EquipmentSlot::OffHand => "offhand",
-            EquipmentSlot::Feet => "feet",
-            EquipmentSlot::Legs => "legs",
-            EquipmentSlot::Chest => "chest",
-            EquipmentSlot::Head => "head",
-            EquipmentSlot::Body => "body",
-            EquipmentSlot::Saddle => "saddle",
+            Self::MainHand => "mainhand",
+            Self::OffHand => "offhand",
+            Self::Feet => "feet",
+            Self::Legs => "legs",
+            Self::Chest => "chest",
+            Self::Head => "head",
+            Self::Body => "body",
+            Self::Saddle => "saddle",
         }
     }
 
-    pub fn offset_entity_slot_id(&self, offset: i32) -> i32 {
+    #[must_use] pub fn offset_entity_slot_id(&self, offset: i32) -> i32 {
         offset + self.entity_slot_id()
     }
 
-    pub fn offset_index(&self, offset: i32) -> i32 {
+
+    #[must_use] pub fn offset_index(&self, offset: i32) -> i32 {
         self.index() + offset
     }
 
-    pub fn is_armor_slot(&self) -> bool {
+    #[must_use] pub fn is_armor_slot(&self) -> bool {
         matches!(
             self.slot_type(),
             EquipmentSlotType::HumanoidArmor | EquipmentSlotType::AnimalArmor
         )
     }
 
+    #[must_use]
     pub fn increases_dropped_experience(&self) -> bool {
         self.slot_type() != EquipmentSlotType::Saddle
     }
@@ -113,44 +108,46 @@ impl EquipmentSlot {
         }
     }
 
+    #[must_use]
     pub fn from_index(index: i32) -> Option<Self> {
         match index {
-            0 => Some(EquipmentSlot::MainHand),
-            1 => Some(EquipmentSlot::Feet),
-            2 => Some(EquipmentSlot::Legs),
-            3 => Some(EquipmentSlot::Chest),
-            4 => Some(EquipmentSlot::Head),
-            5 => Some(EquipmentSlot::OffHand),
-            6 => Some(EquipmentSlot::Body),
-            7 => Some(EquipmentSlot::Saddle),
+            0 => Some(Self::MainHand),
+            1 => Some(Self::Feet),
+            2 => Some(Self::Legs),
+            3 => Some(Self::Chest),
+            4 => Some(Self::Head),
+            5 => Some(Self::OffHand),
+            6 => Some(Self::Body),
+            7 => Some(Self::Saddle),
             _ => None,
         }
     }
 
     pub fn by_name(name: &str) -> Result<Self, String> {
         match name {
-            "mainhand" => Ok(EquipmentSlot::MainHand),
-            "offhand" => Ok(EquipmentSlot::OffHand),
-            "feet" => Ok(EquipmentSlot::Feet),
-            "legs" => Ok(EquipmentSlot::Legs),
-            "chest" => Ok(EquipmentSlot::Chest),
-            "head" => Ok(EquipmentSlot::Head),
-            "body" => Ok(EquipmentSlot::Body),
-            "saddle" => Ok(EquipmentSlot::Saddle),
-            _ => Err(format!("Invalid slot '{}'", name)),
+            "mainhand" => Ok(Self::MainHand),
+            "offhand" => Ok(Self::OffHand),
+            "feet" => Ok(Self::Feet),
+            "legs" => Ok(Self::Legs),
+            "chest" => Ok(Self::Chest),
+            "head" => Ok(Self::Head),
+            "body" => Ok(Self::Body),
+            "saddle" => Ok(Self::Saddle),
+            _ => Err(format!("Invalid slot '{name}'")),
         }
     }
 
-    pub fn all_values() -> &'static [EquipmentSlot] {
+    #[must_use]
+    pub fn all_values() -> &'static [Self] {
         &[
-            EquipmentSlot::MainHand,
-            EquipmentSlot::OffHand,
-            EquipmentSlot::Feet,
-            EquipmentSlot::Legs,
-            EquipmentSlot::Chest,
-            EquipmentSlot::Head,
-            EquipmentSlot::Body,
-            EquipmentSlot::Saddle,
+            Self::MainHand,
+            Self::OffHand,
+            Self::Feet,
+            Self::Legs,
+            Self::Chest,
+            Self::Head,
+            Self::Body,
+            Self::Saddle,
         ]
     }
 }

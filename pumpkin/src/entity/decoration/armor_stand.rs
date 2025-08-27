@@ -17,8 +17,8 @@ pub struct PackedRotation {
     pub right_leg: EulerAngle,
 }
 
-impl PackedRotation {
-    pub fn default() -> Self {
+impl Default for PackedRotation {
+    fn default() -> Self {
         Self {
             head: EulerAngle::new(0.0, 0.0, 0.0),
             body: EulerAngle::new(0.0, 0.0, 0.0),
@@ -230,17 +230,15 @@ impl NBTStorage for ArmorStandEntity {
     async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
         let mut flags = 0u8;
 
-        if let Some(small) = nbt.get_bool("Small") {
-            if small {
+        if let Some(small) = nbt.get_bool("Small")
+            && small {
                 flags |= 1;
             }
-        }
 
-        if let Some(show_arms) = nbt.get_bool("ShowArms") {
-            if show_arms {
+        if let Some(show_arms) = nbt.get_bool("ShowArms")
+            && show_arms {
                 flags |= 4;
             }
-        }
 
         if let Some(no_base_plate) = nbt.get_bool("NoBasePlate") {
             if !no_base_plate {
@@ -250,11 +248,10 @@ impl NBTStorage for ArmorStandEntity {
             flags |= 8;
         }
 
-        if let Some(marker) = nbt.get_bool("Marker") {
-            if marker {
+        if let Some(marker) = nbt.get_bool("Marker")
+            && marker {
                 flags |= 16;
             }
-        }
 
         self.armor_stand_flags.store(flags, Ordering::Relaxed);
 
@@ -301,19 +298,17 @@ impl EntityBase for ArmorStandEntity {
             };
 
             if !mob_griefing_gamerule {
-                if let Some(attacker) = source {
-                    if attacker.get_player().is_none() {
+                if let Some(attacker) = source
+                    && attacker.get_player().is_none() {
                         return false;
                     }
-                }
 
-                if let Some(indirect_attacker) = cause {
-                    if indirect_attacker.get_player().is_none() {
+                if let Some(indirect_attacker) = cause
+                    && indirect_attacker.get_player().is_none() {
                         return false;
                     }
-                }
             }
-        };
+        }
 
         // TODO: <DamageSource>.isIn(DamageTypeTags::BYPASSES_INVULNERABILITY)
 
