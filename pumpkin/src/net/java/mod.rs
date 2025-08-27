@@ -60,6 +60,7 @@ pub mod status;
 
 use crate::entity::player::Player;
 use crate::net::{GameProfile, PlayerConfig};
+use crate::world::text::TextResolution;
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
 pub struct JavaClient {
@@ -260,10 +261,19 @@ impl JavaClient {
                 .await;
             }
             ConnectionState::Config => {
-                self.send_packet_now(&CConfigDisconnect::new(&reason.get_text()))
-                    .await;
+                self.send_packet_now(&CConfigDisconnect::new(
+                    &reason.to_string(None, false).await,
+                ))
+                .await;
             }
-            ConnectionState::Play => self.send_packet_now(&CPlayDisconnect::new(&reason)).await,
+            ConnectionState::Play => {
+                self.send_packet_now(&CPlayDisconnect::new(
+                    &reason
+                        .to_send(self.player.lock().await.clone().unwrap().as_ref())
+                        .await,
+                ))
+                .await;
+            }
             _ => {}
         }
         log::debug!("Closing connection for {}", self.id);
@@ -348,7 +358,7 @@ impl JavaClient {
                         Err(e) => {
                             if e.is_kick() {
                                 if let Some(kick_reason) = e.client_kick_reason() {
-                                    self.kick(TextComponent::text(kick_reason)).await;
+                                    self.kick(kick_reason).await;
                                 } else {
                                     self.kick(TextComponent::text(format!(
                                         "Error while handling incoming packet {e}"

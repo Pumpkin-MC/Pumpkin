@@ -12,6 +12,7 @@ use crate::{
     entity::player::ChatMode,
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
+    world::text::TextResolution,
 };
 
 use pumpkin_protocol::{ClientPacket, Property};
@@ -170,7 +171,19 @@ impl ClientPlatform {
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
         match self {
             Self::Java(java) => java.kick(message).await,
-            Self::Bedrock(bedrock) => bedrock.kick(reason, message.get_text()).await,
+            Self::Bedrock(bedrock) => {
+                bedrock
+                    .kick(
+                        reason,
+                        message
+                            .to_string(
+                                Some(bedrock.player.lock().await.clone().unwrap().as_ref()),
+                                false,
+                            )
+                            .await,
+                    )
+                    .await;
+            }
         }
     }
 }
@@ -188,11 +201,13 @@ pub async fn can_not_join(
     if let Some(entry) = banned_players.get_entry(profile) {
         let text = TextComponent::translate(
             "multiplayer.disconnect.banned.reason",
+            None,
             [TextComponent::text(entry.reason.clone())],
         );
         return Some(match entry.expires {
             Some(expires) => text.add_child(TextComponent::translate(
                 "multiplayer.disconnect.banned.expiration",
+                None,
                 [TextComponent::text(
                     expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],
@@ -209,6 +224,7 @@ pub async fn can_not_join(
         if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
             return Some(TextComponent::translate(
                 "multiplayer.disconnect.not_whitelisted",
+                None,
                 &[],
             ));
         }
@@ -217,11 +233,13 @@ pub async fn can_not_join(
     if let Some(entry) = BANNED_IP_LIST.write().await.get_entry(&address.ip()) {
         let text = TextComponent::translate(
             "multiplayer.disconnect.banned_ip.reason",
+            None,
             [TextComponent::text(entry.reason.clone())],
         );
         return Some(match entry.expires {
             Some(expires) => text.add_child(TextComponent::translate(
                 "multiplayer.disconnect.banned_ip.expiration",
+                None,
                 [TextComponent::text(
                     expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],

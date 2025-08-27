@@ -51,6 +51,7 @@ impl CommandExecutor for Executor {
 
             let msg = TextComponent::translate(
                 "commands.deop.success",
+                None,
                 [player.get_display_name().await],
             );
             sender.send_message(msg).await;

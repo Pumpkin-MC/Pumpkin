@@ -46,7 +46,8 @@ impl CommandExecutor for DefaultGamemodeExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.defaultgamemode.success",
-                [TextComponent::translate(gamemode_string, [])],
+                None,
+                [TextComponent::translate(gamemode_string, None, [])],
             ))
             .await;
 

@@ -99,6 +99,7 @@ impl CommandExecutor for Executor {
             .send_message(if success {
                 TextComponent::translate(
                     "commands.setblock.success",
+                    None,
                     [
                         TextComponent::text(pos.0.x.to_string()),
                         TextComponent::text(pos.0.y.to_string()),
@@ -106,7 +107,7 @@ impl CommandExecutor for Executor {
                     ],
                 )
             } else {
-                TextComponent::translate("commands.setblock.failed", [])
+                TextComponent::translate("commands.setblock.failed", None, [])
             })
             .await;
 

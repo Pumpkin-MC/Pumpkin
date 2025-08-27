@@ -36,6 +36,7 @@ impl CommandExecutor for NoArgsWorldSpawnExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.setworldspawn.success",
+                    None,
                     [
                         TextComponent::text(level_info_guard.spawn_x.to_string()),
                         TextComponent::text(level_info_guard.spawn_y.to_string()),
@@ -110,6 +111,7 @@ async fn setworldspawn(
             sender
                 .send_message(TextComponent::translate(
                     "commands.setworldspawn.failure.not_overworld",
+                    None,
                     [],
                 ))
                 .await;
@@ -129,6 +131,7 @@ async fn setworldspawn(
     sender
         .send_message(TextComponent::translate(
             "commands.setworldspawn.success",
+            None,
             [
                 TextComponent::text(block_pos.0.x.to_string()),
                 TextComponent::text(block_pos.0.y.to_string()),
