@@ -17,7 +17,9 @@ pub mod snowball;
 pub mod spawn_egg;
 pub mod swords;
 pub mod trident;
+pub mod armor_stand;
 
+use crate::item::items::armor_stand::ArmorStandItem;
 use crate::item::items::end_crystal::EndCrystalItem;
 use crate::item::items::minecart::MinecartItem;
 use crate::item::items::name_tag::NameTagItem;
@@ -67,6 +69,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(DyeItem);
     manager.register(InkSacItem);
     manager.register(GlowingInkSacItem);
+    manager.register(ArmorStandItem);
 
     Arc::new(manager)
 }

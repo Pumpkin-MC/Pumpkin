@@ -62,6 +62,7 @@ pub mod player;
 pub mod projectile;
 pub mod tnt;
 pub mod r#type;
+pub mod equipment_slot;
 
 mod combat;
 pub mod predicate;
