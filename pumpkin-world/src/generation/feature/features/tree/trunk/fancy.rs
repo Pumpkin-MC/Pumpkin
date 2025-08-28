@@ -11,8 +11,8 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use super::TrunkPlacer;
-use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::feature::features::tree::{TreeFeature, TreeNode};
+use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct FancyTrunkPlacer;

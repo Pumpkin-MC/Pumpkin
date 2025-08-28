@@ -1,4 +1,3 @@
-
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
 use pumpkin_data::tag;

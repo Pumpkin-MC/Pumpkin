@@ -21,3 +21,4 @@ enum_dispatch = "0.3.13"
 
 uuid.workspace = true
 tokio.workspace = true
+nohash-hasher = "0.2.0"

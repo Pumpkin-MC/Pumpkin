@@ -8,13 +8,12 @@ use pumpkin_data::noise_router::{
 use pumpkin_util::math::vector2::Vector2;
 
 use super::{
-    noise::router::proto_noise_router::ProtoNoiseRouters,
-    settings::gen_settings_from_dimension,
+    noise::router::proto_noise_router::ProtoNoiseRouters, settings::gen_settings_from_dimension,
 };
+use crate::dimension::Dimension;
 use crate::generation::proto_chunk::TerrainCache;
 use crate::level::Level;
 use crate::world::BlockRegistryExt;
-use crate::dimension::Dimension;
 use crate::{
     chunk::ChunkData,
     generation::{GlobalRandomConfig, Seed, proto_chunk::StagedChunk},

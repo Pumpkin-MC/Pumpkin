@@ -3,8 +3,8 @@ use pumpkin_util::math::position::BlockPos;
 use serde::Deserialize;
 
 use super::TrunkPlacer;
-use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::feature::features::tree::TreeNode;
+use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct StraightTrunkPlacer;

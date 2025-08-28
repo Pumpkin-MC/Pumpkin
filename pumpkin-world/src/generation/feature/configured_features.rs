@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::LazyLock,
-};
+use std::{collections::HashMap, sync::LazyLock};
 
 use pumpkin_util::{include_json_static, math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;

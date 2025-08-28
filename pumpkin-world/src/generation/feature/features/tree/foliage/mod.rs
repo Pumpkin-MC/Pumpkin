@@ -1,4 +1,3 @@
-
 use acacia::AcaciaFoliagePlacer;
 use blob::BlobFoliagePlacer;
 use bush::BushFoliagePlacer;

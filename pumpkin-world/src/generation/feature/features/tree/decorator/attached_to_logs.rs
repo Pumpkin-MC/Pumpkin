@@ -5,8 +5,8 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::block_state_provider::BlockStateProvider;
+use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct AttachedToLogsTreeDecorator {

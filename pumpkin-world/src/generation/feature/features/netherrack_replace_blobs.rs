@@ -7,8 +7,7 @@ use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{
-    block::BlockStateCodec, generation::height_limit::HeightLimitView,
-    world::BlockRegistryExt,
+    block::BlockStateCodec, generation::height_limit::HeightLimitView, world::BlockRegistryExt,
 };
 
 #[derive(Deserialize)]

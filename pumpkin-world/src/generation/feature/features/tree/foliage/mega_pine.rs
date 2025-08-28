@@ -1,4 +1,3 @@
-
 use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
@@ -7,8 +6,8 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use super::{FoliagePlacer, LeaveValidator};
-use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::feature::features::tree::TreeNode;
+use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct MegaPineFoliagePlacer {

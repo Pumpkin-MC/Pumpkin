@@ -7,11 +7,11 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::feature::features::tree::{
-        TreeNode,
-        trunk::{TrunkPlacer, giant::GiantTrunkPlacer},
-    };
+    TreeNode,
+    trunk::{TrunkPlacer, giant::GiantTrunkPlacer},
+};
+use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct MegaJungleTrunkPlacer;

@@ -1,4 +1,3 @@
-
 use fancy::FancyTrunkPlacer;
 use pumpkin_data::tag;
 use pumpkin_data::{Block, BlockState, tag::Taggable};
@@ -10,12 +9,12 @@ use serde::Deserialize;
 use straight::StraightTrunkPlacer;
 
 use super::{TreeFeature, TreeNode};
-use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::feature::features::tree::trunk::{
-        bending::BendingTrunkPlacer, cherry::CherryTrunkPlacer, dark_oak::DarkOakTrunkPlacer,
-        forking::ForkingTrunkPlacer, giant::GiantTrunkPlacer, mega_jungle::MegaJungleTrunkPlacer,
-        upwards_branching::UpwardsBranchingTrunkPlacer,
-    };
+    bending::BendingTrunkPlacer, cherry::CherryTrunkPlacer, dark_oak::DarkOakTrunkPlacer,
+    forking::ForkingTrunkPlacer, giant::GiantTrunkPlacer, mega_jungle::MegaJungleTrunkPlacer,
+    upwards_branching::UpwardsBranchingTrunkPlacer,
+};
+use crate::generation::proto_chunk::GenerationCache;
 
 mod bending;
 mod cherry;
