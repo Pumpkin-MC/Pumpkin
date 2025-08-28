@@ -1,11 +1,12 @@
-use std::sync::{atomic::{AtomicI32, AtomicU64, AtomicU8, Ordering}, Arc};
+use std::sync::{atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering}, Arc};
 
-use crate::entity::{living::LivingEntity, Entity, NBTStorage, EntityBase};
+use crate::entity::{living::{LivingEntity, LivingEntityTrait}, Entity, EntityBase, NBTStorage};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{damage::DamageType, data_component_impl::{EquipmentSlot, EquipmentType}};
+use pumpkin_data::{damage::DamageType, data_component_impl::{EquipmentSlot, EquipmentType}, entity::EntityStatus, item::Item, sound::{Sound, SoundCategory}};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{euler_angle::EulerAngle, vector3::Vector3};
+use pumpkin_world::item::ItemStack;
 
 #[derive(Debug, Clone)]
 pub struct PackedRotation {
@@ -36,7 +37,7 @@ pub struct ArmorStandEntity {
 
     armor_stand_flags: AtomicU8,
     invisible: AtomicCell<bool>,
-    last_hit_time: AtomicU64,
+    last_hit_time: AtomicI64,
     disabled_slots: AtomicI32,
 
     head_rotation: AtomicCell<EulerAngle>,
@@ -61,7 +62,7 @@ impl ArmorStandEntity {
             living_entity,
             armor_stand_flags: AtomicU8::new(0),
             invisible: AtomicCell::new(false),
-            last_hit_time: AtomicU64::new(0),
+            last_hit_time: AtomicI64::new(0),
             disabled_slots: AtomicI32::new(0),
             head_rotation: AtomicCell::new(packed_rotation.head),
             body_rotation: AtomicCell::new(packed_rotation.body),
@@ -206,6 +207,24 @@ impl ArmorStandEntity {
         self.set_left_leg_rotation(packed.left_leg);
         self.set_right_leg_rotation(packed.right_leg);
     }
+
+    async fn break_and_drop_items(&self) {
+        let entity = self.get_entity();
+        //let name = entity.custom_name.unwrap_or(entity.get_name());
+
+        //TODO: i am stupid! let armor_stand_item = ItemStack::new_with_component(1, &Item::ARMOR_STAND, vec![(DataComponent::CustomName, self.get_custom_name())]);
+        let armor_stand_item = ItemStack::new(1, &Item::ARMOR_STAND);
+        entity.world.drop_stack(&entity.block_pos.load(), armor_stand_item).await;
+
+        self.on_break(entity).await;
+    }
+
+    async fn on_break(&self, entity: &Entity) {
+        let world = &entity.world;
+        world.play_sound(Sound::EntityArmorStandBreak, SoundCategory::Neutral, &entity.pos.load()).await;
+
+        // TODO: Implement equipment slots and make them drop all of their stored items.
+    }
 }
 
 #[async_trait]
@@ -262,6 +281,12 @@ impl NBTStorage for ArmorStandEntity {
 }
 
 #[async_trait]
+impl LivingEntityTrait for ArmorStandEntity {
+    //async fn on_actually_hurt()
+}
+
+
+#[async_trait]
 impl EntityBase for ArmorStandEntity {
     fn get_entity(&self) -> &Entity {
         &self.living_entity.entity
@@ -283,7 +308,7 @@ impl EntityBase for ArmorStandEntity {
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,
         source: Option<&dyn EntityBase>,
-        cause: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
     ) -> bool {
         let entity = self.get_entity();
         if entity.is_removed() {
@@ -297,23 +322,16 @@ impl EntityBase for ArmorStandEntity {
                 game_rules.mob_griefing
             };
 
-            if !mob_griefing_gamerule {
-                if let Some(attacker) = source
-                    && attacker.get_player().is_none() {
-                        return false;
-                    }
-
-                if let Some(indirect_attacker) = cause
-                    && indirect_attacker.get_player().is_none() {
-                        return false;
-                    }
+            if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none()) {
+                return false;
             }
         }
 
         // TODO: <DamageSource>.isIn(DamageTypeTags::BYPASSES_INVULNERABILITY)
 
         if damage_type == DamageType::EXPLOSION {
-            // TODO: Implement Dropping Items that are in the Equipment Slots
+            // TODO: Implement Dropping Items that are in the Equipment Slots & entity.kill()
+            self.on_break(entity).await;
             entity.remove().await;
             return false;
         } // TODO: Implement <DamageSource>.isIn(DamageTypeTags::IGNITES_ARMOR_STANDS)
@@ -329,6 +347,31 @@ impl EntityBase for ArmorStandEntity {
         }
         */
 
+        let Some(source) = source else { return false };
+
+        // TODO: source is not giving the real player or wrong stuff cause .is_creative() is false even tho the player is in creative.
+        if let Some(player) = source.get_player() {
+            if !player.abilities.lock().await.allow_modify_world {
+                return false;
+            } else if player.is_creative() {
+                world.play_sound(Sound::EntityArmorStandBreak, SoundCategory::Neutral, &entity.block_pos.load().to_f64()).await;
+                self.break_and_drop_items().await;
+                entity.remove().await;
+                return true;
+            }
+        }
+
+        let time = world.level_time.lock().await.query_gametime();
+
+        if time - self.last_hit_time.load(Ordering::Relaxed) > 5 { // && !bl2 {
+            world.send_entity_status(entity, EntityStatus::HitArmorStand).await;
+            world.play_sound(Sound::EntityArmorStandHit, SoundCategory::Neutral, &entity.block_pos.load().to_f64()).await;
+            self.last_hit_time.store(time, Ordering::Relaxed);
+        } else {
+            world.play_sound(Sound::EntityArmorStandBreak, SoundCategory::Neutral, &entity.block_pos.load().to_f64()).await;
+            self.break_and_drop_items().await;
+            entity.remove().await;
+        }
 
         true
     }
