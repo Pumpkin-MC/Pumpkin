@@ -1,9 +1,21 @@
-use std::sync::{atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering}, Arc};
+use std::sync::{
+    Arc,
+    atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering},
+};
 
-use crate::entity::{living::{LivingEntity, LivingEntityTrait}, Entity, EntityBase, NBTStorage};
+use crate::entity::{
+    Entity, EntityBase, NBTStorage,
+    living::{LivingEntity, LivingEntityTrait},
+};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{damage::DamageType, data_component_impl::{EquipmentSlot, EquipmentType}, entity::EntityStatus, item::Item, sound::{Sound, SoundCategory}};
+use pumpkin_data::{
+    damage::DamageType,
+    data_component_impl::{EquipmentSlot, EquipmentType},
+    entity::EntityStatus,
+    item::Item,
+    sound::{Sound, SoundCategory},
+};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{euler_angle::EulerAngle, vector3::Vector3};
 use pumpkin_world::item::ItemStack;
@@ -116,15 +128,16 @@ impl ArmorStandEntity {
     }
 
     pub fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
-        !matches!(slot, EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_)) && !self.is_slot_disabled(slot)
+        !matches!(slot, EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_))
+            && !self.is_slot_disabled(slot)
     }
 
     pub fn is_slot_disabled(&self, slot: &EquipmentSlot) -> bool {
         let disabled_slots = self.disabled_slots.load(Ordering::Relaxed);
         let slot_bit = 1 << slot.get_offset_entity_slot_id(0);
 
-        (disabled_slots & slot_bit) != 0 ||
-        (slot.slot_type() == EquipmentType::Hand && !self.should_show_arms())
+        (disabled_slots & slot_bit) != 0
+            || (slot.slot_type() == EquipmentType::Hand && !self.should_show_arms())
     }
 
     pub fn set_slot_disabled(&self, slot: &EquipmentSlot, disabled: bool) {
@@ -214,14 +227,23 @@ impl ArmorStandEntity {
 
         //TODO: i am stupid! let armor_stand_item = ItemStack::new_with_component(1, &Item::ARMOR_STAND, vec![(DataComponent::CustomName, self.get_custom_name())]);
         let armor_stand_item = ItemStack::new(1, &Item::ARMOR_STAND);
-        entity.world.drop_stack(&entity.block_pos.load(), armor_stand_item).await;
+        entity
+            .world
+            .drop_stack(&entity.block_pos.load(), armor_stand_item)
+            .await;
 
         self.on_break(entity).await;
     }
 
     async fn on_break(&self, entity: &Entity) {
         let world = &entity.world;
-        world.play_sound(Sound::EntityArmorStandBreak, SoundCategory::Neutral, &entity.pos.load()).await;
+        world
+            .play_sound(
+                Sound::EntityArmorStandBreak,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+            )
+            .await;
 
         // TODO: Implement equipment slots and make them drop all of their stored items.
     }
@@ -250,14 +272,16 @@ impl NBTStorage for ArmorStandEntity {
         let mut flags = 0u8;
 
         if let Some(small) = nbt.get_bool("Small")
-            && small {
-                flags |= 1;
-            }
+            && small
+        {
+            flags |= 1;
+        }
 
         if let Some(show_arms) = nbt.get_bool("ShowArms")
-            && show_arms {
-                flags |= 4;
-            }
+            && show_arms
+        {
+            flags |= 4;
+        }
 
         if let Some(no_base_plate) = nbt.get_bool("NoBasePlate") {
             if !no_base_plate {
@@ -268,9 +292,10 @@ impl NBTStorage for ArmorStandEntity {
         }
 
         if let Some(marker) = nbt.get_bool("Marker")
-            && marker {
-                flags |= 16;
-            }
+            && marker
+        {
+            flags |= 16;
+        }
 
         self.armor_stand_flags.store(flags, Ordering::Relaxed);
 
@@ -284,7 +309,6 @@ impl NBTStorage for ArmorStandEntity {
 impl LivingEntityTrait for ArmorStandEntity {
     //async fn on_actually_hurt()
 }
-
 
 #[async_trait]
 impl EntityBase for ArmorStandEntity {
@@ -322,7 +346,8 @@ impl EntityBase for ArmorStandEntity {
                 game_rules.mob_griefing
             };
 
-            if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none()) {
+            if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none())
+            {
                 return false;
             }
         }
@@ -354,7 +379,13 @@ impl EntityBase for ArmorStandEntity {
             if !player.abilities.lock().await.allow_modify_world {
                 return false;
             } else if player.is_creative() {
-                world.play_sound(Sound::EntityArmorStandBreak, SoundCategory::Neutral, &entity.block_pos.load().to_f64()).await;
+                world
+                    .play_sound(
+                        Sound::EntityArmorStandBreak,
+                        SoundCategory::Neutral,
+                        &entity.block_pos.load().to_f64(),
+                    )
+                    .await;
                 self.break_and_drop_items().await;
                 entity.remove().await;
                 return true;
@@ -363,12 +394,27 @@ impl EntityBase for ArmorStandEntity {
 
         let time = world.level_time.lock().await.query_gametime();
 
-        if time - self.last_hit_time.load(Ordering::Relaxed) > 5 { // && !bl2 {
-            world.send_entity_status(entity, EntityStatus::HitArmorStand).await;
-            world.play_sound(Sound::EntityArmorStandHit, SoundCategory::Neutral, &entity.block_pos.load().to_f64()).await;
+        if time - self.last_hit_time.load(Ordering::Relaxed) > 5 {
+            // && !bl2 {
+            world
+                .send_entity_status(entity, EntityStatus::HitArmorStand)
+                .await;
+            world
+                .play_sound(
+                    Sound::EntityArmorStandHit,
+                    SoundCategory::Neutral,
+                    &entity.block_pos.load().to_f64(),
+                )
+                .await;
             self.last_hit_time.store(time, Ordering::Relaxed);
         } else {
-            world.play_sound(Sound::EntityArmorStandBreak, SoundCategory::Neutral, &entity.block_pos.load().to_f64()).await;
+            world
+                .play_sound(
+                    Sound::EntityArmorStandBreak,
+                    SoundCategory::Neutral,
+                    &entity.block_pos.load().to_f64(),
+                )
+                .await;
             self.break_and_drop_items().await;
             entity.remove().await;
         }

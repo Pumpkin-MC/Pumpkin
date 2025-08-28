@@ -9,7 +9,11 @@ pub struct EulerAngle {
 
 impl EulerAngle {
     pub fn new(pitch: f32, yaw: f32, roll: f32) -> Self {
-        let pitch = if pitch.is_finite() { pitch % 360.0 } else { 0.0 };
+        let pitch = if pitch.is_finite() {
+            pitch % 360.0
+        } else {
+            0.0
+        };
         let yaw = if yaw.is_finite() { yaw % 360.0 } else { 0.0 };
         let roll = if roll.is_finite() { roll % 360.0 } else { 0.0 };
 

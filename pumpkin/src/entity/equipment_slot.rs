@@ -1,5 +1,5 @@
-use std::{borrow::Cow, collections::HashMap};
 use pumpkin_world::item::ItemStack;
+use std::{borrow::Cow, collections::HashMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EquipmentSlotType {
@@ -24,18 +24,18 @@ pub enum EquipmentSlot {
 impl EquipmentSlot {
     pub const NO_MAX_COUNT: i32 = 0;
 
-    #[must_use] pub fn slot_type(&self) -> EquipmentSlotType {
+    #[must_use]
+    pub fn slot_type(&self) -> EquipmentSlotType {
         match self {
             Self::MainHand | Self::OffHand => EquipmentSlotType::Hand,
-            Self::Feet | Self::Legs | Self::Chest | Self::Head => {
-                EquipmentSlotType::HumanoidArmor
-            }
+            Self::Feet | Self::Legs | Self::Chest | Self::Head => EquipmentSlotType::HumanoidArmor,
             Self::Body => EquipmentSlotType::AnimalArmor,
             Self::Saddle => EquipmentSlotType::Saddle,
         }
     }
 
-    #[must_use] pub fn entity_slot_id(&self) -> i32 {
+    #[must_use]
+    pub fn entity_slot_id(&self) -> i32 {
         match self {
             Self::MainHand | Self::Feet | Self::Body | Self::Saddle => 0,
             Self::OffHand | Self::Legs => 1,
@@ -44,14 +44,16 @@ impl EquipmentSlot {
         }
     }
 
-    #[must_use] pub fn max_count(&self) -> i32 {
+    #[must_use]
+    pub fn max_count(&self) -> i32 {
         match self {
             Self::OffHand | Self::MainHand => Self::NO_MAX_COUNT,
             Self::Feet | Self::Legs | Self::Chest | Self::Head | Self::Body | Self::Saddle => 1,
         }
     }
 
-    #[must_use] pub fn index(&self) -> i32 {
+    #[must_use]
+    pub fn index(&self) -> i32 {
         match self {
             Self::MainHand => 0,
             Self::OffHand => 5,
@@ -64,7 +66,8 @@ impl EquipmentSlot {
         }
     }
 
-    #[must_use] pub fn name(&self) -> &'static str {
+    #[must_use]
+    pub fn name(&self) -> &'static str {
         match self {
             Self::MainHand => "mainhand",
             Self::OffHand => "offhand",
@@ -77,16 +80,18 @@ impl EquipmentSlot {
         }
     }
 
-    #[must_use] pub fn offset_entity_slot_id(&self, offset: i32) -> i32 {
+    #[must_use]
+    pub fn offset_entity_slot_id(&self, offset: i32) -> i32 {
         offset + self.entity_slot_id()
     }
 
-
-    #[must_use] pub fn offset_index(&self, offset: i32) -> i32 {
+    #[must_use]
+    pub fn offset_index(&self, offset: i32) -> i32 {
         self.index() + offset
     }
 
-    #[must_use] pub fn is_armor_slot(&self) -> bool {
+    #[must_use]
+    pub fn is_armor_slot(&self) -> bool {
         matches!(
             self.slot_type(),
             EquipmentSlotType::HumanoidArmor | EquipmentSlotType::AnimalArmor

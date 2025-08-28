@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::Entity;
+use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::player::Player;
-use crate::server::Server;
 use crate::item::{ItemBehaviour, ItemMetadata};
+use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -47,16 +47,12 @@ impl ItemBehaviour for ArmorStandItem {
         location: BlockPos,
         face: BlockDirection,
         _block: &Block,
-        _server: &Server
+        _server: &Server,
     ) {
         let world = player.world();
         let position = Self::calculate_placement_position(&location, face).to_f64();
 
-        let bottom_center = Vector3::new(
-            position.x,
-            position.y,
-            position.z
-        );
+        let bottom_center = Vector3::new(position.x, position.y, position.z);
 
         let armor_stand_dimensions = EntityType::ARMOR_STAND.dimension;
         let width = f64::from(armor_stand_dimensions[0]);
@@ -66,16 +62,18 @@ impl ItemBehaviour for ArmorStandItem {
             Vector3::new(
                 bottom_center.x - width / 2.0,
                 bottom_center.y,
-                bottom_center.z - width / 2.0
+                bottom_center.z - width / 2.0,
             ),
             Vector3::new(
                 bottom_center.x + width / 2.0,
                 bottom_center.y + height,
-                bottom_center.z + width / 2.0
-            )
+                bottom_center.z + width / 2.0,
+            ),
         );
 
-        if world.is_space_empty(bounding_box).await && world.get_entities_at_box(&bounding_box).await.is_empty() {
+        if world.is_space_empty(bounding_box).await
+            && world.get_entities_at_box(&bounding_box).await.is_empty()
+        {
             let (player_yaw, _) = player.rotation();
             let rotation = ((wrap_degrees(player_yaw - 180.0) + 22.5) / 45.0).floor() * 45.0;
 
@@ -84,12 +82,18 @@ impl ItemBehaviour for ArmorStandItem {
                 world.clone(),
                 position,
                 &EntityType::ARMOR_STAND,
-                false
+                false,
             );
 
             entity.set_rotation(rotation, 0.0);
 
-            world.play_sound(Sound::EntityArmorStandPlace, SoundCategory::Blocks, &entity.pos.load()).await;
+            world
+                .play_sound(
+                    Sound::EntityArmorStandPlace,
+                    SoundCategory::Blocks,
+                    &entity.pos.load(),
+                )
+                .await;
 
             let armor_stand = ArmorStandEntity::new(entity);
 
