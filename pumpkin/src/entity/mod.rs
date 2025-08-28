@@ -61,8 +61,8 @@ pub mod living;
 pub mod mob;
 pub mod player;
 pub mod projectile;
-pub mod tnt;
 pub mod projectile_deflection;
+pub mod tnt;
 pub mod r#type;
 
 mod combat;

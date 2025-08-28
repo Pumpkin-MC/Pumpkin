@@ -1,16 +1,15 @@
 use std::sync::Arc;
 
+use crate::entity::player::Player;
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use uuid::Uuid;
-use crate::entity::player::Player;
 
-
-use crate::entity::projectile::wind_charge::WindChargeEntity;
-use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::Entity;
+use crate::entity::projectile::ThrownItemEntity;
+use crate::entity::projectile::wind_charge::WindChargeEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
 
 pub struct WindChargeItem;
@@ -31,14 +30,20 @@ impl ItemBehaviour for WindChargeItem {
 
         // TODO: Implement Cooldown to throw the item
 
-        world.play_sound(Sound::EntityWindChargeThrow, pumpkin_data::sound::SoundCategory::Neutral, &position).await;
+        world
+            .play_sound(
+                Sound::EntityWindChargeThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+            )
+            .await;
 
         let entity = Entity::new(
             Uuid::new_v4(),
             world.clone(),
             position,
             &EntityType::WIND_CHARGE,
-            false
+            false,
         );
 
         let wind_charge = ThrownItemEntity::new(entity, &player.living_entity.entity);
@@ -49,7 +54,9 @@ impl ItemBehaviour for WindChargeItem {
         // TODO: player.incrementStat(Stats.USED)
 
         // TODO: Implement that the projectile will explode on impact on ground
-        world.spawn_entity(Arc::new(WindChargeEntity::new(wind_charge))).await;
+        world
+            .spawn_entity(Arc::new(WindChargeEntity::new(wind_charge)))
+            .await;
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

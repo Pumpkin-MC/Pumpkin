@@ -1,8 +1,20 @@
-use std::{f64, sync::{atomic::{AtomicU8, Ordering}, Arc}};
 use async_trait::async_trait;
 use pumpkin_util::math::vector3::Vector3;
+use std::{
+    f64,
+    sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+    },
+};
 
-use crate::{entity::{living::LivingEntity, projectile::ThrownItemEntity, projectile_deflection::ProjectileDeflectionType, Entity, EntityBase, NBTStorage}, server::Server};
+use crate::{
+    entity::{
+        Entity, EntityBase, NBTStorage, living::LivingEntity, projectile::ThrownItemEntity,
+        projectile_deflection::ProjectileDeflectionType,
+    },
+    server::Server,
+};
 
 const EXPLOSION_POWER: f32 = 1.2;
 // square(3.5)
@@ -38,22 +50,33 @@ impl WindChargeEntity {
     }
 
     pub fn should_render(&self, distance: f64) -> bool {
-        if self.get_entity().age.load(Ordering::Relaxed) < 2 && distance < MAX_RENDER_DISTANCE_WHEN_NEWLY_SPAWNED as f64 {
+        if self.get_entity().age.load(Ordering::Relaxed) < 2
+            && distance < f64::from(MAX_RENDER_DISTANCE_WHEN_NEWLY_SPAWNED)
+        {
             return false;
         }
 
-        let mut average_side_length = self.get_entity().bounding_box.load().get_average_side_length();
+        let mut average_side_length = self
+            .get_entity()
+            .bounding_box
+            .load()
+            .get_average_side_length();
 
         if average_side_length.is_nan() {
             average_side_length = 1.0;
-        };
+        }
 
         // TODO: IMPLEMENT renderDistanceMultiplier instead of the 1.0
         average_side_length *= 64.0 * 1.0;
-        return distance < average_side_length * average_side_length;
+        distance < average_side_length * average_side_length
     }
 
-    pub fn deflect(&mut self, deflection: &ProjectileDeflectionType, deflector: Option<&dyn EntityBase>, _from_attack: bool) -> bool {
+    pub fn deflect(
+        &mut self,
+        deflection: &ProjectileDeflectionType,
+        deflector: Option<&dyn EntityBase>,
+        _from_attack: bool,
+    ) -> bool {
         if self.deflect_cooldown.load(Ordering::Relaxed) > 0 {
             return false;
         }

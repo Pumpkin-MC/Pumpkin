@@ -1,18 +1,18 @@
-use std::sync::atomic::Ordering;
 use crate::entity::EntityBase;
+use std::sync::atomic::Ordering;
 
 #[derive(Clone, Copy)]
 pub enum ProjectileDeflectionType {
     None,
     Simple,
     Redirected,
-    TransferVelocityDirection
+    TransferVelocityDirection,
 }
 
 impl ProjectileDeflectionType {
     pub fn deflect(&self, projectile: &mut dyn EntityBase, hit_entity: Option<&dyn EntityBase>) {
         match self {
-            Self::None => { }
+            Self::None => {}
             Self::Simple => {
                 let vel = 170.0 + rand::random::<f32>() * 20.0;
 
@@ -33,9 +33,7 @@ impl ProjectileDeflectionType {
             }
             Self::Redirected => {
                 if let Some(hit_entity) = hit_entity {
-                    let rotation_vector = hit_entity
-                        .get_entity()
-                        .rotation();
+                    let rotation_vector = hit_entity.get_entity().rotation();
 
                     let entity = projectile.get_entity();
                     entity.velocity.store(rotation_vector.to_f64());
