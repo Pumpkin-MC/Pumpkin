@@ -19,6 +19,7 @@ use crate::{
 const EXPLOSION_POWER: f32 = 1.2;
 // square(3.5)
 const MAX_RENDER_DISTANCE_WHEN_NEWLY_SPAWNED: f32 = 3.5 * 3.5;
+const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
 
 pub struct WindChargeEntity {
     deflect_cooldown: AtomicU8,
@@ -29,7 +30,7 @@ impl WindChargeEntity {
     #[must_use]
     pub fn new(thrown_item_entity: ThrownItemEntity) -> Self {
         Self {
-            deflect_cooldown: AtomicU8::new(5),
+            deflect_cooldown: AtomicU8::new(DEFAULT_DEFLECT_COOLDOWN),
             thrown_item_entity,
         }
     }
