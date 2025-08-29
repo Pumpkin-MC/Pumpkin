@@ -635,12 +635,7 @@ impl World {
             }
         }
 
-        let a = self.level.chunk_loading.lock().unwrap().get_cloned_level();
-        if let Some(channel) = self.level.sender.lock().unwrap().as_ref() {
-            channel.set(a);
-        } else {
-            panic!();
-        }
+        self.level.chunk_loading.lock().unwrap().send_change();
 
         log::debug!(
             "Ticking world took {:?}, loaded chunks: {}, chunk tick took {:?}",
@@ -1853,7 +1848,7 @@ impl World {
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
     #[allow(clippy::too_many_lines)]
-    fn spawn_world_chunks(
+    fn spawn_world_entity_chunks(
         self: &Arc<Self>,
         player: Arc<Player>,
         chunks: Vec<Vector2<i32>>,
@@ -1874,93 +1869,10 @@ impl World {
             rel_x * rel_x + rel_z * rel_z
         });
 
-        let mut receiver = self.level.receive_chunks(chunks.clone());
-
-        let level = self.level.clone();
-        let player1 = player.clone();
-        let world = self.clone();
-        let world1 = self.clone();
-
-        player.clone().spawn_task(async move {
-            'main: loop {
-                let recv_result = tokio::select! {
-                    () = player.client.await_close_interrupt() => {
-                        log::debug!("Canceling player packet processing");
-                        None
-                    },
-                    recv_result = receiver.recv() => {
-                        recv_result
-                    }
-                };
-
-                let Some((chunk, first_load)) = recv_result else {
-                    break;
-                };
-
-                let position = chunk.read().await.position;
-
-                let (world, chunk) = if level.is_chunk_watched(&position) {
-                    (world.clone(), chunk)
-                } else {
-                    send_cancellable! {{
-                        ChunkSave {
-                            world: world.clone(),
-                            chunk,
-                            cancelled: false,
-                        };
-
-                        'after: {
-                            log::trace!(
-                                "Received chunk {:?}, but it is no longer watched... cleaning",
-                                &position
-                            );
-                            // level.clean_chunk(&position).await;
-                            continue 'main;
-                        }
-                    }};
-                    (event.world, event.chunk)
-                };
-
-                let (world, chunk) = if first_load {
-                    send_cancellable! {{
-                        ChunkLoad {
-                            world,
-                            chunk,
-                            cancelled: false,
-                        };
-
-                        'cancelled: {
-                            continue 'main;
-                        }
-                    }}
-                    (event.world, event.chunk)
-                } else {
-                    (world, chunk)
-                };
-
-                if !player.client.closed() {
-                    send_cancellable! {{
-                        ChunkSend {
-                            world,
-                            chunk: chunk.clone(),
-                            cancelled: false,
-                        };
-
-                        'after: {
-                            let mut chunk_manager = player.chunk_manager.lock().await;
-                            chunk_manager.push_chunk(position, chunk);
-                        }
-                    }};
-                }
-            }
-
-            #[cfg(debug_assertions)]
-            log::debug!("Chunks queued after {}ms", inst.elapsed().as_millis());
-        });
         let mut entity_receiver = self.level.receive_entity_chunks(chunks);
         let level = self.level.clone();
-        let player = player1;
-        let world = world1;
+        let player = player.clone();
+        let world = self.clone();
         player.clone().spawn_task(async move {
             'main: loop {
                 let recv_result = tokio::select! {

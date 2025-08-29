@@ -33,13 +33,6 @@ pub async fn update_position(player: &Arc<Player>) {
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical != new_cylindrical {
-        const PLAYER_LOADING_LEVEL: i8 = 20;
-        {
-            let mut level = player.world().level.chunk_loading.lock().unwrap();
-            level.remove_ticket(old_cylindrical.center, 25);
-            level.add_ticket(new_chunk_center, 25);
-            drop(level);
-        }
         match player.client.as_ref() {
             ClientPlatform::Java(client) => {
                 client
@@ -78,10 +71,12 @@ pub async fn update_position(player: &Arc<Player>) {
         let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks).await;
 
         {
-            // After marking the chunks as watched, remove chunks that we are already in the process
-            // of sending.
-            let chunk_manager = player.chunk_manager.lock().await;
-            loading_chunks.retain(|pos| !chunk_manager.is_chunk_pending(pos));
+            let mut chunk_manager = player.chunk_manager.lock().await;
+            chunk_manager.update_center_and_view_distance(
+                new_chunk_center,
+                view_distance.into(),
+                level,
+            );
         };
 
         player.watched_section.store(new_cylindrical);
@@ -97,9 +92,11 @@ pub async fn update_position(player: &Arc<Player>) {
         }
 
         if !loading_chunks.is_empty() {
-            entity
-                .world
-                .spawn_world_chunks(player.clone(), loading_chunks, new_chunk_center);
+            entity.world.spawn_world_entity_chunks(
+                player.clone(),
+                loading_chunks,
+                new_chunk_center,
+            );
         }
     }
 }

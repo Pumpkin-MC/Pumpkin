@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
+use crossbeam::channel::Receiver;
 use log::warn;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
@@ -68,7 +69,7 @@ use pumpkin_world::entity::entity_data_flags::{
     DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION, SLEEPING_POS_ID,
 };
 use pumpkin_world::item::ItemStack;
-use pumpkin_world::level::{SyncChunk, SyncEntityChunk};
+use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
@@ -89,6 +90,7 @@ use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
+use pumpkin_world::chunk_system::{ChunkListener, ChunkLoading};
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -102,8 +104,11 @@ enum BatchState {
 }
 
 pub struct ChunkManager {
-    unique: HashSet<Vector2<i32>>,
     chunks_per_tick: usize,
+    center: Vector2<i32>,
+    view_distance: u8,
+    chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
+    chunk_sent: HashSet<Vector2<i32>>,
     chunk_queue: VecDeque<(Vector2<i32>, SyncChunk)>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
@@ -113,14 +118,79 @@ impl ChunkManager {
     pub const NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE: u8 = 10;
 
     #[must_use]
-    pub fn new(chunks_per_tick: usize) -> Self {
+    pub fn new(
+        chunks_per_tick: usize,
+        chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
+    ) -> Self {
         Self {
-            unique: HashSet::new(),
             chunks_per_tick,
+            center: Vector2::<i32>::new(0, 0),
+            view_distance: 0,
+            chunk_listener,
+            chunk_sent: HashSet::new(),
             chunk_queue: VecDeque::new(),
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
         }
+    }
+
+    pub fn pull_new_chunks(&mut self) {
+        while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
+            if (pos.x - self.center.x)
+                .abs()
+                .max((pos.y - self.center.y).abs())
+                > self.view_distance as i32
+            {
+                continue;
+            }
+            if self.chunk_sent.insert(pos) {
+                self.chunk_queue.push_back((pos, chunk));
+            }
+        }
+    }
+
+    pub fn update_center_and_view_distance(
+        &mut self,
+        center: Vector2<i32>,
+        view_distance: u8,
+        level: &Arc<Level>,
+    ) {
+        let mut lock = level.chunk_loading.lock().unwrap();
+        lock.add_ticket(
+            center,
+            ChunkLoading::get_level_from_view_distance(view_distance),
+        );
+        lock.remove_ticket(
+            self.center,
+            ChunkLoading::get_level_from_view_distance(self.view_distance),
+        );
+        self.chunk_sent.retain(|pos| {
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance as i32
+        });
+        self.chunk_queue.retain(|(pos, _)| {
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance as i32
+        });
+        self.center = center;
+        self.view_distance = view_distance;
+        let view_distance = view_distance as i32;
+        for dx in (-view_distance)..=view_distance {
+            for dy in (-view_distance)..=view_distance {
+                let new_pos = center.add_raw(dx, dy);
+                if !self.chunk_sent.contains(&new_pos) {
+                    if let Some(chunk) = level.loaded_chunks.get(&new_pos) {
+                        self.push_chunk(new_pos, chunk.value().clone());
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn clean_up(&self, level: &Arc<Level>) {
+        let mut lock = level.chunk_loading.lock().unwrap();
+        lock.remove_ticket(
+            self.center,
+            ChunkLoading::get_level_from_view_distance(self.view_distance),
+        );
     }
 
     pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
@@ -304,7 +374,7 @@ impl Player {
 
         let living_entity = LivingEntity::new(Entity::new(
             player_uuid,
-            world,
+            world.clone(),
             Vector3::new(0.0, 0.0, 0.0),
             &EntityType::PLAYER,
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
@@ -368,7 +438,10 @@ impl Player {
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
             // Default to sending 16 chunks per tick.
-            chunk_manager: Mutex::new(ChunkManager::new(16)),
+            chunk_manager: Mutex::new(ChunkManager::new(
+                16,
+                world.level.chunk_listener.add_global_chunk_listener(),
+            )),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
             last_sent_food: AtomicU8::new(0),
@@ -407,13 +480,7 @@ impl Player {
         world.remove_player(self, true).await;
 
         let cylindrical = self.watched_section.load();
-        self.get_entity()
-            .world
-            .level
-            .chunk_loading
-            .lock()
-            .unwrap()
-            .remove_ticket(cylindrical.center, 25);
+        self.chunk_manager.lock().await.clean_up(&world.level);
 
         // Radial chunks are all of the chunks the player is theoretically viewing.
         // Given enough time, all of these chunks will be in memory.
@@ -739,14 +806,6 @@ impl Player {
     // TODO Abstract the chunk sending
     #[allow(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
-        let mut temp = self.chunk_manager.lock().await;
-        for i in self.world().level.loaded_chunks.iter() {
-            if !temp.unique.contains(i.key()) {
-                temp.unique.insert(*i.key());
-                temp.chunk_queue.push_back((*i.key(), i.value().clone()));
-            }
-        }
-        drop(temp);
         self.current_screen_handler
             .lock()
             .await
@@ -775,6 +834,7 @@ impl Player {
 
         let chunk_of_chunks = {
             let mut chunk_manager = self.chunk_manager.lock().await;
+            chunk_manager.pull_new_chunks();
             if let ClientPlatform::Java(_) = self.client.as_ref() {
                 // Java clients can only send a limited amount of chunks per tick.
                 // If we have sent too many chunks without receiving an ack, we stop sending chunks.
