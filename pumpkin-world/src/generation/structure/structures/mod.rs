@@ -1,7 +1,7 @@
 use pumpkin_data::BlockState;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use crate::{ProtoChunk, generation::height_limit::HeightLimitView};
+use crate::ProtoChunk;
 
 pub mod buried_treasure;
 pub mod nether_fortress;

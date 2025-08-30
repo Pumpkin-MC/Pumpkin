@@ -231,7 +231,6 @@ impl Server {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        log::info!("spawn 1 new task");
         self.tasks.spawn(task)
     }
 

@@ -4,9 +4,7 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{
-    block::BlockStateCodec, generation::height_limit::HeightLimitView, world::BlockRegistryExt,
-};
+use crate::{block::BlockStateCodec, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct EmptyTODOStruct {}

@@ -90,7 +90,7 @@ use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
-use pumpkin_world::chunk_system::{ChunkListener, ChunkLoading};
+use pumpkin_world::chunk_system::ChunkLoading;
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -135,7 +135,7 @@ impl ChunkManager {
     }
 
     pub fn pull_new_chunks(&mut self) {
-        log::debug!("pull_new_chunks");
+        log::debug!("pull new chunks");
         while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
             if (pos.x - self.center.x)
                 .abs()
@@ -145,6 +145,7 @@ impl ChunkManager {
                 continue;
             }
             if self.chunk_sent.insert(pos) {
+                log::debug!("receive new chunk {pos:?}");
                 self.chunk_queue.push_back((pos, chunk));
             }
         }
@@ -502,7 +503,6 @@ impl Player {
         // Decrement the value of watched chunks
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
-        // level.clean_chunks(&chunks_to_clean).await;
         level.clean_entity_chunks(&chunks_to_clean).await;
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
@@ -858,6 +858,7 @@ impl Player {
                     java_client.send_packet_now(&CChunkBatchStart).await;
                     for chunk in chunk_of_chunks {
                         let chunk = chunk.read().await;
+                        log::info!("send chunk {:?}", chunk.position);
                         // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
                         // player or something.
                         java_client.send_packet_now(&CChunkData(&chunk)).await;

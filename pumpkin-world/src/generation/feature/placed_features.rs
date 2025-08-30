@@ -16,7 +16,6 @@ use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
 use crate::block::RawBlockState;
 use crate::generation::block_predicate::BlockPredicate;
-use crate::generation::height_limit::HeightLimitView;
 use crate::generation::height_provider::HeightProvider;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::BlockRegistryExt;

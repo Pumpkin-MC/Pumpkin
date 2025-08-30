@@ -33,7 +33,6 @@ pub struct TreeNode {
 }
 
 impl TreeFeature {
-    #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
@@ -64,7 +63,6 @@ impl TreeFeature {
         state.is_air() || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }
 
-    #[expect(clippy::too_many_arguments)]
     fn generate_main<T: GenerationCache>(
         &self,
         chunk: &mut T,

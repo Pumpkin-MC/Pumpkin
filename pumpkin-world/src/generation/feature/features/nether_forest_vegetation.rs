@@ -6,10 +6,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{
-    generation::{block_state_provider::BlockStateProvider, height_limit::HeightLimitView},
-    world::BlockRegistryExt,
-};
+use crate::{generation::block_state_provider::BlockStateProvider, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct NetherForestVegetationFeature {

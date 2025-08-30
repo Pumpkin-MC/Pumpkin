@@ -9,11 +9,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{
-    block::BlockStateCodec,
-    generation::{height_limit::HeightLimitView, rule::RuleTest},
-    world::BlockRegistryExt,
-};
+use crate::{block::BlockStateCodec, generation::rule::RuleTest, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct OreFeature {

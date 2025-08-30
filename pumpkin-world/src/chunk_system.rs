@@ -1,5 +1,4 @@
 use crate::block::RawBlockState;
-use crate::chunk::io::FileIO;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
 use crate::dimension::Dimension;
@@ -342,7 +341,6 @@ impl From<u8> for StagedChunkEnum {
     }
 }
 impl StagedChunkEnum {
-    const MAX_STAGE_ID: u8 = Full as u8;
     fn level_to_stage(level: i8) -> Self {
         if level <= 33 {
             Full
@@ -703,7 +701,7 @@ impl GenerationCache for Cache {
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
-            Chunk::Level(data) => {
+            Chunk::Level(_data) => {
                 0 // todo missing
             }
             Chunk::Proto(data) => data.ocean_floor_height_exclusive(pos),
@@ -716,10 +714,19 @@ impl GenerationCache for Cache {
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
-            Chunk::Level(_data) => {
+            Chunk::Level(data) => {
                 // Could this happen?
-                panic!();
-                &pumpkin_data::biome::Biome::PLAINS
+                Biome::from_id(
+                    data.blocking_read()
+                        .section
+                        .get_rough_biome_absolute_y(
+                            (global_block_pos.x & 15) as usize,
+                            global_block_pos.y,
+                            (global_block_pos.z & 15) as usize,
+                        )
+                        .unwrap_or(0),
+                )
+                .unwrap()
             }
             Chunk::Proto(data) => data.get_biome_for_terrain_gen(global_block_pos),
         }
@@ -741,6 +748,7 @@ impl Cache {
             chunks: Vec::with_capacity((size * size) as usize),
         }
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn advance(
         &mut self,
         stage: StagedChunkEnum,
@@ -824,7 +832,7 @@ impl ChunkListener {
                 if single[i].1.is_closed() {
                     let listener_pos = single[i].0;
                     single.remove(i);
-                    log::debug!("single dropped send {listener_pos:?}");
+                    log::debug!("single listener dropped {listener_pos:?}");
                     len -= 1;
                     continue;
                 }
@@ -938,6 +946,18 @@ impl GenerationSchedule {
         }
     }
 
+    fn remove_chunk(
+        loaded_chunks: &Arc<DashMap<Vector2<i32>, SyncChunk>>,
+        proto_chunks: &mut HashMapType<ChunkPos, ProtoChunk>,
+        pos: ChunkPos,
+    ) -> Option<Chunk> {
+        if let Some(data) = loaded_chunks.remove(&pos) {
+            Some(Chunk::Level(data.1))
+        } else {
+            proto_chunks.remove(&pos).map(Chunk::Proto)
+        }
+    }
+
     fn get_chunk_stage_id(
         loaded_chunks: &Arc<DashMap<Vector2<i32>, SyncChunk>>,
         proto_chunks: &HashMapType<ChunkPos, ProtoChunk>,
@@ -971,7 +991,7 @@ impl GenerationSchedule {
         for pos in self.last_level.keys() {
             if !new_level.contains_key(pos)
                 && let Some(chunk) =
-                    Self::get_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
+                    Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
             {
                 self.task_mark.insert(*pos, (0, chunk.get_stage_id()));
                 self.unload_chunks.insert(*pos, chunk);
@@ -1124,9 +1144,6 @@ impl GenerationSchedule {
         let (mark, _) = self.task_mark.get_mut(&pos).unwrap();
         debug_assert!((*mark >> (stage as u8) & 1) == 1);
         *mark -= 1 << (stage as u8);
-        if *mark == 0 {
-            self.task_mark.remove(&pos);
-        }
     }
 
     fn unload_chunk(&mut self) {
@@ -1219,6 +1236,8 @@ impl GenerationSchedule {
 
     fn dump_debug_info(&self, sx: i32, tx: i32, sy: i32, ty: i32) {
         debug!("queue len {}", self.queue.len());
+        debug!("proto chunk size {}", self.proto_chunks.len());
+        debug!("unload chunk size {}", self.unload_chunks.len());
         // debug!("queue {:?}", self.queue);
         debug!("running tasks {}", self.running_task_count);
         debug!(
@@ -1273,8 +1292,13 @@ impl GenerationSchedule {
                 clock = now;
             }
             'outer: while i < len {
+                let mut have_recv = false;
                 while let Ok((pos, data)) = self.recv_chunk.try_recv() {
                     self.receive_chunk(pos, data);
+                    have_recv = true;
+                }
+                if have_recv {
+                    break 'outer;
                 }
 
                 let (pos, _, stage) = self.queue[i];

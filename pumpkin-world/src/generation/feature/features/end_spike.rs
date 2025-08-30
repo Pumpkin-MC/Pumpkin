@@ -6,10 +6,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{
-    generation::{height_limit::HeightLimitView, section_coords},
-    world::BlockRegistryExt,
-};
+use crate::{generation::section_coords, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct EndSpikeFeature {

@@ -25,7 +25,6 @@ impl Ticker {
 
     /// IMPORTANT: Run this in a new thread/tokio task.
     pub async fn run(&mut self, server: &Arc<Server>) {
-        log::debug!("Ticker start");
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let tick_start_time = Instant::now();
             let manager = &server.tick_rate_manager;
@@ -45,7 +44,6 @@ impl Ticker {
                     manager.finish_tick_sprint(server).await;
                 }
             } else {
-                // log::debug!("server.tick().await");
                 // Always call tick - it will internally decide what to tick based on frozen state
                 server.tick().await;
             }
