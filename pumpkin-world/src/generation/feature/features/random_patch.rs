@@ -1,15 +1,11 @@
-use std::sync::Arc;
-
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk, generation::feature::placed_features::PlacedFeature, level::Level,
-    world::BlockRegistryExt,
-};
+use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::feature::placed_features::PlacedFeature, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct RandomPatchFeature {
@@ -21,10 +17,9 @@ pub struct RandomPatchFeature {
 
 impl RandomPatchFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        chunk: &mut T,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
@@ -43,7 +38,6 @@ impl RandomPatchFeature {
             );
             if !self.feature.generate(
                 chunk,
-                level,
                 block_registry,
                 min_y,
                 height,

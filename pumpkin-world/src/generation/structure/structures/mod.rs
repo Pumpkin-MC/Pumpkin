@@ -64,13 +64,13 @@ pub fn fill_downwards(x: i32, y: i32, z: i32, state: &BlockState, chunk: &mut cr
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StructurePosition {
     pub position: BlockPos,
     pub generator: StructurePiecesCollector,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct StructurePiecesCollector {
     pub pieces_positions: Vec<BlockPos>,
 }

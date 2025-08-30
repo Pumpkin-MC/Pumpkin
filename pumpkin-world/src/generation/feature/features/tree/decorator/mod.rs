@@ -1,3 +1,4 @@
+use crate::generation::proto_chunk::GenerationCache;
 use alter_ground::AlterGroundTreeDecorator;
 use attached_to_leaves::AttachedToLeavesTreeDecorator;
 use attached_to_logs::AttachedToLogsTreeDecorator;
@@ -10,8 +11,6 @@ use place_on_ground::PlaceOnGroundTreeDecorator;
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 use trunk_vine::TrunkVineTreeDecorator;
-
-use crate::ProtoChunk;
 
 mod alter_ground;
 mod attached_to_leaves;
@@ -50,9 +49,9 @@ pub enum TreeDecorator {
 }
 
 impl TreeDecorator {
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         root_positions: Vec<BlockPos>,
         log_positions: Vec<BlockPos>,

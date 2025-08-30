@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::int_provider::IntProvider,
@@ -7,9 +5,9 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{ProtoChunk, generation::feature::features::tree::TreeNode, level::Level};
-
 use super::{FoliagePlacer, LeaveValidator};
+use crate::generation::feature::features::tree::TreeNode;
+use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct CherryFoliagePlacer {
@@ -22,10 +20,9 @@ pub struct CherryFoliagePlacer {
 
 impl CherryFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         node: &TreeNode,
         foliage_height: i32,
@@ -38,7 +35,6 @@ impl CherryFoliagePlacer {
         FoliagePlacer::generate_square(
             self,
             chunk,
-            level,
             random,
             pos,
             radius - 2,
@@ -49,7 +45,6 @@ impl CherryFoliagePlacer {
         FoliagePlacer::generate_square(
             self,
             chunk,
-            level,
             random,
             pos,
             radius - 1,
@@ -61,7 +56,6 @@ impl CherryFoliagePlacer {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
-                level,
                 random,
                 pos,
                 radius,
@@ -74,7 +68,6 @@ impl CherryFoliagePlacer {
         FoliagePlacer::generate_square(
             self,
             chunk,
-            level,
             random,
             pos,
             radius,
@@ -86,7 +79,6 @@ impl CherryFoliagePlacer {
         FoliagePlacer::generate_square(
             self,
             chunk,
-            level,
             random,
             pos,
             radius - 1,

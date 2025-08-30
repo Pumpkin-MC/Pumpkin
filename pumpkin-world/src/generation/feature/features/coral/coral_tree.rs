@@ -1,3 +1,4 @@
+use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::{
     math::position::BlockPos,
@@ -5,17 +6,15 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::ProtoChunk;
-
 use super::CoralFeature;
 
 #[derive(Deserialize)]
 pub struct CoralTreeFeature;
 
 impl CoralTreeFeature {
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut T,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature

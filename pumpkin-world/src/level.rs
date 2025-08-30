@@ -1,3 +1,5 @@
+use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
+use crate::generation::generator::VanillaGenerator;
 use crate::{
     BlockStateId,
     block::{RawBlockState, entities::BlockEntity},
@@ -7,7 +9,7 @@ use crate::{
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, generator::WorldGenerator, get_world_gen},
+    generation::{Seed, get_world_gen},
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
@@ -20,6 +22,7 @@ use pumpkin_data::biome::Biome;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
+use std::sync::Mutex;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -27,6 +30,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
+    thread,
 };
 use tokio::{
     select,
@@ -42,11 +46,6 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
 pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
 
-pub struct ChunkRequest {
-    pub pos: Vector2<i32>,
-    pub response: oneshot::Sender<(SyncChunk, bool)>, // bool = is_new
-}
-
 /// The `Level` module provides functionality for working with chunks within or outside a Minecraft world.
 ///
 /// Key features include:
@@ -58,23 +57,24 @@ pub struct ChunkRequest {
 /// For more details on world generation, refer to the `WorldGenerator` module.
 pub struct Level {
     pub seed: Seed,
-    block_registry: Arc<dyn BlockRegistryExt>,
-    level_folder: LevelFolder,
+    pub block_registry: Arc<dyn BlockRegistryExt>,
+    pub level_folder: LevelFolder,
 
     /// Counts the number of ticks that have been scheduled for this world
     schedule_tick_counts: AtomicU64,
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
-    loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
+    pub chunk_loading: Mutex<ChunkLoading>,
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
+    pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
     entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
 
-    world_gen: Arc<dyn WorldGenerator>,
+    pub world_gen: Arc<VanillaGenerator>,
 
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
@@ -82,11 +82,12 @@ pub struct Level {
     pub shutdown_notifier: Notify,
     pub is_shutting_down: AtomicBool,
 
-    gen_request_tx: Sender<Vector2<i32>>,
-    pending_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncChunk>>>>,
-
     gen_entity_request_tx: Sender<Vector2<i32>>,
     pending_entity_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncEntityChunk>>>>,
+
+    pub level_channel: Arc<LevelChannel>,
+    pub thread_tracker: Mutex<Vec<thread::JoinHandle<()>>>,
+    pub chunk_listener: Arc<ChunkListener>,
 }
 
 pub struct TickData {
@@ -126,7 +127,6 @@ impl Level {
         };
 
         // TODO: Load info correctly based on world format type
-
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
@@ -146,11 +146,12 @@ impl Level {
                 }
             };
 
-        let (gen_request_tx, gen_request_rx) = crossbeam::channel::unbounded();
-        let pending_generations = Arc::new(DashMap::new());
-
         let (gen_entity_request_tx, gen_entity_request_rx) = crossbeam::channel::unbounded();
         let pending_entity_generations = Arc::new(DashMap::new());
+
+        let level_channel = Arc::new(LevelChannel::new());
+        let thread_tracker = Mutex::new(Vec::new());
+        let listener = Arc::new(ChunkListener::new());
 
         let level_ref = Arc::new(Self {
             seed,
@@ -162,65 +163,40 @@ impl Level {
             schedule_tick_counts: AtomicU64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
+            chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             is_shutting_down: AtomicBool::new(false),
-            gen_request_tx,
-            pending_generations: pending_generations.clone(),
             gen_entity_request_tx,
             pending_entity_generations: pending_entity_generations.clone(),
+            level_channel: level_channel.clone(),
+            thread_tracker,
+            chunk_listener: listener.clone(),
         });
 
-        //TODO: Investigate optimal number of threads
-        let num_threads = num_cpus::get().saturating_sub(1).max(1);
+        let num_threads = num_cpus::get().saturating_sub(2).max(1);
 
-        // Normal Chunks
-        for thread_id in 0..num_threads {
-            let level_clone = level_ref.clone();
-            let pending_clone = pending_generations.clone();
-            let rx = gen_request_rx.clone();
+        GenerationSchedule::create(
+            &level_ref.tasks,
+            4,
+            num_threads,
+            level_ref.clone(),
+            level_channel,
+            listener,
+            level_ref.thread_tracker.lock().unwrap().as_mut(),
+        );
 
-            std::thread::spawn(move || {
-                while let Ok(pos) = rx.recv() {
-                    if level_clone.is_shutting_down.load(Ordering::Relaxed) {
-                        break;
-                    }
-
-                    log::debug!(
-                        "Generating chunk {pos:?}, worker thread {thread_id:?}, queue length {}",
-                        rx.len()
-                    );
-
-                    // Generate chunk
-                    let mut chunk = level_clone.world_gen.generate_chunk(
-                        &level_clone,
-                        level_clone.block_registry.as_ref(),
-                        &pos,
-                    );
-                    chunk.heightmap = chunk.calculate_heightmap();
-                    let arc_chunk = Arc::new(RwLock::new(chunk));
-
-                    // Insert into loaded chunks
-                    level_clone.loaded_chunks.insert(pos, arc_chunk.clone());
-
-                    // Fulfill all waiters
-                    if let Some(waiters) = pending_clone.remove(&pos) {
-                        for tx in waiters.1 {
-                            let _ = tx.send(arc_chunk.clone());
-                        }
-                    }
-                }
-            });
-        }
-
+        let mut tracker = level_ref.thread_tracker.lock().unwrap();
         // Entity Chunks
         for thread_id in 0..num_threads {
             let level_clone = level_ref.clone();
             let pending_clone = pending_entity_generations.clone();
             let rx = gen_entity_request_rx.clone();
 
-            std::thread::spawn(move || {
+            let builder =
+                thread::Builder::new().name(format!("Entity Chunk Generation Thread {thread_id}"));
+            tracker.push(builder.spawn(move || {
                 while let Ok(pos) = rx.recv() {
                     if level_clone.is_shutting_down.load(Ordering::Relaxed) {
                         break;
@@ -248,9 +224,15 @@ impl Level {
                         }
                     }
                 }
-            });
+            }).unwrap());
         }
-
+        drop(tracker);
+        level_ref
+            .chunk_loading
+            .lock()
+            .unwrap()
+            .add_ticket(Vector2::<i32>::new(0, 0), 17);
+        // .add_ticket(Vector2::<i32>::new(0, 0), ChunkLoading::FULL_CHUNK_LEVEL);
         level_ref
     }
 
@@ -289,6 +271,18 @@ impl Level {
 
         self.is_shutting_down.store(true, Ordering::Relaxed);
         self.shutdown_notifier.notify_waiters();
+        self.level_channel.notify();
+
+        let mut lock = self.thread_tracker.lock().unwrap();
+        log::info!("Wait {} jobs stop", lock.len());
+        while let Some(i) = lock.pop() {
+            log::info!(
+                "Waiting Thread {:?} {} stop",
+                i.thread().id(),
+                i.thread().name().unwrap_or("unknown")
+            );
+        }
+        log::info!("All Thread stop");
 
         self.tasks.close();
         log::debug!("Awaiting level tasks");
@@ -299,16 +293,16 @@ impl Level {
         self.chunk_saver.block_and_await_ongoing_tasks().await;
 
         // save all chunks currently in memory
-        let chunks_to_write = self
-            .loaded_chunks
-            .iter()
-            .map(|chunk| (*chunk.key(), chunk.value().clone()))
-            .collect::<Vec<_>>();
-        self.loaded_chunks.clear();
+        // let chunks_to_write = self
+        //     .loaded_chunks
+        //     .iter()
+        //     .map(|chunk| (*chunk.key(), chunk.value().clone()))
+        //     .collect::<Vec<_>>();
+        // self.loaded_chunks.clear();
 
         // TODO: I think the chunk_saver should be at the server level
-        self.chunk_saver.clear_watched_chunks().await;
-        self.write_chunks(chunks_to_write).await;
+        // self.chunk_saver.clear_watched_chunks().await;
+        // self.write_chunks(chunks_to_write).await;
 
         log::debug!("Done awaiting level entity tasks");
 
@@ -365,9 +359,9 @@ impl Level {
             }
         }
 
-        self.chunk_saver
-            .watch_chunks(&self.level_folder, chunks)
-            .await;
+        // self.chunk_saver
+        //     .watch_chunks(&self.level_folder, chunks)
+        //     .await;
         self.entity_saver
             .watch_chunks(&self.level_folder, chunks)
             .await;
@@ -403,10 +397,6 @@ impl Level {
                 }
             }
         }
-
-        self.chunk_saver
-            .unwatch_chunks(&self.level_folder, chunks)
-            .await;
         self.entity_saver
             .unwatch_chunks(&self.level_folder, chunks)
             .await;
@@ -420,6 +410,7 @@ impl Level {
     }
 
     pub async fn clean_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
+        panic!();
         // Care needs to be take here because of interweaving case:
         // 1) Remove chunk from cache
         // 2) Another player wants same chunk
@@ -578,7 +569,7 @@ impl Level {
     }
 
     pub async fn clean_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
-        self.clean_chunks(&[*chunk]).await;
+        // self.clean_chunks(&[*chunk]).await;
     }
 
     pub async fn clean_entity_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
@@ -591,8 +582,8 @@ impl Level {
 
     pub fn clean_memory(&self) {
         self.chunk_watchers.retain(|_, watcher| !watcher.is_zero());
-        self.loaded_chunks
-            .retain(|at, _| self.chunk_watchers.get(at).is_some());
+        // self.loaded_chunks
+        //     .retain(|at, _| self.chunk_watchers.get(at).is_some());
         self.loaded_entity_chunks
             .retain(|at, _| self.chunk_watchers.get(at).is_some());
 
@@ -616,32 +607,27 @@ impl Level {
     pub async fn get_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
         // Already loaded?
         if let Some(chunk) = self.loaded_chunks.get(&pos) {
-            return chunk.clone();
-        }
+            chunk.clone()
+        } else {
+            log::info!("Missing Chunk {pos:?}. Fetching.");
+            let recv = self.chunk_listener.add_single_chunk_listener(pos);
 
-        // Try to load from disk
-        match self.load_single_chunk(pos).await {
-            Ok((chunk, _)) => {
-                self.loaded_chunks.insert(pos, chunk.clone());
-                chunk
+            {
+                let mut lock = self.chunk_loading.lock().unwrap();
+                lock.add_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+                lock.send_change();
             }
-            Err(_) => {
-                // Need to generate
-                let (tx, rx) = oneshot::channel();
 
-                // Deduplication
-                match self.pending_generations.entry(pos) {
-                    dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                        entry.get_mut().push(tx);
-                    }
-                    dashmap::mapref::entry::Entry::Vacant(entry) => {
-                        entry.insert(vec![tx]);
-                        let _ = self.gen_request_tx.send(pos);
-                    }
-                }
+            let ret = if let Some(chunk) = self.loaded_chunks.get(&pos) {
+                // try again here. otherwise deadlock
+                chunk.clone()
+            } else {
+                recv.await.unwrap()
+            };
 
-                rx.await.expect("Generation worker dropped")
-            }
+            let mut lock = self.chunk_loading.lock().unwrap();
+            lock.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+            ret
         }
     }
 
@@ -653,6 +639,7 @@ impl Level {
         self: &Arc<Self>,
         chunks: Vec<Vector2<i32>>,
     ) -> UnboundedReceiver<(SyncChunk, bool)> {
+        panic!("");
         let (sender, receiver) = mpsc::unbounded_channel();
         let level = self.clone();
 
@@ -669,6 +656,7 @@ impl Level {
                         let _ = sender.send((chunk.clone(), false));
                     } else {
                         to_fetch.push(*pos);
+                        panic!("not chunk found at {pos:?}");
                     }
                 }
 
@@ -693,27 +681,29 @@ impl Level {
                                 let _ = sender.send((chunk, false));
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
-                                // Need to generate — but don't block here
+                                panic!("chunk found at {pos:?}");
                                 let sender_clone = sender.clone();
+
+                                // Need to generate — but don't block here
                                 let level_clone = level.clone();
 
-                                tokio::spawn(async move {
-                                    let (tx, rx) = oneshot::channel();
-
-                                    match level_clone.pending_generations.entry(pos) {
-                                        dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                                            entry.get_mut().push(tx);
-                                        }
-                                        dashmap::mapref::entry::Entry::Vacant(entry) => {
-                                            entry.insert(vec![tx]);
-                                            let _ = level_clone.gen_request_tx.send(pos);
-                                        }
-                                    }
-
-                                    if let Ok(chunk) = rx.await {
-                                        let _ = sender_clone.send((chunk, true));
-                                    }
-                                });
+                                // tokio::spawn(async move {
+                                //     let (tx, rx) = oneshot::channel();
+                                //
+                                //     match level_clone.pending_generations.entry(pos) {
+                                //         dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+                                //             entry.get_mut().push(tx);
+                                //         }
+                                //         dashmap::mapref::entry::Entry::Vacant(entry) => {
+                                //             entry.insert(vec![tx]);
+                                //             let _ = level_clone.gen_request_tx.send(pos);
+                                //         }
+                                //     }
+                                //
+                                //     if let Ok(chunk) = rx.await {
+                                //         let _ = sender_clone.send((chunk, true));
+                                //     }
+                                // });
                             }
                         }
                     }

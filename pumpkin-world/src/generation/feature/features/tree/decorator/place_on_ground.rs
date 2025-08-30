@@ -5,9 +5,9 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{ProtoChunk, generation::block_state_provider::BlockStateProvider};
-
 use super::TreeDecorator;
+use crate::generation::block_state_provider::BlockStateProvider;
+use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct PlaceOnGroundTreeDecorator {
@@ -18,9 +18,9 @@ pub struct PlaceOnGroundTreeDecorator {
 }
 
 impl PlaceOnGroundTreeDecorator {
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         root_positions: Vec<BlockPos>,
         log_positions: Vec<BlockPos>,
@@ -63,15 +63,15 @@ impl PlaceOnGroundTreeDecorator {
         }
     }
 
-    fn generate_decoration(
+    fn generate_decoration<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut T,
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) {
-        let state = chunk.get_block_state(&pos.0);
+        let state = GenerationCache::get_block_state(chunk, &pos.0);
         let pos = pos.up();
-        let up_state = chunk.get_block_state(&pos.0);
+        let up_state = GenerationCache::get_block_state(chunk, &pos.0);
 
         // TODO
         if (up_state.to_state().is_air() || up_state.to_block() == &Block::VINE)

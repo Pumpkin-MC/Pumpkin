@@ -14,7 +14,7 @@ use crate::{
     },
 };
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct BuriedTreasureGenerator;
 
 impl StructureGenerator for BuriedTreasureGenerator {
