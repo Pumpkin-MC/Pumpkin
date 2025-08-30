@@ -275,8 +275,7 @@ impl Level {
 
         let mut lock = self.thread_tracker.lock().unwrap();
         log::info!("Wait {} jobs stop", lock.len());
-        while !lock.is_empty() {
-            let i = lock.pop().unwrap();
+        while let Some(i) = lock.pop() {
             log::info!(
                 "Waiting Thread {:?} {} stop",
                 i.thread().id(),

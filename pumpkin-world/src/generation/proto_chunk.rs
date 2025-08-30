@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::ptr;
-use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::tag;
@@ -28,9 +26,6 @@ use super::{
     settings::GenerationSettings,
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
-use crate::chunk::format::LightContainer;
-use crate::chunk::palette::{BiomePalette, BlockPalette};
-use crate::chunk::{ChunkData, ChunkLight, ChunkSections, SubChunk};
 use crate::chunk_system::StagedChunkEnum;
 use crate::generation::aquifer_sampler::FluidLevelSampler;
 use crate::generation::height_limit::HeightLimitView;
@@ -46,7 +41,6 @@ use crate::{
     chunk::CHUNK_AREA,
     dimension::Dimension,
     generation::{biome, positions::chunk_pos},
-    level::Level,
     world::{BlockAccessor, BlockRegistryExt},
 };
 

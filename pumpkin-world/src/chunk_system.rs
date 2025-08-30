@@ -12,7 +12,7 @@ use crate::level::{Level, SyncChunk};
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
 use async_trait::async_trait;
-use crossbeam::channel::{Receiver, SendError, Sender};
+use crossbeam::channel::{Receiver, Sender};
 use dashmap::DashMap;
 use itertools::Itertools;
 use log::debug;
@@ -25,9 +25,9 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 
-use std::cmp::{Ordering, PartialEq, max, min};
+use std::cmp::{Ordering, PartialEq, max};
+use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry;
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::mem::swap;
 use std::sync::{Arc, Condvar, Mutex};
 
@@ -37,12 +37,10 @@ use crate::chunk_system::Chunk::Proto;
 use crate::chunk_system::StagedChunkEnum::{Biomes, Empty, Features, Full, Noise, Surface};
 use crate::generation::biome_coords;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::hash::BuildHasherDefault;
 use std::sync::atomic::Ordering::Relaxed;
+use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use std::{ptr, thread};
-use tokio::runtime::{Builder, Runtime};
 use tokio::sync::{RwLock, oneshot};
 use tokio::task;
 use tokio_util::task::TaskTracker;
@@ -71,15 +69,12 @@ impl Ord for HeapNode {
 }
 impl From<(ChunkPos, i8)> for HeapNode {
     fn from(value: (ChunkPos, i8)) -> Self {
-        Self {
-            0: value.1,
-            1: value.0,
-        }
+        Self(value.1, value.0)
     }
 }
-impl Into<(ChunkPos, i8)> for HeapNode {
-    fn into(self) -> (ChunkPos, i8) {
-        (self.1, self.0)
+impl From<HeapNode> for (ChunkPos, i8) {
+    fn from(val: HeapNode) -> Self {
+        (val.1, val.0)
     }
 }
 
@@ -142,8 +137,8 @@ impl ChunkLoading {
     }
 
     fn run_update(pos_level: &mut ChunkLevel, mut queue: BinaryHeap<HeapNode>) {
-        while !queue.is_empty() {
-            let (pos, level) = unsafe { queue.pop().unwrap_unchecked().into() }; // we have checked. unsafe is safe
+        while let Some(node) = queue.pop() {
+            let (pos, level) = node.into();
             debug_assert!(level < Self::MAX_LEVEL);
             if level > *pos_level.get(&pos).unwrap_or(&Self::MAX_LEVEL) {
                 continue;
@@ -440,7 +435,6 @@ impl LevelChannel {
         ret
     }
     pub fn wait_and_get(&self, level: &Arc<Level>) -> Option<ChunkLevel> {
-        // TODO if this return None, stop thread
         let mut lock = self.value.lock().unwrap();
         while lock.is_none() && !level.is_shutting_down.load(Relaxed) {
             lock = self.notify.wait(lock).unwrap();

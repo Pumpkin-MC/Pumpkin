@@ -1,23 +1,14 @@
-use std::sync::Arc;
-
-use async_trait::async_trait;
 use pumpkin_data::BlockState;
 use pumpkin_data::noise_router::{
     END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
 };
-use pumpkin_util::math::vector2::Vector2;
 
 use super::{
     noise::router::proto_noise_router::ProtoNoiseRouters, settings::gen_settings_from_dimension,
 };
 use crate::dimension::Dimension;
 use crate::generation::proto_chunk::TerrainCache;
-use crate::level::Level;
-use crate::world::BlockRegistryExt;
-use crate::{
-    chunk::ChunkData,
-    generation::{GlobalRandomConfig, Seed},
-};
+use crate::generation::{GlobalRandomConfig, Seed};
 
 pub trait GeneratorInit {
     fn new(seed: Seed, dimension: Dimension) -> Self;
