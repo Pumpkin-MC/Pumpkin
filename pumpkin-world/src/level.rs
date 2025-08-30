@@ -44,10 +44,6 @@ use tokio_util::task::TaskTracker;
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
 pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
-pub struct ChunkRequest {
-    pub pos: Vector2<i32>,
-    pub response: oneshot::Sender<(SyncChunk, bool)>, // bool = is_new
-}
 
 /// The `Level` module provides functionality for working with chunks within or outside a Minecraft world.
 ///
