@@ -135,6 +135,7 @@ impl ChunkManager {
     }
 
     pub fn pull_new_chunks(&mut self) {
+        log::debug!("pull_new_chunks");
         while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
             if (pos.x - self.center.x)
                 .abs()
@@ -147,6 +148,8 @@ impl ChunkManager {
                 self.chunk_queue.push_back((pos, chunk));
             }
         }
+        log::debug!("chunk_queue size {}", self.chunk_queue.len());
+        log::debug!("chunk_sent size {}", self.chunk_sent.len());
     }
 
     pub fn update_center_and_view_distance(
@@ -164,6 +167,7 @@ impl ChunkManager {
             self.center,
             ChunkLoading::get_level_from_view_distance(self.view_distance),
         );
+        drop(lock);
         self.chunk_sent.retain(|pos| {
             (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance as i32
         });
@@ -199,6 +203,7 @@ impl ChunkManager {
     }
 
     pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
+        self.chunk_sent.insert(position);
         self.chunk_queue.push_back((position, chunk));
     }
 

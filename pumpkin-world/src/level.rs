@@ -9,7 +9,7 @@ use crate::{
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, generator::WorldGenerator, get_world_gen},
+    generation::{Seed, get_world_gen},
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
@@ -30,6 +30,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
+    thread,
 };
 use tokio::{
     select,
@@ -85,7 +86,7 @@ pub struct Level {
     pending_entity_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncEntityChunk>>>>,
 
     pub level_channel: Arc<LevelChannel>,
-    pub thread_tracker: Mutex<Vec<std::thread::JoinHandle<()>>>,
+    pub thread_tracker: Mutex<Vec<thread::JoinHandle<()>>>,
     pub chunk_listener: Arc<ChunkListener>,
 }
 
@@ -174,7 +175,7 @@ impl Level {
             chunk_listener: listener.clone(),
         });
 
-        let num_threads = num_cpus::get().saturating_sub(1).max(1);
+        let num_threads = num_cpus::get().saturating_sub(2).max(1);
 
         GenerationSchedule::create(
             &level_ref.tasks,
@@ -186,13 +187,16 @@ impl Level {
             level_ref.thread_tracker.lock().unwrap().as_mut(),
         );
 
+        let mut tracker = level_ref.thread_tracker.lock().unwrap();
         // Entity Chunks
         for thread_id in 0..num_threads {
             let level_clone = level_ref.clone();
             let pending_clone = pending_entity_generations.clone();
             let rx = gen_entity_request_rx.clone();
 
-            std::thread::spawn(move || {
+            let builder =
+                thread::Builder::new().name(format!("Entity Chunk Generation Thread {thread_id}"));
+            tracker.push(builder.spawn(move || {
                 while let Ok(pos) = rx.recv() {
                     if level_clone.is_shutting_down.load(Ordering::Relaxed) {
                         break;
@@ -220,8 +224,9 @@ impl Level {
                         }
                     }
                 }
-            });
+            }).unwrap());
         }
+        drop(tracker);
         level_ref
             .chunk_loading
             .lock()
@@ -622,7 +627,6 @@ impl Level {
             };
 
             let mut lock = self.chunk_loading.lock().unwrap();
-            lock = self.chunk_loading.lock().unwrap();
             lock.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
             ret
         }

@@ -16,23 +16,11 @@ use crate::level::Level;
 use crate::world::BlockRegistryExt;
 use crate::{
     chunk::ChunkData,
-    generation::{GlobalRandomConfig, Seed, proto_chunk::StagedChunk},
+    generation::{GlobalRandomConfig, Seed},
 };
 
 pub trait GeneratorInit {
     fn new(seed: Seed, dimension: Dimension) -> Self;
-}
-
-#[async_trait]
-pub trait WorldGenerator: Sync + Send {
-    fn generate_chunk(
-        &self,
-        level: &Arc<Level>,
-        block_registry: &dyn BlockRegistryExt,
-        at: &Vector2<i32>,
-    ) -> ChunkData;
-
-    fn new_staged_chunk(&self, at: &Vector2<i32>) -> StagedChunk;
 }
 
 pub struct VanillaGenerator {
@@ -68,37 +56,5 @@ impl GeneratorInit for VanillaGenerator {
             terrain_cache,
             default_block,
         }
-    }
-}
-
-impl WorldGenerator for VanillaGenerator {
-    fn generate_chunk(
-        &self,
-        level: &Arc<Level>,
-        block_registry: &dyn BlockRegistryExt,
-        at: &Vector2<i32>,
-    ) -> ChunkData {
-        let generation_settings = gen_settings_from_dimension(&self.dimension);
-
-        // Use StagedChunk for type-safe generation pipeline
-        StagedChunk::generate_complete_from_vanilla_generator(
-            *at,
-            level,
-            block_registry,
-            generation_settings,
-            &self.random_config,
-            &self.terrain_cache,
-            &self.base_router,
-            self.dimension,
-            self.default_block,
-        )
-        .expect("Failed to generate chunk through staged pipeline")
-    }
-
-    fn new_staged_chunk(&self, at: &Vector2<i32>) -> StagedChunk {
-        let settings = gen_settings_from_dimension(&self.dimension);
-        use crate::biome::hash_seed;
-        let biome_mixer_seed = hash_seed(self.random_config.seed);
-        StagedChunk::new(*at, settings, self.default_block, biome_mixer_seed)
     }
 }
