@@ -1,4 +1,4 @@
-use crate::{entity::player::Player, world::text::TextResolution};
+use crate::{entity::player::Player, text::TextResolution};
 use pumpkin_protocol::java::client::play::{BosseventAction, CBossEvent};
 use pumpkin_util::text::TextComponent;
 use uuid::Uuid;

@@ -60,7 +60,7 @@ pub mod status;
 
 use crate::entity::player::Player;
 use crate::net::{GameProfile, PlayerConfig};
-use crate::world::text::TextResolution;
+use crate::text::TextResolution;
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
 pub struct JavaClient {

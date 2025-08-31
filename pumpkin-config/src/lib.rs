@@ -131,6 +131,8 @@ pub struct BasicConfiguration {
     pub online_mode: bool,
     /// Whether packet encryption is enabled. Required when online mode is enabled.
     pub encryption: bool,
+    /// The language the server will use.
+    pub language: String,
     /// Message of the Day; the server's description displayed on the status screen.
     pub motd: String,
     /// The server's ticks per second.
@@ -172,6 +174,7 @@ impl Default for BasicConfiguration {
             hardcore: false,
             online_mode: true,
             encryption: true,
+            language: "en_us".to_string(),
             motd: "A blazingly fast Pumpkin server!".to_string(),
             tps: 20.0,
             default_gamemode: GameMode::Survival,

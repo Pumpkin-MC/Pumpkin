@@ -10,6 +10,7 @@ pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-nbt = { path = "../pumpkin-nbt" }
 
 serde.workspace = true
+serde_json.workspace = true
 crc-fast = "1.4.0"
 
 [build-dependencies]
@@ -18,6 +19,7 @@ pumpkin-nbt = { path = "../pumpkin-nbt" }
 
 serde.workspace = true
 serde_json.workspace = true
+reqwest.workspace = true
 
 serde_json5 = "0.2.1"
 heck = "0.5"

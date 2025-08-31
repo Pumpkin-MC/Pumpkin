@@ -41,6 +41,7 @@ pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
+pub mod text;
 pub mod world;
 
 #[cfg(feature = "dhat-heap")]

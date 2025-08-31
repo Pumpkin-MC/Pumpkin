@@ -13,7 +13,7 @@ use crate::command::{
     CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
 };
 use crate::entity::EntityBase;
-use crate::world::text::TextResolution;
+use crate::text::TextResolution;
 
 const NAMES: [&str; 2] = ["pumpkin", "version"];
 

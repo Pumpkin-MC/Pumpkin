@@ -7,7 +7,6 @@ use pumpkin_util::text::{
     content::{NbtSource, NbtValue, TextContent},
     hover::HoverEvent,
     style::Style,
-    translation::{Locale, get_translation, reorder_substitutions},
 };
 use std::borrow::Cow;
 use uuid::Uuid;
@@ -15,14 +14,20 @@ use uuid::Uuid;
 use crate::{
     command::{CommandSender, args::entities::TargetSelector},
     entity::player::Player,
+    text::{
+        nbt::snbt_display,
+        translations::{TRANSLATION_MANAGER, reorder_substitutions, translated},
+    },
 };
+
+pub mod nbt;
+pub mod translations;
 /// TODO List
-/// - Add server locale support
+/// - Open a public translation system, maybe a Crowdin like Minecraft?
 /// - Use translations in the logs
 /// - - `Client_kick_reason` messages
 /// - Document all about `TextComponents`
 /// - Add support for translations on commands descriptions
-/// - Open a public translation system, maybe a Crowdin like Minecraft?
 /// - Integrate custom translations with the plugins API
 /// - Solve command discrepances (unquoted keys, type value)
 
@@ -55,9 +60,6 @@ impl TextResolution for TextComponentBase {
                 fallback,
                 with,
             } => {
-                let fallback = fallback
-                    .unwrap_or_else(|| format!("minecraft:{translate}").into())
-                    .to_string();
                 translated(
                     format!("minecraft:{translate}"),
                     player,
@@ -69,8 +71,7 @@ impl TextResolution for TextComponentBase {
             }
             TextContent::Keybind { keybind } => keybind.into_owned(),
             TextContent::Custom { key, with, .. } => {
-                let fallback = key.clone();
-                translated(key, player, fallback, with, stylized).await
+                translated(key, player, None, with, stylized).await
             }
             _ => String::new(),
         };
@@ -100,14 +101,18 @@ impl TextResolution for TextComponentBase {
         }
         text
     }
+    #[allow(clippy::too_many_lines)]
     async fn to_send(self, player: &Player) -> Self {
         let resolved = self.resolve(Some(player)).await;
         let locale = player.locale().await;
         // Divide the translation into slices and inserts the substitutions
         let mut component = match resolved.content {
             TextContent::Custom { key, with, .. } => {
-                let fallback = key.clone();
-                let translation = get_translation(key, locale, fallback);
+                let translation =
+                    TRANSLATION_MANAGER
+                        .lock()
+                        .unwrap()
+                        .get(locale.as_str(), &key, None);
                 if with.is_empty() || !translation.contains('%') {
                     Self {
                         content: TextContent::Text {
@@ -123,7 +128,7 @@ impl TextResolution for TextComponentBase {
                     let (substitutions, ranges) = reorder_substitutions(&translation, with);
                     let mut idx = 0;
                     for substitute in substitutions {
-                        let range = ranges[idx];
+                        let range = &ranges[idx];
                         if idx == 0 {
                             translation_parent = translation[..range.start].to_string();
                         }
@@ -387,352 +392,6 @@ async fn resolve_nbt(
             TextComponent::custom("pumpkin", "text.error.no_data", &[])
                 .color_named(NamedColor::Red)
                 .0
-        }
-    }
-}
-
-async fn translated<P: Into<Cow<'static, str>>>(
-    namespaced_key: P,
-    player: Option<&Player>,
-    fallback: P,
-    with: Vec<TextComponentBase>,
-    stylized: bool,
-) -> String {
-    let locale = match player {
-        Some(player) => player.locale().await,
-        None => Locale::EnUs,
-    };
-    let mut translation = get_translation(namespaced_key.into(), locale, fallback.into());
-    if with.is_empty() || !translation.contains('%') {
-        return translation;
-    }
-
-    let (substitutions, indices) = reorder_substitutions(&translation, with);
-    let mut translated_substitutions = Vec::new();
-    for substitution in substitutions {
-        translated_substitutions.push(substitution.to_string(player, stylized).await);
-    }
-    let mut displacement = 0i32;
-    for (idx, &range) in indices.iter().enumerate() {
-        let sub_idx = idx.clamp(0, translated_substitutions.len() - 1);
-        let substitution = &translated_substitutions[sub_idx];
-        translation.replace_range(
-            range.start + displacement as usize..=range.end + displacement as usize,
-            substitution,
-        );
-        displacement += substitution.len() as i32 - range.len() as i32;
-    }
-    translation
-}
-
-#[allow(clippy::too_many_lines)]
-pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent, String> {
-    let folded = TextComponent::text("<...>").color_named(NamedColor::Gray);
-    match tag {
-        NbtTag::End => Err("Unexpected end tag".into()),
-        NbtTag::Byte(value) => {
-            let byte_format = TextComponent::text("b").color_named(NamedColor::Red);
-            Ok(TextComponent::text(format!("{value}"))
-                .color_named(NamedColor::Gold)
-                .add_child(byte_format))
-        }
-        NbtTag::Short(value) => {
-            let short_format = TextComponent::text("s").color_named(NamedColor::Red);
-            Ok(TextComponent::text(format!("{value}"))
-                .color_named(NamedColor::Gold)
-                .add_child(short_format))
-        }
-        NbtTag::Int(value) => {
-            Ok(TextComponent::text(format!("{value}")).color_named(NamedColor::Gold))
-        }
-        NbtTag::Long(value) => {
-            let long_format = TextComponent::text("L").color_named(NamedColor::Red);
-            Ok(TextComponent::text(format!("{value}"))
-                .color_named(NamedColor::Gold)
-                .add_child(long_format))
-        }
-        NbtTag::Float(value) => {
-            let float_format = TextComponent::text("f").color_named(NamedColor::Red);
-            Ok(TextComponent::text(format!("{value}"))
-                .color_named(NamedColor::Gold)
-                .add_child(float_format))
-        }
-        NbtTag::Double(value) => {
-            let double_format = TextComponent::text("d").color_named(NamedColor::Red);
-            Ok(TextComponent::text(format!("{value}"))
-                .color_named(NamedColor::Gold)
-                .add_child(double_format))
-        }
-        NbtTag::ByteArray(value) => {
-            let byte_array_format = TextComponent::text("B").color_named(NamedColor::Red);
-            let mut content = TextComponent::text("[")
-                .add_child(byte_array_format.clone())
-                .add_child(TextComponent::text("; "));
-
-            for (index, byte) in value.iter().take(128).enumerate() {
-                content = content
-                    .add_child(TextComponent::text(format!("{byte}")))
-                    .add_child(byte_array_format.clone());
-                if index < value.len() - 1 {
-                    content = content.add_child(TextComponent::text(", "));
-                }
-            }
-
-            if value.len() > 128 {
-                content = content.add_child(folded);
-            }
-
-            content = content.add_child(TextComponent::text("]"));
-            Ok(content)
-        }
-        NbtTag::String(value) => {
-            let escaped_value = value
-                .replace('"', "\\\"")
-                .replace('\\', "\\\\")
-                .replace('\n', "\\n")
-                .replace('\t', "\\t")
-                .replace('\r', "\\r")
-                .replace('\x0c', "\\f")
-                .replace('\x08', "\\b");
-
-            Ok(TextComponent::text(format!("\"{escaped_value}\"")).color_named(NamedColor::Green))
-        }
-        NbtTag::List(value) => {
-            if value.is_empty() {
-                Ok(TextComponent::text("[]"))
-            } else if depth >= 64 {
-                Ok(TextComponent::text("[")
-                    .add_child(folded)
-                    .add_child(TextComponent::text("]")))
-            } else {
-                let mut content = TextComponent::text("[");
-
-                for (index, item) in value.iter().take(128).enumerate() {
-                    let item_display = snbt_colorful_display(item, depth + 1)
-                        .map_err(|string| format!("Error displaying item.[{index}]: {string}"))?;
-                    content = content.add_child(item_display);
-
-                    if index < value.len() - 1 {
-                        content = content.add_child(TextComponent::text(", "));
-                    }
-                }
-
-                if value.len() > 128 {
-                    content = content.add_child(folded);
-                }
-
-                content = content.add_child(TextComponent::text("]"));
-                Ok(content)
-            }
-        }
-        NbtTag::Compound(value) => {
-            if value.is_empty() {
-                Ok(TextComponent::text("{}"))
-            } else if depth >= 64 {
-                Ok(TextComponent::text("{")
-                    .add_child(folded)
-                    .add_child(TextComponent::text("}")))
-            } else {
-                let mut content = TextComponent::text("{");
-
-                for (index, (key, item)) in value.child_tags.iter().take(128).enumerate() {
-                    let item_display = snbt_colorful_display(item, depth + 1)
-                        .map_err(|string| format!("Error displaying item.{key}: {string}"))?;
-                    content = content
-                        .add_child(TextComponent::text(key.clone()).color_named(NamedColor::Aqua))
-                        .add_child(TextComponent::text(": "))
-                        .add_child(item_display);
-
-                    if index < value.child_tags.len() - 1 {
-                        content = content.add_child(TextComponent::text(", "));
-                    }
-                }
-
-                if value.child_tags.len() > 128 {
-                    content = content.add_child(folded);
-                }
-
-                content = content.add_child(TextComponent::text("}"));
-                Ok(content)
-            }
-        }
-        NbtTag::IntArray(value) => {
-            let int_array_format = TextComponent::text("I").color_named(NamedColor::Red);
-            let mut content = TextComponent::text("[")
-                .add_child(int_array_format)
-                .add_child(TextComponent::text("; "));
-
-            for (index, int) in value.iter().take(128).enumerate() {
-                content = content
-                    .add_child(TextComponent::text(format!("{int}")).color_named(NamedColor::Gold));
-                if index < value.len() - 1 {
-                    content = content.add_child(TextComponent::text(", "));
-                }
-            }
-
-            if value.len() > 128 {
-                content = content.add_child(folded);
-            }
-
-            content = content.add_child(TextComponent::text("]"));
-            Ok(content)
-        }
-        NbtTag::LongArray(value) => {
-            let long_array_format = TextComponent::text("L").color_named(NamedColor::Red);
-            let mut content = TextComponent::text("[")
-                .add_child(long_array_format.clone())
-                .add_child(TextComponent::text("; "));
-
-            for (index, long) in value.iter().take(128).enumerate() {
-                content = content
-                    .add_child(TextComponent::text(format!("{long}")))
-                    .add_child(long_array_format.clone());
-                if index < value.len() - 1 {
-                    content = content.add_child(TextComponent::text(", "));
-                }
-            }
-
-            if value.len() > 128 {
-                content = content.add_child(folded);
-            }
-
-            content = content.add_child(TextComponent::text("]"));
-            Ok(content)
-        }
-    }
-}
-
-#[allow(clippy::too_many_lines)]
-pub fn snbt_display(tag: &NbtTag, depth: usize) -> Result<TextComponent, String> {
-    let folded = TextComponent::text("<...>");
-    match tag {
-        NbtTag::End => Err("Unexpected end tag".into()),
-        NbtTag::Byte(value) => Ok(TextComponent::text(format!("{value}b"))),
-        NbtTag::Short(value) => Ok(TextComponent::text(format!("{value}s"))),
-        NbtTag::Int(value) => Ok(TextComponent::text(format!("{value}"))),
-        NbtTag::Long(value) => Ok(TextComponent::text(format!("{value}L"))),
-        NbtTag::Float(value) => Ok(TextComponent::text(format!("{value}f"))),
-        NbtTag::Double(value) => Ok(TextComponent::text(format!("{value}d"))),
-        NbtTag::ByteArray(value) => {
-            let mut content = TextComponent::text("[B; ");
-
-            for (index, byte) in value.iter().take(128).enumerate() {
-                content = content.add_child(TextComponent::text(format!("{byte}B")));
-                if index < value.len() - 1 {
-                    content = content.add_child(TextComponent::text(", "));
-                }
-            }
-
-            if value.len() > 128 {
-                content = content.add_child(folded);
-            }
-
-            content = content.add_child(TextComponent::text("]"));
-            Ok(content)
-        }
-        NbtTag::String(value) => {
-            let escaped_value = value
-                .replace('"', "\\\"")
-                .replace('\\', "\\\\")
-                .replace('\n', "\\n")
-                .replace('\t', "\\t")
-                .replace('\r', "\\r")
-                .replace('\x0c', "\\f")
-                .replace('\x08', "\\b");
-
-            Ok(TextComponent::text(format!("\"{escaped_value}\"")))
-        }
-        NbtTag::List(value) => {
-            if value.is_empty() {
-                Ok(TextComponent::text("[]"))
-            } else if depth >= 64 {
-                Ok(TextComponent::text("[")
-                    .add_child(folded)
-                    .add_child(TextComponent::text("]")))
-            } else {
-                let mut content = TextComponent::text("[");
-
-                for (index, item) in value.iter().take(128).enumerate() {
-                    let item_display = snbt_display(item, depth + 1)
-                        .map_err(|string| format!("Error displaying item.[{index}]: {string}"))?;
-                    content = content.add_child(item_display);
-
-                    if index < value.len() - 1 {
-                        content = content.add_child(TextComponent::text(", "));
-                    }
-                }
-
-                if value.len() > 128 {
-                    content = content.add_child(folded);
-                }
-
-                content = content.add_child(TextComponent::text("]"));
-                Ok(content)
-            }
-        }
-        NbtTag::Compound(value) => {
-            if value.is_empty() {
-                Ok(TextComponent::text("{}"))
-            } else if depth >= 64 {
-                Ok(TextComponent::text("{")
-                    .add_child(folded)
-                    .add_child(TextComponent::text("}")))
-            } else {
-                let mut content = TextComponent::text("{");
-
-                for (index, (key, item)) in value.child_tags.iter().take(128).enumerate() {
-                    let item_display = snbt_display(item, depth + 1)
-                        .map_err(|string| format!("Error displaying item.{key}: {string}"))?;
-                    content = content
-                        .add_child(TextComponent::text(format!("{}: ", key.clone())))
-                        .add_child(item_display);
-
-                    if index < value.child_tags.len() - 1 {
-                        content = content.add_child(TextComponent::text(", "));
-                    }
-                }
-
-                if value.child_tags.len() > 128 {
-                    content = content.add_child(folded);
-                }
-
-                content = content.add_child(TextComponent::text("}"));
-                Ok(content)
-            }
-        }
-        NbtTag::IntArray(value) => {
-            let mut content = TextComponent::text("[I; ");
-
-            for (index, int) in value.iter().take(128).enumerate() {
-                content = content.add_child(TextComponent::text(format!("{int}")));
-                if index < value.len() - 1 {
-                    content = content.add_child(TextComponent::text(", "));
-                }
-            }
-
-            if value.len() > 128 {
-                content = content.add_child(folded);
-            }
-
-            content = content.add_child(TextComponent::text("]"));
-            Ok(content)
-        }
-        NbtTag::LongArray(value) => {
-            let mut content = TextComponent::text("[L; ");
-
-            for (index, long) in value.iter().take(128).enumerate() {
-                content = content.add_child(TextComponent::text(format!("{long}L")));
-                if index < value.len() - 1 {
-                    content = content.add_child(TextComponent::text(", "));
-                }
-            }
-
-            if value.len() > 128 {
-                content = content.add_child(folded);
-            }
-
-            content = content.add_child(TextComponent::text("]"));
-            Ok(content)
         }
     }
 }

@@ -56,7 +56,7 @@ use tokio::sync::RwLock;
 
 use pumpkin::{
     LOGGER_IMPL, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server,
-    world::text::TextResolution,
+    text::{TextResolution, translations::init_translations},
 };
 
 use pumpkin_util::{
@@ -75,6 +75,7 @@ pub mod item;
 pub mod net;
 pub mod plugin;
 pub mod server;
+pub mod text;
 pub mod world;
 
 #[cfg(feature = "dhat-heap")]
@@ -127,6 +128,9 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
+
+    init_translations().await;
+
     log::info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
 
     log::debug!(

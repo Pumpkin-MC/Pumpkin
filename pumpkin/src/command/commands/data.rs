@@ -6,7 +6,7 @@ use crate::command::{
     tree::{CommandTree, builder::argument},
 };
 use crate::entity::NBTStorage;
-use crate::world::text::snbt_colorful_display;
+use crate::text::nbt::snbt_colorful_display;
 use CommandError::InvalidConsumption;
 use async_trait::async_trait;
 use pumpkin_nbt::compound::NbtCompound;

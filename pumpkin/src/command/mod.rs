@@ -3,16 +3,16 @@ use std::sync::Arc;
 
 use crate::entity::player::Player;
 use crate::server::Server;
+use crate::text::TextResolution;
 use crate::world::World;
-use crate::world::text::TextResolution;
 use args::ConsumedArgs;
 use async_trait::async_trait;
 
 use dispatcher::CommandError;
+use pumpkin_config::BASIC_CONFIG;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::PermissionLvl;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::translation::Locale;
 
 pub mod args;
 pub mod client_suggestions;
@@ -108,9 +108,9 @@ impl CommandSender {
         }
     }
 
-    pub async fn locale(&self) -> Locale {
+    pub async fn locale(&self) -> String {
         match self {
-            Self::Console | Self::Rcon(..) => Locale::EnUs, // Default locale for console and RCON
+            Self::Console | Self::Rcon(..) => BASIC_CONFIG.language.clone(), // Default locale for console and RCON
             Self::Player(player) => player.locale().await,
         }
     }

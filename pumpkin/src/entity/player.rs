@@ -3,7 +3,6 @@ use std::collections::VecDeque;
 use std::f64::consts::TAU;
 use std::num::NonZeroU8;
 use std::ops::AddAssign;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
@@ -13,7 +12,6 @@ use crossbeam::atomic::AtomicCell;
 use log::warn;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
-use pumpkin_util::text::translation::Locale;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
@@ -82,8 +80,8 @@ use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
+use crate::text::TextResolution;
 use crate::world::World;
-use crate::world::text::TextResolution;
 use crate::{PERMISSION_MANAGER, block};
 
 use super::combat::{self, AttackType, player_attack_sound};
@@ -1902,8 +1900,8 @@ impl Player {
         self.living_entity.reset_state().await;
     }
 
-    pub async fn locale(&self) -> Locale {
-        Locale::from_str(&self.config.read().await.locale).unwrap_or(Locale::EnUs)
+    pub async fn locale(&self) -> String {
+        self.config.read().await.locale.clone()
     }
 }
 

@@ -10,11 +10,10 @@ pub mod chunker;
 pub mod explosion;
 pub mod loot;
 pub mod portal;
-pub mod text;
 pub mod time;
 
+use crate::text::TextResolution;
 use crate::world::loot::LootContextParameters;
-use crate::world::text::TextResolution;
 use crate::{
     PLUGIN_MANAGER,
     block::{

@@ -15,7 +15,6 @@ pub mod color;
 pub mod content;
 pub mod hover;
 pub mod style;
-pub mod translation;
 
 /// Represents a text component
 #[derive(Clone, Debug, Serialize, PartialEq, Eq, Hash)]

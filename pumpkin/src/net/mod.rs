@@ -12,7 +12,7 @@ use crate::{
     entity::player::ChatMode,
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
-    world::text::TextResolution,
+    text::TextResolution,
 };
 
 use pumpkin_protocol::{ClientPacket, Property};
