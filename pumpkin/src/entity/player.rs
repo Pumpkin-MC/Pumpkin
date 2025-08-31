@@ -1571,12 +1571,14 @@ impl Player {
         match &self.client {
             ClientPlatform::Java(client) => {
                 client
-                    .enqueue_packet(&CSystemChatMessage::new(text.to_send(self).await, overlay))
+                    .enqueue_packet(&CSystemChatMessage::new(&text.to_send(self).await, overlay))
                     .await;
             }
             ClientPlatform::Bedrock(client) => {
                 client
-                    .send_game_packet(&SText::system_message(text.to_string(Some(self), false).await))
+                    .send_game_packet(&SText::system_message(
+                        text.to_string(Some(self), false).await,
+                    ))
                     .await;
             }
         }
@@ -1957,15 +1959,15 @@ impl Player {
                 .await;
         }
     }
+
+    pub async fn locale(&self) -> String {
+        self.config.read().await.locale.clone()
+    }
 }
 
 impl PartialEq for Player {
     fn eq(&self, other: &Self) -> bool {
         self.gameprofile.id == other.gameprofile.id
-    }
-
-    pub async fn locale(&self) -> String {
-        self.config.read().await.locale.clone()
     }
 }
 

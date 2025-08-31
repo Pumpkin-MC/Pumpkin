@@ -15,12 +15,12 @@ struct MinecraftResource {
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/en_us.json");
-    println!("cargo:rerun-if-changed=../assets/translations/en_us.json");
+    println!("cargo:rerun-if-changed=../assets/pumpkin_en_us.json");
     // Hardcode en_us translations (as static slice chunks)
     let file = File::open(global_path!("../../assets/en_us.json")).unwrap();
     let reader = BufReader::new(file);
     let vanilla: BTreeMap<String, String> = serde_json::from_reader(reader).unwrap();
-    let file = File::open(global_path!("../../assets/translations/en_us.json")).unwrap();
+    let file = File::open(global_path!("../../assets/pumpkin_en_us.json")).unwrap();
     let reader = BufReader::new(file);
     let custom: BTreeMap<String, String> = serde_json::from_reader(reader).unwrap();
 

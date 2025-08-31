@@ -380,7 +380,7 @@ impl World {
         let current_players = self.players.read().await;
 
         for (_, player) in current_players.iter() {
-            match player.client.as_ref() {
+            match &player.client {
                 ClientPlatform::Java(client) => {
                     let message = message.clone().to_send(player.as_ref()).await;
                     let sender_name = sender_name.clone().to_send(player.as_ref()).await;

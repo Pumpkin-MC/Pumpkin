@@ -31,6 +31,10 @@ pub async fn init_translations() {
         }
         let vanilla_dir = translations_dir.join(hash);
         if !vanilla_dir.exists() {
+            log::info!(
+                "Downloading vanilla translation for {}...",
+                BASIC_CONFIG.language
+            );
             if let Ok(data) = reqwest::get(format!(
                 "https://resources.download.minecraft.net/{}/{}",
                 &hash[0..2],
@@ -38,8 +42,16 @@ pub async fn init_translations() {
             ))
             .await
             {
+                let data = data.text().await.unwrap();
+                let mut data = data.as_bytes();
+                if data.len() != size as usize {
+                    log::warn!(
+                        "A downloaded translation it's corrupted; the server will remain in English."
+                    );
+                    return;
+                }
                 let mut vanilla = File::create(&vanilla_dir).unwrap();
-                let _ = io::copy(&mut data.text().await.unwrap().as_bytes(), &mut vanilla);
+                let _ = io::copy(&mut data, &mut vanilla);
             } else {
                 log::warn!(
                     "A translation could not be downloaded; the server will remain in English."
@@ -50,8 +62,6 @@ pub async fn init_translations() {
         if let Ok(mut manager) = TRANSLATION_MANAGER.lock() {
             let _ = manager.add_file(BASIC_CONFIG.language.as_str(), "minecraft", &vanilla_dir);
         }
-
-        log::info!("Info of {}: {} - {}", BASIC_CONFIG.language, hash, size);
     }
 }
 
