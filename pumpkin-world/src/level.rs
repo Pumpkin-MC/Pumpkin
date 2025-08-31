@@ -232,8 +232,11 @@ impl Level {
             .chunk_loading
             .lock()
             .unwrap()
-            .add_ticket(Vector2::<i32>::new(0, 0), 17);
-        // .add_ticket(Vector2::<i32>::new(0, 0), ChunkLoading::FULL_CHUNK_LEVEL);
+            // .add_ticket(Vector2::<i32>::new(0, 0), 17);
+            .add_ticket(
+                Vector2::<i32>::new(0, 0),
+                ChunkLoading::FULL_CHUNK_LEVEL - 1,
+            );
         level_ref
     }
 
@@ -254,6 +257,11 @@ impl Level {
         self.shutdown_notifier.notify_waiters();
         self.level_channel.notify();
 
+        self.tasks.close();
+        log::debug!("Awaiting level tasks");
+        self.tasks.wait().await;
+        log::debug!("Done awaiting level chunk tasks");
+
         {
             let mut lock = self.thread_tracker.lock().unwrap();
             log::info!("Wait {} jobs stop", lock.len());
@@ -266,11 +274,6 @@ impl Level {
             }
             log::info!("All Thread stop");
         }
-
-        self.tasks.close();
-        log::debug!("Awaiting level tasks");
-        self.tasks.wait().await;
-        log::debug!("Done awaiting level chunk tasks");
 
         // wait for chunks currently saving in other threads
         self.chunk_saver.block_and_await_ongoing_tasks().await;

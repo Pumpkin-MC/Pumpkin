@@ -442,7 +442,8 @@ impl LevelChannel {
         ret
     }
     pub fn notify(&self) {
-        drop(self.value.lock());
+        let val = self.value.lock().unwrap();
+        drop(val);
         self.notify.notify_one();
     }
 }
@@ -993,7 +994,7 @@ impl GenerationSchedule {
                 && let Some(chunk) =
                     Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
             {
-                self.task_mark.insert(*pos, (0, chunk.get_stage_id()));
+                log::debug!("unload chunk {pos:?}");
                 self.unload_chunks.insert(*pos, chunk);
             }
         }
@@ -1002,7 +1003,6 @@ impl GenerationSchedule {
             if old_level == ChunkLoading::MAX_LEVEL
                 && let Some(chunk) = self.unload_chunks.remove(pos)
             {
-                self.task_mark.remove(pos);
                 Self::add_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos, chunk);
             }
 
@@ -1141,9 +1141,17 @@ impl GenerationSchedule {
     }
 
     fn drop_mark(&mut self, stage: StagedChunkEnum, pos: ChunkPos) {
-        let (mark, _) = self.task_mark.get_mut(&pos).unwrap();
-        debug_assert!((*mark >> (stage as u8) & 1) == 1);
-        *mark -= 1 << (stage as u8);
+        match self.task_mark.entry(pos) {
+            Entry::Occupied(mut entry) => {
+                let (mark, _) = entry.get_mut();
+                debug_assert!((*mark >> (stage as u8) & 1) == 1);
+                *mark -= 1 << (stage as u8);
+                if *mark == 0 && !self.last_level.contains_key(&pos) {
+                    entry.remove();
+                }
+            }
+            Entry::Vacant(_) => panic!(),
+        }
     }
 
     fn unload_chunk(&mut self) {
@@ -1298,6 +1306,7 @@ impl GenerationSchedule {
                     have_recv = true;
                 }
                 if have_recv {
+                    nothing = false;
                     break 'outer;
                 }
 
