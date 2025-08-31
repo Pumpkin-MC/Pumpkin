@@ -11,10 +11,12 @@ pub(crate) fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../assets/spawn_egg.json").unwrap())
             .expect("Failed to parse spawn_egg.json");
     let mut names = TokenStream::new();
+    let mut ids = TokenStream::new();
 
     for (egg, entity) in &eggs {
         let entity = entity.to_shouty_snake_case();
         let entity = format_ident!("{}", entity);
+        ids.extend(quote! { #egg, });
         names.extend(quote! { #egg => Some(&EntityType::#entity), });
     }
     quote! {
@@ -25,6 +27,9 @@ pub(crate) fn build() -> TokenStream {
             #names
             _ => None
         }
+    }
+    pub fn spawn_egg_ids() -> Box<[u16]> {
+        [#ids].into()
     }
     }
 }

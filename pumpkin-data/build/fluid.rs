@@ -53,8 +53,8 @@ impl ToTokens for PropertyStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = Ident::new(&self.name, Span::call_site());
 
-        let variant_count = self.values.clone().len() as u16;
-        let values_index = (0..self.values.clone().len() as u16).collect::<Vec<_>>();
+        let variant_count = self.values.len() as u16;
+        let values_index = (0..self.values.len() as u16).collect::<Vec<_>>();
 
         let ident_values = self.values.iter().map(|value| {
             let value_str = if value.chars().all(|c| c.is_numeric()) {
@@ -370,7 +370,7 @@ pub(crate) fn build() -> TokenStream {
     let mut unique_states = Vec::new();
     let mut optimized_fluids: Vec<(String, FluidStateRef)> = Vec::new();
 
-    for fluid in fluids.clone() {
+    for fluid in fluids {
         let id_name = LitStr::new(&fluid.name, proc_macro2::Span::call_site());
         let const_ident = format_ident!("{}", fluid.name.to_shouty_snake_case());
         let state_id_start = fluid

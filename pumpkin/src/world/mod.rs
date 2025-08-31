@@ -1,3 +1,4 @@
+use std::num::NonZeroU32;
 use std::sync::Weak;
 use std::sync::atomic::Ordering::Relaxed;
 use std::time::Duration;
@@ -52,19 +53,20 @@ use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
+use pumpkin_protocol::bedrock::client::chunk_radius_update::CChunkRadiusUpdate;
+use pumpkin_protocol::bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate;
+use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
         client::{
-            chunk_radius_update::CChunkRadiusUpdate,
             creative_content::{CreativeContent, Group},
             gamerules_changed::GameRules,
-            inventory_content::CInventoryContent,
             play_status::CPlayStatus,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_artributes::{Attribute, CUpdateAttributes},
         },
-        network_item::{ItemInstanceUserData, NetworkItemDescriptor, NetworkItemStackDescriptor},
+        network_item::NetworkItemDescriptor,
         server::text::SText,
     },
     codec::{
@@ -390,7 +392,7 @@ impl World {
         let current_players = self.players.read().await;
 
         for (_, player) in current_players.iter() {
-            match player.client.as_ref() {
+            match &player.client {
                 ClientPlatform::Java(client) => client.enqueue_packet(je_packet).await,
                 ClientPlatform::Bedrock(client) => client.send_game_packet(be_packet).await,
             }
@@ -717,8 +719,8 @@ impl World {
 
         for i in self.players.read().await.values() {
             let center = i.living_entity.entity.chunk_pos.load();
-            for dx in -8i32..=8 {
-                for dy in -8i32..=8 {
+            for dx in -8..=8 {
+                for dy in -8..=8 {
                     // if dx.abs() <= 2 || dy.abs() <= 2 || dx.abs() >= 6 || dy.abs() >= 6 { // this is only for debug, spawning runs too slow
                     //     continue;
                     // }
@@ -732,10 +734,8 @@ impl World {
             }
         }
 
-        let mut spawning_chunks = Vec::with_capacity(spawning_chunks_map.len());
-        for i in spawning_chunks_map {
-            spawning_chunks.push(i);
-        }
+        let mut spawning_chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)> =
+            spawning_chunks_map.into_iter().collect();
 
         let get_chunks_clock = spawn_entity_clock_start.elapsed();
         // log::debug!("spawning chunks size {}", spawning_chunks.len());
@@ -1085,10 +1085,8 @@ impl World {
     ) {
         // this.level.tickThunder(chunk);
         //TODO check in simulation distance
-        if self.weather.lock().await.raining
-            && self.weather.lock().await.thundering
-            && rng().random_range(0..100_000) == 0
-        {
+        let weather = self.weather.lock().await;
+        if weather.raining && weather.thundering && rng().random_range(0..100_000) == 0 {
             let rand_value = rng().random::<i32>() >> 2;
             let delta = Vector3::new(rand_value & 15, rand_value >> 16 & 15, rand_value >> 8 & 15);
             let random_pos = Vector3::new(
@@ -1191,14 +1189,14 @@ impl World {
             custom_biome_name: String::new(),
             dimension: VarInt(0),
             generator_type: VarInt(1),
-            world_gamemode: VarInt(server.defaultgamemode.lock().await.gamemode as i32),
+            world_gamemode: server.defaultgamemode.lock().await.gamemode,
             hardcore: base_config.hardcore,
             difficulty: VarInt(level_info.difficulty as i32),
-            spawn_position: NetworkPos(BlockPos(Vector3::new(
+            spawn_position: NetworkPos(BlockPos::new(
                 level_info.spawn_x,
                 level_info.spawn_y,
                 level_info.spawn_z,
-            ))),
+            )),
             has_achievements_disabled: false,
             editor_world_type: VarInt(0),
             is_created_in_editor: false,
@@ -1212,8 +1210,8 @@ impl World {
             has_confirmed_platform_locked_content: false,
             was_multiplayer_intended: true,
             was_lan_broadcasting_intended: true,
-            xbox_live_broadcast_setting: VarInt(GamePublishSetting::Public as _),
-            platform_broadcast_setting: VarInt(GamePublishSetting::Public as _),
+            xbox_live_broadcast_setting: GamePublishSetting::Public,
+            platform_broadcast_setting: GamePublishSetting::Public,
             commands_enabled: level_info.allow_commands,
             is_texture_packs_required: false,
             rule_data: GameRules {
@@ -1256,11 +1254,12 @@ impl World {
         drop(weather);
 
         let client = player.client.bedrock();
+
         client
             .send_game_packet(&CStartGame {
-                entity_id: VarLong(runtime_id as i64),
+                entity_id: VarLong(runtime_id as _),
                 runtime_entity_id: VarULong(runtime_id),
-                player_gamemode: VarInt(player.gamemode.load() as i32),
+                player_gamemode: player.gamemode.load(),
                 position: Vector3::new(0.0, 100.0, 0.0),
                 pitch: 0.0,
                 yaw: 0.0,
@@ -1290,9 +1289,16 @@ impl World {
                 // TODO The client needs extra biome data for this
                 enable_clientside_generation: false,
                 blocknetwork_ids_are_hashed: false,
+                tick_death_system_enabled: false,
                 server_auth_sounds: false,
             })
             .await;
+        client
+            .send_game_packet(&CChunkRadiusUpdate {
+                chunk_radius: VarInt(player.config.read().await.view_distance.get().into()),
+            })
+            .await;
+        chunker::update_position(&player).await;
         client
             .send_game_packet(&CreativeContent {
                 groups: &[Group {
@@ -1304,52 +1310,48 @@ impl World {
             })
             .await;
 
+        let mut frame_set = FrameSet::default();
         client
-            .send_game_packet(&CChunkRadiusUpdate {
-                chunk_radius: VarInt(16),
-            })
+            .write_game_packet_to_set(
+                &CNetworkChunkPublisherUpdate::new(
+                    BlockPos::new(0, 100, 0),
+                    NonZeroU32::from(player.config.read().await.view_distance).into(),
+                ),
+                &mut frame_set,
+            )
             .await;
 
-        chunker::update_position(&player).await;
-
         client
-            .send_game_packet(&CUpdateAttributes {
-                runtime_id: VarULong(runtime_id),
-                attributes: vec![Attribute {
-                    min_value: 0.0,
-                    max_value: f32::MAX,
-                    current_value: 0.1,
-                    default_min_value: 0.0,
-                    default_max_value: f32::MAX,
-                    default_value: 0.1,
-                    name: "minecraft:movement".to_string(),
-                    modifiers_list_size: VarUInt(0),
-                }],
-                player_tick: VarULong(0),
-            })
+            .write_game_packet_to_set(
+                &CUpdateAttributes {
+                    runtime_id: VarULong(runtime_id),
+                    attributes: vec![Attribute {
+                        min_value: 0.0,
+                        max_value: f32::MAX,
+                        current_value: 0.1,
+                        default_min_value: 0.0,
+                        default_max_value: f32::MAX,
+                        default_value: 0.1,
+                        name: "minecraft:movement".to_string(),
+                        modifiers_list_size: VarUInt(0),
+                    }],
+                    player_tick: VarULong(0),
+                },
+                &mut frame_set,
+            )
             .await;
 
-        client.send_game_packet(&CPlayStatus::PlayerSpawn).await;
-
         client
-            .send_game_packet(&CInventoryContent {
-                inventory_id: VarUInt(124),
-                slots: vec![
-                    NetworkItemStackDescriptor {
-                        id: VarInt(2),
-                        stack_size: 64,
-                        aux_value: VarUInt(0),
-                        net_id: Some(VarInt(2)),
-                        block_runtime_id: VarInt(2),
-                        user_data_buffer: ItemInstanceUserData::default()
-                    };
-                    36
-                ],
-                container_name: 0,
-                dynamic_id: None,
-                storage_item: NetworkItemStackDescriptor::default(),
-            })
+            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
             .await;
+        client.send_frame_set(frame_set, 0x84).await;
+
+        {
+            let mut abilities = player.abilities.lock().await;
+            abilities.set_for_gamemode(player.gamemode.load());
+        };
+
+        player.send_abilities_update().await;
     }
 
     #[expect(clippy::too_many_lines)]
@@ -1689,7 +1691,7 @@ impl World {
         yaw: f32,
         pitch: f32,
     ) {
-        if let ClientPlatform::Java(client) = player.client.as_ref() {
+        if let ClientPlatform::Java(client) = &player.client {
             self.worldborder.lock().await.init_client(client).await;
         }
 
@@ -1781,7 +1783,7 @@ impl World {
             ))
             .await;
 
-        player.reset_state().await;
+        player.living_entity.reset_state().await;
 
         log::debug!("Sending player abilities to {}", player.gameprofile.name);
         player.send_abilities_update().await;
@@ -1870,9 +1872,9 @@ impl World {
         let mut receiver = self.level.receive_chunks(chunks.clone());
 
         let level = self.level.clone();
-        let player1 = player.clone();
         let world = self.clone();
         let world1 = self.clone();
+        let player1 = player.clone();
 
         player.clone().spawn_task(async move {
             'main: loop {
@@ -2316,7 +2318,7 @@ impl World {
             .remove(&player.gameprofile.id)
             .unwrap();
         let uuid = player.gameprofile.id;
-        self.broadcast_packet_except(&[player.gameprofile.id], &CRemovePlayerInfo::new(&[uuid]))
+        self.broadcast_packet_all(&CRemovePlayerInfo::new(&[uuid]))
             .await;
         self.broadcast_packet_all(&CRemoveEntities::new(&[player.entity_id().into()]))
             .await;
@@ -3202,8 +3204,25 @@ impl pumpkin_world::world::SimpleWorld for World {
         Self::update_neighbors(&self, block_pos, except).await;
     }
 
+    async fn is_space_empty(&self, bounding_box: BoundingBox) -> bool {
+        self.is_space_empty(bounding_box).await
+    }
+
     async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
         self.add_synced_block_event(pos, r#type, data).await;
+    }
+
+    async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
+        self.sync_world_event(world_event, position, data).await;
+    }
+
+    async fn spawn_from_type(
+        self: Arc<Self>,
+        entity_type: &'static EntityType,
+        position: Vector3<f64>,
+    ) {
+        let mob = from_type(entity_type, position, &self, Uuid::new_v4()).await;
+        self.spawn_entity(mob).await;
     }
 
     async fn remove_block_entity(&self, block_pos: &BlockPos) {

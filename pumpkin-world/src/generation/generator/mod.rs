@@ -13,6 +13,7 @@ use super::{
 };
 use crate::chunk::format::LightContainer;
 use crate::generation::proto_chunk::TerrainCache;
+use crate::generation::section_coords;
 use crate::level::Level;
 use crate::world::BlockRegistryExt;
 use crate::{chunk::ChunkLight, dimension::Dimension};

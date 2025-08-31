@@ -3,7 +3,10 @@ use std::{
     net::SocketAddr,
 };
 
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::{
+    GameMode,
+    math::{position::BlockPos, vector3::Vector3},
+};
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
@@ -152,16 +155,34 @@ impl<T: PacketWrite> PacketWrite for Option<T> {
 impl PacketWrite for SocketAddr {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
+            // version, addr, port
             SocketAddr::V4(addr) => {
-                writer.write_all(&[4])?;
+                4u8.write(writer)?;
                 writer.write_all(&addr.ip().octets())?;
+                addr.port().write_be(writer)
             }
+            // version, addr_family, port, flow_info, addr, scope_id
             SocketAddr::V6(addr) => {
-                writer.write_all(&[6])?;
+                6u8.write(writer)?;
+                10u16.write(writer)?;
+                addr.port().write_be(writer)?;
+                addr.flowinfo().write_be(writer)?;
                 writer.write_all(&addr.ip().octets())?;
+                addr.scope_id().write_be(writer)
             }
-        };
+        }
+    }
+}
 
-        writer.write_all(&self.port().to_be_bytes())
+impl PacketWrite for GameMode {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarInt(match self {
+            Self::Survival => 0,
+            Self::Creative => 1,
+            Self::Adventure => 2,
+            // I have no idea why
+            Self::Spectator => 6,
+        })
+        .write(writer)
     }
 }

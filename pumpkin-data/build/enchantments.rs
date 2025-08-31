@@ -63,7 +63,7 @@ pub(crate) fn build() -> TokenStream {
     let mut name_to_type = TokenStream::new();
     let mut id_to_type = TokenStream::new();
 
-    for (name, enchantment) in enchantments.iter() {
+    for (name, enchantment) in enchantments.into_iter() {
         let id = enchantment.id;
         let raw_name = name.strip_prefix("minecraft:").unwrap();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
@@ -79,7 +79,7 @@ pub(crate) fn build() -> TokenStream {
                 .to_uppercase()
         );
         let max_level = enchantment.max_level;
-        let slots = enchantment.slots.clone();
+        let slots = enchantment.slots;
         let slots = slots.iter().map(|slot| slot.to_tokens());
         let Translate { translate, with: _ } = &enchantment.description.0.content else {
             panic!()

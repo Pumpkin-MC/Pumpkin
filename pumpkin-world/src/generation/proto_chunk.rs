@@ -321,6 +321,12 @@ impl ProtoChunk {
     }
 
     #[inline]
+    pub fn get_block_state_raw(&self, local_pos: &Vector3<i32>) -> u16 {
+        let index = self.local_pos_to_block_index(local_pos);
+        self.flat_block_map[index]
+    }
+
+    #[inline]
     pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> RawBlockState {
         let local_pos = Vector3::new(
             local_pos.x & 15,
@@ -330,8 +336,7 @@ impl ProtoChunk {
         if local_pos.y < 0 || local_pos.y >= self.height() as i32 {
             return RawBlockState(Block::VOID_AIR.default_state.id);
         }
-        let index = self.local_pos_to_block_index(&local_pos);
-        RawBlockState(self.flat_block_map[index])
+        RawBlockState(self.get_block_state_raw(&local_pos))
     }
 
     pub fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {

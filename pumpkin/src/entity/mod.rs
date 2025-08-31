@@ -1412,7 +1412,7 @@ impl Entity {
     }
 
     pub async fn set_sneaking(&self, sneaking: bool) {
-        assert!(self.sneaking.load(Relaxed) != sneaking);
+        //assert!(self.sneaking.load(Relaxed) != sneaking);
         self.sneaking.store(sneaking, Relaxed);
         self.set_flag(Flag::Sneaking, sneaking).await;
         if sneaking {
@@ -1554,7 +1554,7 @@ impl Entity {
     }
 
     pub async fn set_sprinting(&self, sprinting: bool) {
-        assert!(self.sprinting.load(Relaxed) != sprinting);
+        //assert!(self.sprinting.load(Relaxed) != sprinting);
         self.sprinting.store(sprinting, Relaxed);
         self.set_flag(Flag::Sprinting, sprinting).await;
     }

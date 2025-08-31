@@ -29,6 +29,7 @@ use crate::item::items::dye::DyeItem;
 use crate::item::items::glowing_ink_sac::GlowingInkSacItem;
 use crate::item::items::honeycomb::HoneyCombItem;
 use crate::item::items::ink_sac::InkSacItem;
+use crate::net::ClientPlatform;
 use crate::world::World;
 
 type SignProperties = pumpkin_data::block_properties::OakSignLikeProperties;
@@ -55,7 +56,7 @@ impl BlockBehaviour for SignBlock {
     }
 
     async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        match args.player.client.as_ref() {
+        match &args.player.client {
             crate::net::ClientPlatform::Java(java) => {
                 java.send_sign_packet(*args.position, true).await;
             }
@@ -100,12 +101,12 @@ impl BlockBehaviour for SignBlock {
 
         let is_facing_front_text =
             is_facing_front_text(args.world, args.position, args.block, args.player).await;
-        match args.player.client.as_ref() {
-            crate::net::ClientPlatform::Java(java) => {
+        match &args.player.client {
+            ClientPlatform::Java(java) => {
                 java.send_sign_packet(*args.position, is_facing_front_text)
                     .await;
             }
-            crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
+            ClientPlatform::Bedrock(_bedrock) => todo!(),
         }
 
         BlockActionResult::SuccessServer

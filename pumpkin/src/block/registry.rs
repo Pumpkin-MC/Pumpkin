@@ -60,6 +60,7 @@ use crate::block::blocks::redstone::tripwire::TripwireBlock;
 use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
 use crate::block::blocks::signs::SignBlock;
 use crate::block::blocks::slabs::SlabBlock;
+use crate::block::blocks::spawner::SpawnerBlock;
 use crate::block::blocks::stairs::StairBlock;
 use crate::block::blocks::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::tnt::TNTBlock;
@@ -74,7 +75,6 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use async_trait::async_trait;
 use pumpkin_data::fluid;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
@@ -201,6 +201,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(PressurePlateBlock);
     manager.register(WeightedPressurePlateBlock);
     manager.register(EndPortalBlock);
+    manager.register(SpawnerBlock);
     manager.register(EndPortalFrameBlock);
     manager.register(CandleBlock);
     manager.register(SeaPickleBlock);
@@ -290,7 +291,6 @@ pub struct BlockRegistry {
     fluids: HashMap<&'static Fluid, Arc<dyn FluidBehaviour>>,
 }
 
-#[async_trait]
 impl BlockRegistryExt for BlockRegistry {
     fn can_place_at(
         &self,

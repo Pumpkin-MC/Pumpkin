@@ -18,7 +18,7 @@ pub struct Recipes {
 }
 
 impl Recipes {
-    pub fn to_tokens_potion(&self) -> TokenStream {
+    pub fn get_tokens_potion(self) -> TokenStream {
         let from = format_ident!(
             "{}",
             self.from.strip_prefix("minecraft:").unwrap().to_uppercase()
@@ -28,8 +28,7 @@ impl Recipes {
             self.to.strip_prefix("minecraft:").unwrap().to_uppercase()
         );
 
-        let slots = self.ingredient.clone();
-        let slots = slots.iter().map(|slot| {
+        let slots = self.ingredient.iter().map(|slot| {
             format_ident!(
                 "{}",
                 slot.strip_prefix("minecraft:").unwrap().to_uppercase()
@@ -45,7 +44,7 @@ impl Recipes {
         }
     }
 
-    pub fn to_tokens_item(&self) -> TokenStream {
+    pub fn get_tokens_item(self) -> TokenStream {
         let from = format_ident!(
             "{}",
             self.from.strip_prefix("minecraft:").unwrap().to_uppercase()
@@ -55,8 +54,7 @@ impl Recipes {
             self.to.strip_prefix("minecraft:").unwrap().to_uppercase()
         );
 
-        let slots = self.ingredient.clone();
-        let slots = slots.iter().map(|slot| {
+        let slots = self.ingredient.iter().map(|slot| {
             format_ident!(
                 "{}",
                 slot.strip_prefix("minecraft:").unwrap().to_uppercase()
@@ -83,15 +81,15 @@ pub(crate) fn build() -> TokenStream {
     let mut item = TokenStream::new();
     let mut potion = TokenStream::new();
 
-    for j in &json.item_recipes {
-        item.extend(j.to_tokens_item());
-    }
-    for j in &json.potion_recipes {
-        potion.extend(j.to_tokens_potion());
-    }
-
     let item_len = json.item_recipes.len();
     let potion_len = json.potion_recipes.len();
+
+    for j in json.item_recipes {
+        item.extend(j.get_tokens_item());
+    }
+    for j in json.potion_recipes {
+        potion.extend(j.get_tokens_potion());
+    }
 
     quote! {
         #![allow(dead_code)]
