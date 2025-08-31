@@ -1,5 +1,6 @@
 pub mod chunk_radius_update;
 pub mod container_open;
+pub mod correct_player_move;
 pub mod creative_content;
 pub mod disconnect_player;
 pub mod gamerules_changed;
@@ -14,7 +15,9 @@ pub mod player_hotbar;
 pub mod raknet;
 pub mod resource_pack_stack;
 pub mod resource_packs_info;
+pub mod set_actor_motion;
 pub mod set_player_gamemode;
 pub mod set_time;
 pub mod start_game;
+pub mod update_abilities;
 pub mod update_artributes;

@@ -26,6 +26,12 @@ impl LootTableExt for LootTable {
 
         if let Some(pools) = self.pools {
             for pool in pools {
+                if let Some(conditions) = pool.conditions
+                    && !conditions.iter().all(|cond| cond.is_fulfilled(&params))
+                {
+                    return stacks;
+                }
+
                 // TODO
                 let rolls = pool
                     .rolls

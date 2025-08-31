@@ -34,6 +34,19 @@ impl SText {
             filtered_message: String::new(),
         }
     }
+
+    pub fn system_message(message: String) -> Self {
+        Self {
+            r#type: TextPacketType::SystemMessage,
+            localize: false,
+            player_name: String::new(),
+            message,
+            parameters: Vec::new(),
+            sender_xuid: String::new(),
+            platform_id: String::new(),
+            filtered_message: String::new(),
+        }
+    }
 }
 
 impl PacketRead for SText {
