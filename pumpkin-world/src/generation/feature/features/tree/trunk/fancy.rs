@@ -121,7 +121,7 @@ impl FancyTrunkPlacer {
 
     fn make_or_check_branch(
         chunk: &mut ProtoChunk,
-        _level: &Arc<Level>,
+        level: &Arc<Level>,
         start_pos: Vector3<i32>,
         branch_pos: Vector3<i32>,
         trunk_provider: &BlockState,
@@ -174,7 +174,7 @@ impl FancyTrunkPlacer {
                     if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
                         chunk.set_block_state(&block_pos_2.0, BlockState::from_id(state));
                     } else {
-                        // level.set_block_state(&block_pos_2, state).await;
+                        level.set_block_state_gen(&block_pos_2, BlockState::from_id(state));
                     }
                     logs.push(block_pos_2);
                     continue;

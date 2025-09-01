@@ -159,6 +159,7 @@ fn rayon_chunk_generator(
     chunk_coord: Vector2<i32>,
     level: Arc<Level>,
     generation_state: &VanillaGenerationState,
+    permit: tokio::sync::OwnedSemaphorePermit,
 ) {
     let chunk = {
         let chunk = level.loaded_chunks.entry(chunk_coord).or_insert_with(|| {
@@ -209,7 +210,7 @@ fn rayon_chunk_generator(
                 ChunkEntry::Pending(chunk) => {
                     ChunkEntry::Full(Arc::new(RwLock::new(chunk.finalize(generation_settings))))
                 }
-                ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
+                ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk),
             });
         }
 
@@ -217,9 +218,11 @@ fn rayon_chunk_generator(
             notify_full.notify_waiters();
         }
 
-        println!("Chunk {:?} generated", chunk_coord);
+        //println!("Chunk {:?} generated", chunk_coord);
+        drop(permit);
     } else {
         println!("Chunk {:?} already exists", chunk_coord);
+        drop(permit);
     }
 }
 
@@ -299,18 +302,33 @@ impl Level {
 
         let level_ref_clone = level_ref.clone();
         tokio::spawn(async move {
+            let generation_semaphore = Arc::new(tokio::sync::Semaphore::new(1));
             loop {
+                if level_ref_clone.is_shutting_down.load(Ordering::Relaxed) {
+                    break;
+                }
                 let maybe_coord = level_ref_clone.chunk_tickets.lock().await.pop();
 
                 if let Some(coord) = maybe_coord {
                     let generator_clone = level_ref_clone.clone();
                     let generation_state_clone = generation_state.clone();
 
+                    let permit = generation_semaphore.clone().acquire_owned().await.unwrap();
                     level_ref_clone.thread_pool.spawn(move || {
-                        rayon_chunk_generator(coord, generator_clone, &generation_state_clone);
+                        rayon_chunk_generator(
+                            coord,
+                            generator_clone,
+                            &generation_state_clone,
+                            permit,
+                        );
                     });
                 } else {
-                    level_ref_clone.ticket_notify.notified().await;
+                    tokio::select! {
+                        _ = level_ref_clone.ticket_notify.notified() => {},
+                        _ = level_ref_clone.shutdown_notifier.notified() => {
+                            break;
+                        },
+                    }
                 }
             }
         });
@@ -630,6 +648,9 @@ impl Level {
             block_entities: Vec::new(),
         };
 
+        //TODO: fix
+        return ticks;
+
         let mut rng = SmallRng::from_os_rng();
         for chunk in self.loaded_chunks.iter() {
             let mut chunk = match &chunk.value() {
@@ -697,6 +718,11 @@ impl Level {
 
     pub async fn clean_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
         self.clean_chunks(&[*chunk]).await;
+    }
+
+    async fn request_chunks(&self, coords: &[Vector2<i32>]) {
+        self.chunk_tickets.lock().await.extend(coords);
+        self.ticket_notify.notify_waiters();
     }
 
     pub async fn wait_for_chunk(&self, coord: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
@@ -779,7 +805,10 @@ impl Level {
                     .insert(pos, ChunkEntry::Full(chunk.clone()));
                 chunk
             }
-            Err(_) => self.wait_for_chunk(pos).await,
+            Err(_) => {
+                self.request_chunks(&[pos]).await;
+                self.wait_for_chunk(pos).await
+            }
         }
     }
 
@@ -839,6 +868,7 @@ impl Level {
                                 let sender_clone = sender.clone();
                                 let level_clone = level.clone();
 
+                                level_clone.request_chunks(&[pos]).await;
                                 tokio::spawn(async move {
                                     let _ = sender_clone
                                         .send((level_clone.wait_for_chunk(pos).await, true));
@@ -1021,6 +1051,20 @@ impl Level {
             chunk.mark_dirty(true);
         }
         replaced_block_state_id
+    }
+
+    pub fn set_block_state_gen(&self, position: &BlockPos, block_state: &BlockState) {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        if let Some(chunk) = self.loaded_chunks.get(&chunk_coordinate)
+            && let ChunkEntry::Pending(chunk) = &chunk.value()
+        {
+            chunk
+                .state
+                .lock()
+                .unwrap()
+                .proto_chunk
+                .set_block_state(&relative, block_state);
+        }
     }
 
     pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk)>) {

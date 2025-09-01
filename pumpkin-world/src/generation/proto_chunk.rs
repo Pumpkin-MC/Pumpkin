@@ -806,7 +806,7 @@ const fn dependency_radius(chunk_stage: ChunkStage) -> i32 {
         ChunkStage::Empty => 0,
         ChunkStage::Biomes => 0,
         ChunkStage::Noise => 0,
-        ChunkStage::Surface => 0,
+        ChunkStage::Surface => 1,
         ChunkStage::Full => 0,
     }
 }
@@ -1032,6 +1032,7 @@ impl PendingChunk {
                         &mut surface_height_estimate_sampler,
                     );
                     state.stage = ChunkStage::Surface;
+                    println!("Chunk {:?} built surface", self.position);
                 }
                 ChunkStage::Surface => {
                     // Generate features and structures
@@ -1041,6 +1042,7 @@ impl PendingChunk {
                         random_config,
                     );
                     state.stage = ChunkStage::Full;
+                    println!("Chunk {:?} generated features and structures", self.position);
                 }
                 ChunkStage::Full => {
                     // Should not happen due to the check at the top, but is safe.

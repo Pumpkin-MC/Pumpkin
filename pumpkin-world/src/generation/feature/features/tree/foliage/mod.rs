@@ -135,7 +135,7 @@ impl FoliagePlacer {
 
     pub fn place_foliage_block(
         chunk: &mut ProtoChunk,
-        _level: &Arc<Level>,
+        level: &Arc<Level>,
         pos: BlockPos,
         block_state: &BlockState,
     ) {
@@ -146,7 +146,7 @@ impl FoliagePlacer {
         if chunk.chunk_pos == pos.chunk_and_chunk_relative_position().0 {
             chunk.set_block_state(&pos.0, block_state);
         } else {
-            //level.set_block_state(&pos, block_state.id).await;
+            level.set_block_state_gen(&pos, block_state);
         }
     }
 }
