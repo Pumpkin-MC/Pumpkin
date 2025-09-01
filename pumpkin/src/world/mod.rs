@@ -728,7 +728,7 @@ impl World {
                     if let Some(chunk) = self.level.try_get_chunk(&chunk_pos) {
                         spawning_chunks_map
                             .entry(chunk_pos)
-                            .or_insert(chunk.value().clone());
+                            .or_insert(chunk.clone());
                     }
                 }
             }

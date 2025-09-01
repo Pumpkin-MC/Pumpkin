@@ -42,6 +42,11 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
 pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
 
+pub enum ChunkEntry {
+    Pending(Arc<StagedChunk>),
+    Full(Arc<RwLock<ChunkData>>),
+}
+
 pub struct ChunkRequest {
     pub pos: Vector2<i32>,
     pub response: oneshot::Sender<(SyncChunk, bool)>, // bool = is_new
@@ -66,8 +71,7 @@ pub struct Level {
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
-    loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
-    pending_chunks: Arc<DashMap<Vector2<i32>, StagedChunk>>,
+    loaded_chunks: Arc<DashMap<Vector2<i32>, ChunkEntry>>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
@@ -162,7 +166,6 @@ impl Level {
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
-            pending_chunks: Arc::new(DashMap::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
@@ -203,7 +206,9 @@ impl Level {
                     let arc_chunk = Arc::new(RwLock::new(chunk));
 
                     // Insert into loaded chunks
-                    level_clone.loaded_chunks.insert(pos, arc_chunk.clone());
+                    level_clone
+                        .loaded_chunks
+                        .insert(pos, ChunkEntry::Full(arc_chunk.clone()));
 
                     // Fulfill all waiters
                     if let Some(waiters) = pending_clone.remove(&pos) {
@@ -303,7 +308,13 @@ impl Level {
         let chunks_to_write = self
             .loaded_chunks
             .iter()
-            .map(|chunk| (*chunk.key(), chunk.value().clone()))
+            .filter_map(|chunk| {
+                if let ChunkEntry::Full(loaded_chunk) = &chunk.value() {
+                    Some((*chunk.key(), loaded_chunk.clone()))
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<_>>();
         self.loaded_chunks.clear();
 
@@ -437,7 +448,12 @@ impl Level {
                     .get(pos)
                     .is_none_or(|count| count.is_zero())
                 {
-                    self.loaded_chunks.remove(pos).map(|chunk| (*pos, chunk.1))
+                    //TODO: pending chunk saving
+                    if let Some((pos, ChunkEntry::Full(chunk))) = self.loaded_chunks.remove(pos) {
+                        Some((pos, chunk))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
@@ -456,7 +472,7 @@ impl Level {
                 if level.chunk_watchers.get(&pos).is_some() {
                     let entry = level.loaded_chunks.entry(pos);
                     if let Entry::Vacant(vacant) = entry {
-                        vacant.insert(chunk);
+                        vacant.insert(ChunkEntry::Full(chunk));
                     }
                 }
             }
@@ -518,7 +534,10 @@ impl Level {
 
         let mut rng = SmallRng::from_os_rng();
         for chunk in self.loaded_chunks.iter() {
-            let mut chunk = chunk.write().await;
+            let mut chunk = match &chunk.value() {
+                ChunkEntry::Full(chunk) => chunk.write().await,
+                ChunkEntry::Pending(_) => continue,
+            };
             ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
             ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
 
@@ -616,14 +635,17 @@ impl Level {
 
     pub async fn get_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
         // Already loaded?
-        if let Some(chunk) = self.loaded_chunks.get(&pos) {
-            return chunk.clone();
+        if let Some(chunk) = self.loaded_chunks.get(&pos)
+            && let ChunkEntry::Full(loaded_chunk) = &chunk.value()
+        {
+            return loaded_chunk.clone();
         }
 
         // Try to load from disk
         match self.load_single_chunk(pos).await {
             Ok((chunk, _)) => {
-                self.loaded_chunks.insert(pos, chunk.clone());
+                self.loaded_chunks
+                    .insert(pos, ChunkEntry::Full(chunk.clone()));
                 chunk
             }
             Err(_) => {
@@ -666,8 +688,10 @@ impl Level {
                 // Separate already-loaded chunks from ones we need to fetch
                 let mut to_fetch = Vec::new();
                 for pos in &chunks {
-                    if let Some(chunk) = level.loaded_chunks.get(pos) {
-                        let _ = sender.send((chunk.clone(), false));
+                    if let Some(chunk) = level.loaded_chunks.get(pos)
+                        && let ChunkEntry::Full(loaded_chunk) = &chunk.value()
+                    {
+                        let _ = sender.send((loaded_chunk.clone(), false));
                     } else {
                         to_fetch.push(*pos);
                     }
@@ -690,7 +714,9 @@ impl Level {
                         match data {
                             LoadedData::Loaded(chunk) => {
                                 let pos = chunk.read().await.position;
-                                level.loaded_chunks.insert(pos, chunk.clone());
+                                level
+                                    .loaded_chunks
+                                    .insert(pos, ChunkEntry::Full(chunk.clone()));
                                 let _ = sender.send((chunk, false));
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
@@ -929,11 +955,13 @@ impl Level {
         }
     }
 
-    pub fn try_get_chunk(
-        &self,
-        coordinates: &Vector2<i32>,
-    ) -> Option<dashmap::mapref::one::Ref<'_, Vector2<i32>, Arc<RwLock<ChunkData>>>> {
-        self.loaded_chunks.try_get(coordinates).try_unwrap()
+    pub fn try_get_chunk(&self, coordinates: &Vector2<i32>) -> Option<Arc<RwLock<ChunkData>>> {
+        if let Some(chunk) = self.loaded_chunks.try_get(coordinates).try_unwrap()
+            && let ChunkEntry::Full(loaded_chunk) = &chunk.value()
+        {
+            return Some(loaded_chunk.clone());
+        }
+        None
     }
 
     pub fn try_get_entity_chunk(
