@@ -72,8 +72,8 @@ pub struct Level {
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
-    entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
+    pub chunk_saver: Arc<dyn FileIO<Data=SyncChunk>>,
+    entity_saver: Arc<dyn FileIO<Data=SyncEntityChunk>>,
 
     pub world_gen: Arc<VanillaGenerator>,
 
@@ -82,6 +82,10 @@ pub struct Level {
     /// Notification that interrupts tasks for shutdown
     pub shutdown_notifier: Notify,
     pub is_shutting_down: AtomicBool,
+
+    pub shut_down_chunk_system: AtomicBool,
+    pub should_save: AtomicBool,
+    pub should_unload: AtomicBool,
 
     gen_entity_request_tx: Sender<Vector2<i32>>,
     pending_entity_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncEntityChunk>>>>,
@@ -131,13 +135,13 @@ impl Level {
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
-        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match advanced_config().chunk.format {
+        let chunk_saver: Arc<dyn FileIO<Data=SyncChunk>> = match advanced_config().chunk.format {
             ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile<ChunkData>>::default()),
             ChunkFormat::Anvil => {
                 Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkData>>::default())
             }
         };
-        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> =
+        let entity_saver: Arc<dyn FileIO<Data=SyncEntityChunk>> =
             match advanced_config().chunk.format {
                 ChunkFormat::Linear => {
                     Arc::new(ChunkFileManager::<LinearFile<ChunkEntityData>>::default())
@@ -169,6 +173,9 @@ impl Level {
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             is_shutting_down: AtomicBool::new(false),
+            shut_down_chunk_system: AtomicBool::new(false),
+            should_save: AtomicBool::new(false),
+            should_unload: AtomicBool::new(false),
             gen_entity_request_tx,
             pending_entity_generations: pending_entity_generations.clone(),
             level_channel: level_channel.clone(),
@@ -255,12 +262,14 @@ impl Level {
 
         self.is_shutting_down.store(true, Ordering::Relaxed);
         self.shutdown_notifier.notify_waiters();
-        self.level_channel.notify();
 
         self.tasks.close();
         log::debug!("Awaiting level tasks");
         self.tasks.wait().await;
         log::debug!("Done awaiting level chunk tasks");
+
+        self.shut_down_chunk_system.store(true, Ordering::Relaxed);
+        self.level_channel.notify();
 
         {
             let mut lock = self.thread_tracker.lock().unwrap();
@@ -275,7 +284,8 @@ impl Level {
             log::info!("All Thread stop");
         }
 
-        // wait for chunks currently saving in other threads
+        // wait for chunks currently saving in other
+        log::info!("Wait chunk saver to stop");
         self.chunk_saver.block_and_await_ongoing_tasks().await;
 
         // save all chunks currently in memory
