@@ -818,7 +818,7 @@ pub enum ChunkStage {
 const fn dependency_radius(chunk_stage: ChunkStage) -> i32 {
     match chunk_stage {
         ChunkStage::Empty => 0,
-        ChunkStage::Biomes => 0,
+        ChunkStage::Biomes => 1,
         ChunkStage::Noise => 0,
         ChunkStage::Surface => 1,
         ChunkStage::Features => 1,
@@ -873,11 +873,13 @@ impl PendingChunk {
         biome_mixer_seed: i64,
     ) {
         loop {
-            let current_stage = self.state.lock().unwrap().stage;
-
-            if current_stage >= target_stage {
-                return;
-            }
+            let current_stage = {
+                let state = self.state.lock().unwrap();
+                if state.stage >= target_stage {
+                    return;
+                }
+                state.stage
+            };
 
             let next_stage_deps = self.get_dependants(current_stage);
 
@@ -885,17 +887,28 @@ impl PendingChunk {
                 .par_iter()
                 .for_each(|(coord, required_stage)| {
                     let dependency_chunk = {
-                        let dependency_chunk =
-                            level.loaded_chunks.entry(*coord).or_insert_with(|| {
-                                ChunkEntry::Pending(Arc::new(PendingChunk::new(
-                                    *coord,
-                                    settings,
-                                    default_block,
-                                    biome_mixer_seed,
-                                )))
-                            });
+                        let dependency_chunk = {
+                            if current_stage == ChunkStage::Empty {
+                                Some(level.loaded_chunks.entry(*coord).or_insert_with(|| {
+                                    ChunkEntry::Pending(Arc::new(PendingChunk::new(
+                                        *coord,
+                                        settings,
+                                        default_block,
+                                        biome_mixer_seed,
+                                    )))
+                                }))
+                            } else {
+                                if let Some(chunk) = level.loaded_chunks.get_mut(coord) {
+                                    Some(chunk)
+                                } else {
+                                    None
+                                }
+                            }
+                        };
 
-                        if let ChunkEntry::Pending(chunk) = &*dependency_chunk {
+                        if let Some(chunk) = dependency_chunk
+                            && let ChunkEntry::Pending(chunk) = &*chunk
+                        {
                             Some(chunk.clone())
                         } else {
                             None
@@ -1093,7 +1106,13 @@ impl PendingChunk {
     /// Finalize the chunk, extracting the ProtoChunk if fully generated
     pub fn finalize(&self, generation_settings: &GenerationSettings) -> ChunkData {
         let state = self.state.lock().unwrap();
-        assert_eq!(state.stage, ChunkStage::Full);
+        if state.stage != ChunkStage::Full {
+            panic!(
+                "Attempted to finalize chunk at position {:?} with stage {:?}, expected ChunkStage::Full. \
+                This indicates a race condition in chunk generation.",
+                self.position, state.stage
+            );
+        }
         let proto_chunk = &self.proto_chunk;
         let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
         let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
