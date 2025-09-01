@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use log::warn;
+use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{
@@ -207,6 +208,8 @@ pub struct Player {
     pub client: ClientPlatform,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
+    /// The player's `EnderChest` inventory.
+    pub ender_chest_inventory: Arc<EnderChestInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
     pub config: RwLock<PlayerConfig>,
     /// The player's current gamemode (e.g., Survival, Creative, Adventure).
@@ -317,6 +320,8 @@ impl Player {
             living_entity.equipment_slots.clone(),
         ));
 
+        let ender_chest_inventory = Arc::new(EnderChestInventory::new());
+
         let player_screen_handler = Arc::new(Mutex::new(
             PlayerScreenHandler::new(&inventory, None, 0).await,
         ));
@@ -366,7 +371,7 @@ impl Player {
                 |op| AtomicCell::new(op.level),
             ),
             inventory,
-            // TODO: enderChestInventory
+            ender_chest_inventory,
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
@@ -402,6 +407,10 @@ impl Player {
 
     pub fn inventory(&self) -> &Arc<PlayerInventory> {
         &self.inventory
+    }
+
+    pub fn ender_chest_inventory(&self) -> &Arc<EnderChestInventory> {
+        &self.ender_chest_inventory
     }
 
     /// Removes the [`Player`] out of the current [`World`].
@@ -1961,6 +1970,7 @@ impl NBTStorage for Player {
         nbt.put_int("DataVersion", DATA_VERSION);
         self.living_entity.write_nbt(nbt).await;
         self.inventory.write_nbt(nbt).await;
+        self.ender_chest_inventory.write_nbt(nbt).await;
 
         self.abilities.lock().await.write_nbt(nbt).await;
 
@@ -1990,6 +2000,7 @@ impl NBTStorage for Player {
     async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
         self.living_entity.read_nbt(nbt).await;
         self.inventory.read_nbt_non_mut(nbt).await;
+        self.ender_chest_inventory.read_nbt_non_mut(nbt).await;
         self.abilities.lock().await.read_nbt(nbt).await;
 
         self.gamemode.store(
@@ -2029,7 +2040,7 @@ impl NBTStorage for PlayerInventory {
         nbt.put_int("SelectedItemSlot", i32::from(self.get_selected_slot()));
 
         // Create inventory list with the correct capacity (inventory size)
-        let mut vec: Vec<NbtTag> = Vec::with_capacity(41);
+        let mut items: Vec<NbtTag> = Vec::with_capacity(41);
         for (i, item) in self.main_inventory.iter().enumerate() {
             let stack = item.lock().await;
             if !stack.is_empty() {
@@ -2037,7 +2048,7 @@ impl NBTStorage for PlayerInventory {
                 item_compound.put_byte("Slot", i as i8);
                 stack.write_item_stack(&mut item_compound);
                 drop(stack);
-                vec.push(NbtTag::Compound(item_compound));
+                items.push(NbtTag::Compound(item_compound));
             }
         }
 
@@ -2072,7 +2083,7 @@ impl NBTStorage for PlayerInventory {
             }
         }
         nbt.put_component("equipment", equipment_compound);
-        nbt.put("Inventory", NbtTag::List(vec));
+        nbt.put("Inventory", NbtTag::List(items));
     }
 
     async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
@@ -2127,6 +2138,44 @@ impl NBTStorage for PlayerInventory {
 }
 
 impl NBTStorageInit for PlayerInventory {}
+
+#[async_trait]
+impl NBTStorage for EnderChestInventory {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
+        // Create item list with the correct capacity (inventory size)
+        let mut items: Vec<NbtTag> = Vec::with_capacity(Self::INVENTORY_SIZE);
+        for (i, item) in self.items.iter().enumerate() {
+            let stack = item.lock().await;
+            if !stack.is_empty() {
+                let mut item_compound = NbtCompound::new();
+                item_compound.put_byte("Slot", i as i8);
+                stack.write_item_stack(&mut item_compound);
+                drop(stack);
+                items.push(NbtTag::Compound(item_compound));
+            }
+        }
+
+        nbt.put("EnderItems", NbtTag::List(items));
+    }
+
+    async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
+        // Process item list
+        if let Some(item_list) = nbt.get_list("EnderItems") {
+            for tag in item_list {
+                if let Some(item_compound) = tag.extract_compound()
+                    && let Some(slot_byte) = item_compound.get_byte("Slot")
+                {
+                    let slot = slot_byte as usize;
+                    if let Some(item_stack) = ItemStack::read_item_stack(item_compound) {
+                        self.set_stack(slot, item_stack).await;
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl NBTStorageInit for EnderChestInventory {}
 
 #[async_trait]
 impl EntityBase for Player {

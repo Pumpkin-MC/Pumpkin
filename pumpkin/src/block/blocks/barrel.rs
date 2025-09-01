@@ -27,11 +27,9 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         _player: &dyn InventoryPlayer,
     ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
-        Some(Arc::new(Mutex::new(create_generic_9x3(
-            sync_id,
-            player_inventory,
-            self.0.clone(),
-        ))))
+        Some(Arc::new(Mutex::new(
+            create_generic_9x3(sync_id, player_inventory, self.0.clone()).await,
+        )))
     }
 
     fn get_display_name(&self) -> TextComponent {
@@ -44,6 +42,12 @@ pub struct BarrelBlock;
 
 #[async_trait]
 impl BlockBehaviour for BarrelBlock {
+    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = BarrelLikeProperties::default(args.block);
+        props.facing = args.player.living_entity.entity.get_facing().opposite();
+        props.to_state_id(args.block)
+    }
+
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await
             && let Some(inventory) = block_entity.get_inventory()
@@ -54,12 +58,6 @@ impl BlockBehaviour for BarrelBlock {
         }
 
         BlockActionResult::Success
-    }
-
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = BarrelLikeProperties::default(args.block);
-        props.facing = args.player.living_entity.entity.get_facing().opposite();
-        props.to_state_id(args.block)
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {

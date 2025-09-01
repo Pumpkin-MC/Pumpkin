@@ -29,6 +29,7 @@ pub mod command_block;
 pub mod comparator;
 pub mod dropper;
 pub mod end_portal;
+pub mod ender_chest;
 pub mod furnace;
 pub mod hopper;
 pub mod mob_spawner;
