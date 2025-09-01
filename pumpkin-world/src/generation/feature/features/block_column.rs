@@ -29,7 +29,7 @@ impl BlockColumnFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,

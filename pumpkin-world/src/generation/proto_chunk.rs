@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use pumpkin_data::tag;
@@ -112,17 +112,17 @@ pub struct ProtoChunk {
     pub default_block: &'static BlockState,
     biome_mixer_seed: i64,
     // These are local positions
-    flat_block_map: Box<[BlockStateId]>,
-    flat_biome_map: Box<[&'static Biome]>,
+    flat_block_map: Mutex<Box<[BlockStateId]>>,
+    flat_biome_map: Mutex<Box<[&'static Biome]>>,
     /// HEIGHTMAPS
     ///
     /// Top block that is not air
-    pub flat_surface_height_map: Box<[i16]>,
-    flat_ocean_floor_height_map: Box<[i16]>,
-    pub flat_motion_blocking_height_map: Box<[i16]>,
-    pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
+    pub flat_surface_height_map: Mutex<Box<[i16]>>,
+    flat_ocean_floor_height_map: Mutex<Box<[i16]>>,
+    pub flat_motion_blocking_height_map: Mutex<Box<[i16]>>,
+    pub flat_motion_blocking_no_leaves_height_map: Mutex<Box<[i16]>>,
     // may want to use chunk status
-    structure_starts: HashMap<Structure, (StructurePosition, StructureType)>,
+    structure_starts: Mutex<HashMap<Structure, (StructurePosition, StructureType)>>,
     // Height of the chunk for indexing
     height: u16,
     bottom_y: i8,
@@ -163,20 +163,22 @@ impl ProtoChunk {
         Self {
             chunk_pos,
             default_block,
-            flat_block_map: vec![0; CHUNK_AREA * height as usize].into_boxed_slice(),
-            flat_biome_map: vec![
-                &Biome::PLAINS;
-                biome_coords::from_block(CHUNK_DIM as usize)
-                    * biome_coords::from_block(CHUNK_DIM as usize)
-                    * biome_coords::from_block(height as usize)
-            ]
-            .into_boxed_slice(),
+            flat_block_map: Mutex::new(vec![0; CHUNK_AREA * height as usize].into_boxed_slice()),
+            flat_biome_map: Mutex::new(
+                vec![
+                    &Biome::PLAINS;
+                    biome_coords::from_block(CHUNK_DIM as usize)
+                        * biome_coords::from_block(CHUNK_DIM as usize)
+                        * biome_coords::from_block(height as usize)
+                ]
+                .into_boxed_slice(),
+            ),
             biome_mixer_seed,
-            flat_surface_height_map: default_heightmap.clone(),
-            flat_ocean_floor_height_map: default_heightmap.clone(),
-            flat_motion_blocking_height_map: default_heightmap.clone(),
-            flat_motion_blocking_no_leaves_height_map: default_heightmap,
-            structure_starts: HashMap::new(),
+            flat_surface_height_map: Mutex::new(default_heightmap.clone()),
+            flat_ocean_floor_height_map: Mutex::new(default_heightmap.clone()),
+            flat_motion_blocking_height_map: Mutex::new(default_heightmap.clone()),
+            flat_motion_blocking_no_leaves_height_map: Mutex::new(default_heightmap),
+            structure_starts: Mutex::new(HashMap::new()),
             height,
             bottom_y: generation_shape.min_y,
         }
@@ -190,47 +192,54 @@ impl ProtoChunk {
         self.bottom_y
     }
 
-    fn maybe_update_surface_height_map(&mut self, pos: &Vector3<i32>) {
+    fn maybe_update_surface_height_map(&self, pos: &Vector3<i32>) {
         let local_x = pos.x & 15;
         let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        let current_height = self.flat_surface_height_map[index];
+        let mut heightmap = self.flat_surface_height_map.lock().unwrap();
+        let current_height = heightmap[index];
 
         if pos.y > current_height as i32 {
-            self.flat_surface_height_map[index] = pos.y as _;
+            heightmap[index] = pos.y as _;
         }
     }
 
-    fn maybe_update_ocean_floor_height_map(&mut self, pos: &Vector3<i32>) {
+    fn maybe_update_ocean_floor_height_map(&self, pos: &Vector3<i32>) {
         let local_x = pos.x & 15;
         let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        let current_height = self.flat_ocean_floor_height_map[index];
+        let mut heightmap = self.flat_ocean_floor_height_map.lock().unwrap();
+        let current_height = heightmap[index];
 
         if pos.y > current_height as i32 {
-            self.flat_ocean_floor_height_map[index] = pos.y as _;
+            heightmap[index] = pos.y as _;
         }
     }
 
-    fn maybe_update_motion_blocking_height_map(&mut self, pos: &Vector3<i32>) {
+    fn maybe_update_motion_blocking_height_map(&self, pos: &Vector3<i32>) {
         let local_x = pos.x & 15;
         let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        let current_height = self.flat_motion_blocking_height_map[index];
+        let mut heightmap = self.flat_motion_blocking_height_map.lock().unwrap();
+        let current_height = heightmap[index];
 
         if pos.y > current_height as i32 {
-            self.flat_motion_blocking_height_map[index] = pos.y as _;
+            heightmap[index] = pos.y as _;
         }
     }
 
-    fn maybe_update_motion_blocking_no_leaves_height_map(&mut self, pos: &Vector3<i32>) {
+    fn maybe_update_motion_blocking_no_leaves_height_map(&self, pos: &Vector3<i32>) {
         let local_x = pos.x & 15;
         let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        let current_height = self.flat_motion_blocking_no_leaves_height_map[index];
+        let mut heightmap = self
+            .flat_motion_blocking_no_leaves_height_map
+            .lock()
+            .unwrap();
+        let current_height = heightmap[index];
 
         if pos.y > current_height as i32 {
-            self.flat_motion_blocking_no_leaves_height_map[index] = pos.y as _;
+            heightmap[index] = pos.y as _;
         }
     }
 
@@ -251,28 +260,31 @@ impl ProtoChunk {
         let local_x = pos.x & 15;
         let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_surface_height_map[index] as i32 + 1
+        self.flat_surface_height_map.lock().unwrap()[index] as i32 + 1
     }
 
     pub fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
         let local_x = pos.x & 15;
         let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_ocean_floor_height_map[index] as i32 + 1
+        self.flat_ocean_floor_height_map.lock().unwrap()[index] as i32 + 1
     }
 
     pub fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
         let local_x = pos.x & 15;
         let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_motion_blocking_height_map[index] as i32 + 1
+        self.flat_motion_blocking_height_map.lock().unwrap()[index] as i32 + 1
     }
 
     pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
         let local_x = pos.x & 15;
         let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_motion_blocking_no_leaves_height_map[index] as i32 + 1
+        self.flat_motion_blocking_no_leaves_height_map
+            .lock()
+            .unwrap()[index] as i32
+            + 1
     }
 
     #[inline]
@@ -326,7 +338,7 @@ impl ProtoChunk {
     #[inline]
     pub fn get_block_state_raw(&self, local_pos: &Vector3<i32>) -> u16 {
         let index = self.local_pos_to_block_index(local_pos);
-        self.flat_block_map[index]
+        self.flat_block_map.lock().unwrap()[index]
     }
 
     #[inline]
@@ -342,7 +354,7 @@ impl ProtoChunk {
         RawBlockState(self.get_block_state_raw(&local_pos))
     }
 
-    pub fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {
+    pub fn set_block_state(&self, pos: &Vector3<i32>, block_state: &BlockState) {
         let local_pos = Vector3::new(pos.x & 15, pos.y - self.bottom_y() as i32, pos.z & 15);
         if local_pos.y < 0 || local_pos.y >= self.height() as i32 {
             return;
@@ -366,7 +378,7 @@ impl ProtoChunk {
         }
 
         let index = self.local_pos_to_block_index(&local_pos);
-        self.flat_block_map[index] = block_state.id;
+        self.flat_block_map.lock().unwrap()[index] = block_state.id;
     }
 
     #[inline]
@@ -377,11 +389,11 @@ impl ProtoChunk {
             global_biome_pos.z & biome_coords::from_block(15),
         );
         let index = self.local_biome_pos_to_biome_index(&local_pos);
-        self.flat_biome_map[index]
+        self.flat_biome_map.lock().unwrap()[index]
     }
 
     pub fn populate_biomes(
-        &mut self,
+        &self,
         dimension: Dimension,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
@@ -424,7 +436,7 @@ impl ProtoChunk {
                         };
                         let index = self.local_biome_pos_to_biome_index(&local_biome_pos);
 
-                        self.flat_biome_map[index] = biome;
+                        self.flat_biome_map.lock().unwrap()[index] = biome;
                     }
                 }
             }
@@ -432,7 +444,7 @@ impl ProtoChunk {
     }
 
     pub fn populate_noise(
-        &mut self,
+        &self,
         noise_sampler: &mut ChunkNoiseGenerator,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) {
@@ -540,7 +552,7 @@ impl ProtoChunk {
     ///
     /// It is crucial that biome assignments are determined before this process begins.
     pub fn build_surface(
-        &mut self,
+        &self,
         settings: &GenerationSettings,
         random_config: &GlobalRandomConfig,
         terrain_cache: &TerrainCache,
@@ -678,7 +690,7 @@ impl ProtoChunk {
     /// 1. First, we determine **whether** to generate a feature and **at which block positions** to place it.
     /// 2. Then, using the second file, we determine **how** to generate the feature.
     pub fn generate_features_and_structure(
-        &mut self,
+        &self,
         level: &Arc<Level>,
         block_registry: &dyn BlockRegistryExt,
         random_config: &GlobalRandomConfig,
@@ -697,7 +709,7 @@ impl ProtoChunk {
         let population_seed =
             Xoroshiro::get_population_seed(random_config.seed, block_pos.0.x, block_pos.0.z);
 
-        for (_structure, (pos, stype)) in self.structure_starts.clone() {
+        for (_structure, (pos, stype)) in self.structure_starts.lock().unwrap().clone() {
             dbg!("generating structure");
             stype.generate(pos.clone(), self);
         }
@@ -721,7 +733,7 @@ impl ProtoChunk {
         }
     }
 
-    pub fn set_structure_starts(&mut self, random_config: &GlobalRandomConfig) {
+    pub fn set_structure_starts(&self, random_config: &GlobalRandomConfig) {
         for (name, set) in STRUCTURE_SETS.iter() {
             let calculator = StructurePlacementCalculator {
                 seed: random_config.seed as i64,
@@ -740,7 +752,7 @@ impl ProtoChunk {
                 if let Some(position) = position
                     && !position.generator.pieces_positions.is_empty()
                 {
-                    self.structure_starts.insert(
+                    self.structure_starts.lock().unwrap().insert(
                         STRUCTURES.get(name).unwrap().clone(),
                         (position, set.structures[0].structure.clone()),
                     );
@@ -797,6 +809,8 @@ pub enum ChunkStage {
     Noise,
     /// Chunk with surface built, ready for features and structures
     Surface,
+    /// Chunk with features and structures generated
+    Features,
     /// Fully generated chunk
     Full,
 }
@@ -807,12 +821,12 @@ const fn dependency_radius(chunk_stage: ChunkStage) -> i32 {
         ChunkStage::Biomes => 0,
         ChunkStage::Noise => 0,
         ChunkStage::Surface => 1,
+        ChunkStage::Features => 1,
         ChunkStage::Full => 0,
     }
 }
 
 pub struct PendingChunkState {
-    pub proto_chunk: ProtoChunk,
     pub stage: ChunkStage,
 }
 
@@ -821,6 +835,7 @@ pub struct PendingChunkState {
 pub struct PendingChunk {
     pub state: std::sync::Mutex<PendingChunkState>,
     pub notify_full: Arc<Notify>,
+    pub proto_chunk: ProtoChunk,
     pub position: Vector2<i32>,
 }
 
@@ -834,13 +849,13 @@ impl PendingChunk {
     ) -> Self {
         let proto_chunk = ProtoChunk::new(chunk_pos, settings, default_block, biome_mixer_seed);
         let state = PendingChunkState {
-            proto_chunk,
             stage: ChunkStage::Empty,
         };
         PendingChunk {
             state: std::sync::Mutex::new(state),
             notify_full: Arc::new(Notify::new()),
             position: chunk_pos,
+            proto_chunk,
         }
     }
 
@@ -932,8 +947,7 @@ impl PendingChunk {
                             &multi_noise_config,
                         );
 
-                    state
-                        .proto_chunk
+                    self.proto_chunk
                         .populate_biomes(dimension, &mut multi_noise_sampler);
                     state.stage = ChunkStage::Biomes;
                 }
@@ -991,8 +1005,7 @@ impl PendingChunk {
                     &surface_config,
                 );
 
-                    state
-                        .proto_chunk
+                    self.proto_chunk
                         .populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
                     state.stage = ChunkStage::Noise;
                 }
@@ -1025,24 +1038,27 @@ impl PendingChunk {
                     &surface_config,
                 );
 
-                    state.proto_chunk.build_surface(
+                    self.proto_chunk.build_surface(
                         settings,
                         random_config,
                         terrain_cache,
                         &mut surface_height_estimate_sampler,
                     );
                     state.stage = ChunkStage::Surface;
-                    println!("Chunk {:?} built surface", self.position);
+                    //println!("Chunk {:?} built surface", self.position);
                 }
                 ChunkStage::Surface => {
                     // Generate features and structures
-                    state.proto_chunk.generate_features_and_structure(
+                    self.proto_chunk.generate_features_and_structure(
                         level,
                         block_registry,
                         random_config,
                     );
+                    state.stage = ChunkStage::Features;
+                    //println!("Chunk {:?} generated features and structures", self.position);
+                }
+                ChunkStage::Features => {
                     state.stage = ChunkStage::Full;
-                    println!("Chunk {:?} generated features and structures", self.position);
                 }
                 ChunkStage::Full => {
                     // Should not happen due to the check at the top, but is safe.
@@ -1078,11 +1094,13 @@ impl PendingChunk {
     pub fn finalize(&self, generation_settings: &GenerationSettings) -> ChunkData {
         let state = self.state.lock().unwrap();
         assert_eq!(state.stage, ChunkStage::Full);
-        let proto_chunk = &state.proto_chunk;
+        let proto_chunk = &self.proto_chunk;
         let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
         let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
         let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
 
+        // Lock biome map once for the entire operation
+        let biome_map = proto_chunk.flat_biome_map.lock().unwrap();
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
             let relative_y = y as usize;
             let section_index = relative_y / BiomePalette::SIZE;
@@ -1093,13 +1111,22 @@ impl PendingChunk {
                         let absolute_y =
                             biome_coords::from_block(generation_settings.shape.min_y as i32)
                                 + y as i32;
-                        let biome =
-                            proto_chunk.get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
+                        let local_pos = Vector3::new(
+                            (x as i32) & biome_coords::from_block(15),
+                            absolute_y - biome_coords::from_block(proto_chunk.bottom_y() as i32),
+                            (z as i32) & biome_coords::from_block(15),
+                        );
+                        let index = proto_chunk.local_biome_pos_to_biome_index(&local_pos);
+                        let biome = biome_map[index];
                         section.biomes.set(x, relative_y, z, biome.id);
                     }
                 }
             }
         }
+        drop(biome_map); // Release the lock
+
+        // Lock block map once for the entire operation
+        let block_map = proto_chunk.flat_block_map.lock().unwrap();
         for y in 0..generation_settings.shape.height {
             let relative_y = y as usize;
             let section_index = section_coords::block_to_section(relative_y);
@@ -1107,13 +1134,15 @@ impl PendingChunk {
             if let Some(section) = sections.sections.get_mut(section_index) {
                 for z in 0..BlockPalette::SIZE {
                     for x in 0..BlockPalette::SIZE {
-                        let block = proto_chunk
-                            .get_block_state_raw(&Vector3::new(x as i32, y as i32, z as i32));
+                        let local_pos = Vector3::new(x as i32, y as i32, z as i32);
+                        let index = proto_chunk.local_pos_to_block_index(&local_pos);
+                        let block = block_map[index];
                         section.block_states.set(x, relative_y, z, block);
                     }
                 }
             }
         }
+        drop(block_map); // Release the lock
         let mut chunk = ChunkData {
             light_engine: ChunkLight {
                 sky_light: (0..sections.sections.len())

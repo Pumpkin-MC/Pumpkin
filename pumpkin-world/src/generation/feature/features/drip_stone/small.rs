@@ -18,7 +18,7 @@ pub struct SmallDripstoneFeature {
 impl SmallDripstoneFeature {
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -32,7 +32,7 @@ impl SmallDripstoneFeature {
     }
 
     fn get_direction(
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) -> Option<BlockDirection> {
@@ -56,7 +56,7 @@ impl SmallDripstoneFeature {
 
     fn gen_dripstone_blocks(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) {

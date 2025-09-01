@@ -9,7 +9,7 @@ pub mod nether_fortress;
 pub trait StructureGenerator {
     fn get_structure_position(&self, chunk: &ProtoChunk) -> StructurePosition;
 
-    fn generate(&self, position: BlockPos, chunk: &mut crate::ProtoChunk);
+    fn generate(&self, position: BlockPos, chunk: &crate::ProtoChunk);
 }
 
 #[expect(clippy::too_many_arguments)]
@@ -22,7 +22,7 @@ pub fn fill_with_outline(
     max_z: i32,
     outline: &BlockState,
     inside: &BlockState,
-    chunk: &mut crate::ProtoChunk,
+    chunk: &crate::ProtoChunk,
 ) {
     for y in min_y..=max_y {
         for x in min_x..=max_x {
@@ -47,7 +47,7 @@ pub fn fill(
     max_y: i32,
     max_z: i32,
     state: &BlockState,
-    chunk: &mut crate::ProtoChunk,
+    chunk: &crate::ProtoChunk,
 ) {
     for y in min_y..=max_y {
         for x in min_x..=max_x {
@@ -58,7 +58,7 @@ pub fn fill(
     }
 }
 
-pub fn fill_downwards(x: i32, y: i32, z: i32, state: &BlockState, chunk: &mut crate::ProtoChunk) {
+pub fn fill_downwards(x: i32, y: i32, z: i32, state: &BlockState, chunk: &crate::ProtoChunk) {
     for y in y..chunk.bottom_y() as i32 {
         chunk.set_block_state(&Vector3::new(x, y, z), state);
     }

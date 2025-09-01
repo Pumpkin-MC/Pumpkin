@@ -29,7 +29,7 @@ impl StructureGenerator for NetherFortressGenerator {
             generator,
         }
     }
-    fn generate(&self, position: BlockPos, chunk: &mut crate::ProtoChunk) {
+    fn generate(&self, position: BlockPos, chunk: &crate::ProtoChunk) {
         BridgePlatform::generate(&BridgePlatform, position, chunk);
     }
 }
@@ -37,7 +37,7 @@ impl StructureGenerator for NetherFortressGenerator {
 pub struct BridgePlatform;
 
 impl BridgePlatform {
-    fn generate(&self, _position: BlockPos, chunk: &mut crate::ProtoChunk) {
+    fn generate(&self, _position: BlockPos, chunk: &crate::ProtoChunk) {
         super::fill(0, 2, 0, 6, 7, 7, Block::AIR.default_state, chunk);
         super::fill(1, 0, 0, 5, 1, 7, Block::NETHER_BRICKS.default_state, chunk);
         super::fill(1, 2, 1, 5, 2, 7, Block::NETHER_BRICKS.default_state, chunk);

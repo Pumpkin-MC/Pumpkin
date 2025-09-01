@@ -52,7 +52,7 @@ pub enum TreeDecorator {
 impl TreeDecorator {
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         random: &mut RandomGenerator,
         root_positions: Vec<BlockPos>,
         log_positions: Vec<BlockPos>,

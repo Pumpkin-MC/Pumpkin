@@ -28,7 +28,7 @@ impl FancyTrunkPlacer {
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         force_dirt: bool,
@@ -120,7 +120,7 @@ impl FancyTrunkPlacer {
     }
 
     fn make_or_check_branch(
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         start_pos: Vector3<i32>,
         branch_pos: Vector3<i32>,
@@ -190,7 +190,7 @@ impl FancyTrunkPlacer {
     }
 
     fn make_branches(
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         tree_height: i32,
         start_pos: Vector3<i32>,

@@ -35,7 +35,7 @@ impl StructureGenerator for BuriedTreasureGenerator {
         }
     }
 
-    fn generate(&self, position: BlockPos, chunk: &mut crate::ProtoChunk) {
+    fn generate(&self, position: BlockPos, chunk: &crate::ProtoChunk) {
         let y = chunk.get_top_y(
             &HeightMap::OceanFloorWg,
             &Vector2::new(position.0.x, position.0.z),

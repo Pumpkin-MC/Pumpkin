@@ -15,7 +15,7 @@ pub struct CoralClawFeature;
 impl CoralClawFeature {
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature

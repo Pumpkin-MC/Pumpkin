@@ -198,7 +198,9 @@ fn rayon_chunk_generator(
         );
 
         let notify_full = {
-            if let ChunkEntry::Pending(chunk) = &*level.loaded_chunks.get(&chunk_coord).unwrap() {
+            if let Some(chunk) = level.loaded_chunks.get(&chunk_coord)
+                && let ChunkEntry::Pending(chunk) = &*chunk
+            {
                 Some(chunk.notify_full.clone())
             } else {
                 None
@@ -302,7 +304,7 @@ impl Level {
 
         let level_ref_clone = level_ref.clone();
         tokio::spawn(async move {
-            let generation_semaphore = Arc::new(tokio::sync::Semaphore::new(1));
+            let generation_semaphore = Arc::new(tokio::sync::Semaphore::new(num_cpus::get()));
             loop {
                 if level_ref_clone.is_shutting_down.load(Ordering::Relaxed) {
                     break;
@@ -565,8 +567,10 @@ impl Level {
                     .is_none_or(|count| count.is_zero())
                 {
                     //TODO: pending chunk saving
-                    if let Some((pos, ChunkEntry::Full(chunk))) = self.loaded_chunks.remove(pos) {
-                        Some((pos, chunk))
+                    if let Some(chunk) = self.loaded_chunks.get(pos)
+                        && let ChunkEntry::Full(chunk) = &chunk.value()
+                    {
+                        Some((*pos, chunk.clone()))
                     } else {
                         None
                     }
@@ -575,6 +579,14 @@ impl Level {
                 }
             })
             .collect::<Vec<_>>();
+
+        self.remove_chunk_requests(
+            &chunks_with_no_watchers
+                .iter()
+                .map(|(pos, _)| *pos)
+                .collect::<Vec<_>>(),
+        )
+        .await;
 
         let level = self.clone();
         self.spawn_task(async move {
@@ -585,11 +597,8 @@ impl Level {
             // cache
             for (pos, chunk) in chunks_to_remove {
                 // Add them back if they have watchers
-                if level.chunk_watchers.get(&pos).is_some() {
-                    let entry = level.loaded_chunks.entry(pos);
-                    if let Entry::Vacant(vacant) = entry {
-                        vacant.insert(ChunkEntry::Full(chunk));
-                    }
+                if level.chunk_watchers.get(&pos).is_none() {
+                    let _ = level.loaded_chunks.remove(&pos);
                 }
             }
         });
@@ -723,6 +732,11 @@ impl Level {
     async fn request_chunks(&self, coords: &[Vector2<i32>]) {
         self.chunk_tickets.lock().await.extend(coords);
         self.ticket_notify.notify_waiters();
+    }
+
+    async fn remove_chunk_requests(&self, coords: &[Vector2<i32>]) {
+        let mut tickets = self.chunk_tickets.lock().await;
+        tickets.retain(|c| !coords.contains(c));
     }
 
     pub async fn wait_for_chunk(&self, coord: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
@@ -1055,15 +1069,21 @@ impl Level {
 
     pub fn set_block_state_gen(&self, position: &BlockPos, block_state: &BlockState) {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        if let Some(chunk) = self.loaded_chunks.get(&chunk_coordinate)
-            && let ChunkEntry::Pending(chunk) = &chunk.value()
-        {
-            chunk
-                .state
-                .lock()
-                .unwrap()
-                .proto_chunk
-                .set_block_state(&relative, block_state);
+        if let Some(chunk) = self.loaded_chunks.get(&chunk_coordinate) {
+            match &chunk.value() {
+                ChunkEntry::Pending(chunk) => {
+                    chunk.proto_chunk.set_block_state(&relative, block_state)
+                }
+                ChunkEntry::Full(chunk) => {
+                    println!("Thiss shouldn't happen");
+                    let _ = chunk.blocking_write().section.set_block_absolute_y(
+                        relative.x as usize,
+                        relative.y,
+                        relative.z as usize,
+                        block_state.id,
+                    );
+                }
+            }
         }
     }
 

@@ -21,7 +21,7 @@ impl ReplaceBlobsFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         _block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -58,7 +58,7 @@ impl ReplaceBlobsFeature {
 
     fn move_down_to_target(
         mut pos: BlockPos,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         target: &'static Block,
     ) -> Option<BlockPos> {
         while pos.0.y > chunk.bottom_y() as i32 + 1 {

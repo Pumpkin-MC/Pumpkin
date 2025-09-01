@@ -18,7 +18,7 @@ impl SimpleBlockFeature {
     pub fn generate(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {

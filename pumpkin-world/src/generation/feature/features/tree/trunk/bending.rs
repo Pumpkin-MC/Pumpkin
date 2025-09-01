@@ -26,7 +26,7 @@ impl BendingTrunkPlacer {
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         _level: &Arc<Level>,
         random: &mut RandomGenerator,
         force_dirt: bool,

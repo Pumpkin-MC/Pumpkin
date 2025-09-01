@@ -20,7 +20,7 @@ pub enum MaterialRule {
 impl MaterialRule {
     pub fn try_apply(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         context: &mut MaterialRuleContext,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
@@ -65,7 +65,7 @@ pub struct SequenceMaterialRule {
 impl SequenceMaterialRule {
     pub fn try_apply(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         context: &mut MaterialRuleContext,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
@@ -87,7 +87,7 @@ pub struct ConditionMaterialRule {
 impl ConditionMaterialRule {
     pub fn try_apply(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         context: &mut MaterialRuleContext,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {

@@ -50,7 +50,7 @@ impl TrunkPlacer {
 
     pub fn set_dirt(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         pos: &BlockPos,
         force_dirt: bool,
         dirt_state: &BlockState,
@@ -67,7 +67,7 @@ impl TrunkPlacer {
 
     pub fn place(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         pos: &BlockPos,
         trunk_block: &BlockState,
     ) -> bool {
@@ -81,7 +81,7 @@ impl TrunkPlacer {
 
     pub fn try_place(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         pos: &BlockPos,
         trunk_block: &BlockState,
     ) -> bool {
@@ -97,7 +97,7 @@ impl TrunkPlacer {
         &self,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         force_dirt: bool,
@@ -148,7 +148,7 @@ impl TrunkType {
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         force_dirt: bool,

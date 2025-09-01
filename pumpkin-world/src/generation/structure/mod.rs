@@ -59,7 +59,7 @@ impl StructureType {
         None
     }
 
-    pub fn generate(&self, position: StructurePosition, chunk: &mut crate::ProtoChunk) {
+    pub fn generate(&self, position: StructurePosition, chunk: &crate::ProtoChunk) {
         for pos in position.generator.pieces_positions {
             match self {
                 StructureType::BuriedTreasure(generator) => generator.generate(pos, chunk),

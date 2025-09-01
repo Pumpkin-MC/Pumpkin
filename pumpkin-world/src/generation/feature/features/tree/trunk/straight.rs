@@ -14,7 +14,7 @@ impl StraightTrunkPlacer {
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         force_dirt: bool,
         dirt_state: &BlockState,
         trunk_state: &BlockState,

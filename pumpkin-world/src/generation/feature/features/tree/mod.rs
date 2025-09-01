@@ -41,7 +41,7 @@ impl TreeFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         min_y: i8,
         height: u16,
@@ -74,7 +74,7 @@ impl TreeFeature {
     #[expect(clippy::too_many_arguments)]
     fn generate_main(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         _min_y: i8,
         _height: u16,

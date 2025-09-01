@@ -19,7 +19,7 @@ pub struct CoralFeature;
 
 impl CoralFeature {
     pub fn generate_coral_piece(
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         random: &mut RandomGenerator,
         state: &BlockState,
         pos: BlockPos,

@@ -15,7 +15,7 @@ impl AcaciaFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         node: &TreeNode,

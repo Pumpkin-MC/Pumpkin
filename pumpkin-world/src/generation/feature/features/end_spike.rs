@@ -39,7 +39,7 @@ impl EndSpikeFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         _block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -78,7 +78,7 @@ impl EndSpikeFeature {
         true
     }
 
-    fn gen_spike(spike: &Spike, chunk: &mut ProtoChunk) {
+    fn gen_spike(spike: &Spike, chunk: &ProtoChunk) {
         let radius = spike.radius;
         for pos in BlockPos::iterate(
             BlockPos::new(

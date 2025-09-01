@@ -20,7 +20,7 @@ pub struct PlaceOnGroundTreeDecorator {
 impl PlaceOnGroundTreeDecorator {
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         random: &mut RandomGenerator,
         root_positions: Vec<BlockPos>,
         log_positions: Vec<BlockPos>,
@@ -65,7 +65,7 @@ impl PlaceOnGroundTreeDecorator {
 
     fn generate_decoration(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) {

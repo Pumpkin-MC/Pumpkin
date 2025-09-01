@@ -123,7 +123,7 @@ impl SurfaceTerrainBuilder {
 
     pub fn place_badlands_pillar(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         global_x: i32,
         global_z: i32,
         surface_y: i32,
@@ -186,7 +186,7 @@ impl SurfaceTerrainBuilder {
     #[expect(clippy::too_many_arguments)]
     pub fn place_iceberg(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         biome: &Biome,
         x: i32,
         z: i32,
