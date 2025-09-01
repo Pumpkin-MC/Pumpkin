@@ -11,6 +11,8 @@ use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
     random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
 };
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use tokio::sync::Notify;
 
 use crate::chunk::format::LightContainer;
 use crate::chunk::palette::{BiomePalette, BlockPalette};
@@ -19,6 +21,7 @@ use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::structure::placement::StructurePlacementCalculator;
 use crate::generation::structure::structures::StructurePosition;
 use crate::generation::structure::{STRUCTURE_SETS, STRUCTURES, Structure, StructureType};
+use crate::level::ChunkEntry;
 use crate::{
     BlockStateId,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier},
@@ -784,7 +787,7 @@ impl BlockAccessor for ProtoChunk {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChunkStage {
     /// Initial empty chunk, ready for biome population
     Empty,
@@ -798,15 +801,30 @@ pub enum ChunkStage {
     Full,
 }
 
-/// Represents the different stages of chunk generation
-/// This provides type safety and ensures chunks progress through the correct stages
-#[derive(Debug)]
-pub struct StagedChunk {
+const fn dependency_radius(chunk_stage: ChunkStage) -> i32 {
+    match chunk_stage {
+        ChunkStage::Empty => 0,
+        ChunkStage::Biomes => 0,
+        ChunkStage::Noise => 0,
+        ChunkStage::Surface => 0,
+        ChunkStage::Full => 0,
+    }
+}
+
+pub struct PendingChunkState {
     pub proto_chunk: ProtoChunk,
     pub stage: ChunkStage,
 }
 
-impl StagedChunk {
+/// Represents the different stages of chunk generation
+/// This provides type safety and ensures chunks progress through the correct stages
+pub struct PendingChunk {
+    pub state: std::sync::Mutex<PendingChunkState>,
+    pub notify_full: Arc<Notify>,
+    pub position: Vector2<i32>,
+}
+
+impl PendingChunk {
     /// Create a new empty staged chunk
     pub fn new(
         chunk_pos: Vector2<i32>,
@@ -815,276 +833,20 @@ impl StagedChunk {
         biome_mixer_seed: i64,
     ) -> Self {
         let proto_chunk = ProtoChunk::new(chunk_pos, settings, default_block, biome_mixer_seed);
-        StagedChunk {
+        let state = PendingChunkState {
             proto_chunk,
             stage: ChunkStage::Empty,
+        };
+        PendingChunk {
+            state: std::sync::Mutex::new(state),
+            notify_full: Arc::new(Notify::new()),
+            position: chunk_pos,
         }
     }
 
-    /// Advance the chunk to the next generation stage
-    pub fn advance(
-        &mut self,
-        level: &Arc<Level>,
-        block_registry: &dyn BlockRegistryExt,
-        settings: &GenerationSettings,
-        random_config: &GlobalRandomConfig,
-        terrain_cache: &TerrainCache,
-        noise_router: &super::noise::router::proto_noise_router::ProtoNoiseRouters,
-        dimension: crate::dimension::Dimension,
-    ) -> Result<(), &'static str> {
-        let chunk = &mut self.proto_chunk;
-        match self.stage {
-            ChunkStage::Empty => {
-                // Populate biomes
-                let chunk_pos = chunk.chunk_pos;
-                let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
-                let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
-                let biome_pos = Vector2::new(
-                    biome_coords::from_block(start_x),
-                    biome_coords::from_block(start_z),
-                );
-                let horizontal_biome_end = biome_coords::from_block(16);
-                let multi_noise_config =
-                    super::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
-                        biome_pos.x,
-                        biome_pos.y,
-                        horizontal_biome_end as usize,
-                    );
-                let mut multi_noise_sampler =
-                    super::noise::router::multi_noise_sampler::MultiNoiseSampler::generate(
-                        &noise_router.multi_noise,
-                        &multi_noise_config,
-                    );
-
-                chunk.populate_biomes(dimension, &mut multi_noise_sampler);
-                self.stage = ChunkStage::Biomes;
-            }
-            ChunkStage::Biomes => {
-                // Generate noise
-                let chunk_pos = chunk.chunk_pos;
-                let generation_shape = &settings.shape;
-                let horizontal_cell_count =
-                    super::chunk_noise::CHUNK_DIM / generation_shape.horizontal_cell_block_count();
-                let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
-                let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
-
-                let sampler = super::aquifer_sampler::FluidLevelSampler::Chunk(Box::new(
-                    StandardChunkFluidLevelSampler::new(
-                        super::aquifer_sampler::FluidLevel::new(
-                            settings.sea_level,
-                            settings.default_fluid.name,
-                        ),
-                        super::aquifer_sampler::FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
-                    ),
-                ));
-
-                let mut noise_sampler = super::chunk_noise::ChunkNoiseGenerator::new(
-                    &noise_router.noise,
-                    random_config,
-                    horizontal_cell_count as usize,
-                    start_x,
-                    start_z,
-                    generation_shape,
-                    sampler,
-                    settings.aquifers_enabled,
-                    settings.ore_veins_enabled,
-                );
-
-                let biome_pos = Vector2::new(
-                    biome_coords::from_block(start_x),
-                    biome_coords::from_block(start_z),
-                );
-                let horizontal_biome_end = biome_coords::from_block(
-                    horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
-                );
-                let surface_config = super::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
-                    biome_pos.x,
-                    biome_pos.y,
-                    horizontal_biome_end as usize,
-                    generation_shape.min_y as i32,
-                    generation_shape.max_y() as i32,
-                    generation_shape.vertical_cell_block_count() as usize,
-                );
-                let mut surface_height_estimate_sampler = super::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler::generate(
-                    &noise_router.surface_estimator,
-                    &surface_config,
-                );
-
-                chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
-                self.stage = ChunkStage::Noise;
-            }
-            ChunkStage::Noise => {
-                // Build surface
-                let chunk_pos = chunk.chunk_pos;
-                let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
-                let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
-                let generation_shape = &settings.shape;
-                let horizontal_cell_count =
-                    super::chunk_noise::CHUNK_DIM / generation_shape.horizontal_cell_block_count();
-
-                let biome_pos = Vector2::new(
-                    biome_coords::from_block(start_x),
-                    biome_coords::from_block(start_z),
-                );
-                let horizontal_biome_end = biome_coords::from_block(
-                    horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
-                );
-                let surface_config = super::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
-                    biome_pos.x,
-                    biome_pos.y,
-                    horizontal_biome_end as usize,
-                    generation_shape.min_y as i32,
-                    generation_shape.max_y() as i32,
-                    generation_shape.vertical_cell_block_count() as usize,
-                );
-                let mut surface_height_estimate_sampler = super::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler::generate(
-                    &noise_router.surface_estimator,
-                    &surface_config,
-                );
-
-                chunk.build_surface(
-                    settings,
-                    random_config,
-                    terrain_cache,
-                    &mut surface_height_estimate_sampler,
-                );
-                self.stage = ChunkStage::Surface;
-            }
-            ChunkStage::Surface => {
-                // Generate features and structures
-                chunk.generate_features_and_structure(level, block_registry, random_config);
-                self.stage = ChunkStage::Full;
-            }
-            ChunkStage::Full => {
-                return Err("Chunk is already fully generated");
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Check if the chunk is fully generated
-    pub fn is_complete(&self) -> bool {
-        matches!(self.stage, ChunkStage::Full)
-    }
-
-    /// Get an immutable reference to the underlying ProtoChunk
-    pub fn proto_chunk(&self) -> &ProtoChunk {
-        &self.proto_chunk
-    }
-
-    /// Get a mutable reference to the underlying ProtoChunk
-    pub fn proto_chunk_mut(&mut self) -> &mut ProtoChunk {
-        &mut self.proto_chunk
-    }
-
-    /// Finalize the chunk, extracting the ProtoChunk if fully generated
-    pub fn finalize(
-        self,
-        generation_settings: &GenerationSettings,
-        dimension: Dimension,
-    ) -> Result<ChunkData, Self> {
-        match self.stage {
-            ChunkStage::Full => {
-                let proto_chunk = &self.proto_chunk;
-                let height: usize = match dimension {
-                    Dimension::Overworld => 384,
-                    Dimension::Nether | Dimension::End => 256,
-                };
-                let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
-                let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
-                let mut sections =
-                    ChunkSections::new(sections, generation_settings.shape.min_y as i32);
-
-                for y in 0..biome_coords::from_block(generation_settings.shape.height) {
-                    let relative_y = y as usize;
-                    let section_index = relative_y / BiomePalette::SIZE;
-                    let relative_y = relative_y % BiomePalette::SIZE;
-                    if let Some(section) = sections.sections.get_mut(section_index) {
-                        for z in 0..BiomePalette::SIZE {
-                            for x in 0..BiomePalette::SIZE {
-                                let absolute_y = biome_coords::from_block(
-                                    generation_settings.shape.min_y as i32,
-                                ) + y as i32;
-                                let biome = proto_chunk
-                                    .get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
-                                section.biomes.set(x, relative_y, z, biome.id);
-                            }
-                        }
-                    }
-                }
-                for y in 0..generation_settings.shape.height {
-                    let relative_y = y as usize;
-                    let section_index = section_coords::block_to_section(relative_y);
-                    let relative_y = relative_y % BlockPalette::SIZE;
-                    if let Some(section) = sections.sections.get_mut(section_index) {
-                        for z in 0..BlockPalette::SIZE {
-                            for x in 0..BlockPalette::SIZE {
-                                let block = proto_chunk.get_block_state_raw(&Vector3::new(
-                                    x as i32, y as i32, z as i32,
-                                ));
-                                section.block_states.set(x, relative_y, z, block);
-                            }
-                        }
-                    }
-                }
-                let mut chunk = ChunkData {
-                    light_engine: ChunkLight {
-                        sky_light: (0..sections.sections.len())
-                            .map(|_| LightContainer::new_filled(15))
-                            .collect(),
-                        block_light: (0..sections.sections.len())
-                            .map(|_| LightContainer::new_empty(15))
-                            .collect(),
-                    },
-                    section: sections,
-                    heightmap: Default::default(),
-                    position: proto_chunk.chunk_pos,
-                    dirty: true,
-                    block_ticks: Default::default(),
-                    fluid_ticks: Default::default(),
-                    block_entities: Default::default(),
-                };
-
-                chunk.heightmap = chunk.calculate_heightmap();
-                Ok(chunk)
-            }
-            _ => Err(self),
-        }
-    }
-
-    /// Advance through all remaining stages to completion
-    pub fn advance_to_completion(
-        mut self,
-        level: &Arc<Level>,
-        block_registry: &dyn BlockRegistryExt,
-        settings: &GenerationSettings,
-        random_config: &GlobalRandomConfig,
-        terrain_cache: &TerrainCache,
-        noise_router: &super::noise::router::proto_noise_router::ProtoNoiseRouters,
-        dimension: crate::dimension::Dimension,
-    ) -> Result<ChunkData, &'static str> {
-        while !self.is_complete() {
-            self.advance(
-                level,
-                block_registry,
-                settings,
-                random_config,
-                terrain_cache,
-                noise_router,
-                dimension,
-            )?;
-        }
-        self.finalize(settings, dimension)
-            .map_err(|_| "Failed to finalize chunk")
-    }
-}
-
-/// Example usage of StagedChunk
-impl StagedChunk {
-    /// Create a StagedChunk and advance it through all stages using the same dependencies as VanillaGenerator
-    pub fn generate_complete_from_vanilla_generator(
-        chunk_pos: Vector2<i32>,
+    pub fn advance_to_stage(
+        &self,
+        target_stage: ChunkStage,
         level: &Arc<Level>,
         block_registry: &dyn BlockRegistryExt,
         settings: &GenerationSettings,
@@ -1093,22 +855,283 @@ impl StagedChunk {
         noise_router: &super::noise::router::proto_noise_router::ProtoNoiseRouters,
         dimension: crate::dimension::Dimension,
         default_block: &'static BlockState,
-    ) -> Result<ChunkData, &'static str> {
-        // Calculate biome mixer seed
-        use crate::biome::hash_seed;
-        let biome_mixer_seed = hash_seed(random_config.seed);
+        biome_mixer_seed: i64,
+    ) {
+        loop {
+            let current_stage = self.state.lock().unwrap().stage;
 
-        // Create staged chunk and advance through all stages
-        let staged_chunk = StagedChunk::new(chunk_pos, settings, default_block, biome_mixer_seed);
-        staged_chunk.advance_to_completion(
-            level,
-            block_registry,
-            settings,
-            random_config,
-            terrain_cache,
-            noise_router,
-            dimension,
-        )
+            if current_stage >= target_stage {
+                return;
+            }
+
+            let next_stage_deps = self.get_dependants(current_stage);
+
+            next_stage_deps
+                .par_iter()
+                .for_each(|(coord, required_stage)| {
+                    let dependency_chunk = {
+                        let dependency_chunk =
+                            level.loaded_chunks.entry(*coord).or_insert_with(|| {
+                                ChunkEntry::Pending(Arc::new(PendingChunk::new(
+                                    *coord,
+                                    settings,
+                                    default_block,
+                                    biome_mixer_seed,
+                                )))
+                            });
+
+                        if let ChunkEntry::Pending(chunk) = &*dependency_chunk {
+                            Some(chunk.clone())
+                        } else {
+                            None
+                        }
+                    };
+
+                    if let Some(chunk) = dependency_chunk {
+                        chunk.advance_to_stage(
+                            *required_stage,
+                            level,
+                            block_registry,
+                            settings,
+                            random_config,
+                            terrain_cache,
+                            noise_router,
+                            dimension,
+                            default_block,
+                            biome_mixer_seed,
+                        );
+                    }
+                });
+
+            let mut state = self.state.lock().unwrap();
+
+            // Check for race conditions.
+            if state.stage != current_stage {
+                continue;
+            }
+
+            match state.stage {
+                ChunkStage::Empty => {
+                    let chunk_pos = self.position;
+                    let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
+                    let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
+                    let biome_pos = Vector2::new(
+                        biome_coords::from_block(start_x),
+                        biome_coords::from_block(start_z),
+                    );
+                    let horizontal_biome_end = biome_coords::from_block(16);
+                    let multi_noise_config =
+                    super::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
+                        biome_pos.x,
+                        biome_pos.y,
+                        horizontal_biome_end as usize,
+                    );
+                    let mut multi_noise_sampler =
+                        super::noise::router::multi_noise_sampler::MultiNoiseSampler::generate(
+                            &noise_router.multi_noise,
+                            &multi_noise_config,
+                        );
+
+                    state
+                        .proto_chunk
+                        .populate_biomes(dimension, &mut multi_noise_sampler);
+                    state.stage = ChunkStage::Biomes;
+                }
+                ChunkStage::Biomes => {
+                    // Generate noise
+                    let chunk_pos = self.position;
+                    let generation_shape = &settings.shape;
+                    let horizontal_cell_count = super::chunk_noise::CHUNK_DIM
+                        / generation_shape.horizontal_cell_block_count();
+                    let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
+                    let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
+
+                    let sampler = super::aquifer_sampler::FluidLevelSampler::Chunk(Box::new(
+                        StandardChunkFluidLevelSampler::new(
+                            super::aquifer_sampler::FluidLevel::new(
+                                settings.sea_level,
+                                settings.default_fluid.name,
+                            ),
+                            super::aquifer_sampler::FluidLevel::new(
+                                -54,
+                                &pumpkin_data::Block::LAVA,
+                            ),
+                        ),
+                    ));
+
+                    let mut noise_sampler = super::chunk_noise::ChunkNoiseGenerator::new(
+                        &noise_router.noise,
+                        random_config,
+                        horizontal_cell_count as usize,
+                        start_x,
+                        start_z,
+                        generation_shape,
+                        sampler,
+                        settings.aquifers_enabled,
+                        settings.ore_veins_enabled,
+                    );
+
+                    let biome_pos = Vector2::new(
+                        biome_coords::from_block(start_x),
+                        biome_coords::from_block(start_z),
+                    );
+                    let horizontal_biome_end = biome_coords::from_block(
+                        horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+                    );
+                    let surface_config = super::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+                    biome_pos.x,
+                    biome_pos.y,
+                    horizontal_biome_end as usize,
+                    generation_shape.min_y as i32,
+                    generation_shape.max_y() as i32,
+                    generation_shape.vertical_cell_block_count() as usize,
+                );
+                    let mut surface_height_estimate_sampler = super::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler::generate(
+                    &noise_router.surface_estimator,
+                    &surface_config,
+                );
+
+                    state
+                        .proto_chunk
+                        .populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
+                    state.stage = ChunkStage::Noise;
+                }
+                ChunkStage::Noise => {
+                    // Build surface
+                    let chunk_pos = self.position;
+                    let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
+                    let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
+                    let generation_shape = &settings.shape;
+                    let horizontal_cell_count = super::chunk_noise::CHUNK_DIM
+                        / generation_shape.horizontal_cell_block_count();
+
+                    let biome_pos = Vector2::new(
+                        biome_coords::from_block(start_x),
+                        biome_coords::from_block(start_z),
+                    );
+                    let horizontal_biome_end = biome_coords::from_block(
+                        horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+                    );
+                    let surface_config = super::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+                    biome_pos.x,
+                    biome_pos.y,
+                    horizontal_biome_end as usize,
+                    generation_shape.min_y as i32,
+                    generation_shape.max_y() as i32,
+                    generation_shape.vertical_cell_block_count() as usize,
+                );
+                    let mut surface_height_estimate_sampler = super::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler::generate(
+                    &noise_router.surface_estimator,
+                    &surface_config,
+                );
+
+                    state.proto_chunk.build_surface(
+                        settings,
+                        random_config,
+                        terrain_cache,
+                        &mut surface_height_estimate_sampler,
+                    );
+                    state.stage = ChunkStage::Surface;
+                }
+                ChunkStage::Surface => {
+                    // Generate features and structures
+                    state.proto_chunk.generate_features_and_structure(
+                        level,
+                        block_registry,
+                        random_config,
+                    );
+                    state.stage = ChunkStage::Full;
+                }
+                ChunkStage::Full => {
+                    // Should not happen due to the check at the top, but is safe.
+                }
+            }
+        }
+    }
+
+    // Helper to get dependencies for the *next* stage transition.
+    fn get_dependants(&self, current_stage: ChunkStage) -> Vec<(Vector2<i32>, ChunkStage)> {
+        let mut deps = Vec::new();
+        let dep_radius = dependency_radius(current_stage);
+
+        if dep_radius == 0 {
+            return deps;
+        }
+
+        for dx in -dep_radius..=dep_radius {
+            for dz in -dep_radius..=dep_radius {
+                if dx == 0 && dz == 0 {
+                    continue;
+                }
+                deps.push((
+                    Vector2::new(self.position.x + dx, self.position.y + dz),
+                    current_stage, // The dependency must be at least at our current stage
+                ));
+            }
+        }
+        deps
+    }
+
+    /// Finalize the chunk, extracting the ProtoChunk if fully generated
+    pub fn finalize(&self, generation_settings: &GenerationSettings) -> ChunkData {
+        let state = self.state.lock().unwrap();
+        assert_eq!(state.stage, ChunkStage::Full);
+        let proto_chunk = &state.proto_chunk;
+        let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
+        let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
+        let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
+
+        for y in 0..biome_coords::from_block(generation_settings.shape.height) {
+            let relative_y = y as usize;
+            let section_index = relative_y / BiomePalette::SIZE;
+            let relative_y = relative_y % BiomePalette::SIZE;
+            if let Some(section) = sections.sections.get_mut(section_index) {
+                for z in 0..BiomePalette::SIZE {
+                    for x in 0..BiomePalette::SIZE {
+                        let absolute_y =
+                            biome_coords::from_block(generation_settings.shape.min_y as i32)
+                                + y as i32;
+                        let biome =
+                            proto_chunk.get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
+                        section.biomes.set(x, relative_y, z, biome.id);
+                    }
+                }
+            }
+        }
+        for y in 0..generation_settings.shape.height {
+            let relative_y = y as usize;
+            let section_index = section_coords::block_to_section(relative_y);
+            let relative_y = relative_y % BlockPalette::SIZE;
+            if let Some(section) = sections.sections.get_mut(section_index) {
+                for z in 0..BlockPalette::SIZE {
+                    for x in 0..BlockPalette::SIZE {
+                        let block = proto_chunk
+                            .get_block_state_raw(&Vector3::new(x as i32, y as i32, z as i32));
+                        section.block_states.set(x, relative_y, z, block);
+                    }
+                }
+            }
+        }
+        let mut chunk = ChunkData {
+            light_engine: ChunkLight {
+                sky_light: (0..sections.sections.len())
+                    .map(|_| LightContainer::new_filled(15))
+                    .collect(),
+                block_light: (0..sections.sections.len())
+                    .map(|_| LightContainer::new_empty(15))
+                    .collect(),
+            },
+            section: sections,
+            heightmap: Default::default(),
+            position: proto_chunk.chunk_pos,
+            dirty: true,
+            block_ticks: Default::default(),
+            fluid_ticks: Default::default(),
+            block_entities: Default::default(),
+        };
+
+        chunk.heightmap = chunk.calculate_heightmap();
+        chunk
     }
 }
 

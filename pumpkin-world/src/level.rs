@@ -7,7 +7,7 @@ use crate::{
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, generator::WorldGenerator, get_world_gen, proto_chunk::StagedChunk},
+    generation::{Seed, generator::WorldGenerator, get_world_gen, proto_chunk::PendingChunk},
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
@@ -43,7 +43,7 @@ pub type SyncChunk = Arc<RwLock<ChunkData>>;
 pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
 
 pub enum ChunkEntry {
-    Pending(Arc<StagedChunk>),
+    Pending(Arc<PendingChunk>),
     Full(Arc<RwLock<ChunkData>>),
 }
 
@@ -71,7 +71,7 @@ pub struct Level {
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
-    loaded_chunks: Arc<DashMap<Vector2<i32>, ChunkEntry>>,
+    pub(crate) loaded_chunks: Arc<DashMap<Vector2<i32>, ChunkEntry>>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
