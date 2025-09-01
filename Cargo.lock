@@ -2249,6 +2249,7 @@ dependencies = [
  "serde_json",
  "serde_json5",
  "sha2 0.10.9",
+ "take_mut",
  "temp-dir",
  "thiserror",
  "thread_local",

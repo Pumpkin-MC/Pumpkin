@@ -1,5 +1,6 @@
 use crate::{
-    BlockStateId,
+    BlockStateId, GlobalRandomConfig, ProtoNoiseRouters,
+    biome::hash_seed,
     block::{RawBlockState, entities::BlockEntity},
     chunk::{
         ChunkData, ChunkEntityData, ChunkReadingError,
@@ -7,7 +8,11 @@ use crate::{
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, generator::WorldGenerator, get_world_gen, proto_chunk::PendingChunk},
+    generation::{
+        Seed,
+        proto_chunk::{ChunkStage, PendingChunk, TerrainCache},
+        settings::gen_settings_from_dimension,
+    },
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
@@ -16,10 +21,16 @@ use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
-use pumpkin_data::biome::Biome;
-use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
+use pumpkin_data::{
+    Block,
+    block_properties::has_random_ticks,
+    fluid::Fluid,
+    noise_router::{END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER},
+};
+use pumpkin_data::{BlockState, biome::Biome};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -45,6 +56,42 @@ pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
 pub enum ChunkEntry {
     Pending(Arc<PendingChunk>),
     Full(Arc<RwLock<ChunkData>>),
+}
+
+pub struct VanillaGenerationState {
+    random_config: GlobalRandomConfig,
+    base_router: ProtoNoiseRouters,
+    dimension: Dimension,
+
+    terrain_cache: TerrainCache,
+
+    default_block: &'static BlockState,
+}
+
+impl VanillaGenerationState {
+    fn new(seed: Seed, dimension: Dimension) -> Self {
+        let random_config = GlobalRandomConfig::new(seed.0, false);
+
+        // TODO: The generation settings contains (part of?) the noise routers too; do we keep the separate or
+        // use only the generation settings?
+        let base = match dimension {
+            Dimension::Overworld => OVERWORLD_BASE_NOISE_ROUTER,
+            Dimension::Nether => NETHER_BASE_NOISE_ROUTER,
+            Dimension::End => END_BASE_NOISE_ROUTER,
+        };
+        let terrain_cache = TerrainCache::from_random(&random_config);
+        let generation_settings = gen_settings_from_dimension(&dimension);
+
+        let default_block = generation_settings.default_block.get_state();
+        let base_router = ProtoNoiseRouters::generate(&base, &random_config);
+        Self {
+            random_config,
+            base_router,
+            dimension,
+            terrain_cache,
+            default_block,
+        }
+    }
 }
 
 pub struct ChunkRequest {
@@ -79,16 +126,16 @@ pub struct Level {
     chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
     entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
 
-    world_gen: Arc<dyn WorldGenerator>,
-
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
     pub shutdown_notifier: Notify,
     pub is_shutting_down: AtomicBool,
 
-    gen_request_tx: Sender<Vector2<i32>>,
-    pending_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncChunk>>>>,
+    generation_state: Arc<VanillaGenerationState>,
+    chunk_tickets: Arc<tokio::sync::Mutex<Vec<Vector2<i32>>>>,
+    ticket_notify: Notify,
+    thread_pool: Arc<ThreadPool>,
 
     gen_entity_request_tx: Sender<Vector2<i32>>,
     pending_entity_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncEntityChunk>>>>,
@@ -106,6 +153,74 @@ pub struct LevelFolder {
     pub root_folder: PathBuf,
     pub region_folder: PathBuf,
     pub entities_folder: PathBuf,
+}
+
+fn rayon_chunk_generator(
+    chunk_coord: Vector2<i32>,
+    level: Arc<Level>,
+    generation_state: &VanillaGenerationState,
+) {
+    let chunk = {
+        let chunk = level.loaded_chunks.entry(chunk_coord).or_insert_with(|| {
+            let generation_settings = gen_settings_from_dimension(&generation_state.dimension);
+            ChunkEntry::Pending(Arc::new(PendingChunk::new(
+                chunk_coord,
+                generation_settings,
+                generation_state.default_block,
+                hash_seed(generation_state.random_config.seed),
+            )))
+        });
+
+        if let ChunkEntry::Pending(chunk) = &*chunk {
+            Some(chunk.clone())
+        } else {
+            None
+        }
+    };
+
+    if let Some(chunk) = chunk {
+        let generation_settings = gen_settings_from_dimension(&generation_state.dimension);
+
+        let block_registry = level.block_registry.as_ref();
+
+        chunk.advance_to_stage(
+            ChunkStage::Full,
+            &level,
+            block_registry,
+            &generation_settings,
+            &generation_state.random_config,
+            &generation_state.terrain_cache,
+            &generation_state.base_router,
+            generation_state.dimension,
+            generation_state.default_block,
+            hash_seed(generation_state.random_config.seed),
+        );
+
+        let notify_full = {
+            if let ChunkEntry::Pending(chunk) = &*level.loaded_chunks.get(&chunk_coord).unwrap() {
+                Some(chunk.notify_full.clone())
+            } else {
+                None
+            }
+        };
+
+        if let Some(mut chunk) = level.loaded_chunks.get_mut(&chunk_coord) {
+            take_mut::take(chunk.value_mut(), |chunk| match chunk {
+                ChunkEntry::Pending(chunk) => {
+                    ChunkEntry::Full(Arc::new(RwLock::new(chunk.finalize(generation_settings))))
+                }
+                ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
+            });
+        }
+
+        if let Some(notify_full) = notify_full {
+            notify_full.notify_waiters();
+        }
+
+        println!("Chunk {:?} generated", chunk_coord);
+    } else {
+        println!("Chunk {:?} already exists", chunk_coord);
+    }
 }
 
 impl Level {
@@ -133,7 +248,6 @@ impl Level {
         // TODO: Load info correctly based on world format type
 
         let seed = Seed(seed as u64);
-        let world_gen = get_world_gen(seed, dimension).into();
 
         let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match advanced_config().chunk.format {
             ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile<ChunkData>>::default()),
@@ -151,16 +265,14 @@ impl Level {
                 }
             };
 
-        let (gen_request_tx, gen_request_rx) = crossbeam::channel::unbounded();
-        let pending_generations = Arc::new(DashMap::new());
-
         let (gen_entity_request_tx, gen_entity_request_rx) = crossbeam::channel::unbounded();
         let pending_entity_generations = Arc::new(DashMap::new());
+
+        let generation_state = Arc::new(VanillaGenerationState::new(seed, dimension));
 
         let level_ref = Arc::new(Self {
             seed,
             block_registry,
-            world_gen,
             level_folder,
             chunk_saver,
             entity_saver,
@@ -171,54 +283,40 @@ impl Level {
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             is_shutting_down: AtomicBool::new(false),
-            gen_request_tx,
-            pending_generations: pending_generations.clone(),
+            chunk_tickets: Arc::new(tokio::sync::Mutex::new(Vec::new())),
+            ticket_notify: Notify::new(),
+            thread_pool: Arc::new(
+                ThreadPoolBuilder::new()
+                    .num_threads(num_cpus::get())
+                    .thread_name(move |i| format!("Chunk Generator Thread {}", i))
+                    .build()
+                    .unwrap(),
+            ),
             gen_entity_request_tx,
             pending_entity_generations: pending_entity_generations.clone(),
+            generation_state: generation_state.clone(),
+        });
+
+        let level_ref_clone = level_ref.clone();
+        tokio::spawn(async move {
+            loop {
+                let maybe_coord = level_ref_clone.chunk_tickets.lock().await.pop();
+
+                if let Some(coord) = maybe_coord {
+                    let generator_clone = level_ref_clone.clone();
+                    let generation_state_clone = generation_state.clone();
+
+                    level_ref_clone.thread_pool.spawn(move || {
+                        rayon_chunk_generator(coord, generator_clone, &generation_state_clone);
+                    });
+                } else {
+                    level_ref_clone.ticket_notify.notified().await;
+                }
+            }
         });
 
         //TODO: Investigate optimal number of threads
         let num_threads = num_cpus::get().saturating_sub(1).max(1);
-
-        // Normal Chunks
-        for thread_id in 0..num_threads {
-            let level_clone = level_ref.clone();
-            let pending_clone = pending_generations.clone();
-            let rx = gen_request_rx.clone();
-
-            std::thread::spawn(move || {
-                while let Ok(pos) = rx.recv() {
-                    if level_clone.is_shutting_down.load(Ordering::Relaxed) {
-                        break;
-                    }
-
-                    log::debug!(
-                        "Generating chunk {pos:?}, worker thread {thread_id:?}, queue length {}",
-                        rx.len()
-                    );
-
-                    // Generate chunk
-                    let chunk = level_clone.world_gen.generate_chunk(
-                        &level_clone,
-                        level_clone.block_registry.as_ref(),
-                        &pos,
-                    );
-                    let arc_chunk = Arc::new(RwLock::new(chunk));
-
-                    // Insert into loaded chunks
-                    level_clone
-                        .loaded_chunks
-                        .insert(pos, ChunkEntry::Full(arc_chunk.clone()));
-
-                    // Fulfill all waiters
-                    if let Some(waiters) = pending_clone.remove(&pos) {
-                        for tx in waiters.1 {
-                            let _ = tx.send(arc_chunk.clone());
-                        }
-                    }
-                }
-            });
-        }
 
         // Entity Chunks
         for thread_id in 0..num_threads {
@@ -601,6 +699,39 @@ impl Level {
         self.clean_chunks(&[*chunk]).await;
     }
 
+    pub async fn wait_for_chunk(&self, coord: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
+        loop {
+            let chunk = {
+                let chunk = self.loaded_chunks.entry(coord).or_insert_with(|| {
+                    let generation_settings =
+                        gen_settings_from_dimension(&self.generation_state.dimension);
+                    ChunkEntry::Pending(Arc::new(PendingChunk::new(
+                        coord,
+                        generation_settings,
+                        self.generation_state.default_block,
+                        hash_seed(self.generation_state.random_config.seed),
+                    )))
+                });
+
+                match &*chunk {
+                    ChunkEntry::Pending(chunk) => ChunkEntry::Pending(chunk.clone()),
+                    ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
+                }
+            };
+
+            if let ChunkEntry::Full(chunk) = chunk {
+                return chunk.clone();
+            }
+            let notified = if let ChunkEntry::Pending(chunk) = &chunk {
+                chunk.notify_full.notified()
+            } else {
+                continue;
+            };
+
+            notified.await;
+        }
+    }
+
     pub async fn clean_entity_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
         self.clean_entity_chunks(&[*chunk]).await;
     }
@@ -648,23 +779,7 @@ impl Level {
                     .insert(pos, ChunkEntry::Full(chunk.clone()));
                 chunk
             }
-            Err(_) => {
-                // Need to generate
-                let (tx, rx) = oneshot::channel();
-
-                // Deduplication
-                match self.pending_generations.entry(pos) {
-                    dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                        entry.get_mut().push(tx);
-                    }
-                    dashmap::mapref::entry::Entry::Vacant(entry) => {
-                        entry.insert(vec![tx]);
-                        let _ = self.gen_request_tx.send(pos);
-                    }
-                }
-
-                rx.await.expect("Generation worker dropped")
-            }
+            Err(_) => self.wait_for_chunk(pos).await,
         }
     }
 
@@ -725,21 +840,8 @@ impl Level {
                                 let level_clone = level.clone();
 
                                 tokio::spawn(async move {
-                                    let (tx, rx) = oneshot::channel();
-
-                                    match level_clone.pending_generations.entry(pos) {
-                                        dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                                            entry.get_mut().push(tx);
-                                        }
-                                        dashmap::mapref::entry::Entry::Vacant(entry) => {
-                                            entry.insert(vec![tx]);
-                                            let _ = level_clone.gen_request_tx.send(pos);
-                                        }
-                                    }
-
-                                    if let Ok(chunk) = rx.await {
-                                        let _ = sender_clone.send((chunk, true));
-                                    }
+                                    let _ = sender_clone
+                                        .send((level_clone.wait_for_chunk(pos).await, true));
                                 });
                             }
                         }

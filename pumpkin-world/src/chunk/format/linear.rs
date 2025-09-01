@@ -387,7 +387,7 @@ mod tests {
     use crate::chunk::io::file_manager::ChunkFileManager;
     use crate::chunk::io::{FileIO, LoadedData};
     use crate::dimension::Dimension;
-    use crate::generation::{Seed, get_world_gen};
+    use crate::generation::Seed;
     use crate::level::{Level, LevelFolder};
     use crate::world::{BlockAccessor, BlockRegistryExt};
 
@@ -437,8 +437,6 @@ mod tests {
     async fn test_writing() {
         let _ = env_logger::try_init();
 
-        let generator = get_world_gen(Seed(0), Dimension::Overworld);
-
         let temp_dir = TempDir::new().unwrap();
         let level_folder = LevelFolder {
             root_folder: temp_dir.path().to_path_buf(),
@@ -459,8 +457,8 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator.generate_chunk(&level, block_registry.as_ref(), &position);
-                chunks.push((position, Arc::new(RwLock::new(chunk))));
+                let chunk = level.get_chunk(position).await;
+                chunks.push((position, chunk));
             }
         }
 
