@@ -96,7 +96,9 @@ pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
 pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> {
     Some(match nbt.get_string("id").unwrap() {
         ChestBlockEntity::ID => Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt)),
-        EnderChestBlockEntity::ID => Arc::new(block_entity_from_generic::<EnderChestBlockEntity>(nbt)),
+        EnderChestBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<EnderChestBlockEntity>(nbt))
+        }
         SignBlockEntity::ID => Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt)),
         BedBlockEntity::ID => Arc::new(block_entity_from_generic::<BedBlockEntity>(nbt)),
         ComparatorBlockEntity::ID => {
