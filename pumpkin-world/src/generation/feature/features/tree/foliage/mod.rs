@@ -153,7 +153,7 @@ impl FoliagePlacer {
             let dy = chunk_pos.y - other_chunk_pos.y;
             let distance_squared = dx * dx + dy * dy;
             if distance_squared > 2 {
-                println!("Distance is more than 2, (Logic Error in foliage generation)");
+                //println!("Distance is more than 2, (Logic Error in foliage generation)");
                 return;
             }
             level.set_block_state_gen(&pos, block_state);

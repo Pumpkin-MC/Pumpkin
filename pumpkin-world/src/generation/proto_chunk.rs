@@ -933,8 +933,9 @@ impl PendingChunk {
                 ChunkStage::Empty => {
                     let proto_chunk = self.proto_chunk.clone();
                     let chunk_pos = self.position;
-                    let generation_context = generation_context.clone();
-                    tokio::task::spawn_blocking(move || {
+                    let generation_context_clone = generation_context.clone();
+                    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+                    generation_context.thread_pool.spawn(move || {
                         let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
                         let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
                         let biome_pos = Vector2::new(
@@ -950,23 +951,26 @@ impl PendingChunk {
                         );
                         let mut multi_noise_sampler =
                             super::noise::router::multi_noise_sampler::MultiNoiseSampler::generate(
-                                &generation_context.noise_router.multi_noise,
+                                &generation_context_clone.noise_router.multi_noise,
                                 &multi_noise_config,
                             );
 
                         proto_chunk
-                            .populate_biomes(generation_context.dimension, &mut multi_noise_sampler);
+                            .populate_biomes(generation_context_clone.dimension, &mut multi_noise_sampler);
 
                         state.stage = ChunkStage::Biomes;
-                    }).await.unwrap();
+                        tx.send(()).unwrap();
+                    });
+                    rx.await.unwrap();
                 }
                 ChunkStage::Biomes => {
                     let proto_chunk = self.proto_chunk.clone();
                     let chunk_pos = self.position;
-                    let generation_context = generation_context.clone();
-                    tokio::task::spawn_blocking(move || {
+                    let generation_context_clone = generation_context.clone();
+                    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+                    generation_context.thread_pool.spawn(move || {
                         // Generate noise
-                        let generation_shape = &generation_context.settings.shape;
+                        let generation_shape = &generation_context_clone.settings.shape;
                         let horizontal_cell_count = super::chunk_noise::CHUNK_DIM
                             / generation_shape.horizontal_cell_block_count();
                         let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
@@ -975,8 +979,8 @@ impl PendingChunk {
                         let sampler = super::aquifer_sampler::FluidLevelSampler::Chunk(Box::new(
                             StandardChunkFluidLevelSampler::new(
                                 super::aquifer_sampler::FluidLevel::new(
-                                    generation_context.settings.sea_level,
-                                    generation_context.settings.default_fluid.name,
+                                    generation_context_clone.settings.sea_level,
+                                    generation_context_clone.settings.default_fluid.name,
                                 ),
                                 super::aquifer_sampler::FluidLevel::new(
                                     -54,
@@ -986,15 +990,15 @@ impl PendingChunk {
                         ));
 
                         let mut noise_sampler = super::chunk_noise::ChunkNoiseGenerator::new(
-                            &generation_context.noise_router.noise,
-                            &generation_context.random_config,
+                            &generation_context_clone.noise_router.noise,
+                            &generation_context_clone.random_config,
                             horizontal_cell_count as usize,
                             start_x,
                             start_z,
                             generation_shape,
                             sampler,
-                            generation_context.settings.aquifers_enabled,
-                            generation_context.settings.ore_veins_enabled,
+                            generation_context_clone.settings.aquifers_enabled,
+                            generation_context_clone.settings.ore_veins_enabled,
                         );
 
                         let biome_pos = Vector2::new(
@@ -1013,7 +1017,7 @@ impl PendingChunk {
                     generation_shape.vertical_cell_block_count() as usize,
                 );
                         let mut surface_height_estimate_sampler = super::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler::generate(
-                    &generation_context.noise_router.surface_estimator,
+                    &generation_context_clone.noise_router.surface_estimator,
                     &surface_config,
                 );
 
@@ -1022,18 +1026,21 @@ impl PendingChunk {
                             &mut surface_height_estimate_sampler,
                         );
                         state.stage = ChunkStage::Noise;
-                    }).await.unwrap();
+                        tx.send(()).unwrap();
+                    });
+                    rx.await.unwrap();
                 }
                 ChunkStage::Noise => {
                     let proto_chunk = self.proto_chunk.clone();
                     let chunk_pos = self.position;
-                    let generation_context = generation_context.clone();
+                    let generation_context_clone = generation_context.clone();
 
-                    tokio::task::spawn_blocking(move || {
+                    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+                    generation_context.thread_pool.spawn(move || {
                         // Build surface
                         let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
                         let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
-                        let generation_shape = &generation_context.settings.shape;
+                        let generation_shape = &generation_context_clone.settings.shape;
                         let horizontal_cell_count = super::chunk_noise::CHUNK_DIM
                             / generation_shape.horizontal_cell_block_count();
 
@@ -1053,36 +1060,39 @@ impl PendingChunk {
                             generation_shape.vertical_cell_block_count() as usize,
                         );
                         let mut surface_height_estimate_sampler = super::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler::generate(
-                            &generation_context.noise_router.surface_estimator,
+                            &generation_context_clone.noise_router.surface_estimator,
                             &surface_config,
                         );
 
                         proto_chunk.build_surface(
-                            &generation_context.settings,
-                            &generation_context.random_config,
-                            &generation_context.terrain_cache,
+                            &generation_context_clone.settings,
+                            &generation_context_clone.random_config,
+                            &generation_context_clone.terrain_cache,
                             &mut surface_height_estimate_sampler,
                         );
                         state.stage = ChunkStage::Surface;
-                    }).await.unwrap();
+                        tx.send(()).unwrap();
+                    });
+                    rx.await.unwrap();
                 }
                 ChunkStage::Surface => {
                     // Generate features and structures
                     let proto_chunk = self.proto_chunk.clone();
                     let level = level.clone();
                     let block_registry = generation_context.block_registry.clone();
-                    let generation_context = generation_context.clone();
-                    tokio::task::spawn_blocking(move || {
+                    let generation_context_clone = generation_context.clone();
+                    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+                    generation_context.thread_pool.spawn(move || {
                         let block_registry: &dyn BlockRegistryExt = block_registry.as_ref();
                         proto_chunk.generate_features_and_structure(
                             &level,
                             block_registry,
-                            &generation_context.random_config,
+                            &generation_context_clone.random_config,
                         );
                         state.stage = ChunkStage::Features;
-                    })
-                    .await
-                    .unwrap();
+                        tx.send(()).unwrap();
+                    });
+                    rx.await.unwrap();
                 }
                 ChunkStage::Features => {
                     state.stage = ChunkStage::Full;
