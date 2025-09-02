@@ -818,7 +818,7 @@ pub enum ChunkStage {
 const fn dependency_radius(chunk_stage: ChunkStage) -> i32 {
     match chunk_stage {
         ChunkStage::Empty => 0,
-        ChunkStage::Biomes => 1,
+        ChunkStage::Biomes => 0,
         ChunkStage::Noise => 0,
         ChunkStage::Surface => 1,
         ChunkStage::Features => 1,
@@ -888,22 +888,14 @@ impl PendingChunk {
                 .for_each(|(coord, required_stage)| {
                     let dependency_chunk = {
                         let dependency_chunk = {
-                            if current_stage == ChunkStage::Empty {
-                                Some(level.loaded_chunks.entry(*coord).or_insert_with(|| {
-                                    ChunkEntry::Pending(Arc::new(PendingChunk::new(
-                                        *coord,
-                                        settings,
-                                        default_block,
-                                        biome_mixer_seed,
-                                    )))
-                                }))
-                            } else {
-                                if let Some(chunk) = level.loaded_chunks.get_mut(coord) {
-                                    Some(chunk)
-                                } else {
-                                    None
-                                }
-                            }
+                            Some(level.loaded_chunks.entry(*coord).or_insert_with(|| {
+                                ChunkEntry::Pending(Arc::new(PendingChunk::new(
+                                    *coord,
+                                    settings,
+                                    default_block,
+                                    biome_mixer_seed,
+                                )))
+                            }))
                         };
 
                         if let Some(chunk) = dependency_chunk

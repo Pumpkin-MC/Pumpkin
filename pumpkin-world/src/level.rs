@@ -550,6 +550,8 @@ impl Level {
     }
 
     pub async fn clean_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
+        println!("Cleaning chunks {:?}", chunks.len());
+        return;
         // Care needs to be take here because of interweaving case:
         // 1) Remove chunk from cache
         // 2) Another player wants same chunk
@@ -781,6 +783,8 @@ impl Level {
     }
 
     pub fn clean_memory(&self) {
+        println!("Cleaning memory");
+        return;
         self.chunk_watchers.retain(|_, watcher| !watcher.is_zero());
         self.loaded_chunks
             .retain(|at, _| self.chunk_watchers.get(at).is_some());
