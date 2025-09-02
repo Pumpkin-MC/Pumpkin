@@ -1,5 +1,6 @@
+use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use pumpkin_data::tag;
@@ -196,7 +197,7 @@ impl ProtoChunk {
         let local_x = pos.x & 15;
         let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        let mut heightmap = self.flat_surface_height_map.lock().unwrap();
+        let mut heightmap = self.flat_surface_height_map.lock();
         let current_height = heightmap[index];
 
         if pos.y > current_height as i32 {
@@ -208,7 +209,7 @@ impl ProtoChunk {
         let local_x = pos.x & 15;
         let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        let mut heightmap = self.flat_ocean_floor_height_map.lock().unwrap();
+        let mut heightmap = self.flat_ocean_floor_height_map.lock();
         let current_height = heightmap[index];
 
         if pos.y > current_height as i32 {
@@ -220,7 +221,7 @@ impl ProtoChunk {
         let local_x = pos.x & 15;
         let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        let mut heightmap = self.flat_motion_blocking_height_map.lock().unwrap();
+        let mut heightmap = self.flat_motion_blocking_height_map.lock();
         let current_height = heightmap[index];
 
         if pos.y > current_height as i32 {
@@ -232,10 +233,7 @@ impl ProtoChunk {
         let local_x = pos.x & 15;
         let local_z = pos.z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        let mut heightmap = self
-            .flat_motion_blocking_no_leaves_height_map
-            .lock()
-            .unwrap();
+        let mut heightmap = self.flat_motion_blocking_no_leaves_height_map.lock();
         let current_height = heightmap[index];
 
         if pos.y > current_height as i32 {
@@ -260,31 +258,28 @@ impl ProtoChunk {
         let local_x = pos.x & 15;
         let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_surface_height_map.lock().unwrap()[index] as i32 + 1
+        self.flat_surface_height_map.lock()[index] as i32 + 1
     }
 
     pub fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
         let local_x = pos.x & 15;
         let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_ocean_floor_height_map.lock().unwrap()[index] as i32 + 1
+        self.flat_ocean_floor_height_map.lock()[index] as i32 + 1
     }
 
     pub fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
         let local_x = pos.x & 15;
         let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_motion_blocking_height_map.lock().unwrap()[index] as i32 + 1
+        self.flat_motion_blocking_height_map.lock()[index] as i32 + 1
     }
 
     pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
         let local_x = pos.x & 15;
         let local_z = pos.y & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
-        self.flat_motion_blocking_no_leaves_height_map
-            .lock()
-            .unwrap()[index] as i32
-            + 1
+        self.flat_motion_blocking_no_leaves_height_map.lock()[index] as i32 + 1
     }
 
     #[inline]
@@ -338,7 +333,7 @@ impl ProtoChunk {
     #[inline]
     pub fn get_block_state_raw(&self, local_pos: &Vector3<i32>) -> u16 {
         let index = self.local_pos_to_block_index(local_pos);
-        self.flat_block_map.lock().unwrap()[index]
+        self.flat_block_map.lock()[index]
     }
 
     #[inline]
@@ -378,7 +373,7 @@ impl ProtoChunk {
         }
 
         let index = self.local_pos_to_block_index(&local_pos);
-        self.flat_block_map.lock().unwrap()[index] = block_state.id;
+        self.flat_block_map.lock()[index] = block_state.id;
     }
 
     #[inline]
@@ -389,7 +384,7 @@ impl ProtoChunk {
             global_biome_pos.z & biome_coords::from_block(15),
         );
         let index = self.local_biome_pos_to_biome_index(&local_pos);
-        self.flat_biome_map.lock().unwrap()[index]
+        self.flat_biome_map.lock()[index]
     }
 
     pub fn populate_biomes(
@@ -436,7 +431,7 @@ impl ProtoChunk {
                         };
                         let index = self.local_biome_pos_to_biome_index(&local_biome_pos);
 
-                        self.flat_biome_map.lock().unwrap()[index] = biome;
+                        self.flat_biome_map.lock()[index] = biome;
                     }
                 }
             }
@@ -709,7 +704,7 @@ impl ProtoChunk {
         let population_seed =
             Xoroshiro::get_population_seed(random_config.seed, block_pos.0.x, block_pos.0.z);
 
-        for (_structure, (pos, stype)) in self.structure_starts.lock().unwrap().clone() {
+        for (_structure, (pos, stype)) in self.structure_starts.lock().clone() {
             dbg!("generating structure");
             stype.generate(pos.clone(), self);
         }
@@ -752,7 +747,7 @@ impl ProtoChunk {
                 if let Some(position) = position
                     && !position.generator.pieces_positions.is_empty()
                 {
-                    self.structure_starts.lock().unwrap().insert(
+                    self.structure_starts.lock().insert(
                         STRUCTURES.get(name).unwrap().clone(),
                         (position, set.structures[0].structure.clone()),
                     );
@@ -833,7 +828,7 @@ pub struct PendingChunkState {
 /// Represents the different stages of chunk generation
 /// This provides type safety and ensures chunks progress through the correct stages
 pub struct PendingChunk {
-    pub state: std::sync::Mutex<PendingChunkState>,
+    pub state: Mutex<PendingChunkState>,
     pub notify_full: Arc<Notify>,
     pub proto_chunk: ProtoChunk,
     pub position: Vector2<i32>,
@@ -852,7 +847,7 @@ impl PendingChunk {
             stage: ChunkStage::Empty,
         };
         PendingChunk {
-            state: std::sync::Mutex::new(state),
+            state: Mutex::new(state),
             notify_full: Arc::new(Notify::new()),
             position: chunk_pos,
             proto_chunk,
@@ -874,7 +869,7 @@ impl PendingChunk {
     ) {
         loop {
             let current_stage = {
-                let state = self.state.lock().unwrap();
+                let state = self.state.lock();
                 if state.stage >= target_stage {
                     return;
                 }
@@ -923,7 +918,7 @@ impl PendingChunk {
                     }
                 });
 
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock();
 
             // Check for race conditions.
             if state.stage != current_stage {
@@ -1053,6 +1048,19 @@ impl PendingChunk {
                     //println!("Chunk {:?} built surface", self.position);
                 }
                 ChunkStage::Surface => {
+                    /*
+                    let neigbor_stages = self.get_dependants(ChunkStage::Features);
+                    let mut stages = Vec::new();
+                    for (pos, stage) in neigbor_stages {
+                        let value = level.loaded_chunks.get(&pos).unwrap();
+                        match value.value() {
+                            ChunkEntry::Pending(chunk) => {
+                                stages.push(chunk.state.lock().stage);
+                            }
+                            ChunkEntry::Full(chunk) => stages.push(ChunkStage::Full),
+                        }
+                    }
+                    println!("Chunk {:?} depends on chunks {:?}", self.position, stages); */
                     // Generate features and structures
                     self.proto_chunk.generate_features_and_structure(
                         level,
@@ -1097,7 +1105,7 @@ impl PendingChunk {
 
     /// Finalize the chunk, extracting the ProtoChunk if fully generated
     pub fn finalize(&self, generation_settings: &GenerationSettings) -> ChunkData {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
         if state.stage != ChunkStage::Full {
             panic!(
                 "Attempted to finalize chunk at position {:?} with stage {:?}, expected ChunkStage::Full. \
@@ -1111,7 +1119,7 @@ impl PendingChunk {
         let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
 
         // Lock biome map once for the entire operation
-        let biome_map = proto_chunk.flat_biome_map.lock().unwrap();
+        let biome_map = proto_chunk.flat_biome_map.lock();
         for y in 0..biome_coords::from_block(generation_settings.shape.height) {
             let relative_y = y as usize;
             let section_index = relative_y / BiomePalette::SIZE;
@@ -1137,7 +1145,7 @@ impl PendingChunk {
         drop(biome_map); // Release the lock
 
         // Lock block map once for the entire operation
-        let block_map = proto_chunk.flat_block_map.lock().unwrap();
+        let block_map = proto_chunk.flat_block_map.lock();
         for y in 0..generation_settings.shape.height {
             let relative_y = y as usize;
             let section_index = section_coords::block_to_section(relative_y);

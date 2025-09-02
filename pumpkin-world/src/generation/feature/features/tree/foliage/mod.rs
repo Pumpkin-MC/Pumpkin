@@ -146,6 +146,16 @@ impl FoliagePlacer {
         if chunk.chunk_pos == pos.chunk_and_chunk_relative_position().0 {
             chunk.set_block_state(&pos.0, block_state);
         } else {
+            // If distance is more than 1 panic
+            let chunk_pos = chunk.chunk_pos;
+            let other_chunk_pos = pos.chunk_and_chunk_relative_position().0;
+            let dx = chunk_pos.x - other_chunk_pos.x;
+            let dy = chunk_pos.y - other_chunk_pos.y;
+            let distance_squared = dx * dx + dy * dy;
+            if distance_squared > 2 {
+                println!("Distance is more than 2, (Logic Error in foliage generation)");
+                return;
+            }
             level.set_block_state_gen(&pos, block_state);
         }
     }

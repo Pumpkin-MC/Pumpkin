@@ -20,6 +20,7 @@ use crossbeam::channel::Sender;
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
+use priority_queue::PriorityQueue;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_data::{
     Block,
@@ -32,6 +33,7 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
+    cmp::Reverse,
     collections::HashMap,
     path::PathBuf,
     sync::{
@@ -133,7 +135,7 @@ pub struct Level {
     pub is_shutting_down: AtomicBool,
 
     generation_state: Arc<VanillaGenerationState>,
-    chunk_tickets: Arc<tokio::sync::Mutex<Vec<Vector2<i32>>>>,
+    chunk_tickets: Arc<tokio::sync::Mutex<PriorityQueue<Vector2<i32>, Reverse<u64>>>>,
     ticket_notify: Notify,
     thread_pool: Arc<ThreadPool>,
 
@@ -288,11 +290,11 @@ impl Level {
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             is_shutting_down: AtomicBool::new(false),
-            chunk_tickets: Arc::new(tokio::sync::Mutex::new(Vec::new())),
+            chunk_tickets: Arc::new(tokio::sync::Mutex::new(PriorityQueue::new())),
             ticket_notify: Notify::new(),
             thread_pool: Arc::new(
                 ThreadPoolBuilder::new()
-                    .num_threads(num_cpus::get())
+                    .num_threads(num_cpus::get() * 3)
                     .thread_name(move |i| format!("Chunk Generator Thread {}", i))
                     .build()
                     .unwrap(),
@@ -318,7 +320,7 @@ impl Level {
                     let permit = generation_semaphore.clone().acquire_owned().await.unwrap();
                     level_ref_clone.thread_pool.spawn(move || {
                         rayon_chunk_generator(
-                            coord,
+                            coord.0,
                             generator_clone,
                             &generation_state_clone,
                             permit,
@@ -549,63 +551,6 @@ impl Level {
         !self.mark_chunks_as_not_watched(&[chunk]).await.is_empty()
     }
 
-    pub async fn clean_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
-        println!("Cleaning chunks {:?}", chunks.len());
-        return;
-        // Care needs to be take here because of interweaving case:
-        // 1) Remove chunk from cache
-        // 2) Another player wants same chunk
-        // 3) Load (old) chunk from serializer
-        // 4) Write (new) chunk from serializer
-        // Now outdated chunk data is cached and will be written later
-
-        let chunks_with_no_watchers = chunks
-            .iter()
-            .filter_map(|pos| {
-                // Only chunks that have no entry in the watcher map or have 0 watchers
-                if self
-                    .chunk_watchers
-                    .get(pos)
-                    .is_none_or(|count| count.is_zero())
-                {
-                    //TODO: pending chunk saving
-                    if let Some(chunk) = self.loaded_chunks.get(pos)
-                        && let ChunkEntry::Full(chunk) = &chunk.value()
-                    {
-                        Some((*pos, chunk.clone()))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        self.remove_chunk_requests(
-            &chunks_with_no_watchers
-                .iter()
-                .map(|(pos, _)| *pos)
-                .collect::<Vec<_>>(),
-        )
-        .await;
-
-        let level = self.clone();
-        self.spawn_task(async move {
-            let chunks_to_remove = chunks_with_no_watchers.clone();
-
-            level.write_chunks(chunks_with_no_watchers).await;
-            // Only after we have written the chunks to the serializer do we remove them from the
-            // cache
-            for (pos, chunk) in chunks_to_remove {
-                // Add them back if they have watchers
-                if level.chunk_watchers.get(&pos).is_none() {
-                    let _ = level.loaded_chunks.remove(&pos);
-                }
-            }
-        });
-    }
-
     pub async fn clean_entity_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
         // Care needs to be take here because of interweaving case:
         // 1) Remove chunk from cache
@@ -731,14 +676,17 @@ impl Level {
         self.clean_chunks(&[*chunk]).await;
     }
 
-    async fn request_chunks(&self, coords: &[Vector2<i32>]) {
-        self.chunk_tickets.lock().await.extend(coords);
+    async fn request_chunks(&self, coords: &[(Vector2<i32>, u64)]) {
+        self.chunk_tickets
+            .lock()
+            .await
+            .extend(coords.iter().map(|(c, d)| (*c, Reverse(*d))));
         self.ticket_notify.notify_waiters();
     }
 
     async fn remove_chunk_requests(&self, coords: &[Vector2<i32>]) {
         let mut tickets = self.chunk_tickets.lock().await;
-        tickets.retain(|c| !coords.contains(c));
+        tickets.retain(|c, _| !coords.contains(c));
     }
 
     pub async fn wait_for_chunk(&self, coord: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
@@ -783,11 +731,10 @@ impl Level {
     }
 
     pub fn clean_memory(&self) {
-        println!("Cleaning memory");
         return;
         self.chunk_watchers.retain(|_, watcher| !watcher.is_zero());
-        self.loaded_chunks
-            .retain(|at, _| self.chunk_watchers.get(at).is_some());
+        //self.loaded_chunks
+        //    .retain(|at, _| self.chunk_watchers.get(at).is_some());
         self.loaded_entity_chunks
             .retain(|at, _| self.chunk_watchers.get(at).is_some());
 
@@ -808,6 +755,62 @@ impl Level {
         }
     }
 
+    pub async fn clean_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
+        return;
+        // Care needs to be take here because of interweaving case:
+        // 1) Remove chunk from cache
+        // 2) Another player wants same chunk
+        // 3) Load (old) chunk from serializer
+        // 4) Write (new) chunk from serializer
+        // Now outdated chunk data is cached and will be written later
+
+        let chunks_with_no_watchers = chunks
+            .iter()
+            .filter_map(|pos| {
+                // Only chunks that have no entry in the watcher map or have 0 watchers
+                if self
+                    .chunk_watchers
+                    .get(pos)
+                    .is_none_or(|count| count.is_zero())
+                {
+                    //TODO: pending chunk saving
+                    if let Some(chunk) = self.loaded_chunks.get(pos)
+                        && let ChunkEntry::Full(chunk) = &chunk.value()
+                    {
+                        Some((*pos, chunk.clone()))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        self.remove_chunk_requests(
+            &chunks_with_no_watchers
+                .iter()
+                .map(|(pos, _)| *pos)
+                .collect::<Vec<_>>(),
+        )
+        .await;
+
+        let level = self.clone();
+        self.spawn_task(async move {
+            let chunks_to_remove = chunks_with_no_watchers.clone();
+
+            level.write_chunks(chunks_with_no_watchers).await;
+            // Only after we have written the chunks to the serializer do we remove them from the
+            // cache
+            for (pos, chunk) in chunks_to_remove {
+                // Add them back if they have watchers
+                if level.chunk_watchers.get(&pos).is_none() {
+                    let _ = level.loaded_chunks.remove(&pos);
+                }
+            }
+        });
+    }
+
     pub async fn get_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
         // Already loaded?
         if let Some(chunk) = self.loaded_chunks.get(&pos)
@@ -824,7 +827,7 @@ impl Level {
                 chunk
             }
             Err(_) => {
-                self.request_chunks(&[pos]).await;
+                self.request_chunks(&[(pos, 0)]).await;
                 self.wait_for_chunk(pos).await
             }
         }
@@ -836,7 +839,7 @@ impl Level {
     /// handle)
     pub fn receive_chunks(
         self: &Arc<Self>,
-        chunks: Vec<Vector2<i32>>,
+        chunks: Vec<(Vector2<i32>, u64)>,
     ) -> UnboundedReceiver<(SyncChunk, bool)> {
         let (sender, receiver) = mpsc::unbounded_channel();
         let level = self.clone();
@@ -849,7 +852,7 @@ impl Level {
             let fetch_task = async {
                 // Separate already-loaded chunks from ones we need to fetch
                 let mut to_fetch = Vec::new();
-                for pos in &chunks {
+                for (pos, _) in &chunks {
                     if let Some(chunk) = level.loaded_chunks.get(pos)
                         && let ChunkEntry::Full(loaded_chunk) = &chunk.value()
                     {
@@ -886,7 +889,12 @@ impl Level {
                                 let sender_clone = sender.clone();
                                 let level_clone = level.clone();
 
-                                level_clone.request_chunks(&[pos]).await;
+                                level_clone
+                                    .request_chunks(&[(
+                                        pos,
+                                        chunks.iter().find(|(p, _)| *p == pos).unwrap().1,
+                                    )])
+                                    .await;
                                 tokio::spawn(async move {
                                     let _ = sender_clone
                                         .send((level_clone.wait_for_chunk(pos).await, true));
@@ -1078,14 +1086,8 @@ impl Level {
                 ChunkEntry::Pending(chunk) => {
                     chunk.proto_chunk.set_block_state(&relative, block_state)
                 }
-                ChunkEntry::Full(chunk) => {
-                    println!("Thiss shouldn't happen");
-                    let _ = chunk.blocking_write().section.set_block_absolute_y(
-                        relative.x as usize,
-                        relative.y,
-                        relative.z as usize,
-                        block_state.id,
-                    );
+                ChunkEntry::Full(_chunk) => {
+                    panic!("This shouldn't happen");
                 }
             }
         }

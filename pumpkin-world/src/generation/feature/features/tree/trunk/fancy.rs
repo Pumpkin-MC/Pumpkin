@@ -174,7 +174,17 @@ impl FancyTrunkPlacer {
                     if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
                         chunk.set_block_state(&block_pos_2.0, BlockState::from_id(state));
                     } else {
-                        level.set_block_state_gen(&block_pos_2, BlockState::from_id(state));
+                        // If distance is more than 1 panic
+                        let chunk_pos = chunk.chunk_pos;
+                        let other_chunk_pos = block_pos_2.chunk_and_chunk_relative_position().0;
+                        let dx = chunk_pos.x - other_chunk_pos.x;
+                        let dy = chunk_pos.y - other_chunk_pos.y;
+                        let distance_squared = dx * dx + dy * dy;
+                        if distance_squared > 2 {
+                            println!("Distance is more than 2, (Logic Error in trunk generation)");
+                        } else {
+                            level.set_block_state_gen(&block_pos_2, BlockState::from_id(state));
+                        }
                     }
                     logs.push(block_pos_2);
                     continue;

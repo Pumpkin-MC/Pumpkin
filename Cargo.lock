@@ -1979,6 +1979,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "priority-queue"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5676d703dda103cbb035b653a9f11448c0a7216c7926bd35fcb5865475d0c970"
+dependencies = [
+ "autocfg",
+ "equivalent",
+ "indexmap 2.11.0",
+]
+
+[[package]]
 name = "proc-macro-error-attr2"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2238,6 +2249,8 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_cpus",
+ "parking_lot",
+ "priority-queue",
  "pumpkin-config",
  "pumpkin-data",
  "pumpkin-nbt",

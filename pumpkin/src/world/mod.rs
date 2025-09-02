@@ -1862,14 +1862,13 @@ impl World {
         let inst = std::time::Instant::now();
 
         // Sort such that the first chunks are closest to the center.
-        let mut chunks = chunks;
-        chunks.sort_unstable_by_key(|pos| {
+        let req_chunks = chunks.iter().map(|pos| {
             let rel_x = pos.x - center_chunk.x;
             let rel_z = pos.y - center_chunk.y;
-            rel_x * rel_x + rel_z * rel_z
-        });
+            (*pos, (rel_x * rel_x + rel_z * rel_z) as u64)
+        }).collect::<Vec<_>>();
 
-        let mut receiver = self.level.receive_chunks(chunks.clone());
+        let mut receiver = self.level.receive_chunks(req_chunks);
 
         let level = self.level.clone();
         let world = self.clone();
