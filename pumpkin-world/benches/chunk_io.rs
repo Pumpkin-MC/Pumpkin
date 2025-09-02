@@ -13,6 +13,7 @@ use pumpkin_world::{
 };
 use tokio::{runtime::Runtime, sync::RwLock};
 
+#[ignore]
 async fn test_reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
     let level = level.clone();
     let mut receiver = level.receive_chunks(positions);
@@ -91,6 +92,7 @@ impl BlockRegistryExt for BlockRegistry {
     }
 }
 
+#[ignore]
 fn initialize_level(
     async_handler: &Runtime,
     root_dir: PathBuf,

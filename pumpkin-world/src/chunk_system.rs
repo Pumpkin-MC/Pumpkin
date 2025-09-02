@@ -437,7 +437,7 @@ impl LevelChannel {
         while lock.is_none() && !level.should_unload.load(Relaxed) && !level.should_save.load(Relaxed) && !level.shut_down_chunk_system.load(Relaxed) {
             lock = self.notify.wait(lock).unwrap();
         }
-        
+
         let mut ret = None;
         swap(&mut ret, &mut *lock);
         ret
@@ -455,12 +455,6 @@ pub enum Chunk {
 }
 
 impl Chunk {
-    fn get_stage_id(&self) -> u8 {
-        match self {
-            Chunk::Proto(data) => data.stage_id(),
-            Chunk::Level(_) => 6,
-        }
-    }
     fn get_proto_chunk_mut(&mut self) -> &mut ProtoChunk {
         match self {
             Chunk::Level(_) => panic!("chunk isn't a ProtoChunk"),
@@ -880,7 +874,6 @@ pub struct GenerationSchedule {
 
 impl GenerationSchedule {
     pub fn create(
-        tracker: &TaskTracker,
         oi_read_thread_count: usize,
         gen_thread_count: usize,
         level: Arc<Level>,
@@ -888,6 +881,7 @@ impl GenerationSchedule {
         listener: Arc<ChunkListener>,
         thread_tracker: &mut Vec<JoinHandle<()>>,
     ) {
+        let tracker = &level.chunk_system_tasks;
         let (send_chunk, recv_chunk) = crossbeam::channel::unbounded();
         let (send_read_io, recv_read_io) = crossbeam::channel::bounded(oi_read_thread_count + 2);
         let (send_write_io, recv_write_io) = crossbeam::channel::unbounded();
@@ -1207,6 +1201,7 @@ impl GenerationSchedule {
                 }
             }
         }
+        #[allow(clippy::for_kv_map)]
         for (pos, _chunk) in &self.proto_chunks {
             log::warn!("proto chunk saving is unimplemented {pos:?}");
         }

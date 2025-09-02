@@ -3,7 +3,6 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
-use pumpkin_world::generation::generator::WorldGenerator;
 use std::sync::Arc;
 use temp_dir::TempDir;
 
@@ -28,6 +27,7 @@ impl BlockRegistryExt for BlockRegistry {
     }
 }
 
+#[ignore]
 fn chunk_generation_seed(seed: i64) {
     let generator = get_world_gen(Seed(seed as u64), Dimension::Overworld);
     let temp_dir = TempDir::new().unwrap();

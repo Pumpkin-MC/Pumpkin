@@ -79,6 +79,7 @@ pub struct Level {
 
     /// Tracks tasks associated with this world instance
     tasks: TaskTracker,
+    pub chunk_system_tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
     pub shutdown_notifier: Notify,
     pub is_shutting_down: AtomicBool,
@@ -171,6 +172,7 @@ impl Level {
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
+            chunk_system_tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             is_shutting_down: AtomicBool::new(false),
             shut_down_chunk_system: AtomicBool::new(false),
@@ -186,7 +188,6 @@ impl Level {
         let num_threads = num_cpus::get().saturating_sub(2).max(1);
 
         GenerationSchedule::create(
-            &level_ref.tasks,
             4,
             num_threads,
             level_ref.clone(),
@@ -280,10 +281,14 @@ impl Level {
                     i.thread().id(),
                     i.thread().name().unwrap_or("unknown")
                 );
+                i.join().unwrap();
             }
             log::info!("All Thread stop");
         }
 
+        log::info!("Wait chunk system tasks stop");
+        self.chunk_system_tasks.close();
+        self.chunk_system_tasks.wait().await;
         // wait for chunks currently saving in other
         log::info!("Wait chunk saver to stop");
         self.chunk_saver.block_and_await_ongoing_tasks().await;
