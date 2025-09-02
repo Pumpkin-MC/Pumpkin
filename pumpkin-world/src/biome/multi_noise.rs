@@ -68,7 +68,7 @@ mod test {
         // Calculate biome mixer seed
         use crate::biome::hash_seed;
         let biome_mixer_seed = hash_seed(random_config.seed);
-        
+
         let _chunk = ProtoChunk::new(
             chunk_pos,
             surface_config,
@@ -77,9 +77,11 @@ mod test {
         );
 
         // Create MultiNoiseSampler for testing
-        use crate::generation::noise::router::multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions};
+        use crate::generation::noise::router::multi_noise_sampler::{
+            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+        };
         use crate::generation::{biome_coords, positions::chunk_pos};
-        
+
         let start_x = chunk_pos::start_block_x(&chunk_pos);
         let start_z = chunk_pos::start_block_z(&chunk_pos);
         let biome_pos = Vector2::new(

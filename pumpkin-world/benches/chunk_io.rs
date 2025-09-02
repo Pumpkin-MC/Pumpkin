@@ -15,7 +15,7 @@ use tokio::{runtime::Runtime, sync::RwLock};
 
 async fn test_reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
     let level = level.clone();
-    let mut receiver = level.receive_chunks(positions.iter().map(|p| (*p, 0)).collect());
+    let mut receiver = level.receive_chunks(positions);
 
     while let Some(x) = receiver.recv().await {
         // Don't compile me away!

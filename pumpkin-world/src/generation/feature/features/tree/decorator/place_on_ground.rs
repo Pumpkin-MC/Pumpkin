@@ -63,12 +63,7 @@ impl PlaceOnGroundTreeDecorator {
         }
     }
 
-    fn generate_decoration(
-        &self,
-        chunk: &ProtoChunk,
-        pos: BlockPos,
-        random: &mut RandomGenerator,
-    ) {
+    fn generate_decoration(&self, chunk: &ProtoChunk, pos: BlockPos, random: &mut RandomGenerator) {
         let state = chunk.get_block_state(&pos.0);
         let pos = pos.up();
         let up_state = chunk.get_block_state(&pos.0);

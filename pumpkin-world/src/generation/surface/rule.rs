@@ -2,7 +2,10 @@ use pumpkin_data::BlockState;
 use serde::Deserialize;
 
 use super::{MaterialCondition, MaterialRuleContext};
-use crate::{ProtoChunk, block::BlockStateCodec, generation::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler};
+use crate::{
+    ProtoChunk, block::BlockStateCodec,
+    generation::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler,
+};
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -27,8 +30,12 @@ impl MaterialRule {
         match self {
             MaterialRule::Badlands(badlands) => badlands.try_apply(context),
             MaterialRule::Block(block) => Some(block.try_apply()),
-            MaterialRule::Sequence(sequence) => sequence.try_apply(chunk, context, surface_height_estimate_sampler),
-            MaterialRule::Condition(condition) => condition.try_apply(chunk, context, surface_height_estimate_sampler),
+            MaterialRule::Sequence(sequence) => {
+                sequence.try_apply(chunk, context, surface_height_estimate_sampler)
+            }
+            MaterialRule::Condition(condition) => {
+                condition.try_apply(chunk, context, surface_height_estimate_sampler)
+            }
         }
     }
 }
@@ -91,8 +98,13 @@ impl ConditionMaterialRule {
         context: &mut MaterialRuleContext,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
-        if self.if_true.test(chunk, context, surface_height_estimate_sampler) {
-            return self.then_run.try_apply(chunk, context, surface_height_estimate_sampler);
+        if self
+            .if_true
+            .test(chunk, context, surface_height_estimate_sampler)
+        {
+            return self
+                .then_run
+                .try_apply(chunk, context, surface_height_estimate_sampler);
         }
         None
     }

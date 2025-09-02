@@ -116,22 +116,20 @@ mod test {
 
         for data in expected_data.into_iter() {
             let chunk_pos = Vector2::new(data.x, data.z);
-            
+
             // Calculate biome mixer seed
             use crate::biome::hash_seed;
             let biome_mixer_seed = hash_seed(random_config.seed);
-            
-            let mut chunk = ProtoChunk::new(
-                chunk_pos,
-                surface_settings,
-                default_block,
-                biome_mixer_seed,
-            );
+
+            let mut chunk =
+                ProtoChunk::new(chunk_pos, surface_settings, default_block, biome_mixer_seed);
 
             // Create MultiNoiseSampler for populate_biomes
-            use crate::generation::noise::router::multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions};
+            use crate::generation::noise::router::multi_noise_sampler::{
+                MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+            };
             use crate::generation::{biome_coords, positions::chunk_pos};
-            
+
             let start_x = chunk_pos::start_block_x(&chunk_pos);
             let start_z = chunk_pos::start_block_z(&chunk_pos);
             let biome_pos = Vector2::new(
@@ -146,7 +144,7 @@ mod test {
             );
             let mut multi_noise_sampler =
                 MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
-            
+
             chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
             for (biome_x, biome_y, biome_z, biome_id) in data.data {

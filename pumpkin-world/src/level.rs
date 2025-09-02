@@ -10,7 +10,7 @@ use crate::{
     dimension::Dimension,
     generation::{
         Seed,
-        proto_chunk::{ChunkStage, PendingChunk, TerrainCache},
+        proto_chunk::{ChunkStage, GenerationContext, PendingChunk, TerrainCache},
         settings::gen_settings_from_dimension,
     },
     tick::{OrderedTick, ScheduledTick, TickPriority},
@@ -60,11 +60,11 @@ pub enum ChunkEntry {
 }
 
 pub struct VanillaGenerationState {
-    random_config: GlobalRandomConfig,
-    base_router: ProtoNoiseRouters,
+    random_config: Arc<GlobalRandomConfig>,
+    base_router: Arc<ProtoNoiseRouters>,
     dimension: Dimension,
 
-    terrain_cache: TerrainCache,
+    terrain_cache: Arc<TerrainCache>,
 
     default_block: &'static BlockState,
 }
@@ -86,10 +86,10 @@ impl VanillaGenerationState {
         let default_block = generation_settings.default_block.get_state();
         let base_router = ProtoNoiseRouters::generate(&base, &random_config);
         Self {
-            random_config,
-            base_router,
+            random_config: Arc::new(random_config),
+            base_router: Arc::new(base_router),
             dimension,
-            terrain_cache,
+            terrain_cache: Arc::new(terrain_cache),
             default_block,
         }
     }
@@ -156,10 +156,11 @@ pub struct LevelFolder {
     pub entities_folder: PathBuf,
 }
 
-fn rayon_chunk_generator(
+async fn rayon_chunk_generator(
     chunk_coord: Vector2<i32>,
     level: Arc<Level>,
     generation_state: &VanillaGenerationState,
+    thread_pool: &Arc<ThreadPool>,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) {
     let chunk = {
@@ -183,20 +184,22 @@ fn rayon_chunk_generator(
     if let Some(chunk) = chunk {
         let generation_settings = gen_settings_from_dimension(&generation_state.dimension);
 
-        let block_registry = level.block_registry.as_ref();
+        let generation_context = GenerationContext {
+            block_registry: level.block_registry.clone(),
+            settings: generation_settings,
+            random_config: generation_state.random_config.clone(),
+            terrain_cache: generation_state.terrain_cache.clone(),
+            noise_router: generation_state.base_router.clone(),
+            dimension: generation_state.dimension,
+            default_block: generation_state.default_block,
+            biome_mixer_seed: hash_seed(generation_state.random_config.seed),
+            thread_pool: thread_pool.clone(),
+        };
+        let generation_context = Arc::new(generation_context);
 
-        chunk.advance_to_stage(
-            ChunkStage::Full,
-            &level,
-            block_registry,
-            &generation_settings,
-            &generation_state.random_config,
-            &generation_state.terrain_cache,
-            &generation_state.base_router,
-            generation_state.dimension,
-            generation_state.default_block,
-            hash_seed(generation_state.random_config.seed),
-        );
+        chunk
+            .advance_to_stage(ChunkStage::Full, &level, &generation_context)
+            .await;
 
         let notify_full = {
             if let Some(chunk) = level.loaded_chunks.get(&chunk_coord)
@@ -293,7 +296,7 @@ impl Level {
             ticket_notify: Notify::new(),
             thread_pool: Arc::new(
                 ThreadPoolBuilder::new()
-                    .num_threads(num_cpus::get() * 3)
+                    .num_threads(num_cpus::get())
                     .thread_name(move |i| format!("Chunk Generator Thread {}", i))
                     .build()
                     .unwrap(),
@@ -310,6 +313,7 @@ impl Level {
                 if level_ref_clone.is_shutting_down.load(Ordering::Relaxed) {
                     break;
                 }
+                let thread_pool = level_ref_clone.thread_pool.clone();
                 let maybe_coord = level_ref_clone.chunk_tickets.lock().await.pop_front();
 
                 if let Some(coord) = maybe_coord {
@@ -317,13 +321,15 @@ impl Level {
                     let generation_state_clone = generation_state.clone();
 
                     let permit = generation_semaphore.clone().acquire_owned().await.unwrap();
-                    level_ref_clone.thread_pool.spawn(move || {
+                    tokio::spawn(async move {
                         rayon_chunk_generator(
                             coord,
                             generator_clone,
                             &generation_state_clone,
+                            &thread_pool,
                             permit,
-                        );
+                        )
+                        .await;
                     });
                 } else {
                     tokio::select! {
