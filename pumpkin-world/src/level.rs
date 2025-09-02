@@ -20,7 +20,6 @@ use crossbeam::channel::Sender;
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
-use priority_queue::PriorityQueue;
 use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_data::{
     Block,
@@ -34,7 +33,7 @@ use rand::{Rng, SeedableRng, rngs::SmallRng};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
     cmp::Reverse,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     path::PathBuf,
     sync::{
         Arc,
@@ -135,7 +134,7 @@ pub struct Level {
     pub is_shutting_down: AtomicBool,
 
     generation_state: Arc<VanillaGenerationState>,
-    chunk_tickets: Arc<tokio::sync::Mutex<PriorityQueue<Vector2<i32>, Reverse<u64>>>>,
+    chunk_tickets: Arc<tokio::sync::Mutex<VecDeque<Vector2<i32>>>>,
     ticket_notify: Notify,
     thread_pool: Arc<ThreadPool>,
 
@@ -290,7 +289,7 @@ impl Level {
             tasks: TaskTracker::new(),
             shutdown_notifier: Notify::new(),
             is_shutting_down: AtomicBool::new(false),
-            chunk_tickets: Arc::new(tokio::sync::Mutex::new(PriorityQueue::new())),
+            chunk_tickets: Arc::new(tokio::sync::Mutex::new(VecDeque::new())),
             ticket_notify: Notify::new(),
             thread_pool: Arc::new(
                 ThreadPoolBuilder::new()
@@ -311,7 +310,7 @@ impl Level {
                 if level_ref_clone.is_shutting_down.load(Ordering::Relaxed) {
                     break;
                 }
-                let maybe_coord = level_ref_clone.chunk_tickets.lock().await.pop();
+                let maybe_coord = level_ref_clone.chunk_tickets.lock().await.pop_front();
 
                 if let Some(coord) = maybe_coord {
                     let generator_clone = level_ref_clone.clone();
@@ -320,7 +319,7 @@ impl Level {
                     let permit = generation_semaphore.clone().acquire_owned().await.unwrap();
                     level_ref_clone.thread_pool.spawn(move || {
                         rayon_chunk_generator(
-                            coord.0,
+                            coord,
                             generator_clone,
                             &generation_state_clone,
                             permit,
@@ -676,17 +675,14 @@ impl Level {
         self.clean_chunks(&[*chunk]).await;
     }
 
-    async fn request_chunks(&self, coords: &[(Vector2<i32>, u64)]) {
-        self.chunk_tickets
-            .lock()
-            .await
-            .extend(coords.iter().map(|(c, d)| (*c, Reverse(*d))));
+    async fn request_chunks(&self, coords: &[Vector2<i32>]) {
+        self.chunk_tickets.lock().await.extend(coords);
         self.ticket_notify.notify_waiters();
     }
 
     async fn remove_chunk_requests(&self, coords: &[Vector2<i32>]) {
         let mut tickets = self.chunk_tickets.lock().await;
-        tickets.retain(|c, _| !coords.contains(c));
+        tickets.retain(|c| !coords.contains(c));
     }
 
     pub async fn wait_for_chunk(&self, coord: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
@@ -731,7 +727,6 @@ impl Level {
     }
 
     pub fn clean_memory(&self) {
-        return;
         self.chunk_watchers.retain(|_, watcher| !watcher.is_zero());
         //self.loaded_chunks
         //    .retain(|at, _| self.chunk_watchers.get(at).is_some());
@@ -756,7 +751,6 @@ impl Level {
     }
 
     pub async fn clean_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
-        return;
         // Care needs to be take here because of interweaving case:
         // 1) Remove chunk from cache
         // 2) Another player wants same chunk
@@ -805,7 +799,7 @@ impl Level {
             for (pos, chunk) in chunks_to_remove {
                 // Add them back if they have watchers
                 if level.chunk_watchers.get(&pos).is_none() {
-                    let _ = level.loaded_chunks.remove(&pos);
+                    //TODO: let _ = level.loaded_chunks.remove(&pos);
                 }
             }
         });
@@ -827,7 +821,7 @@ impl Level {
                 chunk
             }
             Err(_) => {
-                self.request_chunks(&[(pos, 0)]).await;
+                self.request_chunks(&[pos]).await;
                 self.wait_for_chunk(pos).await
             }
         }
@@ -839,7 +833,7 @@ impl Level {
     /// handle)
     pub fn receive_chunks(
         self: &Arc<Self>,
-        chunks: Vec<(Vector2<i32>, u64)>,
+        chunks: Vec<Vector2<i32>>,
     ) -> UnboundedReceiver<(SyncChunk, bool)> {
         let (sender, receiver) = mpsc::unbounded_channel();
         let level = self.clone();
@@ -852,7 +846,7 @@ impl Level {
             let fetch_task = async {
                 // Separate already-loaded chunks from ones we need to fetch
                 let mut to_fetch = Vec::new();
-                for (pos, _) in &chunks {
+                for pos in &chunks {
                     if let Some(chunk) = level.loaded_chunks.get(pos)
                         && let ChunkEntry::Full(loaded_chunk) = &chunk.value()
                     {
@@ -889,12 +883,7 @@ impl Level {
                                 let sender_clone = sender.clone();
                                 let level_clone = level.clone();
 
-                                level_clone
-                                    .request_chunks(&[(
-                                        pos,
-                                        chunks.iter().find(|(p, _)| *p == pos).unwrap().1,
-                                    )])
-                                    .await;
+                                level_clone.request_chunks(&[pos]).await;
                                 tokio::spawn(async move {
                                     let _ = sender_clone
                                         .send((level_clone.wait_for_chunk(pos).await, true));

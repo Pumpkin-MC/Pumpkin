@@ -114,8 +114,7 @@ fn initialize_level(
         let chunks_to_generate = (MIN_CHUNK..MAX_CHUNK)
             .flat_map(|x| (MIN_CHUNK..MAX_CHUNK).map(move |z| Vector2::new(x, z)))
             .collect::<Vec<_>>();
-        let mut receiver =
-            level_to_fetch.receive_chunks(chunks_to_generate.iter().map(|p| (*p, 0)).collect());
+        let mut receiver = level_to_fetch.receive_chunks(chunks_to_generate);
 
         while let Some((chunk, _)) = receiver.recv().await {
             let pos = chunk.read().await.position;
