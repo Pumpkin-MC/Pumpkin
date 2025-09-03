@@ -11,7 +11,7 @@ use crate::{
     generation::{
         Seed,
         proto_chunk::{ChunkStage, GenerationContext, PendingChunk, TerrainCache},
-        settings::gen_settings_from_dimension,
+        settings::{GenerationSettings, gen_settings_from_dimension},
     },
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
@@ -164,18 +164,18 @@ async fn rayon_chunk_generator(
     permit: tokio::sync::OwnedSemaphorePermit,
 ) {
     let chunk = {
-        let chunk = level.loaded_chunks.entry(chunk_coord).or_insert_with(|| {
-            let generation_settings = gen_settings_from_dimension(&generation_state.dimension);
-            ChunkEntry::Pending(Arc::new(PendingChunk::new(
+        let generation_settings = gen_settings_from_dimension(&generation_state.dimension);
+        let chunk = level
+            .get_or_create_chunk(
                 chunk_coord,
                 generation_settings,
                 generation_state.default_block,
                 hash_seed(generation_state.random_config.seed),
-            )))
-        });
+            )
+            .await;
 
-        if let ChunkEntry::Pending(chunk) = &*chunk {
-            Some(chunk.clone())
+        if let ChunkEntry::Pending(chunk) = chunk {
+            Some(chunk)
         } else {
             None
         }
@@ -385,7 +385,7 @@ impl Level {
         level_ref
     }
 
-    async fn load_single_chunk(
+    pub(crate) async fn load_single_chunk(
         &self,
         pos: Vector2<i32>,
     ) -> Result<(SyncChunk, bool), ChunkReadingError> {
@@ -691,10 +691,60 @@ impl Level {
         tickets.retain(|c| !coords.contains(c));
     }
 
+    pub(crate) async fn get_or_create_chunk(
+        &self,
+        coord: Vector2<i32>,
+        generation_settings: &GenerationSettings,
+        default_block: &'static BlockState,
+        biome_mixer_seed: i64,
+    ) -> ChunkEntry {
+        let entry = self.loaded_chunks.entry(coord);
+
+        let chunk = match entry {
+            dashmap::mapref::entry::Entry::Occupied(entry) => {
+                let chunk_entry = entry.get();
+                match chunk_entry {
+                    ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
+                    ChunkEntry::Pending(chunk) => ChunkEntry::Pending(chunk.clone()),
+                }
+            }
+            dashmap::mapref::entry::Entry::Vacant(entry) => {
+                drop(entry);
+                let chunk = self.load_single_chunk(coord).await;
+                if let Ok((chunk, _)) = chunk {
+                    let mut chunk_entry = self
+                        .loaded_chunks
+                        .entry(coord)
+                        .or_insert_with(|| ChunkEntry::Full(chunk));
+                    match chunk_entry.value_mut() {
+                        ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
+                        ChunkEntry::Pending(chunk) => ChunkEntry::Pending(chunk.clone()),
+                    }
+                } else {
+                    let mut chunk_entry = self.loaded_chunks.entry(coord).or_insert_with(|| {
+                        ChunkEntry::Pending(Arc::new(PendingChunk::new(
+                            coord,
+                            &generation_settings,
+                            default_block,
+                            biome_mixer_seed,
+                        )))
+                    });
+                    match chunk_entry.value_mut() {
+                        ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
+                        ChunkEntry::Pending(chunk) => ChunkEntry::Pending(chunk.clone()),
+                    }
+                }
+            }
+        };
+
+        return chunk;
+    }
+
     pub async fn wait_for_chunk(&self, coord: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
         loop {
             let chunk = {
                 let chunk = self.loaded_chunks.entry(coord).or_insert_with(|| {
+                    println!("Inserting pending chunk for {:?}", coord);
                     let generation_settings =
                         gen_settings_from_dimension(&self.generation_state.dimension);
                     ChunkEntry::Pending(Arc::new(PendingChunk::new(
@@ -805,7 +855,7 @@ impl Level {
             for (pos, chunk) in chunks_to_remove {
                 // Add them back if they have watchers
                 if level.chunk_watchers.get(&pos).is_none() {
-                    //TODO: let _ = level.loaded_chunks.remove(&pos);
+                    let _ = level.loaded_chunks.remove(&pos);
                 }
             }
         });
@@ -1082,7 +1132,8 @@ impl Level {
                     chunk.proto_chunk.set_block_state(&relative, block_state)
                 }
                 ChunkEntry::Full(_chunk) => {
-                    panic!("This shouldn't happen");
+                    //panic!("This shouldn't happen");
+                    println!("Panic here once Pending Chunk saving/loading is fixed")
                 }
             }
         }

@@ -2,6 +2,7 @@ use parking_lot::Mutex;
 use rayon::ThreadPool;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::runtime::Handle;
 
 use async_trait::async_trait;
 use pumpkin_data::tag;
@@ -887,21 +888,16 @@ impl PendingChunk {
                 .iter()
                 .map(|(coord, required_stage)| async move {
                     let dependency_chunk = {
-                        let dependency_chunk = {
-                            Some(level.loaded_chunks.entry(*coord).or_insert_with(|| {
-                                ChunkEntry::Pending(Arc::new(PendingChunk::new(
-                                    *coord,
-                                    &generation_context.settings,
-                                    generation_context.default_block,
-                                    generation_context.biome_mixer_seed,
-                                )))
-                            }))
-                        };
-
-                        if let Some(chunk) = dependency_chunk
-                            && let ChunkEntry::Pending(chunk) = &*chunk
-                        {
-                            Some(chunk.clone())
+                        let chunk = level
+                            .get_or_create_chunk(
+                                *coord,
+                                generation_context.settings,
+                                generation_context.default_block,
+                                generation_context.biome_mixer_seed,
+                            )
+                            .await;
+                        if let ChunkEntry::Pending(chunk) = chunk {
+                            Some(chunk)
                         } else {
                             None
                         }
@@ -1202,23 +1198,23 @@ impl PendingChunk {
 #[cfg(test)]
 mod test {
     use std::sync::LazyLock;
-    
+
     use pumpkin_data::noise_router::{OVERWORLD_BASE_NOISE_ROUTER, WrapperType};
-    use pumpkin_util::{read_data_from_file, math::vector2::Vector2};
-    
+    use pumpkin_util::{math::vector2::Vector2, read_data_from_file};
+
     use super::*;
     use crate::generation::{
-        settings::{GENERATION_SETTINGS, GeneratorSetting},
-        noise::router::{
-            proto_noise_router::{ProtoNoiseRouters, ProtoNoiseFunctionComponent},
-            multi_noise_sampler::MultiNoiseSampler,
-            surface_height_sampler::SurfaceHeightEstimateSampler,
-            density_function::{PassThrough, NoiseFunctionComponentRange},
-        },
-        chunk_noise::ChunkNoiseGenerator,
         aquifer_sampler::{FluidLevel, FluidLevelSampler},
-        positions::chunk_pos,
         biome_coords,
+        chunk_noise::ChunkNoiseGenerator,
+        noise::router::{
+            density_function::{NoiseFunctionComponentRange, PassThrough},
+            multi_noise_sampler::MultiNoiseSampler,
+            proto_noise_router::{ProtoNoiseFunctionComponent, ProtoNoiseRouters},
+            surface_height_sampler::SurfaceHeightEstimateSampler,
+        },
+        positions::chunk_pos,
+        settings::{GENERATION_SETTINGS, GeneratorSetting},
     };
 
     const SEED: u64 = 0;
@@ -1255,8 +1251,8 @@ mod test {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
                                         wrapper.input_index,
-                                                                NoiseFunctionComponentRange::min(wrapper),
-                        NoiseFunctionComponentRange::max(wrapper),
+                                        NoiseFunctionComponentRange::min(wrapper),
+                                        NoiseFunctionComponentRange::max(wrapper),
                                     ));
                             }
                         }
@@ -1281,23 +1277,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
         let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &base_router.noise,
@@ -1331,10 +1318,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -1369,8 +1353,8 @@ mod test {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
                                         wrapper.input_index,
-                                                                NoiseFunctionComponentRange::min(wrapper),
-                        NoiseFunctionComponentRange::max(wrapper),
+                                        NoiseFunctionComponentRange::min(wrapper),
+                                        NoiseFunctionComponentRange::max(wrapper),
                                     ));
                             }
                         }
@@ -1395,23 +1379,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
         let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &base_router.noise,
@@ -1445,10 +1420,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -1483,8 +1455,8 @@ mod test {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
                                         wrapper.input_index,
-                                                                NoiseFunctionComponentRange::min(wrapper),
-                        NoiseFunctionComponentRange::max(wrapper),
+                                        NoiseFunctionComponentRange::min(wrapper),
+                                        NoiseFunctionComponentRange::max(wrapper),
                                     ));
                             }
                         }
@@ -1509,23 +1481,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
         let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &base_router.noise,
@@ -1559,10 +1522,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -1597,8 +1557,8 @@ mod test {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
                                         wrapper.input_index,
-                                                                NoiseFunctionComponentRange::min(wrapper),
-                        NoiseFunctionComponentRange::max(wrapper),
+                                        NoiseFunctionComponentRange::min(wrapper),
+                                        NoiseFunctionComponentRange::max(wrapper),
                                     ));
                             }
                         }
@@ -1623,23 +1583,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
         let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &base_router.noise,
@@ -1673,10 +1624,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -1711,8 +1659,8 @@ mod test {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
                                         wrapper.input_index,
-                                                                NoiseFunctionComponentRange::min(wrapper),
-                        NoiseFunctionComponentRange::max(wrapper),
+                                        NoiseFunctionComponentRange::min(wrapper),
+                                        NoiseFunctionComponentRange::max(wrapper),
                                     ));
                             }
                         }
@@ -1737,23 +1685,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
         let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &base_router.noise,
@@ -1787,10 +1726,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -1811,7 +1747,7 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        
+
         let chunk = ProtoChunk::new(
             Vector2::new(0, 0),
             surface_config,
@@ -1821,23 +1757,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
         let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER.noise,
@@ -1871,10 +1798,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -1904,23 +1828,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(7, 4));
         let start_z = chunk_pos::start_block_z(&Vector2::new(7, 4));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER.noise,
@@ -1954,10 +1869,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -1987,23 +1899,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(-595, 544));
         let start_z = chunk_pos::start_block_z(&Vector2::new(-595, 544));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER.noise,
@@ -2037,10 +1940,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -2070,23 +1970,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(-119, 183));
         let start_z = chunk_pos::start_block_z(&Vector2::new(-119, 183));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER.noise,
@@ -2120,10 +2011,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -2153,23 +2041,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(-6, 11));
         let start_z = chunk_pos::start_block_z(&Vector2::new(-6, 11));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER2.noise,
@@ -2203,10 +2082,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -2236,23 +2112,14 @@ mod test {
 
         // Create noise generator and surface height estimator
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(-2, 15));
         let start_z = chunk_pos::start_block_z(&Vector2::new(-2, 15));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER2.noise,
@@ -2286,10 +2153,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         let block_map = chunk.flat_block_map.lock();
         expected_data
@@ -2328,31 +2192,20 @@ mod test {
             biome_pos.y,
             horizontal_biome_end as usize,
         );
-        let mut multi_noise_sampler = MultiNoiseSampler::generate(
-            &BASE_NOISE_ROUTER.multi_noise,
-            &multi_noise_config,
-        );
+        let mut multi_noise_sampler =
+            MultiNoiseSampler::generate(&BASE_NOISE_ROUTER.multi_noise, &multi_noise_config);
         chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
         // Populate noise
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
         let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER.noise,
@@ -2386,10 +2239,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         // Build surface
         chunk.build_surface(
@@ -2436,31 +2286,20 @@ mod test {
             biome_pos.y,
             horizontal_biome_end as usize,
         );
-        let mut multi_noise_sampler = MultiNoiseSampler::generate(
-            &BASE_NOISE_ROUTER.multi_noise,
-            &multi_noise_config,
-        );
+        let mut multi_noise_sampler =
+            MultiNoiseSampler::generate(&BASE_NOISE_ROUTER.multi_noise, &multi_noise_config);
         chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
         // Populate noise
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(-595, 544));
         let start_z = chunk_pos::start_block_z(&Vector2::new(-595, 544));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER.noise,
@@ -2494,10 +2333,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         // Build surface
         chunk.build_surface(
@@ -2545,31 +2381,20 @@ mod test {
             biome_pos.y,
             horizontal_biome_end as usize,
         );
-        let mut multi_noise_sampler = MultiNoiseSampler::generate(
-            &BASE_NOISE_ROUTER2.multi_noise,
-            &multi_noise_config,
-        );
+        let mut multi_noise_sampler =
+            MultiNoiseSampler::generate(&BASE_NOISE_ROUTER2.multi_noise, &multi_noise_config);
         chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
         // Populate noise
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(-6, 11));
         let start_z = chunk_pos::start_block_z(&Vector2::new(-6, 11));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER2.noise,
@@ -2603,10 +2428,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         // Build surface
         chunk.build_surface(
@@ -2655,31 +2477,20 @@ mod test {
             biome_pos.y,
             horizontal_biome_end as usize,
         );
-        let mut multi_noise_sampler = MultiNoiseSampler::generate(
-            &BASE_NOISE_ROUTER2.multi_noise,
-            &multi_noise_config,
-        );
+        let mut multi_noise_sampler =
+            MultiNoiseSampler::generate(&BASE_NOISE_ROUTER2.multi_noise, &multi_noise_config);
         chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
         // Populate noise
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(-7, 9));
         let start_z = chunk_pos::start_block_z(&Vector2::new(-7, 9));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER2.noise,
@@ -2713,10 +2524,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         // Build surface
         chunk.build_surface(
@@ -2765,31 +2573,20 @@ mod test {
             biome_pos.y,
             horizontal_biome_end as usize,
         );
-        let mut multi_noise_sampler = MultiNoiseSampler::generate(
-            &BASE_NOISE_ROUTER2.multi_noise,
-            &multi_noise_config,
-        );
+        let mut multi_noise_sampler =
+            MultiNoiseSampler::generate(&BASE_NOISE_ROUTER2.multi_noise, &multi_noise_config);
         chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
         // Populate noise
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(-2, 15));
         let start_z = chunk_pos::start_block_z(&Vector2::new(-2, 15));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER2.noise,
@@ -2823,10 +2620,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         // Build surface
         chunk.build_surface(
@@ -2874,31 +2668,20 @@ mod test {
             biome_pos.y,
             horizontal_biome_end as usize,
         );
-        let mut multi_noise_sampler = MultiNoiseSampler::generate(
-            &BASE_NOISE_ROUTER.multi_noise,
-            &multi_noise_config,
-        );
+        let mut multi_noise_sampler =
+            MultiNoiseSampler::generate(&BASE_NOISE_ROUTER.multi_noise, &multi_noise_config);
         chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
         // Populate noise
         let generation_shape = &surface_config.shape;
-        let horizontal_cell_count = CHUNK_DIM
-            / generation_shape.horizontal_cell_block_count();
+        let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = chunk_pos::start_block_x(&Vector2::new(-119, 183));
         let start_z = chunk_pos::start_block_z(&Vector2::new(-119, 183));
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(
-            StandardChunkFluidLevelSampler::new(
-                FluidLevel::new(
-                    surface_config.sea_level,
-                    surface_config.default_fluid.name,
-                ),
-                FluidLevel::new(
-                    -54,
-                    &pumpkin_data::Block::LAVA,
-                ),
-            ),
-        ));
+        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+            FluidLevel::new(surface_config.sea_level, surface_config.default_fluid.name),
+            FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
+        )));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &BASE_NOISE_ROUTER.noise,
@@ -2932,10 +2715,7 @@ mod test {
             &surface_config_builder,
         );
 
-        chunk.populate_noise(
-            &mut noise_sampler,
-            &mut surface_height_estimate_sampler,
-        );
+        chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
 
         // Build surface
         chunk.build_surface(
