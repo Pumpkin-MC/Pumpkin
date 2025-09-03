@@ -2,7 +2,6 @@ use parking_lot::Mutex;
 use rayon::ThreadPool;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio_util::task;
 
 use async_trait::async_trait;
 use pumpkin_data::tag;
@@ -14,7 +13,6 @@ use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
     random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
 };
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio::sync::Notify;
 
 use crate::chunk::format::LightContainer;
@@ -936,15 +934,15 @@ impl PendingChunk {
                     let generation_context_clone = generation_context.clone();
                     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
                     generation_context.thread_pool.spawn(move || {
-                        let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
-                        let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
+                        let start_x = chunk_pos::start_block_x(&chunk_pos);
+                        let start_z = chunk_pos::start_block_z(&chunk_pos);
                         let biome_pos = Vector2::new(
                             biome_coords::from_block(start_x),
                             biome_coords::from_block(start_z),
                         );
                         let horizontal_biome_end = biome_coords::from_block(16);
                         let multi_noise_config =
-                        super::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
+                        crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
                             biome_pos.x,
                             biome_pos.y,
                             horizontal_biome_end as usize,
@@ -971,10 +969,10 @@ impl PendingChunk {
                     generation_context.thread_pool.spawn(move || {
                         // Generate noise
                         let generation_shape = &generation_context_clone.settings.shape;
-                        let horizontal_cell_count = super::chunk_noise::CHUNK_DIM
+                        let horizontal_cell_count = CHUNK_DIM
                             / generation_shape.horizontal_cell_block_count();
-                        let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
-                        let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
+                        let start_x = chunk_pos::start_block_x(&chunk_pos);
+                        let start_z = chunk_pos::start_block_z(&chunk_pos);
 
                         let sampler = super::aquifer_sampler::FluidLevelSampler::Chunk(Box::new(
                             StandardChunkFluidLevelSampler::new(
@@ -1008,7 +1006,7 @@ impl PendingChunk {
                         let horizontal_biome_end = biome_coords::from_block(
                             horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
                         );
-                        let surface_config = super::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+                        let surface_config = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
                     biome_pos.x,
                     biome_pos.y,
                     horizontal_biome_end as usize,
@@ -1038,10 +1036,10 @@ impl PendingChunk {
                     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
                     generation_context.thread_pool.spawn(move || {
                         // Build surface
-                        let start_x = super::positions::chunk_pos::start_block_x(&chunk_pos);
-                        let start_z = super::positions::chunk_pos::start_block_z(&chunk_pos);
+                        let start_x = chunk_pos::start_block_x(&chunk_pos);
+                        let start_z = chunk_pos::start_block_z(&chunk_pos);
                         let generation_shape = &generation_context_clone.settings.shape;
-                        let horizontal_cell_count = super::chunk_noise::CHUNK_DIM
+                        let horizontal_cell_count = CHUNK_DIM
                             / generation_shape.horizontal_cell_block_count();
 
                         let biome_pos = Vector2::new(
@@ -1051,7 +1049,7 @@ impl PendingChunk {
                         let horizontal_biome_end = biome_coords::from_block(
                             horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
                         );
-                        let surface_config = super::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+                        let surface_config = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
                             biome_pos.x,
                             biome_pos.y,
                             horizontal_biome_end as usize,
@@ -1202,16 +1200,30 @@ impl PendingChunk {
 }
 
 #[cfg(test)]
-#[allow(dead_code)] // TODO: Fix tests to work with new ProtoChunk API
 mod test {
-    /*
-    TODO: Update all tests to work with the new ProtoChunk API that doesn't use lifetimes.
-    The new API requires passing noise samplers and other dependencies as parameters to methods
-    instead of storing them in the struct.
+    use std::sync::LazyLock;
+    
+    use pumpkin_data::noise_router::{OVERWORLD_BASE_NOISE_ROUTER, WrapperType};
+    use pumpkin_util::{read_data_from_file, math::vector2::Vector2};
+    
+    use super::*;
+    use crate::generation::{
+        settings::{GENERATION_SETTINGS, GeneratorSetting},
+        noise::router::{
+            proto_noise_router::{ProtoNoiseRouters, ProtoNoiseFunctionComponent},
+            multi_noise_sampler::MultiNoiseSampler,
+            surface_height_sampler::SurfaceHeightEstimateSampler,
+            density_function::{PassThrough, NoiseFunctionComponentRange},
+        },
+        chunk_noise::ChunkNoiseGenerator,
+        aquifer_sampler::{FluidLevel, FluidLevelSampler},
+        positions::chunk_pos,
+        biome_coords,
+    };
 
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
-        LazyLock::new(|| GlobalRandomConfig::new(SEED, false)); // TODO: use legacy when needed
+        LazyLock::new(|| GlobalRandomConfig::new(SEED, false));
     static TERRAIN_CACHE: LazyLock<TerrainCache> =
         LazyLock::new(|| TerrainCache::from_random(&RANDOM_CONFIG));
     static BASE_NOISE_ROUTER: LazyLock<ProtoNoiseRouters> =
@@ -1219,13 +1231,12 @@ mod test {
 
     const SEED2: u64 = 13579;
     static RANDOM_CONFIG2: LazyLock<GlobalRandomConfig> =
-        LazyLock::new(|| GlobalRandomConfig::new(SEED2, false)); // TODO: use legacy when needed
+        LazyLock::new(|| GlobalRandomConfig::new(SEED2, false));
     static BASE_NOISE_ROUTER2: LazyLock<ProtoNoiseRouters> = LazyLock::new(|| {
         ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &RANDOM_CONFIG2)
     });
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_only_cell_cache() {
         // We say no wrapper, but it technically has a top-level cell cache
         let expected_data: Vec<u16> =
@@ -1244,8 +1255,8 @@ mod test {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
                                         wrapper.input_index,
-                                        wrapper.min(),
-                                        wrapper.max(),
+                                                                NoiseFunctionComponentRange::min(wrapper),
+                        NoiseFunctionComponentRange::max(wrapper),
                                     ));
                             }
                         }
@@ -1261,29 +1272,83 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(0, 0),
-            &base_router,
-            &RANDOM_CONFIG,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
-        chunk.populate_noise();
 
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &base_router.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &base_router.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("{expected} vs {actual} ({index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_only_cell_2d_cache() {
         // it technically has a top-level cell cache
         // should be the same as only cell_cache
@@ -1304,8 +1369,8 @@ mod test {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
                                         wrapper.input_index,
-                                        wrapper.min(),
-                                        wrapper.max(),
+                                                                NoiseFunctionComponentRange::min(wrapper),
+                        NoiseFunctionComponentRange::max(wrapper),
                                     ));
                             }
                         }
@@ -1321,29 +1386,83 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(0, 0),
-            &base_router,
-            &RANDOM_CONFIG,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
-        chunk.populate_noise();
 
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &base_router.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &base_router.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("{expected} vs {actual} ({index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_only_cell_flat_cache() {
         // it technically has a top-level cell cache
         let expected_data: Vec<u16> = read_data_from_file!(
@@ -1364,8 +1483,8 @@ mod test {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
                                         wrapper.input_index,
-                                        wrapper.min(),
-                                        wrapper.max(),
+                                                                NoiseFunctionComponentRange::min(wrapper),
+                        NoiseFunctionComponentRange::max(wrapper),
                                     ));
                             }
                         }
@@ -1381,29 +1500,83 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(0, 0),
-            &base_router,
-            &RANDOM_CONFIG,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
-        chunk.populate_noise();
 
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &base_router.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &base_router.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("{expected} vs {actual} ({index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_only_cell_once_cache() {
         // it technically has a top-level cell cache
         let expected_data: Vec<u16> = read_data_from_file!(
@@ -1424,8 +1597,8 @@ mod test {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
                                         wrapper.input_index,
-                                        wrapper.min(),
-                                        wrapper.max(),
+                                                                NoiseFunctionComponentRange::min(wrapper),
+                        NoiseFunctionComponentRange::max(wrapper),
                                     ));
                             }
                         }
@@ -1441,29 +1614,83 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(0, 0),
-            &base_router,
-            &RANDOM_CONFIG,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
-        chunk.populate_noise();
 
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &base_router.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &base_router.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("{expected} vs {actual} ({index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_only_cell_interpolated() {
         // it technically has a top-level cell cache
         let expected_data: Vec<u16> = read_data_from_file!(
@@ -1484,8 +1711,8 @@ mod test {
                                 *component =
                                     ProtoNoiseFunctionComponent::PassThrough(PassThrough::new(
                                         wrapper.input_index,
-                                        wrapper.min(),
-                                        wrapper.max(),
+                                                                NoiseFunctionComponentRange::min(wrapper),
+                        NoiseFunctionComponentRange::max(wrapper),
                                     ));
                             }
                         }
@@ -1501,255 +1728,798 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
-            Vector2::new(0, 0),
-            &base_router,
-            &RANDOM_CONFIG,
-            surface_config,
-            &TERRAIN_CACHE,
-            surface_config.default_block.get_state(),
-        );
-        chunk.populate_noise();
-
-        expected_data
-            .into_iter()
-            .zip(chunk.flat_block_map)
-            .enumerate()
-            .for_each(|(index, (expected, actual))| {
-                if expected != actual {
-                    panic!("{expected} vs {actual} ({index})");
-                }
-            });
-    }
-
-    #[test]
-    #[ignore] // TODO: Update this test to work with new API
-    fn test_no_blend_no_beard() {
-        let _expected_data: Vec<u16> =
-            read_data_from_file!("../../assets/no_blend_no_beard_0_0.chunk");
-        let surface_config = GENERATION_SETTINGS
-            .get(&GeneratorSetting::Overworld)
-            .unwrap();
-        // TODO: Create ProtoChunk and call populate_noise with proper parameters
-        let _chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(0, 0),
             surface_config,
             surface_config.default_block.get_state(),
             0, // biome_mixer_seed
         );
 
-        // assert_eq!(
-        //     expected_data,
-        //     chunk.flat_block_map.into_iter().collect::<Vec<u16>>()
-        // );
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &base_router.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &base_router.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
+        expected_data
+            .into_iter()
+            .zip(block_map.iter())
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != *actual {
+                    panic!("{expected} vs {actual} ({index})");
+                }
+            });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
+    fn test_no_blend_no_beard() {
+        let expected_data: Vec<u16> =
+            read_data_from_file!("../../assets/no_blend_no_beard_0_0.chunk");
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        
+        let chunk = ProtoChunk::new(
+            Vector2::new(0, 0),
+            surface_config,
+            surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
+        );
+
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
+        expected_data
+            .into_iter()
+            .zip(block_map.iter())
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != *actual {
+                    panic!("{expected} vs {actual} ({index})");
+                }
+            });
+    }
+
+    #[test]
     fn test_no_blend_no_beard_aquifer() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_7_4.chunk");
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(7, 4),
-            &BASE_NOISE_ROUTER,
-            &RANDOM_CONFIG,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
-        chunk.populate_noise();
 
-        assert_eq!(
-            expected_data,
-            chunk.flat_block_map.into_iter().collect::<Vec<u16>>()
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(7, 4));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(7, 4));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
         );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
+        expected_data
+            .into_iter()
+            .zip(block_map.iter())
+            .enumerate()
+            .for_each(|(index, (expected, actual))| {
+                if expected != *actual {
+                    panic!("{expected} vs {actual} ({index})");
+                }
+            });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_badlands() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_-595_544.chunk");
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(-595, 544),
-            &BASE_NOISE_ROUTER,
-            &RANDOM_CONFIG,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
-        chunk.populate_noise();
 
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(-595, 544));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(-595, 544));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_frozen_ocean() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_-119_183.chunk");
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(-119, 183),
-            &BASE_NOISE_ROUTER,
-            &RANDOM_CONFIG,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
-        chunk.populate_noise();
 
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(-119, 183));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(-119, 183));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_badlands2() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_13579_-6_11.chunk");
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(-6, 11),
-            &BASE_NOISE_ROUTER2,
-            &RANDOM_CONFIG2,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
-        chunk.populate_noise();
 
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(-6, 11));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(-6, 11));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER2.noise,
+            &RANDOM_CONFIG2,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER2.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_badlands3() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_13579_-2_15.chunk");
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(-2, 15),
-            &BASE_NOISE_ROUTER2,
-            &RANDOM_CONFIG2,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
-        chunk.populate_noise();
 
+        // Create noise generator and surface height estimator
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(-2, 15));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(-2, 15));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER2.noise,
+            &RANDOM_CONFIG2,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER2.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_surface() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_surface_0_0.chunk");
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(0, 0),
-            &BASE_NOISE_ROUTER,
-            &RANDOM_CONFIG,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
 
-        chunk.populate_biomes(Dimension::Overworld);
-        chunk.populate_noise();
-        chunk.build_surface();
+        // Populate biomes
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(chunk_pos::start_block_x(&Vector2::new(0, 0))),
+            biome_coords::from_block(chunk_pos::start_block_z(&Vector2::new(0, 0))),
+        );
+        let horizontal_biome_end = biome_coords::from_block(16);
+        let multi_noise_config = crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+        );
+        let mut multi_noise_sampler = MultiNoiseSampler::generate(
+            &BASE_NOISE_ROUTER.multi_noise,
+            &multi_noise_config,
+        );
+        chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
+        // Populate noise
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        // Build surface
+        chunk.build_surface(
+            surface_config,
+            &RANDOM_CONFIG,
+            &TERRAIN_CACHE,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_surface_badlands() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_surface_badlands_-595_544.chunk");
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(-595, 544),
-            &BASE_NOISE_ROUTER,
-            &RANDOM_CONFIG,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
 
-        chunk.populate_biomes(Dimension::Overworld);
-        chunk.populate_noise();
-        chunk.build_surface();
+        // Populate biomes
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(chunk_pos::start_block_x(&Vector2::new(-595, 544))),
+            biome_coords::from_block(chunk_pos::start_block_z(&Vector2::new(-595, 544))),
+        );
+        let horizontal_biome_end = biome_coords::from_block(16);
+        let multi_noise_config = crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+        );
+        let mut multi_noise_sampler = MultiNoiseSampler::generate(
+            &BASE_NOISE_ROUTER.multi_noise,
+            &multi_noise_config,
+        );
+        chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
+        // Populate noise
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(-595, 544));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(-595, 544));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        // Build surface
+        chunk.build_surface(
+            surface_config,
+            &RANDOM_CONFIG,
+            &TERRAIN_CACHE,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_surface_badlands2() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_surface_13579_-6_11.chunk");
@@ -1757,32 +2527,108 @@ mod test {
             .get(&GeneratorSetting::Overworld)
             .unwrap();
         let terrain_cache = TerrainCache::from_random(&RANDOM_CONFIG2);
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(-6, 11),
-            &BASE_NOISE_ROUTER2,
-            &RANDOM_CONFIG2,
             surface_config,
-            &terrain_cache,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
 
-        chunk.populate_biomes(Dimension::Overworld);
-        chunk.populate_noise();
-        chunk.build_surface();
+        // Populate biomes
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(chunk_pos::start_block_x(&Vector2::new(-6, 11))),
+            biome_coords::from_block(chunk_pos::start_block_z(&Vector2::new(-6, 11))),
+        );
+        let horizontal_biome_end = biome_coords::from_block(16);
+        let multi_noise_config = crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+        );
+        let mut multi_noise_sampler = MultiNoiseSampler::generate(
+            &BASE_NOISE_ROUTER2.multi_noise,
+            &multi_noise_config,
+        );
+        chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
+        // Populate noise
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(-6, 11));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(-6, 11));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER2.noise,
+            &RANDOM_CONFIG2,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER2.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        // Build surface
+        chunk.build_surface(
+            surface_config,
+            &RANDOM_CONFIG2,
+            &terrain_cache,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_surface_badlands3() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_surface_13579_-7_9.chunk");
@@ -1791,32 +2637,108 @@ mod test {
             .unwrap();
         let terrain_cache = TerrainCache::from_random(&RANDOM_CONFIG2);
 
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(-7, 9),
-            &BASE_NOISE_ROUTER2,
-            &RANDOM_CONFIG2,
             surface_config,
-            &terrain_cache,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
 
-        chunk.populate_biomes(Dimension::Overworld);
-        chunk.populate_noise();
-        chunk.build_surface();
+        // Populate biomes
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(chunk_pos::start_block_x(&Vector2::new(-7, 9))),
+            biome_coords::from_block(chunk_pos::start_block_z(&Vector2::new(-7, 9))),
+        );
+        let horizontal_biome_end = biome_coords::from_block(16);
+        let multi_noise_config = crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+        );
+        let mut multi_noise_sampler = MultiNoiseSampler::generate(
+            &BASE_NOISE_ROUTER2.multi_noise,
+            &multi_noise_config,
+        );
+        chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
+        // Populate noise
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(-7, 9));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(-7, 9));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER2.noise,
+            &RANDOM_CONFIG2,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER2.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        // Build surface
+        chunk.build_surface(
+            surface_config,
+            &RANDOM_CONFIG2,
+            &terrain_cache,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_surface_biome_blend() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_surface_13579_-2_15.chunk");
@@ -1825,32 +2747,108 @@ mod test {
             .unwrap();
         let terrain_cache = TerrainCache::from_random(&RANDOM_CONFIG2);
 
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(-2, 15),
-            &BASE_NOISE_ROUTER2,
-            &RANDOM_CONFIG2,
             surface_config,
-            &terrain_cache,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
 
-        chunk.populate_biomes(Dimension::Overworld);
-        chunk.populate_noise();
-        chunk.build_surface();
+        // Populate biomes
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(chunk_pos::start_block_x(&Vector2::new(-2, 15))),
+            biome_coords::from_block(chunk_pos::start_block_z(&Vector2::new(-2, 15))),
+        );
+        let horizontal_biome_end = biome_coords::from_block(16);
+        let multi_noise_config = crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+        );
+        let mut multi_noise_sampler = MultiNoiseSampler::generate(
+            &BASE_NOISE_ROUTER2.multi_noise,
+            &multi_noise_config,
+        );
+        chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
+        // Populate noise
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(-2, 15));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(-2, 15));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER2.noise,
+            &RANDOM_CONFIG2,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER2.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        // Build surface
+        chunk.build_surface(
+            surface_config,
+            &RANDOM_CONFIG2,
+            &terrain_cache,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
     }
 
     #[test]
-    #[ignore] // TODO: Update this test to work with new API
     fn test_no_blend_no_beard_surface_frozen_ocean() {
         let expected_data: Vec<u16> = read_data_from_file!(
             "../../assets/no_blend_no_beard_surface_frozen_ocean_-119_183.chunk"
@@ -1858,27 +2856,104 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut chunk = ProtoChunk::new(
+        let chunk = ProtoChunk::new(
             Vector2::new(-119, 183),
-            &BASE_NOISE_ROUTER,
-            &RANDOM_CONFIG,
             surface_config,
-            &TERRAIN_CACHE,
             surface_config.default_block.get_state(),
+            0, // biome_mixer_seed
         );
 
-        chunk.populate_biomes(Dimension::Overworld);
-        chunk.populate_noise();
-        chunk.build_surface();
+        // Populate biomes
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(chunk_pos::start_block_x(&Vector2::new(-119, 183))),
+            biome_coords::from_block(chunk_pos::start_block_z(&Vector2::new(-119, 183))),
+        );
+        let horizontal_biome_end = biome_coords::from_block(16);
+        let multi_noise_config = crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+        );
+        let mut multi_noise_sampler = MultiNoiseSampler::generate(
+            &BASE_NOISE_ROUTER.multi_noise,
+            &multi_noise_config,
+        );
+        chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
+        // Populate noise
+        let generation_shape = &surface_config.shape;
+        let horizontal_cell_count = CHUNK_DIM
+            / generation_shape.horizontal_cell_block_count();
+        let start_x = chunk_pos::start_block_x(&Vector2::new(-119, 183));
+        let start_z = chunk_pos::start_block_z(&Vector2::new(-119, 183));
+
+        let sampler = FluidLevelSampler::Chunk(Box::new(
+            StandardChunkFluidLevelSampler::new(
+                FluidLevel::new(
+                    surface_config.sea_level,
+                    surface_config.default_fluid.name,
+                ),
+                FluidLevel::new(
+                    -54,
+                    &pumpkin_data::Block::LAVA,
+                ),
+            ),
+        ));
+
+        let mut noise_sampler = ChunkNoiseGenerator::new(
+            &BASE_NOISE_ROUTER.noise,
+            &RANDOM_CONFIG,
+            horizontal_cell_count as usize,
+            start_x,
+            start_z,
+            generation_shape,
+            sampler,
+            surface_config.aquifers_enabled,
+            surface_config.ore_veins_enabled,
+        );
+
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let surface_config_builder = crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.y,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
+            &BASE_NOISE_ROUTER.surface_estimator,
+            &surface_config_builder,
+        );
+
+        chunk.populate_noise(
+            &mut noise_sampler,
+            &mut surface_height_estimate_sampler,
+        );
+
+        // Build surface
+        chunk.build_surface(
+            surface_config,
+            &RANDOM_CONFIG,
+            &TERRAIN_CACHE,
+            &mut surface_height_estimate_sampler,
+        );
+
+        let block_map = chunk.flat_block_map.lock();
         expected_data
             .into_iter()
-            .zip(chunk.flat_block_map)
+            .zip(block_map.iter())
             .enumerate()
             .for_each(|(index, (expected, actual))| {
-                if expected != actual {
+                if expected != *actual {
                     panic!("expected {expected}, was {actual} (at {index})");
                 }
             });
-    */
+    }
 }
