@@ -75,6 +75,7 @@ impl ChunkEntry {
         match chunk_lock.status {
             ChunkStatus::Full => ChunkEntry::Full(chunk.clone()),
             _ => {
+                println!("From sync chunk");
                 let generation_settings = gen_settings_from_dimension(&generation_state.dimension);
                 ChunkEntry::Pending(Arc::new(PendingChunk::from_chunk_data(
                     &chunk_lock,
@@ -763,6 +764,7 @@ impl Level {
     }
 
     pub async fn wait_for_chunk(&self, coord: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
+        println!("Waiting for chunk: {:?}", coord);
         loop {
             let generation_settings = gen_settings_from_dimension(&self.generation_state.dimension);
             let chunk = self
@@ -827,9 +829,10 @@ impl Level {
         // 4) Write (new) chunk from serializer
         // Now outdated chunk data is cached and will be written later
 
-        let chunks_with_no_watchers = chunks
-            .iter()
-            .filter_map(|pos| {
+        use futures::stream::{self, StreamExt};
+
+        let chunks_with_no_watchers = stream::iter(chunks)
+            .filter_map(async |pos| {
                 // Only chunks that have no entry in the watcher map or have 0 watchers
                 if self
                     .chunk_watchers
@@ -837,10 +840,21 @@ impl Level {
                     .is_none_or(|count| count.is_zero())
                 {
                     //TODO: pending chunk saving
-                    if let Some(chunk) = self.loaded_chunks.get(pos)
-                        && let ChunkEntry::Full(chunk) = &chunk.value()
-                    {
-                        Some((*pos, chunk.clone()))
+                    if let Some(chunk) = self.loaded_chunks.get(pos) {
+                        match &chunk.value() {
+                            ChunkEntry::Full(chunk) => Some((*pos, chunk.clone())),
+                            ChunkEntry::Pending(chunk) => {
+                                let generation_settings =
+                                    gen_settings_from_dimension(&self.generation_state.dimension);
+                                let status = chunk.state.clone().lock_owned().await;
+                                Some((
+                                    *pos,
+                                    Arc::new(RwLock::new(
+                                        chunk.finalize(generation_settings, status),
+                                    )),
+                                ))
+                            }
+                        }
                     } else {
                         None
                     }
@@ -848,7 +862,8 @@ impl Level {
                     None
                 }
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+            .await;
 
         self.remove_chunk_requests(
             &chunks_with_no_watchers
@@ -891,6 +906,7 @@ impl Level {
                     ret
                 }
                 ChunkEntry::Pending(_) => {
+                    self.loaded_chunks.insert(pos, chunk);
                     self.request_chunks(&[pos]).await;
                     self.wait_for_chunk(pos).await
                 }
@@ -949,7 +965,7 @@ impl Level {
                     while let Some(data) = rx.recv().await {
                         match data {
                             LoadedData::Loaded(chunk) => {
-                                let pos = chunk.read().await.position;
+                                let pos: Vector2<i32> = chunk.read().await.position;
                                 let entry = ChunkEntry::from_sync_chunk(
                                     chunk,
                                     &level_clone.generation_state,
