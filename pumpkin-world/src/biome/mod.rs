@@ -121,7 +121,7 @@ mod test {
             use crate::biome::hash_seed;
             let biome_mixer_seed = hash_seed(random_config.seed);
 
-            let mut chunk =
+            let chunk =
                 ProtoChunk::new(chunk_pos, surface_settings, default_block, biome_mixer_seed);
 
             // Create MultiNoiseSampler for populate_biomes

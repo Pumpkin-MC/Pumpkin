@@ -380,14 +380,12 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use temp_dir::TempDir;
-    use tokio::sync::RwLock;
 
     use crate::chunk::ChunkData;
     use crate::chunk::format::linear::LinearFile;
     use crate::chunk::io::file_manager::ChunkFileManager;
     use crate::chunk::io::{FileIO, LoadedData};
     use crate::dimension::Dimension;
-    use crate::generation::Seed;
     use crate::level::{Level, LevelFolder};
     use crate::world::{BlockAccessor, BlockRegistryExt};
 
