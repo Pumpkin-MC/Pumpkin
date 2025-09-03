@@ -2,7 +2,6 @@ use parking_lot::Mutex;
 use rayon::ThreadPool;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::runtime::Handle;
 
 use async_trait::async_trait;
 use pumpkin_data::tag;
@@ -906,8 +905,8 @@ impl PendingChunk {
                     if let Some(chunk) = dependency_chunk {
                         Box::pin(chunk.advance_to_stage(
                             *required_stage,
-                            &level,
-                            &generation_context,
+                            level,
+                            generation_context,
                         ))
                         .await;
                     }
@@ -1059,7 +1058,7 @@ impl PendingChunk {
                         );
 
                         proto_chunk.build_surface(
-                            &generation_context_clone.settings,
+                            generation_context_clone.settings,
                             &generation_context_clone.random_config,
                             &generation_context_clone.terrain_cache,
                             &mut surface_height_estimate_sampler,
@@ -1203,18 +1202,21 @@ mod test {
     use pumpkin_util::{math::vector2::Vector2, read_data_from_file};
 
     use super::*;
-    use crate::generation::{
-        aquifer_sampler::{FluidLevel, FluidLevelSampler},
-        biome_coords,
-        chunk_noise::ChunkNoiseGenerator,
-        noise::router::{
-            density_function::{NoiseFunctionComponentRange, PassThrough},
-            multi_noise_sampler::MultiNoiseSampler,
-            proto_noise_router::{ProtoNoiseFunctionComponent, ProtoNoiseRouters},
-            surface_height_sampler::SurfaceHeightEstimateSampler,
+    use crate::{
+        biome::hash_seed,
+        generation::{
+            aquifer_sampler::{FluidLevel, FluidLevelSampler},
+            biome_coords,
+            chunk_noise::ChunkNoiseGenerator,
+            noise::router::{
+                density_function::{NoiseFunctionComponentRange, PassThrough},
+                multi_noise_sampler::MultiNoiseSampler,
+                proto_noise_router::{ProtoNoiseFunctionComponent, ProtoNoiseRouters},
+                surface_height_sampler::SurfaceHeightEstimateSampler,
+            },
+            positions::chunk_pos,
+            settings::{GENERATION_SETTINGS, GeneratorSetting},
         },
-        positions::chunk_pos,
-        settings::{GENERATION_SETTINGS, GeneratorSetting},
     };
 
     const SEED: u64 = 0;
@@ -2272,7 +2274,7 @@ mod test {
             Vector2::new(-595, 544),
             surface_config,
             surface_config.default_block.get_state(),
-            0, // biome_mixer_seed
+            hash_seed(RANDOM_CONFIG2.seed), // biome_mixer_seed
         );
 
         // Populate biomes
@@ -2367,7 +2369,7 @@ mod test {
             Vector2::new(-6, 11),
             surface_config,
             surface_config.default_block.get_state(),
-            0, // biome_mixer_seed
+            hash_seed(RANDOM_CONFIG2.seed),
         );
 
         // Populate biomes
@@ -2463,7 +2465,7 @@ mod test {
             Vector2::new(-7, 9),
             surface_config,
             surface_config.default_block.get_state(),
-            0, // biome_mixer_seed
+            hash_seed(RANDOM_CONFIG2.seed), // biome_mixer_seed
         );
 
         // Populate biomes
@@ -2559,7 +2561,7 @@ mod test {
             Vector2::new(-2, 15),
             surface_config,
             surface_config.default_block.get_state(),
-            0, // biome_mixer_seed
+            hash_seed(RANDOM_CONFIG2.seed), // biome_mixer_seed
         );
 
         // Populate biomes

@@ -5,10 +5,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk,
-    generation::{chunk_noise::WATER_BLOCK, height_limit::HeightLimitView},
-};
+use crate::{ProtoChunk, generation::chunk_noise::WATER_BLOCK};
 
 // TODO: remove .to_state()
 

@@ -6,9 +6,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::{
-    ProtoChunk,
-    generation::{block_state_provider::BlockStateProvider, height_limit::HeightLimitView},
-    world::BlockRegistryExt,
+    ProtoChunk, generation::block_state_provider::BlockStateProvider, world::BlockRegistryExt,
 };
 
 #[derive(Deserialize)]

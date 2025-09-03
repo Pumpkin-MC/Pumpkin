@@ -55,12 +55,9 @@ pub fn bench_create_and_populate_noise(
 ) {
     use crate::biome::hash_seed;
     use crate::generation::chunk_noise::ChunkNoiseGenerator;
-    use crate::generation::noise::router::{
-        multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
-        surface_height_sampler::{
+    use crate::generation::noise::router::surface_height_sampler::{
             SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
-        },
-    };
+        };
     use crate::generation::proto_chunk::StandardChunkFluidLevelSampler;
     use crate::generation::{
         aquifer_sampler::{FluidLevel, FluidLevelSampler},
@@ -69,7 +66,7 @@ pub fn bench_create_and_populate_noise(
     };
 
     let biome_mixer_seed = hash_seed(random_config.seed);
-    let mut chunk = ProtoChunk::new(
+    let chunk = ProtoChunk::new(
         Vector2::new(0, 0),
         settings,
         default_block,
@@ -135,7 +132,7 @@ pub fn bench_create_and_populate_biome(
     use crate::generation::{biome_coords, positions::chunk_pos};
 
     let biome_mixer_seed = hash_seed(random_config.seed);
-    let mut chunk = ProtoChunk::new(
+    let chunk = ProtoChunk::new(
         Vector2::new(0, 0),
         settings,
         default_block,
@@ -188,7 +185,7 @@ pub fn bench_create_and_populate_noise_with_surface(
     };
 
     let biome_mixer_seed = hash_seed(random_config.seed);
-    let mut chunk = ProtoChunk::new(
+    let chunk = ProtoChunk::new(
         Vector2::new(0, 0),
         settings,
         default_block,

@@ -32,7 +32,6 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::{
-    cmp::Reverse,
     collections::{HashMap, VecDeque},
     path::PathBuf,
     sync::{
@@ -602,7 +601,7 @@ impl Level {
 
     // Gets random ticks, block ticks and fluid ticks
     pub async fn get_tick_data(&self) -> TickData {
-        let mut ticks = TickData {
+        let ticks = TickData {
             block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
             random_ticks: Vec::with_capacity(self.loaded_chunks.len() * 3 * 16 * 16),
@@ -612,6 +611,7 @@ impl Level {
         //TODO: fix
         return ticks;
 
+        #[allow(unreachable_code)]
         let mut rng = SmallRng::from_os_rng();
         for chunk in self.loaded_chunks.iter() {
             let mut chunk = match &chunk.value() {
@@ -700,7 +700,9 @@ impl Level {
     ) -> ChunkEntry {
         let entry = self.loaded_chunks.entry(coord);
 
-        let chunk = match entry {
+        
+
+        match entry {
             dashmap::mapref::entry::Entry::Occupied(entry) => {
                 let chunk_entry = entry.get();
                 match chunk_entry {
@@ -724,7 +726,7 @@ impl Level {
                     let mut chunk_entry = self.loaded_chunks.entry(coord).or_insert_with(|| {
                         ChunkEntry::Pending(Arc::new(PendingChunk::new(
                             coord,
-                            &generation_settings,
+                            generation_settings,
                             default_block,
                             biome_mixer_seed,
                         )))
@@ -735,9 +737,7 @@ impl Level {
                     }
                 }
             }
-        };
-
-        return chunk;
+        }
     }
 
     pub async fn wait_for_chunk(&self, coord: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
@@ -852,7 +852,7 @@ impl Level {
             level.write_chunks(chunks_with_no_watchers).await;
             // Only after we have written the chunks to the serializer do we remove them from the
             // cache
-            for (pos, chunk) in chunks_to_remove {
+            for (pos, _chunk) in chunks_to_remove {
                 // Add them back if they have watchers
                 if level.chunk_watchers.get(&pos).is_none() {
                     let _ = level.loaded_chunks.remove(&pos);

@@ -5,10 +5,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk, block::BlockStateCodec, generation::height_limit::HeightLimitView,
-    world::BlockRegistryExt,
-};
+use crate::{ProtoChunk, block::BlockStateCodec, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct ReplaceBlobsFeature {
