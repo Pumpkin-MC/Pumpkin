@@ -24,6 +24,7 @@ use pumpkin_config::{advanced_config, chunk::ChunkFormat};
 use pumpkin_data::{
     Block,
     block_properties::has_random_ticks,
+    chunk::ChunkStatus,
     fluid::Fluid,
     noise_router::{END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER},
 };
@@ -66,6 +67,24 @@ pub struct VanillaGenerationState {
     terrain_cache: Arc<TerrainCache>,
 
     default_block: &'static BlockState,
+}
+
+impl ChunkEntry {
+    async fn from_sync_chunk(chunk: SyncChunk, generation_state: &VanillaGenerationState) -> Self {
+        let chunk_lock = chunk.read().await;
+        match chunk_lock.status {
+            ChunkStatus::Full => ChunkEntry::Full(chunk.clone()),
+            _ => {
+                let generation_settings = gen_settings_from_dimension(&generation_state.dimension);
+                ChunkEntry::Pending(Arc::new(PendingChunk::from_chunk_data(
+                    &chunk_lock,
+                    &generation_settings,
+                    generation_state.default_block,
+                    hash_seed(generation_state.random_config.seed),
+                )))
+            }
+        }
+    }
 }
 
 impl VanillaGenerationState {
@@ -211,10 +230,15 @@ async fn rayon_chunk_generator(
         };
 
         if let Some(mut chunk) = level.loaded_chunks.get_mut(&chunk_coord) {
+            let status = match chunk.value() {
+                ChunkEntry::Pending(chunk) => Some(chunk.state.clone().lock_owned().await),
+                ChunkEntry::Full(_chunk) => None,
+            };
+
             take_mut::take(chunk.value_mut(), |chunk| match chunk {
-                ChunkEntry::Pending(chunk) => {
-                    ChunkEntry::Full(Arc::new(RwLock::new(chunk.finalize(generation_settings))))
-                }
+                ChunkEntry::Pending(chunk) => ChunkEntry::Full(Arc::new(RwLock::new(
+                    chunk.finalize(generation_settings, status.unwrap()),
+                ))),
                 ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk),
             });
         }
@@ -387,7 +411,7 @@ impl Level {
     pub(crate) async fn load_single_chunk(
         &self,
         pos: Vector2<i32>,
-    ) -> Result<(SyncChunk, bool), ChunkReadingError> {
+    ) -> Result<(ChunkEntry, bool), ChunkReadingError> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 
         // Call the existing fetch_chunks with a single chunk
@@ -397,7 +421,10 @@ impl Level {
 
         // Wait for the result
         match rx.recv().await {
-            Some(LoadedData::Loaded(chunk)) => Ok((chunk, false)),
+            Some(LoadedData::Loaded(chunk)) => Ok((
+                ChunkEntry::from_sync_chunk(chunk, &self.generation_state).await,
+                false,
+            )),
             Some(LoadedData::Missing(_)) => Err(ChunkReadingError::ChunkNotExist),
             Some(LoadedData::Error((_, err))) => Err(err),
             None => Err(ChunkReadingError::ChunkNotExist),
@@ -712,10 +739,7 @@ impl Level {
                 drop(entry);
                 let chunk = self.load_single_chunk(coord).await;
                 if let Ok((chunk, _)) = chunk {
-                    let mut chunk_entry = self
-                        .loaded_chunks
-                        .entry(coord)
-                        .or_insert_with(|| ChunkEntry::Full(chunk));
+                    let mut chunk_entry = self.loaded_chunks.entry(coord).or_insert_with(|| chunk);
                     match chunk_entry.value_mut() {
                         ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
                         ChunkEntry::Pending(chunk) => ChunkEntry::Pending(chunk.clone()),
@@ -860,11 +884,17 @@ impl Level {
 
         // Try to load from disk
         match self.load_single_chunk(pos).await {
-            Ok((chunk, _)) => {
-                self.loaded_chunks
-                    .insert(pos, ChunkEntry::Full(chunk.clone()));
-                chunk
-            }
+            Ok((chunk, _)) => match &chunk {
+                ChunkEntry::Full(full_chunk) => {
+                    let ret = full_chunk.clone();
+                    self.loaded_chunks.insert(pos, chunk);
+                    ret
+                }
+                ChunkEntry::Pending(_) => {
+                    self.request_chunks(&[pos]).await;
+                    self.wait_for_chunk(pos).await
+                }
+            },
             Err(_) => {
                 self.request_chunks(&[pos]).await;
                 self.wait_for_chunk(pos).await
@@ -885,6 +915,8 @@ impl Level {
 
         log::trace!("Receiving chunks: {}", chunks.len());
 
+        let level_clone = level.clone();
+        let self_clone = self.clone();
         self.spawn_task(async move {
             let cancel_notifier = level.shutdown_notifier.notified();
 
@@ -918,10 +950,14 @@ impl Level {
                         match data {
                             LoadedData::Loaded(chunk) => {
                                 let pos = chunk.read().await.position;
-                                level
-                                    .loaded_chunks
-                                    .insert(pos, ChunkEntry::Full(chunk.clone()));
-                                let _ = sender.send((chunk, false));
+                                let entry = ChunkEntry::from_sync_chunk(
+                                    chunk,
+                                    &level_clone.generation_state,
+                                )
+                                .await;
+                                level.loaded_chunks.insert(pos, entry);
+                                self_clone.request_chunks(&[pos]).await;
+                                let _ = sender.send((self_clone.wait_for_chunk(pos).await, false));
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
                                 // Need to generate — but don't block here

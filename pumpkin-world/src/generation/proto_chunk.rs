@@ -1,4 +1,5 @@
 use parking_lot::Mutex;
+use pumpkin_data::chunk::ChunkStatus;
 use rayon::ThreadPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -13,7 +14,7 @@ use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
     random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
 };
-use tokio::sync::Notify;
+use tokio::sync::{Notify, OwnedMutexGuard};
 
 use crate::chunk::format::LightContainer;
 use crate::chunk::palette::{BiomePalette, BlockPalette};
@@ -773,6 +774,88 @@ impl ProtoChunk {
     fn start_block_z(&self) -> i32 {
         start_block_z(&self.chunk_pos)
     }
+
+    pub fn from_chunk_data(
+        chunk_data: &ChunkData,
+        settings: &GenerationSettings,
+        default_block: &'static BlockState,
+        biome_mixer_seed: i64,
+    ) -> Self {
+        let proto_chunk = ProtoChunk::new(
+            chunk_data.position,
+            settings,
+            default_block,
+            biome_mixer_seed,
+        );
+
+        for (section_y, section) in chunk_data.section.sections.iter().enumerate() {
+            for y in 0..16 {
+                for z in 0..16 {
+                    for x in 0..16 {
+                        let block_state_id = section.block_states.get(x, y, z);
+                        let block_state = BlockState::from_id(block_state_id);
+
+                        let absolute_y =
+                            (section_y as i32 * 16) + y as i32 + chunk_data.section.min_y;
+
+                        proto_chunk.set_block_state(
+                            &Vector3::new(x as i32, absolute_y, z as i32),
+                            block_state,
+                        );
+                    }
+                }
+            }
+            for y in 0..4 {
+                for z in 0..4 {
+                    for x in 0..4 {
+                        let biome_id = section.biomes.get(x, y, z);
+                        let biome = Biome::from_id(biome_id).unwrap();
+
+                        let absolute_y =
+                            (section_y as i32 * 16) + (y as i32 * 4) + chunk_data.section.min_y;
+
+                        let local_biome_pos =
+                            Vector3::new((x * 4) as i32, absolute_y, (z * 4) as i32);
+                        let index = proto_chunk.local_biome_pos_to_biome_index(&local_biome_pos);
+                        proto_chunk.flat_biome_map.lock()[index] = biome;
+                    }
+                }
+            }
+        }
+
+        for z in 0..16 {
+            for x in 0..16 {
+                let motion_blocking_height = chunk_data.heightmap.get_height(
+                    crate::chunk::ChunkHeightmapType::MotionBlocking,
+                    x,
+                    z,
+                    chunk_data.section.min_y,
+                );
+                let index = (z * 16 + x) as usize;
+                proto_chunk.flat_motion_blocking_height_map.lock()[index] =
+                    motion_blocking_height as i16;
+
+                let motion_blocking_no_leaves_height = chunk_data.heightmap.get_height(
+                    crate::chunk::ChunkHeightmapType::MotionBlockingNoLeaves,
+                    x,
+                    z,
+                    chunk_data.section.min_y,
+                );
+                proto_chunk.flat_motion_blocking_no_leaves_height_map.lock()[index] =
+                    motion_blocking_no_leaves_height as i16;
+
+                let world_surface_height = chunk_data.heightmap.get_height(
+                    crate::chunk::ChunkHeightmapType::WorldSurface,
+                    x,
+                    z,
+                    chunk_data.section.min_y,
+                );
+                proto_chunk.flat_surface_height_map.lock()[index] = world_surface_height as i16;
+            }
+        }
+
+        proto_chunk
+    }
 }
 
 #[async_trait]
@@ -1120,8 +1203,31 @@ impl PendingChunk {
         deps
     }
 
+    pub fn from_chunk_data(
+        chunk_data: &ChunkData,
+        settings: &GenerationSettings,
+        default_block: &'static BlockState,
+        biome_mixer_seed: i64,
+    ) -> Self {
+        let proto_chunk =
+            ProtoChunk::from_chunk_data(chunk_data, settings, default_block, biome_mixer_seed);
+        let pending_chunk = PendingChunk {
+            position: chunk_data.position,
+            proto_chunk: Arc::new(proto_chunk),
+            state: Arc::new(tokio::sync::Mutex::new(PendingChunkState {
+                stage: chunk_data.status.into(),
+            })),
+            notify_full: Arc::new(Notify::new()),
+        };
+        pending_chunk
+    }
+
     /// Finalize the chunk, extracting the ProtoChunk if fully generated
-    pub fn finalize(&self, generation_settings: &GenerationSettings) -> ChunkData {
+    pub fn finalize(
+        &self,
+        generation_settings: &GenerationSettings,
+        status: OwnedMutexGuard<PendingChunkState>,
+    ) -> ChunkData {
         let proto_chunk = &self.proto_chunk;
         let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
         let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
@@ -1187,10 +1293,36 @@ impl PendingChunk {
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),
             block_entities: Default::default(),
+            status: status.stage.into(),
         };
 
         chunk.heightmap = chunk.calculate_heightmap();
         chunk
+    }
+}
+
+impl From<ChunkStatus> for ChunkStage {
+    fn from(status: ChunkStatus) -> Self {
+        match status {
+            ChunkStatus::Empty => ChunkStage::Empty,
+            ChunkStatus::StructureStarts => ChunkStage::Empty,
+            ChunkStatus::StructureReferences => ChunkStage::Empty,
+            ChunkStatus::Biomes => ChunkStage::Biomes,
+            ChunkStatus::Noise => ChunkStage::Noise,
+            ChunkStatus::Surface => ChunkStage::Surface,
+            ChunkStatus::Carvers => ChunkStage::Surface,
+            ChunkStatus::Features => ChunkStage::Features,
+            ChunkStatus::InitializeLight => ChunkStage::Features,
+            ChunkStatus::Light => ChunkStage::Features,
+            ChunkStatus::Spawn => ChunkStage::Features,
+            ChunkStatus::Full => ChunkStage::Full,
+        }
+    }
+}
+
+impl From<ChunkStage> for ChunkStatus {
+    fn from(status: ChunkStage) -> Self {
+        status.into()
     }
 }
 

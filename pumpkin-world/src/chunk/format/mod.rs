@@ -192,6 +192,7 @@ impl ChunkData {
                 block_entities
             },
             light_engine,
+            status: chunk_data.status,
         })
     }
 
