@@ -57,7 +57,7 @@ impl DarkOakTrunkPlacer {
         let mut rand = random.next_bounded_i32(3);
 
         let mut x = pos.0.x;
-        let mut z = pos.0.x;
+        let mut z = pos.0.z;
 
         // TODO: make this random
         let random_direction = BlockDirection::North;

@@ -308,7 +308,7 @@ impl Level {
 
         let level_ref_clone = level_ref.clone();
         tokio::spawn(async move {
-            let generation_semaphore = Arc::new(tokio::sync::Semaphore::new(num_cpus::get()));
+            let generation_semaphore = Arc::new(tokio::sync::Semaphore::new(num_cpus::get() * 2));
             loop {
                 if level_ref_clone.is_shutting_down.load(Ordering::Relaxed) {
                     break;
