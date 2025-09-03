@@ -700,8 +700,6 @@ impl Level {
     ) -> ChunkEntry {
         let entry = self.loaded_chunks.entry(coord);
 
-        
-
         match entry {
             dashmap::mapref::entry::Entry::Occupied(entry) => {
                 let chunk_entry = entry.get();

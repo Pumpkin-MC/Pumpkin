@@ -5,11 +5,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk,
-    generation::section_coords,
-    world::BlockRegistryExt,
-};
+use crate::{ProtoChunk, generation::section_coords, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct EndSpikeFeature {

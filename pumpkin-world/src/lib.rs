@@ -56,8 +56,8 @@ pub fn bench_create_and_populate_noise(
     use crate::biome::hash_seed;
     use crate::generation::chunk_noise::ChunkNoiseGenerator;
     use crate::generation::noise::router::surface_height_sampler::{
-            SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
-        };
+        SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
+    };
     use crate::generation::proto_chunk::StandardChunkFluidLevelSampler;
     use crate::generation::{
         aquifer_sampler::{FluidLevel, FluidLevelSampler},
