@@ -740,24 +740,15 @@ impl Level {
 
     pub async fn wait_for_chunk(&self, coord: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
         loop {
-            let chunk = {
-                let chunk = self.loaded_chunks.entry(coord).or_insert_with(|| {
-                    println!("Inserting pending chunk for {:?}", coord);
-                    let generation_settings =
-                        gen_settings_from_dimension(&self.generation_state.dimension);
-                    ChunkEntry::Pending(Arc::new(PendingChunk::new(
-                        coord,
-                        generation_settings,
-                        self.generation_state.default_block,
-                        hash_seed(self.generation_state.random_config.seed),
-                    )))
-                });
-
-                match &*chunk {
-                    ChunkEntry::Pending(chunk) => ChunkEntry::Pending(chunk.clone()),
-                    ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
-                }
-            };
+            let generation_settings = gen_settings_from_dimension(&self.generation_state.dimension);
+            let chunk = self
+                .get_or_create_chunk(
+                    coord,
+                    generation_settings,
+                    self.generation_state.default_block,
+                    hash_seed(self.generation_state.random_config.seed),
+                )
+                .await;
 
             if let ChunkEntry::Full(chunk) = chunk {
                 return chunk.clone();
