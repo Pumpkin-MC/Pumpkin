@@ -1276,6 +1276,7 @@ impl PendingChunk {
                 }
             }
         }
+
         drop(block_map); // Release the lock
         let mut chunk = ChunkData {
             light_engine: ChunkLight {
@@ -1322,7 +1323,14 @@ impl From<ChunkStatus> for ChunkStage {
 
 impl From<ChunkStage> for ChunkStatus {
     fn from(status: ChunkStage) -> Self {
-        status.into()
+        match status {
+            ChunkStage::Empty => ChunkStatus::Empty,
+            ChunkStage::Biomes => ChunkStatus::Biomes,
+            ChunkStage::Noise => ChunkStatus::Noise,
+            ChunkStage::Surface => ChunkStatus::Surface,
+            ChunkStage::Features => ChunkStatus::Features,
+            ChunkStage::Full => ChunkStatus::Full,
+        }
     }
 }
 

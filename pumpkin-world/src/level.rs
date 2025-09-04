@@ -54,6 +54,7 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
 pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
 
+#[derive(Clone)]
 pub enum ChunkEntry {
     Pending(Arc<PendingChunk>),
     Full(Arc<RwLock<ChunkData>>),
@@ -75,7 +76,6 @@ impl ChunkEntry {
         match chunk_lock.status {
             ChunkStatus::Full => ChunkEntry::Full(chunk.clone()),
             _ => {
-                println!("From sync chunk");
                 let generation_settings = gen_settings_from_dimension(&generation_state.dimension);
                 ChunkEntry::Pending(Arc::new(PendingChunk::from_chunk_data(
                     &chunk_lock,
@@ -460,11 +460,12 @@ impl Level {
         let chunks_to_write = self
             .loaded_chunks
             .iter()
-            .filter_map(|chunk| {
-                if let ChunkEntry::Full(loaded_chunk) = &chunk.value() {
-                    Some((*chunk.key(), loaded_chunk.clone()))
-                } else {
-                    None
+            .map(|chunk| match &chunk.value() {
+                ChunkEntry::Full(loaded_chunk) => {
+                    (*chunk.key(), ChunkEntry::Full(loaded_chunk.clone()))
+                }
+                ChunkEntry::Pending(pending_chunk) => {
+                    (*chunk.key(), ChunkEntry::Pending(pending_chunk.clone()))
                 }
             })
             .collect::<Vec<_>>();
@@ -764,7 +765,6 @@ impl Level {
     }
 
     pub async fn wait_for_chunk(&self, coord: Vector2<i32>) -> Arc<RwLock<ChunkData>> {
-        println!("Waiting for chunk: {:?}", coord);
         loop {
             let generation_settings = gen_settings_from_dimension(&self.generation_state.dimension);
             let chunk = self
@@ -829,10 +829,9 @@ impl Level {
         // 4) Write (new) chunk from serializer
         // Now outdated chunk data is cached and will be written later
 
-        use futures::stream::{self, StreamExt};
-
-        let chunks_with_no_watchers = stream::iter(chunks)
-            .filter_map(async |pos| {
+        let chunks_with_no_watchers = chunks
+            .iter()
+            .filter_map(|pos| {
                 // Only chunks that have no entry in the watcher map or have 0 watchers
                 if self
                     .chunk_watchers
@@ -842,17 +841,11 @@ impl Level {
                     //TODO: pending chunk saving
                     if let Some(chunk) = self.loaded_chunks.get(pos) {
                         match &chunk.value() {
-                            ChunkEntry::Full(chunk) => Some((*pos, chunk.clone())),
+                            ChunkEntry::Full(chunk) => {
+                                Some((*pos, ChunkEntry::Full(chunk.clone())))
+                            }
                             ChunkEntry::Pending(chunk) => {
-                                let generation_settings =
-                                    gen_settings_from_dimension(&self.generation_state.dimension);
-                                let status = chunk.state.clone().lock_owned().await;
-                                Some((
-                                    *pos,
-                                    Arc::new(RwLock::new(
-                                        chunk.finalize(generation_settings, status),
-                                    )),
-                                ))
+                                Some((*pos, ChunkEntry::Pending(chunk.clone())))
                             }
                         }
                     } else {
@@ -862,8 +855,7 @@ impl Level {
                     None
                 }
             })
-            .collect::<Vec<_>>()
-            .await;
+            .collect::<Vec<_>>();
 
         self.remove_chunk_requests(
             &chunks_with_no_watchers
@@ -1180,10 +1172,28 @@ impl Level {
         }
     }
 
-    pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk)>) {
+    pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, ChunkEntry)>) {
         if chunks_to_write.is_empty() {
             return;
         }
+
+        let chunks_to_write = chunks_to_write
+            .iter()
+            .map(async |(pos, chunk)| match &chunk {
+                ChunkEntry::Full(chunk) => (*pos, chunk.clone()),
+                ChunkEntry::Pending(chunk) => {
+                    let generation_settings =
+                        gen_settings_from_dimension(&self.generation_state.dimension);
+                    let status = chunk.state.clone().lock_owned().await;
+                    (
+                        *pos,
+                        Arc::new(RwLock::new(chunk.finalize(generation_settings, status))),
+                    )
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let chunks_to_write = futures::future::join_all(chunks_to_write).await;
 
         let chunk_saver = self.chunk_saver.clone();
         let level_folder = self.level_folder.clone();

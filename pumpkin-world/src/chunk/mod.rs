@@ -69,6 +69,7 @@ pub enum CompressionError {
 }
 
 // Clone here cause we want to clone a snapshot of the chunk so we don't block writing for too long
+#[derive(Clone)]
 pub struct ChunkData {
     pub section: ChunkSections,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
