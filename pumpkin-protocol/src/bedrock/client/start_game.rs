@@ -1,3 +1,5 @@
+use std::io::{Error, Write};
+
 use crate::{
     bedrock::client::gamerules_changed::GameRules,
     codec::{
@@ -7,7 +9,7 @@ use crate::{
     serial::PacketWrite,
 };
 use pumpkin_macros::packet;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::{GameMode, math::vector3::Vector3};
 use uuid::Uuid;
 
 #[derive(PacketWrite)]
@@ -16,7 +18,7 @@ pub struct CStartGame {
     // https://mojang.github.io/bedrock-protocol-docs/html/StartGamePacket.html
     pub entity_id: VarLong,
     pub runtime_entity_id: VarULong,
-    pub player_gamemode: VarInt,
+    pub player_gamemode: GameMode,
     pub position: Vector3<f32>,
     pub pitch: f32,
     pub yaw: f32,
@@ -48,6 +50,7 @@ pub struct CStartGame {
 
     pub enable_clientside_generation: bool,
     pub blocknetwork_ids_are_hashed: bool,
+    pub tick_death_system_enabled: bool,
     pub server_auth_sounds: bool,
 }
 
@@ -64,7 +67,7 @@ pub struct LevelSettings {
 
     // Level Settings
     pub generator_type: VarInt,
-    pub world_gamemode: VarInt,
+    pub world_gamemode: GameMode,
     pub hardcore: bool,
     pub difficulty: VarInt,
     pub spawn_position: NetworkPos,
@@ -81,8 +84,8 @@ pub struct LevelSettings {
     pub has_confirmed_platform_locked_content: bool,
     pub was_multiplayer_intended: bool,
     pub was_lan_broadcasting_intended: bool,
-    pub xbox_live_broadcast_setting: VarInt,
-    pub platform_broadcast_setting: VarInt,
+    pub xbox_live_broadcast_setting: GamePublishSetting,
+    pub platform_broadcast_setting: GamePublishSetting,
     pub commands_enabled: bool,
     pub is_texture_packs_required: bool,
 
@@ -127,13 +130,19 @@ pub struct Experiments {
     pub experiments_ever_toggled: bool,
 }
 
-#[repr(i32)]
+#[derive(Clone, Copy)]
 pub enum GamePublishSetting {
     NoMultiPlay = 0,
     InviteOnly = 1,
     FriendsOnly = 2,
     FriendsOfFriends = 3,
     Public = 4,
+}
+
+impl PacketWrite for GamePublishSetting {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarInt(*self as i32).write(writer)
+    }
 }
 
 #[derive(PacketWrite)]

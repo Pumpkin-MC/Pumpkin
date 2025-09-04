@@ -13,6 +13,7 @@ use super::{
 };
 use crate::chunk::format::LightContainer;
 use crate::generation::proto_chunk::TerrainCache;
+use crate::generation::section_coords;
 use crate::level::Level;
 use crate::world::BlockRegistryExt;
 use crate::{chunk::ChunkLight, dimension::Dimension};
@@ -83,11 +84,7 @@ impl WorldGenerator for VanillaGenerator {
     ) -> ChunkData {
         let generation_settings = gen_settings_from_dimension(&self.dimension);
 
-        let height: usize = match self.dimension {
-            Dimension::Overworld => 384,
-            Dimension::Nether | Dimension::End => 256,
-        };
-        let sub_chunks = height / BlockPalette::SIZE;
+        let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
         let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
         let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
 
@@ -122,26 +119,25 @@ impl WorldGenerator for VanillaGenerator {
             }
         }
         for y in 0..generation_settings.shape.height {
-            let relative_y = (y as i32 - sections.min_y) as usize;
-            let section_index = relative_y / BlockPalette::SIZE;
+            let relative_y = y as usize;
+            let section_index = section_coords::block_to_section(relative_y);
             let relative_y = relative_y % BlockPalette::SIZE;
             if let Some(section) = sections.sections.get_mut(section_index) {
                 for z in 0..BlockPalette::SIZE {
                     for x in 0..BlockPalette::SIZE {
-                        let absolute_y = generation_settings.shape.min_y as i32 + y as i32;
                         let block = proto_chunk
-                            .get_block_state(&Vector3::new(x as i32, absolute_y, z as i32));
-                        section.block_states.set(x, relative_y, z, block.0);
+                            .get_block_state_raw(&Vector3::new(x as i32, y as i32, z as i32));
+                        section.block_states.set(x, relative_y, z, block);
                     }
                 }
             }
         }
         ChunkData {
             light_engine: ChunkLight {
-                sky_light: (0..sections.sections.len() + 2)
+                sky_light: (0..sections.sections.len())
                     .map(|_| LightContainer::new_filled(15))
                     .collect(),
-                block_light: (0..sections.sections.len() + 2)
+                block_light: (0..sections.sections.len())
                     .map(|_| LightContainer::new_empty(15))
                     .collect(),
             },
