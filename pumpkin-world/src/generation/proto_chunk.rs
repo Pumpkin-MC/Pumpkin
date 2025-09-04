@@ -811,11 +811,12 @@ impl ProtoChunk {
                         let biome_id = section.biomes.get(x, y, z);
                         let biome = Biome::from_id(biome_id).unwrap();
 
-                        let absolute_y =
-                            (section_y as i32 * 16) + (y as i32 * 4) + chunk_data.section.min_y;
-
-                        let local_biome_pos =
-                            Vector3::new((x * 4) as i32, absolute_y, (z * 4) as i32);
+                        let relative_y_block = (section_y as i32 * 16) + (y as i32 * 4);
+                        let local_biome_pos = Vector3::new(
+                            x as i32,
+                            biome_coords::from_block(relative_y_block),
+                            z as i32,
+                        );
                         let index = proto_chunk.local_biome_pos_to_biome_index(&local_biome_pos);
                         proto_chunk.flat_biome_map.lock()[index] = biome;
                     }

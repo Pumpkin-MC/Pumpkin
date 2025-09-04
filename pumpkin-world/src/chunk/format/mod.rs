@@ -79,15 +79,6 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        // TODO: Implement chunk stages?
-        if from_bytes::<ChunkStatusWrapper>(Cursor::new(chunk_data))
-            .map_err(ChunkParsingError::FailedReadStatus)?
-            .status
-            != ChunkStatus::Full
-        {
-            return Err(ChunkParsingError::ChunkNotGenerated);
-        }
-
         let chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
@@ -222,7 +213,7 @@ impl ChunkData {
             x_pos: self.position.x,
             z_pos: self.position.y,
             min_y_section: section_coords::block_to_section(self.section.min_y),
-            status: ChunkStatus::Full,
+            status: self.status,
             heightmaps: self.heightmap.clone(),
             sections,
             block_ticks: self.block_ticks.to_vec(),

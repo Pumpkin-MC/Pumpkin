@@ -76,6 +76,7 @@ impl ChunkEntry {
         match chunk_lock.status {
             ChunkStatus::Full => ChunkEntry::Full(chunk.clone()),
             _ => {
+                println!("Pending chunk");
                 let generation_settings = gen_settings_from_dimension(&generation_state.dimension);
                 ChunkEntry::Pending(Arc::new(PendingChunk::from_chunk_data(
                     &chunk_lock,
