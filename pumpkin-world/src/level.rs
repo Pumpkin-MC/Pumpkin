@@ -32,7 +32,8 @@ use std::{
     },
     thread,
 };
-use tokio::time::Instant;
+use std::time::Duration;
+use tokio::time::{timeout, Instant};
 use tokio::{
     select,
     sync::{
@@ -42,6 +43,7 @@ use tokio::{
     },
     task::JoinHandle,
 };
+use tokio::runtime::Handle;
 use tokio_util::task::TaskTracker;
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
@@ -109,6 +111,18 @@ pub struct LevelFolder {
     pub region_folder: PathBuf,
     pub entities_folder: PathBuf,
 }
+#[cfg(feature = "tokio_taskdump")]
+pub async fn dump() {
+    let handle = Handle::current();
+    if let Ok(dump) = timeout(Duration::from_secs(100), handle.dump()).await {
+        for (i, task) in dump.tasks().iter().enumerate() {
+            let trace = task.trace();
+            log::error!("TASK {i}:");
+            log::error!("{trace}\n");
+        }
+    }
+}
+
 
 impl Level {
     pub fn from_root_folder(
@@ -196,7 +210,7 @@ impl Level {
             level_ref.thread_tracker.lock().unwrap().as_mut(),
         );
 
-        let mut tracker = level_ref.thread_tracker.lock().unwrap();
+        // let mut tracker = level_ref.thread_tracker.lock().unwrap();
         // Entity Chunks
         for thread_id in 0..num_threads {
             let level_clone = level_ref.clone();
@@ -205,7 +219,8 @@ impl Level {
 
             let builder =
                 thread::Builder::new().name(format!("Entity Chunk Generation Thread {thread_id}"));
-            tracker.push(builder.spawn(move || {
+            // tracker.push( TODO
+            builder.spawn(move || {
                 while let Ok(pos) = rx.recv() {
                     if level_clone.is_shutting_down.load(Ordering::Relaxed) {
                         break;
@@ -233,9 +248,10 @@ impl Level {
                         }
                     }
                 }
-            }).unwrap());
+            }).unwrap();
+            // );
         }
-        drop(tracker);
+        // drop(tracker);
         level_ref
             .chunk_loading
             .lock()
@@ -266,6 +282,14 @@ impl Level {
 
         self.tasks.close();
         log::debug!("Awaiting level tasks");
+        #[cfg(feature = "tokio_taskdump")]
+        match tokio::time::timeout(Duration::from_secs(30), self.tasks.wait()).await {
+            Ok(guard) => guard,
+            Err(_) => {
+                dump().await;
+                panic!("Timeout Awaiting level tasks");
+            }
+        };
         self.tasks.wait().await;
         log::debug!("Done awaiting level chunk tasks");
 
@@ -288,6 +312,14 @@ impl Level {
 
         log::info!("Wait chunk system tasks stop");
         self.chunk_system_tasks.close();
+        #[cfg(feature = "tokio_taskdump")]
+        match tokio::time::timeout(Duration::from_secs(30), self.tasks.wait()).await {
+            Ok(guard) => guard,
+            Err(_) => {
+                dump().await;
+                panic!("Timeout Awaiting chunk_system_tasks tasks");
+            }
+        };
         self.chunk_system_tasks.wait().await;
         // wait for chunks currently saving in other
         log::info!("Wait chunk saver to stop");
@@ -570,9 +602,9 @@ impl Level {
             } else {
                 recv.await.unwrap()
             };
-            log::info!("Chunk {pos:?} received after {:?}.", Instant::now() - clock);
             let mut lock = self.chunk_loading.lock().unwrap();
             lock.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+            log::info!("Chunk {pos:?} received after {:?}.", Instant::now() - clock);
             ret
         }
     }

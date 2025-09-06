@@ -455,6 +455,12 @@ pub enum Chunk {
 }
 
 impl Chunk {
+    fn get_stage_id(&self) -> u8 {
+        match self {
+            Chunk::Proto(data) => data.stage_id(),
+            Chunk::Level(_) => 6,
+        }
+    }
     fn get_proto_chunk_mut(&mut self) -> &mut ProtoChunk {
         match self {
             Chunk::Level(_) => panic!("chunk isn't a ProtoChunk"),
@@ -821,7 +827,7 @@ impl ChunkListener {
                 if single[i].0 == pos {
                     let (_, send) = single.remove(i);
                     let _ = send.send(chunk.clone());
-                    log::debug!("single listener send {pos:?}");
+                    log::debug!("single listener {i} send {pos:?}");
                     len -= 1;
                     continue;
                 }
@@ -841,7 +847,9 @@ impl ChunkListener {
             let mut len = global.len();
             while i < len {
                 match global[i].send((pos, chunk.clone())) {
-                    Ok(_) => {}
+                    Ok(_) => {
+                        log::debug!("global listener {i} send {pos:?}");
+                    }
                     Err(_) => {
                         log::debug!("one global listener dropped");
                         global.remove(i);
@@ -1003,6 +1011,7 @@ impl GenerationSchedule {
             if old_level == ChunkLoading::MAX_LEVEL
                 && let Some(chunk) = self.unload_chunks.remove(pos)
             {
+                self.task_mark.entry(*pos).or_insert((0, 0)).1 = chunk.get_stage_id();
                 Self::add_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos, chunk);
             }
 
@@ -1069,6 +1078,7 @@ impl GenerationSchedule {
                 .fetch_chunks(&level.level_folder, &[pos], t_send.clone())
                 .await;
             if let Some(Loaded(chunk)) = t_recv.recv().await {
+                log::debug!("io read chunk {pos:?} read from file");
                 if send
                     .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
                     .is_err()
@@ -1161,6 +1171,7 @@ impl GenerationSchedule {
     }
 
     fn unload_chunk(&mut self) {
+        log::warn!("proto chunk saving is unimplemented");
         let mut unload_chunks = HashMapType::default();
         swap(&mut unload_chunks, &mut self.unload_chunks);
         let mut chunks = Vec::with_capacity(unload_chunks.len());
@@ -1177,7 +1188,6 @@ impl GenerationSchedule {
                     }
                 }
                 Chunk::Proto(chunk) => {
-                    log::warn!("proto chunk saving is unimplemented {pos:?}");
                     self.unload_chunks.insert(pos, Proto(chunk));
                 }
             }
@@ -1190,6 +1200,7 @@ impl GenerationSchedule {
     }
 
     fn save_all_chunk(&self) {
+        log::warn!("proto chunk saving is unimplemented");
         let mut chunks = Vec::with_capacity(self.unload_chunks.len() + self.proto_chunks.len() + self.loaded_chunks.len());
         for (pos, chunk) in &self.unload_chunks {
             match chunk {
@@ -1197,14 +1208,13 @@ impl GenerationSchedule {
                     chunks.push((*pos, chunk.clone()));
                 }
                 Chunk::Proto(_chunk) => {
-                    log::warn!("proto chunk saving is unimplemented {pos:?}");
+                    //todo
                 }
             }
         }
-        #[allow(clippy::for_kv_map)]
-        for (pos, _chunk) in &self.proto_chunks {
-            log::warn!("proto chunk saving is unimplemented {pos:?}");
-        }
+        // for (_pos, _chunk) in &self.proto_chunks {
+        //     //todo
+        // }
         for i in self.loaded_chunks.iter() {
             chunks.push((*i.key(), i.value().clone()));
         }

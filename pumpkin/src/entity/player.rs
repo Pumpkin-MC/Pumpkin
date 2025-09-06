@@ -191,7 +191,7 @@ impl ChunkManager {
         }
     }
 
-    pub fn clean_up(&self, level: &Arc<Level>) {
+    pub fn clean_up(&mut self, level: &Arc<Level>) {
         let mut lock = level.chunk_loading.lock().unwrap();
         lock.remove_ticket(
             self.center,

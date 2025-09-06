@@ -81,3 +81,6 @@ harness = false
 [[bench]]
 name = "hashmap"
 harness = false
+
+[features]
+tokio_taskdump = []

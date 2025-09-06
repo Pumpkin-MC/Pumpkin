@@ -95,3 +95,4 @@ iai = "0.1"
 #https://valgrind.org/docs/manual/dh-manual.html
 dhat-heap = ["dep:dhat"]
 console-subscriber = ["dep:console-subscriber"]
+tokio_taskdump = ["pumpkin-world/tokio_taskdump"]
