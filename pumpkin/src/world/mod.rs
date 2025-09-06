@@ -735,10 +735,10 @@ impl World {
                     //     continue;
                     // }
                     let chunk_pos = center.add_raw(dx, dy);
-                    if let Some(chunk) = self.level.try_get_chunk(&chunk_pos) {
+                    if !spawning_chunks_map.contains_key(&chunk_pos) && let Some(chunk) = self.level.try_get_chunk(&chunk_pos) {
                         spawning_chunks_map
                             .entry(chunk_pos)
-                            .or_insert(chunk.value().clone());
+                            .or_insert(chunk);
                     }
                 }
             }

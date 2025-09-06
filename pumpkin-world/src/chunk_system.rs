@@ -796,7 +796,7 @@ impl GenerationCache for Cache {
                         )
                         .unwrap_or(0),
                 )
-                .unwrap()
+                    .unwrap()
             }
             Chunk::Proto(data) => data.get_biome_for_terrain_gen(global_block_pos),
         }
@@ -1007,7 +1007,7 @@ impl GenerationSchedule {
                         generate: send_gen,
                         listener,
                     }
-                    .work(level);
+                        .work(level);
                 })
                 .unwrap(),
         )
@@ -1090,7 +1090,7 @@ impl GenerationSchedule {
         for pos in self.last_level.keys() {
             if !new_level.contains_key(pos)
                 && let Some(chunk) =
-                    Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
+                Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
             {
                 log::debug!("unload chunk {pos:?}");
                 match self.task_mark.entry(*pos) {
@@ -1397,9 +1397,11 @@ impl GenerationSchedule {
                                     }
                                 }
                                 Entry::Vacant(_) => {
+                                    if new_pos == pos {
+                                        stage = chunk.stage_id().into();
+                                    }
                                     log::debug!("receive chunk {new_pos:?} to unload chunks");
                                     self.unload_chunks.insert(new_pos, Chunk::Proto(chunk));
-                                    continue;
                                 }
                             };
                         }
@@ -1412,6 +1414,9 @@ impl GenerationSchedule {
                     }
                 }
                 debug_assert_ne!(stage, Empty);
+                if stage == Empty {
+                    panic!();
+                }
                 self.drop_mark(stage, pos);
             }
         }
@@ -1440,8 +1445,8 @@ impl GenerationSchedule {
                     &self.proto_chunks,
                     ChunkPos::new(x, y),
                 )
-                .to_string()
-                .as_str();
+                    .to_string()
+                    .as_str();
                 s += " ";
             }
             s += "\n";

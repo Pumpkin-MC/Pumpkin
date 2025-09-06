@@ -23,7 +23,7 @@ use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::sync::Mutex;
-use std::time::Duration;
+// use std::time::Duration;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -74,8 +74,8 @@ pub struct Level {
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
-    entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
+    pub chunk_saver: Arc<dyn FileIO<Data=SyncChunk>>,
+    entity_saver: Arc<dyn FileIO<Data=SyncEntityChunk>>,
 
     pub world_gen: Arc<VanillaGenerator>,
 
@@ -151,13 +151,13 @@ impl Level {
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
-        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match advanced_config().chunk.format {
+        let chunk_saver: Arc<dyn FileIO<Data=SyncChunk>> = match advanced_config().chunk.format {
             ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile<ChunkData>>::default()),
             ChunkFormat::Anvil => {
                 Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkData>>::default())
             }
         };
-        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> =
+        let entity_saver: Arc<dyn FileIO<Data=SyncEntityChunk>> =
             match advanced_config().chunk.format {
                 ChunkFormat::Linear => {
                     Arc::new(ChunkFileManager::<LinearFile<ChunkEntityData>>::default())
@@ -492,7 +492,8 @@ impl Level {
         };
 
         let mut rng = SmallRng::from_os_rng();
-        for chunk in self.loaded_chunks.iter() {
+        let chunks = self.loaded_chunks.iter().map(|x| x.value().clone()).collect::<Vec<_>>();
+        for chunk in chunks {
             let mut chunk = chunk.write().await;
             ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
             ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
@@ -574,9 +575,9 @@ impl Level {
 
         // if the difference is too big, we can shrink the loaded chunks
         // (1024 chunks is the equivalent to a 32x32 chunks area)
-        if self.loaded_chunks.capacity() - self.loaded_chunks.len() >= 4096 {
-            self.loaded_chunks.shrink_to_fit();
-        }
+        // if self.loaded_chunks.capacity() - self.loaded_chunks.len() >= 4096 {
+        //     self.loaded_chunks.shrink_to_fit();
+        // }
 
         if self.loaded_entity_chunks.capacity() - self.loaded_entity_chunks.len() >= 4096 {
             self.loaded_entity_chunks.shrink_to_fit();
@@ -811,8 +812,8 @@ impl Level {
     pub fn try_get_chunk(
         &self,
         coordinates: &Vector2<i32>,
-    ) -> Option<dashmap::mapref::one::Ref<'_, Vector2<i32>, Arc<RwLock<ChunkData>>>> {
-        self.loaded_chunks.try_get(coordinates).try_unwrap()
+    ) -> Option<Arc<RwLock<ChunkData>>> {
+        self.loaded_chunks.get(coordinates).map(|x| x.value().clone())
     }
 
     pub fn try_get_entity_chunk(
