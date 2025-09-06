@@ -15,13 +15,13 @@ use tokio::{runtime::Runtime, sync::RwLock};
 
 #[ignore]
 async fn test_reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
-    let level = level.clone();
-    let mut receiver = level.receive_chunks(positions);
-
-    while let Some(x) = receiver.recv().await {
-        // Don't compile me away!
-        let _ = x;
-    }
+    // let level = level.clone();
+    // let mut receiver = level.receive_chunks(positions);
+    //
+    // while let Some(x) = receiver.recv().await {
+    //     // Don't compile me away!
+    //     let _ = x;
+    // }
 }
 
 /*
@@ -116,12 +116,12 @@ fn initialize_level(
         let chunks_to_generate = (MIN_CHUNK..MAX_CHUNK)
             .flat_map(|x| (MIN_CHUNK..MAX_CHUNK).map(move |z| Vector2::new(x, z)))
             .collect::<Vec<_>>();
-        let mut receiver = level_to_fetch.receive_chunks(chunks_to_generate);
+        // let mut receiver = level_to_fetch.receive_chunks(chunks_to_generate);
 
-        while let Some((chunk, _)) = receiver.recv().await {
-            let pos = chunk.read().await.position;
-            chunks.push((pos, chunk));
-        }
+        // while let Some((chunk, _)) = receiver.recv().await {
+        //     let pos = chunk.read().await.position;
+        //     chunks.push((pos, chunk));
+        // }
         level_to_save.write_chunks(chunks.clone()).await;
     });
 

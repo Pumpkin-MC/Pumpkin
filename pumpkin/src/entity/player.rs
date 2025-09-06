@@ -140,7 +140,7 @@ impl ChunkManager {
             if (pos.x - self.center.x)
                 .abs()
                 .max((pos.y - self.center.y).abs())
-                > self.view_distance as i32
+                > i32::from(self.view_distance)
             {
                 continue;
             }
@@ -170,22 +170,22 @@ impl ChunkManager {
         );
         lock.send_change();
         drop(lock);
+        let view_distance = i32::from(view_distance);
         self.chunk_sent.retain(|pos| {
-            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance as i32
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance
         });
         self.chunk_queue.retain(|(pos, _)| {
-            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance as i32
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance
         });
         self.center = center;
-        self.view_distance = view_distance;
-        let view_distance = view_distance as i32;
+        self.view_distance = view_distance as u8;
         for dx in (-view_distance)..=view_distance {
             for dy in (-view_distance)..=view_distance {
                 let new_pos = center.add_raw(dx, dy);
-                if !self.chunk_sent.contains(&new_pos) {
-                    if let Some(chunk) = level.loaded_chunks.get(&new_pos) {
-                        self.push_chunk(new_pos, chunk.value().clone());
-                    }
+                if !self.chunk_sent.contains(&new_pos)
+                    && let Some(chunk) = level.loaded_chunks.get(&new_pos)
+                {
+                    self.push_chunk(new_pos, chunk.value().clone());
                 }
             }
         }

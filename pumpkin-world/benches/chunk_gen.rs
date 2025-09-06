@@ -29,24 +29,24 @@ impl BlockRegistryExt for BlockRegistry {
 
 #[ignore]
 fn chunk_generation_seed(seed: i64) {
-    let generator = get_world_gen(Seed(seed as u64), Dimension::Overworld);
-    let temp_dir = TempDir::new().unwrap();
-    let block_registry = Arc::new(BlockRegistry);
-    let level = Arc::new(Level::from_root_folder(
-        temp_dir.path().to_path_buf(),
-        block_registry.clone(),
-        seed,
-        Dimension::Overworld,
-    ));
-
-    // Prepare all positions to generate
-    let positions: Vec<Vector2<i32>> = (0..100)
-        .flat_map(|x| (0..10).map(move |y| Vector2::new(x, y)))
-        .collect();
-
-    positions.par_iter().for_each(|position| {
-        generator.generate_chunk(&level, block_registry.as_ref(), position);
-    });
+    // let generator = get_world_gen(Seed(seed as u64), Dimension::Overworld);
+    // let temp_dir = TempDir::new().unwrap();
+    // let block_registry = Arc::new(BlockRegistry);
+    // let level = Arc::new(Level::from_root_folder(
+    //     temp_dir.path().to_path_buf(),
+    //     block_registry.clone(),
+    //     seed,
+    //     Dimension::Overworld,
+    // ));
+    //
+    // // Prepare all positions to generate
+    // let positions: Vec<Vector2<i32>> = (0..100)
+    //     .flat_map(|x| (0..10).map(move |y| Vector2::new(x, y)))
+    //     .collect();
+    //
+    // positions.par_iter().for_each(|position| {
+    //     generator.generate_chunk(&level, block_registry.as_ref(), position);
+    // });
 }
 
 fn bench_chunk_generation(c: &mut Criterion) {

@@ -647,7 +647,6 @@ impl World {
 
         self.level.chunk_loading.lock().unwrap().send_change();
 
-
         log::debug!(
             "Ticking world took {:?}, loaded chunks: {}, chunk tick took {:?}",
             start.elapsed(),
@@ -1882,7 +1881,6 @@ impl World {
 
         let mut entity_receiver = self.level.receive_entity_chunks(chunks);
         let level = self.level.clone();
-        let player = player.clone();
         let world = self.clone();
         player.clone().spawn_task(async move {
             'main: loop {

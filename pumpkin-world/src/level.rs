@@ -23,6 +23,7 @@ use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::sync::Mutex;
+use std::time::Duration;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -32,8 +33,8 @@ use std::{
     },
     thread,
 };
-use std::time::Duration;
-use tokio::time::{timeout, Instant};
+// use tokio::runtime::Handle;
+use tokio::time::Instant;
 use tokio::{
     select,
     sync::{
@@ -43,7 +44,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tokio::runtime::Handle;
 use tokio_util::task::TaskTracker;
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
@@ -74,8 +74,8 @@ pub struct Level {
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    pub chunk_saver: Arc<dyn FileIO<Data=SyncChunk>>,
-    entity_saver: Arc<dyn FileIO<Data=SyncEntityChunk>>,
+    pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
+    entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
 
     pub world_gen: Arc<VanillaGenerator>,
 
@@ -111,18 +111,19 @@ pub struct LevelFolder {
     pub region_folder: PathBuf,
     pub entities_folder: PathBuf,
 }
+
+#[ignore]
 #[cfg(feature = "tokio_taskdump")]
 pub async fn dump() {
-    let handle = Handle::current();
-    if let Ok(dump) = timeout(Duration::from_secs(100), handle.dump()).await {
-        for (i, task) in dump.tasks().iter().enumerate() {
-            let trace = task.trace();
-            log::error!("TASK {i}:");
-            log::error!("{trace}\n");
-        }
-    }
+    // let handle = Handle::current();
+    // if let Ok(dump) = timeout(Duration::from_secs(100), handle.dump()).await {
+    //     for (i, task) in dump.tasks().iter().enumerate() {
+    //         let trace = task.trace();
+    //         log::error!("TASK {i}:");
+    //         log::error!("{trace}\n");
+    //     }
+    // }
 }
-
 
 impl Level {
     pub fn from_root_folder(
@@ -150,13 +151,13 @@ impl Level {
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
-        let chunk_saver: Arc<dyn FileIO<Data=SyncChunk>> = match advanced_config().chunk.format {
+        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match advanced_config().chunk.format {
             ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile<ChunkData>>::default()),
             ChunkFormat::Anvil => {
                 Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkData>>::default())
             }
         };
-        let entity_saver: Arc<dyn FileIO<Data=SyncEntityChunk>> =
+        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> =
             match advanced_config().chunk.format {
                 ChunkFormat::Linear => {
                     Arc::new(ChunkFileManager::<LinearFile<ChunkEntityData>>::default())
@@ -592,7 +593,7 @@ impl Level {
             let recv = self.chunk_listener.add_single_chunk_listener(pos);
             {
                 let mut lock = self.chunk_loading.lock().unwrap();
-                lock.add_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+                lock.add_force_ticket(pos);
                 lock.send_change();
             }
 
@@ -603,7 +604,7 @@ impl Level {
                 recv.await.unwrap()
             };
             let mut lock = self.chunk_loading.lock().unwrap();
-            lock.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+            lock.remove_force_ticket(pos);
             log::info!("Chunk {pos:?} received after {:?}.", Instant::now() - clock);
             ret
         }
