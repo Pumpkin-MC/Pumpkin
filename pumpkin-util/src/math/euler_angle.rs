@@ -34,38 +34,38 @@ impl Default for EulerAngle {
     }
 }
 
-impl Into<NbtTag> for EulerAngle {
-    fn into(self) -> NbtTag {
+impl From<EulerAngle> for NbtTag {
+    fn from(val: EulerAngle) -> Self {
         NbtTag::List(vec![
-            NbtTag::Float(self.pitch),
-            NbtTag::Float(self.yaw),
-            NbtTag::Float(self.roll),
+            NbtTag::Float(val.pitch),
+            NbtTag::Float(val.yaw),
+            NbtTag::Float(val.roll),
         ])
     }
 }
 
 impl From<NbtTag> for EulerAngle {
     fn from(tag: NbtTag) -> Self {
-        if let NbtTag::List(list) = tag {
-            if list.len() == 3 {
-                let pitch = if let NbtTag::Float(f) = list[0] {
-                    f
-                } else {
-                    0.0
-                };
-                let yaw = if let NbtTag::Float(f) = list[1] {
-                    f
-                } else {
-                    0.0
-                };
-                let roll = if let NbtTag::Float(f) = list[2] {
-                    f
-                } else {
-                    0.0
-                };
+        if let NbtTag::List(list) = tag
+            && list.len() == 3
+        {
+            let pitch = if let NbtTag::Float(f) = list[0] {
+                f
+            } else {
+                0.0
+            };
+            let yaw = if let NbtTag::Float(f) = list[1] {
+                f
+            } else {
+                0.0
+            };
+            let roll = if let NbtTag::Float(f) = list[2] {
+                f
+            } else {
+                0.0
+            };
 
-                return Self::new(pitch, yaw, roll);
-            }
+            return Self::new(pitch, yaw, roll);
         }
 
         Self::ZERO

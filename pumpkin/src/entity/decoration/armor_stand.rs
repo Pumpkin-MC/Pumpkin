@@ -43,20 +43,21 @@ impl Default for PackedRotation {
     }
 }
 
-impl Into<NbtTag> for PackedRotation {
-    fn into(self) -> NbtTag {
+impl From<PackedRotation> for NbtTag {
+    fn from(val: PackedRotation) -> Self {
         let mut compound = NbtCompound::new();
-        compound.put("Head", self.head);
-        compound.put("Body", self.body);
-        compound.put("LeftArm", self.left_arm);
-        compound.put("RightArm", self.right_arm);
-        compound.put("LeftLeg", self.left_leg);
-        compound.put("RightLeg", self.right_leg);
-        NbtTag::Compound(compound)
+        compound.put("Head", val.head);
+        compound.put("Body", val.body);
+        compound.put("LeftArm", val.left_arm);
+        compound.put("RightArm", val.right_arm);
+        compound.put("LeftLeg", val.left_leg);
+        compound.put("RightLeg", val.right_leg);
+        Self::Compound(compound)
     }
 }
 
 impl From<NbtTag> for PackedRotation {
+    #[allow(clippy::unnecessary_fallible_conversions)]
     fn from(tag: NbtTag) -> Self {
         if let NbtTag::Compound(compound) = tag {
             fn get_rotation(
@@ -70,9 +71,9 @@ impl From<NbtTag> for PackedRotation {
                     .unwrap_or(default)
             }
 
-            let default = PackedRotation::default();
+            let default = Self::default();
 
-            PackedRotation {
+            Self {
                 head: get_rotation(&compound, "Head", default.head),
                 body: get_rotation(&compound, "Body", default.body),
                 left_arm: get_rotation(&compound, "LeftArm", default.left_arm),
@@ -303,8 +304,7 @@ impl NBTStorage for ArmorStandEntity {
             nbt.put_bool("Marker", true);
         }
 
-        // TODO: Implement pose saving
-        nbt.put("Pose", self.pack_rotation())
+        nbt.put("Pose", self.pack_rotation());
     }
 
     async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
