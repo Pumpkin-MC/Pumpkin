@@ -52,7 +52,6 @@ use tokio::sync::Mutex;
 pub mod ai;
 pub mod decoration;
 pub mod effect;
-pub mod equipment_slot;
 pub mod experience_orb;
 pub mod falling;
 pub mod hunger;

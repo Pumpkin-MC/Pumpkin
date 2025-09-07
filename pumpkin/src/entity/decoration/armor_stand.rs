@@ -16,7 +16,7 @@ use pumpkin_data::{
     item::Item,
     sound::{Sound, SoundCategory},
 };
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::{euler_angle::EulerAngle, vector3::Vector3};
 use pumpkin_world::item::ItemStack;
 
@@ -39,6 +39,44 @@ impl Default for PackedRotation {
             right_arm: EulerAngle::new(-15.0, 0.0, 10.0),
             left_leg: EulerAngle::new(-1.0, 0.0, -1.0),
             right_leg: EulerAngle::new(1.0, 0.0, 1.0),
+        }
+    }
+}
+
+impl Into<NbtTag> for PackedRotation {
+    fn into(self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put("Head", self.head);
+        compound.put("Body", self.body);
+        compound.put("LeftArm", self.left_arm);
+        compound.put("RightArm", self.right_arm);
+        compound.put("LeftLeg", self.left_leg);
+        compound.put("RightLeg", self.right_leg);
+        NbtTag::Compound(compound)
+    }
+}
+
+impl From<NbtTag> for PackedRotation {
+    fn from(tag: NbtTag) -> Self {
+        if let NbtTag::Compound(compound) = tag {
+            fn get_rotation(compound: &NbtCompound, key: &'static str, default: EulerAngle) -> EulerAngle {
+                compound.get(key)
+                    .and_then(|tag| tag.clone().try_into().ok())
+                    .unwrap_or(default)
+            }
+
+            let default = PackedRotation::default();
+
+            PackedRotation {
+                head: get_rotation(&compound, "Head", default.head),
+                body: get_rotation(&compound, "Body", default.body),
+                left_arm: get_rotation(&compound, "LeftArm", default.left_arm),
+                right_arm: get_rotation(&compound, "RightArm", default.right_arm),
+                left_leg: get_rotation(&compound, "LeftLeg", default.left_leg),
+                right_leg: get_rotation(&compound, "RightLeg", default.right_leg),
+            }
+        } else {
+            Self::default()
         }
     }
 }
@@ -261,11 +299,17 @@ impl NBTStorage for ArmorStandEntity {
         }
 
         // TODO: Implement pose saving
-        //nbt.put("Pose", )
+        nbt.put("Pose", self.pack_rotation())
     }
 
     async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
         let mut flags = 0u8;
+
+        if let Some(invisible) = nbt.get_bool("Invisible")
+            && invisible
+        {
+            self.get_entity().set_invisible(invisible).await;
+        }
 
         if let Some(small) = nbt.get_bool("Small")
             && small
@@ -277,6 +321,10 @@ impl NBTStorage for ArmorStandEntity {
             && show_arms
         {
             flags |= ArmorStandFlags::ShowArms as u8;
+        }
+
+        if let Some(disabled_slots) = nbt.get_int("DisabledSlots") {
+            self.disabled_slots.store(disabled_slots, Ordering::Relaxed);
         }
 
         if let Some(no_base_plate) = nbt.get_bool("NoBasePlate") {
@@ -295,8 +343,9 @@ impl NBTStorage for ArmorStandEntity {
 
         self.armor_stand_flags.store(flags, Ordering::Relaxed);
 
-        if let Some(disabled_slots) = nbt.get_int("DisabledSlots") {
-            self.disabled_slots.store(disabled_slots, Ordering::Relaxed);
+        if let Some(pose_tag) = nbt.get("Pose") {
+            let packed: PackedRotation = pose_tag.clone().into();
+            self.unpack_rotation(&packed);
         }
     }
 }
@@ -320,7 +369,6 @@ impl EntityBase for ArmorStandEntity {
         self
     }
 
-    // TODO: Is this wrong here?
     async fn damage_with_context(
         &self,
         _caller: Arc<dyn EntityBase>,
@@ -336,16 +384,15 @@ impl EntityBase for ArmorStandEntity {
         }
 
         let world = &entity.world;
-        if let Some(server) = world.server.upgrade() {
-            let mob_griefing_gamerule = {
-                let game_rules = &server.level_info.read().await.game_rules;
-                game_rules.mob_griefing
-            };
 
-            if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none())
-            {
-                return false;
-            }
+        let mob_griefing_gamerule = {
+            let game_rules = &world.level_info.read().await.game_rules;
+            game_rules.mob_griefing
+        };
+
+        if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none())
+        {
+            return false;
         }
 
         // TODO: <DamageSource>.isIn(DamageTypeTags::BYPASSES_INVULNERABILITY)
