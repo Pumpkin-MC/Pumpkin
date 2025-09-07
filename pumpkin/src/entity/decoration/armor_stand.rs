@@ -59,8 +59,13 @@ impl Into<NbtTag> for PackedRotation {
 impl From<NbtTag> for PackedRotation {
     fn from(tag: NbtTag) -> Self {
         if let NbtTag::Compound(compound) = tag {
-            fn get_rotation(compound: &NbtCompound, key: &'static str, default: EulerAngle) -> EulerAngle {
-                compound.get(key)
+            fn get_rotation(
+                compound: &NbtCompound,
+                key: &'static str,
+                default: EulerAngle,
+            ) -> EulerAngle {
+                compound
+                    .get(key)
                     .and_then(|tag| tag.clone().try_into().ok())
                     .unwrap_or(default)
             }
@@ -390,8 +395,7 @@ impl EntityBase for ArmorStandEntity {
             game_rules.mob_griefing
         };
 
-        if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none())
-        {
+        if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none()) {
             return false;
         }
 
