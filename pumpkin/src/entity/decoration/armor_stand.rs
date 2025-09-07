@@ -48,7 +48,6 @@ pub struct ArmorStandEntity {
     living_entity: LivingEntity,
 
     armor_stand_flags: AtomicU8,
-    invisible: AtomicCell<bool>,
     last_hit_time: AtomicI64,
     disabled_slots: AtomicI32,
 
@@ -60,11 +59,6 @@ pub struct ArmorStandEntity {
     right_leg_rotation: AtomicCell<EulerAngle>,
 }
 
-const SMALL_FLAG: u8 = 1;
-const SHOW_ARMS_FLAG: u8 = 4;
-const HIDE_BASE_PLATE_FLAG: u8 = 8;
-const MARKER_FLAG: u8 = 16;
-
 impl ArmorStandEntity {
     pub fn new(entity: Entity) -> Self {
         let living_entity = LivingEntity::new(entity);
@@ -73,7 +67,6 @@ impl ArmorStandEntity {
         Self {
             living_entity,
             armor_stand_flags: AtomicU8::new(0),
-            invisible: AtomicCell::new(false),
             last_hit_time: AtomicI64::new(0),
             disabled_slots: AtomicI32::new(0),
             head_rotation: AtomicCell::new(packed_rotation.head),
@@ -86,43 +79,43 @@ impl ArmorStandEntity {
     }
 
     pub fn set_small(&self, small: bool) {
-        self.set_bit_field(SMALL_FLAG, small);
+        self.set_bit_field(ArmorStandFlags::Small, small);
     }
 
     pub fn is_small(&self) -> bool {
-        (self.armor_stand_flags.load(Ordering::Relaxed) & SMALL_FLAG) != 0
+        (self.armor_stand_flags.load(Ordering::Relaxed) & ArmorStandFlags::Small as u8) != 0
     }
 
     pub fn set_show_arms(&self, show_arms: bool) {
-        self.set_bit_field(SHOW_ARMS_FLAG, show_arms);
+        self.set_bit_field(ArmorStandFlags::ShowArms, show_arms);
     }
 
     pub fn should_show_arms(&self) -> bool {
-        (self.armor_stand_flags.load(Ordering::Relaxed) & SHOW_ARMS_FLAG) != 0
+        (self.armor_stand_flags.load(Ordering::Relaxed) & ArmorStandFlags::ShowArms as u8) != 0
     }
 
     pub fn set_hide_base_plate(&self, hide_base_plate: bool) {
-        self.set_bit_field(HIDE_BASE_PLATE_FLAG, hide_base_plate);
+        self.set_bit_field(ArmorStandFlags::HideBasePlate, hide_base_plate);
     }
 
     pub fn should_show_base_plate(&self) -> bool {
-        (self.armor_stand_flags.load(Ordering::Relaxed) & HIDE_BASE_PLATE_FLAG) == 0
+        (self.armor_stand_flags.load(Ordering::Relaxed) & ArmorStandFlags::HideBasePlate as u8) == 0
     }
 
     pub fn set_marker(&self, marker: bool) {
-        self.set_bit_field(MARKER_FLAG, marker);
+        self.set_bit_field(ArmorStandFlags::Marker, marker);
     }
 
     pub fn is_marker(&self) -> bool {
-        (self.armor_stand_flags.load(Ordering::Relaxed) & MARKER_FLAG) != 0
+        (self.armor_stand_flags.load(Ordering::Relaxed) & ArmorStandFlags::Marker as u8) != 0
     }
 
-    fn set_bit_field(&self, bit_field: u8, set: bool) {
+    fn set_bit_field(&self, bit_field: ArmorStandFlags, set: bool) {
         let current = self.armor_stand_flags.load(Ordering::Relaxed);
         let new_value = if set {
-            current | bit_field
+            current | bit_field as u8
         } else {
-            current & !bit_field
+            current & !(bit_field as u8)
         };
         self.armor_stand_flags.store(new_value, Ordering::Relaxed);
     }
@@ -201,6 +194,10 @@ impl ArmorStandEntity {
         self.right_leg_rotation.load()
     }
 
+    pub fn is_invisible(&self) -> bool {
+        self.get_entity().invisible.load(Ordering::Relaxed)
+    }
+
     pub fn pack_rotation(&self) -> PackedRotation {
         PackedRotation {
             head: self.get_head_rotation(),
@@ -254,8 +251,7 @@ impl NBTStorage for ArmorStandEntity {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         let disabled_slots = self.disabled_slots.load(Ordering::Relaxed);
 
-        // TODO: ADD `ArmorStandEntity`.is_invisible()
-        //nbt.put_bool("Invisible", self.is_invisible());
+        nbt.put_bool("Invisible", self.is_invisible());
         nbt.put_bool("Small", self.is_small());
         nbt.put_bool("ShowArms", self.should_show_arms());
         nbt.put_int("DisabledSlots", disabled_slots);
@@ -274,27 +270,27 @@ impl NBTStorage for ArmorStandEntity {
         if let Some(small) = nbt.get_bool("Small")
             && small
         {
-            flags |= 1;
+            flags |= ArmorStandFlags::Small as u8;
         }
 
         if let Some(show_arms) = nbt.get_bool("ShowArms")
             && show_arms
         {
-            flags |= 4;
+            flags |= ArmorStandFlags::ShowArms as u8;
         }
 
         if let Some(no_base_plate) = nbt.get_bool("NoBasePlate") {
             if !no_base_plate {
-                flags |= 8;
+                flags |= ArmorStandFlags::HideBasePlate as u8;
             }
         } else {
-            flags |= 8;
+            flags |= ArmorStandFlags::HideBasePlate as u8;
         }
 
         if let Some(marker) = nbt.get_bool("Marker")
             && marker
         {
-            flags |= 16;
+            flags |= ArmorStandFlags::Marker as u8;
         }
 
         self.armor_stand_flags.store(flags, Ordering::Relaxed);
@@ -421,4 +417,15 @@ impl EntityBase for ArmorStandEntity {
 
         true
     }
+}
+
+pub enum ArmorStandFlags {
+    /// Small armor stand Flag
+    Small = 1,
+    /// Show arms Flag
+    ShowArms = 4,
+    /// Hide base plate fLag
+    HideBasePlate = 8,
+    /// Marker Flag
+    Marker = 16,
 }
