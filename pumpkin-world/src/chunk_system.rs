@@ -222,6 +222,15 @@ impl ChunkLoading {
                         entry.remove();
                     }
                     Entry::Vacant(_) => {
+                        Self::dump_level_debug(
+                            &self.high_priority,
+                            &self.pos_level,
+                            pos.x - 20,
+                            pos.x + 20,
+                            pos.y - 20,
+                            pos.y + 20,
+                        );
+                        log::logger().flush();
                         panic!("pos {new_pos:?} should contain a level");
                     }
                 }
@@ -232,35 +241,59 @@ impl ChunkLoading {
         let min_y = pos.y - range as i32 - 1;
         let max_y = pos.y + range as i32 + 1;
         for y in min_y..max_y {
-            let mut new_pos = ChunkPos::new(max_x, y);
+            let new_pos = ChunkPos::new(max_x, y);
             let level = self.pos_level.get(&new_pos).unwrap_or(&Self::MAX_LEVEL) + 1;
             if level < Self::MAX_LEVEL {
-                new_pos.x -= 1;
-                Self::check_then_push(&mut self.pos_level, &mut queue, new_pos, level);
+                for dx in -1..2 {
+                    for dy in -1..2 {
+                        let pos = new_pos.add_raw(dx, dy);
+                        if new_pos != pos {
+                            Self::check_then_push(&mut self.pos_level, &mut queue, pos, level);
+                        }
+                    }
+                }
             }
         }
         for x in min_x..max_x {
-            let mut new_pos = ChunkPos::new(x, min_y);
+            let new_pos = ChunkPos::new(x, min_y);
             let level = self.pos_level.get(&new_pos).unwrap_or(&Self::MAX_LEVEL) + 1;
             if level < Self::MAX_LEVEL {
-                new_pos.y += 1;
-                Self::check_then_push(&mut self.pos_level, &mut queue, new_pos, level);
+                for dx in -1..2 {
+                    for dy in -1..2 {
+                        let pos = new_pos.add_raw(dx, dy);
+                        if new_pos != pos {
+                            Self::check_then_push(&mut self.pos_level, &mut queue, pos, level);
+                        }
+                    }
+                }
             }
         }
         for y in (min_y + 1)..=max_y {
-            let mut new_pos = ChunkPos::new(min_x, y);
+            let new_pos = ChunkPos::new(min_x, y);
             let level = self.pos_level.get(&new_pos).unwrap_or(&Self::MAX_LEVEL) + 1;
             if level < Self::MAX_LEVEL {
-                new_pos.x += 1;
-                Self::check_then_push(&mut self.pos_level, &mut queue, new_pos, level);
+                for dx in -1..2 {
+                    for dy in -1..2 {
+                        let pos = new_pos.add_raw(dx, dy);
+                        if new_pos != pos {
+                            Self::check_then_push(&mut self.pos_level, &mut queue, pos, level);
+                        }
+                    }
+                }
             }
         }
         for x in (min_x + 1)..=max_x {
-            let mut new_pos = ChunkPos::new(x, max_y);
+            let new_pos = ChunkPos::new(x, max_y);
             let level = self.pos_level.get(&new_pos).unwrap_or(&Self::MAX_LEVEL) + 1;
             if level < Self::MAX_LEVEL {
-                new_pos.y -= 1;
-                Self::check_then_push(&mut self.pos_level, &mut queue, new_pos, level);
+                for dx in -1..2 {
+                    for dy in -1..2 {
+                        let pos = new_pos.add_raw(dx, dy);
+                        if new_pos != pos {
+                            Self::check_then_push(&mut self.pos_level, &mut queue, pos, level);
+                        }
+                    }
+                }
             }
         }
         for (ticket_pos, levels) in &self.ticket {
@@ -325,10 +358,10 @@ impl ChunkLoading {
         Self::dump_level_debug(
             &self.high_priority,
             &self.pos_level,
-            pos.x - 10,
-            pos.x + 10,
-            pos.y - 10,
-            pos.y + 10,
+            pos.x - 20,
+            pos.x + 20,
+            pos.y - 20,
+            pos.y + 20,
         );
     }
     pub fn remove_ticket(&mut self, pos: ChunkPos, level: i8) {
@@ -355,10 +388,10 @@ impl ChunkLoading {
         Self::dump_level_debug(
             &self.high_priority,
             &self.pos_level,
-            pos.x - 10,
-            pos.x + 10,
-            pos.y - 10,
-            pos.y + 10,
+            pos.x - 20,
+            pos.x + 20,
+            pos.y - 20,
+            pos.y + 20,
         );
     }
 }
@@ -1337,6 +1370,7 @@ impl GenerationSchedule {
                         self.unload_chunks.insert(pos, Chunk::Level(data.clone()));
                     }
                     self.listener.process_new_chunk(pos, &data);
+                    self.drop_mark(Empty, pos);
                 }
                 Chunk::Proto(data) => {
                     let mut mark = match self.task_mark.entry(pos) {
