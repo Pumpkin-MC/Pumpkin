@@ -308,7 +308,7 @@ impl World {
             entity.entity_id.into(),
             VarInt(i32::from(effect_type.id)),
         ))
-            .await;
+        .await;
     }
 
     pub async fn set_difficulty(&self, difficulty: Difficulty) {
@@ -347,7 +347,7 @@ impl World {
                 event.data,
                 VarInt(i32::from(block.id)),
             ))
-                .await;
+            .await;
         }
     }
 
@@ -677,7 +677,7 @@ impl World {
                     block_pos,
                     i32::from(block_state_id).into(),
                 ))
-                    .await;
+                .await;
             } else {
                 self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section.clone()))
                     .await;
@@ -735,10 +735,10 @@ impl World {
                     //     continue;
                     // }
                     let chunk_pos = center.add_raw(dx, dy);
-                    if !spawning_chunks_map.contains_key(&chunk_pos) && let Some(chunk) = self.level.try_get_chunk(&chunk_pos) {
-                        spawning_chunks_map
-                            .entry(chunk_pos)
-                            .or_insert(chunk);
+                    if !spawning_chunks_map.contains_key(&chunk_pos)
+                        && let Some(chunk) = self.level.try_get_chunk(&chunk_pos)
+                    {
+                        spawning_chunks_map.entry(chunk_pos).or_insert(chunk);
                     }
                 }
             }
@@ -1113,7 +1113,7 @@ impl World {
                 ),
                 chunk_pos.y << 4,
             )
-                .add(&delta);
+            .add(&delta);
             // TODO this.getBrightness(LightLayer.SKY, blockPos) >= 15;
             // TODO heightmap
 
@@ -1124,7 +1124,7 @@ impl World {
                 // TODO this.getCurrentDifficultyAt(blockPos);
                 if rng().random::<f32>() < 0.0675
                     && self.get_block(&random_pos.to_block_pos().down()).await
-                    != &Block::LIGHTNING_ROD
+                        != &Block::LIGHTNING_ROD
                 {
                     let entity = Entity::new(
                         Uuid::new_v4(),
@@ -1487,7 +1487,7 @@ impl World {
                 ],
             }],
         ))
-            .await;
+        .await;
         let current_players = self.players.read().await;
         // Here, we send all the infos of players who already joined.
         {
@@ -1557,7 +1557,7 @@ impl World {
                 velocity,
             ),
         )
-            .await;
+        .await;
 
         // Spawn players for our client.
         let id = player.gameprofile.id;
@@ -1691,7 +1691,7 @@ impl World {
             &[from.get_entity().entity_uuid],
             &CSetEquipment::new(from.entity_id().into(), equipment),
         )
-            .await;
+        .await;
     }
 
     pub async fn send_world_info(
@@ -1729,7 +1729,7 @@ impl World {
                 Vector3::new(0.0, 0.0, 0.0),
             ),
         )
-            .await;
+        .await;
         player.send_client_information().await;
 
         chunker::update_position(player).await;
@@ -2203,7 +2203,7 @@ impl World {
                 "multiplayer.player.joined",
                 [TextComponent::text(player.gameprofile.name.clone())],
             )
-                .color_named(NamedColor::Yellow);
+            .color_named(NamedColor::Yellow);
             let event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
             let event = PLUGIN_MANAGER.fire(event).await;
@@ -2254,7 +2254,7 @@ impl World {
                 "multiplayer.player.left",
                 [TextComponent::text(player.gameprofile.name.clone())],
             )
-                .color_named(NamedColor::Yellow);
+            .color_named(NamedColor::Yellow);
             let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
             let event = PLUGIN_MANAGER.fire(event).await;
@@ -2306,7 +2306,7 @@ impl World {
             &[from.entity_uuid],
             &CSetBlockDestroyStage::new(from.entity_id.into(), location, progress as i8),
         )
-            .await;
+        .await;
     }
 
     /// Sets a block and returns the old block id
@@ -2560,7 +2560,7 @@ impl World {
                 f64::from(position.0.z),
                 inventory.remove_stack(i).await,
             )
-                .await;
+            .await;
         }
     }
     pub async fn scatter_stack(self: &Arc<Self>, x: f64, y: f64, z: f64, mut stack: ItemStack) {
@@ -2868,7 +2868,7 @@ impl World {
                 VarInt(block_entity.get_id() as i32),
                 bytes.into_boxed_slice(),
             ))
-                .await;
+            .await;
         }
 
         chunk.block_entities.insert(block_pos, block_entity);
@@ -2902,7 +2902,7 @@ impl World {
                 VarInt(block_entity.get_id() as i32),
                 bytes.into_boxed_slice(),
             ))
-                .await;
+            .await;
         }
         chunk.mark_dirty(true);
     }
@@ -3043,22 +3043,22 @@ impl World {
         let mut next = Vector3::new(
             delta.x
                 * (if step.x > 0 {
-                1.0 - (from.x - from.x.floor())
-            } else {
-                from.x - from.x.floor()
-            }),
+                    1.0 - (from.x - from.x.floor())
+                } else {
+                    from.x - from.x.floor()
+                }),
             delta.y
                 * (if step.y > 0 {
-                1.0 - (from.y - from.y.floor())
-            } else {
-                from.y - from.y.floor()
-            }),
+                    1.0 - (from.y - from.y.floor())
+                } else {
+                    from.y - from.y.floor()
+                }),
             delta.z
                 * (if step.z > 0 {
-                1.0 - (from.z - from.z.floor())
-            } else {
-                from.z - from.z.floor()
-            }),
+                    1.0 - (from.z - from.z.floor())
+                } else {
+                    from.z - from.z.floor()
+                }),
         );
 
         while next.x <= 1.0 || next.y <= 1.0 || next.z <= 1.0 {

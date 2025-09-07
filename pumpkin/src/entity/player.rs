@@ -171,9 +171,8 @@ impl ChunkManager {
         lock.send_change();
         drop(lock);
         let view_distance = i32::from(view_distance);
-        self.chunk_sent.retain(|pos| {
-            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance
-        });
+        self.chunk_sent
+            .retain(|pos| (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance);
         self.chunk_queue.retain(|(pos, _)| {
             (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance
         });
@@ -197,6 +196,9 @@ impl ChunkManager {
             self.center,
             ChunkLoading::get_level_from_view_distance(self.view_distance),
         );
+        let (_rx, tx) = crossbeam::channel::unbounded();
+        // drop old channel
+        self.chunk_listener = tx;
     }
 
     pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
@@ -910,7 +912,7 @@ impl Player {
                     state,
                     self.start_mining_time.load(Ordering::Relaxed),
                 )
-                    .await;
+                .await;
             }
         }
 
@@ -938,7 +940,7 @@ impl Player {
                     DisconnectReason::Timeout,
                     TextComponent::translate("disconnect.timeout", []),
                 )
-                    .await;
+                .await;
                 return;
             }
             self.wait_for_keep_alive.store(true, Ordering::Relaxed);
@@ -1433,11 +1435,11 @@ impl Player {
     pub async fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {
         !state.tool_required()
             || self
-            .inventory
-            .held_item()
-            .lock()
-            .await
-            .is_correct_for_drops(block)
+                .inventory
+                .held_item()
+                .lock()
+                .await
+                .is_correct_for_drops(block)
     }
 
     pub async fn get_mining_speed(&self, block: &'static Block) -> f32 {
@@ -1445,9 +1447,9 @@ impl Player {
         // Haste
         if self.living_entity.has_effect(&StatusEffect::HASTE).await
             || self
-            .living_entity
-            .has_effect(&StatusEffect::CONDUIT_POWER)
-            .await
+                .living_entity
+                .has_effect(&StatusEffect::CONDUIT_POWER)
+                .await
         {
             speed *= 1.0 + (self.get_haste_amplifier().await + 1) as f32 * 0.2;
         }

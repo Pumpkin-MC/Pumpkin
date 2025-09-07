@@ -243,8 +243,8 @@ impl Server {
             VanillaDimensionType::TheEnd => world_guard.get(2),
             VanillaDimensionType::TheNether => world_guard.get(1),
         }
-            .cloned()
-            .unwrap()
+        .cloned()
+        .unwrap()
     }
 
     #[allow(clippy::if_then_some_else_none)]
@@ -329,7 +329,7 @@ impl Server {
             world.clone(),
             gamemode,
         )
-            .await;
+        .await;
 
         if let Some(mut nbt_data) = nbt {
             player.read_nbt(&mut nbt_data).await;
@@ -464,7 +464,7 @@ impl Server {
                 level_info.difficulty as u8,
                 level_info.difficulty_locked,
             ))
-                .await;
+            .await;
             drop(level_info);
         }
     }

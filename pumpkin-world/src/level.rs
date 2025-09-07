@@ -74,8 +74,8 @@ pub struct Level {
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    pub chunk_saver: Arc<dyn FileIO<Data=SyncChunk>>,
-    entity_saver: Arc<dyn FileIO<Data=SyncEntityChunk>>,
+    pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
+    entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
 
     pub world_gen: Arc<VanillaGenerator>,
 
@@ -151,13 +151,13 @@ impl Level {
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
-        let chunk_saver: Arc<dyn FileIO<Data=SyncChunk>> = match advanced_config().chunk.format {
+        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match advanced_config().chunk.format {
             ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile<ChunkData>>::default()),
             ChunkFormat::Anvil => {
                 Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkData>>::default())
             }
         };
-        let entity_saver: Arc<dyn FileIO<Data=SyncEntityChunk>> =
+        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> =
             match advanced_config().chunk.format {
                 ChunkFormat::Linear => {
                     Arc::new(ChunkFileManager::<LinearFile<ChunkEntityData>>::default())
@@ -492,7 +492,11 @@ impl Level {
         };
 
         let mut rng = SmallRng::from_os_rng();
-        let chunks = self.loaded_chunks.iter().map(|x| x.value().clone()).collect::<Vec<_>>();
+        let chunks = self
+            .loaded_chunks
+            .iter()
+            .map(|x| x.value().clone())
+            .collect::<Vec<_>>();
         for chunk in chunks {
             let mut chunk = chunk.write().await;
             ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
@@ -809,11 +813,10 @@ impl Level {
         }
     }
 
-    pub fn try_get_chunk(
-        &self,
-        coordinates: &Vector2<i32>,
-    ) -> Option<Arc<RwLock<ChunkData>>> {
-        self.loaded_chunks.get(coordinates).map(|x| x.value().clone())
+    pub fn try_get_chunk(&self, coordinates: &Vector2<i32>) -> Option<Arc<RwLock<ChunkData>>> {
+        self.loaded_chunks
+            .get(coordinates)
+            .map(|x| x.value().clone())
     }
 
     pub fn try_get_entity_chunk(
