@@ -876,7 +876,7 @@ impl Level {
             for (pos, _chunk) in chunks_to_remove {
                 // Add them back if they have watchers
                 if level.chunk_watchers.get(&pos).is_none() {
-                    let _ = level.loaded_chunks.remove(&pos);
+                    //let _ = level.loaded_chunks.remove(&pos);
                 }
             }
         });
