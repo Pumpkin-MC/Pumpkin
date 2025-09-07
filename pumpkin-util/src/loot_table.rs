@@ -16,6 +16,8 @@ pub struct LootPool {
     pub entries: &'static [LootPoolEntry],
     pub rolls: LootNumberProviderTypes,
     pub bonus_rolls: f32,
+    pub conditions: Option<&'static [LootCondition]>,
+    pub functions: Option<&'static [LootFunction]>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
