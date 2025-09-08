@@ -104,32 +104,43 @@ fn test() {
     a.remove_ticket((-72, 457).into(), 24);
     a.add_ticket((-72, 455).into(), 24);
 
-    let mut header = "X/Y".to_string();
-    for y in -40..=40 {
-        header.push_str(&format!("{y:4}"));
+    a.add_ticket((-59, 495).into(), 33);
+    a.add_ticket((-51, 504).into(), 24);
+
+    a.remove_ticket((-51, 504).into(), 24);
+
+    let sx = -59;
+    let tx = -51;
+    let sy = 495;
+    let ty = 504;
+    {
+        let mut header = "X/Y".to_string();
+        for y in sy..=ty {
+            header.push_str(&format!("{y:4}"));
+        }
+
+        let grid: String = (sx..=tx)
+            .map(|x| {
+                let mut row = format!("{x:3}");
+                row.push_str(
+                    &(sy..=ty)
+                        .map(|y| {
+                            format!(
+                                "{:4}",
+                                a.pos_level
+                                    .get(&ChunkPos::new(x, y))
+                                    .unwrap_or(&ChunkLoading::MAX_LEVEL)
+                            )
+                        })
+                        .collect::<String>(),
+                );
+                row
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        println!("\nloading level:\n{header}\n{grid}");
     }
-
-    let grid: String = (-40..=40)
-        .map(|x| {
-            let mut row = format!("{x:3}");
-            row.push_str(
-                &(-40..=40)
-                    .map(|y| {
-                        format!(
-                            "{:4}",
-                            a.pos_level
-                                .get(&ChunkPos::new(x, y))
-                                .unwrap_or(&ChunkLoading::MAX_LEVEL)
-                        )
-                    })
-                    .collect::<String>(),
-            );
-            row
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    println!("\nloading level:\n{header}\n{grid}");
 }
 
 impl ChunkLoading {
@@ -327,10 +338,9 @@ impl ChunkLoading {
                         empty.insert(level);
                     }
                 }
-                self.increase_update.push((pos, level).into());
+                self.increase_update.push((*ticket_pos, level).into());
             }
         }
-
         self.run_increase_update();
     }
 
