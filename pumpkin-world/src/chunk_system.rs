@@ -24,7 +24,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 
-use std::cmp::{Ordering, PartialEq, max};
+use std::cmp::{Ordering, PartialEq, max, min};
 use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry;
 use std::mem::swap;
@@ -48,7 +48,7 @@ type HashSetType<K> = FxHashSet<K>;
 type ChunkPos = Vector2<i32>;
 type ChunkLevel = HashMapType<ChunkPos, i8>;
 
-struct HeapNode(i8, ChunkPos);
+pub struct HeapNode(i8, ChunkPos);
 impl PartialEq for HeapNode {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
@@ -83,11 +83,92 @@ pub struct ChunkLoading {
     pub ticket: HashMapType<ChunkPos, Vec<i8>>, // TODO lifetime & id
     pub high_priority: Vec<ChunkPos>,
     pub sender: Arc<LevelChannel>,
+    pub increase_update: BinaryHeap<HeapNode>,
+    pub decrease_update: BinaryHeap<HeapNode>,
+}
+
+#[test]
+fn test() {
+    let mut a = ChunkLoading::new(Arc::new(LevelChannel::new()));
+    a.add_ticket((0, 0).into(), 30);
+    a.add_ticket((0, 10).into(), 25);
+    a.add_ticket((10, 10).into(), 26);
+    a.add_ticket((10, 10).into(), 26);
+    a.remove_ticket((0, 0).into(), 30);
+    a.remove_ticket((0, 10).into(), 25);
+    a.remove_ticket((10, 10).into(), 26);
+    a.remove_ticket((10, 10).into(), 26);
+    a.add_ticket((-72, 457).into(), 24);
+    a.add_ticket((-72, 455).into(), 33);
+    a.add_ticket((-72, 456).into(), 24);
+    a.remove_ticket((-72, 457).into(), 24);
+    a.add_ticket((-72, 455).into(), 24);
+
+    let mut header = "X/Y".to_string();
+    for y in -40..=40 {
+        header.push_str(&format!("{y:4}"));
+    }
+
+    let grid: String = (-40..=40)
+        .map(|x| {
+            let mut row = format!("{x:3}");
+            row.push_str(
+                &(-40..=40)
+                    .map(|y| {
+                        format!(
+                            "{:4}",
+                            a.pos_level
+                                .get(&ChunkPos::new(x, y))
+                                .unwrap_or(&ChunkLoading::MAX_LEVEL)
+                        )
+                    })
+                    .collect::<String>(),
+            );
+            row
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    println!("\nloading level:\n{header}\n{grid}");
 }
 
 impl ChunkLoading {
     pub const FULL_CHUNK_LEVEL: i8 = 33;
     pub const MAX_LEVEL: i8 = 46; // level 46 will be unloaded.
+    fn debug_check_error(&self) -> bool {
+        let mut temp = ChunkLevel::default();
+        for (ticket_pos, levels) in &self.ticket {
+            let level = *levels.iter().min().unwrap();
+            let range = Self::MAX_LEVEL - level - 1;
+            for dx in -range..=range {
+                for dy in -range..=range {
+                    let new_pos = ticket_pos.add_raw(dx as i32, dy as i32);
+                    let level_from_source = level + abs(dx).max(abs(dy));
+                    let i = temp.entry(new_pos).or_insert(Self::MAX_LEVEL);
+                    *i = min(*i, level_from_source);
+                }
+            }
+        }
+        if temp.len() != self.pos_level.len() {
+            debug!("temp: \n{temp:?}");
+            debug!("pos_level: \n{:?}", self.pos_level);
+        }
+        assert_eq!(temp.len(), self.pos_level.len());
+        for val in &temp {
+            if val != self.pos_level.get_key_value(&val.0).unwrap() {
+                Self::dump_level_debug(
+                    &self.high_priority,
+                    &self.pos_level,
+                    val.0.x - 40,
+                    val.0.x + 40,
+                    val.0.y - 40,
+                    val.0.y + 40,
+                );
+            }
+            assert_eq!(val, self.pos_level.get_key_value(&val.0).unwrap());
+        }
+        true
+    }
     pub fn dump_level_debug(
         pri: &Vec<ChunkPos>,
         map: &ChunkLevel,
@@ -137,6 +218,8 @@ impl ChunkLoading {
             ticket: HashMapType::default(),
             high_priority: Vec::new(),
             sender,
+            increase_update: Default::default(),
+            decrease_update: Default::default(),
         }
     }
 
@@ -158,14 +241,14 @@ impl ChunkLoading {
         }
     }
 
-    fn run_update(pos_level: &mut ChunkLevel, mut queue: BinaryHeap<HeapNode>) {
-        while let Some(node) = queue.pop() {
+    fn run_increase_update(&mut self) {
+        while let Some(node) = self.increase_update.pop() {
             let (pos, level) = node.into();
             debug_assert!(level < Self::MAX_LEVEL);
-            if level > *pos_level.get(&pos).unwrap_or(&Self::MAX_LEVEL) {
+            if level > *self.pos_level.get(&pos).unwrap_or(&Self::MAX_LEVEL) {
                 continue;
             }
-            debug_assert_eq!(level, *pos_level.get(&pos).unwrap_or(&Self::MAX_LEVEL));
+            debug_assert_eq!(level, *self.pos_level.get(&pos).unwrap_or(&Self::MAX_LEVEL));
             let spread_level = level + 1;
             if spread_level >= Self::MAX_LEVEL {
                 continue;
@@ -174,20 +257,16 @@ impl ChunkLoading {
                 for dy in -1..2 {
                     let new_pos = pos.add_raw(dx, dy);
                     if new_pos != pos {
-                        Self::check_then_push(pos_level, &mut queue, new_pos, spread_level);
+                        self.check_then_push(new_pos, spread_level);
                     }
                 }
             }
         }
     }
 
-    fn check_then_push(
-        pos_level: &mut ChunkLevel,
-        queue: &mut BinaryHeap<HeapNode>,
-        pos: ChunkPos,
-        level: i8,
-    ) {
-        match pos_level.entry(pos) {
+    fn check_then_push(&mut self, pos: ChunkPos, level: i8) {
+        debug_assert!(level < Self::MAX_LEVEL);
+        match self.pos_level.entry(pos) {
             Entry::Occupied(mut entry) => {
                 let old = entry.get_mut();
                 if *old <= level {
@@ -199,117 +278,62 @@ impl ChunkLoading {
                 empty.insert(level);
             }
         }
-        queue.push((pos, level).into());
+        self.increase_update.push((pos, level).into());
     }
 
-    fn run_increase_update(&mut self, pos: ChunkPos, level: i8) {
-        // TODO there will be a faster way
-        debug_assert!(level < Self::MAX_LEVEL);
-        let range = Self::MAX_LEVEL - level - 1;
-        let mut queue = BinaryHeap::new();
-        for dx in -range..=range {
-            for dy in -range..=range {
-                let new_pos = pos.add_raw(dx as i32, dy as i32);
-                let level_from_source = level + abs(dx).max(abs(dy));
-                match self.pos_level.entry(new_pos) {
-                    Entry::Occupied(entry) => {
-                        let old = *entry.get();
-                        if old < level_from_source {
-                            queue.push((new_pos, old).into());
+    fn run_decrease_update(&mut self, pos: ChunkPos, range: i32) {
+        while let Some(node) = self.decrease_update.pop() {
+            let (pos, level) = node.into();
+            debug_assert!(level < Self::MAX_LEVEL);
+            let spread_level = level + 1;
+            for dx in -1..2 {
+                for dy in -1..2 {
+                    let new_pos = pos.add_raw(dx, dy);
+                    if new_pos == pos {
+                        continue;
+                    }
+                    match self.pos_level.entry(new_pos) {
+                        Entry::Occupied(entry) => {
+                            let new_pos_level = *entry.get();
+                            debug_assert!(new_pos_level <= spread_level);
+                            if new_pos_level == spread_level {
+                                entry.remove();
+                                if spread_level < Self::MAX_LEVEL {
+                                    self.decrease_update.push((new_pos, spread_level).into());
+                                }
+                            } else {
+                                self.increase_update.push((new_pos, new_pos_level).into());
+                            }
+                        }
+                        Entry::Vacant(_) => continue,
+                    }
+                }
+            }
+        }
+
+        for (ticket_pos, levels) in &self.ticket {
+            if abs(ticket_pos.x - pos.x) <= range && abs(ticket_pos.y - pos.y) <= range {
+                let level = *levels.iter().min().unwrap();
+                debug_assert!(level < Self::MAX_LEVEL);
+                match self.pos_level.entry(*ticket_pos) {
+                    Entry::Occupied(mut entry) => {
+                        let old = entry.get_mut();
+                        if *old <= level {
                             continue;
                         }
-                        debug_assert!(old == level_from_source);
-                        entry.remove();
+                        *old = level;
                     }
-                    Entry::Vacant(_) => {
-                        Self::dump_level_debug(
-                            &self.high_priority,
-                            &self.pos_level,
-                            pos.x - 20,
-                            pos.x + 20,
-                            pos.y - 20,
-                            pos.y + 20,
-                        );
-                        log::logger().flush();
-                        panic!("pos {new_pos:?} should contain a level");
+                    Entry::Vacant(empty) => {
+                        empty.insert(level);
                     }
                 }
+                self.increase_update.push((pos, level).into());
             }
         }
-        let min_x = pos.x - range as i32 - 1;
-        let max_x = pos.x + range as i32 + 1;
-        let min_y = pos.y - range as i32 - 1;
-        let max_y = pos.y + range as i32 + 1;
-        for y in min_y..max_y {
-            let new_pos = ChunkPos::new(max_x, y);
-            let level = self.pos_level.get(&new_pos).unwrap_or(&Self::MAX_LEVEL) + 1;
-            if level < Self::MAX_LEVEL {
-                for dx in -1..2 {
-                    for dy in -1..2 {
-                        let pos = new_pos.add_raw(dx, dy);
-                        if new_pos != pos {
-                            Self::check_then_push(&mut self.pos_level, &mut queue, pos, level);
-                        }
-                    }
-                }
-            }
-        }
-        for x in min_x..max_x {
-            let new_pos = ChunkPos::new(x, min_y);
-            let level = self.pos_level.get(&new_pos).unwrap_or(&Self::MAX_LEVEL) + 1;
-            if level < Self::MAX_LEVEL {
-                for dx in -1..2 {
-                    for dy in -1..2 {
-                        let pos = new_pos.add_raw(dx, dy);
-                        if new_pos != pos {
-                            Self::check_then_push(&mut self.pos_level, &mut queue, pos, level);
-                        }
-                    }
-                }
-            }
-        }
-        for y in (min_y + 1)..=max_y {
-            let new_pos = ChunkPos::new(min_x, y);
-            let level = self.pos_level.get(&new_pos).unwrap_or(&Self::MAX_LEVEL) + 1;
-            if level < Self::MAX_LEVEL {
-                for dx in -1..2 {
-                    for dy in -1..2 {
-                        let pos = new_pos.add_raw(dx, dy);
-                        if new_pos != pos {
-                            Self::check_then_push(&mut self.pos_level, &mut queue, pos, level);
-                        }
-                    }
-                }
-            }
-        }
-        for x in (min_x + 1)..=max_x {
-            let new_pos = ChunkPos::new(x, max_y);
-            let level = self.pos_level.get(&new_pos).unwrap_or(&Self::MAX_LEVEL) + 1;
-            if level < Self::MAX_LEVEL {
-                for dx in -1..2 {
-                    for dy in -1..2 {
-                        let pos = new_pos.add_raw(dx, dy);
-                        if new_pos != pos {
-                            Self::check_then_push(&mut self.pos_level, &mut queue, pos, level);
-                        }
-                    }
-                }
-            }
-        }
-        for (ticket_pos, levels) in &self.ticket {
-            if abs(ticket_pos.x - pos.x) <= range as i32
-                && abs(ticket_pos.y - pos.y) <= range as i32
-            {
-                Self::check_then_push(
-                    &mut self.pos_level,
-                    &mut queue,
-                    *ticket_pos,
-                    *levels.iter().max().unwrap(),
-                );
-            }
-        }
-        Self::run_update(&mut self.pos_level, queue);
+
+        self.run_increase_update();
     }
+
     pub fn add_force_ticket(&mut self, pos: ChunkPos) {
         log::debug!("add force ticket at {pos:?}");
         self.high_priority.push(pos);
@@ -352,17 +376,10 @@ impl ChunkLoading {
             }
         }
         self.is_dirty = true;
-        let mut queue: BinaryHeap<HeapNode> = BinaryHeap::new();
-        queue.push((pos, level).into());
-        Self::run_update(&mut self.pos_level, queue);
-        Self::dump_level_debug(
-            &self.high_priority,
-            &self.pos_level,
-            pos.x - 20,
-            pos.x + 20,
-            pos.y - 20,
-            pos.y + 20,
-        );
+        debug_assert!(self.increase_update.is_empty());
+        self.increase_update.push((pos, level).into());
+        self.run_increase_update();
+        debug_assert!(self.debug_check_error());
     }
     pub fn remove_ticket(&mut self, pos: ChunkPos, level: i8) {
         log::debug!("remove ticket at {pos:?} level {level}");
@@ -376,23 +393,24 @@ impl ChunkLoading {
             return;
         };
         vec.remove(index);
-        let old_level = *self.pos_level.get(&pos).unwrap_or(&Self::MAX_LEVEL);
-        let source = *vec.iter().max().unwrap_or(&Self::MAX_LEVEL);
-        if vec.is_empty() {
-            self.ticket.remove(&pos);
+        match self.pos_level.entry(pos) {
+            Entry::Occupied(entry) => {
+                let old_level = *entry.get();
+                let source = *vec.iter().max().unwrap_or(&Self::MAX_LEVEL);
+                if vec.is_empty() {
+                    self.ticket.remove(&pos);
+                }
+                if level == old_level && source != level {
+                    self.is_dirty = true;
+                    entry.remove();
+                    debug_assert!(self.decrease_update.is_empty());
+                    self.decrease_update.push((pos, level).into());
+                    self.run_decrease_update(pos, (Self::MAX_LEVEL - level - 1) as i32);
+                }
+            }
+            Entry::Vacant(_) => panic!(),
         }
-        if level == old_level && source != level {
-            self.is_dirty = true;
-            self.run_increase_update(pos, old_level);
-        }
-        Self::dump_level_debug(
-            &self.high_priority,
-            &self.pos_level,
-            pos.x - 20,
-            pos.x + 20,
-            pos.y - 20,
-            pos.y + 20,
-        );
+        debug_assert!(self.debug_check_error());
     }
 }
 
@@ -829,7 +847,7 @@ impl GenerationCache for Cache {
                         )
                         .unwrap_or(0),
                 )
-                    .unwrap()
+                .unwrap()
             }
             Chunk::Proto(data) => data.get_biome_for_terrain_gen(global_block_pos),
         }
@@ -1040,7 +1058,7 @@ impl GenerationSchedule {
                         generate: send_gen,
                         listener,
                     }
-                        .work(level);
+                    .work(level);
                 })
                 .unwrap(),
         )
@@ -1123,7 +1141,7 @@ impl GenerationSchedule {
         for pos in self.last_level.keys() {
             if !new_level.contains_key(pos)
                 && let Some(chunk) =
-                Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
+                    Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
             {
                 log::debug!("unload chunk {pos:?}");
                 match self.task_mark.entry(*pos) {
@@ -1479,8 +1497,8 @@ impl GenerationSchedule {
                     &self.proto_chunks,
                     ChunkPos::new(x, y),
                 )
-                    .to_string()
-                    .as_str();
+                .to_string()
+                .as_str();
                 s += " ";
             }
             s += "\n";

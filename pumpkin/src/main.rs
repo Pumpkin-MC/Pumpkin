@@ -60,9 +60,7 @@ use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
     text::{TextComponent, color::NamedColor},
 };
-use std::time::{Duration, Instant};
-use tokio::runtime::Handle;
-use tokio::time::timeout;
+use std::time::Instant;
 // Setup some tokens to allow us to identify which event is for which socket.
 
 pub mod block;

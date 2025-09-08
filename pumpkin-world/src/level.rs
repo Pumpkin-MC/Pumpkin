@@ -284,7 +284,7 @@ impl Level {
         self.tasks.close();
         log::debug!("Awaiting level tasks");
         #[cfg(feature = "tokio_taskdump")]
-        match tokio::time::timeout(Duration::from_secs(30), self.tasks.wait()).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(30), self.tasks.wait()).await {
             Ok(guard) => guard,
             Err(_) => {
                 dump().await;
@@ -314,7 +314,7 @@ impl Level {
         log::info!("Wait chunk system tasks stop");
         self.chunk_system_tasks.close();
         #[cfg(feature = "tokio_taskdump")]
-        match tokio::time::timeout(Duration::from_secs(30), self.tasks.wait()).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(30), self.tasks.wait()).await {
             Ok(guard) => guard,
             Err(_) => {
                 dump().await;

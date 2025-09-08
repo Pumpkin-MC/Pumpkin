@@ -1,5 +1,5 @@
 use core::f32;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BinaryHeap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::num::NonZeroU8;
 use std::ops::AddAssign;
@@ -103,13 +103,35 @@ enum BatchState {
     Count(u8),
 }
 
+struct HeapNode(i32, Vector2<i32>, SyncChunk);
+
+impl Eq for HeapNode {}
+
+impl PartialEq<Self> for HeapNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl PartialOrd<Self> for HeapNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for HeapNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0).reverse()
+    }
+}
+
 pub struct ChunkManager {
     chunks_per_tick: usize,
     center: Vector2<i32>,
     view_distance: u8,
     chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
     chunk_sent: HashSet<Vector2<i32>>,
-    chunk_queue: VecDeque<(Vector2<i32>, SyncChunk)>,
+    chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
     batches_sent_since_ack: BatchState,
 }
@@ -128,7 +150,7 @@ impl ChunkManager {
             view_distance: 0,
             chunk_listener,
             chunk_sent: HashSet::new(),
-            chunk_queue: VecDeque::new(),
+            chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
             batches_sent_since_ack: BatchState::Initial,
         }
@@ -137,16 +159,15 @@ impl ChunkManager {
     pub fn pull_new_chunks(&mut self) {
         log::debug!("pull new chunks");
         while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
-            if (pos.x - self.center.x)
+            let dst = (pos.x - self.center.x)
                 .abs()
-                .max((pos.y - self.center.y).abs())
-                > i32::from(self.view_distance)
-            {
+                .max((pos.y - self.center.y).abs());
+            if dst > i32::from(self.view_distance) {
                 continue;
             }
             if self.chunk_sent.insert(pos) {
                 log::debug!("receive new chunk {pos:?}");
-                self.chunk_queue.push_back((pos, chunk));
+                self.chunk_queue.push(HeapNode(dst, pos, chunk));
             }
         }
         log::debug!("chunk_queue size {}", self.chunk_queue.len());
@@ -173,9 +194,14 @@ impl ChunkManager {
         let view_distance = i32::from(view_distance);
         self.chunk_sent
             .retain(|pos| (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance);
-        self.chunk_queue.retain(|(pos, _)| {
-            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance
-        });
+        let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
+        for node in &self.chunk_queue {
+            let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
+            if dst <= view_distance {
+                new_queue.push(HeapNode(dst, node.1, node.2.clone()));
+            }
+        }
+        self.chunk_queue = new_queue;
         self.center = center;
         self.view_distance = view_distance as u8;
         for dx in (-view_distance)..=view_distance {
@@ -208,7 +234,10 @@ impl ChunkManager {
 
     pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
         self.chunk_sent.insert(position);
-        self.chunk_queue.push_back((position, chunk));
+        let dst = (position.x - self.center.x)
+            .abs()
+            .max((position.y - self.center.y).abs());
+        self.chunk_queue.push(HeapNode(dst, position, chunk));
     }
 
     pub fn push_entity(&mut self, position: Vector2<i32>, chunk: SyncEntityChunk) {
@@ -227,13 +256,12 @@ impl ChunkManager {
     }
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
-        let chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
-        let chunks: Vec<Arc<RwLock<ChunkData>>> = self
-            .chunk_queue
-            .drain(0..chunk_size)
-            .map(|(_, chunk)| chunk)
-            .collect();
-
+        let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
+        let mut chunks = Vec::<Arc<RwLock<ChunkData>>>::with_capacity(chunk_size);
+        while chunk_size > 0 {
+            chunks.push(self.chunk_queue.pop().unwrap().2);
+            chunk_size -= 1;
+        }
         match &mut self.batches_sent_since_ack {
             BatchState::Count(count) => {
                 count.add_assign(1);
@@ -262,13 +290,6 @@ impl ChunkManager {
         }
 
         chunks.into_boxed_slice()
-    }
-
-    #[must_use]
-    pub fn is_chunk_pending(&self, pos: &Vector2<i32>) -> bool {
-        // This is probably comparable to hashmap speed due to the relatively small count of chunks
-        // (guestimated to be ~ 1024)
-        self.chunk_queue.iter().any(|(elem_pos, _)| elem_pos == pos)
     }
 }
 
