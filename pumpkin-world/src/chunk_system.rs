@@ -39,7 +39,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::atomic::Ordering::Relaxed;
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, oneshot};
 use tokio::task;
 
@@ -144,7 +143,8 @@ fn test() {
 }
 
 impl ChunkLoading {
-    pub const FULL_CHUNK_LEVEL: i8 = 33;
+    // pub const FULL_CHUNK_LEVEL: i8 = 33;
+    pub const FULL_CHUNK_LEVEL: i8 = 44;
     pub const MAX_LEVEL: i8 = 46; // level 46 will be unloaded.
     fn debug_check_error(&self) -> bool {
         let mut temp = ChunkLevel::default();
@@ -457,29 +457,45 @@ impl From<u8> for StagedChunkEnum {
 }
 impl StagedChunkEnum {
     fn level_to_stage(level: i8) -> Self {
-        if level <= 33 {
+        // if level <= 33 {
+        //     Full
+        // } else if level <= 35 {
+        //     Features
+        // } else if level <= 36 {
+        //     Surface
+        // } else if level <= 37 {
+        //     Biomes
+        // } else if level <= 45 {
+        //     Empty
+        // } else {
+        //     Self::None
+        // }
+        if level <= 44 {
             Full
-        } else if level <= 35 {
-            Features
-        } else if level <= 36 {
-            Surface
-        } else if level <= 37 {
-            Biomes
         } else if level <= 45 {
-            Empty
+            Surface
         } else {
             Self::None
         }
     }
     fn get_radius(self) -> i32 {
         // self exclude
+        // match self {
+        //     Empty => 0,
+        //     Biomes => 8,
+        //     Noise => 9,
+        //     Surface => 9,
+        //     Features => 10,
+        //     Full => 11,
+        //     _ => panic!(),
+        // }
         match self {
             Empty => 0,
-            Biomes => 8,
-            Noise => 9,
-            Surface => 9,
-            Features => 10,
-            Full => 11,
+            Biomes => 0,
+            Noise => 0,
+            Surface => 0,
+            Features => 1,
+            Full => 1,
             _ => panic!(),
         }
     }
@@ -498,20 +514,19 @@ impl StagedChunkEnum {
     fn get_dependencies(self) -> &'static [StagedChunkEnum] {
         match self {
             Biomes => &[
-                Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty,
+                Empty
             ],
             Noise => &[
-                Biomes, Biomes, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty,
+                Biomes
             ],
             Surface => &[
-                Noise, Biomes, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty,
+                Noise
             ],
             Features => &[
-                Surface, Surface, Biomes, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty,
+                Surface, Surface
             ],
             Full => &[
-                Features, Features, Surface, Biomes, Empty, Empty, Empty, Empty, Empty, Empty,
-                Empty, Empty,
+                Features, Surface
             ],
             _ => panic!(),
         }
