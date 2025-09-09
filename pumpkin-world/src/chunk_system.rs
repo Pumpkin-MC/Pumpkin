@@ -513,21 +513,11 @@ impl StagedChunkEnum {
     }
     fn get_dependencies(self) -> &'static [StagedChunkEnum] {
         match self {
-            Biomes => &[
-                Empty
-            ],
-            Noise => &[
-                Biomes
-            ],
-            Surface => &[
-                Noise
-            ],
-            Features => &[
-                Surface, Surface
-            ],
-            Full => &[
-                Features, Surface
-            ],
+            Biomes => &[Empty],
+            Noise => &[Biomes],
+            Surface => &[Noise],
+            Features => &[Surface, Surface],
+            Full => &[Features, Surface],
             _ => panic!(),
         }
     }
@@ -734,7 +724,12 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::error!("illegal get_block_state {pos:?} cache pos ({}, {}) size {}", self.x, self.y, self.size);
+            log::error!(
+                "illegal get_block_state {pos:?} cache pos ({}, {}) size {}",
+                self.x,
+                self.y,
+                self.size
+            );
             return RawBlockState::AIR;
         }
         match &self.chunks[(dx * self.size + dz) as usize] {
@@ -761,7 +756,12 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::error!("illegal set_block_state {pos:?} cache pos ({}, {}) size {}", self.x, self.y, self.size);
+            log::error!(
+                "illegal set_block_state {pos:?} cache pos ({}, {}) size {}",
+                self.x,
+                self.y,
+                self.size
+            );
             return;
         }
         match &mut self.chunks[(dx * self.size + dz) as usize] {
@@ -882,7 +882,7 @@ impl GenerationCache for Cache {
                         )
                         .unwrap_or(0),
                 )
-                    .unwrap()
+                .unwrap()
             }
             Chunk::Proto(data) => data.get_biome_for_terrain_gen(global_block_pos),
         }
@@ -1093,7 +1093,7 @@ impl GenerationSchedule {
                         generate: send_gen,
                         listener,
                     }
-                        .work(level);
+                    .work(level);
                 })
                 .unwrap(),
         )
@@ -1176,7 +1176,7 @@ impl GenerationSchedule {
         for pos in self.last_level.keys() {
             if !new_level.contains_key(pos)
                 && let Some(chunk) =
-                Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
+                    Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
             {
                 log::debug!("unload chunk {pos:?}");
                 match self.task_mark.entry(*pos) {
@@ -1532,8 +1532,8 @@ impl GenerationSchedule {
                     &self.proto_chunks,
                     ChunkPos::new(x, y),
                 )
-                    .to_string()
-                    .as_str();
+                .to_string()
+                .as_str();
                 s += " ";
             }
             s += "\n";
@@ -1676,7 +1676,7 @@ impl GenerationSchedule {
                 len -= 1;
             }
             if len == 0 {
-                debug!("the queue is empty. thread sleep");
+                // debug!("the queue is empty. thread sleep");
                 let mut no_resort = true;
                 'out: while self.running_task_count > 0 {
                     let (pos, data) = self.recv_chunk.recv().expect("recv_chunk stop");
@@ -1693,7 +1693,7 @@ impl GenerationSchedule {
                 && nothing
                 && self.running_task_count > 0
             {
-                debug!("nothing to do. thread sleep.");
+                // debug!("nothing to do. thread sleep.");
                 if let Ok((pos, data)) = self.recv_chunk.recv() {
                     self.receive_chunk(pos, data);
                 }

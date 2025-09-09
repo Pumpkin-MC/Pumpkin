@@ -253,15 +253,14 @@ impl Level {
             // );
         }
         // drop(tracker);
-        level_ref
-            .chunk_loading
-            .lock()
-            .unwrap()
-            // .add_ticket(Vector2::<i32>::new(0, 0), 17);
-            .add_ticket(
-                Vector2::<i32>::new(0, 0),
-                ChunkLoading::FULL_CHUNK_LEVEL - 1,
-            );
+        // level_ref
+        //     .chunk_loading
+        //     .lock()
+        //     .unwrap()
+        //     .add_ticket(
+        //         Vector2::<i32>::new(0, 0),
+        //         ChunkLoading::FULL_CHUNK_LEVEL - 1,
+        //     );
         level_ref
     }
 

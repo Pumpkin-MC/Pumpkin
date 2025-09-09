@@ -882,7 +882,7 @@ impl Player {
                     java_client.send_packet_now(&CChunkBatchStart).await;
                     for chunk in chunk_of_chunks {
                         let chunk = chunk.read().await;
-                        log::info!("send chunk {:?}", chunk.position);
+                        log::debug!("send chunk {:?}", chunk.position);
                         // TODO: Can we check if we still need to send the chunk? Like if it's a fast moving
                         // player or something.
                         java_client.send_packet_now(&CChunkData(&chunk)).await;
