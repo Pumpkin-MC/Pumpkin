@@ -2238,11 +2238,15 @@ impl World {
     /// - This function assumes `broadcast_packet_expect` and `remove_entity` are defined elsewhere.
     /// - The disconnect message sending is currently optional. Consider making it a configurable option.
     pub async fn remove_player(&self, player: &Arc<Player>, fire_event: bool) {
-        self.players
+        if self
+            .players
             .write()
             .await
             .remove(&player.gameprofile.id)
-            .unwrap();
+            .is_none()
+        {
+            return;
+        }
         let uuid = player.gameprofile.id;
         self.broadcast_packet_except(&[player.gameprofile.id], &CRemovePlayerInfo::new(&[uuid]))
             .await;

@@ -227,6 +227,18 @@ impl ChunkManager {
         self.chunk_listener = tx;
     }
 
+    pub fn change_world(&mut self, old_level: &Arc<Level>, new_level: &Arc<Level>) {
+        let mut lock = old_level.chunk_loading.lock().unwrap();
+        lock.remove_ticket(
+            self.center,
+            ChunkLoading::get_level_from_view_distance(self.view_distance),
+        );
+        drop(lock);
+        self.chunk_listener = new_level.chunk_listener.add_global_chunk_listener();
+        self.chunk_sent.clear();
+        self.chunk_queue.clear();
+    }
+
     pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
         self.batches_sent_since_ack = BatchState::Count(0);
         self.chunks_per_tick = chunks_per_tick.ceil() as usize;
@@ -1212,6 +1224,8 @@ impl Player {
                         )
                         .await));
                 self.unload_watched_chunks(&current_world).await;
+
+                self.chunk_manager.lock().await.change_world(&current_world.level, &new_world.level);
 
                 let last_pos = self.living_entity.entity.last_pos.load();
                 let death_dimension = self.world().dimension_type.resource_location();

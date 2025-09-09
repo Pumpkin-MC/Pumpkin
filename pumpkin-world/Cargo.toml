@@ -66,20 +66,16 @@ iai = "0.1"
 name = "chunk"
 harness = false
 
-[[bench]]
-name = "chunk_io"
-harness = false
-
-[[bench]]
-name = "chunk_gen"
-harness = false
+#[[bench]]
+#name = "chunk_io"
+#harness = false
+#
+#[[bench]]
+#name = "chunk_gen"
+#harness = false
 
 [[bench]]
 name = "noise_router"
-harness = false
-
-[[bench]]
-name = "hashmap"
 harness = false
 
 [features]
