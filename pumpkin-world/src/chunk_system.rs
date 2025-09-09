@@ -166,7 +166,7 @@ impl ChunkLoading {
         }
         assert_eq!(temp.len(), self.pos_level.len());
         for val in &temp {
-            if val != self.pos_level.get_key_value(&val.0).unwrap() {
+            if val != self.pos_level.get_key_value(val.0).unwrap() {
                 Self::dump_level_debug(
                     &self.high_priority,
                     &self.pos_level,
@@ -176,7 +176,7 @@ impl ChunkLoading {
                     val.0.y + 40,
                 );
             }
-            assert_eq!(val, self.pos_level.get_key_value(&val.0).unwrap());
+            assert_eq!(val, self.pos_level.get_key_value(val.0).unwrap());
         }
         true
     }
@@ -537,17 +537,17 @@ impl LevelChannel {
         }
     }
     pub fn set_both(&self, new_value: ChunkLevel, pos: Vec<ChunkPos>) {
-        debug!("set new level and priority");
+        // debug!("set new level and priority");
         *self.value.lock().unwrap() = (Some(new_value), Some(pos));
         self.notify.notify_one();
     }
     pub fn set_level(&self, new_value: ChunkLevel) {
-        debug!("set new level");
+        // debug!("set new level");
         self.value.lock().unwrap().0 = Some(new_value);
         self.notify.notify_one();
     }
     pub fn set_priority(&self, pos: Vec<ChunkPos>) {
-        debug!("set new priority");
+        // debug!("set new priority");
         self.value.lock().unwrap().1 = Some(pos);
         self.notify.notify_one();
     }
@@ -715,8 +715,13 @@ impl GenerationCache for Cache {
     fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState {
         let dx = (pos.x >> 4) - self.x;
         let dz = (pos.z >> 4) - self.y;
-        debug_assert!(dx < self.size && dz < self.size);
-        debug_assert!(dx >= 0 && dz >= 0);
+        // debug_assert!(dx < self.size && dz < self.size);
+        // debug_assert!(dx >= 0 && dz >= 0);
+        if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
+            // breakpoint here
+            log::error!("illegal get_block_state {pos:?} cache pos ({}, {}) size {}", self.x, self.y, self.size);
+            return RawBlockState::AIR;
+        }
         match &self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(data) => {
                 let chunk = data.blocking_read();
@@ -737,8 +742,13 @@ impl GenerationCache for Cache {
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {
         let dx = (pos.x >> 4) - self.x;
         let dz = (pos.z >> 4) - self.y;
-        debug_assert!(dx < self.size && dz < self.size);
-        debug_assert!(dx >= 0 && dz >= 0);
+        // debug_assert!(dx < self.size && dz < self.size);
+        // debug_assert!(dx >= 0 && dz >= 0);
+        if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
+            // breakpoint here
+            log::error!("illegal set_block_state {pos:?} cache pos ({}, {}) size {}", self.x, self.y, self.size);
+            return;
+        }
         match &mut self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(data) => {
                 let mut chunk = data.blocking_write();
@@ -857,7 +867,7 @@ impl GenerationCache for Cache {
                         )
                         .unwrap_or(0),
                 )
-                .unwrap()
+                    .unwrap()
             }
             Chunk::Proto(data) => data.get_biome_for_terrain_gen(global_block_pos),
         }
@@ -977,7 +987,7 @@ impl ChunkListener {
             while i < len {
                 match global[i].send((pos, chunk.clone())) {
                     Ok(_) => {
-                        log::debug!("global listener {i} send {pos:?}");
+                        // log::debug!("global listener {i} send {pos:?}");
                     }
                     Err(_) => {
                         log::debug!("one global listener dropped");
@@ -1068,7 +1078,7 @@ impl GenerationSchedule {
                         generate: send_gen,
                         listener,
                     }
-                    .work(level);
+                        .work(level);
                 })
                 .unwrap(),
         )
@@ -1151,7 +1161,7 @@ impl GenerationSchedule {
         for pos in self.last_level.keys() {
             if !new_level.contains_key(pos)
                 && let Some(chunk) =
-                    Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
+                Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
             {
                 log::debug!("unload chunk {pos:?}");
                 match self.task_mark.entry(*pos) {
@@ -1227,13 +1237,13 @@ impl GenerationSchedule {
         let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
         let (t_send, mut t_recv) = tokio::sync::mpsc::channel(2);
         while let Ok(pos) = task::block_in_place(|| recv.recv()) {
-            debug!("io read thread receive chunk pos {pos:?}");
+            // debug!("io read thread receive chunk pos {pos:?}");
             level
                 .chunk_saver
                 .fetch_chunks(&level.level_folder, &[pos], t_send.clone())
                 .await;
             if let Some(Loaded(chunk)) = t_recv.recv().await {
-                log::debug!("io read chunk {pos:?} read from file");
+                // log::debug!("io read chunk {pos:?} read from file");
                 if send
                     .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
                     .is_err()
@@ -1288,7 +1298,7 @@ impl GenerationSchedule {
 
         let settings = gen_settings_from_dimension(&level.world_gen.dimension);
         while let Ok((pos, mut cache, stage)) = recv.recv() {
-            debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
+            // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
             cache.advance(
                 stage,
                 level.block_registry.as_ref(),
@@ -1336,7 +1346,7 @@ impl GenerationSchedule {
                         log::warn!("chunk {pos:?} is still used somewhere. it can't be unloaded");
                         self.unload_chunks.insert(pos, Chunk::Level(chunk));
                     } else {
-                        log::warn!("unload chunk {pos:?} to file");
+                        log::debug!("unload chunk {pos:?} to file");
                         chunks.push((pos, chunk));
                     }
                 }
@@ -1381,7 +1391,7 @@ impl GenerationSchedule {
     }
 
     fn receive_chunk(&mut self, pos: ChunkPos, data: RecvChunk) {
-        debug!("receive chunk pos {pos:?}");
+        // debug!("receive chunk pos {pos:?}");
         match data {
             RecvChunk::IO(chunk) => match chunk {
                 Chunk::Level(data) => {
@@ -1507,8 +1517,8 @@ impl GenerationSchedule {
                     &self.proto_chunks,
                     ChunkPos::new(x, y),
                 )
-                .to_string()
-                .as_str();
+                    .to_string()
+                    .as_str();
                 s += " ";
             }
             s += "\n";
@@ -1524,7 +1534,7 @@ impl GenerationSchedule {
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")
         );
-        let mut clock = Instant::now();
+        // let mut clock = Instant::now();
         loop {
             if level.should_unload.load(Relaxed) {
                 log::debug!("unload chunk signal");
@@ -1544,11 +1554,11 @@ impl GenerationSchedule {
             let mut len = self.queue.len();
             let mut i = 0;
 
-            let now = Instant::now();
-            if now - clock > Duration::from_secs(5) {
-                self.dump_debug_info(-20, 20, -20, 20);
-                clock = now;
-            }
+            // let now = Instant::now();
+            // if now - clock > Duration::from_secs(5) {
+            //     self.dump_debug_info(-20, 20, -20, 20);
+            //     clock = now;
+            // }
             'outer: while i < len {
                 let mut have_recv = false;
                 while let Ok((pos, data)) = self.recv_chunk.try_recv() {
@@ -1679,6 +1689,7 @@ impl GenerationSchedule {
             let (pos, data) = self.recv_chunk.recv().expect("recv_chunk stop");
             self.receive_chunk(pos, data);
         }
+        log::info!("saving all chunks");
         self.save_all_chunk();
         log::info!(
             "schedule thread stop id: {:?} name: {}",
