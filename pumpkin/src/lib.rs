@@ -230,7 +230,6 @@ impl PumpkinServer {
         {
             let ticker_server = server.clone();
             server.spawn_task(async move {
-                log::info!("Spawn task1");
                 ticker.run(&ticker_server).await;
             });
         };

@@ -34,7 +34,7 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::palette::{BiomePalette, BlockPalette};
 use crate::chunk_system::Chunk::Proto;
 use crate::chunk_system::StagedChunkEnum::{Biomes, Empty, Features, Full, Noise, Surface};
-use crate::generation::biome_coords;
+use crate::generation::{biome_coords, section_coords};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::atomic::Ordering::Relaxed;
 use std::thread;
@@ -601,14 +601,10 @@ impl Chunk {
             Proto(chunk) => chunk,
         }
     }
-    fn upgrade_to_full(&mut self, generation_settings: &GenerationSettings, dimension: Dimension) {
+    fn upgrade_to_full(&mut self, generation_settings: &GenerationSettings) {
         let proto_chunk = self.get_proto_chunk_mut();
         debug_assert_eq!(proto_chunk.stage, StagedChunkEnum::Features);
-        let height: usize = match dimension {
-            Dimension::Overworld => 384,
-            Dimension::Nether | Dimension::End => 256,
-        };
-        let sub_chunks = height / BlockPalette::SIZE;
+        let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
         let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
         let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
 
@@ -630,26 +626,25 @@ impl Chunk {
             }
         }
         for y in 0..generation_settings.shape.height {
-            let relative_y = (y as i32 - sections.min_y) as usize;
-            let section_index = relative_y / BlockPalette::SIZE;
+            let relative_y = y as usize;
+            let section_index = section_coords::block_to_section(relative_y);
             let relative_y = relative_y % BlockPalette::SIZE;
             if let Some(section) = sections.sections.get_mut(section_index) {
                 for z in 0..BlockPalette::SIZE {
                     for x in 0..BlockPalette::SIZE {
-                        let absolute_y = generation_settings.shape.min_y as i32 + y as i32;
                         let block = proto_chunk
-                            .get_block_state(&Vector3::new(x as i32, absolute_y, z as i32));
-                        section.block_states.set(x, relative_y, z, block.0);
+                            .get_block_state_raw(&Vector3::new(x as i32, y as i32, z as i32));
+                        section.block_states.set(x, relative_y, z, block);
                     }
                 }
             }
         }
         let mut chunk = ChunkData {
             light_engine: ChunkLight {
-                sky_light: (0..sections.sections.len() + 2)
+                sky_light: (0..sections.sections.len())
                     .map(|_| LightContainer::new_filled(15))
                     .collect(),
-                block_light: (0..sections.sections.len() + 2)
+                block_light: (0..sections.sections.len())
                     .map(|_| LightContainer::new_empty(15))
                     .collect(),
             },
@@ -935,7 +930,7 @@ impl Cache {
             Features => {
                 ProtoChunk::generate_features_and_structure(self, block_registry, random_config)
             }
-            Full => self.chunks[mid].upgrade_to_full(settings, dimension),
+            Full => self.chunks[mid].upgrade_to_full(settings),
             _ => panic!("unknown stage {stage:?}"),
         }
     }

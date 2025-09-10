@@ -420,7 +420,7 @@ impl Player {
 
         let living_entity = LivingEntity::new(Entity::new(
             player_uuid,
-            world,
+            world.clone(),
             Vector3::new(0.0, 100.0, 0.0),
             &EntityType::PLAYER,
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
