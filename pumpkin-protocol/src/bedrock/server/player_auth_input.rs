@@ -2,7 +2,7 @@ use pumpkin_macros::packet;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
-    codec::{var_uint::VarUInt, var_ulong::VarULong},
+    codec::{bitset::Bitset, var_uint::VarUInt, var_ulong::VarULong},
     serial::PacketRead,
 };
 
@@ -15,12 +15,7 @@ pub struct SPlayerAuthInput {
     pub position: Vector3<f32>,
     pub move_vec: Vector2<f32>,
     pub head_rotation: f32,
-    pub bit1: u8,
-    pub bit2: u8,
-    pub bit3: u8,
-    pub bit4: u8,
-    pub bit5: u8,
-    pub bit6: u8,
+    pub input_data: Bitset<65>,
     pub input_mode: VarUInt,
     pub play_mode: VarUInt,
     pub new_interaction_model: VarUInt,
@@ -29,9 +24,10 @@ pub struct SPlayerAuthInput {
     pub pos_delta: Vector3<f32>,
     pub analog_move: Vector2<f32>,
     pub camera_orientation: Vector3<f32>,
-    //pub raw_move_vec: Vector2<f32>,
+    pub raw_move_vec: Vector2<f32>,
 }
 
+#[derive(Clone, Copy)]
 pub enum InputData {
     // https://mojang.github.io/bedrock-protocol-docs/html/enums.html#PlayerAuthInputPacket::InputData
     Ascend = 0,
@@ -99,6 +95,12 @@ pub enum InputData {
     SneakPressedRaw = 63,
     SneakCurrentRaw = 64,
     InputNum = 65,
+}
+
+impl From<InputData> for usize {
+    fn from(value: InputData) -> Self {
+        value as Self
+    }
 }
 
 pub enum InputMode {

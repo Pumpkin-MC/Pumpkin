@@ -14,6 +14,7 @@ use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
 use crate::block::entities::hopper::HopperBlockEntity;
+use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
@@ -30,6 +31,7 @@ pub mod dropper;
 pub mod end_portal;
 pub mod furnace;
 pub mod hopper;
+pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
 pub mod sign;
@@ -75,6 +77,7 @@ pub trait BlockEntity: Send + Sync {
     fn is_dirty(&self) -> bool {
         false
     }
+
     fn as_any(&self) -> &dyn Any;
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
         None
@@ -98,6 +101,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         }
         BarrelBlockEntity::ID => Arc::new(block_entity_from_generic::<BarrelBlockEntity>(nbt)),
         HopperBlockEntity::ID => Arc::new(block_entity_from_generic::<HopperBlockEntity>(nbt)),
+        MobSpawnerBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<MobSpawnerBlockEntity>(nbt))
+        }
         DropperBlockEntity::ID => Arc::new(block_entity_from_generic::<DropperBlockEntity>(nbt)),
         ShulkerBoxBlockEntity::ID => {
             Arc::new(block_entity_from_generic::<ShulkerBoxBlockEntity>(nbt))

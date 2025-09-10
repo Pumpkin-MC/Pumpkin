@@ -13,6 +13,10 @@ use crossbeam::channel::Receiver;
 use log::warn;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
+use pumpkin_protocol::bedrock::client::update_abilities::{
+    Ability, AbilityLayer, CUpdateAbilities,
+};
+use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
@@ -314,7 +318,7 @@ pub struct Player {
     /// The player's game profile information, including their username and UUID.
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
-    pub client: Arc<ClientPlatform>,
+    pub client: ClientPlatform,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
     /// The player's configuration settings. Changes when the player changes their settings.
@@ -392,7 +396,7 @@ pub struct Player {
 
 impl Player {
     pub async fn new(
-        client: Arc<ClientPlatform>,
+        client: ClientPlatform,
         gameprofile: GameProfile,
         config: PlayerConfig,
         world: Arc<World>,
@@ -416,8 +420,8 @@ impl Player {
 
         let living_entity = LivingEntity::new(Entity::new(
             player_uuid,
-            world.clone(),
-            Vector3::new(0.0, 0.0, 0.0),
+            world,
+            Vector3::new(0.0, 100.0, 0.0),
             &EntityType::PLAYER,
             matches!(gamemode, GameMode::Creative | GameMode::Spectator),
         ));
@@ -455,11 +459,12 @@ impl Player {
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: AtomicCell::new(None),
             sleeping_since: AtomicCell::new(None),
-            // We want this to be an impossible watched section so that `player_chunker::update_position`
+            // We want this to be an impossible watched section so that `chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)
             watched_section: AtomicCell::new(Cylindrical::new(
-                Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
+                Vector2::new(0, 0),
+                // Since 1 is not possible in vanilla it is used as uninit
                 NonZeroU8::new(1).unwrap(),
             )),
             wait_for_keep_alive: AtomicBool::new(false),
@@ -876,7 +881,7 @@ impl Player {
         let chunk_of_chunks = {
             let mut chunk_manager = self.chunk_manager.lock().await;
             chunk_manager.pull_new_chunks();
-            if let ClientPlatform::Java(_) = self.client.as_ref() {
+            if let ClientPlatform::Java(_) = self.client {
                 // Java clients can only send a limited amount of chunks per tick.
                 // If we have sent too many chunks without receiving an ack, we stop sending chunks.
                 chunk_manager
@@ -889,7 +894,7 @@ impl Player {
 
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             let chunk_count = chunk_of_chunks.len();
-            match self.client.as_ref() {
+            match &self.client {
                 ClientPlatform::Java(java_client) => {
                     java_client.send_packet_now(&CChunkBatchStart).await;
                     for chunk in chunk_of_chunks {
@@ -964,7 +969,7 @@ impl Player {
         // TODO This should only be handled by the ClientPlatform
         let now = Instant::now();
         if now.duration_since(self.last_keep_alive_time.load()) >= Duration::from_secs(15) {
-            if matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
+            if matches!(self.client, ClientPlatform::Bedrock(_)) {
                 return;
             }
             // We never got a response from the last keep alive we sent.
@@ -1081,28 +1086,77 @@ impl Player {
 
     /// Updates the current abilities the player has.
     pub async fn send_abilities_update(&self) {
-        let mut b = 0i8;
-        let abilities = &self.abilities.lock().await;
+        match &self.client {
+            ClientPlatform::Java(java) => {
+                let mut b = 0;
+                let abilities = &self.abilities.lock().await;
 
-        if abilities.invulnerable {
-            b |= 1;
+                if abilities.invulnerable {
+                    b |= 1;
+                }
+                if abilities.flying {
+                    b |= 2;
+                }
+                if abilities.allow_flying {
+                    b |= 4;
+                }
+                if abilities.creative {
+                    b |= 8;
+                }
+                java.enqueue_packet(&CPlayerAbilities::new(
+                    b,
+                    abilities.fly_speed,
+                    abilities.walk_speed,
+                ))
+                .await;
+            }
+            ClientPlatform::Bedrock(bedrock) => {
+                let mut ability_value = 0;
+                let abilities = &self.abilities.lock().await;
+
+                if abilities.invulnerable {
+                    ability_value |= 1 << Ability::Invulnerable as u32;
+                }
+
+                if abilities.flying {
+                    ability_value |= 1 << Ability::Flying as u32;
+                }
+
+                if abilities.allow_flying {
+                    ability_value |= 1 << Ability::MayFly as u32;
+                }
+
+                if abilities.creative {
+                    ability_value |= 1 << Ability::OperatorCommands as u32;
+                    ability_value |= 1 << Ability::Teleport as u32;
+                    ability_value |= 1 << Ability::Invulnerable as u32;
+                }
+
+                // Todo: Integrate this into the system
+                ability_value |= 1 << Ability::AttackMobs as u32;
+                ability_value |= 1 << Ability::AttackPlayers as u32;
+                ability_value |= 1 << Ability::Build as u32;
+                ability_value |= 1 << Ability::DoorsAndSwitches as u32;
+                ability_value |= 1 << Ability::Instabuild as u32;
+                ability_value |= 1 << Ability::Mine as u32;
+
+                let packet = CUpdateAbilities {
+                    target_player_raw_id: self.entity_id().into(),
+                    player_permission: 2,
+                    command_permission: 4,
+                    layers: vec![AbilityLayer {
+                        serialized_layer: 1,
+                        abilities_set: (1 << Ability::AbilityCount as u32) - 1,
+                        ability_value,
+                        fly_speed: 0.05,
+                        vertical_fly_speed: 1.0,
+                        walk_speed: 0.1,
+                    }],
+                };
+
+                bedrock.send_game_packet(&packet).await;
+            }
         }
-        if abilities.flying {
-            b |= 2;
-        }
-        if abilities.allow_flying {
-            b |= 4;
-        }
-        if abilities.creative {
-            b |= 8;
-        }
-        self.client
-            .enqueue_packet(&CPlayerAbilities::new(
-                b,
-                abilities.fly_speed,
-                abilities.walk_speed,
-            ))
-            .await;
     }
 
     /// Updates the client of the player's current permission level.
@@ -1145,7 +1199,7 @@ impl Player {
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
         let l_world = world.level_time.lock().await;
-        match self.client.as_ref() {
+        match &self.client {
             ClientPlatform::Java(java_client) => {
                 java_client
                     .enqueue_packet(&CUpdateTime::new(
@@ -1177,7 +1231,7 @@ impl Player {
         }
 
         self.watched_section.store(Cylindrical::new(
-            Vector2::new(i32::MAX >> 1, i32::MAX >> 1),
+            Vector2::new(0, 0),
             NonZeroU8::new(1).unwrap(),
         ));
     }
@@ -1610,13 +1664,33 @@ impl Player {
     }
 
     pub async fn send_system_message(&self, text: &TextComponent) {
-        self.send_system_message_raw(text, false).await;
+        match &self.client {
+            ClientPlatform::Java(client) => {
+                client
+                    .enqueue_packet(&CSystemChatMessage::new(text, false))
+                    .await;
+            }
+            ClientPlatform::Bedrock(client) => {
+                client
+                    .send_game_packet(&SText::system_message(text.clone().get_text()))
+                    .await;
+            }
+        }
     }
 
     pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
-        self.client
-            .enqueue_packet(&CSystemChatMessage::new(text, overlay))
-            .await;
+        match &self.client {
+            ClientPlatform::Java(client) => {
+                client
+                    .enqueue_packet(&CSystemChatMessage::new(text, overlay))
+                    .await;
+            }
+            ClientPlatform::Bedrock(client) => {
+                client
+                    .send_game_packet(&SText::system_message(text.clone().get_text()))
+                    .await;
+            }
+        }
     }
 
     pub async fn tick_experience(&self) {
@@ -1994,9 +2068,11 @@ impl Player {
                 .await;
         }
     }
+}
 
-    pub async fn reset_state(&self) {
-        self.living_entity.reset_state().await;
+impl PartialEq for Player {
+    fn eq(&self, other: &Self) -> bool {
+        self.gameprofile.id == other.gameprofile.id
     }
 }
 

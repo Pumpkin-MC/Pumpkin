@@ -5,7 +5,7 @@ edition.workspace = true
 build = "build/build.rs"
 
 [dependencies]
-phf = { version = "0.12.1", features = ["macros"] }
+phf = { version = "0.13.1", features = ["macros"] }
 pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-nbt = { path = "../pumpkin-nbt" }
 

@@ -14,12 +14,14 @@ pub mod minecart;
 pub mod name_tag;
 pub mod shovel;
 pub mod snowball;
+pub mod spawn_egg;
 pub mod swords;
 pub mod trident;
 
 use crate::item::items::end_crystal::EndCrystalItem;
 use crate::item::items::minecart::MinecartItem;
 use crate::item::items::name_tag::NameTagItem;
+use crate::item::items::spawn_egg::SpawnEggItem;
 
 use super::registry::ItemRegistry;
 use axe::AxeItem;
@@ -54,6 +56,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(EmptyBucketItem);
     manager.register(FilledBucketItem);
     manager.register(ShovelItem);
+    manager.register(SpawnEggItem);
     manager.register(AxeItem);
     manager.register(EndCrystalItem);
     manager.register(MinecartItem);

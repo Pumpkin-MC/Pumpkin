@@ -465,6 +465,8 @@ mod tests {
             }
         }
 
+        let section_count = chunks[0].1.read().await.section.sections.len();
+
         for i in 0..5 {
             println!("Iteration {}", i + 1);
             // Mark the chunks as dirty so we save them again
@@ -510,6 +512,10 @@ mod tests {
                 let chunk = chunk.read().await;
                 for read_chunk in read_chunks.iter() {
                     let read_chunk = read_chunk.read().await;
+
+                    // Before this commit the chunks got an extra section after saving and reading
+                    // so we prevent that from happening in the future :)
+                    assert_eq!(read_chunk.section.sections.len(), section_count);
                     if read_chunk.position == chunk.position {
                         let original = chunk.section.dump_blocks();
                         let read = read_chunk.section.dump_blocks();
