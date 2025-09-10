@@ -733,11 +733,7 @@ impl GenerationCache for Cache {
                 RawBlockState(
                     chunk
                         .section
-                        .get_block_absolute_y(
-                            (pos.x & 15) as usize,
-                            pos.y - chunk.section.min_y,
-                            (pos.z & 15) as usize,
-                        )
+                        .get_block_absolute_y((pos.x & 15) as usize, pos.y, (pos.z & 15) as usize)
                         .unwrap_or(0),
                 )
             }
@@ -762,10 +758,9 @@ impl GenerationCache for Cache {
         match &mut self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(data) => {
                 let mut chunk = data.blocking_write();
-                let min_y = chunk.section.min_y;
                 chunk.section.set_block_absolute_y(
                     (pos.x & 15) as usize,
-                    pos.y - min_y,
+                    pos.y,
                     (pos.z & 15) as usize,
                     block_state.id,
                 );
