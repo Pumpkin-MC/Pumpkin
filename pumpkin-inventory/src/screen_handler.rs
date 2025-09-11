@@ -6,7 +6,10 @@ use crate::{
 };
 use async_trait::async_trait;
 use log::warn;
-use pumpkin_data::screen::WindowType;
+use pumpkin_data::{
+    data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
+    screen::WindowType,
+};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::OptionalItemStackHash,
     java::{
@@ -72,6 +75,7 @@ pub trait InventoryPlayer: Send + Sync {
     async fn enqueue_property_packet(&self, packet: &CSetContainerProperty);
     async fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory);
     async fn enqueue_set_held_item_packet(&self, packet: &CSetSelectedSlot);
+    async fn enqueue_equipment_change(&self, slot: &EquipmentSlot, stack: &ItemStack);
 }
 
 pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack) {
@@ -738,6 +742,10 @@ pub trait ScreenHandler: Send + Sync {
                 let slot_stack = slot.get_cloned_stack().await;
                 let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
 
+                let equipment_slot = cursor_stack
+                    .get_data_component::<EquippableImpl>()
+                    .map_or(&EquipmentSlot::MAIN_HAND, |equippable| equippable.slot);
+
                 if self
                     .handle_slot_click(
                         player,
@@ -753,6 +761,14 @@ pub trait ScreenHandler: Send + Sync {
 
                 if slot_stack.is_empty() {
                     if !cursor_stack.is_empty() {
+                        if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
+                            && (5..9).contains(&slot_index)
+                        {
+                            player
+                                .enqueue_equipment_change(equipment_slot, &cursor_stack)
+                                .await;
+                        }
+
                         let transfer_count = if click_type == MouseClick::Left {
                             cursor_stack.item_count
                         } else {
@@ -774,8 +790,27 @@ pub trait ScreenHandler: Send + Sync {
                             // Reverse order of operations, shouldn't affect anything
                             *cursor_stack = taken.clone();
                             slot.on_take_item(player, &taken).await;
+
+                            if (5..9).contains(&slot_index) {
+                                let equipment_slot = cursor_stack
+                                    .get_data_component::<EquippableImpl>()
+                                    .map_or(&EquipmentSlot::MAIN_HAND, |equippable| {
+                                        equippable.slot
+                                    });
+                                player
+                                    .enqueue_equipment_change(equipment_slot, &ItemStack::EMPTY)
+                                    .await;
+                            }
                         }
                     } else if slot.can_insert(&cursor_stack).await {
+                        if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
+                            && (5..9).contains(&slot_index)
+                        {
+                            player
+                                .enqueue_equipment_change(equipment_slot, &cursor_stack)
+                                .await;
+                        }
+
                         if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack) {
                             let insert_count = if click_type == MouseClick::Left {
                                 cursor_stack.item_count

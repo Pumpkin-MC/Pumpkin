@@ -1601,6 +1601,27 @@ impl World {
                     ))
                     .await;
             }
+
+            {
+                let mut equipment_list = Vec::new();
+
+                equipment_list.push((
+                    EquipmentSlot::MAIN_HAND.discriminant(),
+                    existing_player.inventory.held_item().lock().await.clone(),
+                ));
+
+                for (slot, item_arc_mutex) in &existing_player.inventory.entity_equipment.lock().await.equipment {
+                    let item_stack = item_arc_mutex.lock().await.clone();
+                    equipment_list.push((slot.discriminant(), item_stack));
+                }
+
+                let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
+                    .iter()
+                    .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
+                    .collect();
+
+                client.enqueue_packet(&CSetEquipment::new(existing_player.entity_id().into(), equipment)).await;
+            }
         }
         player.send_client_information().await;
 

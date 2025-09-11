@@ -26,13 +26,13 @@ use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
-use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, FoodImpl};
+use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_inventory::screen_handler::ScreenHandler;
+use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
@@ -1602,7 +1602,7 @@ impl JavaClient {
                 None,
             )
         };
-        let held = item_in_hand.lock().await;
+        let mut held = item_in_hand.lock().await;
         if held.get_data_component::<ConsumableImpl>().is_some() {
             // If its food we want to make sure we can actually consume it
             if let Some(food) = held.get_data_component::<FoodImpl>() {
@@ -1622,12 +1622,30 @@ impl JavaClient {
                     .await;
             }
         }
+        if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
+            // If it can be equipped we want to makr sure we can actually equip it
+            player.enqueue_equipment_change(equippable.slot, &*held).await;
+            
+            let binding = inventory
+                .entity_equipment
+                .lock()
+                .await
+                .get(equippable.slot);
+            let mut equip_item = binding.lock().await;
+            if equip_item.is_empty() {
+                *equip_item = held.clone();
+                held.decrement_unless_creative(player.gamemode.load(), 1);
+            } else {
+                let binding = held.clone();
+                *held = equip_item.clone();
+                *equip_item = binding;
+            }
+        }
 
         send_cancellable! {{
             event;
             'after: {
                 let item = held.item;
-                drop(held);
                 server.item_registry.on_use(item, player).await;
             }
         }}
@@ -1662,6 +1680,38 @@ impl JavaClient {
 
         if valid_slot && is_legal {
             let mut player_screen_handler = player.player_screen_handler.lock().await;
+
+            let setted = player_screen_handler
+                .get_slot(packet.slot as usize)
+                .await
+                .get_stack()
+                .await
+                .lock()
+                .await
+                .are_equal(&item_stack);
+            if !setted {
+                if (5..9).contains(&packet.slot) {
+                    player
+                        .enqueue_equipment_change(
+                            &match packet.slot {
+                                5 => EquipmentSlot::HEAD,
+                                6 => EquipmentSlot::CHEST,
+                                7 => EquipmentSlot::LEGS,
+                                8 => EquipmentSlot::FEET,
+                                _ => unreachable!(),
+                            },
+                            &item_stack,
+                        )
+                        .await
+                } else if (36..45).contains(&packet.slot) {
+                    let slot = packet.slot - 36;
+                    if player.inventory().get_selected_slot() == slot as u8 {
+                        let equipment = &[(EquipmentSlot::MAIN_HAND, item_stack.clone())];
+                        player.living_entity.send_equipment_changes(equipment).await;
+                    }
+                }
+            }
+
             player_screen_handler
                 .get_slot(packet.slot as usize)
                 .await
@@ -1669,7 +1719,6 @@ impl JavaClient {
                 .await;
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
             player_screen_handler.send_content_updates().await;
-            drop(player_screen_handler);
         } else if is_negative && is_legal {
             // Item drop
             player.drop_item(item_stack).await;
