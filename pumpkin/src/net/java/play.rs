@@ -1624,8 +1624,8 @@ impl JavaClient {
         }
         if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
             // If it can be equipped we want to makr sure we can actually equip it
-            player.enqueue_equipment_change(equippable.slot, &*held).await;
-            
+            player.enqueue_equipment_change(equippable.slot, &held).await;
+
             let binding = inventory
                 .entity_equipment
                 .lock()
@@ -1646,6 +1646,7 @@ impl JavaClient {
             event;
             'after: {
                 let item = held.item;
+                drop(held);
                 server.item_registry.on_use(item, player).await;
             }
         }}
@@ -1681,7 +1682,7 @@ impl JavaClient {
         if valid_slot && is_legal {
             let mut player_screen_handler = player.player_screen_handler.lock().await;
 
-            let setted = player_screen_handler
+            let is_armor_equipped = player_screen_handler
                 .get_slot(packet.slot as usize)
                 .await
                 .get_stack()
@@ -1689,7 +1690,7 @@ impl JavaClient {
                 .lock()
                 .await
                 .are_equal(&item_stack);
-            if !setted {
+            if !is_armor_equipped {
                 if (5..9).contains(&packet.slot) {
                     player
                         .enqueue_equipment_change(
@@ -1702,7 +1703,7 @@ impl JavaClient {
                             },
                             &item_stack,
                         )
-                        .await
+                        .await;
                 } else if (36..45).contains(&packet.slot) {
                     let slot = packet.slot - 36;
                     if player.inventory().get_selected_slot() == slot as u8 {
@@ -1719,6 +1720,7 @@ impl JavaClient {
                 .await;
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
             player_screen_handler.send_content_updates().await;
+            drop(player_screen_handler);
         } else if is_negative && is_legal {
             // Item drop
             player.drop_item(item_stack).await;

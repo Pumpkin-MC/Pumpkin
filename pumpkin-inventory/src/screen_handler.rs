@@ -798,7 +798,7 @@ pub trait ScreenHandler: Send + Sync {
                                         equippable.slot
                                     });
                                 player
-                                    .enqueue_equipment_change(equipment_slot, &ItemStack::EMPTY)
+                                    .enqueue_equipment_change(equipment_slot, ItemStack::EMPTY)
                                     .await;
                             }
                         }

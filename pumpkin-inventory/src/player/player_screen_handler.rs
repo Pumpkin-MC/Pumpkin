@@ -131,7 +131,7 @@ impl ScreenHandler for PlayerScreenHandler {
                 }
 
                 player
-                    .enqueue_equipment_change(equipment_slot, &ItemStack::EMPTY)
+                    .enqueue_equipment_change(equipment_slot, ItemStack::EMPTY)
                     .await;
             } else if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
                 && self

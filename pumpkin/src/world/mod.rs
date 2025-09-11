@@ -1600,7 +1600,7 @@ impl World {
                         buf.into(),
                     ))
                     .await;
-            }
+            };
 
             {
                 let mut equipment_list = Vec::new();

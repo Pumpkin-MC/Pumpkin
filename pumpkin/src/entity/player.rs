@@ -2555,16 +2555,17 @@ impl InventoryPlayer for Player {
             )
             .await;
 
-        if let Some(equippable) = stack.get_data_component::<EquippableImpl>() {
-            if let Some(sound) = Sound::from_name(
-                equippable.equip_sound
+        if let Some(equippable) = stack.get_data_component::<EquippableImpl>()
+            && let Some(sound) = Sound::from_name(
+                equippable
+                    .equip_sound
                     .strip_prefix("minecraft:")
                     .unwrap_or(equippable.equip_sound),
-            ) {
-                self.world()
-                    .play_sound(sound, SoundCategory::Players, &self.position())
-                    .await;
-            }
+            )
+        {
+            self.world()
+                .play_sound(sound, SoundCategory::Players, &self.position())
+                .await;
         }
     }
 }
