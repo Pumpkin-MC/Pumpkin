@@ -1624,13 +1624,11 @@ impl JavaClient {
         }
         if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
             // If it can be equipped we want to makr sure we can actually equip it
-            player.enqueue_equipment_change(equippable.slot, &held).await;
+            player
+                .enqueue_equipment_change(equippable.slot, &held)
+                .await;
 
-            let binding = inventory
-                .entity_equipment
-                .lock()
-                .await
-                .get(equippable.slot);
+            let binding = inventory.entity_equipment.lock().await.get(equippable.slot);
             let mut equip_item = binding.lock().await;
             if equip_item.is_empty() {
                 *equip_item = held.clone();
