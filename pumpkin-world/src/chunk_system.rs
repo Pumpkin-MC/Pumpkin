@@ -144,7 +144,7 @@ fn test() {
 
 impl ChunkLoading {
     // pub const FULL_CHUNK_LEVEL: i8 = 33;
-    pub const FULL_CHUNK_LEVEL: i8 = 44;
+    pub const FULL_CHUNK_LEVEL: i8 = 43;
     pub const MAX_LEVEL: i8 = 46; // level 46 will be unloaded.
     fn debug_check_error(&self) -> bool {
         let mut temp = ChunkLevel::default();
@@ -456,7 +456,7 @@ impl From<u8> for StagedChunkEnum {
     }
 }
 impl StagedChunkEnum {
-    fn level_to_stage(level: i8) -> Self {
+    const fn level_to_stage(level: i8) -> Self {
         // if level <= 33 {
         //     Full
         // } else if level <= 35 {
@@ -470,15 +470,17 @@ impl StagedChunkEnum {
         // } else {
         //     Self::None
         // }
-        if level <= 44 {
+        if level <= 43 {
             Full
+        } else if level <= 44 {
+            Features
         } else if level <= 45 {
             Surface
         } else {
             Self::None
         }
     }
-    fn get_radius(self) -> i32 {
+    const fn get_radius(self) -> i32 {
         // self exclude
         // match self {
         //     Empty => 0,
@@ -495,11 +497,11 @@ impl StagedChunkEnum {
             Noise => 0,
             Surface => 0,
             Features => 1,
-            Full => 1,
+            Full => 2,
             _ => panic!(),
         }
     }
-    fn get_write_radius(self) -> i32 {
+    const fn get_write_radius(self) -> i32 {
         // self exclude
         match self {
             Empty => 0,
@@ -511,13 +513,13 @@ impl StagedChunkEnum {
             _ => panic!(),
         }
     }
-    fn get_dependencies(self) -> &'static [StagedChunkEnum] {
+    const fn get_dependencies(self) -> &'static [StagedChunkEnum] {
         match self {
             Biomes => &[Empty],
             Noise => &[Biomes],
             Surface => &[Noise],
             Features => &[Surface, Surface],
-            Full => &[Features, Surface],
+            Full => &[Features, Features, Surface],
             _ => panic!(),
         }
     }
