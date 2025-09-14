@@ -376,7 +376,7 @@ impl EntityBase for ArmorStandEntity {
 
     async fn damage_with_context(
         &self,
-        _caller: Arc<dyn EntityBase>,
+        caller: Arc<dyn EntityBase>,
         _amount: f32,
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,
@@ -404,7 +404,8 @@ impl EntityBase for ArmorStandEntity {
         if damage_type == DamageType::EXPLOSION {
             // TODO: Implement Dropping Items that are in the Equipment Slots & entity.kill()
             self.on_break(entity).await;
-            entity.remove().await;
+            entity.kill(caller).await;
+            //entity.remove().await;
             return false;
         } // TODO: Implement <DamageSource>.isIn(DamageTypeTags::IGNITES_ARMOR_STANDS)
 
@@ -421,6 +422,8 @@ impl EntityBase for ArmorStandEntity {
 
         let Some(source) = source else { return false };
 
+        log::info!("Source Entity: {:#?} and cause: {:#?}", source.get_entity().get_player().is_some(), _cause.is_some_and(|c| c.get_player().is_some()));
+
         // TODO: source is not giving the real player or wrong stuff cause .is_creative() is false even tho the player is in creative.
         if let Some(player) = source.get_player() {
             if !player.abilities.lock().await.allow_modify_world {
@@ -434,7 +437,7 @@ impl EntityBase for ArmorStandEntity {
                     )
                     .await;
                 self.break_and_drop_items().await;
-                entity.remove().await;
+                entity.kill(caller).await;
                 return true;
             }
         }
@@ -463,7 +466,7 @@ impl EntityBase for ArmorStandEntity {
                 )
                 .await;
             self.break_and_drop_items().await;
-            entity.remove().await;
+            entity.kill(caller).await;
         }
 
         true
