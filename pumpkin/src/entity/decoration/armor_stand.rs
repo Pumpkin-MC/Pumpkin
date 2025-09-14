@@ -422,8 +422,6 @@ impl EntityBase for ArmorStandEntity {
 
         let Some(source) = source else { return false };
 
-        log::info!("Source Entity: {:#?} and cause: {:#?}", source.get_entity().get_player().is_some(), _cause.is_some_and(|c| c.get_player().is_some()));
-
         // TODO: source is not giving the real player or wrong stuff cause .is_creative() is false even tho the player is in creative.
         if let Some(player) = source.get_player() {
             if !player.abilities.lock().await.allow_modify_world {
