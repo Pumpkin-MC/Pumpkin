@@ -129,6 +129,10 @@ impl ScreenHandler for PlayerScreenHandler {
                 if !self.insert_item(&mut slot_stack, 9, 45, false).await {
                     return ItemStack::EMPTY.clone();
                 }
+
+                player
+                    .enqueue_equipment_change(equipment_slot, ItemStack::EMPTY)
+                    .await;
             } else if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
                 && self
                     .get_slot((8 - equipment_slot.get_entity_slot_id()) as usize)
@@ -145,6 +149,10 @@ impl ScreenHandler for PlayerScreenHandler {
                 {
                     return ItemStack::EMPTY.clone();
                 }
+
+                player
+                    .enqueue_equipment_change(equipment_slot, &stack_prev)
+                    .await;
             } else if matches!(equipment_slot, EquipmentSlot::OffHand(_))
                 && slot_index != 45
                 && self.get_slot(45).await.get_cloned_stack().await.is_empty()
