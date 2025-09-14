@@ -1,6 +1,7 @@
 pub mod anvil;
 pub mod bamboo;
 pub mod barrel;
+pub mod barrier;
 pub mod bed;
 pub mod cactus;
 pub mod cake;
