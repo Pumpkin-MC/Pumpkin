@@ -1,6 +1,6 @@
 use std::{
     f32::{self},
-    sync::atomic::Ordering,
+    sync::atomic::Ordering
 };
 
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
