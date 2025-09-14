@@ -98,10 +98,12 @@ impl NBTStorage for WindChargeEntity {}
 
 #[async_trait]
 impl EntityBase for WindChargeEntity {
-    async fn tick(&self, _caller: Arc<dyn EntityBase>, _server: &Server) {
+    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
         if self.get_deflect_cooldown() > 0 {
             self.set_deflect_cooldown(self.get_deflect_cooldown() - 1);
         }
+
+        self.thrown_item_entity.tick(caller, server).await;
     }
 
     fn get_entity(&self) -> &Entity {
