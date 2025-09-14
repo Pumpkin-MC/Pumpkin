@@ -5,11 +5,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk,
-    generation::{height_limit::HeightLimitView, section_coords},
-    world::BlockRegistryExt,
-};
+use crate::{ProtoChunk, generation::section_coords, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct EndSpikeFeature {
@@ -39,7 +35,7 @@ impl EndSpikeFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         _block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -78,7 +74,7 @@ impl EndSpikeFeature {
         true
     }
 
-    fn gen_spike(spike: &Spike, chunk: &mut ProtoChunk<'_>) {
+    fn gen_spike(spike: &Spike, chunk: &ProtoChunk) {
         let radius = spike.radius;
         for pos in BlockPos::iterate(
             BlockPos::new(

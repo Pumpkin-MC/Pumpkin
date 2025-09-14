@@ -64,7 +64,7 @@ impl PlacedFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,
@@ -158,7 +158,7 @@ impl PlacementModifier {
     #[expect(clippy::too_many_arguments)]
     pub fn get_positions(
         &self,
-        chunk: &ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
@@ -255,7 +255,7 @@ pub struct EnvironmentScanPlacementModifier {
 impl EnvironmentScanPlacementModifier {
     pub fn get_positions(
         &self,
-        chunk: &ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         block_registry: &dyn BlockRegistryExt,
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {

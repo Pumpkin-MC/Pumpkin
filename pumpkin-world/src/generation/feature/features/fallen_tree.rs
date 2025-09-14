@@ -11,7 +11,7 @@ pub struct FallenTreeFeature {
 impl FallenTreeFeature {
     pub fn generate(
         &self,
-        _chunk: &mut ProtoChunk,
+        _chunk: &ProtoChunk,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature
@@ -21,7 +21,7 @@ impl FallenTreeFeature {
         false
     }
 
-    fn gen_stump(&self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, pos: BlockPos) {
+    fn gen_stump(&self, chunk: &ProtoChunk, random: &mut RandomGenerator, pos: BlockPos) {
         chunk.set_block_state(&pos.0, self.trunk_provider.get(random, pos));
     }
 }

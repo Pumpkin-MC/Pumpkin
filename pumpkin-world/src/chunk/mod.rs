@@ -2,6 +2,7 @@ use crate::block::entities::BlockEntity;
 use crate::tick::scheduler::ChunkTickScheduler;
 use palette::{BiomePalette, BlockPalette};
 use pumpkin_data::block_properties::blocks_movement;
+use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
 use pumpkin_data::tag::Taggable;
@@ -77,6 +78,7 @@ pub struct ChunkData {
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
     pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
     pub light_engine: ChunkLight,
+    pub status: ChunkStatus,
 
     pub dirty: bool,
 }

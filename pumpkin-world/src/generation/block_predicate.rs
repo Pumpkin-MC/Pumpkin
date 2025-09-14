@@ -47,7 +47,7 @@ impl BlockPredicate {
     pub fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         pos: &BlockPos,
     ) -> bool {
         match self {
@@ -139,7 +139,7 @@ impl AnyOfBlockPredicate {
     pub fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         pos: &BlockPos,
     ) -> bool {
         for predicate in &self.predicates {
@@ -161,7 +161,7 @@ impl AllOfBlockPredicate {
     pub fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         pos: &BlockPos,
     ) -> bool {
         for predicate in &self.predicates {
@@ -183,7 +183,7 @@ impl NotBlockPredicate {
     pub fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         pos: &BlockPos,
     ) -> bool {
         !self.predicate.test(block_registry, chunk, pos)
@@ -214,7 +214,7 @@ impl WouldSurviveBlockPredicate {
     pub fn test(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         pos: &BlockPos,
     ) -> bool {
         let block = self.state.get_block();

@@ -2,7 +2,10 @@ use pumpkin_data::BlockState;
 use serde::Deserialize;
 
 use super::{MaterialCondition, MaterialRuleContext};
-use crate::{ProtoChunk, block::BlockStateCodec};
+use crate::{
+    ProtoChunk, block::BlockStateCodec,
+    generation::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler,
+};
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -20,14 +23,19 @@ pub enum MaterialRule {
 impl MaterialRule {
     pub fn try_apply(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         context: &mut MaterialRuleContext,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         match self {
             MaterialRule::Badlands(badlands) => badlands.try_apply(context),
             MaterialRule::Block(block) => Some(block.try_apply()),
-            MaterialRule::Sequence(sequence) => sequence.try_apply(chunk, context),
-            MaterialRule::Condition(condition) => condition.try_apply(chunk, context),
+            MaterialRule::Sequence(sequence) => {
+                sequence.try_apply(chunk, context, surface_height_estimate_sampler)
+            }
+            MaterialRule::Condition(condition) => {
+                condition.try_apply(chunk, context, surface_height_estimate_sampler)
+            }
         }
     }
 }
@@ -64,11 +72,12 @@ pub struct SequenceMaterialRule {
 impl SequenceMaterialRule {
     pub fn try_apply(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         context: &mut MaterialRuleContext,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         for seq in &self.sequence {
-            if let Some(state) = seq.try_apply(chunk, context) {
+            if let Some(state) = seq.try_apply(chunk, context, surface_height_estimate_sampler) {
                 return Some(state);
             }
         }
@@ -85,11 +94,17 @@ pub struct ConditionMaterialRule {
 impl ConditionMaterialRule {
     pub fn try_apply(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         context: &mut MaterialRuleContext,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
-        if self.if_true.test(chunk, context) {
-            return self.then_run.try_apply(chunk, context);
+        if self
+            .if_true
+            .test(chunk, context, surface_height_estimate_sampler)
+        {
+            return self
+                .then_run
+                .try_apply(chunk, context, surface_height_estimate_sampler);
         }
         None
     }

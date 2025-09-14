@@ -16,7 +16,7 @@ pub struct TrunkVineTreeDecorator;
 impl TrunkVineTreeDecorator {
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         random: &mut RandomGenerator,
         log_positions: Vec<BlockPos>,
     ) {

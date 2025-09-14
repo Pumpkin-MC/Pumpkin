@@ -32,7 +32,7 @@ impl OreFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         _block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -73,7 +73,7 @@ impl OreFeature {
     #[expect(clippy::too_many_arguments)]
     fn generate_vein_part(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         random: &mut RandomGenerator,
         start_x: f64,
         end_x: f64,
@@ -212,7 +212,7 @@ impl OreFeature {
 
     fn should_place(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         state: &'static BlockState,
         random: &mut RandomGenerator,
         target: &OreTarget,
@@ -237,7 +237,7 @@ impl OreFeature {
         random.next_f32() >= chance
     }
 
-    fn is_exposed_to_air(chunk: &mut ProtoChunk, pos: &BlockPos) -> bool {
+    fn is_exposed_to_air(chunk: &ProtoChunk, pos: &BlockPos) -> bool {
         for dir in BlockDirection::all() {
             if chunk
                 .get_block_state(&pos.offset(dir.to_offset()).0)

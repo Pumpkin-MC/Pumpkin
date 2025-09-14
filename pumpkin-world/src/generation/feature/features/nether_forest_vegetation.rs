@@ -6,9 +6,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 
 use crate::{
-    ProtoChunk,
-    generation::{block_state_provider::BlockStateProvider, height_limit::HeightLimitView},
-    world::BlockRegistryExt,
+    ProtoChunk, generation::block_state_provider::BlockStateProvider, world::BlockRegistryExt,
 };
 
 #[derive(Deserialize)]
@@ -22,7 +20,7 @@ impl NetherForestVegetationFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,

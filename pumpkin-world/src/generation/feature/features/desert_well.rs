@@ -5,10 +5,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk,
-    generation::{chunk_noise::WATER_BLOCK, height_limit::HeightLimitView},
-};
+use crate::{ProtoChunk, generation::chunk_noise::WATER_BLOCK};
 
 // TODO: remove .to_state()
 
@@ -23,7 +20,7 @@ impl DesertWellFeature {
 
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature

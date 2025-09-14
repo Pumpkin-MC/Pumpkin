@@ -12,7 +12,7 @@ pub static GENERATION_SETTINGS: LazyLock<HashMap<GeneratorSetting, GenerationSet
         || include_json_static!("../../../assets/chunk_gen_settings.json", HashMap<GeneratorSetting, GenerationSettings>),
     );
 
-pub fn gen_settings_from_dimension(dimension: &Dimension) -> &GenerationSettings {
+pub fn gen_settings_from_dimension(dimension: &Dimension) -> &'static GenerationSettings {
     match dimension {
         Dimension::Overworld => GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)

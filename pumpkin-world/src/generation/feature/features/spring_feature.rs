@@ -24,7 +24,7 @@ impl SpringFeatureFeature {
     pub fn generate(
         &self,
         _block_registry: &dyn BlockRegistryExt,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
