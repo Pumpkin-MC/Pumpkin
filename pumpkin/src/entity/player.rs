@@ -15,6 +15,7 @@ use pumpkin_protocol::bedrock::client::update_abilities::{
     Ability, AbilityLayer, CUpdateAbilities,
 };
 use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::{Mutex, RwLock};
@@ -23,8 +24,8 @@ use uuid::Uuid;
 
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
@@ -49,10 +50,10 @@ use pumpkin_protocol::java::client::play::{
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CDisguisedChatMessage,
     CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive, COpenScreen, CParticle,
     CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
-    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
-    CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
-    MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetEquipment,
+    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
+    CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
+    GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_registry::VanillaDimensionType;
@@ -2538,5 +2539,33 @@ impl InventoryPlayer for Player {
 
     async fn enqueue_set_held_item_packet(&self, packet: &CSetSelectedSlot) {
         self.client.enqueue_packet(packet).await;
+    }
+
+    async fn enqueue_equipment_change(&self, slot: &EquipmentSlot, stack: &ItemStack) {
+        self.world()
+            .broadcast_packet_except(
+                &[self.get_entity().entity_uuid],
+                &CSetEquipment::new(
+                    self.entity_id().into(),
+                    vec![(
+                        slot.discriminant(),
+                        ItemStackSerializer::from(stack.clone()),
+                    )],
+                ),
+            )
+            .await;
+
+        if let Some(equippable) = stack.get_data_component::<EquippableImpl>()
+            && let Some(sound) = Sound::from_name(
+                equippable
+                    .equip_sound
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(equippable.equip_sound),
+            )
+        {
+            self.world()
+                .play_sound(sound, SoundCategory::Players, &self.position())
+                .await;
+        }
     }
 }
