@@ -69,6 +69,7 @@ impl CommandExecutor for GetExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.worldborder.get",
+                None,
                 [TextComponent::text(diameter.to_string())],
             ))
             .await;
@@ -109,7 +110,7 @@ impl CommandExecutor for SetExecutor {
         if (distance - border.new_diameter).abs() < f64::EPSILON {
             sender
                 .send_message(
-                    TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [])
+                    TextComponent::translate(NOTHING_CHANGED_EXCEPTION, None, [])
                         .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
@@ -120,6 +121,7 @@ impl CommandExecutor for SetExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.worldborder.set.immediate",
+                None,
                 [TextComponent::text(dist)],
             ))
             .await;
@@ -174,7 +176,7 @@ impl CommandExecutor for SetTimeExecutor {
             std::cmp::Ordering::Equal => {
                 sender
                     .send_message(
-                        TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [])
+                        TextComponent::translate(NOTHING_CHANGED_EXCEPTION, None, [])
                             .color(Color::Named(NamedColor::Red)),
                     )
                     .await;
@@ -185,6 +187,7 @@ impl CommandExecutor for SetTimeExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.worldborder.set.shrink",
+                        None,
                         [
                             TextComponent::text(dist),
                             TextComponent::text(time.to_string()),
@@ -197,6 +200,7 @@ impl CommandExecutor for SetTimeExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.worldborder.set.grow",
+                        None,
                         [
                             TextComponent::text(dist),
                             TextComponent::text(time.to_string()),
@@ -246,7 +250,7 @@ impl CommandExecutor for AddExecutor {
         if distance == 0.0 {
             sender
                 .send_message(
-                    TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [])
+                    TextComponent::translate(NOTHING_CHANGED_EXCEPTION, None, [])
                         .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
@@ -259,6 +263,7 @@ impl CommandExecutor for AddExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.worldborder.set.immediate",
+                None,
                 [TextComponent::text(dist)],
             ))
             .await;
@@ -315,7 +320,7 @@ impl CommandExecutor for AddTimeExecutor {
             std::cmp::Ordering::Equal => {
                 sender
                     .send_message(
-                        TextComponent::translate(NOTHING_CHANGED_EXCEPTION, [])
+                        TextComponent::translate(NOTHING_CHANGED_EXCEPTION, None, [])
                             .color(Color::Named(NamedColor::Red)),
                     )
                     .await;
@@ -326,6 +331,7 @@ impl CommandExecutor for AddTimeExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.worldborder.set.shrink",
+                        None,
                         [
                             TextComponent::text(dist),
                             TextComponent::text(time.to_string()),
@@ -338,6 +344,7 @@ impl CommandExecutor for AddTimeExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.worldborder.set.grow",
+                        None,
                         [
                             TextComponent::text(dist),
                             TextComponent::text(time.to_string()),
@@ -376,6 +383,7 @@ impl CommandExecutor for CenterExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.worldborder.center.success",
+                None,
                 [
                     TextComponent::text(format!("{x:.2}")),
                     TextComponent::text(format!("{y:.2}")),
@@ -420,7 +428,7 @@ impl CommandExecutor for DamageAmountExecutor {
         if (damage_per_block - border.damage_per_block).abs() < f32::EPSILON {
             sender
                 .send_message(
-                    TextComponent::translate("commands.worldborder.damage.amount.failed", [])
+                    TextComponent::translate("commands.worldborder.damage.amount.failed", None, [])
                         .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
@@ -431,6 +439,7 @@ impl CommandExecutor for DamageAmountExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.worldborder.damage.amount.success",
+                None,
                 [TextComponent::text(damage)],
             ))
             .await;
@@ -472,7 +481,7 @@ impl CommandExecutor for DamageBufferExecutor {
         if (buffer - border.buffer).abs() < f32::EPSILON {
             sender
                 .send_message(
-                    TextComponent::translate("commands.worldborder.damage.buffer.failed", [])
+                    TextComponent::translate("commands.worldborder.damage.buffer.failed", None, [])
                         .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
@@ -483,6 +492,7 @@ impl CommandExecutor for DamageBufferExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.worldborder.damage.buffer.success",
+                None,
                 [TextComponent::text(buf)],
             ))
             .await;
@@ -524,8 +534,12 @@ impl CommandExecutor for WarningDistanceExecutor {
         if distance == border.warning_blocks {
             sender
                 .send_message(
-                    TextComponent::translate("commands.worldborder.warning.distance.failed", [])
-                        .color(Color::Named(NamedColor::Red)),
+                    TextComponent::translate(
+                        "commands.worldborder.warning.distance.failed",
+                        None,
+                        [],
+                    )
+                    .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
             return Ok(());
@@ -534,6 +548,7 @@ impl CommandExecutor for WarningDistanceExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.worldborder.warning.distance.success",
+                None,
                 [TextComponent::text(distance.to_string())],
             ))
             .await;
@@ -575,7 +590,7 @@ impl CommandExecutor for WarningTimeExecutor {
         if time == border.warning_time {
             sender
                 .send_message(
-                    TextComponent::translate("commands.worldborder.warning.time.failed", [])
+                    TextComponent::translate("commands.worldborder.warning.time.failed", None, [])
                         .color(Color::Named(NamedColor::Red)),
                 )
                 .await;
@@ -585,6 +600,7 @@ impl CommandExecutor for WarningTimeExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.worldborder.warning.time.success",
+                None,
                 [TextComponent::text(time.to_string())],
             ))
             .await;

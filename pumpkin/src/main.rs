@@ -54,7 +54,10 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
-use pumpkin::{LOGGER_IMPL, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+use pumpkin::{
+    LOGGER_IMPL, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server,
+    text::{TextResolution, translations::init_translations},
+};
 
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
@@ -72,6 +75,7 @@ pub mod item;
 pub mod net;
 pub mod plugin;
 pub mod server;
+pub mod text;
 pub mod world;
 
 #[cfg(feature = "dhat-heap")]
@@ -124,6 +128,9 @@ async fn main() {
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
+
+    init_translations().await;
+
     log::info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
 
     log::debug!(
@@ -175,12 +182,13 @@ async fn main() {
     log::info!("The server has stopped.");
 }
 
-fn handle_interrupt() {
+async fn handle_interrupt() {
     log::warn!(
         "{}",
         TextComponent::text("Received interrupt signal; stopping server...")
             .color_named(NamedColor::Red)
-            .to_pretty_console()
+            .to_string(None, true)
+            .await
     );
     stop_server();
 }
@@ -189,7 +197,7 @@ fn handle_interrupt() {
 #[cfg(not(unix))]
 async fn setup_sighandler() -> io::Result<()> {
     if ctrl_c().await.is_ok() {
-        handle_interrupt();
+        handle_interrupt().await;
     }
 
     Ok(())
@@ -199,15 +207,15 @@ async fn setup_sighandler() -> io::Result<()> {
 #[cfg(unix)]
 async fn setup_sighandler() -> io::Result<()> {
     if signal(SignalKind::interrupt())?.recv().await.is_some() {
-        handle_interrupt();
+        handle_interrupt().await;
     }
 
     if signal(SignalKind::hangup())?.recv().await.is_some() {
-        handle_interrupt();
+        handle_interrupt().await;
     }
 
     if signal(SignalKind::terminate())?.recv().await.is_some() {
-        handle_interrupt();
+        handle_interrupt().await;
     }
 
     Ok(())

@@ -39,6 +39,6 @@ impl ScreenHandlerFactory for CraftingTableScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.crafting", &[])
+        TextComponent::translate("container.crafting", None, &[])
     }
 }

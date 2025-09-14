@@ -47,7 +47,11 @@ impl CommandExecutor for Executor {
                     .set_weather_parameters(&world, duration, 0, false, false)
                     .await;
                 sender
-                    .send_message(TextComponent::translate("commands.weather.set.clear", []))
+                    .send_message(TextComponent::translate(
+                        "commands.weather.set.clear",
+                        None,
+                        [],
+                    ))
                     .await;
             }
             WeatherMode::Rain => {
@@ -55,7 +59,11 @@ impl CommandExecutor for Executor {
                     .set_weather_parameters(&world, 0, duration, true, false)
                     .await;
                 sender
-                    .send_message(TextComponent::translate("commands.weather.set.rain", []))
+                    .send_message(TextComponent::translate(
+                        "commands.weather.set.rain",
+                        None,
+                        [],
+                    ))
                     .await;
             }
             WeatherMode::Thunder => {
@@ -63,7 +71,11 @@ impl CommandExecutor for Executor {
                     .set_weather_parameters(&world, 0, duration, true, true)
                     .await;
                 sender
-                    .send_message(TextComponent::translate("commands.weather.set.thunder", []))
+                    .send_message(TextComponent::translate(
+                        "commands.weather.set.thunder",
+                        None,
+                        [],
+                    ))
                     .await;
             }
         }

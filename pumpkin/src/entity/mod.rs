@@ -166,6 +166,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
             .clone()
             .unwrap_or(TextComponent::translate(
                 format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                None,
                 [],
             ))
     }
@@ -177,6 +178,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
             .clone()
             .unwrap_or(TextComponent::translate(
                 format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                None,
                 [],
             ));
         let name_clone = name.clone();

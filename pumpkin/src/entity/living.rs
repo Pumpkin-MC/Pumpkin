@@ -747,6 +747,7 @@ impl LivingEntity {
                 {
                     TextComponent::translate(
                         format!("death.attack.{}.player", damage_type.message_id),
+                        None,
                         [
                             dyn_self.get_display_name().await,
                             cause.get_display_name().await,
@@ -755,6 +756,7 @@ impl LivingEntity {
                 } else {
                     TextComponent::translate(
                         format!("death.attack.{}", damage_type.message_id),
+                        None,
                         [dyn_self.get_display_name().await],
                     )
                 }
@@ -763,12 +765,14 @@ impl LivingEntity {
                 //TODO
                 TextComponent::translate(
                     "death.fell.accident.generic",
+                    None,
                     [dyn_self.get_display_name().await],
                 )
             }
             DeathMessageType::IntentionalGameDesign => TextComponent::text("[")
                 .add_child(TextComponent::translate(
                     format!("death.attack.{}.message", damage_type.message_id),
+                    None,
                     [dyn_self.get_display_name().await],
                 ))
                 .add_child(TextComponent::text("]")),
@@ -814,7 +818,7 @@ impl LivingEntity {
                     Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
                 if let Some(server) = world.server.upgrade() {
                     for player in server.get_all_players().await {
-                        player.send_system_message(&death_message).await;
+                        player.send_system_message(death_message.clone()).await;
                     }
                 }
             }

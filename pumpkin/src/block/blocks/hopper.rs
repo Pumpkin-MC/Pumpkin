@@ -40,7 +40,7 @@ impl ScreenHandlerFactory for HopperBlockScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.hopper", &[])
+        TextComponent::translate("container.hopper", None, &[])
     }
 }
 

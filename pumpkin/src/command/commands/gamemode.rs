@@ -44,9 +44,10 @@ impl CommandExecutor for TargetSelfExecutor {
                 let gamemode_string = format!("{gamemode:?}").to_lowercase();
                 let gamemode_string = format!("gameMode.{gamemode_string}");
                 target
-                    .send_system_message(&TextComponent::translate(
+                    .send_system_message(TextComponent::translate(
                         "commands.gamemode.success.self",
-                        [TextComponent::translate(gamemode_string, [])],
+                        None,
+                        [TextComponent::translate(gamemode_string, None, [])],
                     ))
                     .await;
             }
@@ -82,18 +83,20 @@ impl CommandExecutor for TargetPlayerExecutor {
                 let gamemode_string = format!("{gamemode:?}").to_lowercase();
                 let gamemode_string = format!("gameMode.{gamemode_string}");
                 target
-                    .send_system_message(&TextComponent::translate(
+                    .send_system_message(TextComponent::translate(
                         "gameMode.changed",
-                        [TextComponent::translate(gamemode_string.clone(), [])],
+                        None,
+                        [TextComponent::translate(gamemode_string.clone(), None, [])],
                     ))
                     .await;
                 if target_count == 1 {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.gamemode.success.other",
+                            None,
                             [
                                 target.get_display_name().await,
-                                TextComponent::translate(gamemode_string, []),
+                                TextComponent::translate(gamemode_string, None, []),
                             ],
                         ))
                         .await;

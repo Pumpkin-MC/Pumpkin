@@ -161,6 +161,10 @@ pub mod potion_brewing;
 #[path = "generated/recipe_remainder.rs"]
 pub mod recipe_remainder;
 
+#[rustfmt::skip]
+#[path = "generated/translations.rs"]
+pub mod translations;
+
 mod block_direction;
 pub mod block_state;
 mod blocks;

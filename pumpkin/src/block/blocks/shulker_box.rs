@@ -35,7 +35,7 @@ impl ScreenHandlerFactory for ShulkerBoxScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.shulkerBox", &[])
+        TextComponent::translate("container.shulkerBox", None, &[])
     }
 }
 
