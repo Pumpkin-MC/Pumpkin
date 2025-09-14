@@ -35,6 +35,7 @@ pub mod jukebox;
 pub mod ladder;
 pub mod lanterns;
 pub mod logs;
+pub mod mangrove_roots;
 pub mod nether_portal;
 pub mod note;
 pub mod piston;
