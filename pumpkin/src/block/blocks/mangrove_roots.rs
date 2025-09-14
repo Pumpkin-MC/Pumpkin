@@ -1,11 +1,10 @@
-
 use crate::block::{BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs};
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, MangroveRootsLikeProperties};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::tick::TickPriority;
 
 #[pumpkin_block("minecraft:mangrove_roots")]
 pub struct MangroveRootsBlock;
@@ -29,7 +28,7 @@ impl BlockBehaviour for MangroveRootsBlock {
                     &Fluid::WATER,
                     *args.position,
                     Fluid::WATER.flow_speed as u8,
-                    TickPriority::Normal
+                    TickPriority::Normal,
                 )
                 .await;
         }

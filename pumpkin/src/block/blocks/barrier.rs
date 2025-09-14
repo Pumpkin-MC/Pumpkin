@@ -1,10 +1,12 @@
 use crate::block::{BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs};
 use async_trait::async_trait;
-use pumpkin_data::block_properties::{BlockProperties, MangroveRootsLikeProperties as BarrierLikeProperties };
+use pumpkin_data::block_properties::{
+    BlockProperties, MangroveRootsLikeProperties as BarrierLikeProperties,
+};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::tick::TickPriority;
 
 #[pumpkin_block("minecraft:barrier")]
 pub struct BarrierBlock;
@@ -28,7 +30,7 @@ impl BlockBehaviour for BarrierBlock {
                     &Fluid::WATER,
                     *args.position,
                     Fluid::WATER.flow_speed as u8,
-                    TickPriority::Normal
+                    TickPriority::Normal,
                 )
                 .await;
         }
