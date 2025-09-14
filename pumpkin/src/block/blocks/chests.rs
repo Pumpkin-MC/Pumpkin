@@ -42,9 +42,9 @@ impl ScreenHandlerFactory for ChestScreenFactory {
         _player: &dyn InventoryPlayer,
     ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
         Some(Arc::new(Mutex::new(if self.0.size() > 27 {
-            create_generic_9x6(sync_id, player_inventory, self.0.clone())
+            create_generic_9x6(sync_id, player_inventory, self.0.clone()).await
         } else {
-            create_generic_9x3(sync_id, player_inventory, self.0.clone())
+            create_generic_9x3(sync_id, player_inventory, self.0.clone()).await
         })))
     }
 
@@ -91,7 +91,7 @@ impl BlockBehaviour for ChestBlock {
     }
 
     async fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
-        // On the server, we don't need the ChestLidAnimator because the client is responsible for that.
+        // On the server, we don't need to do more because the client is responsible for that.
         args.r#type == Self::LID_ANIMATION_EVENT_TYPE
     }
 

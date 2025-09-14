@@ -31,11 +31,11 @@ use super::BlockEntity;
 #[derive(Debug)]
 pub struct ChestBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; 27],
+    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub dirty: AtomicBool,
 
     // Viewer
-    pub viewers: ViewerCountTracker,
+    viewers: ViewerCountTracker,
 }
 
 #[async_trait]
@@ -113,6 +113,7 @@ impl ViewerCountListener for ChestBlockEntity {
 }
 
 impl ChestBlockEntity {
+    pub const INVENTORY_SIZE: usize = 27;
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:chest";
 
@@ -194,11 +195,11 @@ impl Inventory for ChestBlockEntity {
         *self.items[slot].lock().await = stack;
     }
 
-    fn on_open(&self) {
+    async fn on_open(&self) {
         self.viewers.open_container();
     }
 
-    fn on_close(&self) {
+    async fn on_close(&self) {
         self.viewers.close_container();
     }
 

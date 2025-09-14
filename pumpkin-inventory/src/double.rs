@@ -72,14 +72,14 @@ impl Inventory for DoubleInventory {
         self.second.mark_dirty();
     }
 
-    fn on_open(&self) {
-        self.first.on_open();
-        self.second.on_open();
+    async fn on_open(&self) {
+        self.first.on_open().await;
+        self.second.on_open().await;
     }
 
-    fn on_close(&self) {
-        self.first.on_close();
-        self.second.on_close();
+    async fn on_close(&self) {
+        self.first.on_close().await;
+        self.second.on_close().await;
     }
 
     fn is_valid_slot_for(&self, slot: usize, stack: &ItemStack) -> bool {
