@@ -110,40 +110,37 @@ pub trait FlowingFluid {
     }
 
     async fn spread_fluid(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
-        let block_state_id = world.get_block_state_id(block_pos).await;
-        if let Some(new_fluid_state) = self.get_new_liquid(world, fluid, block_pos).await {
-            if new_fluid_state.to_state_id(fluid) != block_state_id
-                && self.is_waterlogged(world, block_pos).await.is_none()
-            {
+        let current_block_state = world.get_block_state(block_pos).await;
+        let current_fluid_state =
+            FlowingFluidProperties::from_state_id(current_block_state.id, fluid);
+
+        if current_fluid_state.level != Level::L8 || current_fluid_state.falling == Falling::True {
+            let new_fluid_state = self.get_new_liquid(world, fluid, block_pos).await;
+            if let Some(new_fluid_state) = new_fluid_state {
+                if new_fluid_state.to_state_id(fluid) != current_block_state.id {
+                    world
+                        .set_block_state(
+                            block_pos,
+                            new_fluid_state.to_state_id(fluid),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                }
+            } else if self.is_waterlogged(world, block_pos).await.is_none() {
+                world
+                    .break_block(block_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
+                    .await;
                 world
                     .set_block_state(
                         block_pos,
-                        new_fluid_state.to_state_id(fluid),
+                        Block::AIR.default_state.id,
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
             }
-            self.spread(world, fluid, block_pos, &new_fluid_state).await;
-        } else if self.is_waterlogged(world, block_pos).await.is_some() {
-            self.spread(
-                world,
-                fluid,
-                block_pos,
-                &FlowingFluidProperties::default(fluid),
-            )
-            .await;
-        } else {
-            world
-                .break_block(block_pos, None, BlockFlags::NOTIFY_NEIGHBORS)
-                .await;
-            world
-                .set_block_state(
-                    block_pos,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
         }
+        self.spread(world, fluid, block_pos, &current_fluid_state)
+            .await;
     }
 
     async fn spread(
@@ -163,6 +160,13 @@ pub trait FlowingFluid {
 
             self.spread_to(world, fluid, &below_pos, new_props.to_state_id(fluid))
                 .await;
+            if self
+                .count_neighboring_sources(world, fluid, block_pos)
+                .await
+                >= 3
+            {
+                self.spread_to_sides(world, fluid, block_pos).await;
+            }
         } else if props.level == Level::L8 && props.falling == Falling::False
             || !self
                 .is_water_hole(world, fluid, block_pos, &below_pos)
@@ -256,23 +260,49 @@ pub trait FlowingFluid {
         state_id: BlockStateId,
         fluid: &Fluid,
     ) -> bool {
-        let block = world.get_block(block_pos).await;
-
-        if block.id != 0
-            && !self
-                .can_be_replaced(world, block_pos, block.id, fluid)
-                .await
-        {
-            return true;
-        }
-
-        //TODO check if source
         if self.is_same_fluid(fluid, state_id) {
             let props = FlowingFluidProperties::from_state_id(state_id, fluid);
-            return props.level == Level::L8 && props.falling != Falling::True;
+            if props.level == Level::L8 && props.falling != Falling::True {
+                return true;
+            }
         }
+        world
+            .get_block_state(block_pos)
+            .await
+            .is_side_solid(BlockDirection::Up)
+    }
 
-        false
+    async fn count_neighboring_sources(
+        &self,
+        world: &Arc<World>,
+        fluid: &Fluid,
+        block_pos: &BlockPos,
+    ) -> i32 {
+        let mut source_count = 0;
+
+        for direction in BlockDirection::horizontal() {
+            let neighbor_pos = block_pos.offset(direction.to_offset());
+            let neighbor_state_id = world.get_block_state_id(&neighbor_pos).await;
+
+            if fluid.default_state_index == Fluid::WATER.default_state_index
+                && self.is_waterlogged(world, &neighbor_pos).await.is_some()
+            {
+                source_count += 1;
+                continue;
+            }
+
+            if !self.is_same_fluid(fluid, neighbor_state_id) {
+                continue;
+            }
+
+            let neighbor_props = FlowingFluidProperties::from_state_id(neighbor_state_id, fluid);
+            let neighbor_level = i32::from(neighbor_props.level.to_index()) + 1;
+
+            if neighbor_level == 8 && neighbor_props.falling != Falling::True {
+                source_count += 1;
+            }
+        }
+        source_count
     }
 
     async fn spread_to_sides(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
