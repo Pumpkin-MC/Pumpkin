@@ -26,6 +26,7 @@ use super::{
     settings::GenerationSettings,
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
+use crate::chunk::{ChunkData, ChunkHeightmapType};
 use crate::chunk_system::StagedChunkEnum;
 use crate::generation::aquifer_sampler::FluidLevelSampler;
 use crate::generation::height_limit::HeightLimitView;
@@ -114,7 +115,7 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 ///
 /// 12. full: Generation is done and a chunk can now be loaded. The proto-chunk is now converted to a level chunk and all block updates deferred in the above steps are executed.
 ///
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProtoChunk {
     pub chunk_pos: Vector2<i32>,
     pub default_block: &'static BlockState,
@@ -192,6 +193,87 @@ impl ProtoChunk {
         }
     }
 
+    pub fn from_chunk_data(
+        chunk_data: &ChunkData,
+        settings: &GenerationSettings,
+        default_block: &'static BlockState,
+        biome_mixer_seed: i64,
+    ) -> Self {
+        let mut proto_chunk = ProtoChunk::new(
+            chunk_data.position,
+            settings,
+            default_block,
+            biome_mixer_seed,
+        );
+
+        for (section_y, section) in chunk_data.section.sections.iter().enumerate() {
+            for x in 0..16 {
+                for y in 0..16 {
+                    for z in 0..16 {
+                        let block_state_id = section.block_states.get(x, y, z);
+                        let block_state = BlockState::from_id(block_state_id);
+
+                        let absolute_y =
+                            (section_y << 4) as i32 + y as i32 + chunk_data.section.min_y;
+
+                        proto_chunk.set_block_state(
+                            &Vector3::new(x as i32, absolute_y, z as i32),
+                            block_state,
+                        );
+                    }
+                }
+            }
+            for x in 0..4 {
+                for y in 0..4 {
+                    for z in 0..4 {
+                        let biome_id = section.biomes.get(x, y, z);
+                        let biome = Biome::from_id(biome_id).unwrap();
+
+                        let relative_y_block = (section_y as i32 * 16) + (y as i32 * 4);
+                        let local_biome_pos = Vector3::new(
+                            x as i32,
+                            biome_coords::from_block(relative_y_block),
+                            z as i32,
+                        );
+                        let index = proto_chunk.local_biome_pos_to_biome_index(&local_biome_pos);
+                        proto_chunk.flat_biome_map[index] = biome;
+                    }
+                }
+            }
+        }
+
+        for z in 0..16 {
+            for x in 0..16 {
+                let motion_blocking_height = chunk_data.heightmap.get_height(
+                    ChunkHeightmapType::MotionBlocking,
+                    x,
+                    z,
+                    chunk_data.section.min_y,
+                );
+                let index = ((z << 4) + x) as usize;
+                proto_chunk.flat_motion_blocking_height_map[index] = motion_blocking_height as i16;
+
+                let motion_blocking_no_leaves_height = chunk_data.heightmap.get_height(
+                    ChunkHeightmapType::MotionBlockingNoLeaves,
+                    x,
+                    z,
+                    chunk_data.section.min_y,
+                );
+                proto_chunk.flat_motion_blocking_no_leaves_height_map[index] =
+                    motion_blocking_no_leaves_height as i16;
+
+                let world_surface_height = chunk_data.heightmap.get_height(
+                    ChunkHeightmapType::WorldSurface,
+                    x,
+                    z,
+                    chunk_data.section.min_y,
+                );
+                proto_chunk.flat_surface_height_map[index] = world_surface_height as i16;
+            }
+        }
+
+        proto_chunk
+    }
     pub fn stage_id(&self) -> u8 {
         self.stage as u8
     }
