@@ -23,7 +23,7 @@ pub(crate) fn build() -> TokenStream {
     quote! {
         use serde::{Deserialize, Serialize};
 
-        #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+        #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
         pub enum ChunkStatus {
             #variants
         }
