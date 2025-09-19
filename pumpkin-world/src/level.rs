@@ -592,7 +592,7 @@ impl Level {
         if let Some(chunk) = self.loaded_chunks.get(&pos) {
             chunk.clone()
         } else {
-            log::info!("Missing Chunk {pos:?}. Fetching.");
+            log::debug!("Missing Chunk {pos:?}. Fetching.");
             let clock = Instant::now();
             let recv = self.chunk_listener.add_single_chunk_listener(pos);
             {
@@ -609,7 +609,7 @@ impl Level {
             };
             let mut lock = self.chunk_loading.lock().unwrap();
             lock.remove_force_ticket(pos);
-            log::info!("Chunk {pos:?} received after {:?}.", Instant::now() - clock);
+            log::debug!("Chunk {pos:?} received after {:?}.", Instant::now() - clock);
             ret
         }
     }

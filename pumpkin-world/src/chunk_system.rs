@@ -1,3 +1,13 @@
+/*
+TODO
+1. use Crate flume
+2. use DAG to schedule tasks (IMPORTANT)
+3. send changes instead of whole level hashmap
+4. make another hashmap store chunk stage
+5. add lifetime to loading ticket
+6. solve entity not unload problem
+*/
+
 use crate::block::RawBlockState;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
