@@ -967,6 +967,7 @@ impl Cache {
             }
             Full => {
                 debug_assert_eq!(self.chunks[mid].get_proto_chunk_mut().stage, Features);
+                self.chunks[mid].get_proto_chunk_mut().stage = Full;
                 self.chunks[mid].upgrade_to_level_chunk(settings);
             }
             _ => panic!("unknown stage {stage:?}"),
