@@ -1,6 +1,7 @@
 use num_traits::{Float, One, PrimInt, Zero};
 
 pub mod boundingbox;
+pub mod euler_angle;
 pub mod experience;
 pub mod float_provider;
 pub mod int_provider;

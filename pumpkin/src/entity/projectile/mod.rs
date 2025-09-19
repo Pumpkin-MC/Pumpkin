@@ -7,6 +7,8 @@ use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use async_trait::async_trait;
 use pumpkin_util::math::vector3::Vector3;
 
+pub mod wind_charge;
+
 pub struct ThrownItemEntity {
     entity: Entity,
 }
