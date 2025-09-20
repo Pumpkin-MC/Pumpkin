@@ -1,41 +1,28 @@
-use super::{Goal, GoalControl};
+use super::{Controls, Goal};
 use crate::entity::mob::Mob;
 use async_trait::async_trait;
 use rand::Rng;
-use std::sync::atomic::AtomicI32;
-use std::sync::atomic::Ordering::Relaxed;
 
 #[allow(dead_code)]
+#[derive(Default)]
 pub struct AmbientStandGoal {
-    goal_control: GoalControl,
-    cooldown: AtomicI32,
-}
-
-impl Default for AmbientStandGoal {
-    fn default() -> Self {
-        let entity = Self {
-            goal_control: GoalControl::default(),
-            cooldown: AtomicI32::new(0),
-        };
-        entity.reset_cooldown();
-
-        entity
-    }
+    goal_control: Controls,
+    cooldown: i32,
 }
 
 impl AmbientStandGoal {
-    fn reset_cooldown(&self) {
+    fn reset_cooldown(&mut self) {
         // TODO: should be: this.cooldown = -entity.getMinAmbientStandDelay();
         // TODO: implement when Horses are implemented
-        self.cooldown.store(0, Relaxed);
+        self.cooldown = 0;
     }
 }
 
 #[async_trait]
 impl Goal for AmbientStandGoal {
-    async fn can_start(&self, mob: &dyn Mob) -> bool {
-        let cooldown = self.cooldown.fetch_add(1, Relaxed) + 1;
-        if cooldown > 0 && mob.get_random().random_range(0..1000) < cooldown {
+    async fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        self.cooldown += 1;
+        if self.cooldown > 0 && mob.get_random().random_range(0..1000) < self.cooldown {
             self.reset_cooldown();
         }
 
@@ -45,13 +32,7 @@ impl Goal for AmbientStandGoal {
         false
     }
 
-    async fn start(&self, _mob: &dyn Mob) {}
-
-    async fn stop(&self, _mob: &dyn Mob) {}
-
-    async fn tick(&self, _mob: &dyn Mob) {}
-
-    fn get_goal_control(&self) -> &GoalControl {
-        &self.goal_control
+    fn controls(&self) -> Controls {
+        self.goal_control
     }
 }

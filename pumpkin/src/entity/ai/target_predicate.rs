@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 #[allow(dead_code)]
-const MIN_DISTANCE: f64 = 2.0;
+const MIN_DISTANCE: f32 = 2.0;
 
 pub type PredicateFn = dyn Fn(Arc<LivingEntity>, Arc<World>) -> Pin<Box<dyn Future<Output = bool> + Send>>
     + Send
@@ -12,7 +12,7 @@ pub type PredicateFn = dyn Fn(Arc<LivingEntity>, Arc<World>) -> Pin<Box<dyn Futu
 
 pub struct TargetPredicate {
     pub attackable: bool,
-    pub base_max_distance: f64,
+    pub base_max_distance: f32,
     pub respects_visibility: bool,
     pub use_distance_scaling_factor: bool,
     pub predicate: Option<Arc<PredicateFn>>,

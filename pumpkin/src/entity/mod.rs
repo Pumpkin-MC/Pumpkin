@@ -40,6 +40,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::f32::consts::PI;
 use std::sync::{
     Arc,
     atomic::{
@@ -477,17 +478,14 @@ impl Entity {
     }
 
     /// Changes this entity's pitch and yaw to look at target
-    pub async fn look_at(&self, target: Vector3<f64>) {
+    pub fn look_at(&self, target: Vector3<f64>) {
         let position = self.pos.load();
         let delta = target.sub(&position);
         let root = delta.x.hypot(delta.z);
-        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / std::f32::consts::PI);
-        let yaw =
-            wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / std::f32::consts::PI) - 90.0);
+        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / PI);
+        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / PI) - 90.0);
         self.pitch.store(pitch);
         self.yaw.store(yaw);
-
-        self.send_rotation().await;
     }
 
     pub async fn send_rotation(&self) {

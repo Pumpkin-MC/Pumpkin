@@ -1,4 +1,4 @@
-use super::{Goal, GoalControl, to_goal_ticks};
+use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
@@ -6,9 +6,6 @@ use crate::entity::{EntityBase, mob::MobEntity};
 use async_trait::async_trait;
 use rand::Rng;
 use std::sync::Arc;
-use std::sync::atomic::AtomicI32;
-use std::sync::atomic::Ordering::Relaxed;
-use tokio::sync::Mutex;
 
 const UNSET: i32 = 0;
 #[allow(dead_code)]
@@ -18,14 +15,14 @@ const CANNOT_TRACK: i32 = 2;
 
 #[allow(dead_code)]
 pub struct TrackTargetGoal {
-    goal_control: GoalControl,
-    target: Mutex<Option<Arc<dyn EntityBase>>>,
+    goal_control: Controls,
+    target: Option<Arc<dyn EntityBase>>,
     check_visibility: bool,
     check_can_navigate: bool,
-    can_navigate_flag: AtomicI32,
-    check_can_navigate_cooldown: AtomicI32,
-    time_without_visibility: AtomicI32,
-    max_time_without_visibility: AtomicI32, // Default 60
+    can_navigate_flag: i32,
+    check_can_navigate_cooldown: i32,
+    time_without_visibility: i32,
+    max_time_without_visibility: i32, // Default 60
 }
 
 #[allow(dead_code)]
@@ -33,14 +30,14 @@ impl TrackTargetGoal {
     #[must_use]
     pub fn new(check_visibility: bool, check_can_navigate: bool) -> Self {
         Self {
-            goal_control: GoalControl::default(),
-            target: Mutex::new(None),
+            goal_control: Controls::TARGET,
+            target: None,
             check_visibility,
             check_can_navigate,
-            can_navigate_flag: AtomicI32::new(UNSET),
-            check_can_navigate_cooldown: AtomicI32::new(0),
-            time_without_visibility: AtomicI32::new(0),
-            max_time_without_visibility: AtomicI32::new(60),
+            can_navigate_flag: UNSET,
+            check_can_navigate_cooldown: 0,
+            time_without_visibility: 0,
+            max_time_without_visibility: 60,
         }
     }
 
@@ -49,25 +46,18 @@ impl TrackTargetGoal {
     }
 
     // TODO: get from entity attribute
-    pub fn get_follow_range(_mob: &MobEntity) -> f64 {
+    pub fn get_follow_range(_mob: &MobEntity) -> f32 {
         1.0
     }
 
-    pub fn set_max_time_without_visibility(&self, time: i32) {
-        self.max_time_without_visibility.store(time, Relaxed);
-    }
-
-    fn can_navigate_to_entity(&self, mob: &dyn Mob, _target: &LivingEntity) -> bool {
-        self.check_can_navigate_cooldown.store(
-            to_goal_ticks(10 + mob.get_random().random_range(0..5)),
-            Relaxed,
-        );
+    fn can_navigate_to_entity(&mut self, mob: &dyn Mob, _target: &LivingEntity) -> bool {
+        self.check_can_navigate_cooldown = to_goal_ticks(10 + mob.get_random().random_range(0..5));
         // TODO: after implementing path
         false
     }
 
     pub fn can_track(
-        &self,
+        &mut self,
         mob: &dyn Mob,
         target: Option<&LivingEntity>,
         target_predicate: &TargetPredicate,
@@ -86,20 +76,21 @@ impl TrackTargetGoal {
         // TODO: implement this
 
         if self.check_can_navigate {
-            if self.check_can_navigate_cooldown.fetch_sub(1, Relaxed) - 1 <= 0 {
-                self.can_navigate_flag.store(UNSET, Relaxed);
+            self.check_can_navigate_cooldown -= 1;
+            if self.check_can_navigate_cooldown <= 0 {
+                self.can_navigate_flag = UNSET;
             }
 
-            if self.can_navigate_flag.load(Relaxed) == UNSET {
+            if self.can_navigate_flag == UNSET {
                 let value = if self.can_navigate_to_entity(mob, target) {
                     CAN_TRACK
                 } else {
                     CANNOT_TRACK
                 };
-                self.can_navigate_flag.store(value, Relaxed);
+                self.can_navigate_flag = value;
             }
 
-            if self.can_navigate_flag.load(Relaxed) == CANNOT_TRACK {
+            if self.can_navigate_flag == CANNOT_TRACK {
                 return false;
             }
         }
@@ -110,7 +101,7 @@ impl TrackTargetGoal {
 
 #[async_trait]
 impl Goal for TrackTargetGoal {
-    async fn can_start(&self, _mob: &dyn Mob) -> bool {
+    async fn can_start(&mut self, _mob: &dyn Mob) -> bool {
         false
     }
 
@@ -120,8 +111,7 @@ impl Goal for TrackTargetGoal {
         let target = if mob_target.is_some() {
             mob_target.clone()
         } else {
-            let lock = self.target.lock().await;
-            lock.clone()
+            self.target.clone()
         };
         drop(mob_target);
 
@@ -131,21 +121,19 @@ impl Goal for TrackTargetGoal {
         true
     }
 
-    async fn start(&self, _mob: &dyn Mob) {
-        self.can_navigate_flag.store(0, Relaxed);
-        self.check_can_navigate_cooldown.store(0, Relaxed);
-        self.time_without_visibility.store(0, Relaxed);
+    async fn start(&mut self, _mob: &dyn Mob) {
+        self.can_navigate_flag = 0;
+        self.check_can_navigate_cooldown = 0;
+        self.time_without_visibility = 0;
     }
 
-    async fn stop(&self, mob: &dyn Mob) {
+    async fn stop(&mut self, mob: &dyn Mob) {
         let mob = mob.get_mob_entity();
         *mob.target.lock().await = None;
-        *self.target.lock().await = None;
+        self.target = None;
     }
 
-    async fn tick(&self, _mob: &dyn Mob) {}
-
-    fn get_goal_control(&self) -> &GoalControl {
-        &self.goal_control
+    fn controls(&self) -> Controls {
+        self.goal_control
     }
 }
