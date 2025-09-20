@@ -11,7 +11,7 @@ use std::sync::Arc;
 pub struct LookControl {
     max_yaw_change: f32,
     max_pitch_change: f32,
-    look_at_timer: f32,
+    look_at_timer: i32,
     position: Vector3<f64>,
 }
 
@@ -60,7 +60,7 @@ impl LookControl {
         self.position = Vector3::new(x, y, z);
         self.max_yaw_change = max_yaw_change;
         self.max_pitch_change = max_pitch_change;
-        self.look_at_timer = 2.0;
+        self.look_at_timer = 2;
     }
 
     pub async fn tick(&mut self, mob: &dyn Mob) {
@@ -69,8 +69,8 @@ impl LookControl {
             entity.set_pitch(0.0);
         }
 
-        if self.look_at_timer > 0.0 {
-            self.look_at_timer -= 1.0;
+        if self.look_at_timer > 0 {
+            self.look_at_timer -= 1;
             if let Some(yaw) = self.get_target_yaw(mob.get_mob_entity()) {
                 entity.head_yaw.store(self.change_angle(
                     entity.head_yaw.load(),
