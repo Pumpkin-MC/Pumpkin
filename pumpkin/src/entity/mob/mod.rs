@@ -17,8 +17,8 @@ pub mod zombie;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
-    pub goals_selector: GoalSelector, // Mutex isn't needed because all fields of GoalSelector are thread safe
-    pub target_selector: GoalSelector,
+    pub goals_selector: Mutex<GoalSelector>,
+    pub target_selector: Mutex<GoalSelector>,
     pub navigator: Mutex<Navigator>,
     pub target: Mutex<Option<Arc<dyn EntityBase>>>,
     pub look_control: Mutex<LookControl>,
@@ -31,8 +31,8 @@ impl MobEntity {
     pub fn new(entity: Entity) -> Self {
         Self {
             living_entity: LivingEntity::new(entity),
-            goals_selector: GoalSelector::default(),
-            target_selector: GoalSelector::default(),
+            goals_selector: Mutex::new(GoalSelector::default()),
+            target_selector: Mutex::new(GoalSelector::default()),
             navigator: Mutex::new(Navigator::default()),
             target: Mutex::new(None),
             look_control: Mutex::new(LookControl::default()),
@@ -85,28 +85,35 @@ pub trait Mob: EntityBase + Send + Sync {
 }
 
 #[async_trait]
-impl<T> EntityBase for T
-where
-    T: Mob + Send + 'static,
-{
+impl<T: Mob + Send + 'static> EntityBase for T {
     async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
         let mob_entity = self.get_mob_entity();
         mob_entity.living_entity.tick(caller, server).await;
 
         let age = mob_entity.living_entity.entity.age.load(Relaxed);
         if (age + mob_entity.living_entity.entity.entity_id) % 2 != 0 && age > 1 {
-            mob_entity.target_selector.tick_goals(self, false).await;
-            mob_entity.goals_selector.tick_goals(self, false).await;
+            mob_entity
+                .target_selector
+                .lock()
+                .await
+                .tick_goals(self, false)
+                .await;
+            mob_entity
+                .goals_selector
+                .lock()
+                .await
+                .tick_goals(self, false)
+                .await;
         } else {
-            mob_entity.target_selector.tick(self).await;
-            mob_entity.goals_selector.tick(self).await;
+            mob_entity.target_selector.lock().await.tick(self).await;
+            mob_entity.goals_selector.lock().await.tick(self).await;
         }
 
         let mut navigator = mob_entity.navigator.lock().await;
         navigator.tick(&mob_entity.living_entity).await;
         drop(navigator);
 
-        let look_control = mob_entity.look_control.lock().await;
+        let mut look_control = mob_entity.look_control.lock().await;
         look_control.tick(self).await;
         drop(look_control);
     }
