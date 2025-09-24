@@ -20,7 +20,7 @@ use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::{euler_angle::EulerAngle, vector3::Vector3};
 use pumpkin_world::item::ItemStack;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct PackedRotation {
     pub head: EulerAngle,
     pub body: EulerAngle,
@@ -95,12 +95,7 @@ pub struct ArmorStandEntity {
     last_hit_time: AtomicI64,
     disabled_slots: AtomicI32,
 
-    head_rotation: AtomicCell<EulerAngle>,
-    body_rotation: AtomicCell<EulerAngle>,
-    left_arm_rotation: AtomicCell<EulerAngle>,
-    right_arm_rotation: AtomicCell<EulerAngle>,
-    left_leg_rotation: AtomicCell<EulerAngle>,
-    right_leg_rotation: AtomicCell<EulerAngle>,
+    rotation: AtomicCell<PackedRotation>,
 }
 
 impl ArmorStandEntity {
@@ -113,12 +108,7 @@ impl ArmorStandEntity {
             armor_stand_flags: AtomicU8::new(0),
             last_hit_time: AtomicI64::new(0),
             disabled_slots: AtomicI32::new(0),
-            head_rotation: AtomicCell::new(packed_rotation.head),
-            body_rotation: AtomicCell::new(packed_rotation.body),
-            left_arm_rotation: AtomicCell::new(packed_rotation.left_arm),
-            right_arm_rotation: AtomicCell::new(packed_rotation.right_arm),
-            left_leg_rotation: AtomicCell::new(packed_rotation.left_leg),
-            right_leg_rotation: AtomicCell::new(packed_rotation.right_leg),
+            rotation: AtomicCell::new(packed_rotation),
         }
     }
 
@@ -190,76 +180,16 @@ impl ArmorStandEntity {
         self.disabled_slots.store(new_val, Ordering::Relaxed);
     }
 
-    pub fn set_head_rotation(&self, angle: EulerAngle) {
-        self.head_rotation.store(angle);
-    }
-
-    pub fn get_head_rotation(&self) -> EulerAngle {
-        self.head_rotation.load()
-    }
-
-    pub fn set_body_rotation(&self, angle: EulerAngle) {
-        self.body_rotation.store(angle);
-    }
-
-    pub fn get_body_rotation(&self) -> EulerAngle {
-        self.body_rotation.load()
-    }
-
-    pub fn set_left_arm_rotation(&self, angle: EulerAngle) {
-        self.left_arm_rotation.store(angle);
-    }
-
-    pub fn get_left_arm_rotation(&self) -> EulerAngle {
-        self.left_arm_rotation.load()
-    }
-
-    pub fn set_right_arm_rotation(&self, angle: EulerAngle) {
-        self.right_arm_rotation.store(angle);
-    }
-
-    pub fn get_right_arm_rotation(&self) -> EulerAngle {
-        self.right_arm_rotation.load()
-    }
-
-    pub fn set_left_leg_rotation(&self, angle: EulerAngle) {
-        self.left_leg_rotation.store(angle);
-    }
-
-    pub fn get_left_leg_rotation(&self) -> EulerAngle {
-        self.left_leg_rotation.load()
-    }
-
-    pub fn set_right_leg_rotation(&self, angle: EulerAngle) {
-        self.right_leg_rotation.store(angle);
-    }
-
-    pub fn get_right_leg_rotation(&self) -> EulerAngle {
-        self.right_leg_rotation.load()
-    }
-
     pub fn is_invisible(&self) -> bool {
         self.get_entity().invisible.load(Ordering::Relaxed)
     }
 
     pub fn pack_rotation(&self) -> PackedRotation {
-        PackedRotation {
-            head: self.get_head_rotation(),
-            body: self.get_body_rotation(),
-            left_arm: self.get_left_arm_rotation(),
-            right_arm: self.get_right_arm_rotation(),
-            left_leg: self.get_left_leg_rotation(),
-            right_leg: self.get_right_leg_rotation(),
-        }
+        self.rotation.load()
     }
 
     pub fn unpack_rotation(&self, packed: &PackedRotation) {
-        self.set_head_rotation(packed.head);
-        self.set_body_rotation(packed.body);
-        self.set_left_arm_rotation(packed.left_arm);
-        self.set_right_arm_rotation(packed.right_arm);
-        self.set_left_leg_rotation(packed.left_leg);
-        self.set_right_leg_rotation(packed.right_leg);
+        self.rotation.store(packed.to_owned());
     }
 
     async fn break_and_drop_items(&self) {
