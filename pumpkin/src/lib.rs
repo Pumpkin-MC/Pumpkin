@@ -160,7 +160,10 @@ pub fn stop_server() {
     STOP_INTERRUPT.notify_waiters();
 }
 
-fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(opt: Option<D>, func: F) -> futures::future::Either<T, std::future::Pending<T::Output>> {
+fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
+    opt: Option<D>,
+    func: F,
+) -> futures::future::Either<T, std::future::Pending<T::Output>> {
     use futures::future::Either;
     match opt {
         Some(val) => Either::Left(func(val)),
@@ -251,9 +254,11 @@ impl PumpkinServer {
         let mut udp_socket = None;
 
         if BASIC_CONFIG.bedrock_edition {
-            udp_socket = Some(Arc::new(UdpSocket::bind(BASIC_CONFIG.bedrock_edition_address)
-                .await
-                .expect("Failed to bind UDP Socket")));
+            udp_socket = Some(Arc::new(
+                UdpSocket::bind(BASIC_CONFIG.bedrock_edition_address)
+                    .await
+                    .expect("Failed to bind UDP Socket"),
+            ));
         }
 
         Self {
