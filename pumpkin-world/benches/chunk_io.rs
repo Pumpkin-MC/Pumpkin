@@ -8,7 +8,7 @@ use pumpkin_world::{
     chunk::ChunkData,
     dimension::Dimension,
     global_path,
-    level::Level,
+    level::{ChunkEntry, Level},
     world::{BlockAccessor, BlockRegistryExt},
 };
 use tokio::{runtime::Runtime, sync::RwLock};
@@ -43,7 +43,14 @@ async fn test_reads_parallel(level: &Arc<Level>, positions: Vec<Vector2<i32>>, t
 */
 
 async fn test_writes(level: &Arc<Level>, chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>) {
-    level.write_chunks(chunks).await;
+    level
+        .write_chunks(
+            chunks
+                .iter()
+                .map(|(pos, chunk)| (*pos, ChunkEntry::Full(chunk.clone())))
+                .collect::<Vec<_>>(),
+        )
+        .await;
 }
 
 /*
@@ -120,7 +127,15 @@ fn initialize_level(
             let pos = chunk.read().await.position;
             chunks.push((pos, chunk));
         }
-        level_to_save.write_chunks(chunks.clone()).await;
+        level_to_save
+            .write_chunks(
+                chunks
+                    .clone()
+                    .iter()
+                    .map(|(pos, chunk)| (*pos, ChunkEntry::Full(chunk.clone())))
+                    .collect::<Vec<_>>(),
+            )
+            .await;
     });
 
     // Sort by distance from origin to ensure a fair selection

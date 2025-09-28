@@ -49,12 +49,12 @@ pub trait HeightLimitView {
     }
 }
 
-impl HeightLimitView for ProtoChunk<'_> {
+impl HeightLimitView for ProtoChunk {
     fn height(&self) -> u16 {
-        self.noise_sampler.height()
+        self.height()
     }
 
     fn bottom_y(&self) -> i8 {
-        self.noise_sampler.min_y()
+        self.bottom_y()
     }
 }

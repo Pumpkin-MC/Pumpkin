@@ -29,7 +29,7 @@ pub struct Structures {
     pub structure: StructureType,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub enum StructureType {
     #[serde(rename = "minecraft:buried_treasure")]
     BuriedTreasure(BuriedTreasureGenerator),
@@ -59,7 +59,7 @@ impl StructureType {
         None
     }
 
-    pub fn generate(&self, position: StructurePosition, chunk: &mut crate::ProtoChunk) {
+    pub fn generate(&self, position: StructurePosition, chunk: &crate::ProtoChunk) {
         for pos in position.generator.pieces_positions {
             match self {
                 StructureType::BuriedTreasure(generator) => generator.generate(pos, chunk),
@@ -69,7 +69,7 @@ impl StructureType {
     }
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Structure {
     biomes: String,
 }

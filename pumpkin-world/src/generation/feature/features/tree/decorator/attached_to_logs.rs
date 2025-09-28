@@ -17,7 +17,7 @@ pub struct AttachedToLogsTreeDecorator {
 impl AttachedToLogsTreeDecorator {
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &ProtoChunk,
         random: &mut RandomGenerator,
         _root_positions: Vec<BlockPos>,
         log_positions: Vec<BlockPos>,

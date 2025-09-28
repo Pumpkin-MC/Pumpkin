@@ -8,13 +8,12 @@ use serde::Deserialize;
 use crate::{
     ProtoChunk,
     generation::{
-        height_limit::HeightLimitView,
         positions::chunk_pos::{get_center_x, get_center_z, get_offset_x, get_offset_z},
         structure::structures::{StructureGenerator, StructurePiecesCollector, StructurePosition},
     },
 };
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct BuriedTreasureGenerator;
 
 impl StructureGenerator for BuriedTreasureGenerator {
@@ -35,7 +34,7 @@ impl StructureGenerator for BuriedTreasureGenerator {
         }
     }
 
-    fn generate(&self, position: BlockPos, chunk: &mut crate::ProtoChunk) {
+    fn generate(&self, position: BlockPos, chunk: &crate::ProtoChunk) {
         let y = chunk.get_top_y(
             &HeightMap::OceanFloorWg,
             &Vector2::new(position.0.x, position.0.z),

@@ -8,7 +8,6 @@ mod block_state_provider;
 pub mod carver;
 pub mod chunk_noise;
 mod feature;
-pub mod generator;
 pub mod height_limit;
 pub mod height_provider;
 pub mod noise;
@@ -23,23 +22,13 @@ pub mod structure;
 mod surface;
 pub mod y_offset;
 
-use derive_getters::Getters;
-use generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
 use pumpkin_util::random::{
     RandomDeriver, RandomDeriverImpl, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
 };
 pub use seed::Seed;
 
-use crate::dimension::Dimension;
-
-pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<dyn WorldGenerator> {
-    // TODO decide which WorldGenerator to pick based on config.
-    Box::new(VanillaGenerator::new(seed, dimension))
-}
-
-#[derive(Getters)]
 pub struct GlobalRandomConfig {
-    seed: u64,
+    pub seed: u64,
     base_random_deriver: RandomDeriver,
     aquifer_random_deriver: RandomDeriver,
     ore_random_deriver: RandomDeriver,
@@ -63,6 +52,10 @@ impl GlobalRandomConfig {
             aquifer_random_deriver: aquifer_deriver,
             ore_random_deriver: ore_deriver,
         }
+    }
+
+    pub fn seed(&self) -> u64 {
+        self.seed
     }
 }
 

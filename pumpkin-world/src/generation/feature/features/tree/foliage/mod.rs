@@ -80,7 +80,7 @@ impl FoliagePlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate_square<T: LeaveValidator>(
         validator: &T,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         center_pos: BlockPos,
@@ -105,7 +105,7 @@ impl FoliagePlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         node: &TreeNode,
@@ -134,8 +134,8 @@ impl FoliagePlacer {
     }
 
     pub fn place_foliage_block(
-        chunk: &mut ProtoChunk<'_>,
-        _level: &Arc<Level>,
+        chunk: &ProtoChunk,
+        level: &Arc<Level>,
         pos: BlockPos,
         block_state: &BlockState,
     ) {
@@ -146,7 +146,17 @@ impl FoliagePlacer {
         if chunk.chunk_pos == pos.chunk_and_chunk_relative_position().0 {
             chunk.set_block_state(&pos.0, block_state);
         } else {
-            //level.set_block_state(&pos, block_state.id).await;
+            // If distance is more than 1 panic
+            let chunk_pos = chunk.chunk_pos;
+            let other_chunk_pos = pos.chunk_and_chunk_relative_position().0;
+            let dx = chunk_pos.x - other_chunk_pos.x;
+            let dy = chunk_pos.y - other_chunk_pos.y;
+            let distance_squared = dx * dx + dy * dy;
+            if distance_squared > 2 {
+                //println!("Distance is more than 2, (Logic Error in foliage generation)");
+                return;
+            }
+            level.set_block_state_gen(&pos, block_state);
         }
     }
 }
@@ -182,7 +192,7 @@ impl FoliageType {
     #[expect(clippy::too_many_arguments)]
     pub fn generate(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         node: &TreeNode,

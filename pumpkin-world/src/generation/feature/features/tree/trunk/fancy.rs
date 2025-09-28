@@ -28,7 +28,7 @@ impl FancyTrunkPlacer {
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         force_dirt: bool,
@@ -120,8 +120,8 @@ impl FancyTrunkPlacer {
     }
 
     fn make_or_check_branch(
-        chunk: &mut ProtoChunk<'_>,
-        _level: &Arc<Level>,
+        chunk: &ProtoChunk,
+        level: &Arc<Level>,
         start_pos: Vector3<i32>,
         branch_pos: Vector3<i32>,
         trunk_provider: &BlockState,
@@ -174,7 +174,17 @@ impl FancyTrunkPlacer {
                     if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
                         chunk.set_block_state(&block_pos_2.0, BlockState::from_id(state));
                     } else {
-                        // level.set_block_state(&block_pos_2, state).await;
+                        // If distance is more than 1 panic
+                        let chunk_pos = chunk.chunk_pos;
+                        let other_chunk_pos = block_pos_2.chunk_and_chunk_relative_position().0;
+                        let dx = chunk_pos.x - other_chunk_pos.x;
+                        let dy = chunk_pos.y - other_chunk_pos.y;
+                        let distance_squared = dx * dx + dy * dy;
+                        if distance_squared > 2 {
+                            println!("Distance is more than 2, (Logic Error in trunk generation)");
+                        } else {
+                            level.set_block_state_gen(&block_pos_2, BlockState::from_id(state));
+                        }
                     }
                     logs.push(block_pos_2);
                     continue;
@@ -190,7 +200,7 @@ impl FancyTrunkPlacer {
     }
 
     fn make_branches(
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         tree_height: i32,
         start_pos: Vector3<i32>,

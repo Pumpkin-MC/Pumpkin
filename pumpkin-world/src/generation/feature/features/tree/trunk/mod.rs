@@ -50,7 +50,7 @@ impl TrunkPlacer {
 
     pub fn set_dirt(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         pos: &BlockPos,
         force_dirt: bool,
         dirt_state: &BlockState,
@@ -65,12 +65,7 @@ impl TrunkPlacer {
         }
     }
 
-    pub fn place(
-        &self,
-        chunk: &mut ProtoChunk<'_>,
-        pos: &BlockPos,
-        trunk_block: &BlockState,
-    ) -> bool {
+    pub fn place(&self, chunk: &ProtoChunk, pos: &BlockPos, trunk_block: &BlockState) -> bool {
         let block = chunk.get_block_state(&pos.0);
         if TreeFeature::can_replace(block.to_state(), block.to_block()) {
             chunk.set_block_state(&pos.0, trunk_block);
@@ -79,12 +74,7 @@ impl TrunkPlacer {
         false
     }
 
-    pub fn try_place(
-        &self,
-        chunk: &mut ProtoChunk<'_>,
-        pos: &BlockPos,
-        trunk_block: &BlockState,
-    ) -> bool {
+    pub fn try_place(&self, chunk: &ProtoChunk, pos: &BlockPos, trunk_block: &BlockState) -> bool {
         let block = chunk.get_block_state(&pos.0);
         if TreeFeature::can_replace_or_log(block.to_state(), block.to_block()) {
             return self.place(chunk, pos, trunk_block);
@@ -97,7 +87,7 @@ impl TrunkPlacer {
         &self,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         force_dirt: bool,
@@ -148,7 +138,7 @@ impl TrunkType {
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &ProtoChunk,
         level: &Arc<Level>,
         random: &mut RandomGenerator,
         force_dirt: bool,
