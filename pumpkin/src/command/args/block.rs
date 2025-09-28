@@ -65,6 +65,7 @@ impl<'a> FindArg<'a> for BlockArgumentConsumer {
                         Err(CommandError::CommandFailed(Box::new(
                             TextComponent::translate(
                                 "argument.block.id.invalid",
+                                None,
                                 [TextComponent::text((*name).to_string())],
                             ),
                         )))
@@ -72,6 +73,7 @@ impl<'a> FindArg<'a> for BlockArgumentConsumer {
                         Err(CommandError::CommandFailed(Box::new(
                             TextComponent::translate(
                                 "argument.block.id.invalid",
+                                None,
                                 [TextComponent::text("minecraft:".to_string() + *name)],
                             ),
                         )))
@@ -142,6 +144,7 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
                                 Err(CommandError::CommandFailed(Box::new(
                                     TextComponent::translate(
                                         "argument.block.id.invalid",
+                                        None,
                                         [TextComponent::text((*name).to_string())],
                                     ),
                                 )))
@@ -149,6 +152,7 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
                                 Err(CommandError::CommandFailed(Box::new(
                                     TextComponent::translate(
                                         "argument.block.id.invalid",
+                                        None,
                                         [TextComponent::text("minecraft:".to_string() + *name)],
                                     ),
                                 )))
@@ -163,6 +167,7 @@ impl<'a> FindArg<'a> for BlockPredicateArgumentConsumer {
                             Err(CommandError::CommandFailed(Box::new(
                                 TextComponent::translate(
                                     "arguments.block.tag.unknown",
+                                    None,
                                     [TextComponent::text((*tag).to_string())],
                                 ),
                             )))

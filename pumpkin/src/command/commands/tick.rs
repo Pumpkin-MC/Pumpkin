@@ -68,12 +68,14 @@ impl TickExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.tick.status.sprinting",
+                    None,
                     [],
                 ))
                 .await;
             sender
                 .send_message(TextComponent::translate(
                     "commands.tick.query.rate.sprinting",
+                    None,
                     [
                         TextComponent::text(format!("{tickrate:.1}")),
                         TextComponent::text(avg_mspt_str),
@@ -88,6 +90,7 @@ impl TickExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.tick.query.rate.running",
+                    None,
                     [
                         TextComponent::text(format!("{tickrate:.1}")),
                         TextComponent::text(avg_mspt_str),
@@ -108,15 +111,27 @@ impl TickExecutor {
     ) {
         if manager.is_frozen() {
             sender
-                .send_message(TextComponent::translate("commands.tick.status.frozen", []))
+                .send_message(TextComponent::translate(
+                    "commands.tick.status.frozen",
+                    None,
+                    [],
+                ))
                 .await;
         } else if avg_tick_nanos > manager.nanoseconds_per_tick() {
             sender
-                .send_message(TextComponent::translate("commands.tick.status.lagging", []))
+                .send_message(TextComponent::translate(
+                    "commands.tick.status.lagging",
+                    None,
+                    [],
+                ))
                 .await;
         } else {
             sender
-                .send_message(TextComponent::translate("commands.tick.status.running", []))
+                .send_message(TextComponent::translate(
+                    "commands.tick.status.running",
+                    None,
+                    [],
+                ))
                 .await;
         }
     }
@@ -137,6 +152,7 @@ impl TickExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.tick.query.percentiles",
+                    None,
                     [
                         TextComponent::text(nanos_to_millis_string(p50_nanos)),
                         TextComponent::text(nanos_to_millis_string(p95_nanos)),
@@ -158,13 +174,14 @@ impl TickExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.tick.step.success",
+                    None,
                     [TextComponent::text(ticks.to_string())],
                 ))
                 .await;
         } else {
             sender
                 .send_message(
-                    TextComponent::translate("commands.tick.step.fail", [])
+                    TextComponent::translate("commands.tick.step.fail", None, [])
                         .color_named(NamedColor::Red),
                 )
                 .await;
@@ -185,6 +202,7 @@ impl TickExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.tick.sprint.stop.success",
+                    None,
                     [],
                 ))
                 .await;
@@ -192,6 +210,7 @@ impl TickExecutor {
         sender
             .send_message(TextComponent::translate(
                 "commands.tick.status.sprinting",
+                None,
                 [],
             ))
             .await;
@@ -217,6 +236,7 @@ impl CommandExecutor for TickExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.tick.rate.success",
+                        None,
                         [TextComponent::text(format!("{rate:.1}"))],
                     ))
                     .await;
@@ -227,6 +247,7 @@ impl CommandExecutor for TickExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.tick.rate.success",
+                        None,
                         [TextComponent::text(format!("{rate:.1}"))],
                     ))
                     .await;
@@ -240,7 +261,7 @@ impl CommandExecutor for TickExecutor {
                     "commands.tick.status.running"
                 };
                 sender
-                    .send_message(TextComponent::translate(message_key, []))
+                    .send_message(TextComponent::translate(message_key, None, []))
                     .await;
                 Ok(())
             }
@@ -259,12 +280,17 @@ impl CommandExecutor for TickExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.tick.step.stop.success",
+                            None,
                             [],
                         ))
                         .await;
                 } else {
                     sender
-                        .send_message(TextComponent::translate("commands.tick.step.stop.fail", []))
+                        .send_message(TextComponent::translate(
+                            "commands.tick.step.stop.fail",
+                            None,
+                            [],
+                        ))
                         .await;
                 }
                 Ok(())
@@ -283,13 +309,14 @@ impl CommandExecutor for TickExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.tick.sprint.stop.success",
+                            None,
                             [],
                         ))
                         .await;
                 } else {
                     sender
                         .send_message(
-                            TextComponent::translate("commands.tick.sprint.stop.fail", [])
+                            TextComponent::translate("commands.tick.sprint.stop.fail", None, [])
                                 .color(Color::Named(NamedColor::Red)),
                         )
                         .await;

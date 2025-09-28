@@ -46,7 +46,7 @@ impl ScreenHandlerFactory for DropperScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate("container.dropper", &[])
+        TextComponent::translate("container.dropper", None, &[])
     }
 }
 

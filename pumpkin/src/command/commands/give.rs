@@ -86,6 +86,7 @@ impl CommandExecutor for Executor {
         let msg = if targets.len() == 1 {
             TextComponent::translate(
                 "commands.give.success.single",
+                None,
                 [
                     TextComponent::text(item_count.to_string()),
                     TextComponent::text("[")
@@ -101,6 +102,7 @@ impl CommandExecutor for Executor {
         } else {
             TextComponent::translate(
                 "commands.give.success.multiple",
+                None,
                 [
                     TextComponent::text(item_count.to_string()),
                     TextComponent::text("[")

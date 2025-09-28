@@ -43,6 +43,7 @@ mod sound;
 mod sound_category;
 mod spawn_egg;
 mod tag;
+mod translations;
 mod world_event;
 
 pub const OUT_DIR: &str = "src/generated";
@@ -94,6 +95,7 @@ pub fn main() {
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
         (recipe_remainder::build, "recipe_remainder.rs"),
+        (translations::build, "translations.rs"),
     ];
 
     build_functions.par_iter().for_each(|(build_fn, file)| {

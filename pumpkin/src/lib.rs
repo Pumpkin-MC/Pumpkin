@@ -41,6 +41,7 @@ pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
+pub mod text;
 pub mod world;
 
 #[cfg(feature = "dhat-heap")]
@@ -285,7 +286,7 @@ impl PumpkinServer {
         {
             log::error!("Error saving all players during shutdown: {e}");
         }
-
+        // TRANS-TODO: Implement proper kick message translation
         let kick_message = TextComponent::text("Server stopped");
         for player in self.server.get_all_players().await {
             player

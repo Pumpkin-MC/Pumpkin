@@ -84,6 +84,7 @@ use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
+use crate::text::TextResolution;
 use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
 
@@ -665,11 +666,23 @@ impl Player {
         self.sleeping_since.store(None);
     }
 
-    pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
+    pub async fn show_title(&self, text: TextComponent, mode: &TitleMode) {
         match mode {
-            TitleMode::Title => self.client.enqueue_packet(&CTitleText::new(text)).await,
-            TitleMode::SubTitle => self.client.enqueue_packet(&CSubtitle::new(text)).await,
-            TitleMode::ActionBar => self.client.enqueue_packet(&CActionBar::new(text)).await,
+            TitleMode::Title => {
+                self.client
+                    .enqueue_packet(&CTitleText::new(&text.to_send(self).await))
+                    .await;
+            }
+            TitleMode::SubTitle => {
+                self.client
+                    .enqueue_packet(&CSubtitle::new(&text.to_send(self).await))
+                    .await;
+            }
+            TitleMode::ActionBar => {
+                self.client
+                    .enqueue_packet(&CActionBar::new(&text.to_send(self).await))
+                    .await;
+            }
         }
     }
 
@@ -857,7 +870,7 @@ impl Player {
             if self.wait_for_keep_alive.load(Ordering::Relaxed) {
                 self.kick(
                     DisconnectReason::Timeout,
-                    TextComponent::translate("disconnect.timeout", []),
+                    TextComponent::translate("disconnect.timeout", None, []),
                 )
                 .await;
                 return;
@@ -1258,7 +1271,7 @@ impl Player {
     }
 
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
-        self.client.kick(reason, message).await;
+        self.client.kick(reason, message.to_send(self).await).await;
     }
 
     pub fn can_food_heal(&self) -> bool {
@@ -1323,7 +1336,10 @@ impl Player {
     async fn handle_killed(&self, death_msg: TextComponent) {
         self.set_client_loaded(false);
         self.client
-            .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
+            .send_packet_now(&CCombatDeath::new(
+                self.entity_id().into(),
+                &death_msg.to_send(self).await,
+            ))
             .await;
     }
 
@@ -1465,12 +1481,18 @@ impl Player {
         sender_name: &TextComponent,
         target_name: Option<&TextComponent>,
     ) {
+        let target_name_resolved = if let Some(a) = target_name {
+            Some(&a.clone().to_send(self).await)
+        } else {
+            None
+        };
+
         self.client
             .enqueue_packet(&CDisguisedChatMessage::new(
-                message,
+                &message.clone().to_send(self).await,
                 (chat_type + 1).into(),
-                sender_name,
-                target_name,
+                &sender_name.clone().to_send(self).await,
+                target_name_resolved,
             ))
             .await;
     }
@@ -1542,31 +1564,22 @@ impl Player {
         // todo this.player.stopUsingItem();
     }
 
-    pub async fn send_system_message(&self, text: &TextComponent) {
-        match &self.client {
-            ClientPlatform::Java(client) => {
-                client
-                    .enqueue_packet(&CSystemChatMessage::new(text, false))
-                    .await;
-            }
-            ClientPlatform::Bedrock(client) => {
-                client
-                    .send_game_packet(&SText::system_message(text.clone().get_text()))
-                    .await;
-            }
-        }
+    pub async fn send_system_message(&self, text: TextComponent) {
+        self.send_system_message_raw(text, false).await;
     }
 
-    pub async fn send_system_message_raw(&self, text: &TextComponent, overlay: bool) {
+    pub async fn send_system_message_raw(&self, text: TextComponent, overlay: bool) {
         match &self.client {
             ClientPlatform::Java(client) => {
                 client
-                    .enqueue_packet(&CSystemChatMessage::new(text, overlay))
+                    .enqueue_packet(&CSystemChatMessage::new(&text.to_send(self).await, overlay))
                     .await;
             }
             ClientPlatform::Bedrock(client) => {
                 client
-                    .send_game_packet(&SText::system_message(text.clone().get_text()))
+                    .send_game_packet(&SText::system_message(
+                        text.to_string(Some(self), false).await,
+                    ))
                     .await;
             }
         }
@@ -1946,6 +1959,10 @@ impl Player {
                 .broadcast_packet_except(&[self.gameprofile.id], &packet)
                 .await;
         }
+    }
+
+    pub async fn locale(&self) -> String {
+        self.config.read().await.locale.clone()
     }
 }
 

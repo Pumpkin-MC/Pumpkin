@@ -97,6 +97,7 @@ impl JavaClient {
         if max_players > 0 && server.get_player_count().await >= max_players as usize {
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.server_full",
+                None,
                 [],
             ))
             .await;
@@ -193,11 +194,14 @@ impl JavaClient {
                 Ok(new_profile) => *profile = new_profile,
                 Err(error) => {
                     self.kick(match error {
-                        AuthError::FailedResponse => {
-                            TextComponent::translate("multiplayer.disconnect.authservers_down", [])
-                        }
+                        AuthError::FailedResponse => TextComponent::translate(
+                            "multiplayer.disconnect.authservers_down",
+                            None,
+                            [],
+                        ),
                         AuthError::UnverifiedUsername => TextComponent::translate(
                             "multiplayer.disconnect.unverified_username",
+                            None,
                             [],
                         ),
                         e => TextComponent::text(e.to_string()),
@@ -218,6 +222,7 @@ impl JavaClient {
             );
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
+                None,
                 [],
             ))
             .await;
@@ -235,6 +240,7 @@ impl JavaClient {
             );
             self.kick(TextComponent::translate(
                 "multiplayer.disconnect.duplicate_login",
+                None,
                 [],
             ))
             .await;

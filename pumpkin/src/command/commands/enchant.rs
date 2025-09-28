@@ -33,6 +33,7 @@ impl CommandExecutor for Executor {
                 let err_msg = match err {
                     NotInBounds::LowerBound(val, min) => TextComponent::translate(
                         "argument.integer.low",
+                        None,
                         &[
                             TextComponent::text(min.to_string()),
                             TextComponent::text(val.to_string()),
@@ -40,6 +41,7 @@ impl CommandExecutor for Executor {
                     ),
                     NotInBounds::UpperBound(val, max) => TextComponent::translate(
                         "argument.integer.big",
+                        None,
                         &[
                             TextComponent::text(max.to_string()),
                             TextComponent::text(val.to_string()),
@@ -54,6 +56,7 @@ impl CommandExecutor for Executor {
         if level > enchantment.max_level {
             let msg = TextComponent::translate(
                 "commands.enchant.failed.level",
+                None,
                 [
                     TextComponent::text(level.to_string()),
                     TextComponent::text(enchantment.max_level.to_string()),
@@ -87,6 +90,7 @@ impl CommandExecutor for Executor {
                 if only_one {
                     let msg = TextComponent::translate(
                         "commands.enchant.failed.itemless",
+                        None,
                         [targets[0].get_display_name().await],
                     );
                     return Err(CommandError::CommandFailed(Box::new(msg)));
@@ -97,6 +101,7 @@ impl CommandExecutor for Executor {
                 if only_one {
                     let msg = TextComponent::translate(
                         "commands.enchant.failed.incompatible",
+                        None,
                         [item.item.translated_name()],
                     );
                     return Err(CommandError::CommandFailed(Box::new(msg)));
@@ -110,6 +115,7 @@ impl CommandExecutor for Executor {
                 } else if only_one {
                     let msg = TextComponent::translate(
                         "commands.enchant.failed.incompatible",
+                        None,
                         [item.item.translated_name()],
                     );
                     return Err(CommandError::CommandFailed(Box::new(msg)));
@@ -120,12 +126,13 @@ impl CommandExecutor for Executor {
             }
         }
         if success == 0 {
-            let msg = TextComponent::translate("commands.enchant.failed", []);
+            let msg = TextComponent::translate("commands.enchant.failed", None, []);
             return Err(CommandError::CommandFailed(Box::new(msg)));
         }
         if only_one {
             let msg = TextComponent::translate(
                 "commands.enchant.success.single",
+                None,
                 [
                     enchantment.get_fullname(level),
                     targets[0].get_display_name().await,
@@ -135,6 +142,7 @@ impl CommandExecutor for Executor {
         } else {
             let msg = TextComponent::translate(
                 "commands.enchant.success.multiple",
+                None,
                 [
                     enchantment.get_fullname(level),
                     TextComponent::text(targets.len().to_string()),

@@ -184,7 +184,7 @@ impl BlockBehaviour for BedBlock {
         {
             args.player
                 .send_system_message_raw(
-                    &TextComponent::translate("block.minecraft.bed.obstructed", []),
+                    TextComponent::translate("block.minecraft.bed.obstructed", None, []),
                     true,
                 )
                 .await;
@@ -197,7 +197,7 @@ impl BlockBehaviour for BedBlock {
 
             args.player
                 .send_system_message_raw(
-                    &TextComponent::translate("block.minecraft.bed.occupied", []),
+                    TextComponent::translate("block.minecraft.bed.occupied", None, []),
                     true,
                 )
                 .await;
@@ -216,7 +216,7 @@ impl BlockBehaviour for BedBlock {
         {
             args.player
                 .send_system_message_raw(
-                    &TextComponent::translate("block.minecraft.bed.too_far_away", []),
+                    TextComponent::translate("block.minecraft.bed.too_far_away", None, []),
                     true,
                 )
                 .await;
@@ -234,7 +234,11 @@ impl BlockBehaviour for BedBlock {
             .await
         {
             args.player
-                .send_system_message(&TextComponent::translate("block.minecraft.set_spawn", []))
+                .send_system_message(TextComponent::translate(
+                    "block.minecraft.set_spawn",
+                    None,
+                    [],
+                ))
                 .await;
         }
 
@@ -242,7 +246,7 @@ impl BlockBehaviour for BedBlock {
         if !can_sleep(args.world).await {
             args.player
                 .send_system_message_raw(
-                    &TextComponent::translate("block.minecraft.bed.no_sleep", []),
+                    TextComponent::translate("block.minecraft.bed.no_sleep", None, []),
                     true,
                 )
                 .await;
@@ -261,7 +265,7 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate("block.minecraft.bed.not_safe", []),
+                        TextComponent::translate("block.minecraft.bed.not_safe", None, []),
                         true,
                     )
                     .await;

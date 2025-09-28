@@ -20,4 +20,11 @@ pub enum ClickEvent {
     ChangePage { page: u32 },
     /// Copies the given text to system clipboard.
     CopyToClipboard { value: Cow<'static, str> },
+    /// Opens the specified dialog.
+    ShowDialog { dialog: Cow<'static, str> },
+    /// Sends a custom event to the server; has no effect on vanilla servers.
+    Custom {
+        id: Cow<'static, str>,
+        data: Cow<'static, str>,
+    },
 }
