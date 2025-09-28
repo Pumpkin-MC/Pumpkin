@@ -3,7 +3,7 @@ use crate::entity::ai::goal::look_around_goal::LookAroundGoal;
 use crate::entity::ai::goal::move_to_target_pos_goal::MoveToTargetPos;
 use crate::entity::ai::goal::step_and_destroy_block_goal::{StepAndDestroyBlockGoal, Stepping};
 use crate::entity::ai::goal::zombie_attack_goal::ZombieAttackGoal;
-use crate::entity::ai::goal::{Goal, GoalControl};
+use crate::entity::ai::goal::{Controls, Goal, ParentHandle};
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{active_target_goal::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
@@ -31,38 +31,23 @@ impl Zombie {
             Arc::downgrade(&mob_arc)
         };
 
-        // This is needed for goals because some of them needs the MobEntity fully initialized in the constructor
-        // The Weak is stored to avoid memory leak and can be used if and where necessary
-        let goal_selector = &mob_arc.mob_entity.goals_selector;
-        let target_selector = &mob_arc.mob_entity.target_selector;
+        {
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
-        goal_selector.add_goal(4, DestroyEggGoal::new(1.0, 3)).await;
-        goal_selector
-            .add_goal(
+            goal_selector.add_goal(4, DestroyEggGoal::new(1.0, 3));
+            goal_selector.add_goal(
                 8,
-                Arc::new(LookAtEntityGoal::with_default(
-                    mob_weak,
-                    &EntityType::PLAYER,
-                    8.0,
-                )),
-            )
-            .await;
-        goal_selector
-            .add_goal(8, Arc::new(LookAroundGoal::default()))
-            .await;
-        goal_selector
-            .add_goal(2, Arc::new(ZombieAttackGoal::new(0.1, false)))
-            .await;
+                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+            );
+            goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(2, ZombieAttackGoal::new(0.1, false));
 
-        target_selector
-            .add_goal(
+            target_selector.add_goal(
                 2,
-                Arc::new(
-                    ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true)
-                        .await,
-                ),
-            )
-            .await;
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+            );
+        };
 
         mob_arc
     }
@@ -77,30 +62,34 @@ impl Mob for Zombie {
 }
 
 pub struct DestroyEggGoal {
-    step_and_destroy_block_goal: Arc<StepAndDestroyBlockGoal>,
+    step_and_destroy_block_goal: StepAndDestroyBlockGoal<Self, Self>,
 }
 
 impl DestroyEggGoal {
     #[must_use]
-    pub fn new(speed: f64, max_y_difference: i32) -> Arc<Self> {
-        Arc::new_cyclic(|weak: &Weak<Self>| {
-            let step_and_destroy_block_goal = StepAndDestroyBlockGoal::new(
-                Some(weak.clone()),
-                Some(weak.clone()),
+    pub fn new(speed: f64, max_y_difference: i32) -> Box<Self> {
+        let mut this = Box::new(Self {
+            step_and_destroy_block_goal: StepAndDestroyBlockGoal::new(
+                ParentHandle::none(),
+                ParentHandle::none(),
                 &Block::TURTLE_EGG,
                 speed,
                 max_y_difference,
-            );
-            Self {
-                step_and_destroy_block_goal,
-            }
-        })
+            ),
+        });
+
+        this.step_and_destroy_block_goal.stepping = unsafe { ParentHandle::new(&this) };
+        this.step_and_destroy_block_goal
+            .move_to_target_pos_goal
+            .move_to_target_pos = unsafe { ParentHandle::new(&this) };
+
+        this
     }
 }
 
 #[async_trait]
 impl Goal for DestroyEggGoal {
-    async fn can_start(&self, mob: &dyn Mob) -> bool {
+    async fn can_start(&mut self, mob: &dyn Mob) -> bool {
         self.step_and_destroy_block_goal.can_start(mob).await
     }
 
@@ -108,15 +97,15 @@ impl Goal for DestroyEggGoal {
         self.step_and_destroy_block_goal.should_continue(mob).await
     }
 
-    async fn start(&self, mob: &dyn Mob) {
+    async fn start(&mut self, mob: &dyn Mob) {
         self.step_and_destroy_block_goal.start(mob).await;
     }
 
-    async fn stop(&self, mob: &dyn Mob) {
+    async fn stop(&mut self, mob: &dyn Mob) {
         self.step_and_destroy_block_goal.stop(mob).await;
     }
 
-    async fn tick(&self, mob: &dyn Mob) {
+    async fn tick(&mut self, mob: &dyn Mob) {
         self.step_and_destroy_block_goal.tick(mob).await;
     }
 
@@ -124,8 +113,8 @@ impl Goal for DestroyEggGoal {
         self.step_and_destroy_block_goal.should_run_every_tick()
     }
 
-    fn get_goal_control(&self) -> &GoalControl {
-        self.step_and_destroy_block_goal.get_goal_control()
+    fn controls(&self) -> Controls {
+        self.step_and_destroy_block_goal.controls()
     }
 }
 
