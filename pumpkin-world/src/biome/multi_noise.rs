@@ -95,7 +95,7 @@ mod test {
             horizontal_biome_end as usize,
         );
         let mut multi_noise_sampler =
-            MultiNoiseSampler::generate(&noise_rounter.multi_noise, &multi_noise_config);
+            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
 
         for (x, y, z, tem, hum, con, ero, dep, wei) in expected_data.into_iter() {
             let point = multi_noise_sampler.sample(x, y, z);
