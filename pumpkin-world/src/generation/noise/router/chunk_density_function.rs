@@ -42,13 +42,60 @@ fn recycle_buffer(buf: Box<[f64]>) {
 
 pub struct WrapperData {
     // Our relative position within the cell
-    pub(crate) cell_x_block_position: usize,
-    pub(crate) cell_y_block_position: usize,
-    pub(crate) cell_z_block_position: usize,
+    cell_x_block_position: usize,
+    cell_y_block_position: usize,
+    cell_z_block_position: usize,
 
     // Number of blocks per cell per axis
-    pub(crate) horizontal_cell_block_count: usize,
-    pub(crate) vertical_cell_block_count: usize,
+    horizontal_cell_block_count: usize,
+    vertical_cell_block_count: usize,
+
+    x_delta: f64,
+    y_delta: f64,
+    z_delta: f64,
+}
+
+impl WrapperData {
+    pub fn new(
+        cell_x_block_position: usize,
+        cell_y_block_position: usize,
+        cell_z_block_position: usize,
+        horizontal_cell_block_count: usize,
+        vertical_cell_block_count: usize,
+    ) -> Self {
+        Self {
+            cell_x_block_position,
+            cell_y_block_position,
+            cell_z_block_position,
+            horizontal_cell_block_count,
+            vertical_cell_block_count,
+            x_delta: cell_x_block_position as f64 / horizontal_cell_block_count as f64,
+            y_delta: cell_y_block_position as f64 / vertical_cell_block_count as f64,
+            z_delta: cell_z_block_position as f64 / horizontal_cell_block_count as f64,
+        }
+    }
+
+    pub fn update_position(
+        &mut self,
+        cell_x_block_position: usize,
+        cell_y_block_position: usize,
+        cell_z_block_position: usize,
+    ) {
+        if cell_x_block_position != self.cell_x_block_position {
+            self.cell_x_block_position = cell_x_block_position;
+            self.x_delta = cell_x_block_position as f64 / self.horizontal_cell_block_count as f64;
+        }
+
+        if cell_y_block_position != self.cell_y_block_position {
+            self.cell_y_block_position = cell_y_block_position;
+            self.y_delta = cell_y_block_position as f64 / self.vertical_cell_block_count as f64;
+        }
+
+        if cell_z_block_position != self.cell_z_block_position {
+            self.cell_z_block_position = cell_z_block_position;
+            self.z_delta = cell_z_block_position as f64 / self.horizontal_cell_block_count as f64;
+        }
+    }
 }
 
 pub enum SampleAction {
@@ -261,19 +308,18 @@ impl MutableChunkNoiseFunctionComponentImpl for DensityInterpolator {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
-        match sample_options.action {
+        match &sample_options.action {
             SampleAction::CellCaches(WrapperData {
-                cell_x_block_position,
-                cell_y_block_position,
-                cell_z_block_position,
-                horizontal_cell_block_count,
-                vertical_cell_block_count,
+                x_delta,
+                y_delta,
+                z_delta,
+                ..
             }) => {
                 if sample_options.populating_caches {
                     lerp3(
-                        cell_x_block_position as f64 / horizontal_cell_block_count as f64,
-                        cell_y_block_position as f64 / vertical_cell_block_count as f64,
-                        cell_z_block_position as f64 / horizontal_cell_block_count as f64,
+                        *x_delta,
+                        *y_delta,
+                        *z_delta,
                         self.first_pass[0],
                         self.first_pass[4],
                         self.first_pass[2],
@@ -603,13 +649,14 @@ impl MutableChunkNoiseFunctionComponentImpl for CellCache {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
-        match sample_options.action {
+        match &sample_options.action {
             SampleAction::CellCaches(WrapperData {
                 cell_x_block_position,
                 cell_y_block_position,
                 cell_z_block_position,
                 horizontal_cell_block_count,
                 vertical_cell_block_count,
+                ..
             }) => {
                 let cache_index = ((vertical_cell_block_count - 1 - cell_y_block_position)
                     * horizontal_cell_block_count

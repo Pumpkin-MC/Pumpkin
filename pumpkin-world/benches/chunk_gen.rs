@@ -12,8 +12,6 @@ use pumpkin_world::generation::{Seed, get_world_gen};
 use pumpkin_world::level::Level;
 use pumpkin_world::world::{BlockAccessor, BlockRegistryExt};
 
-use rayon::prelude::*;
-
 struct BlockRegistry;
 
 impl BlockRegistryExt for BlockRegistry {
@@ -40,14 +38,7 @@ fn chunk_generation_seed(seed: i64) {
         Dimension::Overworld,
     ));
 
-    // Prepare all positions to generate
-    let positions: Vec<Vector2<i32>> = (0..100)
-        .flat_map(|x| (0..10).map(move |y| Vector2::new(x, y)))
-        .collect();
-
-    positions.par_iter().for_each(|position| {
-        generator.generate_chunk(&level, block_registry.as_ref(), position);
-    });
+    generator.generate_chunk(&level, block_registry.as_ref(), &Vector2::new(0, 0));
 }
 
 fn bench_chunk_generation(c: &mut Criterion) {
@@ -60,7 +51,7 @@ fn bench_chunk_generation(c: &mut Criterion) {
 
 criterion_group! {
     name = benches;
-    config = Criterion::default().sample_size(10).measurement_time(std::time::Duration::from_secs(180));
+    config = Criterion::default().measurement_time(std::time::Duration::from_secs(30));
     targets = bench_chunk_generation
 }
 criterion_main!(benches);
