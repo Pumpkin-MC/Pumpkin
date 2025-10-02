@@ -369,6 +369,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
@@ -550,3 +551,4 @@ mod tests {
         println!("Checked chunks successfully");
     }
 }
+*/

@@ -1,52 +1,27 @@
-use std::sync::Arc;
-
-use async_trait::async_trait;
 use pumpkin_data::BlockState;
 use pumpkin_data::noise_router::{
     END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
 };
-use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use super::{
-    biome_coords, noise::router::proto_noise_router::ProtoNoiseRouters,
-    settings::gen_settings_from_dimension,
+    noise::router::proto_noise_router::ProtoNoiseRouters, settings::gen_settings_from_dimension,
 };
-use crate::chunk::format::LightContainer;
+use crate::dimension::Dimension;
 use crate::generation::proto_chunk::TerrainCache;
-use crate::generation::section_coords;
-use crate::level::Level;
-use crate::world::BlockRegistryExt;
-use crate::{chunk::ChunkLight, dimension::Dimension};
-use crate::{
-    chunk::{
-        ChunkData, ChunkSections, SubChunk,
-        palette::{BiomePalette, BlockPalette},
-    },
-    generation::{GlobalRandomConfig, Seed, proto_chunk::ProtoChunk},
-};
+use crate::generation::{GlobalRandomConfig, Seed};
 
 pub trait GeneratorInit {
     fn new(seed: Seed, dimension: Dimension) -> Self;
 }
 
-#[async_trait]
-pub trait WorldGenerator: Sync + Send {
-    fn generate_chunk(
-        &self,
-        level: &Arc<Level>,
-        block_registry: &dyn BlockRegistryExt,
-        at: &Vector2<i32>,
-    ) -> ChunkData;
-}
-
 pub struct VanillaGenerator {
-    random_config: GlobalRandomConfig,
-    base_router: ProtoNoiseRouters,
-    dimension: Dimension,
+    pub random_config: GlobalRandomConfig,
+    pub base_router: ProtoNoiseRouters,
+    pub dimension: Dimension,
 
-    terrain_cache: TerrainCache,
+    pub terrain_cache: TerrainCache,
 
-    default_block: &'static BlockState,
+    pub default_block: &'static BlockState,
 }
 
 impl GeneratorInit for VanillaGenerator {
@@ -71,83 +46,6 @@ impl GeneratorInit for VanillaGenerator {
             dimension,
             terrain_cache,
             default_block,
-        }
-    }
-}
-
-impl WorldGenerator for VanillaGenerator {
-    fn generate_chunk(
-        &self,
-        level: &Arc<Level>,
-        block_registry: &dyn BlockRegistryExt,
-        at: &Vector2<i32>,
-    ) -> ChunkData {
-        let generation_settings = gen_settings_from_dimension(&self.dimension);
-
-        let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
-        let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
-        let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
-
-        let mut proto_chunk = ProtoChunk::new(
-            *at,
-            &self.base_router,
-            &self.random_config,
-            generation_settings,
-            &self.terrain_cache,
-            self.default_block,
-        );
-        proto_chunk.populate_biomes(self.dimension);
-        proto_chunk.populate_noise();
-        proto_chunk.build_surface();
-        proto_chunk.generate_features_and_structure(level, block_registry);
-
-        for y in 0..biome_coords::from_block(generation_settings.shape.height) {
-            let relative_y = y as usize;
-            let section_index = relative_y / BiomePalette::SIZE;
-            let relative_y = relative_y % BiomePalette::SIZE;
-            if let Some(section) = sections.sections.get_mut(section_index) {
-                for z in 0..BiomePalette::SIZE {
-                    for x in 0..BiomePalette::SIZE {
-                        let absolute_y =
-                            biome_coords::from_block(generation_settings.shape.min_y as i32)
-                                + y as i32;
-                        let biome =
-                            proto_chunk.get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
-                        section.biomes.set(x, relative_y, z, biome.id);
-                    }
-                }
-            }
-        }
-        for y in 0..generation_settings.shape.height {
-            let relative_y = y as usize;
-            let section_index = section_coords::block_to_section(relative_y);
-            let relative_y = relative_y % BlockPalette::SIZE;
-            if let Some(section) = sections.sections.get_mut(section_index) {
-                for z in 0..BlockPalette::SIZE {
-                    for x in 0..BlockPalette::SIZE {
-                        let block = proto_chunk
-                            .get_block_state_raw(&Vector3::new(x as i32, y as i32, z as i32));
-                        section.block_states.set(x, relative_y, z, block);
-                    }
-                }
-            }
-        }
-        ChunkData {
-            light_engine: ChunkLight {
-                sky_light: (0..sections.sections.len())
-                    .map(|_| LightContainer::new_filled(15))
-                    .collect(),
-                block_light: (0..sections.sections.len())
-                    .map(|_| LightContainer::new_empty(15))
-                    .collect(),
-            },
-            section: sections,
-            heightmap: Default::default(),
-            position: *at,
-            dirty: true,
-            block_ticks: Default::default(),
-            fluid_ticks: Default::default(),
-            block_entities: Default::default(),
         }
     }
 }
