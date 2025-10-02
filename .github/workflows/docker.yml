@@ -52,6 +52,10 @@ jobs:
           echo "PUMPKIN_VERSION=$(echo $VERSION | cut -d '+' -f 1)" >> $GITHUB_ENV
           echo "MC_VERSION=$(echo $VERSION | cut -d '+' -f 2)" >> $GITHUB_ENV
 
+      - name: Set up QEMU
+        if: steps.repo_check.outputs.should_deploy == 'true'
+        uses: docker/setup-qemu-action@v3
+
       - name: Extract Metadata
         if: steps.repo_check.outputs.should_deploy == 'true'
         id: meta
@@ -74,7 +78,16 @@ jobs:
         if: steps.repo_check.outputs.should_deploy == 'true'
         uses: docker/build-push-action@v6
         with:
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
+
+      - name: Generate SBOM
+        if: steps.repo_check.outputs.should_deploy == 'true'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          format: spdx-json
+          artifact-name: sbom-pumpkin-${{ env.PUMPKIN_VERSION }}
