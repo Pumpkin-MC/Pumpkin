@@ -58,7 +58,7 @@ mod test {
         let seed = 0;
         let chunk_pos = Vector2::new(0, 0);
         let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_rounter =
+        let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
 
         let surface_config = GENERATION_SETTINGS

@@ -1623,7 +1623,7 @@ impl JavaClient {
             }
         }
         if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
-            // If it can be equipped we want to makr sure we can actually equip it
+            // If it can be equipped we want to make sure we can actually equip it
             player
                 .enqueue_equipment_change(equippable.slot, &held)
                 .await;

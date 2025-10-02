@@ -240,11 +240,11 @@ mod test {
     fn test_sample() {
         let seed = 123;
         let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_rounter =
+        let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
         let mut sampler =
-            MultiNoiseSampler::generate(&noise_rounter.multi_noise, &multi_noise_config);
+            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
         let expected = NoiseValuePoint {
             temperature: -5727,
             humidity: 55,
@@ -261,11 +261,11 @@ mod test {
         // we use a different seed
         let seed = 13579;
         let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_rounter =
+        let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
         let mut sampler =
-            MultiNoiseSampler::generate(&noise_rounter.multi_noise, &multi_noise_config);
+            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
         let expected = NoiseValuePoint {
             temperature: 7489,
             humidity: 3502,

@@ -57,5 +57,5 @@ serde_json = "1.0"
 
 async-trait = "0.1"
 
-tempfile = { version = "3.21.0", default-features = false }
+tempfile = { version = "3.23.0", default-features = false }
 proc-macro-error2 = "2"
