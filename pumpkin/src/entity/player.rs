@@ -70,9 +70,7 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
-use pumpkin_world::entity::entity_data_flags::{
-    DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION, SLEEPING_POS_ID,
-};
+use pumpkin_world::entity::entity_data_flags::SLEEPING_POS_ID;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 
@@ -100,7 +98,7 @@ use pumpkin_world::chunk_system::ChunkLoading;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
-pub const DATA_VERSION: i32 = 4438; // 1.21.8
+pub const DATA_VERSION: i32 = 4554; // 1.21.9
 
 enum BatchState {
     Initial,
@@ -1503,23 +1501,24 @@ impl Player {
     }
 
     /// Send the player's skin layers and used hand to all players.
-    pub async fn send_client_information(&self) {
-        let config = self.config.read().await;
-        self.living_entity
-            .entity
-            .send_meta_data(&[
-                Metadata::new(
-                    DATA_PLAYER_MODE_CUSTOMISATION,
-                    MetaDataType::Byte,
-                    config.skin_parts,
-                ),
-                Metadata::new(
-                    DATA_PLAYER_MAIN_HAND,
-                    MetaDataType::Byte,
-                    config.main_hand as u8,
-                ),
-            ])
-            .await;
+    pub fn send_client_information(&self) {
+        //let config = self.config.read().await;
+        // TODO
+        // self.living_entity
+        //     .entity
+        //     .send_meta_data(&[
+        //         Metadata::new(
+        //             DATA_PLAYER_MODE_CUSTOMISATION,
+        //             MetaDataType::Byte,
+        //             config.skin_parts,
+        //         ),
+        //         Metadata::new(
+        //             DATA_PLAYER_MAIN_HAND,
+        //             MetaDataType::Byte,
+        //             config.main_hand as u8,
+        //         ),
+        //     ])
+        //     .await;
     }
 
     pub async fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {

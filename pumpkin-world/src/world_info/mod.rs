@@ -12,11 +12,11 @@ use thiserror::Error;
 pub mod anvil;
 
 // Constraint: disk biome palette serialization changed in 1.21.5
-pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4435; // 1.21.8
-pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4438; // 1.21.8
+pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4435; // 1.21.9
+pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4554; // 1.21.9
 
-pub const MINIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19132; // 1.21.8
-pub const MAXIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19133; // 1.21.8
+pub const MINIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19132; // 1.21.9
+pub const MAXIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19133; // 1.21.9
 
 pub trait WorldInfoReader {
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError>;

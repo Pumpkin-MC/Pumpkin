@@ -271,65 +271,122 @@
       "erosion": "minecraft:overworld/erosion",
       "depth": "minecraft:overworld_amplified/depth",
       "ridges": "minecraft:overworld/ridges",
-      "initial_density_without_jaggedness": {
-        "argument1": 0.4,
-        "argument2": {
-          "argument1": {
-            "from_y": -64,
-            "to_y": -40,
-            "from_value": 0.0,
-            "to_value": 1.0,
-            "type": "minecraft:y_clamped_gradient"
-          },
+      "preliminary_surface_level": {
+        "density": {
+          "argument1": -0.390625,
           "argument2": {
-            "argument1": -0.4,
+            "argument1": 0.4,
             "argument2": {
-              "argument1": -0.078125,
+              "argument1": {
+                "from_y": -64,
+                "to_y": -40,
+                "from_value": 0.0,
+                "to_value": 1.0,
+                "type": "minecraft:y_clamped_gradient"
+              },
               "argument2": {
-                "argument1": {
-                  "from_y": 304,
-                  "to_y": 320,
-                  "from_value": 1.0,
-                  "to_value": 0.0,
-                  "type": "minecraft:y_clamped_gradient"
-                },
+                "argument1": -0.4,
                 "argument2": {
-                  "argument1": 0.078125,
+                  "argument1": -0.078125,
                   "argument2": {
-                    "input": {
-                      "argument1": -0.703125,
+                    "argument1": {
+                      "from_y": 304,
+                      "to_y": 320,
+                      "from_value": 1.0,
+                      "to_value": 0.0,
+                      "type": "minecraft:y_clamped_gradient"
+                    },
+                    "argument2": {
+                      "argument1": 0.078125,
                       "argument2": {
-                        "argument1": 4.0,
-                        "argument2": {
-                          "argument": {
-                            "argument1": "minecraft:overworld_amplified/depth",
+                        "input": {
+                          "argument1": -0.703125,
+                          "argument2": {
+                            "argument1": 4.0,
                             "argument2": {
-                              "argument": "minecraft:overworld_amplified/factor",
-                              "type": "minecraft:cache_2d"
+                              "argument": {
+                                "argument1": {
+                                  "argument1": {
+                                    "from_y": -64,
+                                    "to_y": 320,
+                                    "from_value": 1.5,
+                                    "to_value": -1.5,
+                                    "type": "minecraft:y_clamped_gradient"
+                                  },
+                                  "argument2": {
+                                    "argument": "minecraft:overworld_amplified/offset",
+                                    "type": "minecraft:cache_2d"
+                                  },
+                                  "type": "minecraft:add"
+                                },
+                                "argument2": {
+                                  "argument": "minecraft:overworld_amplified/factor",
+                                  "type": "minecraft:cache_2d"
+                                },
+                                "type": "minecraft:mul"
+                              },
+                              "type": "minecraft:quarter_negative"
                             },
                             "type": "minecraft:mul"
                           },
-                          "type": "minecraft:quarter_negative"
+                          "type": "minecraft:add"
                         },
-                        "type": "minecraft:mul"
+                        "min": -64.0,
+                        "max": 64.0,
+                        "type": "minecraft:clamp"
                       },
                       "type": "minecraft:add"
                     },
-                    "min": -64.0,
-                    "max": 64.0,
-                    "type": "minecraft:clamp"
+                    "type": "minecraft:mul"
                   },
                   "type": "minecraft:add"
                 },
-                "type": "minecraft:mul"
+                "type": "minecraft:add"
               },
-              "type": "minecraft:add"
+              "type": "minecraft:mul"
             },
             "type": "minecraft:add"
           },
-          "type": "minecraft:mul"
+          "type": "minecraft:add"
         },
-        "type": "minecraft:add"
+        "upper_bound": {
+          "input": {
+            "argument1": 128.0,
+            "argument2": {
+              "argument1": -128.0,
+              "argument2": {
+                "argument1": {
+                  "argument1": 0.2734375,
+                  "argument2": {
+                    "argument": {
+                      "argument": "minecraft:overworld_amplified/factor",
+                      "type": "minecraft:cache_2d"
+                    },
+                    "type": "minecraft:invert"
+                  },
+                  "type": "minecraft:mul"
+                },
+                "argument2": {
+                  "argument1": -1.0,
+                  "argument2": {
+                    "argument": "minecraft:overworld_amplified/offset",
+                    "type": "minecraft:cache_2d"
+                  },
+                  "type": "minecraft:mul"
+                },
+                "type": "minecraft:add"
+              },
+              "type": "minecraft:mul"
+            },
+            "type": "minecraft:add"
+          },
+          "min": -40.0,
+          "max": 320.0,
+          "type": "minecraft:clamp"
+        },
+        "lower_bound": -64,
+        "cell_height": 8,
+        "type": "minecraft:find_top_surface"
       },
       "lava": {
         "noise": "minecraft:aquifer_lava",
@@ -2611,7 +2668,7 @@
       "erosion": 0.0,
       "depth": 0.0,
       "ridges": 0.0,
-      "initial_density_without_jaggedness": 0.0,
+      "preliminary_surface_level": 0.0,
       "lava": 0.0,
       "temperature": {
         "xz_scale": 0.25,
@@ -4890,52 +4947,7 @@
       },
       "depth": 0.0,
       "ridges": 0.0,
-      "initial_density_without_jaggedness": {
-        "argument1": -0.234375,
-        "argument2": {
-          "argument1": {
-            "from_y": 4,
-            "to_y": 32,
-            "from_value": 0.0,
-            "to_value": 1.0,
-            "type": "minecraft:y_clamped_gradient"
-          },
-          "argument2": {
-            "argument1": 0.234375,
-            "argument2": {
-              "argument1": -23.4375,
-              "argument2": {
-                "argument1": {
-                  "from_y": 56,
-                  "to_y": 312,
-                  "from_value": 1.0,
-                  "to_value": 0.0,
-                  "type": "minecraft:y_clamped_gradient"
-                },
-                "argument2": {
-                  "argument1": 23.4375,
-                  "argument2": {
-                    "argument1": -0.703125,
-                    "argument2": {
-                      "argument": {
-                        "type": "minecraft:end_islands"
-                      },
-                      "type": "minecraft:cache_2d"
-                    },
-                    "type": "minecraft:add"
-                  },
-                  "type": "minecraft:add"
-                },
-                "type": "minecraft:mul"
-              },
-              "type": "minecraft:add"
-            },
-            "type": "minecraft:add"
-          },
-          "type": "minecraft:mul"
-        },
-        "type": "minecraft:add"
-      },
+      "preliminary_surface_level": 0.0,
       "lava": 0.0,
       "temperature": 0.0,
       "vegetation": 0.0,
@@ -5030,7 +5042,7 @@
       "erosion": 0.0,
       "depth": 0.0,
       "ridges": 0.0,
-      "initial_density_without_jaggedness": 0.0,
+      "preliminary_surface_level": 0.0,
       "lava": 0.0,
       "temperature": {
         "xz_scale": 0.25,
@@ -7468,65 +7480,122 @@
       "erosion": "minecraft:overworld_large_biomes/erosion",
       "depth": "minecraft:overworld_large_biomes/depth",
       "ridges": "minecraft:overworld/ridges",
-      "initial_density_without_jaggedness": {
-        "argument1": 0.1171875,
-        "argument2": {
-          "argument1": {
-            "from_y": -64,
-            "to_y": -40,
-            "from_value": 0.0,
-            "to_value": 1.0,
-            "type": "minecraft:y_clamped_gradient"
-          },
+      "preliminary_surface_level": {
+        "density": {
+          "argument1": -0.390625,
           "argument2": {
-            "argument1": -0.1171875,
+            "argument1": 0.1171875,
             "argument2": {
-              "argument1": -0.078125,
+              "argument1": {
+                "from_y": -64,
+                "to_y": -40,
+                "from_value": 0.0,
+                "to_value": 1.0,
+                "type": "minecraft:y_clamped_gradient"
+              },
               "argument2": {
-                "argument1": {
-                  "from_y": 240,
-                  "to_y": 256,
-                  "from_value": 1.0,
-                  "to_value": 0.0,
-                  "type": "minecraft:y_clamped_gradient"
-                },
+                "argument1": -0.1171875,
                 "argument2": {
-                  "argument1": 0.078125,
+                  "argument1": -0.078125,
                   "argument2": {
-                    "input": {
-                      "argument1": -0.703125,
+                    "argument1": {
+                      "from_y": 240,
+                      "to_y": 256,
+                      "from_value": 1.0,
+                      "to_value": 0.0,
+                      "type": "minecraft:y_clamped_gradient"
+                    },
+                    "argument2": {
+                      "argument1": 0.078125,
                       "argument2": {
-                        "argument1": 4.0,
-                        "argument2": {
-                          "argument": {
-                            "argument1": "minecraft:overworld_large_biomes/depth",
+                        "input": {
+                          "argument1": -0.703125,
+                          "argument2": {
+                            "argument1": 4.0,
                             "argument2": {
-                              "argument": "minecraft:overworld_large_biomes/factor",
-                              "type": "minecraft:cache_2d"
+                              "argument": {
+                                "argument1": {
+                                  "argument1": {
+                                    "from_y": -64,
+                                    "to_y": 320,
+                                    "from_value": 1.5,
+                                    "to_value": -1.5,
+                                    "type": "minecraft:y_clamped_gradient"
+                                  },
+                                  "argument2": {
+                                    "argument": "minecraft:overworld_large_biomes/offset",
+                                    "type": "minecraft:cache_2d"
+                                  },
+                                  "type": "minecraft:add"
+                                },
+                                "argument2": {
+                                  "argument": "minecraft:overworld_large_biomes/factor",
+                                  "type": "minecraft:cache_2d"
+                                },
+                                "type": "minecraft:mul"
+                              },
+                              "type": "minecraft:quarter_negative"
                             },
                             "type": "minecraft:mul"
                           },
-                          "type": "minecraft:quarter_negative"
+                          "type": "minecraft:add"
                         },
-                        "type": "minecraft:mul"
+                        "min": -64.0,
+                        "max": 64.0,
+                        "type": "minecraft:clamp"
                       },
                       "type": "minecraft:add"
                     },
-                    "min": -64.0,
-                    "max": 64.0,
-                    "type": "minecraft:clamp"
+                    "type": "minecraft:mul"
                   },
                   "type": "minecraft:add"
                 },
-                "type": "minecraft:mul"
+                "type": "minecraft:add"
               },
-              "type": "minecraft:add"
+              "type": "minecraft:mul"
             },
             "type": "minecraft:add"
           },
-          "type": "minecraft:mul"
+          "type": "minecraft:add"
         },
-        "type": "minecraft:add"
+        "upper_bound": {
+          "input": {
+            "argument1": 128.0,
+            "argument2": {
+              "argument1": -128.0,
+              "argument2": {
+                "argument1": {
+                  "argument1": 0.2734375,
+                  "argument2": {
+                    "argument": {
+                      "argument": "minecraft:overworld_large_biomes/factor",
+                      "type": "minecraft:cache_2d"
+                    },
+                    "type": "minecraft:invert"
+                  },
+                  "type": "minecraft:mul"
+                },
+                "argument2": {
+                  "argument1": -1.0,
+                  "argument2": {
+                    "argument": "minecraft:overworld_large_biomes/offset",
+                    "type": "minecraft:cache_2d"
+                  },
+                  "type": "minecraft:mul"
+                },
+                "type": "minecraft:add"
+              },
+              "type": "minecraft:mul"
+            },
+            "type": "minecraft:add"
+          },
+          "min": -40.0,
+          "max": 320.0,
+          "type": "minecraft:clamp"
+        },
+        "lower_bound": -64,
+        "cell_height": 8,
+        "type": "minecraft:find_top_surface"
       },
       "lava": {
         "noise": "minecraft:aquifer_lava",
@@ -9808,7 +9877,7 @@
       "erosion": 0.0,
       "depth": 0.0,
       "ridges": 0.0,
-      "initial_density_without_jaggedness": 0.0,
+      "preliminary_surface_level": 0.0,
       "lava": 0.0,
       "temperature": {
         "xz_scale": 0.25,
@@ -10747,65 +10816,122 @@
       "erosion": "minecraft:overworld/erosion",
       "depth": "minecraft:overworld/depth",
       "ridges": "minecraft:overworld/ridges",
-      "initial_density_without_jaggedness": {
-        "argument1": 0.1171875,
-        "argument2": {
-          "argument1": {
-            "from_y": -64,
-            "to_y": -40,
-            "from_value": 0.0,
-            "to_value": 1.0,
-            "type": "minecraft:y_clamped_gradient"
-          },
+      "preliminary_surface_level": {
+        "density": {
+          "argument1": -0.390625,
           "argument2": {
-            "argument1": -0.1171875,
+            "argument1": 0.1171875,
             "argument2": {
-              "argument1": -0.078125,
+              "argument1": {
+                "from_y": -64,
+                "to_y": -40,
+                "from_value": 0.0,
+                "to_value": 1.0,
+                "type": "minecraft:y_clamped_gradient"
+              },
               "argument2": {
-                "argument1": {
-                  "from_y": 240,
-                  "to_y": 256,
-                  "from_value": 1.0,
-                  "to_value": 0.0,
-                  "type": "minecraft:y_clamped_gradient"
-                },
+                "argument1": -0.1171875,
                 "argument2": {
-                  "argument1": 0.078125,
+                  "argument1": -0.078125,
                   "argument2": {
-                    "input": {
-                      "argument1": -0.703125,
+                    "argument1": {
+                      "from_y": 240,
+                      "to_y": 256,
+                      "from_value": 1.0,
+                      "to_value": 0.0,
+                      "type": "minecraft:y_clamped_gradient"
+                    },
+                    "argument2": {
+                      "argument1": 0.078125,
                       "argument2": {
-                        "argument1": 4.0,
-                        "argument2": {
-                          "argument": {
-                            "argument1": "minecraft:overworld/depth",
+                        "input": {
+                          "argument1": -0.703125,
+                          "argument2": {
+                            "argument1": 4.0,
                             "argument2": {
-                              "argument": "minecraft:overworld/factor",
-                              "type": "minecraft:cache_2d"
+                              "argument": {
+                                "argument1": {
+                                  "argument1": {
+                                    "from_y": -64,
+                                    "to_y": 320,
+                                    "from_value": 1.5,
+                                    "to_value": -1.5,
+                                    "type": "minecraft:y_clamped_gradient"
+                                  },
+                                  "argument2": {
+                                    "argument": "minecraft:overworld/offset",
+                                    "type": "minecraft:cache_2d"
+                                  },
+                                  "type": "minecraft:add"
+                                },
+                                "argument2": {
+                                  "argument": "minecraft:overworld/factor",
+                                  "type": "minecraft:cache_2d"
+                                },
+                                "type": "minecraft:mul"
+                              },
+                              "type": "minecraft:quarter_negative"
                             },
                             "type": "minecraft:mul"
                           },
-                          "type": "minecraft:quarter_negative"
+                          "type": "minecraft:add"
                         },
-                        "type": "minecraft:mul"
+                        "min": -64.0,
+                        "max": 64.0,
+                        "type": "minecraft:clamp"
                       },
                       "type": "minecraft:add"
                     },
-                    "min": -64.0,
-                    "max": 64.0,
-                    "type": "minecraft:clamp"
+                    "type": "minecraft:mul"
                   },
                   "type": "minecraft:add"
                 },
-                "type": "minecraft:mul"
+                "type": "minecraft:add"
               },
-              "type": "minecraft:add"
+              "type": "minecraft:mul"
             },
             "type": "minecraft:add"
           },
-          "type": "minecraft:mul"
+          "type": "minecraft:add"
         },
-        "type": "minecraft:add"
+        "upper_bound": {
+          "input": {
+            "argument1": 128.0,
+            "argument2": {
+              "argument1": -128.0,
+              "argument2": {
+                "argument1": {
+                  "argument1": 0.2734375,
+                  "argument2": {
+                    "argument": {
+                      "argument": "minecraft:overworld/factor",
+                      "type": "minecraft:cache_2d"
+                    },
+                    "type": "minecraft:invert"
+                  },
+                  "type": "minecraft:mul"
+                },
+                "argument2": {
+                  "argument1": -1.0,
+                  "argument2": {
+                    "argument": "minecraft:overworld/offset",
+                    "type": "minecraft:cache_2d"
+                  },
+                  "type": "minecraft:mul"
+                },
+                "type": "minecraft:add"
+              },
+              "type": "minecraft:mul"
+            },
+            "type": "minecraft:add"
+          },
+          "min": -40.0,
+          "max": 320.0,
+          "type": "minecraft:clamp"
+        },
+        "lower_bound": -64,
+        "cell_height": 8,
+        "type": "minecraft:find_top_surface"
       },
       "lava": {
         "noise": "minecraft:aquifer_lava",

@@ -34,7 +34,6 @@ use crate::{
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use async_trait::async_trait;
 use border::Worldborder;
-use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -53,6 +52,7 @@ use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::chunk_radius_update::CChunkRadiusUpdate;
 use pumpkin_protocol::bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate;
+use pumpkin_protocol::bedrock::client::start_game::CStartGame;
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
@@ -81,12 +81,9 @@ use pumpkin_protocol::{
         server::play::SChatMessage,
     },
 };
-use pumpkin_protocol::{bedrock::client::start_game::CStartGame, ser::serializer::Serializer};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{
-        CBlockEvent, CRemoveMobEffect, CSetEntityMetadata, CSetEquipment, MetaDataType, Metadata,
-    },
+    java::client::play::{CBlockEvent, CRemoveMobEffect, CSetEquipment},
 };
 use pumpkin_protocol::{
     codec::var_int::VarInt,
@@ -106,22 +103,18 @@ use pumpkin_util::{
     math::{position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
+use pumpkin_world::world::GetBlockError;
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, GENERATION_SETTINGS, GeneratorSetting, biome,
     block::entities::BlockEntity, chunk::io::Dirtiable, inventory::Inventory, item::ItemStack,
     world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
-use pumpkin_world::{
-    entity::entity_data_flags::{DATA_PLAYER_MAIN_HAND, DATA_PLAYER_MODE_CUSTOMISATION},
-    world::GetBlockError,
-};
 use pumpkin_world::{level::Level, tick::TickPriority};
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{Rng, rng};
 use scoreboard::Scoreboard;
-use serde::Serialize;
 use time::LevelTime;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
@@ -1583,35 +1576,36 @@ impl World {
                 ))
                 .await;
             {
-                let config = existing_player.config.read().await;
-                let mut buf = Vec::new();
-                for meta in [
-                    Metadata::new(
-                        DATA_PLAYER_MODE_CUSTOMISATION,
-                        MetaDataType::Byte,
-                        config.skin_parts,
-                    ),
-                    Metadata::new(
-                        DATA_PLAYER_MAIN_HAND,
-                        MetaDataType::Byte,
-                        config.main_hand as u8,
-                    ),
-                ] {
-                    let mut serializer_buf = Vec::new();
+                // TODO
+                // let config = existing_player.config.read().await;
+                // let mut buf = Vec::new();
+                // for meta in [
+                //     Metadata::new(
+                //         DATA_PLAYER_MODE_CUSTOMISATION,
+                //         MetaDataType::Byte,
+                //         config.skin_parts,
+                //     ),
+                //     Metadata::new(
+                //         DATA_PLAYER_MAIN_HAND,
+                //         MetaDataType::Byte,
+                //         config.main_hand as u8,
+                //     ),
+                // ] {
+                //     let mut serializer_buf = Vec::new();
 
-                    let mut serializer = Serializer::new(&mut serializer_buf);
-                    meta.serialize(&mut serializer).unwrap();
-                    buf.extend(serializer_buf);
-                }
-                drop(config);
-                // END
-                buf.put_u8(255);
-                client
-                    .enqueue_packet(&CSetEntityMetadata::new(
-                        existing_player.get_entity().entity_id.into(),
-                        buf.into(),
-                    ))
-                    .await;
+                //     let mut serializer = Serializer::new(&mut serializer_buf);
+                //     meta.serialize(&mut serializer).unwrap();
+                //     buf.extend(serializer_buf);
+                // }
+                // drop(config);
+                // // END
+                // buf.put_u8(255);
+                // client
+                //     .enqueue_packet(&CSetEntityMetadata::new(
+                //         existing_player.get_entity().entity_id.into(),
+                //         buf.into(),
+                //     ))
+                //     .await;
             };
 
             {
@@ -1646,7 +1640,7 @@ impl World {
                     .await;
             }
         }
-        player.send_client_information().await;
+        player.send_client_information();
 
         // Sync selected slot
         player
@@ -1764,7 +1758,7 @@ impl World {
             ),
         )
         .await;
-        player.send_client_information().await;
+        player.send_client_information();
 
         chunker::update_position(player).await;
         // Update commands

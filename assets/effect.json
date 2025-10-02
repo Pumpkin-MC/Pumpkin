@@ -7,9 +7,9 @@
     "attribute_modifiers": [
       {
         "attribute": "movement_speed",
+        "operation": "ADD_MULTIPLIED_TOTAL",
         "id": "minecraft:effect.speed",
-        "baseValue": 0.20000000298023224,
-        "operation": "ADD_MULTIPLIED_TOTAL"
+        "baseValue": 0.20000000298023224
       }
     ]
   },
@@ -21,9 +21,9 @@
     "attribute_modifiers": [
       {
         "attribute": "movement_speed",
+        "operation": "ADD_MULTIPLIED_TOTAL",
         "id": "minecraft:effect.slowness",
-        "baseValue": -0.15000000596046448,
-        "operation": "ADD_MULTIPLIED_TOTAL"
+        "baseValue": -0.15000000596046448
       }
     ]
   },
@@ -35,9 +35,9 @@
     "attribute_modifiers": [
       {
         "attribute": "attack_speed",
+        "operation": "ADD_MULTIPLIED_TOTAL",
         "id": "minecraft:effect.haste",
-        "baseValue": 0.10000000149011612,
-        "operation": "ADD_MULTIPLIED_TOTAL"
+        "baseValue": 0.10000000149011612
       }
     ]
   },
@@ -49,9 +49,9 @@
     "attribute_modifiers": [
       {
         "attribute": "attack_speed",
+        "operation": "ADD_MULTIPLIED_TOTAL",
         "id": "minecraft:effect.mining_fatigue",
-        "baseValue": -0.10000000149011612,
-        "operation": "ADD_MULTIPLIED_TOTAL"
+        "baseValue": -0.10000000149011612
       }
     ]
   },
@@ -63,9 +63,9 @@
     "attribute_modifiers": [
       {
         "attribute": "attack_damage",
+        "operation": "ADD_VALUE",
         "id": "minecraft:effect.strength",
-        "baseValue": 3.0,
-        "operation": "ADD_VALUE"
+        "baseValue": 3.0
       }
     ]
   },
@@ -91,9 +91,9 @@
     "attribute_modifiers": [
       {
         "attribute": "safe_fall_distance",
+        "operation": "ADD_VALUE",
         "id": "minecraft:effect.jump_boost",
-        "baseValue": 1.0,
-        "operation": "ADD_VALUE"
+        "baseValue": 1.0
       }
     ]
   },
@@ -143,9 +143,9 @@
     "attribute_modifiers": [
       {
         "attribute": "waypoint_transmit_range",
+        "operation": "ADD_MULTIPLIED_TOTAL",
         "id": "minecraft:effect.waypoint_transmit_range_hide",
-        "baseValue": -1.0,
-        "operation": "ADD_MULTIPLIED_TOTAL"
+        "baseValue": -1.0
       }
     ]
   },
@@ -178,9 +178,9 @@
     "attribute_modifiers": [
       {
         "attribute": "attack_damage",
+        "operation": "ADD_VALUE",
         "id": "minecraft:effect.weakness",
-        "baseValue": -4.0,
-        "operation": "ADD_VALUE"
+        "baseValue": -4.0
       }
     ]
   },
@@ -206,9 +206,9 @@
     "attribute_modifiers": [
       {
         "attribute": "max_health",
+        "operation": "ADD_VALUE",
         "id": "minecraft:effect.health_boost",
-        "baseValue": 4.0,
-        "operation": "ADD_VALUE"
+        "baseValue": 4.0
       }
     ]
   },
@@ -220,9 +220,9 @@
     "attribute_modifiers": [
       {
         "attribute": "max_absorption",
+        "operation": "ADD_VALUE",
         "id": "minecraft:effect.absorption",
-        "baseValue": 4.0,
-        "operation": "ADD_VALUE"
+        "baseValue": 4.0
       }
     ]
   },
@@ -255,9 +255,9 @@
     "attribute_modifiers": [
       {
         "attribute": "luck",
+        "operation": "ADD_VALUE",
         "id": "minecraft:effect.luck",
-        "baseValue": 1.0,
-        "operation": "ADD_VALUE"
+        "baseValue": 1.0
       }
     ]
   },
@@ -269,9 +269,9 @@
     "attribute_modifiers": [
       {
         "attribute": "luck",
+        "operation": "ADD_VALUE",
         "id": "minecraft:effect.unluck",
-        "baseValue": -1.0,
-        "operation": "ADD_VALUE"
+        "baseValue": -1.0
       }
     ]
   },

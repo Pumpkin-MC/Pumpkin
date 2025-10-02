@@ -2062,7 +2062,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -2107,7 +2107,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-api-macros"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -2117,7 +2117,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-config"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "log",
  "pumpkin-util",
@@ -2128,7 +2128,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-data"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "crc-fast",
  "heck",
@@ -2146,7 +2146,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-inventory"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "async-trait",
  "crossbeam-utils",
@@ -2161,7 +2161,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-macros"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "heck",
  "proc-macro-error2",
@@ -2172,7 +2172,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-nbt"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "bytes",
  "cesu8",
@@ -2184,7 +2184,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-protocol"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "aes",
  "async-compression",
@@ -2206,7 +2206,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-registry"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "indexmap 2.11.0",
  "pumpkin-protocol",
@@ -2217,7 +2217,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-util"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "bytes",
  "colored",
@@ -2237,7 +2237,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-world"
-version = "0.1.0-dev+1.21.8"
+version = "0.1.0-dev+1.21.9"
 dependencies = [
  "async-trait",
  "bitflags",
