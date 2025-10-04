@@ -24,7 +24,7 @@ use crate::{
 #[derive(Debug)]
 pub struct ChiseledBookshelfBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; 6],
+    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub last_interacted_slot: AtomicI8,
     pub dirty: AtomicBool,
 }
@@ -81,6 +81,7 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
 }
 
 impl ChiseledBookshelfBlockEntity {
+    pub const INVENTORY_SIZE: usize = 6;
     pub const ID: &'static str = "minecraft:chiseled_bookshelf";
 
     pub fn new(position: BlockPos) -> Self {
