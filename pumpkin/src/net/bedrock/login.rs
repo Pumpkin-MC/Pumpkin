@@ -57,7 +57,7 @@ impl BedrockClient {
         match self.try_handle_login(packet, server).await {
             Ok(()) => Some(()),
             Err(error) => {
-                log::warn!("Bedrock login failed: {error}" );
+                log::warn!("Bedrock login failed: {error}");
                 let message = match error {
                     LoginError::InvalidUsername => "Your username is invalid.".to_string(),
                     _ => "Failed to log in. The data sent by your client was invalid.".to_string(),
