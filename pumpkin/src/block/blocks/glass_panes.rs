@@ -57,7 +57,7 @@ pub async fn compute_pane_state(
         let connected = other_block == block
             || other_block_state.is_side_solid(direction.opposite())
             || other_block.is_tagged_with_by_tag(&tag::Block::C_GLASS_PANES)
-            || other_block == &Block::IRON_BARS
+            || other_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BARS)
             || other_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WALLS);
 
         match direction {
