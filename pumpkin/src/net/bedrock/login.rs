@@ -1,9 +1,8 @@
-use crate::net::MOJANG_PUBLIC_KEY_BASE64;
+use crate::net::authentication::MOJANG_BEDROCK_PUBLIC_KEY_BASE64;
 use crate::{
     net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
     server::Server,
 };
-use bedrock_jwt::{AuthError, verify_chain};
 use pumpkin_config::{BASIC_CONFIG, networking::compression::CompressionInfo};
 use pumpkin_protocol::{
     bedrock::{
@@ -17,6 +16,7 @@ use pumpkin_protocol::{
     },
     codec::var_uint::VarUInt,
 };
+use pumpkin_util::jwt::{AuthError, verify_chain};
 use pumpkin_world::CURRENT_BEDROCK_MC_VERSION;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -79,7 +79,7 @@ impl BedrockClient {
             serde_json::from_str(&outer_payload.certificate)?;
 
         let chain_vec: Vec<&str> = inner_payload.chain.iter().map(String::as_str).collect();
-        let player_data = verify_chain(&chain_vec, MOJANG_PUBLIC_KEY_BASE64)?;
+        let player_data = verify_chain(&chain_vec, MOJANG_BEDROCK_PUBLIC_KEY_BASE64)?;
 
         let profile = GameProfile {
             id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,
