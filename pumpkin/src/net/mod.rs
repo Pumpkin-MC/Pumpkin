@@ -32,6 +32,8 @@ mod proxy;
 pub mod query;
 pub mod rcon;
 
+const MOJANG_PUBLIC_KEY_BASE64: &str = "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAECRXueJeTDqNRRgJi/vlRufByu/2G0i2Ebt6YMar5QX/R0DIIyrJMcUpruK4QveTfJSTp3Shlq4Gk34cD/4GUWwkv0DVuzeuB+tXija7HBxii03NHDbPAD0AKnLr2wdAp";
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct GameProfile {
     pub id: Uuid,
