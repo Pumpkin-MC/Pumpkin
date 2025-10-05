@@ -1,5 +1,9 @@
-use std::sync::Arc;
-use serde::Deserialize;
+use crate::net::MOJANG_PUBLIC_KEY_BASE64;
+use crate::{
+    net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
+    server::Server,
+};
+use bedrock_jwt::{AuthError, verify_chain};
 use pumpkin_config::{BASIC_CONFIG, networking::compression::CompressionInfo};
 use pumpkin_protocol::{
     bedrock::{
@@ -13,15 +17,11 @@ use pumpkin_protocol::{
     },
     codec::var_uint::VarUInt,
 };
+use pumpkin_world::CURRENT_BEDROCK_MC_VERSION;
+use serde::Deserialize;
+use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
-use crate::{
-    net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
-    server::Server,
-};
-use pumpkin_world::CURRENT_BEDROCK_MC_VERSION;
-use bedrock_jwt::{AuthError, verify_chain};
-use crate::net::{MOJANG_PUBLIC_KEY_BASE64};
 
 #[derive(Debug, Error)]
 pub enum LoginError {
@@ -62,15 +62,21 @@ impl BedrockClient {
                     LoginError::InvalidUsername => "Your username is invalid.".to_string(),
                     _ => "Failed to log in. The data sent by your client was invalid.".to_string(),
                 };
-                self.kick(DisconnectReason::LoginPacketNoRequest, message).await;
+                self.kick(DisconnectReason::LoginPacketNoRequest, message)
+                    .await;
                 None
             }
         }
     }
 
-    pub async fn try_handle_login(self: &Arc<Self>, packet: SLogin, server: &Server) -> Result<(), LoginError> {
+    pub async fn try_handle_login(
+        self: &Arc<Self>,
+        packet: SLogin,
+        server: &Server,
+    ) -> Result<(), LoginError> {
         let outer_payload: FullLoginPayload = serde_json::from_slice(&packet.jwt)?;
-        let inner_payload: CertificateChainPayload = serde_json::from_str(&outer_payload.certificate)?;
+        let inner_payload: CertificateChainPayload =
+            serde_json::from_str(&outer_payload.certificate)?;
 
         let chain_vec: Vec<&str> = inner_payload.chain.iter().map(|s| s.as_str()).collect();
         let player_data = verify_chain(&chain_vec, MOJANG_PUBLIC_KEY_BASE64)?;
@@ -94,17 +100,10 @@ impl BedrockClient {
         self.write_game_packet_to_set(&CPlayStatus::LoginSuccess, &mut frame_set)
             .await;
         self.write_game_packet_to_set(
-            &CResourcePacksInfo::new(
-                false,
-                false,
-                false,
-                false,
-                Uuid::default(),
-                String::new(),
-            ),
+            &CResourcePacksInfo::new(false, false, false, false, Uuid::default(), String::new()),
             &mut frame_set,
         )
-            .await;
+        .await;
         self.write_game_packet_to_set(
             &CResourcePackStackPacket::new(
                 false,
@@ -119,16 +118,12 @@ impl BedrockClient {
             ),
             &mut frame_set,
         )
-            .await;
+        .await;
 
         self.send_frame_set(frame_set, 0x84).await;
 
         if let Some((player, world)) = server
-            .add_player(
-                ClientPlatform::Bedrock(self.clone()),
-                profile,
-                None,
-            )
+            .add_player(ClientPlatform::Bedrock(self.clone()), profile, None)
             .await
         {
             world
