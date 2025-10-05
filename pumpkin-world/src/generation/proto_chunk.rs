@@ -979,10 +979,23 @@ impl PendingChunk {
                                 generation_context.biome_mixer_seed,
                             )
                             .await;
-                        if let ChunkEntry::Pending(chunk) = chunk {
-                            Some(chunk)
-                        } else {
-                            None
+                        match chunk {
+                            ChunkEntry::Pending(chunk) => Some(chunk),
+                            ChunkEntry::Full(_chunk) => {
+                                // Dependency is already fully generated. In most cases this is fine,
+                                // but if we're at an early stage (Surface/Noise) and the neighbor is Full,
+                                // it indicates a race condition bug where multiple PendingChunk instances
+                                // were created for the same coordinate.
+                                if current_stage == ChunkStage::Surface || current_stage == ChunkStage::Noise {
+                                    panic!(
+                                        "Chunk Vector2 {{ x: {}, y: {} }} found neighbor Vector2 {{ x: {}, y: {} }} \
+                                        is Full while at stage {:?}, required: {:?}. This indicates a race condition \
+                                        where multiple PendingChunk instances exist for the same coordinate!",
+                                        self.position.x, self.position.y, coord.x, coord.y, current_stage, required_stage
+                                    );
+                                }
+                                None
+                            }
                         }
                     };
 

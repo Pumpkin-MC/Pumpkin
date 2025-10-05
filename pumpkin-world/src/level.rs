@@ -394,13 +394,21 @@ impl Level {
                     };
                     let arc_chunk = Arc::new(RwLock::new(chunk));
 
-                    level_clone
-                        .loaded_entity_chunks
-                        .insert(pos, arc_chunk.clone());
+                    // Atomic insert: only insert if not already present
+                    let final_chunk = match level_clone.loaded_entity_chunks.entry(pos) {
+                        dashmap::mapref::entry::Entry::Vacant(e) => {
+                            e.insert(arc_chunk.clone());
+                            arc_chunk
+                        }
+                        dashmap::mapref::entry::Entry::Occupied(e) => {
+                            // Another task inserted while we were creating, use theirs
+                            e.get().clone()
+                        }
+                    };
 
                     if let Some(waiters) = pending_clone.remove(&pos) {
                         for tx in waiters.1 {
-                            let _ = tx.send(arc_chunk.clone());
+                            let _ = tx.send(final_chunk.clone());
                         }
                     }
                 }
@@ -728,39 +736,38 @@ impl Level {
         default_block: &'static BlockState,
         biome_mixer_seed: i64,
     ) -> ChunkEntry {
-        let entry = self.loaded_chunks.entry(coord);
+        // Fast path: chunk already exists
+        if let Some(entry) = self.loaded_chunks.get(&coord) {
+            return entry.clone();
+        }
 
-        match entry {
+        // Slow path: need to load/create chunk
+        // We can't hold locks across async operations, so we load first, then try to insert
+        let loaded_chunk = self.load_single_chunk(coord).await;
+
+        let chunk_to_insert = if let Ok((chunk, _)) = loaded_chunk {
+            chunk
+        } else {
+            // Not on disk, create new pending chunk
+            ChunkEntry::Pending(Arc::new(PendingChunk::new(
+                coord,
+                generation_settings,
+                default_block,
+                biome_mixer_seed,
+            )))
+        };
+
+        // Try to insert. If another task inserted in the meantime, use theirs instead.
+        // This prevents multiple PendingChunk instances for the same coordinate.
+        match self.loaded_chunks.entry(coord) {
             dashmap::mapref::entry::Entry::Occupied(entry) => {
-                let chunk_entry = entry.get();
-                match chunk_entry {
-                    ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
-                    ChunkEntry::Pending(chunk) => ChunkEntry::Pending(chunk.clone()),
-                }
+                // Another task inserted it while we were loading
+                entry.get().clone()
             }
             dashmap::mapref::entry::Entry::Vacant(entry) => {
-                drop(entry);
-                let chunk = self.load_single_chunk(coord).await;
-                if let Ok((chunk, _)) = chunk {
-                    let mut chunk_entry = self.loaded_chunks.entry(coord).or_insert_with(|| chunk);
-                    match chunk_entry.value_mut() {
-                        ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
-                        ChunkEntry::Pending(chunk) => ChunkEntry::Pending(chunk.clone()),
-                    }
-                } else {
-                    let mut chunk_entry = self.loaded_chunks.entry(coord).or_insert_with(|| {
-                        ChunkEntry::Pending(Arc::new(PendingChunk::new(
-                            coord,
-                            generation_settings,
-                            default_block,
-                            biome_mixer_seed,
-                        )))
-                    });
-                    match chunk_entry.value_mut() {
-                        ChunkEntry::Full(chunk) => ChunkEntry::Full(chunk.clone()),
-                        ChunkEntry::Pending(chunk) => ChunkEntry::Pending(chunk.clone()),
-                    }
-                }
+                // We're first, insert ours
+                entry.insert(chunk_to_insert.clone());
+                chunk_to_insert
             }
         }
     }
@@ -892,18 +899,25 @@ impl Level {
 
         // Try to load from disk
         match self.load_single_chunk(pos).await {
-            Ok((chunk, _)) => match &chunk {
-                ChunkEntry::Full(full_chunk) => {
-                    let ret = full_chunk.clone();
-                    self.loaded_chunks.insert(pos, chunk);
-                    ret
+            Ok((chunk, _)) => {
+                // Atomic insert: only insert if not already present
+                match self.loaded_chunks.entry(pos) {
+                    dashmap::mapref::entry::Entry::Vacant(e) => {
+                        e.insert(chunk.clone());
+                    }
+                    dashmap::mapref::entry::Entry::Occupied(_) => {
+                        // Another task inserted while we were loading, use theirs instead
+                    }
                 }
-                ChunkEntry::Pending(_) => {
-                    self.loaded_chunks.insert(pos, chunk);
-                    self.request_chunks(&[pos]).await;
-                    self.wait_for_chunk(pos).await
+
+                match &chunk {
+                    ChunkEntry::Full(full_chunk) => full_chunk.clone(),
+                    ChunkEntry::Pending(_) => {
+                        self.request_chunks(&[pos]).await;
+                        self.wait_for_chunk(pos).await
+                    }
                 }
-            },
+            }
             Err(_) => {
                 self.request_chunks(&[pos]).await;
                 self.wait_for_chunk(pos).await
@@ -959,12 +973,27 @@ impl Level {
                         match data {
                             LoadedData::Loaded(chunk) => {
                                 let pos: Vector2<i32> = chunk.read().await.position;
-                                let entry = ChunkEntry::from_sync_chunk(
-                                    chunk,
-                                    &level_clone.generation_state,
-                                )
-                                .await;
-                                level.loaded_chunks.insert(pos, entry);
+
+                                // Only insert if not already present to avoid overwriting
+                                // a PendingChunk that's already generating.
+                                // We check first to avoid wasteful conversion.
+                                if level.loaded_chunks.get(&pos).is_none() {
+                                    let entry = ChunkEntry::from_sync_chunk(
+                                        chunk,
+                                        &level_clone.generation_state,
+                                    )
+                                    .await;
+                                    // Atomic insert: only insert if still vacant after conversion
+                                    match level.loaded_chunks.entry(pos) {
+                                        dashmap::mapref::entry::Entry::Vacant(e) => {
+                                            e.insert(entry);
+                                        }
+                                        dashmap::mapref::entry::Entry::Occupied(_) => {
+                                            // Another task inserted while we were converting, use theirs
+                                        }
+                                    }
+                                }
+
                                 self_clone.request_chunks(&[pos]).await;
                                 let _ = sender.send((self_clone.wait_for_chunk(pos).await, false));
                             }
@@ -1045,7 +1074,15 @@ impl Level {
                         match data {
                             LoadedData::Loaded(chunk) => {
                                 let pos = chunk.read().await.chunk_position;
-                                level.loaded_entity_chunks.insert(pos, chunk.clone());
+                                // Atomic insert: only insert if not already present
+                                match level.loaded_entity_chunks.entry(pos) {
+                                    dashmap::mapref::entry::Entry::Vacant(e) => {
+                                        e.insert(chunk.clone());
+                                    }
+                                    dashmap::mapref::entry::Entry::Occupied(_) => {
+                                        // Another task inserted while we were loading, use theirs
+                                    }
+                                }
                                 let _ = sender.send((chunk, false));
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
@@ -1089,7 +1126,15 @@ impl Level {
 
         match self.load_single_entity_chunk(pos).await {
             Ok((chunk, _)) => {
-                self.loaded_entity_chunks.insert(pos, chunk.clone());
+                // Atomic insert: only insert if not already present
+                match self.loaded_entity_chunks.entry(pos) {
+                    dashmap::mapref::entry::Entry::Vacant(e) => {
+                        e.insert(chunk.clone());
+                    }
+                    dashmap::mapref::entry::Entry::Occupied(_) => {
+                        // Another task inserted while we were loading, use theirs
+                    }
+                }
                 chunk
             }
             Err(_) => {
