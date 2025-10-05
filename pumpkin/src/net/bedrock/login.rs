@@ -55,9 +55,9 @@ impl BedrockClient {
 
     pub async fn handle_login(self: &Arc<Self>, packet: SLogin, server: &Server) -> Option<()> {
         match self.try_handle_login(packet, server).await {
-            Ok(_) => Some(()),
+            Ok(()) => Some(()),
             Err(error) => {
-                log::warn!("Bedrock login failed: {}", error);
+                log::warn!("Bedrock login failed: {error}" );
                 let message = match error {
                     LoginError::InvalidUsername => "Your username is invalid.".to_string(),
                     _ => "Failed to log in. The data sent by your client was invalid.".to_string(),
@@ -78,7 +78,7 @@ impl BedrockClient {
         let inner_payload: CertificateChainPayload =
             serde_json::from_str(&outer_payload.certificate)?;
 
-        let chain_vec: Vec<&str> = inner_payload.chain.iter().map(|s| s.as_str()).collect();
+        let chain_vec: Vec<&str> = inner_payload.chain.iter().map(String::as_str).collect();
         let player_data = verify_chain(&chain_vec, MOJANG_PUBLIC_KEY_BASE64)?;
 
         let profile = GameProfile {
