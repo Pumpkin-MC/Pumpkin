@@ -84,3 +84,26 @@ jobs:
       - run: rustup component add clippy rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --release --all-targets --all-features
+  draft_release:
+    permissions:
+      contents: write
+    needs: [build_release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download prebuilt binary artifacts
+        uses: actions/download-artifact@v5
+        with:
+          merge-mulitple: true
+      - name: Generate release notes
+        run: |
+          tree
+          echo "From commit: ${GITHUB_SHA:0:8}" > RELEASE.md
+          echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> RELEASE.md
+
+      - name: Draft a nightly github release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: pumpkin-*
+          name: Nightly Build
+          body_path: RELEASE.md
