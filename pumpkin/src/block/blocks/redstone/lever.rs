@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::block::{
-    blocks::abstruct_wall_mounting::WallMountedBlock,
+    blocks::abstract_wall_mounting::WallMountedBlock,
     {
         CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
         GetStateForNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs,

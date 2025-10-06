@@ -217,7 +217,7 @@ impl RedstoneWireTurbo {
         self.orient_neighbors(&neighbor_nodes, upd1, heading);
     }
 
-    const REORDING: [[usize; 24]; 4] = [
+    const REORDERING: [[usize; 24]; 4] = [
         [
             2, 3, 16, 19, 0, 4, 1, 5, 7, 8, 17, 20, 12, 13, 18, 21, 6, 9, 22, 14, 11, 10, 23, 15,
         ],
@@ -235,7 +235,7 @@ impl RedstoneWireTurbo {
     fn orient_neighbors(&mut self, src: &[NodeId], dst_id: NodeId, heading: usize) {
         let dst = &mut self.nodes[dst_id.index];
         let mut neighbors = Vec::with_capacity(24);
-        let re = Self::REORDING[heading];
+        let re = Self::REORDERING[heading];
         for i in &re {
             neighbors.push(src[*i]);
         }

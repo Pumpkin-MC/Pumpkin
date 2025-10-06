@@ -22,7 +22,7 @@ use crate::{
     world::World,
 };
 
-use super::abstruct_redstone_gate::{RedstoneGateBlock, RedstoneGateBlockProperties};
+use super::abstract_redstone_gate::{RedstoneGateBlock, RedstoneGateBlockProperties};
 
 type RepeaterProperties = pumpkin_data::block_properties::RepeaterLikeProperties;
 

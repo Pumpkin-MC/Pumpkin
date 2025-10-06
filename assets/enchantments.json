@@ -289,13 +289,12 @@
               },
               {
                 "predicate": {
+                  "block": {
+                    "blocks": "#minecraft:lightning_rods"
+                  },
                   "can_see_sky": true
                 },
                 "condition": "minecraft:location_check"
-              },
-              {
-                "block": "minecraft:lightning_rod",
-                "condition": "minecraft:block_state_property"
               }
             ],
             "condition": "minecraft:all_of"
@@ -2104,15 +2103,16 @@
           "enchanted": "attacker",
           "affected": "attacker",
           "effect": {
-            "small_particle": {
-              "type": "minecraft:gust_emitter_small"
-            },
             "large_particle": {
               "type": "minecraft:gust_emitter_large"
             },
             "sound": "minecraft:entity.wind_charge.wind_burst",
-            "radius": 3.5,
             "block_interaction": "trigger",
+            "small_particle": {
+              "type": "minecraft:gust_emitter_small"
+            },
+            "immune_blocks": "#minecraft:blocks_wind_charge_explosions",
+            "radius": 3.5,
             "knockback_multiplier": {
               "values": [
                 1.2,
@@ -2126,7 +2126,6 @@
               },
               "type": "minecraft:lookup"
             },
-            "immune_blocks": "#minecraft:blocks_wind_charge_explosions",
             "type": "minecraft:explode"
           },
           "requirements": {

@@ -58,7 +58,7 @@ mod test {
         let seed = 0;
         let chunk_pos = Vector2::new(0, 0);
         let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_rounter =
+        let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
 
         let surface_config = GENERATION_SETTINGS
@@ -67,7 +67,7 @@ mod test {
         let terrain_cache = TerrainCache::from_random(&random_config);
         let mut chunk = ProtoChunk::new(
             chunk_pos,
-            &noise_rounter,
+            &noise_router,
             &random_config,
             surface_config,
             &terrain_cache,

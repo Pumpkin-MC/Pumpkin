@@ -64,6 +64,6 @@ pub mod smoker;
 
 pub mod ender_chest;
 
-// abstruct
-pub mod abstruct_wall_mounting;
+// abstract
+pub mod abstract_wall_mounting;
 pub mod lectern;
