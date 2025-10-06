@@ -68,9 +68,11 @@ jobs:
       - name: Export executable
         uses: actions/upload-artifact@v4
         with:
-          name: pumpkin-${{ matrix.os }}
+          name: pumpkin-${{ runner.arch }}-${{ runner.os }}
           compression-level: 9
-          path: target/${{ matrix.target }}/release/pumpkin*
+          path: |
+           target/release/pumpkin
+           target/release/pumpkin.exe
   clippy_release:
     name: Run lints in release mode
     runs-on: ubuntu-latest
