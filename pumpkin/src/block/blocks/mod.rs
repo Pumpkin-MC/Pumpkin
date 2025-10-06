@@ -1,6 +1,7 @@
 pub mod anvil;
 pub mod bamboo;
 pub mod barrel;
+pub mod bars;
 pub mod bed;
 pub mod cactus;
 pub mod cake;
@@ -15,7 +16,6 @@ pub mod chiseled_bookshelf;
 pub mod command;
 pub mod composter;
 pub mod crafting_table;
-pub mod copper_bars;
 pub mod dirt_path;
 pub mod doors;
 pub mod end_portal;

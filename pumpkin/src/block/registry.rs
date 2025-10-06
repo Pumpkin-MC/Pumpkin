@@ -21,7 +21,7 @@ use crate::block::blocks::fire::soul_fire::SoulFireBlock;
 use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
-use crate::block::blocks::copper_bars::BarBlock;
+use crate::block::blocks::bars::BarBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::nether_portal::NetherPortalBlock;
 use crate::block::blocks::note::NoteBlock;
