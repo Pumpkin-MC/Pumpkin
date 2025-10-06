@@ -82,7 +82,7 @@ tokio-util = { version = "0.7.16", features = ["rt"] }
 # Memory profiling
 dhat = { version = "0.3.3", optional = true }
 
-flate2 = "1.1.2"
+flate2 = "1.1.4"
 console-subscriber = { version = "0.4.1", optional = true }
 
 [dev-dependencies]
