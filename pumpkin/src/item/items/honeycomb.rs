@@ -79,7 +79,7 @@ impl ItemBehaviour for HoneyCombItem {
             } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LANTERNS) {
                 let lantern_information = world.get_block_state_id(&location).await;
                 let lantern_props =
-                    pumpkin_data::block_properties::LanternLikeProperties::from_state_id(information, block);
+                    pumpkin_data::block_properties::LanternLikeProperties::from_state_id(lantern_information, block);
                 let mut new_lantern_props = pumpkin_data::block_properties::LanternLikeProperties::default(new_block);
                 new_lantern_props.hanging = lantern_props.hanging;
                 new_lantern_props.to_state_id(new_block)
