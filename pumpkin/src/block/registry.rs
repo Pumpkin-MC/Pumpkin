@@ -21,7 +21,7 @@ use crate::block::blocks::fire::soul_fire::SoulFireBlock;
 use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
-use crate::block::blocks::iron_bars::IronBarsBlock;
+use crate::block::blocks::bars::BarBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::nether_portal::NetherPortalBlock;
 use crate::block::blocks::note::NoteBlock;
@@ -145,6 +145,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CarpetBlock);
     manager.register(CarvedPumpkinBlock);
     manager.register(CampfireBlock);
+    manager.register(BarBlock);
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
@@ -162,7 +163,6 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(GlassPaneBlock);
     manager.register(GlazedTerracottaBlock);
     manager.register(GrindstoneBlock);
-    manager.register(IronBarsBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
     manager.register(BambooBlock);

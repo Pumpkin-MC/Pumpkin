@@ -1,6 +1,7 @@
 pub mod anvil;
 pub mod bamboo;
 pub mod barrel;
+pub mod bars;
 pub mod bed;
 pub mod cactus;
 pub mod cake;
@@ -30,7 +31,6 @@ pub mod furnace;
 pub mod glass_panes;
 pub mod glazed_terracotta;
 pub mod grindstone;
-pub mod iron_bars;
 pub mod jukebox;
 pub mod ladder;
 pub mod lanterns;
