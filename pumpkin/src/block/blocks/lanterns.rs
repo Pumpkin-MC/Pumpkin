@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     OnScheduledTickArgs,
@@ -6,7 +7,7 @@ use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{BlockDirection, tag};
+use pumpkin_data::{BlockDirection, tag, Block};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::tag::RegistryKey;
@@ -18,6 +19,17 @@ use pumpkin_world::world::BlockFlags;
 #[pumpkin_block_from_tag("minecraft:lanterns")]
 pub struct LanternBlock;
 
+
+// impl LanternBlock {
+//     pub async fn copy_properties(block: &Block, mut new_block: &Block, world: &Arc<World>, location: &BlockPos) -> u16 {
+//         let lantern_information = world.get_block_state_id(&location).await;
+//         let lantern_props =
+//             pumpkin_data::block_properties::LanternLikeProperties::from_state_id(lantern_information, block);
+//         let mut new_lantern_props = pumpkin_data::block_properties::LanternLikeProperties::default(new_block);
+//         new_lantern_props.hanging = lantern_props.hanging;
+//         new_lantern_props.to_state_id(new_block)
+//     }
+// }
 #[async_trait]
 impl BlockBehaviour for LanternBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
