@@ -6,7 +6,7 @@ use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{BlockDirection, tag, Block};
+use pumpkin_data::{BlockDirection, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::tag::RegistryKey;

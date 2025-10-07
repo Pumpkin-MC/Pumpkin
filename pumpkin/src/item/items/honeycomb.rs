@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crate::block::UseWithItemArgs;
-use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -11,7 +10,7 @@ use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::{
-    LanternLikeProperties, OakDoorLikeProperties, OakFenceLikeProperties,
+    LanternLikeProperties, OakDoorLikeProperties, OakFenceLikeProperties, OakTrapdoorLikeProperties,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Taggable;
@@ -75,18 +74,31 @@ impl ItemBehaviour for HoneyCombItem {
                 new_bars_props.south = bar_props.south;
                 new_bars_props.west = bar_props.west;
                 new_bars_props.east = bar_props.east;
+                new_bars_props.waterlogged = bar_props.waterlogged;
                 new_bars_props.to_state_id(new_block)
             } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LANTERNS) {
                 let lantern_information = world.get_block_state_id(&location).await;
-                let lantern_props =
-                    pumpkin_data::block_properties::LanternLikeProperties::from_state_id(lantern_information, block);
-                let mut new_lantern_props = pumpkin_data::block_properties::LanternLikeProperties::default(new_block);
+                let lantern_props = LanternLikeProperties::from_state_id(
+                        lantern_information,
+                        block,
+                    );
+                let mut new_lantern_props = LanternLikeProperties::default(new_block);
                 new_lantern_props.hanging = lantern_props.hanging;
+                new_lantern_props.waterlogged = lantern_props.waterlogged;
                 new_lantern_props.to_state_id(new_block)
+            } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+                let info = world.get_block_state_id(&location).await;
+                let trapdoor_props = OakTrapdoorLikeProperties::from_state_id(info, block);
+                let mut new_props = OakTrapdoorLikeProperties::default(new_block);
+                new_props.powered = trapdoor_props.powered;
+                new_props.open = trapdoor_props.open;
+                new_props.facing = trapdoor_props.facing;
+                new_props.half = trapdoor_props.half;
+                new_props.waterlogged = trapdoor_props.waterlogged;
+                new_props.to_state_id(new_block)
             } else {
                 new_block.default_state.id
             };
-            // TODO Implements trapdoors
             world
                 .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
                 .await;
