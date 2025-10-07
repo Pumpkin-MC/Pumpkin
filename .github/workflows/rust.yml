@@ -91,22 +91,32 @@ jobs:
       contents: write
     needs: [build_release]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    # if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:
+      - uses: actions/checkout@v5
       - name: Download prebuilt binary artifacts
         uses: actions/download-artifact@v5
         with:
-          merge-mulitple: true
+          path: dist/
+          merge-multiple: true
       - name: Generate release notes
         run: |
-          tree
-          echo "From commit: ${GITHUB_SHA:0:8}" > RELEASE.md
-          echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> RELEASE.md
+          tree dist/
+          echo "From commit: ${GITHUB_SHA:0:8}" > dist/RELEASE.md
+          echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
+          cat dist/RELEASE.md
+
+      - name: Update the nightly tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag --force nightly && git push --force origin tag nightly
 
       - name: Draft a nightly github release
         uses: softprops/action-gh-release@v2
         with:
           prerelease: true
-          files: pumpkin-*
+          files: dist/pumpkin*
+          tag_name: nightly
           name: Nightly Build
-          body_path: RELEASE.md
+          body_path: dist/RELEASE.md
