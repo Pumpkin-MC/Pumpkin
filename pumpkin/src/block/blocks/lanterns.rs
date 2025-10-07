@@ -15,7 +15,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
-#[pumpkin_block_from_tag("minecraft:chains")]
+#[pumpkin_block_from_tag("minecraft:lanterns")]
 pub struct LanternBlock;
 
 #[async_trait]
