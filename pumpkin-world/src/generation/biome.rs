@@ -134,7 +134,7 @@ fn score_permutation(
 
 #[inline]
 fn scale_mix(l: i64) -> f64 {
-    let d = floor_mod(l >> 24, 1024i32 as i64) as i32 as f64 / 1024.0;
+    let d = floor_mod(l >> 24, 1024i64) as i32 as f64 / 1024.0;
 
     (d - 0.5) * 0.9
 }
