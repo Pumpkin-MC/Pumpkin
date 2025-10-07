@@ -151,6 +151,15 @@ fn get_deoxidized_equivalent(block: &Block) -> u16 {
         id if id == Block::OXIDIZED_COPPER_TRAPDOOR.id => Block::WEATHERED_COPPER_TRAPDOOR.id,
         id if id == Block::WEATHERED_COPPER_TRAPDOOR.id => Block::EXPOSED_COPPER_TRAPDOOR.id,
         id if id == Block::EXPOSED_COPPER_TRAPDOOR.id => Block::COPPER_TRAPDOOR.id,
+        id if id == Block::EXPOSED_COPPER_CHAIN.id => Block::COPPER_CHAIN.id,
+        id if id == Block::WEATHERED_COPPER_CHAIN.id => Block::EXPOSED_COPPER_CHAIN.id,
+        id if id == Block::OXIDIZED_COPPER_CHAIN.id => Block::WEATHERED_COPPER_CHAIN.id,
+        id if id == Block::EXPOSED_COPPER_BARS.id => Block::COPPER_BARS.id,
+        id if id == Block::WEATHERED_COPPER_BARS.id => Block::EXPOSED_COPPER_BARS.id,
+        id if id == Block::OXIDIZED_COPPER_BARS.id => Block::WEATHERED_COPPER_BARS.id,
+        id if id == Block::EXPOSED_COPPER_LANTERN.id => Block::COPPER_LANTERN.id,
+        id if id == Block::WEATHERED_COPPER_LANTERN.id => Block::EXPOSED_COPPER_LANTERN.id,
+        id if id == Block::OXIDIZED_COPPER_LANTERN.id => Block::WEATHERED_COPPER_LANTERN.id,
         _ => 0,
     }
 }
@@ -205,6 +214,18 @@ fn get_unwaxed_equivalent(block: &Block) -> u16 {
         }
         id if id == &Block::WAXED_EXPOSED_COPPER_TRAPDOOR.id => Block::EXPOSED_COPPER_TRAPDOOR.id,
         id if id == &Block::WAXED_COPPER_TRAPDOOR.id => Block::COPPER_TRAPDOOR.id,
+        id if id == &Block::WAXED_COPPER_CHAIN.id => Block::COPPER_CHAIN.id,
+        id if id == &Block::WAXED_EXPOSED_COPPER_CHAIN.id => Block::EXPOSED_COPPER_CHAIN.id,
+        id if id == &Block::WAXED_WEATHERED_COPPER_CHAIN.id => Block::WEATHERED_COPPER_CHAIN.id,
+        id if id == &Block::WAXED_OXIDIZED_COPPER_CHAIN.id => Block::OXIDIZED_COPPER_CHAIN.id,
+        id if id == &Block::WAXED_COPPER_BARS.id => Block::COPPER_BARS.id,
+        id if id == &Block::WAXED_EXPOSED_COPPER_BARS.id => Block::EXPOSED_COPPER_BARS.id,
+        id if id == &Block::WAXED_WEATHERED_COPPER_BARS.id => Block::WEATHERED_COPPER_BARS.id,
+        id if id == &Block::WAXED_OXIDIZED_COPPER_BARS.id => Block::OXIDIZED_COPPER_BARS.id,
+        id if id == &Block::WAXED_COPPER_LANTERN.id => Block::COPPER_LANTERN.id,
+        id if id == &Block::WAXED_EXPOSED_COPPER_LANTERN.id => Block::EXPOSED_COPPER_LANTERN.id,
+        id if id == &Block::WAXED_WEATHERED_COPPER_LANTERN.id => Block::WEATHERED_COPPER_LANTERN.id,
+        id if id == &Block::WAXED_OXIDIZED_COPPER_LANTERN.id => Block::OXIDIZED_COPPER_LANTERN.id,
         _ => 0,
     }
 }

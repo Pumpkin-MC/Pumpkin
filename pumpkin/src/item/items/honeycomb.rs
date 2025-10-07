@@ -164,7 +164,18 @@ fn get_waxed_equivalent(block: &Block) -> Option<u16> {
         id if id == &Block::EXPOSED_COPPER_TRAPDOOR.id => {
             Some(Block::WAXED_EXPOSED_COPPER_TRAPDOOR.id)
         }
-        id if id == &Block::COPPER_TRAPDOOR.id => Some(Block::WAXED_COPPER_TRAPDOOR.id),
+        id if id == &Block::COPPER_CHAIN.id => Some(Block::WAXED_COPPER_CHAIN.id),
+        id if id == &Block::EXPOSED_COPPER_CHAIN.id => Some(Block::WAXED_EXPOSED_COPPER_CHAIN.id),
+        id if id == &Block::WEATHERED_COPPER_CHAIN.id => Some(Block::WAXED_WEATHERED_COPPER_CHAIN.id),
+        id if id == &Block::OXIDIZED_COPPER_CHAIN.id => Some(Block::WAXED_OXIDIZED_COPPER_CHAIN.id),
+        id if id == &Block::COPPER_BARS.id => Some(Block::WAXED_COPPER_BARS.id),
+        id if id == &Block::EXPOSED_COPPER_BARS.id => Some(Block::WAXED_EXPOSED_COPPER_BARS.id),
+        id if id == &Block::WEATHERED_COPPER_BARS.id => Some(Block::WAXED_WEATHERED_COPPER_BARS.id),
+        id if id == &Block::OXIDIZED_COPPER_BARS.id => Some(Block::WAXED_OXIDIZED_COPPER_BARS.id),
+        id if id == &Block::COPPER_LANTERN.id => Some(Block::WAXED_COPPER_LANTERN.id),
+        id if id == &Block::EXPOSED_COPPER_LANTERN.id => Some(Block::WAXED_EXPOSED_COPPER_LANTERN.id),
+        id if id == &Block::WEATHERED_COPPER_LANTERN.id => Some(Block::WAXED_WEATHERED_COPPER_LANTERN.id),
+        id if id == &Block::OXIDIZED_COPPER_LANTERN.id => Some(Block::WAXED_OXIDIZED_COPPER_LANTERN.id),
         _ => None,
     }
 }

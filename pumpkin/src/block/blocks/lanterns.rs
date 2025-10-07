@@ -1,28 +1,22 @@
 use crate::block::{
-    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     OnScheduledTickArgs,
 };
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, tag};
+use pumpkin_data::{BlockDirection, tag};
+use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::tag::RegistryKey;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
+#[pumpkin_block_from_tag("minecraft:chains")]
 pub struct LanternBlock;
-
-impl BlockMetadata for LanternBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        &[Block::LANTERN.name, Block::SOUL_LANTERN.name]
-    }
-}
 
 #[async_trait]
 impl BlockBehaviour for LanternBlock {
