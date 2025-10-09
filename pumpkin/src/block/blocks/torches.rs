@@ -26,8 +26,10 @@ impl BlockMetadata for TorchBlock {
         &[
             Block::TORCH.name,
             Block::SOUL_TORCH.name,
+            Block::COPPER_TORCH.name,
             Block::WALL_TORCH.name,
             Block::SOUL_WALL_TORCH.name,
+            Block::COPPER_WALL_TORCH.name,
         ]
     }
 }
@@ -68,8 +70,12 @@ impl BlockBehaviour for TorchBlock {
             {
                 let wall_block = if args.block == &Block::TORCH {
                     Block::WALL_TORCH
-                } else {
+                } else if args.block == &Block::SOUL_TORCH {
                     Block::SOUL_WALL_TORCH
+                } else if args.block == &Block::COPPER_TORCH {
+                    Block::COPPER_WALL_TORCH
+                } else {
+                    Block::WALL_TORCH
                 };
                 let mut torch_props = WallTorchProps::default(&wall_block);
                 torch_props.facing = dir
@@ -80,7 +86,6 @@ impl BlockBehaviour for TorchBlock {
                 return torch_props.to_state_id(&wall_block);
             }
         }
-
         let support_block = args.world.get_block_state(&args.position.down()).await;
         if support_block.is_center_solid(BlockDirection::Up) {
             args.block.default_state.id
