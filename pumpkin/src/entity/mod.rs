@@ -49,6 +49,7 @@ use std::sync::{
     },
 };
 use tokio::sync::Mutex;
+use pumpkin_world::entity::entity_data_flags::DATA_POSE;
 
 pub mod ai;
 pub mod decoration;
@@ -1603,7 +1604,7 @@ impl Entity {
     pub async fn set_pose(&self, pose: EntityPose) {
         self.pose.store(pose);
         let pose = pose as i32;
-        self.send_meta_data(&[Metadata::new(6, MetaDataType::EntityPose, VarInt(pose))])
+        self.send_meta_data(&[Metadata::new(DATA_POSE, MetaDataType::EntityPose, VarInt(pose))])
             .await;
     }
 
