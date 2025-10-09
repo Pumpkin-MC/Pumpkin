@@ -34,6 +34,7 @@ pub mod grindstone;
 pub mod jukebox;
 pub mod ladder;
 pub mod lanterns;
+pub mod lightning_rod;
 pub mod logs;
 pub mod nether_portal;
 pub mod note;
