@@ -68,3 +68,4 @@ pub mod ender_chest;
 // abstract
 pub mod abstract_wall_mounting;
 pub mod lectern;
+pub mod shelf;

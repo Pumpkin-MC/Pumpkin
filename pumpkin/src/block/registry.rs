@@ -132,6 +132,7 @@ use crate::block::blocks::lightning_rod::LightningRodBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
+use crate::block::blocks::shelf::Shelf;
 
 #[must_use]
 #[allow(clippy::too_many_lines)]
@@ -219,6 +220,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     manager.register(FallingBlock);
     manager.register(LightningRodBlock);
+    manager.register(Shelf);
 
     // Fire
     manager.register(SoulFireBlock);
