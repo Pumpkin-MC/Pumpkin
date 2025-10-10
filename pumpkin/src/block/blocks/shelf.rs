@@ -6,6 +6,7 @@ use pumpkin_data::Block;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::SideChain;
 use pumpkin_data::block_properties::{AcaciaShelfLikeProperties, HorizontalFacing};
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -26,11 +27,19 @@ impl BlockBehaviour for Shelf {
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
         // TODO: Here switch the items in the hotbar
+        let block_entity = _args.world.get_block_entity(_args.position).await;
         log::warn!("use_with_item: {}", _args.item_stack.lock().await.item.registry_key);
         for item in  &_args.player.inventory.main_inventory{
             log::warn!("use_with_item: items {}",item.lock().await.item.registry_key);
         }
-        BlockActionResult::Pass
+        _args.world
+            .play_block_sound(
+                Sound::BlockShelfMultiSwap,
+                SoundCategory::Blocks,
+                *_args.position,
+            )
+            .await;
+        BlockActionResult::Consume
     }
 
 
