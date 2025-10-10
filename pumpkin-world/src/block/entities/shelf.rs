@@ -1,21 +1,31 @@
-use std::any::Any;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI8};
+use crate::BlockStateId;
+use crate::block::entities::BlockEntity;
+use crate::inventory::{Clearable, Inventory, split_stack};
+use crate::item::ItemStack;
 use async_trait::async_trait;
-use tokio::sync::Mutex;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use crate::block::entities::BlockEntity;
-use crate::BlockStateId;
-use crate::inventory::{Clearable, Inventory};
-use crate::item::ItemStack;
+use std::any::Any;
+use std::array::from_fn;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI8};
+use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub struct ShelfBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; 6],
-    pub last_interacted_slot: AtomicI8,
+    pub items: [Arc<Mutex<ItemStack>>; 3],
     pub dirty: AtomicBool,
+}
+
+impl ShelfBlockEntity {
+    pub fn new(position: BlockPos, items: [Arc<Mutex<ItemStack>>; 3]) -> Self {
+        Self {
+            position,
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            dirty: AtomicBool::new(false),
+        }
+    }
 }
 
 #[async_trait]
@@ -26,7 +36,7 @@ impl BlockEntity for ShelfBlockEntity {
 
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
-        Self: Sized
+        Self: Sized,
     {
         todo!()
     }
@@ -36,59 +46,62 @@ impl BlockEntity for ShelfBlockEntity {
     }
 
     fn get_position(&self) -> BlockPos {
-        todo!()
-    }
-
-    async fn write_internal(&self, nbt: &mut NbtCompound) {
-        todo!()
+        self.position
     }
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
-        todo!()
-    }
-
-    fn set_block_state(&mut self, _block_state: BlockStateId) {
-        todo!()
+        Some(self)
     }
 
     fn as_any(&self) -> &dyn Any {
-        todo!()
+        self
     }
 }
 #[async_trait]
 impl Inventory for ShelfBlockEntity {
     fn size(&self) -> usize {
-        todo!()
+        self.items.len()
     }
 
     async fn is_empty(&self) -> bool {
-        todo!()
+        for slot in self.items.iter() {
+            if !slot.lock().await.is_empty() {
+                return false;
+            }
+        }
+
+        true
     }
 
     async fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>> {
-        todo!()
+        self.items[slot].clone()
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        todo!()
+        let mut removed = ItemStack::EMPTY.clone();
+        let mut guard = self.items[slot].lock().await;
+        std::mem::swap(&mut removed, &mut *guard);
+        removed
     }
 
     async fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
-        todo!()
+        split_stack(&self.items, slot, amount).await
     }
 
     async fn set_stack(&self, slot: usize, stack: ItemStack) {
-        todo!()
+        *self.items[slot].lock().await = stack;
     }
 
     fn as_any(&self) -> &dyn Any {
-        todo!()
+        self
     }
 }
 
-# [async_trait]
+#[async_trait]
 impl Clearable for ShelfBlockEntity {
     async fn clear(&self) {
-        todo!()
+        for slot in self.items.iter() {
+            *slot.lock().await = ItemStack::EMPTY.clone();
+        }
     }
 }
