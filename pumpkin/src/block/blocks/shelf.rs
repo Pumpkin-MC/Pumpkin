@@ -19,9 +19,17 @@ pub struct Shelf;
 
 #[async_trait]
 impl BlockBehaviour for Shelf {
+    async fn normal_use(&self, _args: NormalUseArgs<'_>) -> BlockActionResult {
+        log::warn!("Shelf normal_use() called");
+        BlockActionResult::Pass
+    }
 
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
         // TODO: Here switch the items in the hotbar
+        log::warn!("use_with_item: {}", _args.item_stack.lock().await.item.registry_key);
+        for item in  &_args.player.inventory.main_inventory{
+            log::warn!("use_with_item: items {}",item.lock().await.item.registry_key);
+        }
         BlockActionResult::Pass
     }
 
