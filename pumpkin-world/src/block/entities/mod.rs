@@ -33,9 +33,9 @@ pub mod furnace;
 pub mod hopper;
 pub mod mob_spawner;
 pub mod piston;
+mod shelf;
 pub mod shulker_box;
 pub mod sign;
-mod shelf;
 
 //TODO: We need a mark_dirty for chests
 #[async_trait]

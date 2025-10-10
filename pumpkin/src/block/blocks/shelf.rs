@@ -1,5 +1,9 @@
 use crate::block::blocks::redstone::{block_receives_redstone_power, get_redstone_power};
-use crate::block::{BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, UseWithItemArgs};
+use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
+    OnPlaceArgs, UseWithItemArgs,
+};
 use crate::world::World;
 use async_trait::async_trait;
 use pumpkin_data::Block;
@@ -13,7 +17,6 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
-use crate::block::registry::BlockActionResult;
 
 #[pumpkin_block_from_tag("minecraft:wooden_shelves")]
 pub struct Shelf;
@@ -28,11 +31,18 @@ impl BlockBehaviour for Shelf {
     async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
         // TODO: Here switch the items in the hotbar
         let block_entity = _args.world.get_block_entity(_args.position).await;
-        log::warn!("use_with_item: {}", _args.item_stack.lock().await.item.registry_key);
-        for item in  &_args.player.inventory.main_inventory{
-            log::warn!("use_with_item: items {}",item.lock().await.item.registry_key);
+        log::warn!(
+            "use_with_item: {}",
+            _args.item_stack.lock().await.item.registry_key
+        );
+        for item in &_args.player.inventory.main_inventory {
+            log::warn!(
+                "use_with_item: items {}",
+                item.lock().await.item.registry_key
+            );
         }
-        _args.world
+        _args
+            .world
             .play_block_sound(
                 Sound::BlockShelfMultiSwap,
                 SoundCategory::Blocks,
@@ -41,7 +51,6 @@ impl BlockBehaviour for Shelf {
             .await;
         BlockActionResult::Consume
     }
-
 
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = AcaciaShelfLikeProperties::default(args.block);
@@ -150,8 +159,7 @@ impl BlockBehaviour for Shelf {
                             )
                             .await;
                     }
-                    _ => {
-                    }
+                    _ => {}
                 },
                 SideChain::Left => match right.unwrap() {
                     SideChain::Right | SideChain::Unconnected => {
@@ -174,8 +182,7 @@ impl BlockBehaviour for Shelf {
                             )
                             .await;
                     }
-                    _ => {
-                    }
+                    _ => {}
                 },
                 SideChain::Right => {
                     own_state.side_chain = SideChain::Left;
@@ -199,7 +206,6 @@ impl BlockBehaviour for Shelf {
                 }
             }
         }
-
     }
 
     async fn get_state_for_neighbor_update(
