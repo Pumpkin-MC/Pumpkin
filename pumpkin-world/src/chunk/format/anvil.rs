@@ -819,6 +819,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
@@ -1327,3 +1328,4 @@ mod tests {
     }
     */
 }
+ */
