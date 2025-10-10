@@ -71,7 +71,7 @@ pub async fn compute_wall_state(
                 }
             } else if block_above.is_tagged_with_by_tag(&tag::Block::C_GLASS_PANES)
                 || block_above.is_tagged_with_by_tag(&tag::Block::MINECRAFT_FENCES)
-                || block_above == &Block::IRON_BARS
+                || block_above.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BARS)
             {
                 let other_props =
                     FenceLikeProperties::from_state_id(block_above_state.id, block_above);
@@ -155,7 +155,7 @@ fn is_connected(
             direction.opposite(),
         ))
         || other_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WALLS)
-        || other_block == &Block::IRON_BARS
+        || other_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BARS)
         || other_block.is_tagged_with_by_tag(&tag::Block::C_GLASS_PANES);
 
     // fence gates do not pass is_side_solid check
