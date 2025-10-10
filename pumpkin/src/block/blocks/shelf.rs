@@ -1,13 +1,13 @@
+use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{BlockBehaviour, OnPlaceArgs};
 use async_trait::async_trait;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::AcaciaShelfLikeProperties;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::SideChain;
-use pumpkin_world::BlockStateId;
-use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::tag::RegistryKey;
-use crate::block::blocks::redstone::block_receives_redstone_power;
+use pumpkin_data::tag::get_tag_values;
+use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_world::BlockStateId;
 
 #[pumpkin_block_from_tag("minecraft:wooden_shelves")]
 pub struct Shelf;

@@ -3,10 +3,10 @@ use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::Axis;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_world::BlockStateId;
-use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::tag::RegistryKey;
+use pumpkin_data::tag::get_tag_values;
+use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_world::BlockStateId;
 
 #[pumpkin_block_from_tag("minecraft:chains")]
 pub struct ChainBlock;
