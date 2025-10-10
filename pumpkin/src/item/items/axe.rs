@@ -238,7 +238,10 @@ fn get_unwaxed_equivalent(block: &Block) -> u16 {
         id if id == Block::WAXED_OXIDIZED_CUT_COPPER_SLAB.id => Block::OXIDIZED_CUT_COPPER_SLAB.id,
         id if id == Block::WAXED_WEATHERED_CUT_COPPER_SLAB.id => {
             Block::WEATHERED_CUT_COPPER_SLAB.id
-        } id if id == Block::WAXED_EXPOSED_CUT_COPPER_SLAB.id => Block::EXPOSED_CUT_COPPER_SLAB.id, id if id == Block::WAXED_CUT_COPPER_SLAB.id => Block::CUT_COPPER_SLAB.id, id if id == Block::WAXED_OXIDIZED_COPPER_BULB.id => Block::OXIDIZED_COPPER_BULB.id,
+        }
+        id if id == Block::WAXED_EXPOSED_CUT_COPPER_SLAB.id => Block::EXPOSED_CUT_COPPER_SLAB.id,
+        id if id == Block::WAXED_CUT_COPPER_SLAB.id => Block::CUT_COPPER_SLAB.id,
+        id if id == Block::WAXED_OXIDIZED_COPPER_BULB.id => Block::OXIDIZED_COPPER_BULB.id,
         id if id == Block::WAXED_WEATHERED_COPPER_BULB.id => Block::WEATHERED_COPPER_BULB.id,
         id if id == Block::WAXED_EXPOSED_COPPER_BULB.id => Block::EXPOSED_COPPER_BULB.id,
         id if id == Block::WAXED_COPPER_BULB.id => Block::COPPER_BULB.id,
