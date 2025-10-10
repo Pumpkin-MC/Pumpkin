@@ -130,6 +130,14 @@ impl BoundingBox {
         Some(collision_time)
     }
 
+    pub fn get_average_side_length(&self) -> f64 {
+        let width = self.max.x - self.min.x;
+        let height = self.max.y - self.min.y;
+        let depth = self.max.z - self.min.z;
+
+        (width + height + depth) / 3.0
+    }
+
     pub fn min_block_pos(&self) -> BlockPos {
         BlockPos::floored_v(self.min)
     }
