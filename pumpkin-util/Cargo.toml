@@ -21,3 +21,7 @@ enum_dispatch = "0.3.13"
 
 uuid.workspace = true
 tokio.workspace = true
+base64 = "0.22.1"
+p384 = { version = "0.13.1", features = ["ecdsa"] }
+thiserror.workspace = true
+ecdsa = "0.16.9"

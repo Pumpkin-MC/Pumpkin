@@ -1,6 +1,8 @@
-use std::sync::Arc;
-
-use base64::{Engine, engine::general_purpose};
+use crate::net::authentication::MOJANG_BEDROCK_PUBLIC_KEY_BASE64;
+use crate::{
+    net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
+    server::Server,
+};
 use pumpkin_config::{BASIC_CONFIG, networking::compression::CompressionInfo};
 use pumpkin_protocol::{
     bedrock::{
@@ -14,13 +16,35 @@ use pumpkin_protocol::{
     },
     codec::var_uint::VarUInt,
 };
-use serde_json::Value;
-
-use crate::{
-    net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
-    server::Server,
-};
+use pumpkin_util::jwt::{AuthError, verify_chain};
 use pumpkin_world::CURRENT_BEDROCK_MC_VERSION;
+use serde::Deserialize;
+use std::sync::Arc;
+use thiserror::Error;
+use uuid::Uuid;
+
+#[derive(Debug, Error)]
+pub enum LoginError {
+    #[error("Login packet data is not a valid JSON array of tokens")]
+    InvalidTokenFormat(#[from] serde_json::Error),
+    #[error("JWT chain validation failed: {0}")]
+    ChainValidationFailed(#[from] AuthError),
+    #[error("The validated username is invalid")]
+    InvalidUsername,
+    #[error("Could not parse UUID from validated token")]
+    InvalidUuid,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct FullLoginPayload {
+    certificate: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct CertificateChainPayload {
+    chain: Vec<String>,
+}
 
 impl BedrockClient {
     pub async fn handle_request_network_settings(&self, _packet: SRequestNetworkSettings) {
@@ -28,46 +52,38 @@ impl BedrockClient {
             .await;
         self.set_compression(CompressionInfo::default()).await;
     }
+
     pub async fn handle_login(self: &Arc<Self>, packet: SLogin, server: &Server) -> Option<()> {
-        // This is a mess to extract the PlayerName
-        // TODO Verify Player
-        // This also contains the public key for encryption!
-        let jwt = unsafe { String::from_utf8_unchecked(packet.jwt) };
-        let i = jwt
-            .split_once('[')
-            .unwrap()
-            .1
-            .split_once(']')
-            .unwrap()
-            .0
-            .split(',')
-            .collect::<Vec<&str>>();
-
-        // TODO Make this right!!!
-        if i.len() != 3 {
-            self.kick(
-                DisconnectReason::LoginPacketNoRequest,
-                "Something went wrong try again".to_string(),
-            )
-            .await;
-            return None;
+        match self.try_handle_login(packet, server).await {
+            Ok(()) => Some(()),
+            Err(error) => {
+                log::warn!("Bedrock login failed: {error}");
+                let message = match error {
+                    LoginError::InvalidUsername => "Your username is invalid.".to_string(),
+                    _ => "Failed to log in. The data sent by your client was invalid.".to_string(),
+                };
+                self.kick(DisconnectReason::LoginPacketNoRequest, message)
+                    .await;
+                None
+            }
         }
+    }
 
-        let i = i[2].split_once('\"').unwrap().1.split_once('\"').unwrap().0;
-        let parts: Vec<&str> = i.split('.').collect();
+    pub async fn try_handle_login(
+        self: &Arc<Self>,
+        packet: SLogin,
+        server: &Server,
+    ) -> Result<(), LoginError> {
+        let outer_payload: FullLoginPayload = serde_json::from_slice(&packet.jwt)?;
+        let inner_payload: CertificateChainPayload =
+            serde_json::from_str(&outer_payload.certificate)?;
 
-        let payload = unsafe {
-            String::from_utf8_unchecked(general_purpose::URL_SAFE_NO_PAD.decode(parts[1]).unwrap())
-        };
-        let payload: Value = serde_json::from_str(&payload).unwrap();
+        let chain_vec: Vec<&str> = inner_payload.chain.iter().map(String::as_str).collect();
+        let player_data = verify_chain(&chain_vec, MOJANG_BEDROCK_PUBLIC_KEY_BASE64)?;
 
-        // TODO
         let profile = GameProfile {
-            id: uuid::Uuid::parse_str(payload["extraData"]["identity"].as_str().unwrap()).unwrap(),
-            name: payload["extraData"]["displayName"]
-                .as_str()
-                .unwrap()
-                .to_string(),
+            id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,
+            name: player_data.display_name,
             properties: Vec::new(),
             profile_actions: None,
         };
@@ -84,14 +100,7 @@ impl BedrockClient {
         self.write_game_packet_to_set(&CPlayStatus::LoginSuccess, &mut frame_set)
             .await;
         self.write_game_packet_to_set(
-            &CResourcePacksInfo::new(
-                false,
-                false,
-                false,
-                false,
-                uuid::Uuid::default(),
-                String::new(),
-            ),
+            &CResourcePacksInfo::new(false, false, false, false, Uuid::default(), String::new()),
             &mut frame_set,
         )
         .await;
@@ -114,11 +123,7 @@ impl BedrockClient {
         self.send_frame_set(frame_set, 0x84).await;
 
         if let Some((player, world)) = server
-            .add_player(
-                ClientPlatform::Bedrock(self.clone()),
-                profile,
-                None, // TODO
-            )
+            .add_player(ClientPlatform::Bedrock(self.clone()), profile, None)
             .await
         {
             world
@@ -127,6 +132,6 @@ impl BedrockClient {
             *self.player.lock().await = Some(player);
         }
 
-        Some(())
+        Ok(())
     }
 }

@@ -57,7 +57,6 @@ pub mod connection;
 pub mod login;
 pub mod open_connection;
 pub mod unconnected;
-
 use crate::{entity::player::Player, net::DisconnectReason, server::Server};
 
 pub struct BedrockClient {
