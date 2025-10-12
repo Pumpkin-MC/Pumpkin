@@ -1,3 +1,4 @@
+use crate::command::args::block::BlockArgumentConsumer;
 use crate::command::args::entity::EntityArgumentConsumer;
 use crate::command::tree::builder::literal;
 use crate::command::{
@@ -12,13 +13,18 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
+use pumpkin_world::block::entities::BlockEntity;
 
 const NAMES: [&str; 1] = ["data"];
 const DESCRIPTION: &str = "Query and modify data of entities and blocks";
 
 const ARG_ENTITY: &str = "entity";
 
+const ARG_BLOCK: &str = "block";
+
 struct GetEntityDataExecutor;
+
+struct GetBlockEntityDataExecutor;
 
 #[async_trait]
 impl CommandExecutor for GetEntityDataExecutor {
@@ -34,7 +40,32 @@ impl CommandExecutor for GetEntityDataExecutor {
         let data_storage = entity.as_nbt_storage();
 
         sender
-            .send_message(display_data(data_storage, entity.get_display_name().await).await?)
+            .send_message(display_entity_data(data_storage, entity.get_display_name().await).await?)
+            .await;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl CommandExecutor for GetBlockEntityDataExecutor {
+    async fn execute<'a>(
+        &self,
+        sender: &mut CommandSender,
+        _server: &crate::server::Server,
+        args: &ConsumedArgs<'a>,
+    ) -> Result<(), CommandError> {
+        let Some(Arg::BlockEntity(block_entity)) = args.get(&ARG_BLOCK) else {
+            return Err(InvalidConsumption(Some(ARG_BLOCK.into())));
+        };
+
+        sender
+            .send_message(
+                display_block_entity_data(
+                    block_entity.as_block_entity(),
+                    TextComponent::translate("test", []),
+                )
+                .await?,
+            )
             .await;
         Ok(())
     }
@@ -217,7 +248,7 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
     }
 }
 
-async fn display_data(
+async fn display_entity_data(
     storage: &dyn NBTStorage,
     target_name: TextComponent,
 ) -> Result<TextComponent, CommandError> {
@@ -231,11 +262,28 @@ async fn display_data(
     ))
 }
 
+async fn display_block_entity_data(
+    storage: &dyn BlockEntity,
+    target_name: TextComponent,
+) -> Result<TextComponent, CommandError> {
+    let mut nbt = NbtCompound::new();
+    storage.write_nbt(&mut nbt).await;
+    let display = snbt_colorful_display(&NbtTag::Compound(nbt), 0)
+        .map_err(|string| CommandError::CommandFailed(Box::new(TextComponent::text(string))))?;
+    Ok(TextComponent::translate(
+        "commands.data.blockentity.query",
+        [target_name, display],
+    ))
+}
+
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         literal("get").then(
             literal("entity")
-                .then(argument(ARG_ENTITY, EntityArgumentConsumer).execute(GetEntityDataExecutor)),
+                .then(argument(ARG_ENTITY, EntityArgumentConsumer).execute(GetEntityDataExecutor))
+                .then(literal("block").then(
+                    argument(ARG_BLOCK, BlockArgumentConsumer).execute(GetBlockEntityDataExecutor),
+                )),
         ),
     )
 }
