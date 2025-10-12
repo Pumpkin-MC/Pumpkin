@@ -35,7 +35,7 @@ pub mod furnace;
 pub mod hopper;
 pub mod mob_spawner;
 pub mod piston;
-mod shelf;
+pub mod shelf;
 pub mod shulker_box;
 pub mod sign;
 
