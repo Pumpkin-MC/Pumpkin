@@ -523,7 +523,7 @@ impl ChunkData {
 
             if !has_found[ChunkHeightmapType::MotionBlockingNoLeaves as usize]
                 && is_motion_blocking
-                && !block.is_tagged_with_by_tag(&MINECRAFT_LEAVES)
+                && !block.has_tag(&MINECRAFT_LEAVES)
             {
                 heightmaps.set(
                     ChunkHeightmapType::MotionBlockingNoLeaves,

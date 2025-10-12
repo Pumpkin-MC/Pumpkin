@@ -233,7 +233,7 @@ pub(crate) fn build() -> TokenStream {
                 Some(items.contains(&self.registry_id()))
             }
 
-            fn is_tagged_with_by_tag(&self, tag: &'static Tag) -> bool {
+            fn has_tag(&self, tag: &'static Tag) -> bool {
                 tag.1.contains(&self.registry_id())
             }
 

@@ -44,7 +44,7 @@ impl BlockBehaviour for MushroomPlantBlock {
 impl PlantBlockBase for MushroomPlantBlock {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos).await;
-        block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_MUSHROOM_GROW_BLOCK)
+        block.has_tag(&tag::Block::MINECRAFT_MUSHROOM_GROW_BLOCK)
         // TODO: Check light level and isOpaqueFullCube
     }
 }

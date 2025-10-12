@@ -103,6 +103,6 @@ async fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     }
     let block = world.get_block(&block_pos.down()).await;
     // TODO: use tags
-    (block == &Block::CACTUS || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_SAND))
+    (block == &Block::CACTUS || block.has_tag(&tag::Block::MINECRAFT_SAND))
         && !world.get_block_state(&block_pos.up()).await.is_liquid()
 }
