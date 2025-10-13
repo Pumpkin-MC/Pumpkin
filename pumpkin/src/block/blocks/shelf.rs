@@ -284,11 +284,7 @@ async fn is_left_shelf(
 
 impl Shelf {
     fn get_slot_for_hit(hit: &BlockHitResult<'_>, facing: HorizontalFacing) -> Option<i8> {
-        Self::get_hit_pos(hit, facing).map(|position| {
-            let i = i8::from(position.y < 0.5);
-            let j = Self::get_column(position.x);
-            j + i * 3
-        })
+        Self::get_hit_pos(hit, facing).map(|position| Self::get_column(position.x))
     }
 
     fn get_hit_pos(hit: &BlockHitResult<'_>, facing: HorizontalFacing) -> Option<Vector2<f32>> {
