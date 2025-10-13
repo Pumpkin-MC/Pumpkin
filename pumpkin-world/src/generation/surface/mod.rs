@@ -49,11 +49,9 @@ pub struct MaterialRuleContext<'a> {
     pub stone_depth_below: i32,
     pub stone_depth_above: i32,
     pub terrain_builder: &'a SurfaceTerrainBuilder,
-    pub sea_level: i32,
 }
 
 impl<'a> MaterialRuleContext<'a> {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         min_y: i8,
         height: u16,
@@ -62,7 +60,6 @@ impl<'a> MaterialRuleContext<'a> {
         terrain_builder: &'a SurfaceTerrainBuilder,
         surface_noise: &'a DoublePerlinNoiseSampler,
         secondary_noise: &'a DoublePerlinNoiseSampler,
-        sea_level: i32,
     ) -> Self {
         const HORIZONTAL_POS: i64 = -i64::MAX; // Vanilla
         Self {
@@ -86,7 +83,6 @@ impl<'a> MaterialRuleContext<'a> {
             noise_builder,
             stone_depth_below: 0,
             stone_depth_above: 0,
-            sea_level,
         }
     }
 
@@ -163,12 +159,7 @@ pub enum MaterialCondition {
 }
 
 impl MaterialCondition {
-    pub fn test(
-        &self,
-        chunk: &mut ProtoChunk,
-        context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
-    ) -> bool {
+    pub fn test(&self, chunk: &mut ProtoChunk, context: &mut MaterialRuleContext) -> bool {
         match self {
             MaterialCondition::Biome(biome) => biome.test(context),
             MaterialCondition::NoiseThreshold(noise_threshold) => noise_threshold.test(context),
@@ -181,7 +172,7 @@ impl MaterialCondition {
                 let temperature = context
                     .biome
                     .weather
-                    .compute_temperature(&context.block_pos, context.sea_level);
+                    .compute_temperature(&context.block_pos, chunk.generation_settings().sea_level);
                 temperature < 0.15f32
             }
             MaterialCondition::Steep => {
@@ -210,12 +201,10 @@ impl MaterialCondition {
                     sub_height >= add_height + 4
                 }
             }
-            MaterialCondition::Not(not) => {
-                not.test(chunk, context, surface_height_estimate_sampler)
-            }
+            MaterialCondition::Not(not) => not.test(chunk, context),
             MaterialCondition::Hole(hole) => hole.test(context),
             MaterialCondition::AbovePreliminarySurface(above) => {
-                above.test(context, surface_height_estimate_sampler)
+                above.test(context, &mut chunk.surface_height_estimate_sampler)
             }
             MaterialCondition::StoneDepth(stone_depth) => stone_depth.test(context),
         }
@@ -257,15 +246,8 @@ pub struct NotMaterialCondition {
 }
 
 impl NotMaterialCondition {
-    pub fn test(
-        &self,
-        chunk: &mut ProtoChunk,
-        context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
-    ) -> bool {
-        !self
-            .invert
-            .test(chunk, context, surface_height_estimate_sampler)
+    pub fn test(&self, chunk: &mut ProtoChunk, context: &mut MaterialRuleContext) -> bool {
+        !self.invert.test(chunk, context)
     }
 }
 

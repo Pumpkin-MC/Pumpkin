@@ -8,8 +8,12 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::generation::proto_chunk::GenerationCache;
-use crate::{block::BlockStateCodec, generation::rule::RuleTest, world::BlockRegistryExt};
+use crate::{
+    ProtoChunk,
+    block::BlockStateCodec,
+    generation::{height_limit::HeightLimitView, rule::RuleTest},
+    world::BlockRegistryExt,
+};
 
 #[derive(Deserialize)]
 pub struct OreFeature {
@@ -26,9 +30,9 @@ struct OreTarget {
 
 impl OreFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         _block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -67,9 +71,9 @@ impl OreFeature {
     }
 
     #[expect(clippy::too_many_arguments)]
-    fn generate_vein_part<T: GenerationCache>(
+    fn generate_vein_part(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         random: &mut RandomGenerator,
         start_x: f64,
         end_x: f64,
@@ -181,8 +185,7 @@ impl OreFeature {
                         let ae = v_val;
                         let af = aa_val;
 
-                        let block_state =
-                            GenerationCache::get_block_state(chunk, &Vector3::new(ad, ae, af));
+                        let block_state = chunk.get_block_state(&Vector3::new(ad, ae, af));
 
                         for target in &self.targets {
                             if self.should_place(
@@ -207,9 +210,9 @@ impl OreFeature {
         placed_blocks_count > 0
     }
 
-    fn should_place<T: GenerationCache>(
+    fn should_place(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         state: &'static BlockState,
         random: &mut RandomGenerator,
         target: &OreTarget,
@@ -234,9 +237,10 @@ impl OreFeature {
         random.next_f32() >= chance
     }
 
-    fn is_exposed_to_air<T: GenerationCache>(chunk: &mut T, pos: &BlockPos) -> bool {
+    fn is_exposed_to_air(chunk: &mut ProtoChunk, pos: &BlockPos) -> bool {
         for dir in BlockDirection::all() {
-            if GenerationCache::get_block_state(chunk, &pos.offset(dir.to_offset()).0)
+            if chunk
+                .get_block_state(&pos.offset(dir.to_offset()).0)
                 .to_state()
                 .is_air()
             {

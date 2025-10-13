@@ -10,8 +10,7 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::{ProtoChunk, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct BambooFeature {
@@ -20,9 +19,9 @@ pub struct BambooFeature {
 
 impl BambooFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk<'_>,
         block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -43,7 +42,7 @@ impl BambooFeature {
                                 chunk.top_block_height_exclusive(&Vector2::new(x, z)) - 1,
                                 z,
                             );
-                            let block = GenerationCache::get_block_state(chunk, &block_below.0);
+                            let block = chunk.get_block_state(&block_below.0);
                             if !block
                                 .to_block()
                                 .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)

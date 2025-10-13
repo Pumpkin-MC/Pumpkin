@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use pumpkin_data::BlockState;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 use serde::Deserialize;
 
+use crate::{ProtoChunk, generation::feature::features::tree::TreeNode, level::Level};
+
 use super::{FoliagePlacer, LeaveValidator};
-use crate::generation::feature::features::tree::TreeNode;
-use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct BushFoliagePlacer {
@@ -13,9 +15,10 @@ pub struct BushFoliagePlacer {
 
 impl BushFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         random: &mut RandomGenerator,
         node: &TreeNode,
         foliage_height: i32,
@@ -28,6 +31,7 @@ impl BushFoliagePlacer {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
+                level,
                 random,
                 node.center,
                 radius,

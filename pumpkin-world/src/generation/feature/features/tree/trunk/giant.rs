@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
@@ -5,19 +7,23 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::generation::feature::features::tree::{TreeNode, trunk::TrunkPlacer};
-use crate::generation::proto_chunk::GenerationCache;
+use crate::{
+    ProtoChunk,
+    generation::feature::features::tree::{TreeNode, trunk::TrunkPlacer},
+    level::Level,
+};
 
 #[derive(Deserialize)]
 pub struct GiantTrunkPlacer;
 
 impl GiantTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk<'_>,
+        _level: &Arc<Level>,
         _random: &mut RandomGenerator,
         force_dirt: bool,
         dirt_state: &BlockState,

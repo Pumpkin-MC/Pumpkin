@@ -12,7 +12,7 @@ use crate::{
     },
 };
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub struct NetherFortressGenerator;
 
 impl StructureGenerator for NetherFortressGenerator {

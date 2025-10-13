@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
@@ -5,9 +7,9 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
+use crate::{ProtoChunk, generation::feature::features::tree::TreeNode, level::Level};
+
 use super::FoliagePlacer;
-use crate::generation::feature::features::tree::TreeNode;
-use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct RandomSpreadFoliagePlacer {
@@ -17,9 +19,10 @@ pub struct RandomSpreadFoliagePlacer {
 
 impl RandomSpreadFoliagePlacer {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         random: &mut RandomGenerator,
         _node: &TreeNode,
         foliage_height: i32,
@@ -33,7 +36,7 @@ impl RandomSpreadFoliagePlacer {
                 random.next_bounded_i32(foliage_height) - random.next_bounded_i32(foliage_height),
                 random.next_bounded_i32(radius) - random.next_bounded_i32(radius),
             );
-            FoliagePlacer::place_foliage_block(chunk, pos, foliage_provider);
+            FoliagePlacer::place_foliage_block(chunk, level, pos, foliage_provider);
         }
     }
     // TODO: getRandomRadius

@@ -30,6 +30,13 @@ use crate::block::BlockStateCodec;
 pub mod anvil;
 pub mod linear;
 
+// I can't use an tag because it will break ChunkNBT, but status need to have a big S, so "Status"
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct ChunkStatusWrapper {
+    status: ChunkStatus,
+}
+
 #[async_trait]
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
@@ -72,6 +79,15 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
+        // TODO: Implement chunk stages?
+        if from_bytes::<ChunkStatusWrapper>(Cursor::new(chunk_data))
+            .map_err(ChunkParsingError::FailedReadStatus)?
+            .status
+            != ChunkStatus::Full
+        {
+            return Err(ChunkParsingError::ChunkNotGenerated);
+        }
+
         let chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
@@ -176,7 +192,6 @@ impl ChunkData {
                 block_entities
             },
             light_engine,
-            status: chunk_data.status,
         })
     }
 
@@ -206,7 +221,7 @@ impl ChunkData {
             x_pos: self.position.x,
             z_pos: self.position.y,
             min_y_section: section_coords::block_to_section(self.section.min_y),
-            status: self.status,
+            status: ChunkStatus::Full,
             heightmaps: self.heightmap.clone(),
             sections,
             block_ticks: self.block_ticks.to_vec(),

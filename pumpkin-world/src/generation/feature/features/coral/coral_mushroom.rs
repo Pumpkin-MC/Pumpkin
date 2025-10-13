@@ -1,9 +1,10 @@
-use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
+
+use crate::ProtoChunk;
 
 use super::CoralFeature;
 
@@ -11,9 +12,9 @@ use super::CoralFeature;
 pub struct CoralMushroomFeature;
 
 impl CoralMushroomFeature {
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature

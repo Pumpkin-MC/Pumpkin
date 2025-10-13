@@ -29,7 +29,7 @@ pub struct Structures {
     pub structure: StructureType,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub enum StructureType {
     #[serde(rename = "minecraft:buried_treasure")]
     BuriedTreasure(BuriedTreasureGenerator),
@@ -69,7 +69,7 @@ impl StructureType {
     }
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct Structure {
     biomes: String,
 }

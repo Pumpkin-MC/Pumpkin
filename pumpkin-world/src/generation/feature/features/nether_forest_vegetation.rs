@@ -5,8 +5,11 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::generation::proto_chunk::GenerationCache;
-use crate::{generation::block_state_provider::BlockStateProvider, world::BlockRegistryExt};
+use crate::{
+    ProtoChunk,
+    generation::{block_state_provider::BlockStateProvider, height_limit::HeightLimitView},
+    world::BlockRegistryExt,
+};
 
 #[derive(Deserialize)]
 pub struct NetherForestVegetationFeature {
@@ -17,9 +20,9 @@ pub struct NetherForestVegetationFeature {
 
 impl NetherForestVegetationFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk<'_>,
         block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -27,7 +30,7 @@ impl NetherForestVegetationFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let state = GenerationCache::get_block_state(chunk, &pos.down().0);
+        let state = chunk.get_block_state(&pos.down().0);
 
         if !state
             .to_block()

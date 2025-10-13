@@ -5,8 +5,10 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::generation::proto_chunk::GenerationCache;
-use crate::{block::BlockStateCodec, world::BlockRegistryExt};
+use crate::{
+    ProtoChunk, block::BlockStateCodec, generation::height_limit::HeightLimitView,
+    world::BlockRegistryExt,
+};
 
 #[derive(Deserialize)]
 pub struct ReplaceBlobsFeature {
@@ -17,9 +19,9 @@ pub struct ReplaceBlobsFeature {
 
 impl ReplaceBlobsFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         _block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -43,7 +45,7 @@ impl ReplaceBlobsFeature {
             if iter_pos.manhattan_distance(pos) > distance {
                 break;
             }
-            let current_state = GenerationCache::get_block_state(chunk, &iter_pos.0);
+            let current_state = chunk.get_block_state(&iter_pos.0);
             if current_state.to_block() != target {
                 continue;
             }
@@ -54,13 +56,13 @@ impl ReplaceBlobsFeature {
         result
     }
 
-    fn move_down_to_target<T: GenerationCache>(
+    fn move_down_to_target(
         mut pos: BlockPos,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         target: &'static Block,
     ) -> Option<BlockPos> {
         while pos.0.y > chunk.bottom_y() as i32 + 1 {
-            let state = GenerationCache::get_block_state(chunk, &pos.0);
+            let state = chunk.get_block_state(&pos.0);
             if state.to_block() == target {
                 return Some(pos);
             }

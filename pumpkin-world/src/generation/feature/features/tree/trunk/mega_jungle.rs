@@ -1,4 +1,5 @@
 use core::f32;
+use std::sync::Arc;
 
 use pumpkin_data::BlockState;
 use pumpkin_util::{
@@ -7,22 +8,26 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::generation::feature::features::tree::{
-    TreeNode,
-    trunk::{TrunkPlacer, giant::GiantTrunkPlacer},
+use crate::{
+    ProtoChunk,
+    generation::feature::features::tree::{
+        TreeNode,
+        trunk::{TrunkPlacer, giant::GiantTrunkPlacer},
+    },
+    level::Level,
 };
-use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct MegaJungleTrunkPlacer;
 
 impl MegaJungleTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         random: &mut RandomGenerator,
         force_dirt: bool,
         dirt_state: &BlockState,
@@ -33,6 +38,7 @@ impl MegaJungleTrunkPlacer {
             height,
             start_pos,
             chunk,
+            level,
             random,
             force_dirt,
             dirt_state,

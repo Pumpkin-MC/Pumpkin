@@ -2,8 +2,7 @@ use pumpkin_data::BlockDirection;
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
-use crate::generation::proto_chunk::GenerationCache;
-use crate::{block::BlockStateCodec, world::BlockRegistryExt};
+use crate::{ProtoChunk, block::BlockStateCodec, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct SpringFeatureFeature {
@@ -22,10 +21,10 @@ enum BlockWrapper {
 }
 
 impl SpringFeatureFeature {
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
         _block_registry: &dyn BlockRegistryExt,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -35,7 +34,8 @@ impl SpringFeatureFeature {
             BlockWrapper::Multi(items) => items,
         };
         if !valid_blocks.contains(
-            &GenerationCache::get_block_state(chunk, &pos.up().0)
+            &chunk
+                .get_block_state(&pos.up().0)
                 .to_block()
                 .name
                 .to_string(),
@@ -44,18 +44,16 @@ impl SpringFeatureFeature {
         }
         if self.requires_block_below
             && !valid_blocks.contains(
-                &GenerationCache::get_block_state(
-                    chunk,
-                    &pos.offset(BlockDirection::Down.to_offset()).0,
-                )
-                .to_block()
-                .name
-                .to_string(),
+                &chunk
+                    .get_block_state(&pos.offset(BlockDirection::Down.to_offset()).0)
+                    .to_block()
+                    .name
+                    .to_string(),
             )
         {
             return false;
         }
-        let state = GenerationCache::get_block_state(chunk, &pos.0);
+        let state = chunk.get_block_state(&pos.0);
         if !state.to_state().is_air() && !valid_blocks.contains(&state.to_block().name.to_string())
         {
             return false;
@@ -63,57 +61,47 @@ impl SpringFeatureFeature {
 
         let mut valid = 0;
         if valid_blocks.contains(
-            &GenerationCache::get_block_state(
-                chunk,
-                &pos.offset(BlockDirection::West.to_offset()).0,
-            )
-            .to_block()
-            .name
-            .to_string(),
+            &chunk
+                .get_block_state(&pos.offset(BlockDirection::West.to_offset()).0)
+                .to_block()
+                .name
+                .to_string(),
         ) {
             valid += 1;
         }
         if valid_blocks.contains(
-            &GenerationCache::get_block_state(
-                chunk,
-                &pos.offset(BlockDirection::East.to_offset()).0,
-            )
-            .to_block()
-            .name
-            .to_string(),
+            &chunk
+                .get_block_state(&pos.offset(BlockDirection::East.to_offset()).0)
+                .to_block()
+                .name
+                .to_string(),
         ) {
             valid += 1;
         }
         if valid_blocks.contains(
-            &GenerationCache::get_block_state(
-                chunk,
-                &pos.offset(BlockDirection::North.to_offset()).0,
-            )
-            .to_block()
-            .name
-            .to_string(),
+            &chunk
+                .get_block_state(&pos.offset(BlockDirection::North.to_offset()).0)
+                .to_block()
+                .name
+                .to_string(),
         ) {
             valid += 1;
         }
         if valid_blocks.contains(
-            &GenerationCache::get_block_state(
-                chunk,
-                &pos.offset(BlockDirection::South.to_offset()).0,
-            )
-            .to_block()
-            .name
-            .to_string(),
+            &chunk
+                .get_block_state(&pos.offset(BlockDirection::South.to_offset()).0)
+                .to_block()
+                .name
+                .to_string(),
         ) {
             valid += 1;
         }
         if valid_blocks.contains(
-            &GenerationCache::get_block_state(
-                chunk,
-                &pos.offset(BlockDirection::Down.to_offset()).0,
-            )
-            .to_block()
-            .name
-            .to_string(),
+            &chunk
+                .get_block_state(&pos.offset(BlockDirection::Down.to_offset()).0)
+                .to_block()
+                .name
+                .to_string(),
         ) {
             valid += 1;
         }

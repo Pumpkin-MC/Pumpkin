@@ -2,17 +2,16 @@ use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::BlockPro
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
-use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::{ProtoChunk, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct VinesFeature;
 
 impl VinesFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         _block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -26,7 +25,8 @@ impl VinesFeature {
         for dir in BlockDirection::all() {
             // TODO
             if dir == BlockDirection::Down
-                || !GenerationCache::get_block_state(chunk, &pos.offset(dir.to_offset()).0)
+                || !chunk
+                    .get_block_state(&pos.offset(dir.to_offset()).0)
                     .to_state()
                     .is_full_cube()
             {

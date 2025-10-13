@@ -8,7 +8,8 @@ use crate::{
     ProtoChunk,
     block::RawBlockState,
     generation::{
-        chunk_noise::WATER_BLOCK, noise::perlin::DoublePerlinNoiseSampler,
+        chunk_noise::WATER_BLOCK, height_limit::HeightLimitView,
+        noise::perlin::DoublePerlinNoiseSampler,
         noise::router::proto_noise_router::DoublePerlinNoiseBuilder,
     },
 };

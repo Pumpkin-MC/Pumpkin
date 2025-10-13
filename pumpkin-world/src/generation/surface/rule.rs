@@ -2,10 +2,7 @@ use pumpkin_data::BlockState;
 use serde::Deserialize;
 
 use super::{MaterialCondition, MaterialRuleContext};
-use crate::{
-    ProtoChunk, block::BlockStateCodec,
-    generation::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler,
-};
+use crate::{ProtoChunk, block::BlockStateCodec};
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -25,17 +22,12 @@ impl MaterialRule {
         &self,
         chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         match self {
             MaterialRule::Badlands(badlands) => badlands.try_apply(context),
             MaterialRule::Block(block) => Some(block.try_apply()),
-            MaterialRule::Sequence(sequence) => {
-                sequence.try_apply(chunk, context, surface_height_estimate_sampler)
-            }
-            MaterialRule::Condition(condition) => {
-                condition.try_apply(chunk, context, surface_height_estimate_sampler)
-            }
+            MaterialRule::Sequence(sequence) => sequence.try_apply(chunk, context),
+            MaterialRule::Condition(condition) => condition.try_apply(chunk, context),
         }
     }
 }
@@ -74,10 +66,9 @@ impl SequenceMaterialRule {
         &self,
         chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         for seq in &self.sequence {
-            if let Some(state) = seq.try_apply(chunk, context, surface_height_estimate_sampler) {
+            if let Some(state) = seq.try_apply(chunk, context) {
                 return Some(state);
             }
         }
@@ -96,15 +87,9 @@ impl ConditionMaterialRule {
         &self,
         chunk: &mut ProtoChunk,
         context: &mut MaterialRuleContext,
-        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
-        if self
-            .if_true
-            .test(chunk, context, surface_height_estimate_sampler)
-        {
-            return self
-                .then_run
-                .try_apply(chunk, context, surface_height_estimate_sampler);
+        if self.if_true.test(chunk, context) {
+            return self.then_run.try_apply(chunk, context);
         }
         None
     }

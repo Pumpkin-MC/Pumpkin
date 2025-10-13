@@ -1,4 +1,5 @@
 use core::f32;
+use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockState,
@@ -10,20 +11,25 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
+use crate::{
+    ProtoChunk,
+    generation::feature::features::tree::{TreeFeature, TreeNode},
+    level::Level,
+};
+
 use super::TrunkPlacer;
-use crate::generation::feature::features::tree::{TreeFeature, TreeNode};
-use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct FancyTrunkPlacer;
 
 impl FancyTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         random: &mut RandomGenerator,
         force_dirt: bool,
         dirt_state: &BlockState,
@@ -58,6 +64,7 @@ impl FancyTrunkPlacer {
 
                 let (i, new_logs) = Self::make_or_check_branch(
                     chunk,
+                    level,
                     block_pos.0,
                     block_pos_2.0,
                     trunk_block,
@@ -78,6 +85,7 @@ impl FancyTrunkPlacer {
 
                 let (i, new_logs) = Self::make_or_check_branch(
                     chunk,
+                    level,
                     block_pos_3.0,
                     block_pos.0,
                     trunk_block,
@@ -94,12 +102,13 @@ impl FancyTrunkPlacer {
 
         Self::make_or_check_branch(
             chunk,
+            level,
             start_pos.0,
             start_pos.up_height(k).0,
             trunk_block,
             true,
         );
-        Self::make_branches(chunk, j, start_pos.0, trunk_block, &list);
+        Self::make_branches(chunk, level, j, start_pos.0, trunk_block, &list);
 
         let mut list_2: Vec<TreeNode> = Vec::new();
         for branch_position in list {
@@ -110,8 +119,9 @@ impl FancyTrunkPlacer {
         (list_2, logs)
     }
 
-    fn make_or_check_branch<T: GenerationCache>(
-        chunk: &mut T,
+    fn make_or_check_branch(
+        chunk: &mut ProtoChunk<'_>,
+        _level: &Arc<Level>,
         start_pos: Vector3<i32>,
         branch_pos: Vector3<i32>,
         trunk_provider: &BlockState,
@@ -140,7 +150,7 @@ impl FancyTrunkPlacer {
                 (0.5f32 + j as f32 * h).floor() as i32,
             ));
 
-            let block = GenerationCache::get_block_state(chunk, &block_pos_2.0);
+            let block = chunk.get_block_state(&block_pos_2.0);
 
             if make {
                 let axis = Self::get_log_axis(start_pos, block_pos_2.0);
@@ -161,7 +171,11 @@ impl FancyTrunkPlacer {
                         })
                         .collect();
                     let state = block.from_properties(&props).to_state_id(block);
-                    chunk.set_block_state(&block_pos_2.0, BlockState::from_id(state));
+                    if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
+                        chunk.set_block_state(&block_pos_2.0, BlockState::from_id(state));
+                    } else {
+                        // level.set_block_state(&block_pos_2, state).await;
+                    }
                     logs.push(block_pos_2);
                     continue;
                 }
@@ -175,8 +189,9 @@ impl FancyTrunkPlacer {
         (true, logs)
     }
 
-    fn make_branches<T: GenerationCache>(
-        chunk: &mut T,
+    fn make_branches(
+        chunk: &mut ProtoChunk<'_>,
+        level: &Arc<Level>,
         tree_height: i32,
         start_pos: Vector3<i32>,
         trunk_provider: &BlockState,
@@ -192,6 +207,7 @@ impl FancyTrunkPlacer {
             }
             Self::make_or_check_branch(
                 chunk,
+                level,
                 block_pos.0,
                 branch_position.node.center.0,
                 trunk_provider,

@@ -1,7 +1,7 @@
 use pumpkin_data::BlockState;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use crate::ProtoChunk;
+use crate::{ProtoChunk, generation::height_limit::HeightLimitView};
 
 pub mod buried_treasure;
 pub mod nether_fortress;
@@ -64,13 +64,13 @@ pub fn fill_downwards(x: i32, y: i32, z: i32, state: &BlockState, chunk: &mut cr
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct StructurePosition {
     pub position: BlockPos,
     pub generator: StructurePiecesCollector,
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone)]
 pub struct StructurePiecesCollector {
     pub pieces_positions: Vec<BlockPos>,
 }

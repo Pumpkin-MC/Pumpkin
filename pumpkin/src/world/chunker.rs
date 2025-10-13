@@ -48,18 +48,16 @@ pub async fn update_position(player: &Arc<Player>) {
         let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks).await;
 
         {
-            let mut chunk_manager = player.chunk_manager.lock().await;
-            chunk_manager.update_center_and_view_distance(
-                new_chunk_center,
-                view_distance.into(),
-                level,
-            );
+            // After marking the chunks as watched, remove chunks that we are already in the process
+            // of sending.
+            let chunk_manager = player.chunk_manager.lock().await;
+            loading_chunks.retain(|pos| !chunk_manager.is_chunk_pending(pos));
         };
 
         player.watched_section.store(new_cylindrical);
 
         if !chunks_to_clean.is_empty() {
-            // level.clean_chunks(&chunks_to_clean).await;
+            level.clean_chunks(&chunks_to_clean).await;
             for chunk in unloading_chunks {
                 player
                     .client
@@ -69,11 +67,9 @@ pub async fn update_position(player: &Arc<Player>) {
         }
 
         if !loading_chunks.is_empty() {
-            entity.world.spawn_world_entity_chunks(
-                player.clone(),
-                loading_chunks,
-                new_chunk_center,
-            );
+            entity
+                .world
+                .spawn_world_chunks(player.clone(), loading_chunks, new_chunk_center);
         }
     }
 }

@@ -8,12 +8,13 @@ use serde::Deserialize;
 use crate::{
     ProtoChunk,
     generation::{
+        height_limit::HeightLimitView,
         positions::chunk_pos::{get_center_x, get_center_z, get_offset_x, get_offset_z},
         structure::structures::{StructureGenerator, StructurePiecesCollector, StructurePosition},
     },
 };
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub struct BuriedTreasureGenerator;
 
 impl StructureGenerator for BuriedTreasureGenerator {

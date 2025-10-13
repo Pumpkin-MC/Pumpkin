@@ -1,4 +1,3 @@
-use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, VineLikeProperties},
@@ -9,13 +8,15 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
+use crate::ProtoChunk;
+
 #[derive(Deserialize)]
 pub struct TrunkVineTreeDecorator;
 
 impl TrunkVineTreeDecorator {
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         random: &mut RandomGenerator,
         log_positions: Vec<BlockPos>,
     ) {

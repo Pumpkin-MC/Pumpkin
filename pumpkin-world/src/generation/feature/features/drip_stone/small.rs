@@ -1,10 +1,11 @@
-use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
+
+use crate::ProtoChunk;
 
 #[derive(Deserialize)]
 pub struct SmallDripstoneFeature {
@@ -15,9 +16,9 @@ pub struct SmallDripstoneFeature {
 }
 
 impl SmallDripstoneFeature {
-    pub fn generate<T: GenerationCache>(
+    pub fn generate(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -30,15 +31,13 @@ impl SmallDripstoneFeature {
         false
     }
 
-    fn get_direction<T: GenerationCache>(
-        chunk: &mut T,
+    fn get_direction(
+        chunk: &mut ProtoChunk,
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) -> Option<BlockDirection> {
-        let up =
-            super::can_replace(GenerationCache::get_block_state(chunk, &pos.up().0).to_block());
-        let down: bool =
-            super::can_replace(GenerationCache::get_block_state(chunk, &pos.down().0).to_block());
+        let up = super::can_replace(chunk.get_block_state(&pos.up().0).to_block());
+        let down: bool = super::can_replace(chunk.get_block_state(&pos.down().0).to_block());
         if up && down {
             return if random.next_bool() {
                 Some(BlockDirection::Down)
@@ -55,9 +54,9 @@ impl SmallDripstoneFeature {
         None
     }
 
-    fn gen_dripstone_blocks<T: GenerationCache>(
+    fn gen_dripstone_blocks(
         &self,
-        chunk: &mut T,
+        chunk: &mut ProtoChunk,
         pos: BlockPos,
         random: &mut RandomGenerator,
     ) {

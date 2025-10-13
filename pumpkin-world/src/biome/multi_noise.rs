@@ -64,41 +64,18 @@ mod test {
         let surface_config = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let _terrain_cache = TerrainCache::from_random(&random_config);
-        // Calculate biome mixer seed
-        use crate::biome::hash_seed;
-        let biome_mixer_seed = hash_seed(random_config.seed);
-
-        let _chunk = ProtoChunk::new(
+        let terrain_cache = TerrainCache::from_random(&random_config);
+        let mut chunk = ProtoChunk::new(
             chunk_pos,
+            &noise_router,
+            &random_config,
             surface_config,
+            &terrain_cache,
             surface_config.default_block.get_state(),
-            biome_mixer_seed,
         );
-
-        // Create MultiNoiseSampler for testing
-        use crate::generation::noise::router::multi_noise_sampler::{
-            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
-        };
-        use crate::generation::{biome_coords, positions::chunk_pos};
-
-        let start_x = chunk_pos::start_block_x(&chunk_pos);
-        let start_z = chunk_pos::start_block_z(&chunk_pos);
-        let biome_pos = Vector2::new(
-            biome_coords::from_block(start_x),
-            biome_coords::from_block(start_z),
-        );
-        let horizontal_biome_end = biome_coords::from_block(16);
-        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
-            biome_pos.x,
-            biome_pos.y,
-            horizontal_biome_end as usize,
-        );
-        let mut multi_noise_sampler =
-            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
 
         for (x, y, z, tem, hum, con, ero, dep, wei) in expected_data.into_iter() {
-            let point = multi_noise_sampler.sample(x, y, z);
+            let point = chunk.multi_noise_sampler.sample(x, y, z);
             assert_eq!(point.temperature, tem);
             assert_eq!(point.humidity, hum);
             assert_eq!(point.continentalness, con);
