@@ -42,7 +42,6 @@ impl BlockEntity for ShelfBlockEntity {
     async fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.write_data(nbt, &self.items, true).await;
         nbt.put_bool(Self::ALIGN_ITEMS_TO_BOTTOM_KEY, self.align_to_bottom);
-        nbt.put_string("id", Self::ID.into());
     }
 
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
