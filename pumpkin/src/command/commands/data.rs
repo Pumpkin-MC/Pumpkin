@@ -278,7 +278,7 @@ async fn display_block_entity_data(
     target_name: TextComponent,
 ) -> Result<TextComponent, CommandError> {
     let mut nbt = NbtCompound::new();
-    storage.write_nbt(&mut nbt).await;
+    storage.write_internal(&mut nbt).await;
     let display = snbt_colorful_display(&NbtTag::Compound(nbt), 0)
         .map_err(|string| CommandError::CommandFailed(Box::new(TextComponent::text(string))))?;
     Ok(TextComponent::translate(
