@@ -1,5 +1,5 @@
 use crate::command::args::entity::EntityArgumentConsumer;
-use crate::command::args::position_3d::Position3DArgumentConsumer;
+use crate::command::args::position_block::BlockPosArgumentConsumer;
 use crate::command::tree::builder::literal;
 use crate::command::{
     CommandError, CommandExecutor, CommandSender,
@@ -12,7 +12,6 @@ use async_trait::async_trait;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_registry::VanillaDimensionType;
-use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::block::entities::BlockEntity;
@@ -56,22 +55,18 @@ impl CommandExecutor for GetBlockEntityDataExecutor {
         _server: &crate::server::Server,
         args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let Some(Arg::Pos3D(position)) = args.get(&ARG_POSITION) else {
+        let Some(Arg::BlockPos(position)) = args.get(&ARG_POSITION) else {
             return Err(InvalidConsumption(Some(ARG_POSITION.into())));
         };
         let Some(block_entity) = _server
             .get_world_from_dimension(VanillaDimensionType::Overworld)
             .await
-            .get_block_entity(&BlockPos::new(
-                position.x as i32,
-                position.y as i32,
-                position.z as i32,
-            ))
+            .get_block_entity(position)
             .await
         else {
             return Err(InvalidConsumption(Some(format!(
                 "Block wasn't found! at the location ({}, {}, {})",
-                position.x as i32, position.y as i32, position.z as i32
+                position.0.x, position.0.y, position.0.z
             ))));
         };
         sender
@@ -302,7 +297,7 @@ pub fn init_command_tree() -> CommandTree {
             )
             .then(
                 literal("block").then(
-                    argument(ARG_POSITION, Position3DArgumentConsumer)
+                    argument(ARG_POSITION, BlockPosArgumentConsumer)
                         .execute(GetBlockEntityDataExecutor),
                 ),
             ),
