@@ -86,6 +86,8 @@ pub trait BlockEntity: Send + Sync {
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
         None
     }
+
+    fn as_block_entity(&self) -> &dyn BlockEntity;
 }
 
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {

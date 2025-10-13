@@ -84,6 +84,10 @@ impl BlockEntity for ShulkerBoxBlockEntity {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn as_block_entity(&self) -> &dyn BlockEntity {
+        self
+    }
 }
 
 #[async_trait]
