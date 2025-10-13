@@ -69,9 +69,10 @@ impl CommandExecutor for GetBlockEntityDataExecutor {
             ))
             .await
         else {
-            return Err(InvalidConsumption(Some(
-                "Block entity wasn't found!".into(),
-            )));
+            return Err(InvalidConsumption(Some(format!(
+                "Block wasn't found! at the location ({}, {}, {})",
+                position.x as i32, position.y as i32, position.z as i32
+            ))));
         };
         sender
             .send_message(
