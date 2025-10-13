@@ -16,7 +16,6 @@ use sign::SignBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
-use crate::block::entities::shelf::ShelfBlockEntity;
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
@@ -124,7 +123,6 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             ChiseledBookshelfBlockEntity,
         >(nbt)),
         FurnaceBlockEntity::ID => Arc::new(block_entity_from_generic::<FurnaceBlockEntity>(nbt)),
-        ShelfBlockEntity::ID => Arc::new(block_entity_from_generic::<ShelfBlockEntity>(nbt)),
         _ => return None,
     })
 }
