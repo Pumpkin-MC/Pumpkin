@@ -91,6 +91,7 @@ impl BedrockClient {
                 false,
                 uuid::Uuid::default(),
                 String::new(),
+                Vec::new(),
             ),
             &mut frame_set,
         )

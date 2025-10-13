@@ -63,13 +63,15 @@ impl<'de> Deserialize<'de> for SClickSlot {
                     .next_element::<OptionalItemStackHash>()?
                     .ok_or(de::Error::custom("Failed to decode carried item"))?;
 
+                let mode: SlotActionType = SlotActionType::try_from(mode.0)
+                    .map_err(|_| de::Error::custom("Invalid slot action type"))?;
+
                 Ok(SClickSlot {
                     sync_id,
                     revision,
                     slot,
                     button,
-                    mode: SlotActionType::try_from(mode.0)
-                        .expect("Invalid slot action, TODO better error handling ;D"),
+                    mode,
                     length_of_array,
                     array_of_changed_slots,
                     carried_item,
