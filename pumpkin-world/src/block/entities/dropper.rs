@@ -13,7 +13,7 @@ use tokio::sync::{Mutex, MutexGuard};
 #[derive(Debug)]
 pub struct DropperBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; 9],
+    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub dirty: AtomicBool,
 }
 
@@ -62,7 +62,9 @@ impl BlockEntity for DropperBlockEntity {
 }
 
 impl DropperBlockEntity {
+    pub const INVENTORY_SIZE: usize = 9;
     pub const ID: &'static str = "minecraft:dropper";
+
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
