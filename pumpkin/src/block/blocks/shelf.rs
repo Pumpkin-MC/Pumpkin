@@ -12,6 +12,7 @@ use pumpkin_data::Block;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::SideChain;
 use pumpkin_data::block_properties::{AcaciaShelfLikeProperties, HorizontalFacing};
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
@@ -22,6 +23,7 @@ use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::shelf::ShelfBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
@@ -110,140 +112,30 @@ impl BlockBehaviour for Shelf {
             args.world.get_block_state(args.position).await.id,
             args.block,
         );
-        own_state.powered = block_receives_redstone_power(args.world, args.position).await;
-        args.world
-            .set_block_state(
-                args.position,
-                own_state.to_state_id(args.block),
-                BlockFlags::NOTIFY_LISTENERS,
-            )
-            .await;
-        let left = is_left_shelf(args.position, args.block, args.world, own_state.facing).await;
-        let right = is_right_shelf(args.position, args.block, args.world, own_state.facing).await;
-        if left == None && right == None {
-            own_state.side_chain = SideChain::Unconnected;
+        let powered = block_receives_redstone_power(args.world, args.position).await;
+        if own_state.powered != powered {
+            own_state.powered = powered;
+            if !powered {
+                own_state.side_chain = SideChain::Unconnected;
+            }
+            args.world
+                .play_block_sound(
+                    if powered {
+                        Sound::BlockShelfActivate
+                    } else {
+                        Sound::BlockShelfDeactivate
+                    },
+                    SoundCategory::Blocks,
+                    *args.position,
+                )
+                .await;
             args.world
                 .set_block_state(
                     args.position,
                     own_state.to_state_id(args.block),
-                    BlockFlags::NOTIFY_LISTENERS,
+                    BlockFlags::NOTIFY_ALL,
                 )
                 .await;
-        } else if left != None && right == None {
-            match left.unwrap() {
-                SideChain::Left | SideChain::Unconnected | SideChain::Center => {
-                    own_state.side_chain = SideChain::Right;
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            own_state.to_state_id(args.block),
-                            BlockFlags::NOTIFY_LISTENERS,
-                        )
-                        .await;
-                }
-                SideChain::Right => {
-                    own_state.side_chain = SideChain::Unconnected;
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            own_state.to_state_id(args.block),
-                            BlockFlags::NOTIFY_LISTENERS,
-                        )
-                        .await;
-                }
-            }
-        } else if left == None && right != None {
-            match right.unwrap() {
-                SideChain::Left => {
-                    own_state.side_chain = SideChain::Unconnected;
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            own_state.to_state_id(args.block),
-                            BlockFlags::NOTIFY_LISTENERS,
-                        )
-                        .await;
-                }
-                SideChain::Right | SideChain::Unconnected | SideChain::Center => {
-                    own_state.side_chain = SideChain::Left;
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            own_state.to_state_id(args.block),
-                            BlockFlags::NOTIFY_LISTENERS,
-                        )
-                        .await;
-                }
-            }
-        } else if left != None && right != None {
-            match left.unwrap() {
-                SideChain::Unconnected => match right.unwrap() {
-                    SideChain::Unconnected => {
-                        own_state.side_chain = SideChain::Center;
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                own_state.to_state_id(args.block),
-                                BlockFlags::NOTIFY_LISTENERS,
-                            )
-                            .await;
-                    }
-                    SideChain::Center => {
-                        own_state.side_chain = SideChain::Right;
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                own_state.to_state_id(args.block),
-                                BlockFlags::NOTIFY_LISTENERS,
-                            )
-                            .await;
-                    }
-                    _ => {}
-                },
-                SideChain::Left => match right.unwrap() {
-                    SideChain::Right | SideChain::Unconnected => {
-                        own_state.side_chain = SideChain::Center;
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                own_state.to_state_id(args.block),
-                                BlockFlags::NOTIFY_LISTENERS,
-                            )
-                            .await;
-                    }
-                    SideChain::Center => {
-                        own_state.side_chain = SideChain::Right;
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                own_state.to_state_id(args.block),
-                                BlockFlags::NOTIFY_LISTENERS,
-                            )
-                            .await;
-                    }
-                    _ => {}
-                },
-                SideChain::Right => {
-                    own_state.side_chain = SideChain::Left;
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            own_state.to_state_id(args.block),
-                            BlockFlags::NOTIFY_LISTENERS,
-                        )
-                        .await;
-                }
-                SideChain::Center => {
-                    own_state.side_chain = SideChain::Right;
-                    args.world
-                        .set_block_state(
-                            args.position,
-                            own_state.to_state_id(args.block),
-                            BlockFlags::NOTIFY_LISTENERS,
-                        )
-                        .await;
-                }
-            }
         }
     }
 
@@ -252,8 +144,17 @@ impl BlockBehaviour for Shelf {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let state = args.world.get_block_state(args.position).await;
-        let mut props = AcaciaShelfLikeProperties::from_state_id(state.id, args.block);
-        props.powered = block_receives_redstone_power(args.world, args.position).await;
+        let props = AcaciaShelfLikeProperties::from_state_id(state.id, args.block);
+        if props.waterlogged {
+            args.world
+                .schedule_fluid_tick(
+                    &Fluid::WATER,
+                    *args.position,
+                    Fluid::WATER.flow_speed as u8,
+                    TickPriority::High,
+                )
+                .await;
+        }
         props.to_state_id(args.block)
     }
 }
