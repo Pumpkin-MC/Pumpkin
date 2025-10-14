@@ -44,7 +44,7 @@ impl BlockBehaviour for Shelf {
             && let Some(block_entity) = block_entity.as_any().downcast_ref::<ShelfBlockEntity>()
         {
             if state.powered {
-                todo!("One step after another")
+                todo!("Do the full hotbar swap")
             } else {
                 if let Some(slot) = Self::get_slot_for_hit(_args.hit, state.facing) {
                     let swaped = swap_single_stack(
@@ -353,11 +353,12 @@ fn swap_single_stack(
     } else {
         item.clone()
     };
-    block_on(
-        player
-            .inventory
-            .set_stack(player.inventory.get_selected_slot() as usize, item2),
-    );
+    // TODO race condition which I don't understand crashes because can't lock in slots.rs get_cloned_stack() line 54
+    // block_on(
+    //     player
+    //         .inventory
+    //         .set_stack(player.inventory.get_selected_slot() as usize, item2),
+    // );
     player.inventory.mark_dirty();
     block_entity.mark_dirty();
     !item.is_empty()
