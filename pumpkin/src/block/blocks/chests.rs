@@ -65,7 +65,18 @@ impl BlockMetadata for ChestBlock {
     }
 
     fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "c:chests/wooden").unwrap()
+        &[
+            "chest",
+            "trapped_chest",
+            "copper_chest",
+            "exposed_copper_chest",
+            "weathered_copper_chest",
+            "oxidized_copper_chest",
+            "waxed_copper_chest",
+            "waxed_exposed_copper_chest",
+            "waxed_weathered_copper_chest",
+            "waxed_oxidized_copper_chest",
+        ]
     }
 }
 
