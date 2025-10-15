@@ -42,8 +42,8 @@ impl BlockBehaviour for Shelf {
             _args.world.get_block_state(_args.position).await.id,
             _args.block,
         );
-        if let Some(block_entity) = _args.world.get_block_entity(_args.position).await
-            && let Some(block_entity) = block_entity.as_any().downcast_ref::<ShelfBlockEntity>()
+        if let Some(block_entity_any) = _args.world.get_block_entity(_args.position).await
+            && let Some(block_entity) = block_entity_any.as_any().downcast_ref::<ShelfBlockEntity>()
         {
             if state.powered {
                 todo!("Do the full hotbar swap")
@@ -81,6 +81,7 @@ impl BlockBehaviour for Shelf {
                             )
                             .await;
                     }
+                    _args.world.update_block_entity(&block_entity_any).await;
                     return BlockActionResult::Success;
                 }
             }
