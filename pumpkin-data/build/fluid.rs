@@ -655,7 +655,7 @@ pub(crate) fn build() -> TokenStream {
 
         impl Eq for Fluid {}
 
-        pub static FLUID_STATES: &[PartialFluidState] = &[
+        pub const FLUID_STATES: &[PartialFluidState] = &[
             #(#unique_fluid_states),*
         ];
 
