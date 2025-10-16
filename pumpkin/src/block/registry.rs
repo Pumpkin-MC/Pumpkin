@@ -1,6 +1,7 @@
 use crate::block::blocks::anvil::AnvilBlock;
 use crate::block::blocks::bamboo::BambooBlock;
 use crate::block::blocks::barrel::BarrelBlock;
+use crate::block::blocks::bars::BarBlock;
 use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::cactus::CactusBlock;
@@ -22,7 +23,6 @@ use crate::block::blocks::fire::soul_fire::SoulFireBlock;
 use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
-use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::mangrove_roots::MangroveRootsBlock;
 use crate::block::blocks::nether_portal::NetherPortalBlock;
@@ -130,6 +130,8 @@ use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::lectern::LecternBlock;
+use crate::block::blocks::lightning_rod::LightningRodBlock;
+use crate::block::blocks::shelf::Shelf;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
@@ -147,6 +149,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CarpetBlock);
     manager.register(CarvedPumpkinBlock);
     manager.register(CampfireBlock);
+    manager.register(BarBlock);
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
@@ -164,7 +167,6 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(GlassPaneBlock);
     manager.register(GlazedTerracottaBlock);
     manager.register(GrindstoneBlock);
-    manager.register(IronBarsBlock);
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
     manager.register(BambooBlock);
@@ -221,6 +223,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(MangroveRootsBlock);
 
     manager.register(FallingBlock);
+    manager.register(LightningRodBlock);
+    manager.register(Shelf);
 
     // Fire
     manager.register(SoulFireBlock);
