@@ -69,9 +69,6 @@ impl BlockBehaviour for Shelf {
                             )
                             .await;
                     } else {
-                        if _args.item_stack.lock().await.is_empty() {
-                            return BlockActionResult::Pass;
-                        }
                         _args
                             .world
                             .play_block_sound(
@@ -80,6 +77,9 @@ impl BlockBehaviour for Shelf {
                                 *_args.position,
                             )
                             .await;
+                        if _args.item_stack.lock().await.is_empty() {
+                            return BlockActionResult::Pass;
+                        }
                     }
                     _args.world.update_block_entity(&block_entity_any).await;
                     return BlockActionResult::Success;
