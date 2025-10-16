@@ -216,7 +216,7 @@ async fn recipe_matches<'a>(
                 if slot.is_empty()
                     || !slot
                         .item
-                        .is_tagged_with_by_tag(&tag::Item::MINECRAFT_DECORATED_POT_INGREDIENTS)
+                        .has_tag(&tag::Item::MINECRAFT_DECORATED_POT_INGREDIENTS)
                 {
                     return None;
                 }

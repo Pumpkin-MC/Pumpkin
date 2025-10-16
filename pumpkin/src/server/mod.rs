@@ -219,6 +219,7 @@ impl Server {
             .worlds
             .try_write()
             .expect("Nothing should hold a lock of worlds before server startup") =
+            // vec![overworld.into()];
             vec![overworld.into(), nether.into(), end.into()];
         server
     }

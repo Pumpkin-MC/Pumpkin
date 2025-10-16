@@ -92,8 +92,8 @@ async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) 
         return true;
     }
 
-    if block_below.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)
-        || block_below.is_tagged_with_by_tag(&tag::Block::MINECRAFT_SAND)
+    if block_below.has_tag(&tag::Block::MINECRAFT_DIRT)
+        || block_below.has_tag(&tag::Block::MINECRAFT_SAND)
     {
         for direction in HorizontalFacing::all() {
             let block = block_accessor

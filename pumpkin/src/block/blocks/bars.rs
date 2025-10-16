@@ -48,9 +48,9 @@ pub async fn compute_bars_state(
         let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos).await;
 
         let connected = other_block_state.is_side_solid(direction.opposite())
-            || other_block.is_tagged_with_by_tag(&tag::Block::C_GLASS_PANES)
-            || other_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WALLS)
-            || other_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BARS);
+            || other_block.has_tag(&tag::Block::C_GLASS_PANES)
+            || other_block.has_tag(&tag::Block::MINECRAFT_WALLS)
+            || other_block.has_tag(&tag::Block::MINECRAFT_BARS);
 
         match direction {
             BlockDirection::North => bars_props.north = connected,

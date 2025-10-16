@@ -5,11 +5,8 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk,
-    generation::{chunk_noise::WATER_BLOCK, height_limit::HeightLimitView},
-};
-
+use crate::generation::chunk_noise::WATER_BLOCK;
+use crate::generation::proto_chunk::GenerationCache;
 // TODO: remove .to_state()
 
 #[derive(Deserialize)]
@@ -21,9 +18,9 @@ impl DesertWellFeature {
     const SLAB: Block = Block::SANDSTONE_SLAB;
     const WALL: Block = Block::SANDSTONE;
 
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk,
+        chunk: &mut T,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature
@@ -34,7 +31,7 @@ impl DesertWellFeature {
         while chunk.is_air(&block_pos.0) && block_pos.0.y > chunk.bottom_y() as i32 + 2 {
             block_pos = block_pos.down();
         }
-        let block = chunk.get_block_state(&pos.0).to_block();
+        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block();
         const CAN_GENERATE: Block = Block::SAND;
         if CAN_GENERATE.id != block.id {
             return false;
