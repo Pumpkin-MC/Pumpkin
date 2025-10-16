@@ -32,11 +32,9 @@ impl ScreenHandlerFactory for HopperBlockScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         _player: &dyn InventoryPlayer,
     ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
-        Some(Arc::new(Mutex::new(create_hopper(
-            sync_id,
-            player_inventory,
-            self.0.clone(),
-        ))))
+        Some(Arc::new(Mutex::new(
+            create_hopper(sync_id, player_inventory, self.0.clone()).await,
+        )))
     }
 
     fn get_display_name(&self) -> TextComponent {

@@ -62,6 +62,7 @@ pub mod living;
 pub mod mob;
 pub mod player;
 pub mod projectile;
+pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
 
@@ -262,6 +263,8 @@ pub struct Entity {
     pub sneaking: AtomicBool,
     /// Indicates whether the entity is sprinting
     pub sprinting: AtomicBool,
+    /// Indicates whether the entity is invisible
+    pub invisible: AtomicBool,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka knockback
@@ -364,6 +367,7 @@ impl Entity {
                 get_section_cord(floor_z),
             )),
             sneaking: AtomicBool::new(false),
+            invisible: AtomicBool::new(false),
             world,
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
@@ -1419,6 +1423,12 @@ impl Entity {
         } else {
             self.set_pose(EntityPose::Standing).await;
         }
+    }
+
+    pub async fn set_invisible(&self, invisible: bool) {
+        assert!(self.invisible.load(Relaxed) != invisible);
+        self.invisible.store(invisible, Relaxed);
+        self.set_flag(Flag::Invisible, invisible).await;
     }
 
     pub async fn set_on_fire(&self, on_fire: bool) {

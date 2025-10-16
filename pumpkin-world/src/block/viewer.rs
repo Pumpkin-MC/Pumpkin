@@ -6,7 +6,7 @@ use std::sync::{
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 
-use crate::{block::entities::BlockEntity, inventory::Inventory, world::SimpleWorld};
+use crate::{block::entities::BlockEntity, world::SimpleWorld};
 
 #[derive(Debug)]
 pub struct ViewerCountTracker {
@@ -42,7 +42,7 @@ impl ViewerCountTracker {
         world: Arc<dyn SimpleWorld>,
         position: &BlockPos,
     ) where
-        T: BlockEntity + Inventory + ViewerCountListener + 'static,
+        T: BlockEntity + ViewerCountListener + 'static,
     {
         let current = self.current.load(Ordering::Relaxed);
         let old = self.old.swap(current, Ordering::Relaxed);

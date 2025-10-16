@@ -1,6 +1,7 @@
 use crate::block::blocks::anvil::AnvilBlock;
 use crate::block::blocks::bamboo::BambooBlock;
 use crate::block::blocks::barrel::BarrelBlock;
+use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::cactus::CactusBlock;
 use crate::block::blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
@@ -23,6 +24,7 @@ use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::logs::LogBlock;
+use crate::block::blocks::mangrove_roots::MangroveRootsBlock;
 use crate::block::blocks::nether_portal::NetherPortalBlock;
 use crate::block::blocks::note::NoteBlock;
 use crate::block::blocks::piston::piston::PistonBlock;
@@ -215,6 +217,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChainBlock);
     manager.register(LanternBlock);
     manager.register(EndRodBlock);
+    manager.register(BarrierBlock);
+    manager.register(MangroveRootsBlock);
 
     manager.register(FallingBlock);
 
