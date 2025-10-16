@@ -53,7 +53,7 @@ impl ItemBehaviour for HoneyCombItem {
             // create new properties for the new log.
             let new_block = &Block::from_id(replacement_block);
 
-            let new_state_id = if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS) {
+            let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
                 // get block state of the old log.
                 let door_information = world.get_block_state_id(&location).await;
                 // get the log properties
@@ -67,7 +67,7 @@ impl ItemBehaviour for HoneyCombItem {
                 new_door_properties.hinge = door_props.hinge;
                 new_door_properties.powered = door_props.powered;
                 new_door_properties.to_state_id(new_block)
-            } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BARS) {
+            } else if block.has_tag(&tag::Block::MINECRAFT_BARS) {
                 let bar_information = world.get_block_state_id(&location).await;
                 let bar_props = OakFenceLikeProperties::from_state_id(bar_information, block);
                 let mut new_bars_props = OakFenceLikeProperties::default(new_block);
@@ -77,7 +77,7 @@ impl ItemBehaviour for HoneyCombItem {
                 new_bars_props.east = bar_props.east;
                 new_bars_props.waterlogged = bar_props.waterlogged;
                 new_bars_props.to_state_id(new_block)
-            } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LANTERNS) {
+            } else if block.has_tag(&tag::Block::MINECRAFT_LANTERNS) {
                 let lantern_information = world.get_block_state_id(&location).await;
                 let lantern_props =
                     LanternLikeProperties::from_state_id(lantern_information, block);
@@ -85,7 +85,7 @@ impl ItemBehaviour for HoneyCombItem {
                 new_lantern_props.hanging = lantern_props.hanging;
                 new_lantern_props.waterlogged = lantern_props.waterlogged;
                 new_lantern_props.to_state_id(new_block)
-            } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+            } else if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
                 let info = world.get_block_state_id(&location).await;
                 let trapdoor_props = OakTrapdoorLikeProperties::from_state_id(info, block);
                 let mut new_props = OakTrapdoorLikeProperties::default(new_block);
@@ -95,7 +95,7 @@ impl ItemBehaviour for HoneyCombItem {
                 new_props.half = trapdoor_props.half;
                 new_props.waterlogged = trapdoor_props.waterlogged;
                 new_props.to_state_id(new_block)
-            } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LIGHTNING_RODS) {
+            } else if block.has_tag(&tag::Block::MINECRAFT_LIGHTNING_RODS) {
                 let info = world.get_block_state_id(&location).await;
                 let rod_props = LightningRodLikeProperties::from_state_id(info, block);
                 let mut new_props = LightningRodLikeProperties::default(new_block);

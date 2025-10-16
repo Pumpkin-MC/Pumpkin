@@ -41,7 +41,7 @@ impl FireBlockBase {
 
     pub async fn is_soul_fire(world: &Arc<World>, block_pos: &BlockPos) -> bool {
         let block = world.get_block(&block_pos.down()).await;
-        block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_SOUL_FIRE_BASE_BLOCKS)
+        block.has_tag(&tag::Block::MINECRAFT_SOUL_FIRE_BASE_BLOCKS)
     }
 
     pub async fn can_place_at(world: &Arc<World>, block_pos: &BlockPos) -> bool {

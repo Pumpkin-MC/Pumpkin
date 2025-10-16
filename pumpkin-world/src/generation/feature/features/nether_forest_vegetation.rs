@@ -29,10 +29,7 @@ impl NetherForestVegetationFeature {
     ) -> bool {
         let state = GenerationCache::get_block_state(chunk, &pos.down().0);
 
-        if !state
-            .to_block()
-            .is_tagged_with_by_tag(&tag::Block::MINECRAFT_NYLIUM)
-        {
+        if !state.to_block().has_tag(&tag::Block::MINECRAFT_NYLIUM) {
             return false;
         }
         let mut result = false;

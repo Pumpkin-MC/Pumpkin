@@ -695,7 +695,7 @@ impl Player {
         let block = self.world().get_block(&respawn_point.position).await;
 
         if respawn_point.dimension == VanillaDimensionType::Overworld
-            && block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BEDS)
+            && block.has_tag(&tag::Block::MINECRAFT_BEDS)
         {
             // TODO: calculate respawn position
             Some((respawn_point.position.to_f64(), respawn_point.yaw))

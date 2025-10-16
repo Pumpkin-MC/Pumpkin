@@ -32,7 +32,7 @@ impl BlockBehaviour for SeaPickleBlock {
                 .world
                 .get_block(&args.position.down())
                 .await
-                .is_tagged_with_by_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
+                .has_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
             || !SeaPickleProperties::from_state_id(
                 args.world.get_block_state_id(args.position).await,
                 args.block,
@@ -63,7 +63,7 @@ impl BlockBehaviour for SeaPickleBlock {
                             .world
                             .get_block(&lv.down())
                             .await
-                            .is_tagged_with_by_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
+                            .has_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
                     {
                         continue;
                     }

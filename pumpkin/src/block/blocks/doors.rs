@@ -86,14 +86,14 @@ fn can_open_door(block: &Block) -> bool {
 // Todo: The sounds should be from BlockSetType
 fn get_sound(block: &Block, open: bool) -> Sound {
     if open {
-        if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
+        if block.has_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
             Sound::BlockWoodenDoorOpen
         } else if block == &Block::IRON_DOOR {
             Sound::BlockIronDoorOpen
         } else {
             Sound::BlockCopperDoorOpen
         }
-    } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
+    } else if block.has_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
         Sound::BlockWoodenDoorClose
     } else if block == &Block::IRON_DOOR {
         Sound::BlockIronDoorClose
@@ -125,13 +125,13 @@ async fn get_hinge(
     let has_left_door = world
         .get_block(&left_pos)
         .await
-        .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
+        .has_tag(&tag::Block::MINECRAFT_DOORS)
         && DoorProperties::from_state_id(left_state.id, left_block).half == DoubleBlockHalf::Lower;
 
     let has_right_door = world
         .get_block(&right_pos)
         .await
-        .is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS)
+        .has_tag(&tag::Block::MINECRAFT_DOORS)
         && DoorProperties::from_state_id(right_state.id, right_block).half
             == DoubleBlockHalf::Lower;
 

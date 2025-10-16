@@ -106,7 +106,7 @@ impl BlockBehaviour for StemBlock {
                 let under_block: &Block = args.world.get_block(&plant_block_pos.down()).await;
                 if plant_block_state.is_air()
                     && (under_block == &Block::FARMLAND
-                        || under_block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT))
+                        || under_block.has_tag(&tag::Block::MINECRAFT_DIRT))
                 {
                     let attached_stem = Self::get_attached_stem(dir, block);
                     let gourd = Self::get_gourd(block);

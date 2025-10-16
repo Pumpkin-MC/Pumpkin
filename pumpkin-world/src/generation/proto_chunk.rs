@@ -454,7 +454,7 @@ impl ProtoChunk {
         if blocks_movement(block_state) || block_state.is_liquid() {
             self.maybe_update_motion_blocking_height_map(pos);
             let block = Block::from_state_id(block_state.id);
-            if !block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LEAVES) {
+            if !block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
                 {
                     self.maybe_update_motion_blocking_no_leaves_height_map(pos);
                 }

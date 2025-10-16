@@ -85,7 +85,7 @@ impl BlockBehaviour for FarmlandBlock {
                     .world
                     .get_block(&args.position.up())
                     .await
-                    .is_tagged_with_by_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
+                    .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
                 {
                     //TODO push entities up
                     args.world

@@ -52,15 +52,15 @@ impl TreeFeature {
     }
 
     pub fn can_replace_or_log(state: &BlockState, block: &Block) -> bool {
-        Self::can_replace(state, block) || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LOGS)
+        Self::can_replace(state, block) || block.has_tag(&tag::Block::MINECRAFT_LOGS)
     }
 
     pub fn is_air_or_leaves(state: &BlockState, block: &Block) -> bool {
-        state.is_air() || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LEAVES)
+        state.is_air() || block.has_tag(&tag::Block::MINECRAFT_LEAVES)
     }
 
     pub fn can_replace(state: &BlockState, block: &Block) -> bool {
-        state.is_air() || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
+        state.is_air() || block.has_tag(&tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }
 
     fn generate_main<T: GenerationCache>(
