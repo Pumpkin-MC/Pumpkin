@@ -9,6 +9,7 @@ use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use async_trait::async_trait;
 use bytes::{Buf, BufMut, Bytes};
 use log::error;
+use pumpkin_config::chunk::LinearChunkConfig;
 use pumpkin_util::math::vector2::Vector2;
 use ruzstd::decoding::StreamingDecoder;
 use ruzstd::encoding::{CompressionLevel, compress_to_vec};
@@ -168,6 +169,8 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
     type Data = S;
     type WriteBackend = PathBuf;
 
+    type ChunkConfig = LinearChunkConfig;
+
     fn should_write(&self, is_watched: bool) -> bool {
         !is_watched
     }
@@ -321,7 +324,11 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         })
     }
 
-    async fn update_chunk(&mut self, chunk: &Self::Data) -> Result<(), ChunkWritingError> {
+    async fn update_chunk(
+        &mut self,
+        chunk: &Self::Data,
+        _chunk_config: &Self::ChunkConfig,
+    ) -> Result<(), ChunkWritingError> {
         let index = LinearFile::<S>::get_chunk_index(chunk.position());
         let chunk_raw: Bytes = chunk
             .to_bytes()

@@ -23,9 +23,9 @@ pub struct ServerPlayerData {
 
 impl ServerPlayerData {
     /// Creates a new `ServerPlayerData` with specified configuration.
-    pub fn new(data_path: impl Into<PathBuf>, save_interval: Duration) -> Self {
+    pub fn new(data_path: impl Into<PathBuf>, save_interval: Duration, enabled: bool) -> Self {
         Self {
-            storage: Arc::new(PlayerDataStorage::new(data_path)),
+            storage: Arc::new(PlayerDataStorage::new(data_path, enabled)),
             save_interval,
             last_save: AtomicCell::new(Instant::now()),
         }
@@ -191,7 +191,7 @@ mod test {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
 
-        let storage = PlayerDataStorage::new(path.clone());
+        let storage = PlayerDataStorage::new(path.clone(), true);
 
         assert_eq!(storage.get_data_path().as_path(), path.as_path());
         // Note: save_enabled might be configured differently in your actual code
@@ -202,7 +202,7 @@ mod test {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
 
-        let storage = PlayerDataStorage::new(path.clone());
+        let storage = PlayerDataStorage::new(path.clone(), true);
 
         let uuid = Uuid::new_v4();
         let expected_path = path.join(format!("{uuid}.dat"));
@@ -215,8 +215,7 @@ mod test {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
 
-        let mut storage = PlayerDataStorage::new(path);
-        storage.set_save_enabled(true); // Ensure saving is enabled for this test
+        let storage = PlayerDataStorage::new(path, true); // Ensure saving is enabled for this test
 
         let uuid = Uuid::new_v4();
 
@@ -241,8 +240,7 @@ mod test {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
 
-        let mut storage = PlayerDataStorage::new(path);
-        storage.set_save_enabled(true); // Ensure saving is enabled for this test
+        let storage = PlayerDataStorage::new(path, true); // Ensure saving is enabled for this test
 
         let uuid = Uuid::new_v4();
 
@@ -258,8 +256,7 @@ mod test {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
 
-        let mut storage = PlayerDataStorage::new(path);
-        storage.set_save_enabled(false);
+        let storage = PlayerDataStorage::new(path, false);
 
         let uuid = Uuid::new_v4();
         let mut nbt = NbtCompound::new();
@@ -281,7 +278,7 @@ mod test {
         let path = temp_dir.path().to_path_buf();
         let save_interval = Duration::from_secs(300);
 
-        let player_data = ServerPlayerData::new(path, save_interval);
+        let player_data = ServerPlayerData::new(path, save_interval, true);
 
         assert_eq!(player_data.save_interval, save_interval);
         assert!(
@@ -295,8 +292,7 @@ mod test {
         let path = temp_dir.path().to_path_buf();
 
         let uuid = Uuid::new_v4();
-        let mut storage = PlayerDataStorage::new(path);
-        storage.set_save_enabled(true);
+        let storage = PlayerDataStorage::new(path, true);
 
         // Create and save player data
         let mut nbt = NbtCompound::new();

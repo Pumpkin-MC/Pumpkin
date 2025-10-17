@@ -474,7 +474,7 @@ impl JavaClient {
                     .await;
             }
             SLoginPluginResponse::PACKET_ID => {
-                self.handle_plugin_response(SLoginPluginResponse::read(payload)?)
+                self.handle_plugin_response(server, SLoginPluginResponse::read(payload)?)
                     .await;
             }
             SLoginAcknowledged::PACKET_ID => {
@@ -520,7 +520,7 @@ impl JavaClient {
                 self.handle_config_cookie_response(&SConfigCookieResponse::read(payload)?);
             }
             SConfigResourcePack::PACKET_ID => {
-                self.handle_resource_pack_response(SConfigResourcePack::read(payload)?)
+                self.handle_resource_pack_response(server, SConfigResourcePack::read(payload)?)
                     .await;
             }
             _ => {
@@ -555,7 +555,7 @@ impl JavaClient {
                     .await;
             }
             SChatMessage::PACKET_ID => {
-                self.handle_chat_message(player, SChatMessage::read(payload)?)
+                self.handle_chat_message(server, player, SChatMessage::read(payload)?)
                     .await;
             }
             SClientInformationPlay::PACKET_ID => {
