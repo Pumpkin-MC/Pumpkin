@@ -39,8 +39,8 @@ impl CSpawnEntity {
             r#type,
             position,
             pitch: (pitch * 256.0 / 360.0).floor() as u8,
-            yaw: (yaw * 256.0 / 360.0).floor() as u8,
-            head_yaw: (head_yaw * 256.0 / 360.0).floor() as u8,
+            yaw: (yaw.rem_euclid(360.0) * 256.0 / 360.0).floor() as u8,
+            head_yaw: (head_yaw.rem_euclid(360.0) * 256.0 / 360.0).floor() as u8,
             data,
             velocity: Velocity(velocity),
         }

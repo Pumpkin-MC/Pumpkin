@@ -14,7 +14,7 @@ pub struct SoulFireBlock;
 impl SoulFireBlock {
     #[must_use]
     pub fn is_soul_base(block: &Block) -> bool {
-        block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_SOUL_FIRE_BASE_BLOCKS)
+        block.has_tag(&tag::Block::MINECRAFT_SOUL_FIRE_BASE_BLOCKS)
     }
 }
 

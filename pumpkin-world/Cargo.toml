@@ -47,6 +47,9 @@ lru = "0.16.1"
 tokio-util = { version = "0.7.16", features = ["rt"] }
 rand = "0.9.2"
 num_cpus = "1.17.0"
+slotmap = "1.0.7"
+intrusive-collections = "0.9.7"
+rustc-hash = "2.1.1"
 
 [dev-dependencies]
 criterion = { version = "0.7", default-features = false, features = ["html_reports", "async_tokio"] }
@@ -57,19 +60,23 @@ env_logger = "0.11.8"
 pumpkin-config = { path = "../pumpkin-config", features = ["test_helper"] }
 # Deserialize NaN and Inf
 serde_json5 = "0.2.1"
+iai = "0.1"
 
 [[bench]]
 name = "chunk"
 harness = false
 
-[[bench]]
-name = "chunk_io"
-harness = false
-
-[[bench]]
-name = "chunk_gen"
-harness = false
+#[[bench]]
+#name = "chunk_io"
+#harness = false
+#
+#[[bench]]
+#name = "chunk_gen"
+#harness = false
 
 [[bench]]
 name = "noise_router"
 harness = false
+
+[features]
+tokio_taskdump = []

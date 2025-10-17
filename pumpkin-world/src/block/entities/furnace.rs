@@ -35,7 +35,7 @@ pub struct FurnaceBlockEntity {
     pub lit_time_remaining: AtomicU16,
     pub lit_total_time: AtomicU16,
 
-    pub items: [Arc<Mutex<ItemStack>>; 3],
+    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
 }
 
 impl FurnaceBlockEntity {
@@ -347,7 +347,9 @@ impl BlockEntity for FurnaceBlockEntity {
 }
 
 impl FurnaceBlockEntity {
+    pub const INVENTORY_SIZE: usize = 3;
     pub const ID: &'static str = "minecraft:furnace";
+
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,

@@ -38,6 +38,7 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_world::entity::entity_data_flags::DATA_POSE;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
@@ -61,6 +62,7 @@ pub mod living;
 pub mod mob;
 pub mod player;
 pub mod projectile;
+pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
 
@@ -261,6 +263,8 @@ pub struct Entity {
     pub sneaking: AtomicBool,
     /// Indicates whether the entity is sprinting
     pub sprinting: AtomicBool,
+    /// Indicates whether the entity is invisible
+    pub invisible: AtomicBool,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka knockback
@@ -363,6 +367,7 @@ impl Entity {
                 get_section_cord(floor_z),
             )),
             sneaking: AtomicBool::new(false),
+            invisible: AtomicBool::new(false),
             world,
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
@@ -1420,6 +1425,12 @@ impl Entity {
         }
     }
 
+    pub async fn set_invisible(&self, invisible: bool) {
+        assert!(self.invisible.load(Relaxed) != invisible);
+        self.invisible.store(invisible, Relaxed);
+        self.set_flag(Flag::Invisible, invisible).await;
+    }
+
     pub async fn set_on_fire(&self, on_fire: bool) {
         if self.has_visual_fire.load(Ordering::Relaxed) != on_fire {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
@@ -1603,8 +1614,12 @@ impl Entity {
     pub async fn set_pose(&self, pose: EntityPose) {
         self.pose.store(pose);
         let pose = pose as i32;
-        self.send_meta_data(&[Metadata::new(6, MetaDataType::EntityPose, VarInt(pose))])
-            .await;
+        self.send_meta_data(&[Metadata::new(
+            DATA_POSE,
+            MetaDataType::EntityPose,
+            VarInt(pose),
+        )])
+        .await;
     }
 
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {

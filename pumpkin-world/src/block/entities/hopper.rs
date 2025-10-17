@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 #[derive(Debug)]
 pub struct HopperBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; 5],
+    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub dirty: AtomicBool,
     pub facing: HopperFacing,
     pub cooldown_time: AtomicI32,
@@ -117,7 +117,9 @@ impl BlockEntity for HopperBlockEntity {
 }
 
 impl HopperBlockEntity {
+    pub const INVENTORY_SIZE: usize = 5;
     pub const ID: &'static str = "minecraft:hopper";
+
     pub fn new(position: BlockPos, facing: HopperFacing) -> Self {
         Self {
             position,
@@ -183,9 +185,7 @@ impl HopperBlockEntity {
             return false;
         }
         let (block, state) = world.get_block_and_state(pos_up).await;
-        if !(state.is_solid()
-            && block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS))
-        {
+        if !(state.is_solid() && block.has_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS)) {
             // TODO getItemsAtAndAbove(level, hopper)
             return false;
         }

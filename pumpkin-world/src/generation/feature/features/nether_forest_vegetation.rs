@@ -5,11 +5,8 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk,
-    generation::{block_state_provider::BlockStateProvider, height_limit::HeightLimitView},
-    world::BlockRegistryExt,
-};
+use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::block_state_provider::BlockStateProvider, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct NetherForestVegetationFeature {
@@ -20,9 +17,9 @@ pub struct NetherForestVegetationFeature {
 
 impl NetherForestVegetationFeature {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut T,
         block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -30,12 +27,9 @@ impl NetherForestVegetationFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let state = chunk.get_block_state(&pos.down().0);
+        let state = GenerationCache::get_block_state(chunk, &pos.down().0);
 
-        if !state
-            .to_block()
-            .is_tagged_with_by_tag(&tag::Block::MINECRAFT_NYLIUM)
-        {
+        if !state.to_block().has_tag(&tag::Block::MINECRAFT_NYLIUM) {
             return false;
         }
         let mut result = false;
