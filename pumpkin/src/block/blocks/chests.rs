@@ -106,7 +106,7 @@ impl BlockBehaviour for ChestBlock {
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
-        let chest = ChestBlockEntity::new(*args.position);
+        let chest = ChestBlockEntity::new(*args.position, args.block.name);
         args.world.add_block_entity(Arc::new(chest)).await;
 
         let chest_props = ChestLikeProperties::from_state_id(args.state_id, args.block);
@@ -292,7 +292,7 @@ async fn get_chest_properties_if_can_connect(
         .get_block_and_state_id(&block_pos.offset(direction.to_offset()))
         .await;
 
-    if neighbor_block != block {
+    if neighbor_block != block && neighbor_block.name != block.name {
         return None;
     }
 
