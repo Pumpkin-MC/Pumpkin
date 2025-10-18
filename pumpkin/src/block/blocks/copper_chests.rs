@@ -1,7 +1,9 @@
 use pumpkin_data::tag::{Taggable, get_tag_values};
 use std::sync::Arc;
 
-use crate::block::blocks::chests::ChestScreenFactory;
+use crate::block::blocks::chests::{
+    ChestTypeExt, chest_broken, chest_normal_use, player_crouching_behaviour,
+};
 use crate::block::{BrokenArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs};
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -10,7 +12,6 @@ use crate::{
     entity::player::Player,
 };
 use async_trait::async_trait;
-use futures::future::join;
 use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
@@ -18,11 +19,9 @@ use pumpkin_data::entity::EntityPose;
 use pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::chest::ChestBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
@@ -31,12 +30,21 @@ pub struct CopperChestBlock;
 
 #[async_trait]
 impl BlockBehaviour for CopperChestBlock {
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        chest_normal_use(args).await
+    }
+
+    async fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
+        // On the server, we don't need to do more because the client is responsible for that.
+        args.r#type == Self::LID_ANIMATION_EVENT_TYPE
+    }
+
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut chest_props = ChestLikeProperties::default(args.block);
 
         chest_props.waterlogged = args.replacing.water_source();
 
-        let (r#type, facing) = compute_chest_props(
+        let (r#type, facing) = compute_copper_chest_props(
             args.world,
             args.player,
             args.block,
@@ -50,11 +58,6 @@ impl BlockBehaviour for CopperChestBlock {
         chest_props.to_state_id(args.block)
     }
 
-    async fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
-        // On the server, we don't need to do more because the client is responsible for that.
-        args.r#type == Self::LID_ANIMATION_EVENT_TYPE
-    }
-
     async fn placed(&self, args: PlacedArgs<'_>) {
         let chest = ChestBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(chest)).await;
@@ -65,7 +68,7 @@ impl BlockBehaviour for CopperChestBlock {
             ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
         };
 
-        if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
+        if let Some(mut neighbor_props) = get_copper_chest_properties_if_can_connect(
             args.world,
             args.block,
             args.position,
@@ -105,76 +108,8 @@ impl BlockBehaviour for CopperChestBlock {
         }
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        let (state, first_chest) = join(
-            args.world.get_block_state_id(args.position),
-            args.world.get_block_entity(args.position),
-        )
-        .await;
-
-        let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
-            return BlockActionResult::Fail;
-        };
-
-        let chest_props = ChestLikeProperties::from_state_id(state, args.block);
-        let connected_towards = match chest_props.r#type {
-            ChestType::Single => None,
-            ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
-            ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
-        };
-
-        let inventory = if let Some(direction) = connected_towards
-            && let Some(second_inventory) = args
-                .world
-                .get_block_entity(&args.position.offset(direction.to_offset()))
-                .await
-                .and_then(BlockEntity::get_inventory)
-        {
-            // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
-            if matches!(chest_props.r#type, ChestType::Right) {
-                DoubleInventory::new(first_inventory, second_inventory)
-            } else {
-                DoubleInventory::new(second_inventory, first_inventory)
-            }
-        } else {
-            first_inventory
-        };
-
-        args.player
-            .open_handled_screen(&ChestScreenFactory(inventory))
-            .await;
-
-        BlockActionResult::Success
-    }
-
     async fn broken(&self, args: BrokenArgs<'_>) {
-        let chest_props = ChestLikeProperties::from_state_id(args.state.id, args.block);
-        let connected_towards = match chest_props.r#type {
-            ChestType::Single => return,
-            ChestType::Left => chest_props.facing.rotate_clockwise(),
-            ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
-        };
-
-        if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
-            args.world,
-            args.block,
-            args.position,
-            chest_props.facing,
-            connected_towards,
-            chest_props.r#type.opposite(),
-        )
-        .await
-        {
-            neighbor_props.r#type = ChestType::Single;
-
-            args.world
-                .set_block_state(
-                    &args.position.offset(connected_towards.to_offset()),
-                    neighbor_props.to_state_id(args.block),
-                    BlockFlags::NOTIFY_LISTENERS,
-                )
-                .await;
-        }
+        chest_broken(args).await;
     }
 }
 
@@ -182,7 +117,7 @@ impl CopperChestBlock {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
 }
 
-async fn compute_chest_props(
+async fn compute_copper_chest_props(
     world: &World,
     player: &Player,
     block: &Block,
@@ -192,33 +127,10 @@ async fn compute_chest_props(
     let chest_facing = player.get_entity().get_horizontal_facing().opposite();
 
     if player.get_entity().pose.load() == EntityPose::Crouching {
-        let Some(face) = face.to_horizontal_facing() else {
-            return (ChestType::Single, chest_facing);
-        };
-
-        let (clicked_block, clicked_block_state) = world
-            .get_block_and_state_id(&block_pos.offset(face.to_offset()))
-            .await;
-
-        if clicked_block == block {
-            let clicked_props =
-                ChestLikeProperties::from_state_id(clicked_block_state, clicked_block);
-
-            if clicked_props.r#type != ChestType::Single {
-                return (ChestType::Single, chest_facing);
-            }
-
-            if clicked_props.facing.rotate_clockwise() == face {
-                return (ChestType::Left, clicked_props.facing);
-            } else if clicked_props.facing.rotate_counter_clockwise() == face {
-                return (ChestType::Right, clicked_props.facing);
-            }
-        }
-
-        return (ChestType::Single, chest_facing);
+        return player_crouching_behaviour(world, block, block_pos, face, chest_facing).await;
     }
 
-    if get_chest_properties_if_can_connect(
+    if get_copper_chest_properties_if_can_connect(
         world,
         block,
         block_pos,
@@ -230,7 +142,7 @@ async fn compute_chest_props(
     .is_some()
     {
         (ChestType::Left, chest_facing)
-    } else if get_chest_properties_if_can_connect(
+    } else if get_copper_chest_properties_if_can_connect(
         world,
         block,
         block_pos,
@@ -247,7 +159,7 @@ async fn compute_chest_props(
     }
 }
 
-async fn get_chest_properties_if_can_connect(
+async fn get_copper_chest_properties_if_can_connect(
     world: &World,
     block: &Block,
     block_pos: &BlockPos,
@@ -268,18 +180,4 @@ async fn get_chest_properties_if_can_connect(
     }
 
     None
-}
-
-trait ChestTypeExt {
-    fn opposite(&self) -> ChestType;
-}
-
-impl ChestTypeExt for ChestType {
-    fn opposite(&self) -> Self {
-        match self {
-            Self::Single => Self::Single,
-            Self::Left => Self::Right,
-            Self::Right => Self::Left,
-        }
-    }
 }

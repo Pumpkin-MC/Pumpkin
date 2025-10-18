@@ -128,80 +128,119 @@ impl BlockBehaviour for ChestBlock {
     }
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        let (state, first_chest) = join(
-            args.world.get_block_state_id(args.position),
-            args.world.get_block_entity(args.position),
-        )
-        .await;
-
-        let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
-            return BlockActionResult::Fail;
-        };
-
-        let chest_props = ChestLikeProperties::from_state_id(state, args.block);
-        let connected_towards = match chest_props.r#type {
-            ChestType::Single => None,
-            ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
-            ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
-        };
-
-        let inventory = if let Some(direction) = connected_towards
-            && let Some(second_inventory) = args
-                .world
-                .get_block_entity(&args.position.offset(direction.to_offset()))
-                .await
-                .and_then(BlockEntity::get_inventory)
-        {
-            // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
-            if matches!(chest_props.r#type, ChestType::Right) {
-                DoubleInventory::new(first_inventory, second_inventory)
-            } else {
-                DoubleInventory::new(second_inventory, first_inventory)
-            }
-        } else {
-            first_inventory
-        };
-
-        args.player
-            .open_handled_screen(&ChestScreenFactory(inventory))
-            .await;
-
-        BlockActionResult::Success
+        chest_normal_use(args).await
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {
-        let chest_props = ChestLikeProperties::from_state_id(args.state.id, args.block);
-        let connected_towards = match chest_props.r#type {
-            ChestType::Single => return,
-            ChestType::Left => chest_props.facing.rotate_clockwise(),
-            ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
-        };
-
-        if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
-            args.world,
-            args.block,
-            args.position,
-            chest_props.facing,
-            connected_towards,
-            chest_props.r#type.opposite(),
-        )
-        .await
-        {
-            neighbor_props.r#type = ChestType::Single;
-
-            args.world
-                .set_block_state(
-                    &args.position.offset(connected_towards.to_offset()),
-                    neighbor_props.to_state_id(args.block),
-                    BlockFlags::NOTIFY_LISTENERS,
-                )
-                .await;
-        }
+        chest_broken(args).await;
     }
 }
 
 impl ChestBlock {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
+}
+
+pub async fn chest_normal_use(args: NormalUseArgs<'_>) -> BlockActionResult {
+    let (state, first_chest) = join(
+        args.world.get_block_state_id(args.position),
+        args.world.get_block_entity(args.position),
+    )
+    .await;
+
+    let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
+        return BlockActionResult::Fail;
+    };
+
+    let chest_props = ChestLikeProperties::from_state_id(state, args.block);
+    let connected_towards = match chest_props.r#type {
+        ChestType::Single => None,
+        ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
+        ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
+    };
+
+    let inventory = if let Some(direction) = connected_towards
+        && let Some(second_inventory) = args
+            .world
+            .get_block_entity(&args.position.offset(direction.to_offset()))
+            .await
+            .and_then(BlockEntity::get_inventory)
+    {
+        // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
+        if matches!(chest_props.r#type, ChestType::Right) {
+            DoubleInventory::new(first_inventory, second_inventory)
+        } else {
+            DoubleInventory::new(second_inventory, first_inventory)
+        }
+    } else {
+        first_inventory
+    };
+
+    args.player
+        .open_handled_screen(&ChestScreenFactory(inventory))
+        .await;
+
+    BlockActionResult::Success
+}
+
+pub async fn chest_broken(args: BrokenArgs<'_>) {
+    let chest_props = ChestLikeProperties::from_state_id(args.state.id, args.block);
+    let connected_towards = match chest_props.r#type {
+        ChestType::Single => return,
+        ChestType::Left => chest_props.facing.rotate_clockwise(),
+        ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
+    };
+
+    if let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
+        args.world,
+        args.block,
+        args.position,
+        chest_props.facing,
+        connected_towards,
+        chest_props.r#type.opposite(),
+    )
+    .await
+    {
+        neighbor_props.r#type = ChestType::Single;
+
+        args.world
+            .set_block_state(
+                &args.position.offset(connected_towards.to_offset()),
+                neighbor_props.to_state_id(args.block),
+                BlockFlags::NOTIFY_LISTENERS,
+            )
+            .await;
+    }
+}
+
+pub async fn player_crouching_behaviour(
+    world: &World,
+    block: &Block,
+    block_pos: &BlockPos,
+    face: BlockDirection,
+    chest_facing: HorizontalFacing,
+) -> (ChestType, HorizontalFacing) {
+    let Some(face) = face.to_horizontal_facing() else {
+        return (ChestType::Single, chest_facing);
+    };
+
+    let (clicked_block, clicked_block_state) = world
+        .get_block_and_state_id(&block_pos.offset(face.to_offset()))
+        .await;
+
+    if clicked_block == block {
+        let clicked_props = ChestLikeProperties::from_state_id(clicked_block_state, clicked_block);
+
+        if clicked_props.r#type != ChestType::Single {
+            return (ChestType::Single, chest_facing);
+        }
+
+        if clicked_props.facing.rotate_clockwise() == face {
+            return (ChestType::Left, clicked_props.facing);
+        } else if clicked_props.facing.rotate_counter_clockwise() == face {
+            return (ChestType::Right, clicked_props.facing);
+        }
+    }
+    (ChestType::Single, chest_facing)
 }
 
 async fn compute_chest_props(
@@ -214,30 +253,7 @@ async fn compute_chest_props(
     let chest_facing = player.get_entity().get_horizontal_facing().opposite();
 
     if player.get_entity().pose.load() == EntityPose::Crouching {
-        let Some(face) = face.to_horizontal_facing() else {
-            return (ChestType::Single, chest_facing);
-        };
-
-        let (clicked_block, clicked_block_state) = world
-            .get_block_and_state_id(&block_pos.offset(face.to_offset()))
-            .await;
-
-        if clicked_block == block {
-            let clicked_props =
-                ChestLikeProperties::from_state_id(clicked_block_state, clicked_block);
-
-            if clicked_props.r#type != ChestType::Single {
-                return (ChestType::Single, chest_facing);
-            }
-
-            if clicked_props.facing.rotate_clockwise() == face {
-                return (ChestType::Left, clicked_props.facing);
-            } else if clicked_props.facing.rotate_counter_clockwise() == face {
-                return (ChestType::Right, clicked_props.facing);
-            }
-        }
-
-        return (ChestType::Single, chest_facing);
+        return player_crouching_behaviour(world, block, block_pos, face, chest_facing).await;
     }
 
     if get_chest_properties_if_can_connect(
@@ -293,7 +309,7 @@ async fn get_chest_properties_if_can_connect(
     None
 }
 
-trait ChestTypeExt {
+pub trait ChestTypeExt {
     fn opposite(&self) -> ChestType;
 }
 
