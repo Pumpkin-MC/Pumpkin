@@ -1,8 +1,8 @@
 use crate::block::blocks::anvil::AnvilBlock;
 use crate::block::blocks::bamboo::BambooBlock;
 use crate::block::blocks::barrel::BarrelBlock;
-use crate::block::blocks::bars::BarBlock;
 use crate::block::blocks::barrier::BarrierBlock;
+use crate::block::blocks::bars::BarBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::cactus::CactusBlock;
 use crate::block::blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
@@ -122,6 +122,7 @@ use super::{
 };
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
+use crate::block::blocks::copper_chests::CopperChestBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::end_rod::EndRodBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
@@ -221,10 +222,10 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(EndRodBlock);
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
-
     manager.register(FallingBlock);
     manager.register(LightningRodBlock);
     manager.register(Shelf);
+    manager.register(CopperChestBlock);
 
     // Fire
     manager.register(SoulFireBlock);

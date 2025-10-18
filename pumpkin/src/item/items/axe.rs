@@ -3,7 +3,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::{BlockProperties, ChestLikeProperties, ChestType};
 use pumpkin_data::block_properties::{
     LanternLikeProperties, LightningRodLikeProperties, OakDoorLikeProperties,
     OakFenceLikeProperties, OakTrapdoorLikeProperties, PaleOakWoodLikeProperties,
@@ -106,6 +106,36 @@ impl ItemBehaviour for AxeItem {
                 new_props.facing = rod_props.facing;
                 new_props.waterlogged = rod_props.waterlogged;
                 new_props.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_CHESTS) {
+                let info = world.get_block_state_id(&location).await;
+                let chest_props = ChestLikeProperties::from_state_id(info, block);
+                let mut new_props = ChestLikeProperties::default(new_block);
+                new_props.r#type = chest_props.r#type;
+                new_props.facing = chest_props.facing;
+                new_props.waterlogged = chest_props.waterlogged;
+                if new_props.r#type != ChestType::Single {
+                    let connected_towards = match chest_props.r#type {
+                        ChestType::Single => return,
+                        ChestType::Left => chest_props.facing.rotate_clockwise(),
+                        ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
+                    };
+                    let neighbor_location = location.offset(connected_towards.to_offset());
+                    let neighbor_info = world.get_block_state_id(&neighbor_location).await;
+                    let neighbor_chest_props =
+                        ChestLikeProperties::from_state_id(neighbor_info, block);
+                    let mut neighbor_props = ChestLikeProperties::default(new_block);
+                    neighbor_props.r#type = neighbor_chest_props.r#type;
+                    neighbor_props.facing = neighbor_chest_props.facing;
+                    neighbor_props.waterlogged = neighbor_chest_props.waterlogged;
+                    world
+                        .set_block_state(
+                            &neighbor_location,
+                            neighbor_props.to_state_id(new_block),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                }
+                new_props.to_state_id(new_block)
             } else {
                 new_block.default_state.id
             };
@@ -201,6 +231,9 @@ fn get_deoxidized_equivalent(block: &Block) -> u16 {
         id if id == Block::EXPOSED_LIGHTNING_ROD.id => Block::LIGHTNING_ROD.id,
         id if id == Block::WEATHERED_LIGHTNING_ROD.id => Block::EXPOSED_LIGHTNING_ROD.id,
         id if id == Block::OXIDIZED_LIGHTNING_ROD.id => Block::WEATHERED_LIGHTNING_ROD.id,
+        id if id == Block::EXPOSED_COPPER_CHEST.id => Block::COPPER_CHEST.id,
+        id if id == Block::WEATHERED_COPPER_CHEST.id => Block::EXPOSED_COPPER_CHEST.id,
+        id if id == Block::OXIDIZED_COPPER_CHEST.id => Block::WEATHERED_COPPER_CHEST.id,
         _ => 0,
     }
 }
@@ -271,6 +304,10 @@ fn get_unwaxed_equivalent(block: &Block) -> u16 {
         id if id == Block::WAXED_EXPOSED_LIGHTNING_ROD.id => Block::EXPOSED_LIGHTNING_ROD.id,
         id if id == Block::WAXED_WEATHERED_LIGHTNING_ROD.id => Block::WEATHERED_LIGHTNING_ROD.id,
         id if id == Block::WAXED_OXIDIZED_LIGHTNING_ROD.id => Block::OXIDIZED_LIGHTNING_ROD.id,
+        id if id == Block::WAXED_COPPER_CHEST.id => Block::COPPER_CHEST.id,
+        id if id == Block::WAXED_EXPOSED_COPPER_CHEST.id => Block::EXPOSED_COPPER_CHEST.id,
+        id if id == Block::WAXED_WEATHERED_COPPER_CHEST.id => Block::WEATHERED_COPPER_CHEST.id,
+        id if id == Block::WAXED_OXIDIZED_COPPER_CHEST.id => Block::OXIDIZED_COPPER_CHEST.id,
         _ => 0,
     }
 }

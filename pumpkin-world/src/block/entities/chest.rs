@@ -9,7 +9,7 @@ use std::{
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, HorizontalFacingExt,
+    HorizontalFacingExt,
     block_properties::{BlockProperties, ChestLikeProperties, ChestType},
     sound::{Sound, SoundCategory},
 };
@@ -33,7 +33,6 @@ pub struct ChestBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub dirty: AtomicBool,
-    pub id: String,
 
     // Viewer
     viewers: ViewerCountTracker,
@@ -58,7 +57,6 @@ impl BlockEntity for ChestBlockEntity {
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
-            id: String::from(nbt.get_string("id").unwrap()),
         };
 
         chest.read_data(nbt, &chest.items);
@@ -118,13 +116,12 @@ impl ChestBlockEntity {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:chest";
 
-    pub fn new(position: BlockPos, id: &str) -> Self {
+    pub fn new(position: BlockPos) -> Self {
         Self {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
-            id: String::from(id),
         }
     }
 
@@ -132,10 +129,8 @@ impl ChestBlockEntity {
         let mut rng = Xoroshiro::from_seed(get_seed());
 
         let state = world.get_block_state(&self.position).await;
-        let properties = ChestLikeProperties::from_state_id(
-            state.id,
-            &Block::from_name(self.id.as_str()).unwrap(),
-        );
+        let block = world.get_block(&self.position).await;
+        let properties = ChestLikeProperties::from_state_id(state.id, block);
         let position = match properties.r#type {
             ChestType::Left => return,
             ChestType::Single => Vector3::new(

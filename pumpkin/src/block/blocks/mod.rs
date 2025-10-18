@@ -1,8 +1,8 @@
 pub mod anvil;
 pub mod bamboo;
 pub mod barrel;
-pub mod bars;
 pub mod barrier;
+pub mod bars;
 pub mod bed;
 pub mod cactus;
 pub mod cake;
@@ -65,9 +65,10 @@ pub mod hopper;
 
 pub mod smoker;
 
+pub mod copper_chests;
 pub mod ender_chest;
+pub mod lectern;
+pub mod shelf;
 
 // abstract
 pub mod abstract_wall_mounting;
-pub mod lectern;
-pub mod shelf;

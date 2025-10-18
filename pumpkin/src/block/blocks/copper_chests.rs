@@ -1,8 +1,8 @@
+use pumpkin_data::tag::{Taggable, get_tag_values};
 use std::sync::Arc;
 
-use crate::block::{
-    BlockMetadata, BrokenArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
-};
+use crate::block::blocks::chests::ChestScreenFactory;
+use crate::block::{BrokenArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs};
 use crate::entity::EntityBase;
 use crate::world::World;
 use crate::{
@@ -15,61 +15,22 @@ use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
 use pumpkin_data::entity::EntityPose;
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS;
+use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_inventory::double::DoubleInventory;
-use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
-use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::chest::ChestBlockEntity;
-use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
-use tokio::sync::Mutex;
 
-pub struct ChestScreenFactory(pub Arc<dyn Inventory>);
-
-#[async_trait]
-impl ScreenHandlerFactory for ChestScreenFactory {
-    async fn create_screen_handler(
-        &self,
-        sync_id: u8,
-        player_inventory: &Arc<PlayerInventory>,
-        _player: &dyn InventoryPlayer,
-    ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
-        Some(Arc::new(Mutex::new(if self.0.size() > 27 {
-            create_generic_9x6(sync_id, player_inventory, self.0.clone()).await
-        } else {
-            create_generic_9x3(sync_id, player_inventory, self.0.clone()).await
-        })))
-    }
-
-    fn get_display_name(&self) -> TextComponent {
-        if self.0.size() > 27 {
-            TextComponent::translate("container.chestDouble", &[])
-        } else {
-            TextComponent::translate("container.chest", &[])
-        }
-    }
-}
-
-pub struct ChestBlock;
-
-impl BlockMetadata for ChestBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "c:chests/wooden").unwrap()
-    }
-}
+#[pumpkin_block_from_tag("minecraft:copper_chests")]
+pub struct CopperChestBlock;
 
 #[async_trait]
-impl BlockBehaviour for ChestBlock {
+impl BlockBehaviour for CopperChestBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut chest_props = ChestLikeProperties::default(args.block);
 
@@ -97,7 +58,6 @@ impl BlockBehaviour for ChestBlock {
     async fn placed(&self, args: PlacedArgs<'_>) {
         let chest = ChestBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(chest)).await;
-
         let chest_props = ChestLikeProperties::from_state_id(args.state_id, args.block);
         let connected_towards = match chest_props.r#type {
             ChestType::Single => return,
@@ -115,15 +75,33 @@ impl BlockBehaviour for ChestBlock {
         )
         .await
         {
+            let neighbor_block = args
+                .world
+                .get_block(&args.position.offset(connected_towards.to_offset()))
+                .await;
+            let block_id = if args.block.id < neighbor_block.id {
+                args.block.id
+            } else {
+                neighbor_block.id
+            };
             neighbor_props.r#type = chest_props.r#type.opposite();
 
             args.world
                 .set_block_state(
                     &args.position.offset(connected_towards.to_offset()),
-                    neighbor_props.to_state_id(args.block),
+                    neighbor_props.to_state_id(&Block::from_id(block_id)),
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
+            if args.block.id != block_id {
+                args.world
+                    .set_block_state(
+                        &args.position,
+                        chest_props.to_state_id(&Block::from_id(block_id)),
+                        BlockFlags::NOTIFY_LISTENERS,
+                    )
+                    .await;
+            }
         }
     }
 
@@ -200,7 +178,7 @@ impl BlockBehaviour for ChestBlock {
     }
 }
 
-impl ChestBlock {
+impl CopperChestBlock {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
 }
 
@@ -281,10 +259,9 @@ async fn get_chest_properties_if_can_connect(
         .get_block_and_state_id(&block_pos.offset(direction.to_offset()))
         .await;
 
-    if neighbor_block != block {
+    if neighbor_block != block && !neighbor_block.has_tag(&MINECRAFT_COPPER_CHESTS) {
         return None;
     }
-
     let neighbor_props = ChestLikeProperties::from_state_id(neighbor_block_state, neighbor_block);
     if neighbor_props.facing == facing && neighbor_props.r#type == wanted_type {
         return Some(neighbor_props);
