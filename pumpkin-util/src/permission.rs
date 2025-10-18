@@ -227,7 +227,7 @@ impl PermissionManager {
 /// - `One`: `moderator`: Player can bypass spawn protection.
 /// - `Two`: `gamemaster`: Player or executor can use more commands and player can use command blocks.
 /// - `Three`:  `admin`: Player or executor can use commands related to multiplayer management.
-/// - `Four`: `owner`: Player or executor can use ll the commands, including commands related to server management.
+/// - `Four`: `owner`: Player or executor can use all the commands, including commands related to server management.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PermissionLvl {
     #[default]
