@@ -20,7 +20,7 @@ impl Dimension {
         seed: i64,
     ) -> Arc<Level> {
         match self {
-            Dimension::Overworld => {}
+            Dimension::Overworld => base_directory.push("DIM0"),
             Dimension::Nether => base_directory.push("DIM-1"),
             Dimension::End => base_directory.push("DIM1"),
         }
