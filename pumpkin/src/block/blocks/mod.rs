@@ -57,16 +57,15 @@ pub mod vine;
 pub mod walls;
 
 pub mod banners;
-pub mod shulker_box;
-
 pub mod blast_furnace;
-
 pub mod hopper;
+pub mod shulker_box;
 
 pub mod smoker;
 
 pub mod copper_chests;
 pub mod ender_chest;
+pub mod golem_statue;
 pub mod lectern;
 pub mod shelf;
 

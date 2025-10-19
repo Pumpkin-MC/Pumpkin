@@ -126,6 +126,7 @@ use crate::block::blocks::copper_chests::CopperChestBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::end_rod::EndRodBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
+use crate::block::blocks::golem_statue::GolemStatueBlock;
 use crate::block::blocks::hopper::HopperBlock;
 use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::blocks::ladder::LadderBlock;
@@ -226,6 +227,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(LightningRodBlock);
     manager.register(Shelf);
     manager.register(CopperChestBlock);
+    manager.register(GolemStatueBlock);
 
     // Fire
     manager.register(SoulFireBlock);
