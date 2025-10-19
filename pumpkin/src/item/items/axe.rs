@@ -203,6 +203,7 @@ fn get_stripped_equivalent(block: &Block) -> u16 {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn get_deoxidized_equivalent(block: &Block) -> u16 {
     match block.id {
         id if id == Block::OXIDIZED_COPPER.id => Block::WEATHERED_COPPER.id,
@@ -259,6 +260,7 @@ fn get_deoxidized_equivalent(block: &Block) -> u16 {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn get_unwaxed_equivalent(block: &Block) -> u16 {
     match block.id {
         id if id == Block::WAXED_OXIDIZED_COPPER.id => Block::OXIDIZED_COPPER.id,

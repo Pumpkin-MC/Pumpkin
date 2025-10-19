@@ -176,6 +176,7 @@ impl HoneyCombItem {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn get_waxed_equivalent(block: &Block) -> Option<u16> {
     match block.id {
         id if id == Block::OXIDIZED_COPPER.id => Some(Block::WAXED_OXIDIZED_COPPER.id),
