@@ -5,7 +5,7 @@ use pumpkin_data::{
 };
 use pumpkin_world::BlockStateId;
 
-use crate::block::{BlockBehaviour, BlockMetadata, OnPlaceArgs};
+use crate::block::{BlockBehaviour, BlockMetadata, OnPlaceArgs, PlacedArgs};
 
 pub struct CarvedPumpkinBlock;
 
@@ -22,6 +22,7 @@ impl BlockMetadata for CarvedPumpkinBlock {
 #[async_trait]
 impl BlockBehaviour for CarvedPumpkinBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        println!("on_place called");
         let mut props = WallTorchLikeProperties::default(args.block);
         props.facing = args
             .player
@@ -30,5 +31,9 @@ impl BlockBehaviour for CarvedPumpkinBlock {
             .get_horizontal_facing()
             .opposite();
         props.to_state_id(args.block)
+    }
+
+    async fn placed(&self, _args: PlacedArgs<'_>) {
+        println!("CarvedPumpkinBlock placed");
     }
 }
