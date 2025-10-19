@@ -111,7 +111,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
                 server.worlds.read().await.first().unwrap().clone()
             }
             CommandSender::Player(player) => player.world().clone(),
-            CommandSender::CommandBlock(_, w) => w.clone()
+            CommandSender::CommandBlock(_, w) => w.clone(),
         };
 
         for target in targets {
@@ -219,7 +219,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
                 server.worlds.read().await.first().unwrap().clone()
             }
             CommandSender::Player(player) => player.world().clone(),
-            CommandSender::CommandBlock(_, w) => w.clone()
+            CommandSender::CommandBlock(_, w) => w.clone(),
         };
         for target in targets {
             let yaw = target.get_entity().yaw.load();

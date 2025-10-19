@@ -19,7 +19,7 @@ pub struct CommandBlockEntity {
     pub command: Mutex<String>,
     pub last_output: Mutex<String>,
     pub track_output: AtomicBool,
-    pub success_count: AtomicU32
+    pub success_count: AtomicU32,
 }
 
 impl CommandBlockEntity {
@@ -34,7 +34,7 @@ impl CommandBlockEntity {
             command: Mutex::new(String::new()),
             last_output: Mutex::new(String::new()),
             track_output: AtomicBool::new(false),
-            success_count: AtomicU32::new(0)
+            success_count: AtomicU32::new(0),
         }
     }
 }
@@ -58,11 +58,18 @@ impl BlockEntity for CommandBlockEntity {
         let command = Mutex::new(nbt.get_string("Command").unwrap_or("").to_string());
         let last_output = Mutex::new(nbt.get_string("LastOutput").unwrap_or("").to_string());
         let track_output = AtomicBool::new(nbt.get_bool("TrackOutput").unwrap_or(false));
-        let success_count = AtomicU32::new(nbt.get_int("SuccessCount").unwrap_or(0).cast_unsigned());
+        let success_count =
+            AtomicU32::new(nbt.get_int("SuccessCount").unwrap_or(0).cast_unsigned());
         Self {
-            position, condition_met, auto, powered, command, last_output, track_output,
+            position,
+            condition_met,
+            auto,
+            powered,
+            command,
+            last_output,
+            track_output,
             success_count,
-            dirty: AtomicBool::new(false)
+            dirty: AtomicBool::new(false),
         }
     }
 
@@ -74,7 +81,10 @@ impl BlockEntity for CommandBlockEntity {
         nbt.put_bool("powered", self.powered.load(Ordering::SeqCst));
         nbt.put_bool("TrackOutput", self.track_output.load(Ordering::SeqCst));
         nbt.put_bool("UpdateLastExecution", false);
-        nbt.put_int("SuccessCount", self.success_count.load(Ordering::SeqCst).cast_signed());
+        nbt.put_int(
+            "SuccessCount",
+            self.success_count.load(Ordering::SeqCst).cast_signed(),
+        );
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -84,7 +94,10 @@ impl BlockEntity for CommandBlockEntity {
         nbt.put_bool("TrackOutput", self.track_output.load(Ordering::SeqCst));
         nbt.put_bool("UpdateLastExecution", false);
         nbt.put_bool("powered", self.powered.load(Ordering::SeqCst));
-        nbt.put_int("SuccessCount", self.success_count.load(Ordering::SeqCst).cast_signed());
+        nbt.put_int(
+            "SuccessCount",
+            self.success_count.load(Ordering::SeqCst).cast_signed(),
+        );
         block_in_place(|| {
             nbt.put_string("Command", self.command.blocking_lock().to_string());
             nbt.put_string("LastOutput", self.last_output.blocking_lock().to_string());

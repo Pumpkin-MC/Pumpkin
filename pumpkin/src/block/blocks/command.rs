@@ -1,13 +1,19 @@
-use std::sync::{atomic::Ordering, Arc};
+use std::sync::{Arc, atomic::Ordering};
 
 use async_trait::async_trait;
-use pumpkin_data::{block_properties::{BlockProperties, CommandBlockLikeProperties}, Block};
-use pumpkin_util::{math::position::BlockPos, GameMode, PermissionLvl};
-use pumpkin_world::{block::entities::command_block::CommandBlockEntity, tick::TickPriority, BlockStateId};
+use pumpkin_data::{
+    Block,
+    block_properties::{BlockProperties, CommandBlockLikeProperties},
+};
+use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
+use pumpkin_world::{
+    BlockStateId, block::entities::command_block::CommandBlockEntity, tick::TickPriority,
+};
 
 use crate::{
     block::{
-        registry::BlockActionResult, BlockBehaviour, BlockMetadata, CanPlaceAtArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs
+        BlockBehaviour, BlockMetadata, CanPlaceAtArgs, NormalUseArgs, OnNeighborUpdateArgs,
+        OnPlaceArgs, OnScheduledTickArgs, PlacedArgs, registry::BlockActionResult,
     },
     world::World,
 };
@@ -93,11 +99,7 @@ impl BlockBehaviour for CommandBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let Some(
-            block_entity
-        ) = args.world.get_block_entity(
-            args.position
-        ).await else {
+        let Some(block_entity) = args.world.get_block_entity(args.position).await else {
             return;
         };
         if block_entity.resource_location() != CommandBlockEntity::ID {
@@ -112,23 +114,33 @@ impl BlockBehaviour for CommandBlock {
 
         let _props = CommandBlockLikeProperties::from_state_id(
             args.world.get_block_state_id(args.position).await,
-            args.block
+            args.block,
         );
 
-        server.command_dispatcher.read().await.handle_command(
-            &mut crate::command::CommandSender::CommandBlock(
-                block_entity.clone(), args.world.clone()
-            ),
-            &server,
-            &command_entity.command.lock().await
-        ).await;
+        server
+            .command_dispatcher
+            .read()
+            .await
+            .handle_command(
+                &mut crate::command::CommandSender::CommandBlock(
+                    block_entity.clone(),
+                    args.world.clone(),
+                ),
+                &server,
+                &command_entity.command.lock().await,
+            )
+            .await;
 
         let block = args.world.get_block(args.position).await;
         if block == &Block::REPEATING_COMMAND_BLOCK {
-            if !command_entity.auto.load(Ordering::SeqCst) && !command_entity.powered.load(Ordering::SeqCst) {
+            if !command_entity.auto.load(Ordering::SeqCst)
+                && !command_entity.powered.load(Ordering::SeqCst)
+            {
                 return;
             }
-            args.world.schedule_block_tick(block, *args.position, 1, TickPriority::Normal).await;
+            args.world
+                .schedule_block_tick(block, *args.position, 1, TickPriority::Normal)
+                .await;
         }
     }
 

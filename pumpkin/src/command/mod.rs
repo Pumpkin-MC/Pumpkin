@@ -13,8 +13,8 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::translation::Locale;
-use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::BlockEntity;
+use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 
 pub mod args;
 pub mod client_suggestions;
@@ -26,7 +26,7 @@ pub enum CommandSender {
     Rcon(Arc<tokio::sync::Mutex<Vec<String>>>),
     Console,
     Player(Arc<Player>),
-    CommandBlock(Arc<dyn BlockEntity>, Arc<World>)
+    CommandBlock(Arc<dyn BlockEntity>, Arc<World>),
 }
 
 impl fmt::Display for CommandSender {
@@ -38,7 +38,7 @@ impl fmt::Display for CommandSender {
                 Self::Console => "Server",
                 Self::Rcon(_) => "Rcon",
                 Self::Player(p) => &p.gameprofile.name,
-                Self::CommandBlock(..) => "Command block"
+                Self::CommandBlock(..) => "Command block",
             }
         )
     }
@@ -61,7 +61,9 @@ impl CommandSender {
     pub fn set_success_count(&self, count: u32) {
         if let Self::CommandBlock(c, _) = self {
             let block: &CommandBlockEntity = c.as_any().downcast_ref().unwrap();
-            block.success_count.store(count, std::sync::atomic::Ordering::SeqCst);
+            block
+                .success_count
+                .store(count, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
@@ -88,7 +90,7 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => PermissionLvl::Four,
             Self::Player(p) => p.permission_lvl.load(),
-            Self::CommandBlock(..) => PermissionLvl::Two
+            Self::CommandBlock(..) => PermissionLvl::Two,
         }
     }
 
@@ -97,7 +99,7 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => true,
             Self::Player(p) => p.permission_lvl.load().ge(&lvl),
-            Self::CommandBlock(..) => PermissionLvl::Two >= lvl
+            Self::CommandBlock(..) => PermissionLvl::Two >= lvl,
         }
     }
 
@@ -114,9 +116,7 @@ impl CommandSender {
                 match p.default {
                     PermissionDefault::Allow => true,
                     PermissionDefault::Deny => false,
-                    PermissionDefault::Op(o) => {
-                        o <= PermissionLvl::Two
-                    }
+                    PermissionDefault::Op(o) => o <= PermissionLvl::Two,
                 }
             }
         }
@@ -127,7 +127,7 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(..) => None,
             Self::Player(p) => Some(p.living_entity.entity.pos.load()),
-            Self::CommandBlock(c, _) => Some(c.get_position().to_centered_f64())
+            Self::CommandBlock(c, _) => Some(c.get_position().to_centered_f64()),
         }
     }
 
@@ -137,7 +137,7 @@ impl CommandSender {
             // TODO: maybe return first world when console
             Self::Console | Self::Rcon(..) => None,
             Self::Player(p) => Some(p.living_entity.entity.world.clone()),
-            Self::CommandBlock(_, w) => Some(w.clone())
+            Self::CommandBlock(_, w) => Some(w.clone()),
         }
     }
 

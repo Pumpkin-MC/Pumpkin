@@ -64,10 +64,8 @@ impl CommandExecutor for Executor {
                 let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
 
                 (player.world().clone(), pos)
-            },
-            CommandSender::CommandBlock(c, w) => {
-                (w.clone(), c.get_position().to_centered_f64())
             }
+            CommandSender::CommandBlock(c, w) => (w.clone(), c.get_position().to_centered_f64()),
         };
 
         world

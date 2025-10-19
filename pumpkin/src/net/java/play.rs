@@ -25,7 +25,9 @@ use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block_properties::{BlockProperties, CommandBlockLikeProperties, WaterLikeProperties};
+use pumpkin_data::block_properties::{
+    BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
+};
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -658,22 +660,32 @@ impl JavaClient {
             props.conditional = command.flags & 0x02 != 0;
             props.facing = old_facing;
             let new_state_id = props.to_state_id(&block_type);
-            player.world().set_block_state(&command.pos, new_state_id, BlockFlags::empty()).await;
+            player
+                .world()
+                .set_block_state(&command.pos, new_state_id, BlockFlags::empty())
+                .await;
 
             let command_block: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
             if !command.command.is_empty() {
                 *command_block.command.lock().await = command.command;
             }
-            command_block.auto.store(command.flags & 0x04 != 0, Ordering::SeqCst);
-            command_block.track_output.store(command.flags & 0x01 != 0, Ordering::SeqCst);
+            command_block
+                .auto
+                .store(command.flags & 0x04 != 0, Ordering::SeqCst);
+            command_block
+                .track_output
+                .store(command.flags & 0x01 != 0, Ordering::SeqCst);
             command_block.dirty.store(true, Ordering::SeqCst);
             if command.flags & 0x4 != 0 {
-                player.world().schedule_block_tick(
-                    &block_type,
-                    pos,
-                    1,
-                    pumpkin_world::tick::TickPriority::Normal
-                ).await;
+                player
+                    .world()
+                    .schedule_block_tick(
+                        &block_type,
+                        pos,
+                        1,
+                        pumpkin_world::tick::TickPriority::Normal,
+                    )
+                    .await;
             }
         }
     }
