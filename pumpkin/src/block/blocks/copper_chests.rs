@@ -92,15 +92,15 @@ impl BlockBehaviour for CopperChestBlock {
             args.world
                 .set_block_state(
                     &args.position.offset(connected_towards.to_offset()),
-                    neighbor_props.to_state_id(&Block::from_id(block_id)),
+                    neighbor_props.to_state_id(Block::from_id(block_id)),
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
             if args.block.id != block_id {
                 args.world
                     .set_block_state(
-                        &args.position,
-                        chest_props.to_state_id(&Block::from_id(block_id)),
+                        args.position,
+                        chest_props.to_state_id(Block::from_id(block_id)),
                         BlockFlags::NOTIFY_LISTENERS,
                     )
                     .await;
