@@ -108,7 +108,7 @@ jobs:
       - name: Generate release notes
         run: |
           tree dist/
-          echo "From commit: ${GITHUB_SHA:0:8}" > dist/RELEASE.md
+          echo "From commit: $(git rev-parse --short HEAD)" > dist/RELEASE.md
           echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
           cat dist/RELEASE.md
 
