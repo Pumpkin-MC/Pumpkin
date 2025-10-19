@@ -8,7 +8,9 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockProperties, ChestLikeProperties, ChestType};
+use pumpkin_data::block_properties::{
+    BlockProperties, ChestLikeProperties, ChestType, CopperGolemStatueLikeProperties,
+};
 use pumpkin_data::block_properties::{
     LanternLikeProperties, LightningRodLikeProperties, OakDoorLikeProperties,
     OakFenceLikeProperties, OakTrapdoorLikeProperties,
@@ -132,6 +134,14 @@ impl ItemBehaviour for HoneyCombItem {
                         )
                         .await;
                 }
+                new_props.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_GOLEM_STATUES) {
+                let info = world.get_block_state_id(&location).await;
+                let old_props = CopperGolemStatueLikeProperties::from_state_id(info, block);
+                let mut new_props = CopperGolemStatueLikeProperties::default(new_block);
+                new_props.copper_golem_pose = old_props.copper_golem_pose;
+                new_props.facing = old_props.facing;
+                new_props.waterlogged = old_props.waterlogged;
                 new_props.to_state_id(new_block)
             } else {
                 new_block.default_state.id
@@ -263,6 +273,16 @@ fn get_waxed_equivalent(block: &Block) -> Option<u16> {
             Some(Block::WAXED_WEATHERED_COPPER_CHEST.id)
         }
         id if id == Block::OXIDIZED_COPPER_CHEST.id => Some(Block::WAXED_OXIDIZED_COPPER_CHEST.id),
+        id if id == Block::COPPER_GOLEM_STATUE.id => Some(Block::WAXED_COPPER_GOLEM_STATUE.id),
+        id if id == Block::EXPOSED_COPPER_GOLEM_STATUE.id => {
+            Some(Block::WAXED_EXPOSED_COPPER_GOLEM_STATUE.id)
+        }
+        id if id == Block::WEATHERED_COPPER_GOLEM_STATUE.id => {
+            Some(Block::WAXED_WEATHERED_COPPER_GOLEM_STATUE.id)
+        }
+        id if id == Block::OXIDIZED_COPPER_GOLEM_STATUE.id => {
+            Some(Block::WAXED_OXIDIZED_COPPER_GOLEM_STATUE.id)
+        }
         _ => None,
     }
 }

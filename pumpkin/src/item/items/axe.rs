@@ -3,7 +3,9 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockProperties, ChestLikeProperties, ChestType};
+use pumpkin_data::block_properties::{
+    BlockProperties, ChestLikeProperties, ChestType, CopperGolemStatueLikeProperties,
+};
 use pumpkin_data::block_properties::{
     LanternLikeProperties, LightningRodLikeProperties, OakDoorLikeProperties,
     OakFenceLikeProperties, OakTrapdoorLikeProperties, PaleOakWoodLikeProperties,
@@ -136,6 +138,17 @@ impl ItemBehaviour for AxeItem {
                         .await;
                 }
                 new_props.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_GOLEM_STATUES) {
+                if block.id != new_block.id && new_block.id == Block::AIR.id {
+                    todo!("Golem spawn")
+                }
+                let info = world.get_block_state_id(&location).await;
+                let old_props = CopperGolemStatueLikeProperties::from_state_id(info, block);
+                let mut new_props = CopperGolemStatueLikeProperties::default(new_block);
+                new_props.copper_golem_pose = old_props.copper_golem_pose;
+                new_props.facing = old_props.facing;
+                new_props.waterlogged = old_props.waterlogged;
+                new_props.to_state_id(new_block)
             } else {
                 new_block.default_state.id
             };
@@ -234,6 +247,14 @@ fn get_deoxidized_equivalent(block: &Block) -> u16 {
         id if id == Block::EXPOSED_COPPER_CHEST.id => Block::COPPER_CHEST.id,
         id if id == Block::WEATHERED_COPPER_CHEST.id => Block::EXPOSED_COPPER_CHEST.id,
         id if id == Block::OXIDIZED_COPPER_CHEST.id => Block::WEATHERED_COPPER_CHEST.id,
+        id if id == Block::COPPER_GOLEM_STATUE.id => Block::AIR.id, // To spawn golem
+        id if id == Block::EXPOSED_COPPER_GOLEM_STATUE.id => Block::COPPER_GOLEM_STATUE.id,
+        id if id == Block::WEATHERED_COPPER_GOLEM_STATUE.id => {
+            Block::EXPOSED_COPPER_GOLEM_STATUE.id
+        }
+        id if id == Block::OXIDIZED_COPPER_GOLEM_STATUE.id => {
+            Block::WEATHERED_COPPER_GOLEM_STATUE.id
+        }
         _ => 0,
     }
 }
@@ -308,6 +329,16 @@ fn get_unwaxed_equivalent(block: &Block) -> u16 {
         id if id == Block::WAXED_EXPOSED_COPPER_CHEST.id => Block::EXPOSED_COPPER_CHEST.id,
         id if id == Block::WAXED_WEATHERED_COPPER_CHEST.id => Block::WEATHERED_COPPER_CHEST.id,
         id if id == Block::WAXED_OXIDIZED_COPPER_CHEST.id => Block::OXIDIZED_COPPER_CHEST.id,
+        id if id == Block::WAXED_COPPER_GOLEM_STATUE.id => Block::COPPER_GOLEM_STATUE.id,
+        id if id == Block::WAXED_EXPOSED_COPPER_GOLEM_STATUE.id => {
+            Block::EXPOSED_COPPER_GOLEM_STATUE.id
+        }
+        id if id == Block::WAXED_WEATHERED_COPPER_GOLEM_STATUE.id => {
+            Block::WEATHERED_COPPER_GOLEM_STATUE.id
+        }
+        id if id == Block::WAXED_OXIDIZED_COPPER_GOLEM_STATUE.id => {
+            Block::OXIDIZED_COPPER_GOLEM_STATUE.id
+        }
         _ => 0,
     }
 }
