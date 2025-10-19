@@ -661,7 +661,7 @@ impl JavaClient {
             player.world().set_block_state(&command.pos, new_state_id, BlockFlags::empty()).await;
 
             let command_block: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
-            if command.command.len() > 0 {
+            if !command.command.is_empty() {
                 *command_block.command.lock().await = command.command;
             }
             command_block.auto.store(command.flags & 0x04 != 0, Ordering::SeqCst);

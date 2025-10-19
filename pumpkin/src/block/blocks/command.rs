@@ -64,9 +64,7 @@ impl BlockBehaviour for CommandBlock {
         if args.player.permission_lvl.load() < PermissionLvl::Two {
             return BlockActionResult::Pass;
         }
-        let block_entity = if let Some(x) = args.world.get_block_entity(args.position).await {
-            x
-        } else {
+        let Some(block_entity) = args.world.get_block_entity(args.position).await else {
             return BlockActionResult::Pass;
         };
         args.world.update_block_entity(&block_entity).await;
@@ -95,13 +93,11 @@ impl BlockBehaviour for CommandBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let block_entity = if let Some(
+        let Some(
             block_entity
         ) = args.world.get_block_entity(
             args.position
-        ).await {
-            block_entity
-        } else {
+        ).await else {
             return;
         };
         if block_entity.resource_location() != CommandBlockEntity::ID {
@@ -110,9 +106,7 @@ impl BlockBehaviour for CommandBlock {
 
         let command_entity: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
 
-        let server = if let Some(server) = args.world.server.upgrade() {
-            server
-        } else {
+        let Some(server) = args.world.server.upgrade() else {
             return;
         };
 
@@ -125,7 +119,7 @@ impl BlockBehaviour for CommandBlock {
             &mut crate::command::CommandSender::CommandBlock(
                 block_entity.clone(), args.world.clone()
             ),
-            &*server,
+            &server,
             &command_entity.command.lock().await
         ).await;
 

@@ -59,12 +59,9 @@ impl CommandSender {
     }
 
     pub fn set_success_count(&self, count: u32) {
-        match self {
-            Self::CommandBlock(c, _) => {
-                let block: &CommandBlockEntity = c.as_any().downcast_ref().unwrap();
-                block.success_count.store(count, std::sync::atomic::Ordering::SeqCst);
-            },
-            _ => {}
+        if let Self::CommandBlock(c, _) = self {
+            let block: &CommandBlockEntity = c.as_any().downcast_ref().unwrap();
+            block.success_count.store(count, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
@@ -111,9 +108,7 @@ impl CommandSender {
             Self::Player(p) => p.has_permission(node).await,
             Self::CommandBlock(..) => {
                 let perm_reg = crate::PERMISSION_REGISTRY.read().await;
-                let p = if let Some(p) = perm_reg.get_permission(node) {
-                    p
-                } else {
+                let Some(p) = perm_reg.get_permission(node) else {
                     return false;
                 };
                 match p.default {
@@ -148,11 +143,10 @@ impl CommandSender {
 
     pub async fn get_locale(&self) -> Locale {
         match self {
-            Self::Console | Self::Rcon(..) => Locale::EnUs, // Default locale for console and RCON
+            Self::CommandBlock(..) | Self::Console | Self::Rcon(..) => Locale::EnUs, // Default locale for console and RCON
             Self::Player(player) => {
                 Locale::from_str(&player.config.read().await.locale).unwrap_or(Locale::EnUs)
-            },
-            Self::CommandBlock(..) => Locale::EnUs
+            }
         }
     }
 }
