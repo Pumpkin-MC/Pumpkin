@@ -25,7 +25,7 @@ use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties, CommandBlockLikeProperties, WaterLikeProperties};
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -623,7 +623,12 @@ impl JavaClient {
     // }
 
     pub async fn handle_set_command_block(&self, player: &Arc<Player>, command: SSetCommandBlock) {
-        // TODO: check things
+        if !player.is_creative() {
+            return;
+        }
+        if player.permission_lvl.load() < PermissionLvl::Two {
+            return;
+        }
         let pos = command.pos;
         if let Some(block_entity) = player.world().get_block_entity(&pos).await {
             if block_entity.resource_location() != CommandBlockEntity::ID {
@@ -639,11 +644,37 @@ impl JavaClient {
                 return;
             };
 
-            let _block_state = match command_block_mode {
+            let block = player.world().get_block(&pos).await;
+            let old_state_id = player.world().get_block_state_id(&pos).await;
+            let old_props = CommandBlockLikeProperties::from_state_id(old_state_id, block);
+            let old_facing = old_props.facing;
+
+            let block_type = match command_block_mode {
                 CommandBlockMode::Chain => Block::CHAIN_COMMAND_BLOCK,
                 CommandBlockMode::Repeating => Block::REPEATING_COMMAND_BLOCK,
                 CommandBlockMode::Impulse => Block::COMMAND_BLOCK,
             };
+            let mut props = CommandBlockLikeProperties::default(&block_type);
+            props.conditional = command.flags & 0x02 != 0;
+            props.facing = old_facing;
+            let new_state_id = props.to_state_id(&block_type);
+            player.world().set_block_state(&command.pos, new_state_id, BlockFlags::empty()).await;
+
+            let command_block: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
+            if command.command.len() > 0 {
+                *command_block.command.lock().await = command.command;
+            }
+            command_block.auto.store(command.flags & 0x04 != 0, Ordering::SeqCst);
+            command_block.track_output.store(command.flags & 0x01 != 0, Ordering::SeqCst);
+            command_block.dirty.store(true, Ordering::SeqCst);
+            if command.flags & 0x4 != 0 {
+                player.world().schedule_block_tick(
+                    &block_type,
+                    pos,
+                    1,
+                    pumpkin_world::tick::TickPriority::Normal
+                ).await;
+            }
         }
     }
 
