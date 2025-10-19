@@ -1,8 +1,8 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockHitResult, GetStateForNeighborUpdateArgs, NormalUseArgs,
-    OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
+    BlockBehaviour, BlockHitResult, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs,
+    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
 };
 use crate::entity::player::Player;
 use crate::world::World;
@@ -157,6 +157,30 @@ impl BlockBehaviour for Shelf {
                 .await;
         }
         props.to_state_id(args.block)
+    }
+
+    async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        if let Some(entity) = args.world.get_block_entity(args.position).await {
+            if let Some(shelf_entity) = entity.as_any().downcast_ref::<ShelfBlockEntity>() {
+                let i = if shelf_entity.items[0].lock().await.is_empty() {
+                    0
+                } else {
+                    1
+                };
+                let j = if shelf_entity.items[1].lock().await.is_empty() {
+                    0
+                } else {
+                    1
+                };
+                let k = if shelf_entity.items[2].lock().await.is_empty() {
+                    0
+                } else {
+                    1
+                };
+                Some( i | j << 1 | k <<2)
+            }
+        }
+        None
     }
 }
 async fn is_left_shelf(
