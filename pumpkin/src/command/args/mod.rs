@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use bounded_num::{NotInBounds, Number};
 use pumpkin_data::Enchantment;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::EffectType;
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
@@ -20,6 +20,7 @@ use super::{
     dispatcher::CommandError,
     tree::{CommandTree, RawArgs},
 };
+use crate::entity::EntityBase;
 use crate::world::bossbar::{BossbarColor, BossbarDivisions};
 use crate::{entity::player::Player, server::Server};
 
@@ -72,7 +73,7 @@ pub trait ArgumentConsumer: Sync + GetClientSideArgParser {
 
 pub trait GetClientSideArgParser {
     /// Return the parser the client should use while typing a command in chat.
-    fn get_client_side_parser(&self) -> ArgumentType;
+    fn get_client_side_parser(&self) -> ArgumentType<'_>;
     /// Usually this should return None. This can be used to force suggestions to be processed on serverside.
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders>;
 }
@@ -83,8 +84,8 @@ pub trait DefaultNameArgConsumer: ArgumentConsumer {
 
 #[derive(Clone)]
 pub enum Arg<'a> {
-    Entities(Vec<Arc<Player>>),
-    Entity(Arc<Player>),
+    Entities(Vec<Arc<dyn EntityBase>>),
+    Entity(Arc<dyn EntityBase>),
     Players(Vec<Arc<Player>>),
     BlockPos(BlockPos),
     Pos3D(Vector3<f64>),
@@ -109,8 +110,8 @@ pub enum Arg<'a> {
     Simple(&'a str),
     SoundCategory(SoundCategory),
     DamageType(DamageType),
-    Effect(EffectType),
-    Enchantment(Enchantment),
+    Effect(&'static StatusEffect),
+    Enchantment(&'static Enchantment),
 }
 
 /// see [`crate::commands::tree::builder::argument`] and [`CommandTree::execute`]/[`crate::commands::tree::builder::NonLeafNodeBuilder::execute`]

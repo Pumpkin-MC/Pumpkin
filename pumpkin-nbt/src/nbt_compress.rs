@@ -1,7 +1,7 @@
 use crate::deserializer::NbtReadHelper;
 use crate::{Error, Nbt, NbtCompound, deserializer, serializer};
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Seek, Write};
 
 /// Reads a GZipped NBT compound tag from any reader.
 ///
@@ -12,10 +12,12 @@ use std::io::{Read, Write};
 /// # Returns
 ///
 /// A Result containing either the parsed NbtCompound or an Error
-pub fn read_gzip_compound_tag(input: impl Read) -> Result<NbtCompound, Error> {
+pub fn read_gzip_compound_tag(input: impl Read + Seek) -> Result<NbtCompound, Error> {
     // Create a GZip decoder and directly chain it to the NBT reader
-    let decoder = GzDecoder::new(input);
-    let mut reader = NbtReadHelper::new(decoder);
+    let mut decoder = GzDecoder::new(input);
+    let mut buf = Vec::new();
+    decoder.read_to_end(&mut buf).map_err(Error::Incomplete)?;
+    let mut reader = NbtReadHelper::new(Cursor::new(buf));
 
     // Read the NBT data directly from the decoder stream
     let nbt = Nbt::read(&mut reader)?;
@@ -65,14 +67,12 @@ pub fn write_gzip_compound_tag_to_bytes(compound: &NbtCompound) -> Result<Vec<u8
 /// # Returns
 ///
 /// A Result containing either the deserialized type or an Error
-pub fn from_gzip_bytes<'a, T, R>(input: R) -> Result<T, Error>
-where
-    T: serde::Deserialize<'a>,
-    R: Read,
-{
+pub fn from_gzip_bytes<'a, T: serde::Deserialize<'a>, R: Read>(input: R) -> Result<T, Error> {
     // Create a GZip decoder and directly use it for deserialization
-    let decoder = GzDecoder::new(input);
-    deserializer::from_bytes(decoder)
+    let mut decoder = GzDecoder::new(input);
+    let mut buf = Vec::new();
+    decoder.read_to_end(&mut buf).map_err(Error::Incomplete)?;
+    deserializer::from_bytes(Cursor::new(buf))
 }
 
 /// Writes a Rust type as GZipped NBT to any writer.
@@ -85,11 +85,7 @@ where
 /// # Returns
 ///
 /// A Result indicating success or an Error
-pub fn to_gzip_bytes<T, W>(value: &T, output: W) -> Result<(), Error>
-where
-    T: serde::Serialize,
-    W: Write,
-{
+pub fn to_gzip_bytes<T: serde::Serialize, W: Write>(value: &T, output: W) -> Result<(), Error> {
     // Create a GZip encoder that writes to the output
     let encoder = GzEncoder::new(output, Compression::default());
 
@@ -98,10 +94,7 @@ where
 }
 
 /// Convenience function that returns compressed bytes
-pub fn to_gzip_bytes_vec<T>(value: &T) -> Result<Vec<u8>, Error>
-where
-    T: serde::Serialize,
-{
+pub fn to_gzip_bytes_vec<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, Error> {
     let mut buffer = Vec::new();
     to_gzip_bytes(value, &mut buffer)?;
     Ok(buffer)
@@ -157,7 +150,7 @@ mod tests {
         assert_eq!(read_compound.get_double("double_value"), Some(123456.789));
         assert_eq!(read_compound.get_bool("bool_value"), Some(true));
         assert_eq!(
-            read_compound.get_string("string_value").map(String::as_str),
+            read_compound.get_string("string_value"),
             Some("test string")
         );
 

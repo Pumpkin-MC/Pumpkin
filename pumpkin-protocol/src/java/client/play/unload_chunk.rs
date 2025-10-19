@@ -5,8 +5,8 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_FORGET_LEVEL_CHUNK)]
 pub struct CUnloadChunk {
-    z: i32,
-    x: i32,
+    pub z: i32,
+    pub x: i32,
 }
 
 impl CUnloadChunk {

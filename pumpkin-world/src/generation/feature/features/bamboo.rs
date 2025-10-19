@@ -1,9 +1,8 @@
 use pumpkin_data::{
-    Block, BlockDirection,
-    block_properties::{
-        BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1, get_state_by_state_id,
-    },
-    tag::Tagable,
+    Block, BlockDirection, BlockState,
+    block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1},
+    tag,
+    tag::Taggable,
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector2::Vector2},
@@ -11,7 +10,8 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{ProtoChunk, world::BlockRegistryExt};
+use crate::generation::proto_chunk::GenerationCache;
+use crate::world::BlockRegistryExt;
 
 #[derive(Deserialize)]
 pub struct BambooFeature {
@@ -20,9 +20,9 @@ pub struct BambooFeature {
 
 impl BambooFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut T,
         block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
@@ -32,10 +32,7 @@ impl BambooFeature {
     ) -> bool {
         let mut i = 0;
         if chunk.is_air(&pos.0) {
-            if block_registry
-                .can_place_at(&Block::BAMBOO, chunk, &pos, BlockDirection::Up)
-                .await
-            {
+            if block_registry.can_place_at(&Block::BAMBOO, chunk, &pos, BlockDirection::Up) {
                 let height = random.next_bounded_i32(12) + 5;
                 if random.next_f32() < self.probability {
                     let rnd = random.next_bounded_i32(4) + 1;
@@ -43,11 +40,11 @@ impl BambooFeature {
                         for z in pos.0.z - rnd..pos.0.z + rnd {
                             let block_below = BlockPos::new(
                                 x,
-                                chunk.top_block_height_exclusive(&Vector2::new(x, z)) as i32 - 1,
+                                chunk.top_block_height_exclusive(&Vector2::new(x, z)) - 1,
                                 z,
                             );
-                            let block = chunk.get_block_state(&block_below.0);
-                            if !block.to_block().is_tagged_with("minecraft:dirt").unwrap() {
+                            let block = GenerationCache::get_block_state(chunk, &block_below.0);
+                            if !block.to_block().has_tag(&tag::Block::MINECRAFT_DIRT) {
                                 continue;
                             }
                             chunk.set_block_state(&block_below.0, Block::PODZOL.default_state);
@@ -72,19 +69,19 @@ impl BambooFeature {
 
                     chunk.set_block_state(
                         &bpos.0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
+                        BlockState::from_id(props.to_state_id(&Block::BAMBOO)),
                     );
                     props.stage = Integer0To1::L0;
 
                     chunk.set_block_state(
                         &bpos.down().0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
+                        BlockState::from_id(props.to_state_id(&Block::BAMBOO)),
                     );
                     props.leaves = BambooLeaves::Small;
 
                     chunk.set_block_state(
                         &bpos.down().down().0,
-                        get_state_by_state_id(props.to_state_id(&Block::BAMBOO)),
+                        BlockState::from_id(props.to_state_id(&Block::BAMBOO)),
                     );
                 }
             }

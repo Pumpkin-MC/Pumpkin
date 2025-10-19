@@ -3,7 +3,9 @@ use std::io::{Read, Write};
 
 use crate::{
     FixedBitSet,
-    codec::{bit_set::BitSet, u24::U24, var_int::VarInt, var_long::VarLong, var_uint::VarUInt},
+    codec::{
+        bit_set::BitSet, var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
+    },
 };
 
 pub mod deserializer;
@@ -15,11 +17,10 @@ pub mod serializer;
 // TODO: This is a bit hacky
 const NO_PREFIX_MARKER: &str = "__network_no_prefix";
 
-pub fn network_serialize_no_prefix<T, S>(input: T, serializer: S) -> Result<S::Ok, S::Error>
-where
-    T: serde::Serialize,
-    S: serde::Serializer,
-{
+pub fn network_serialize_no_prefix<T: serde::Serialize, S: serde::Serializer>(
+    input: T,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
     serializer.serialize_newtype_struct(NO_PREFIX_MARKER, &input)
 }
 
@@ -64,10 +65,10 @@ pub trait NetworkReadExt {
     fn read_remaining_to_boxed_slice(&mut self, bound: usize) -> Result<Box<[u8]>, ReadingError>;
 
     fn get_bool(&mut self) -> Result<bool, ReadingError>;
-    fn get_u24(&mut self) -> Result<U24, ReadingError>;
     fn get_var_int(&mut self) -> Result<VarInt, ReadingError>;
     fn get_var_uint(&mut self) -> Result<VarUInt, ReadingError>;
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
+    fn get_var_ulong(&mut self) -> Result<VarULong, ReadingError>;
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError>;
     fn get_string(&mut self) -> Result<String, ReadingError>;
     fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError>;
@@ -112,10 +113,6 @@ impl<R: Read> NetworkReadExt for R {
             .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
 
         Ok(buf[0])
-    }
-
-    fn get_u24(&mut self) -> Result<U24, ReadingError> {
-        U24::decode(self)
     }
 
     get_number_be!(get_i16_be, i16);
@@ -176,6 +173,10 @@ impl<R: Read> NetworkReadExt for R {
 
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError> {
         VarLong::decode(self)
+    }
+
+    fn get_var_ulong(&mut self) -> Result<VarULong, ReadingError> {
+        VarULong::decode(self)
     }
 
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError> {
@@ -244,7 +245,6 @@ pub trait NetworkWriteExt {
     fn write_u8(&mut self, data: u8) -> Result<(), WritingError>;
     fn write_i16_be(&mut self, data: i16) -> Result<(), WritingError>;
     fn write_u16_be(&mut self, data: u16) -> Result<(), WritingError>;
-    fn write_u24_be(&mut self, data: U24) -> Result<(), WritingError>;
     fn write_i32_be(&mut self, data: i32) -> Result<(), WritingError>;
     fn write_u32_be(&mut self, data: u32) -> Result<(), WritingError>;
     fn write_i64_be(&mut self, data: i64) -> Result<(), WritingError>;
@@ -260,6 +260,8 @@ pub trait NetworkWriteExt {
             self.write_u8(0)
         }
     }
+    fn write_fixed_bitset(&mut self, bits: usize, bit_set: FixedBitSet)
+    -> Result<(), WritingError>;
     fn write_var_int(&mut self, data: &VarInt) -> Result<(), WritingError>;
     fn write_var_uint(&mut self, data: &VarUInt) -> Result<(), WritingError>;
     fn write_var_long(&mut self, data: &VarLong) -> Result<(), WritingError>;
@@ -327,10 +329,6 @@ impl<W: Write> NetworkWriteExt for W {
             .map_err(WritingError::IoError)
     }
 
-    fn write_u24_be(&mut self, data: U24) -> Result<(), WritingError> {
-        data.encode(self)
-    }
-
     write_number_be!(write_i16_be, i16);
     write_number_be!(write_u16_be, u16);
     write_number_be!(write_i32_be, i32);
@@ -342,6 +340,21 @@ impl<W: Write> NetworkWriteExt for W {
 
     fn write_slice(&mut self, data: &[u8]) -> Result<(), WritingError> {
         self.write_all(data).map_err(WritingError::IoError)
+    }
+
+    fn write_fixed_bitset(
+        &mut self,
+        bits: usize,
+        bit_set: FixedBitSet,
+    ) -> Result<(), WritingError> {
+        let new_length = bits.div_ceil(8);
+        let mut new_vec = vec![0u8; new_length];
+        let bytes_to_copy = std::cmp::min(bit_set.len(), new_length);
+
+        new_vec[..bytes_to_copy].copy_from_slice(&bit_set[..bytes_to_copy]);
+        self.write_slice(&new_vec)?;
+
+        Ok(())
     }
 
     fn write_var_int(&mut self, data: &VarInt) -> Result<(), WritingError> {

@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicI32};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
@@ -8,7 +8,7 @@ use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::java::server::play::{
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SInteract, SKeepAlive, SPickItemFromBlock,
+    SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SKeepAlive, SPickItemFromBlock,
     SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded,
     SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
     SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
@@ -62,14 +62,12 @@ use crate::entity::player::Player;
 use crate::net::{GameProfile, PlayerConfig};
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
-pub struct JavaClientPlatform {
+pub struct JavaClient {
     pub id: u64,
     /// The client's game profile information.
     pub gameprofile: Mutex<Option<GameProfile>>,
     /// The client's configuration settings, Optional
     pub config: Mutex<Option<PlayerConfig>>,
-    /// The minecraft protocol version used by the client.
-    pub protocol_version: AtomicI32,
     /// The Address used to connect to the Server, Send in the Handshake
     pub server_address: Mutex<String>,
     /// The current connection state of the client (e.g., Handshaking, Status, Play).
@@ -95,14 +93,13 @@ pub struct JavaClientPlatform {
     network_reader: Mutex<TCPNetworkDecoder<BufReader<OwnedReadHalf>>>,
 }
 
-impl JavaClientPlatform {
+impl JavaClient {
     #[must_use]
     pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: u64) -> Self {
         let (read, write) = tcp_stream.into_split();
         let (send, recv) = tokio::sync::mpsc::channel(128);
         Self {
             id,
-            protocol_version: AtomicI32::new(0),
             gameprofile: Mutex::new(None),
             config: Mutex::new(None),
             server_address: Mutex::new(String::new()),
@@ -193,17 +190,14 @@ impl JavaClientPlatform {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        if self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+        if self.closed.load(Ordering::Relaxed) {
             None
         } else {
             Some(self.tasks.spawn(task))
         }
     }
 
-    pub async fn enqueue_packet<P>(&self, packet: &P)
-    where
-        P: ClientPacket,
-    {
+    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
         Self::write_packet(packet, writer).unwrap();
@@ -219,7 +213,7 @@ impl JavaClientPlatform {
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
         if let Err(err) = self.outgoing_packet_queue_send.send(packet_data).await {
             // This is expected to fail if we are closed
-            if !self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+            if !self.closed.load(Ordering::Relaxed) {
                 log::error!(
                     "Failed to add packet to the outgoing packet queue for client {}: {}",
                     self.id,
@@ -231,11 +225,6 @@ impl JavaClientPlatform {
 
     pub async fn await_close_interrupt(&self) {
         self.close_interrupt.notified().await;
-    }
-
-    fn thread_safe_close(interrupt: &Arc<Notify>, closed: &Arc<AtomicBool>) {
-        interrupt.notify_waiters();
-        closed.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub async fn get_packet(&self) -> Option<RawPacket> {
@@ -266,7 +255,7 @@ impl JavaClientPlatform {
             ConnectionState::Login => {
                 // TextComponent implements Serialize and writes in bytes instead of String, that's the reasib we only use content
                 self.send_packet_now(&CLoginDisconnect::new(
-                    &serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
+                    serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
                 ))
                 .await;
             }
@@ -297,7 +286,7 @@ impl JavaClientPlatform {
             .await
         {
             // It is expected that the packet will fail if we are closed
-            if !self.closed.load(std::sync::atomic::Ordering::Relaxed) {
+            if !self.closed.load(Ordering::Relaxed) {
                 log::warn!("Failed to send packet to client {}: {}", self.id, err);
                 // We now need to close the connection to the client since the stream is in an
                 // unknown state
@@ -345,23 +334,15 @@ impl JavaClientPlatform {
         packet: &RawPacket,
     ) -> Result<(), ReadingError> {
         match self.connection_state.load() {
-            pumpkin_protocol::ConnectionState::HandShake => {
-                self.handle_handshake_packet(packet).await
-            }
-            pumpkin_protocol::ConnectionState::Status => {
-                self.handle_status_packet(server, packet).await
-            }
+            ConnectionState::HandShake => self.handle_handshake_packet(packet).await,
+            ConnectionState::Status => self.handle_status_packet(server, packet).await,
             // TODO: Check config if transfer is enabled
-            pumpkin_protocol::ConnectionState::Login
-            | pumpkin_protocol::ConnectionState::Transfer => {
+            ConnectionState::Login | ConnectionState::Transfer => {
                 self.handle_login_packet(server, packet).await
             }
-            pumpkin_protocol::ConnectionState::Config => {
-                self.handle_config_packet(server, packet).await
-            }
-            pumpkin_protocol::ConnectionState::Play => {
-                let player = self.player.lock().await;
-                if let Some(player) = player.as_ref() {
+            ConnectionState::Config => self.handle_config_packet(server, packet).await,
+            ConnectionState::Play => {
+                if let Some(player) = self.player.lock().await.as_ref() {
                     match self.handle_play_packet(player, server, packet).await {
                         Ok(()) => {}
                         Err(e) => {
@@ -390,15 +371,13 @@ impl JavaClientPlatform {
         match packet.id {
             0 => {
                 self.handle_handshake(SHandShake::read(payload)?).await;
+                Ok(())
             }
-            _ => {
-                log::error!(
-                    "Failed to handle java packet id {} in Handshake state",
-                    packet.id
-                );
-            }
+            _ => Err(ReadingError::Message(format!(
+                "Failed to handle packet id {} in Handshake State",
+                packet.id
+            ))),
         }
-        Ok(())
     }
 
     async fn handle_status_packet(
@@ -411,20 +390,18 @@ impl JavaClientPlatform {
         match packet.id {
             SStatusRequest::PACKET_ID => {
                 self.handle_status_request(server).await;
+                Ok(())
             }
             SStatusPingRequest::PACKET_ID => {
                 self.handle_ping_request(SStatusPingRequest::read(payload)?)
                     .await;
+                Ok(())
             }
-            _ => {
-                log::error!(
-                    "Failed to handle java client packet id {} in Status State",
-                    packet.id
-                );
-            }
+            _ => Err(ReadingError::Message(format!(
+                "Failed to handle java client packet id {} in Status State",
+                packet.id
+            ))),
         }
-
-        Ok(())
     }
 
     pub fn start_outgoing_packet_task(&mut self) {
@@ -437,7 +414,7 @@ impl JavaClientPlatform {
         let writer = self.network_writer.clone();
         let id = self.id;
         self.spawn_task(async move {
-            while !closed.load(std::sync::atomic::Ordering::Relaxed) {
+            while !closed.load(Ordering::Relaxed) {
                 let recv_result = tokio::select! {
                     () = close_interrupt.notified() => {
                         None
@@ -453,11 +430,12 @@ impl JavaClientPlatform {
 
                 if let Err(err) = writer.lock().await.write_packet(packet_data).await {
                     // It is expected that the packet will fail if we are closed
-                    if !closed.load(std::sync::atomic::Ordering::Relaxed) {
+                    if !closed.load(Ordering::Relaxed) {
                         log::warn!("Failed to send packet to client {id}: {err}",);
                         // We now need to close the connection to the client since the stream is in an
                         // unknown state
-                        Self::thread_safe_close(&close_interrupt, &closed);
+                        close_interrupt.notify_waiters();
+                        closed.store(true, Ordering::Relaxed);
                         break;
                     }
                 }
@@ -476,8 +454,7 @@ impl JavaClientPlatform {
     /// This function does not attempt to send any disconnect packets to the client.
     pub fn close(&self) {
         self.close_interrupt.notify_waiters();
-        self.closed
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.closed.store(true, Ordering::Relaxed);
     }
 
     async fn handle_login_packet(
@@ -594,7 +571,7 @@ impl JavaClientPlatform {
                     .await;
             }
             SInteract::PACKET_ID => {
-                self.handle_interact(player, SInteract::read(payload)?)
+                self.handle_interact(player, SInteract::read(payload)?, server)
                     .await;
             }
             SKeepAlive::PACKET_ID => {
@@ -689,6 +666,9 @@ impl JavaClientPlatform {
             SPlayerSession::PACKET_ID => {
                 self.handle_chat_session_update(player, server, SPlayerSession::read(payload)?)
                     .await;
+            }
+            SCustomPayload::PACKET_ID => {
+                // TODO: this fixes Failed to handle player packet id for now
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);

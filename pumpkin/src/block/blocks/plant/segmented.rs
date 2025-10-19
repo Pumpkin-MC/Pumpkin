@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing, Integer1To4};
 use pumpkin_world::BlockStateId;
 
-use crate::block::pumpkin_block::{CanUpdateAtArgs, PumpkinBlock};
-use crate::block::{BlockIsReplacing, pumpkin_block::OnPlaceArgs};
+use crate::block::{BlockBehaviour, CanUpdateAtArgs};
+use crate::block::{BlockIsReplacing, OnPlaceArgs};
 
 pub trait SegmentProperties {
     fn get_segment_amount(&self) -> Integer1To4;
@@ -44,7 +44,7 @@ impl_segment_properties!(
 );
 
 #[async_trait]
-pub trait Segmented: PumpkinBlock {
+pub trait Segmented: BlockBehaviour {
     type Properties: BlockProperties + SegmentProperties;
 
     fn can_add_segment(&self, props: &Self::Properties) -> bool {

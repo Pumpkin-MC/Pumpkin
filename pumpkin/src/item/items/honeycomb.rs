@@ -1,14 +1,23 @@
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+
+use crate::block::UseWithItemArgs;
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
-use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::OakDoorLikeProperties;
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::world::WorldEvent;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::entities::BlockEntity;
+use pumpkin_world::block::entities::sign::SignBlockEntity;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 pub struct HoneyCombItem;
@@ -20,29 +29,29 @@ impl ItemMetadata for HoneyCombItem {
 }
 
 #[async_trait]
-impl PumpkinItem for HoneyCombItem {
+impl ItemBehaviour for HoneyCombItem {
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         block: &Block,
         _server: &Server,
     ) {
-        let world = player.world().await;
+        let world = player.world();
 
         // First we try to strip the block. by getting his equivalent and applying it the axis.
         let replacement_block = get_waxed_equivalent(block);
         // If there is a strip equivalent.
-        if replacement_block.is_some() {
+        if let Some(replacement_block) = replacement_block {
             // get block state of the old log.
             // get the log properties
             // create new properties for the new log.
-            let new_block = &Block::from_id(replacement_block.unwrap());
+            let new_block = &Block::from_id(replacement_block);
 
-            let new_state_id = if block.is_tagged_with("#minecraft:doors").is_some()
-                && block.is_tagged_with("#minecraft:doors").unwrap()
+            let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS)
+                && block.has_tag(&tag::Block::MINECRAFT_DOORS)
             {
                 // get block state of the old log.
                 let door_information = world.get_block_state_id(&location).await;
@@ -67,6 +76,28 @@ impl PumpkinItem for HoneyCombItem {
                 .await;
             return;
         }
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl HoneyCombItem {
+    pub async fn apply_to_sign(
+        &self,
+        args: &UseWithItemArgs<'_>,
+        block_entity: &Arc<dyn BlockEntity>,
+        sign_entity: &SignBlockEntity,
+    ) -> BlockActionResult {
+        sign_entity.is_waxed.store(true, Ordering::Relaxed);
+
+        args.world.update_block_entity(block_entity).await;
+        args.world
+            .sync_world_event(WorldEvent::BlockWaxed, *args.position, 0)
+            .await;
+
+        BlockActionResult::Success
     }
 }
 

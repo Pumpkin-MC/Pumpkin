@@ -19,7 +19,7 @@ use crate::{
         GameProfile,
         authentication::{self, AuthError},
         is_valid_player_name,
-        java::JavaClientPlatform,
+        java::JavaClient,
         offline_uuid,
         proxy::{bungeecord, velocity},
     },
@@ -86,7 +86,7 @@ static LINKS: LazyLock<Vec<Link>> = LazyLock::new(|| {
     links
 });
 
-impl JavaClientPlatform {
+impl JavaClient {
     pub async fn handle_login_start(&self, server: &Server, login_start: SLoginStart) {
         log::debug!("login start");
 
@@ -327,6 +327,7 @@ impl JavaClientPlatform {
                     self.finish_login(&profile).await;
                     *self.gameprofile.lock().await = Some(profile);
                     *address = new_address;
+                    drop(address);
                 }
                 Err(error) => self.kick(TextComponent::text(error.to_string())).await,
             }
@@ -348,6 +349,10 @@ impl JavaClientPlatform {
         self.send_packet_now(&CUpdateTags::new(&[
             pumpkin_data::tag::RegistryKey::Block,
             pumpkin_data::tag::RegistryKey::Fluid,
+            pumpkin_data::tag::RegistryKey::Enchantment,
+            pumpkin_data::tag::RegistryKey::WorldgenBiome,
+            pumpkin_data::tag::RegistryKey::Item,
+            pumpkin_data::tag::RegistryKey::EntityType,
         ]))
         .await;
 
@@ -379,7 +384,7 @@ impl JavaClientPlatform {
         self.send_packet_now(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
             id: "core",
-            version: "1.21",
+            version: "1.21.9",
         }]))
         .await;
     }

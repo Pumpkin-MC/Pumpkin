@@ -1,5 +1,5 @@
 {
-  "version": 772,
+  "version": 773,
   "serverbound": {
     "handshake": [
       "intention"
@@ -24,7 +24,8 @@
       "pong",
       "resource_pack",
       "select_known_packs",
-      "custom_click_action"
+      "custom_click_action",
+      "accept_code_of_conduct"
     ],
     "play": [
       "accept_teleportation",
@@ -49,7 +50,7 @@
       "container_slot_state_changed",
       "cookie_response",
       "custom_payload",
-      "debug_sample_subscription",
+      "debug_subscription_request",
       "edit_book",
       "entity_tag_query",
       "interact",
@@ -127,7 +128,8 @@
       "custom_report_details",
       "server_links",
       "clear_dialog",
-      "show_dialog"
+      "show_dialog",
+      "code_of_conduct"
     ],
     "play": [
       "bundle_delimiter",
@@ -156,6 +158,10 @@
       "custom_chat_completions",
       "custom_payload",
       "damage_event",
+      "debug/block_value",
+      "debug/chunk_value",
+      "debug/entity_value",
+      "debug/event",
       "debug_sample",
       "delete_chat",
       "disconnect",
@@ -165,6 +171,7 @@
       "explode",
       "forget_level_chunk",
       "game_event",
+      "game_test_highlight_pos",
       "horse_screen_open",
       "hurt_animation",
       "initialize_border",

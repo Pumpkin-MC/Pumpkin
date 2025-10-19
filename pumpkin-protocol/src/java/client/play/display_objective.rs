@@ -9,8 +9,8 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_SET_DISPLAY_OBJECTIVE)]
 pub struct CDisplayObjective {
-    position: VarInt,
-    score_name: String,
+    pub position: VarInt,
+    pub score_name: String,
 }
 
 impl CDisplayObjective {

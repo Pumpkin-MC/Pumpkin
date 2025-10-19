@@ -1,12 +1,10 @@
 use async_trait::async_trait;
-use pumpkin_data::Block;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 
-use crate::block::pumpkin_block::{
-    BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock,
-};
+use crate::block::{BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
 
 use super::FireBlockBase;
 
@@ -16,14 +14,12 @@ pub struct SoulFireBlock;
 impl SoulFireBlock {
     #[must_use]
     pub fn is_soul_base(block: &Block) -> bool {
-        block
-            .is_tagged_with("minecraft:soul_fire_base_blocks")
-            .unwrap()
+        block.has_tag(&tag::Block::MINECRAFT_SOUL_FIRE_BASE_BLOCKS)
     }
 }
 
 #[async_trait]
-impl PumpkinBlock for SoulFireBlock {
+impl BlockBehaviour for SoulFireBlock {
     async fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,

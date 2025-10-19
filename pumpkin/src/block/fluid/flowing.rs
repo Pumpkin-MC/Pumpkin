@@ -17,7 +17,14 @@ pub struct SpreadContext {
     holes: HashMap<BlockPos, bool>,
 }
 
+impl Default for SpreadContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SpreadContext {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             holes: HashMap::new(),
@@ -84,14 +91,13 @@ pub trait FlowingFluid {
 
         let state_id = world.get_block_state_id(pos).await;
         // Check if the block has waterlogged property and if it's true
-        if let Some(properties) = block.properties(state_id) {
-            if properties
+        if let Some(properties) = block.properties(state_id)
+            && properties
                 .to_props()
                 .iter()
                 .any(|(key, value)| key == "waterlogged" && value == "true")
-            {
-                return Some(state_id);
-            }
+        {
+            return Some(state_id);
         }
         None
     }
@@ -260,6 +266,7 @@ pub trait FlowingFluid {
             return true;
         }
 
+        //TODO check if source
         if self.is_same_fluid(fluid, state_id) {
             let props = FlowingFluidProperties::from_state_id(state_id, fluid);
             return props.level == Level::L8 && props.falling != Falling::True;

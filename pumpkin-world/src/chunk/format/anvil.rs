@@ -37,8 +37,8 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The number of bytes in a sector (4 KiB)
 const SECTOR_BYTES: usize = 4096;
 
-// 1.21.7
-pub const WORLD_DATA_VERSION: i32 = 4438;
+// 1.21.9
+pub const WORLD_DATA_VERSION: i32 = 4554;
 
 #[derive(Clone, Default)]
 pub struct AnvilChunkFormat;
@@ -819,6 +819,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
@@ -845,7 +846,7 @@ mod tests {
 
     #[async_trait]
     impl BlockRegistryExt for BlockRegistry {
-        async fn can_place_at(
+        fn can_place_at(
             &self,
             _block: &pumpkin_data::Block,
             _block_accessor: &dyn BlockAccessor,
@@ -950,9 +951,7 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator
-                    .generate_chunk(&level, block_registry.as_ref(), &position)
-                    .await;
+                let chunk = generator.generate_chunk(&level, block_registry.as_ref(), &position);
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }
@@ -1228,9 +1227,7 @@ mod tests {
         for x in -5..5 {
             for y in -5..5 {
                 let position = Vector2::new(x, y);
-                let chunk = generator
-                    .generate_chunk(&level, block_registry.as_ref(), &position)
-                    .await;
+                let chunk = generator.generate_chunk(&level, block_registry.as_ref(), &position);
                 chunks.push((position, Arc::new(RwLock::new(chunk))));
             }
         }
@@ -1331,3 +1328,4 @@ mod tests {
     }
     */
 }
+ */

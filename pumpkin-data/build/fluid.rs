@@ -3,7 +3,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     fs,
 };
 use syn::{Ident, LitInt, LitStr};
@@ -53,8 +53,8 @@ impl ToTokens for PropertyStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = Ident::new(&self.name, Span::call_site());
 
-        let variant_count = self.values.clone().len() as u16;
-        let values_index = (0..self.values.clone().len() as u16).collect::<Vec<_>>();
+        let variant_count = self.values.len() as u16;
+        let values_index = (0..self.values.len() as u16).collect::<Vec<_>>();
 
         let ident_values = self.values.iter().map(|value| {
             let value_str = if value.chars().all(|c| c.is_numeric()) {
@@ -316,9 +316,9 @@ struct Property {
 }
 
 #[derive(Deserialize, Clone)]
-struct Fluid {
-    name: String,
-    id: u16,
+pub struct Fluid {
+    pub name: String,
+    pub id: u16,
     properties: Vec<Property>,
     default_state_index: u16,
     states: Vec<FluidState>,
@@ -357,19 +357,20 @@ pub(crate) fn build() -> TokenStream {
     let mut fluid_properties_from_props_and_name = TokenStream::new();
 
     // Used to create property `enum`s.
-    let mut property_enums: HashMap<String, PropertyStruct> = HashMap::new();
+    let mut property_enums: BTreeMap<String, PropertyStruct> = BTreeMap::new();
     // Property implementation for a fluid.
     let mut fluid_properties: Vec<FluidPropertyStruct> = Vec::new();
     // Mapping of a collection of property names -> fluids that have these properties.
-    let mut property_collection_map: HashMap<Vec<String>, PropertyCollectionData> = HashMap::new();
+    let mut property_collection_map: BTreeMap<Vec<String>, PropertyCollectionData> =
+        BTreeMap::new();
     // Validator that we have no `enum` collisions.
-    let mut enum_to_values: HashMap<String, Vec<String>> = HashMap::new();
+    let mut enum_to_values: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     // Collect unique fluid states to create partial states
     let mut unique_states = Vec::new();
     let mut optimized_fluids: Vec<(String, FluidStateRef)> = Vec::new();
 
-    for fluid in fluids.clone() {
+    for fluid in fluids {
         let id_name = LitStr::new(&fluid.name, proc_macro2::Span::call_site());
         let const_ident = format_ident!("{}", fluid.name.to_shouty_snake_case());
         let state_id_start = fluid
@@ -577,11 +578,11 @@ pub(crate) fn build() -> TokenStream {
             );
 
             fluid_properties_from_state_and_name.extend(quote! {
-                #fluid_name => Some(Box::new(#property_name::from_state_id(state_id, &Fluid::#const_fluid_name))),
+                #fluid_name => Box::new(#property_name::from_state_id(state_id, &Fluid::#const_fluid_name)),
             });
 
             fluid_properties_from_props_and_name.extend(quote! {
-                #fluid_name => Some(Box::new(#property_name::from_props(props, &Fluid::#const_fluid_name))),
+                #fluid_name => Box::new(#property_name::from_props(props, &Fluid::#const_fluid_name)),
             });
         }
 
@@ -595,7 +596,7 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use std::hash::{Hash, Hasher};
-        use crate::tag::{Tagable, RegistryKey};
+        use crate::tag::{Taggable, RegistryKey};
         use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 
         #[derive(Clone, Debug)]
@@ -723,19 +724,21 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
+            #[track_caller]
             #[doc = r" Get the properties of the fluid."]
-            pub fn properties(&self, state_id: u16) -> Option<Box<dyn FluidProperties>> {
+            pub fn properties(&self, state_id: u16) -> Box<dyn FluidProperties> {
                 match self.name {
                     #fluid_properties_from_state_and_name
-                    _ => None
+                    _ => panic!("Invalid state_id")
                 }
             }
 
+            #[track_caller]
             #[doc = r" Get the properties of the fluid."]
-            pub fn from_properties(&self, props: Vec<(String, String)>) -> Option<Box<dyn FluidProperties>> {
+            pub fn from_properties(&self, props: Vec<(String, String)>) -> Box<dyn FluidProperties> {
                 match self.name {
                     #fluid_properties_from_props_and_name
-                    _ => None
+                    _ => panic!("Invalid props")
                 }
             }
 
@@ -789,7 +792,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
 
-        impl Tagable for Fluid {
+        impl Taggable for Fluid {
             #[inline]
             fn tag_key() -> RegistryKey {
                 RegistryKey::Fluid
@@ -798,6 +801,11 @@ pub(crate) fn build() -> TokenStream {
             #[inline]
             fn registry_key(&self) -> &str {
                 self.name
+            }
+
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id
             }
         }
 

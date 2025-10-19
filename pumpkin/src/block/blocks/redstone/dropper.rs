@@ -1,12 +1,13 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::pumpkin_block::{
-    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-    PlacedArgs, PumpkinBlock,
-};
 use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockBehaviour, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    PlacedArgs,
+};
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use async_trait::async_trait;
+use pumpkin_data::FacingExt;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
@@ -18,8 +19,9 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::dropper::DropperBlockEntity;
-use pumpkin_world::chunk::TickPriority;
+use pumpkin_world::block::entities::hopper::HopperBlockEntity;
 use pumpkin_world::inventory::Inventory;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
 use std::sync::Arc;
@@ -36,11 +38,9 @@ impl ScreenHandlerFactory for DropperScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         _player: &dyn InventoryPlayer,
     ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
-        Some(Arc::new(Mutex::new(create_generic_3x3(
-            sync_id,
-            player_inventory,
-            self.0.clone(),
-        ))))
+        Some(Arc::new(Mutex::new(
+            create_generic_3x3(sync_id, player_inventory, self.0.clone()).await,
+        )))
     }
 
     fn get_display_name(&self) -> TextComponent {
@@ -80,14 +80,14 @@ const fn to_data3d(facing: Facing) -> i32 {
 }
 
 #[async_trait]
-impl PumpkinBlock for DropperBlock {
+impl BlockBehaviour for DropperBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(inventory) = block_entity.get_inventory() {
-                args.player
-                    .open_handled_screen(&DropperScreenFactory(inventory))
-                    .await;
-            }
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            && let Some(inventory) = block_entity.get_inventory()
+        {
+            args.player
+                .open_handled_screen(&DropperScreenFactory(inventory))
+                .await;
         }
         BlockActionResult::Success
     }
@@ -103,10 +103,6 @@ impl PumpkinBlock for DropperBlock {
         args.world
             .add_block_entity(Arc::new(dropper_block_entity))
             .await;
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
@@ -151,7 +147,39 @@ impl PumpkinBlock for DropperBlock {
                     args.world.get_block_state(args.position).await.id,
                     args.block,
                 );
-                // TODO add item to container
+                if let Some(entity) = args
+                    .world
+                    .get_block_entity(
+                        &args
+                            .position
+                            .offset(props.facing.to_block_direction().to_offset()),
+                    )
+                    .await
+                    && let Some(container) = entity.get_inventory()
+                {
+                    // TODO check WorldlyContainer
+                    let mut is_full = true;
+                    for i in 0..container.size() {
+                        let bind = container.get_stack(i).await;
+                        let item = bind.lock().await;
+                        if item.item_count < item.get_max_stack_size() {
+                            is_full = false;
+                            break;
+                        }
+                    }
+                    if is_full {
+                        return;
+                    }
+                    //TODO WorldlyContainer
+                    let backup = item.clone();
+                    let one_item = item.split(1);
+                    if HopperBlockEntity::add_one_item(dropper, container.as_ref(), one_item).await
+                    {
+                        return;
+                    }
+                    *item = backup;
+                    return;
+                }
                 let drop_item = item.split(1);
                 let facing = to_normal(props.facing);
                 let mut position = args.position.to_centered_f64().add(&(facing * 0.7));
@@ -163,7 +191,7 @@ impl PumpkinBlock for DropperBlock {
                     Uuid::new_v4(),
                     args.world.clone(),
                     position,
-                    EntityType::ITEM,
+                    &EntityType::ITEM,
                     false,
                 );
                 let rd = rng().random::<f64>() * 0.1 + 0.2;

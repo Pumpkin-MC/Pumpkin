@@ -8,9 +8,9 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_MOVE_ENTITY_POS)]
 pub struct CUpdateEntityPos {
-    entity_id: VarInt,
-    delta: Vector3<i16>,
-    on_ground: bool,
+    pub entity_id: VarInt,
+    pub delta: Vector3<i16>,
+    pub on_ground: bool,
 }
 
 impl CUpdateEntityPos {

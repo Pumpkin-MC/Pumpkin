@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
@@ -11,7 +11,7 @@ use rand::Rng;
 use soul_fire::SoulFireBlock;
 
 use crate::block::blocks::fire::fire::FireBlock;
-use crate::block::pumpkin_block::{CanPlaceAtArgs, PumpkinBlock};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs};
 use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 
@@ -23,7 +23,7 @@ pub struct FireBlockBase;
 
 impl FireBlockBase {
     pub async fn get_fire_type(world: &World, pos: &BlockPos) -> Block {
-        let (block, _block_state) = world.get_block_and_block_state(&pos.down()).await;
+        let block = world.get_block(&pos.down()).await;
         if SoulFireBlock::is_soul_base(block) {
             return Block::SOUL_FIRE;
         }
@@ -41,7 +41,7 @@ impl FireBlockBase {
 
     pub async fn is_soul_fire(world: &Arc<World>, block_pos: &BlockPos) -> bool {
         let block = world.get_block(&block_pos.down()).await;
-        block.is_tagged_with("minecraft:soul_fire_base_blocks") == Some(true)
+        block.has_tag(&tag::Block::MINECRAFT_SOUL_FIRE_BASE_BLOCKS)
     }
 
     pub async fn can_place_at(world: &Arc<World>, block_pos: &BlockPos) -> bool {

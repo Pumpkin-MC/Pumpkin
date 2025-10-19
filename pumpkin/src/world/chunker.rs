@@ -4,7 +4,7 @@ use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::java::client::play::{CCenterChunk, CUnloadChunk};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
-use crate::entity::player::Player;
+use crate::{entity::player::Player, net::ClientPlatform};
 
 pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
     player
@@ -13,27 +13,6 @@ pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
         .await
         .view_distance
         .clamp(NonZeroU8::new(2).unwrap(), BASIC_CONFIG.view_distance)
-}
-
-pub async fn player_join(player: &Arc<Player>) {
-    let chunk_pos = player.living_entity.entity.chunk_pos.load();
-
-    log::debug!("Sending center chunk to {}", player.gameprofile.name);
-    player
-        .client
-        .send_packet_now(&CCenterChunk {
-            chunk_x: chunk_pos.x.into(),
-            chunk_z: chunk_pos.y.into(),
-        })
-        .await;
-    let view_distance = get_view_distance(player).await;
-    log::debug!(
-        "Player {} joined with view distance: {}",
-        player.gameprofile.name,
-        view_distance
-    );
-
-    update_position(player).await;
 }
 
 pub async fn update_position(player: &Arc<Player>) {
@@ -46,44 +25,41 @@ pub async fn update_position(player: &Arc<Player>) {
     let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
 
     if old_cylindrical != new_cylindrical {
-        player
-            .client
-            .send_packet_now(&CCenterChunk {
+        if let ClientPlatform::Java(java) = &player.client {
+            java.send_packet_now(&CCenterChunk {
                 chunk_x: new_chunk_center.x.into(),
                 chunk_z: new_chunk_center.y.into(),
             })
             .await;
-
+        }
         let mut loading_chunks = Vec::new();
         let mut unloading_chunks = Vec::new();
         Cylindrical::for_each_changed_chunk(
             old_cylindrical,
             new_cylindrical,
-            |chunk_pos| {
-                loading_chunks.push(chunk_pos);
-            },
-            |chunk_pos| {
-                unloading_chunks.push(chunk_pos);
-            },
+            &mut loading_chunks,
+            &mut unloading_chunks,
         );
 
         // Make sure the watched section and the chunk watcher updates are async atomic. We want to
         // ensure what we unload when the player disconnects is correct.
-        let level = &entity.world.read().await.level;
+        let level = &entity.world.level;
         level.mark_chunks_as_newly_watched(&loading_chunks).await;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&unloading_chunks).await;
 
         {
-            // After marking the chunks as watched, remove chunks that we are already in the process
-            // of sending.
-            let chunk_manager = player.chunk_manager.lock().await;
-            loading_chunks.retain(|pos| !chunk_manager.is_chunk_pending(pos));
+            let mut chunk_manager = player.chunk_manager.lock().await;
+            chunk_manager.update_center_and_view_distance(
+                new_chunk_center,
+                view_distance.into(),
+                level,
+            );
         };
 
         player.watched_section.store(new_cylindrical);
 
         if !chunks_to_clean.is_empty() {
-            level.clean_chunks(&chunks_to_clean).await;
+            // level.clean_chunks(&chunks_to_clean).await;
             for chunk in unloading_chunks {
                 player
                     .client
@@ -93,7 +69,7 @@ pub async fn update_position(player: &Arc<Player>) {
         }
 
         if !loading_chunks.is_empty() {
-            entity.world.read().await.spawn_world_chunks(
+            entity.world.spawn_world_entity_chunks(
                 player.clone(),
                 loading_chunks,
                 new_chunk_center,

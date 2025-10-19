@@ -61,10 +61,10 @@ struct AdditionsSound {
     tick_chance: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Music {
-    sound: String,
-    min_delay: i32,
-    max_delay: i32,
-    replace_current_music: bool,
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// struct Music {
+//     sound: String,
+//     min_delay: i32,
+//     max_delay: i32,
+//     replace_current_music: bool,
+// }

@@ -2,7 +2,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
 use pumpkin_world::generation::{
     GlobalRandomConfig,
-    noise_router::{
+    noise::router::{
         chunk_density_function::ChunkNoiseFunctionBuilderOptions,
         chunk_noise_router::ChunkNoiseRouter, proto_noise_router::ProtoNoiseRouters,
     },

@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockState, block_properties::get_block_by_state_id, chunk::Biome};
+use pumpkin_data::{Block, BlockState, chunk::Biome};
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomDeriver, RandomDeriverImpl, RandomGenerator, RandomImpl},
@@ -8,9 +8,8 @@ use crate::{
     ProtoChunk,
     block::RawBlockState,
     generation::{
-        chunk_noise::WATER_BLOCK, height_limit::HeightLimitView,
-        noise::perlin::DoublePerlinNoiseSampler,
-        noise_router::proto_noise_router::DoublePerlinNoiseBuilder,
+        chunk_noise::WATER_BLOCK, noise::perlin::DoublePerlinNoiseSampler,
+        noise::router::proto_noise_router::DoublePerlinNoiseBuilder,
     },
 };
 
@@ -157,7 +156,7 @@ impl SurfaceTerrainBuilder {
                 for y in (chunk.bottom_y() as i32..=elevation_y).rev() {
                     let pos = Vector3::new(global_x, y, global_z);
                     let block_state = chunk.get_block_state(&pos).to_block();
-                    if block_state == get_block_by_state_id(chunk.default_block.id) {
+                    if block_state == Block::from_state_id(chunk.default_block.id) {
                         break;
                     }
 

@@ -9,9 +9,7 @@ use rand::Rng;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock, RandomTickArgs,
-};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs};
 
 type TorchFlowerProperties = TorchflowerCropLikeProperties;
 
@@ -19,7 +17,7 @@ type TorchFlowerProperties = TorchflowerCropLikeProperties;
 pub struct TorchFlowerBlock;
 
 #[async_trait]
-impl PumpkinBlock for TorchFlowerBlock {
+impl BlockBehaviour for TorchFlowerBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as CropBlockBase>::can_plant_on_top(self, args.block_accessor, &args.position.down())
             .await
@@ -52,19 +50,14 @@ impl CropBlockBase for TorchFlowerBlock {
         2
     }
 
-    fn get_age(&self, state: &pumpkin_data::BlockState, block: &Block) -> i32 {
-        let props = TorchFlowerProperties::from_state_id(state.id, block);
+    fn get_age(&self, state: u16, block: &Block) -> i32 {
+        let props = TorchFlowerProperties::from_state_id(state, block);
         i32::from(props.age.to_index())
     }
 
-    fn state_with_age(
-        &self,
-        block: &Block,
-        state: &pumpkin_data::BlockState,
-        age: i32,
-    ) -> BlockStateId {
+    fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
         if age == 1 {
-            let mut properties = TorchFlowerProperties::from_state_id(state.id, block);
+            let mut properties = TorchFlowerProperties::from_state_id(state, block);
             properties.age = Integer0To1::L1;
             properties.to_state_id(block)
         } else {

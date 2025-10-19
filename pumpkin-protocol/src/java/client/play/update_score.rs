@@ -9,11 +9,11 @@ use crate::{NumberFormat, VarInt};
 #[derive(Serialize)]
 #[packet(PLAY_SET_SCORE)]
 pub struct CUpdateScore {
-    entity_name: String,
-    objective_name: String,
-    value: VarInt,
-    display_name: Option<TextComponent>,
-    number_format: Option<NumberFormat>,
+    pub entity_name: String,
+    pub objective_name: String,
+    pub value: VarInt,
+    pub display_name: Option<TextComponent>,
+    pub number_format: Option<NumberFormat>,
 }
 
 impl CUpdateScore {

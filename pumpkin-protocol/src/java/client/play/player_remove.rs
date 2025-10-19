@@ -6,7 +6,7 @@ use serde::{Serialize, ser::SerializeSeq};
 #[packet(PLAY_PLAYER_INFO_REMOVE)]
 pub struct CRemovePlayerInfo<'a> {
     #[serde(serialize_with = "serialize_slice_uuids")]
-    players: &'a [uuid::Uuid],
+    pub players: &'a [uuid::Uuid],
 }
 
 impl<'a> CRemovePlayerInfo<'a> {

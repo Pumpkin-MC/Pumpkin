@@ -9,11 +9,11 @@ use pumpkin_data::packet::clientbound::CONFIG_RESOURCE_PACK_PUSH;
 #[packet(CONFIG_RESOURCE_PACK_PUSH)]
 pub struct CConfigAddResourcePack<'a> {
     #[serde(with = "uuid::serde::compact")]
-    uuid: &'a uuid::Uuid,
-    url: &'a str,
-    hash: &'a str, // max 40
-    forced: bool,
-    prompt_message: Option<TextComponent>,
+    pub uuid: &'a uuid::Uuid,
+    pub url: &'a str,
+    pub hash: &'a str, // max 40
+    pub forced: bool,
+    pub prompt_message: Option<TextComponent>,
 }
 
 impl<'a> CConfigAddResourcePack<'a> {

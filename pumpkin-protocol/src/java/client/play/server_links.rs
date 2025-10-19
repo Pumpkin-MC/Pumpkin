@@ -6,7 +6,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_SERVER_LINKS)]
 pub struct CPlayServerLinks<'a> {
-    links: &'a [Link<'a>],
+    pub links: &'a [Link<'a>],
 }
 
 impl<'a> CPlayServerLinks<'a> {

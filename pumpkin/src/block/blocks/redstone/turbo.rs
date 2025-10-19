@@ -4,10 +4,7 @@
 
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
-    block_properties::{
-        BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties,
-        get_state_by_state_id,
-    },
+    block_properties::{BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
@@ -220,7 +217,7 @@ impl RedstoneWireTurbo {
         self.orient_neighbors(&neighbor_nodes, upd1, heading);
     }
 
-    const REORDING: [[usize; 24]; 4] = [
+    const REORDERING: [[usize; 24]; 4] = [
         [
             2, 3, 16, 19, 0, 4, 1, 5, 7, 8, 17, 20, 12, 13, 18, 21, 6, 9, 22, 14, 11, 10, 23, 15,
         ],
@@ -238,7 +235,7 @@ impl RedstoneWireTurbo {
     fn orient_neighbors(&mut self, src: &[NodeId], dst_id: NodeId, heading: usize) {
         let dst = &mut self.nodes[dst_id.index];
         let mut neighbors = Vec::with_capacity(24);
-        let re = Self::REORDING[heading];
+        let re = Self::REORDERING[heading];
         for i in &re {
             neighbors.push(src[*i]);
         }
@@ -332,7 +329,7 @@ impl RedstoneWireTurbo {
             let node = &mut self.nodes[upd1.index];
             let mut wire = unwrap_wire(node.state);
             wire.power = new_wire.power;
-            node.state = get_state_by_state_id(wire.to_state_id(&Block::REDSTONE_WIRE));
+            node.state = BlockState::from_id(wire.to_state_id(&Block::REDSTONE_WIRE));
 
             self.propagate_changes(world, upd1, layer).await;
         }
@@ -376,21 +373,19 @@ impl RedstoneWireTurbo {
         if wire_power < 15 {
             let neighbors = self.nodes[upd.index].neighbors.as_ref().unwrap();
 
-            let center_up = &self.nodes[neighbors[1].index].state;
+            let center_up = self.nodes[neighbors[1].index].state;
 
             for m in 0..4 {
                 let n = Self::RS_NEIGHBORS[m];
 
                 let neighbor_id = neighbors[n];
-                let neighbor = &self.get_node(neighbor_id).state;
+                let neighbor = self.get_node(neighbor_id).state;
                 block_power = self.get_max_current_strength(neighbor_id, block_power);
 
-                if !neighbor.is_solid() {
+                if !neighbor.is_solid_block() {
                     let neighbor_down = neighbors[Self::RS_NEIGHBORS_DN[m]];
                     block_power = self.get_max_current_strength(neighbor_down, block_power);
-                } else if !center_up.is_solid()
-                /* TODO:  && !neighbor.is_transparent()*/
-                {
+                } else if !center_up.is_solid_block() && neighbor.is_solid_block() {
                     let neighbor_up = neighbors[Self::RS_NEIGHBORS_UP[m]];
                     block_power = self.get_max_current_strength(neighbor_up, block_power);
                 }

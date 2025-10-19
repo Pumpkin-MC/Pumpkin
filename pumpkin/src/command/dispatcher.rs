@@ -83,7 +83,7 @@ impl CommandDispatcher {
     /// - do not query suggestions for the same consumer multiple times just because they are on different paths through the tree
     pub(crate) async fn find_suggestions<'a>(
         &'a self,
-        src: &mut CommandSender,
+        src: &CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) -> Vec<CommandSuggestion> {
@@ -301,11 +301,6 @@ impl CommandDispatcher {
         }
     }
 
-    #[must_use]
-    pub fn get_permission(&self, key: &str) -> Option<&String> {
-        self.permissions.get(key)
-    }
-
     async fn try_is_fitting_path<'a>(
         src: &mut CommandSender,
         server: &'a Server,
@@ -362,7 +357,7 @@ impl CommandDispatcher {
     }
 
     async fn try_find_suggestions_on_path<'a>(
-        src: &mut CommandSender,
+        src: &CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,
@@ -416,15 +411,13 @@ impl CommandDispatcher {
 
         for name in names {
             self.commands
-                .insert(name.to_string(), Command::Alias(primary_name.to_string()));
-            self.permissions
-                .insert(name.to_string(), permission.clone());
+                .insert(name.clone(), Command::Alias(primary_name.clone()));
+            self.permissions.insert(name.clone(), permission.clone());
         }
 
-        self.permissions
-            .insert(primary_name.to_string(), permission);
+        self.permissions.insert(primary_name.clone(), permission);
         self.commands
-            .insert(primary_name.to_string(), Command::Tree(tree));
+            .insert(primary_name.clone(), Command::Tree(tree));
     }
 
     /// Remove a command from the dispatcher by its primary name.
@@ -433,10 +426,10 @@ impl CommandDispatcher {
         for (key, value) in &self.commands {
             if key == name {
                 to_remove.push(key.clone());
-            } else if let Command::Alias(target) = value {
-                if target == name {
-                    to_remove.push(key.clone());
-                }
+            } else if let Command::Alias(target) = value
+                && target == name
+            {
+                to_remove.push(key.clone());
             }
         }
 

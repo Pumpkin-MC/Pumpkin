@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_data::entity::EffectType;
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
 use crate::command::{
@@ -16,7 +16,7 @@ use crate::server::Server;
 pub struct EffectTypeArgumentConsumer;
 
 impl GetClientSideArgParser for EffectTypeArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Resource {
             identifier: "mob_effect",
         }
@@ -38,7 +38,7 @@ impl ArgumentConsumer for EffectTypeArgumentConsumer {
         let name = args.pop()?;
 
         // Create a static damage type first
-        let damage_type = EffectType::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
+        let damage_type = StatusEffect::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
         // Find matching static damage type from values array
         Some(Arg::Effect(damage_type))
     }
@@ -60,7 +60,7 @@ impl DefaultNameArgConsumer for EffectTypeArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for EffectTypeArgumentConsumer {
-    type Data = &'a EffectType;
+    type Data = &'static StatusEffect;
 
     fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

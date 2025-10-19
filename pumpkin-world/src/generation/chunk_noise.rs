@@ -10,7 +10,7 @@ use super::{
         WorldAquiferSampler,
     },
     biome_coords,
-    noise_router::{
+    noise::router::{
         chunk_density_function::{
             ChunkNoiseFunctionBuilderOptions, ChunkNoiseFunctionSampleOptions, SampleAction,
             WrapperData,
@@ -396,23 +396,23 @@ impl<'a> ChunkNoiseGenerator<'a> {
             .sample(&mut self.router, &pos, &options, height_estimator)
     }
 
+    #[inline]
     pub fn horizontal_cell_block_count(&self) -> u8 {
         self.generation_shape.horizontal_cell_block_count()
     }
 
+    #[inline]
     pub fn vertical_cell_block_count(&self) -> u8 {
         self.generation_shape.vertical_cell_block_count()
     }
 
     /// Aka bottom_y
+    #[inline]
     pub fn min_y(&self) -> i8 {
         self.generation_shape.min_y
     }
 
-    pub fn minimum_cell_y(&self) -> i8 {
-        self.generation_shape.min_y / self.generation_shape.vertical_cell_block_count() as i8
-    }
-
+    #[inline]
     pub fn height(&self) -> u16 {
         self.generation_shape.height
     }

@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::atomic::Ordering};
 
 use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
 use pumpkin_config::{RCONConfig, advanced_config};
@@ -21,7 +21,7 @@ impl RCONServer {
         let password = Arc::new(config.password.clone());
 
         let mut connections = 0;
-        while !SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
             let await_new_client = || async {
                 let t1 = listener.accept();
                 let t2 = STOP_INTERRUPT.notified();
@@ -126,8 +126,10 @@ impl RCONClient {
                     let output_clone = output.clone();
                     let packet_body = packet.get_body().to_owned();
                     tokio::spawn(async move {
-                        let dispatcher = server_clone.command_dispatcher.read().await;
-                        dispatcher
+                        server_clone
+                            .command_dispatcher
+                            .read()
+                            .await
                             .handle_command(
                                 &mut crate::command::CommandSender::Rcon(output_clone),
                                 &server_clone,

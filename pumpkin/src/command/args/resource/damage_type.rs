@@ -16,7 +16,7 @@ use crate::server::Server;
 pub struct DamageTypeArgumentConsumer;
 
 impl GetClientSideArgParser for DamageTypeArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::Resource {
             identifier: "damage_type",
         }
@@ -36,6 +36,7 @@ impl ArgumentConsumer for DamageTypeArgumentConsumer {
         args: &mut RawArgs<'a>,
     ) -> Option<Arg<'a>> {
         let name = args.pop()?;
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
 
         // Create a static damage type first
         let damage_type = DamageType::from_name(name)?;

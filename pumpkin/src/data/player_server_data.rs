@@ -295,7 +295,7 @@ mod test {
         let path = temp_dir.path().to_path_buf();
 
         let uuid = Uuid::new_v4();
-        let mut storage = PlayerDataStorage::new(path.clone());
+        let mut storage = PlayerDataStorage::new(path);
         storage.set_save_enabled(true);
 
         // Create and save player data

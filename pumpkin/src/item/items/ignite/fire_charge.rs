@@ -7,11 +7,12 @@ use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 use crate::entity::player::Player;
 use crate::item::items::ignite::ignition::Ignition;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
 
@@ -24,10 +25,10 @@ impl ItemMetadata for FireChargeItem {
 }
 
 #[async_trait]
-impl PumpkinItem for FireChargeItem {
+impl ItemBehaviour for FireChargeItem {
     async fn use_on_block(
         &self,
-        _item: &Item,
+        _item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
@@ -44,7 +45,6 @@ impl PumpkinItem for FireChargeItem {
                     .play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos)
                     .await;
             },
-            _item,
             player,
             location,
             face,
@@ -52,5 +52,9 @@ impl PumpkinItem for FireChargeItem {
             _server,
         )
         .await;
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

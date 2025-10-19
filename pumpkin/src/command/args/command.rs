@@ -18,7 +18,7 @@ use super::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSid
 pub struct CommandTreeArgumentConsumer;
 
 impl GetClientSideArgParser for CommandTreeArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::String(StringProtoArgBehavior::SingleWord)
     }
 
@@ -58,7 +58,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
             .commands
             .keys()
             .filter(|suggestion| suggestion.starts_with(input))
-            .map(|suggestion| CommandSuggestion::new(suggestion.to_string(), None))
+            .map(|suggestion| CommandSuggestion::new(suggestion.clone(), None))
             .collect();
         Ok(Some(suggestions))
     }

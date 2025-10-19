@@ -7,11 +7,11 @@ use crate::codec::var_int::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_UPDATE_MOB_EFFECT)]
 pub struct CUpdateMobEffect {
-    entity_id: VarInt,
-    effect_id: VarInt,
-    amplifier: VarInt,
-    duration: VarInt,
-    flags: i8,
+    pub entity_id: VarInt,
+    pub effect_id: VarInt,
+    pub amplifier: VarInt,
+    pub duration: VarInt,
+    pub flags: i8,
 }
 
 impl CUpdateMobEffect {

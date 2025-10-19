@@ -16,7 +16,7 @@ use super::{
 pub struct SummonableEntitiesArgumentConsumer;
 
 impl GetClientSideArgParser for SummonableEntitiesArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
         ArgumentType::ResourceLocation
     }
 
@@ -54,7 +54,7 @@ impl DefaultNameArgConsumer for SummonableEntitiesArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for SummonableEntitiesArgumentConsumer {
-    type Data = EntityType;
+    type Data = &'static EntityType;
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {

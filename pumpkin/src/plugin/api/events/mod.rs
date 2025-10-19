@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::sync::Arc;
 
 pub mod block;
 pub mod player;
@@ -8,36 +9,97 @@ pub mod world;
 /// A trait representing an event in the system.
 ///
 /// This trait provides methods for retrieving the event's name and for type-safe downcasting.
-pub trait Event: Send + Sync {
+pub trait Payload: Send + Sync {
     /// Returns the static name of the event type.
     ///
     /// # Returns
-    /// A static string slice representing the name of the event type.
+    /// A static string slice representing the name of the payload type.
     fn get_name_static() -> &'static str
     where
         Self: Sized;
 
-    /// Returns the name of the event instance.
+    /// Returns the name of the payload instance.
     ///
     /// # Returns
-    /// A static string slice representing the name of the event instance.
+    /// A static string slice representing the name of the payload instance.
     fn get_name(&self) -> &'static str;
 
-    /// Provides a mutable reference to the event as a trait object.
+    /// Provides an immutable reference to the payload as a trait object.
     ///
-    /// This method allows for type-safe downcasting of the event.
-    ///
-    /// # Returns
-    /// A mutable reference to the event as a `dyn Any` trait object.
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-
-    /// Provides an immutable reference to the event as a trait object.
-    ///
-    /// This method allows for type-safe downcasting of the event.
+    /// This method allows for type-safe downcasting of the payload.
     ///
     /// # Returns
-    /// An immutable reference to the event as a `dyn Any` trait object.
+    /// An immutable reference to the payload as a `dyn Any` trait object.
     fn as_any(&self) -> &dyn Any;
+
+    /// Provides a mutable reference to the payload as a trait object.
+    ///
+    /// This method allows for type-safe downcasting of the payload.
+    ///
+    /// # Returns
+    /// A mutable reference to the payload as a `dyn Any` trait object.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+/// Helper functions for safe downcasting of Payload implementations.
+impl dyn Payload + '_ {
+    /// Attempts to downcast an Arc<dyn Payload> to Arc<T> using name-based type checking.
+    ///
+    /// This method is safe to use across compilation boundaries as it uses string-based
+    /// type identification instead of `TypeId`.
+    ///
+    /// # Type Parameters
+    /// - `T`: The target type to downcast to. Must implement Payload.
+    ///
+    /// # Arguments
+    /// - `payload`: The Arc<dyn Payload> to downcast.
+    ///
+    /// # Returns
+    /// Some(Arc<T>) if the downcast succeeds, None otherwise.
+    pub fn downcast_arc<T: Payload + 'static>(payload: Arc<dyn Payload>) -> Option<Arc<T>> {
+        if payload.get_name() == T::get_name_static() {
+            // Safe to downcast since we verified the type name
+            unsafe {
+                let raw = Arc::into_raw(payload);
+                let typed = raw.cast::<T>();
+                Some(Arc::from_raw(typed))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Attempts to downcast a &mut dyn Payload to &mut T using name-based type checking.
+    ///
+    /// # Type Parameters
+    /// - `T`: The target type to downcast to. Must implement Payload.
+    ///
+    /// # Returns
+    /// Some(&mut T) if the downcast succeeds, None otherwise.
+    pub fn downcast_mut<T: Payload + 'static>(&mut self) -> Option<&mut T> {
+        if self.get_name() == T::get_name_static() {
+            // Safe to downcast since we verified the type name
+            unsafe { Some(&mut *(std::ptr::from_mut::<dyn Payload>(self).cast::<T>())) }
+        } else {
+            None
+        }
+    }
+
+    /// Attempts to downcast a &dyn Payload to &T using name-based type checking.
+    ///
+    /// # Type Parameters
+    /// - `T`: The target type to downcast to. Must implement Payload.
+    ///
+    /// # Returns
+    /// Some(&T) if the downcast succeeds, None otherwise.
+    pub fn downcast_ref<T: Payload + 'static>(&self) -> Option<&T> {
+        if self.get_name() == T::get_name_static() {
+            // Safe to downcast since we verified the type name
+            unsafe { Some(&*(std::ptr::from_ref::<dyn Payload>(self).cast::<T>())) }
+        } else {
+            None
+        }
+    }
 }
 
 /// A trait for cancellable events.

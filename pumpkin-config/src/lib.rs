@@ -5,14 +5,9 @@ use logging::LoggingConfig;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::{
-    env, fs,
-    net::{Ipv4Addr, SocketAddr},
-    num::NonZeroU8,
-    path::Path,
-    sync::LazyLock,
-};
+use std::{env, fs, num::NonZeroU8, path::Path, sync::LazyLock};
 pub mod fun;
 pub mod logging;
 pub mod networking;
@@ -112,9 +107,9 @@ pub struct BasicConfiguration {
     pub java_edition: bool,
     /// The address and port to which the Java Edition server will bind
     pub java_edition_address: SocketAddr,
-    // Whether Bedrock/Pocket Edition Client's are Accepted
+    // Whether Bedrock Edition Client's are Accepted
     pub bedrock_edition: bool,
-    /// The address and port to which the Bedrock/Pocket Edition server will bind
+    // Whether Bedrock Edition Client's are Accepted
     pub bedrock_edition_address: SocketAddr,
     /// The seed for world generation.
     pub seed: String,
@@ -164,12 +159,12 @@ impl Default for BasicConfiguration {
     fn default() -> Self {
         Self {
             java_edition: true,
-            java_edition_address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 25565),
+            java_edition_address: "0.0.0.0:25565".parse().unwrap(),
             bedrock_edition: true,
-            bedrock_edition_address: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 19132),
+            bedrock_edition_address: "0.0.0.0:19132".parse().unwrap(),
             seed: "".to_string(),
-            max_players: 100000,
-            view_distance: NonZeroU8::new(10).unwrap(),
+            max_players: 1000,
+            view_distance: NonZeroU8::new(16).unwrap(),
             simulation_distance: NonZeroU8::new(10).unwrap(),
             default_difficulty: Difficulty::Normal,
             op_permission_level: PermissionLvl::Four,
@@ -214,19 +209,36 @@ trait LoadConfiguration {
             let file_content = fs::read_to_string(&path)
                 .unwrap_or_else(|_| panic!("Couldn't read configuration file at {:?}", &path));
 
-            toml::from_str(&file_content).unwrap_or_else(|err| {
-                panic!(
-                    "Couldn't parse config at {:?}. Reason: {}. This is probably caused by a config update; just delete the old config and start Pumpkin again",
-                    &path,
-                    err.message()
-                )
-            })
+            let parsed_toml_value: toml::Value = toml::from_str(&file_content)
+                .unwrap_or_else(|err| {
+                    panic!(
+                        "Couldn't parse TOML at {:?}. Reason: {}. This is probably caused by invalid TOML syntax",
+                        &path, err
+                    )
+                });
+
+            let (merged_config, changed) = Self::merge_with_default_toml(parsed_toml_value);
+
+            if changed {
+                println!(
+                    "{} changed because values were missing. The missing values were filled with default values.",
+                    path.file_name().unwrap().to_str().unwrap()
+                );
+                if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
+                    warn!(
+                        "Couldn't write merged config to {:?}. Reason: {}",
+                        &path, err
+                    );
+                }
+            }
+
+            merged_config
         } else {
             let content = Self::default();
 
             if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
                 warn!(
-                    "Couldn't write default config to {:?}. Reason: {}. This is probably caused by a config update; just delete the old config and start Pumpkin again",
+                    "Couldn't write default config to {:?}. Reason: {}",
                     &path, err
                 );
             }
@@ -236,6 +248,55 @@ trait LoadConfiguration {
 
         config.validate();
         config
+    }
+
+    fn merge_with_default_toml(parsed_toml: toml::Value) -> (Self, bool)
+    where
+        Self: Sized + Default + Serialize + DeserializeOwned,
+    {
+        let default_config = Self::default();
+
+        let default_toml_value =
+            toml::Value::try_from(default_config).expect("Failed to parse default config");
+
+        let (merged_value, changed) =
+            Self::merge_toml_values(default_toml_value, parsed_toml.clone());
+
+        let config = merged_value
+            .try_into()
+            .expect("Failed to convert merged config");
+
+        (config, changed)
+    }
+
+    fn merge_toml_values(base: toml::Value, overlay: toml::Value) -> (toml::Value, bool) {
+        match (base, overlay) {
+            (toml::Value::Table(mut base_table), toml::Value::Table(overlay_table)) => {
+                let mut changed = false;
+
+                for key in base_table.keys() {
+                    if !overlay_table.contains_key(key) {
+                        changed = true;
+                        break;
+                    }
+                }
+
+                for (key, overlay_value) in overlay_table {
+                    if let Some(base_value) = base_table.get(&key).cloned() {
+                        let (merged_value, value_changed) =
+                            Self::merge_toml_values(base_value, overlay_value);
+                        base_table.insert(key, merged_value);
+                        if value_changed {
+                            changed = true;
+                        }
+                    } else {
+                        base_table.insert(key, overlay_value);
+                    }
+                }
+                (toml::Value::Table(base_table), changed)
+            }
+            (_, overlay) => (overlay, false),
+        }
     }
 
     fn get_path() -> &'static Path;
@@ -260,7 +321,7 @@ impl LoadConfiguration for BasicConfiguration {
 
     fn validate(&self) {
         let min = NonZeroU8::new(2).unwrap();
-        let max = NonZeroU8::new(32).unwrap();
+        let max = NonZeroU8::new(64).unwrap();
 
         assert!(
             self.view_distance.ge(&min),
@@ -268,7 +329,7 @@ impl LoadConfiguration for BasicConfiguration {
         );
         assert!(
             self.view_distance.le(&max),
-            "View distance must be less than 32"
+            "View distance must be less than 64"
         );
         if self.online_mode {
             assert!(

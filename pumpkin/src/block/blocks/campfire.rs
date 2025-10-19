@@ -2,17 +2,16 @@ use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{BlockProperties, CampfireLikeProperties},
-    damage::DamageType,
     fluid::Fluid,
 };
-use pumpkin_world::BlockStateId;
+use pumpkin_world::{BlockStateId, tick::TickPriority};
 
 use crate::{
     block::{
         BlockIsReplacing,
-        pumpkin_block::{
-            BlockMetadata, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnPlaceArgs,
-            PumpkinBlock,
+        {
+            BlockBehaviour, BlockMetadata, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
+            OnPlaceArgs,
         },
     },
     entity::EntityBase,
@@ -31,13 +30,14 @@ impl BlockMetadata for CampfireBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for CampfireBlock {
+impl BlockBehaviour for CampfireBlock {
     // TODO: cooking food on campfire (CampfireBlockEntity)
     async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit
             && args.entity.get_living_entity().is_some()
         {
-            args.entity.damage(1.0, DamageType::CAMPFIRE).await;
+            // TODO
+            //args.entity.damage(args.entity, 1.0, DamageType::CAMPFIRE).await;
         }
     }
 
@@ -62,9 +62,10 @@ impl PumpkinBlock for CampfireBlock {
             props.lit = false;
             args.world
                 .schedule_fluid_tick(
-                    args.block.id,
+                    &Fluid::WATER,
                     *args.position,
-                    Fluid::WATER.flow_speed as u16,
+                    Fluid::WATER.flow_speed as u8,
+                    TickPriority::Normal,
                 )
                 .await;
         }

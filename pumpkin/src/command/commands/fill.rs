@@ -74,10 +74,7 @@ impl CommandExecutor for Executor {
         let end_z = from.0.z.max(to.0.z);
         // TODO: check isInWorldBounds and throw argument.pos.outofbounds
 
-        let world = sender
-            .world()
-            .await
-            .ok_or(CommandError::InvalidRequirement)?;
+        let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
         let mut placed_blocks = 0;
         let mut to_update = Vec::new();
         match mode {
@@ -86,10 +83,10 @@ impl CommandExecutor for Executor {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
                             let block_position = BlockPos(Vector3::new(x, y, z));
-                            if let Some(filter) = &option_filter {
-                                if not_in_filter(filter, world.get_block(&block_position).await) {
-                                    continue;
-                                }
+                            if let Some(filter) = &option_filter
+                                && not_in_filter(filter, world.get_block(&block_position).await)
+                            {
+                                continue;
                             }
                             world
                                 .break_block(
@@ -116,10 +113,10 @@ impl CommandExecutor for Executor {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
                             let block_position = BlockPos(Vector3::new(x, y, z));
-                            if let Some(filter) = &option_filter {
-                                if not_in_filter(filter, world.get_block(&block_position).await) {
-                                    continue;
-                                }
+                            if let Some(filter) = &option_filter
+                                && not_in_filter(filter, world.get_block(&block_position).await)
+                            {
+                                continue;
                             }
                             world
                                 .set_block_state(
@@ -141,11 +138,10 @@ impl CommandExecutor for Executor {
                             let block_position = BlockPos(Vector3::new(x, y, z));
                             let old_state = world.get_block_state(&block_position).await;
                             if old_state.is_air() {
-                                if let Some(filter) = &option_filter {
-                                    if not_in_filter(filter, world.get_block(&block_position).await)
-                                    {
-                                        continue;
-                                    }
+                                if let Some(filter) = &option_filter
+                                    && not_in_filter(filter, world.get_block(&block_position).await)
+                                {
+                                    continue;
                                 }
                                 world
                                     .set_block_state(
@@ -172,10 +168,10 @@ impl CommandExecutor for Executor {
                                 || y == end_y
                                 || z == start_z
                                 || z == end_z;
-                            if let Some(filter) = &option_filter {
-                                if not_in_filter(filter, world.get_block(&block_position).await) {
-                                    continue;
-                                }
+                            if let Some(filter) = &option_filter
+                                && not_in_filter(filter, world.get_block(&block_position).await)
+                            {
+                                continue;
                             }
                             if is_edge {
                                 world
@@ -210,10 +206,10 @@ impl CommandExecutor for Executor {
                             if !is_edge {
                                 continue;
                             }
-                            if let Some(filter) = &option_filter {
-                                if not_in_filter(filter, world.get_block(&block_position).await) {
-                                    continue;
-                                }
+                            if let Some(filter) = &option_filter
+                                && not_in_filter(filter, world.get_block(&block_position).await)
+                            {
+                                continue;
                             }
                             world
                                 .set_block_state(
@@ -233,10 +229,10 @@ impl CommandExecutor for Executor {
                     for y in start_y..=end_y {
                         for z in start_z..=end_z {
                             let block_position = BlockPos(Vector3::new(x, y, z));
-                            if let Some(filter) = &option_filter {
-                                if not_in_filter(filter, world.get_block(&block_position).await) {
-                                    continue;
-                                }
+                            if let Some(filter) = &option_filter
+                                && not_in_filter(filter, world.get_block(&block_position).await)
+                            {
+                                continue;
                             }
                             world
                                 .set_block_state(

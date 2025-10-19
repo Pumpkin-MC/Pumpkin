@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_util::{
     math::position::BlockPos,
@@ -7,23 +5,19 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk,
-    generation::feature::features::tree::{TreeFeature, TreeNode, trunk::TrunkPlacer},
-    level::Level,
-};
+use crate::generation::feature::features::tree::{TreeFeature, TreeNode, trunk::TrunkPlacer};
+use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct DarkOakTrunkPlacer;
 
 impl DarkOakTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate<T: GenerationCache>(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk<'_>,
-        _level: &Arc<Level>,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         force_dirt: bool,
         dirt_state: &BlockState,
@@ -57,7 +51,7 @@ impl DarkOakTrunkPlacer {
         let mut rand = random.next_bounded_i32(3);
 
         let mut x = pos.0.x;
-        let mut z = pos.0.x;
+        let mut z = pos.0.z;
 
         // TODO: make this random
         let random_direction = BlockDirection::North;
@@ -70,7 +64,7 @@ impl DarkOakTrunkPlacer {
             }
             let pos = BlockPos::new(x, y_height, z);
             // TODO: support multiple chunks
-            let state = chunk.get_block_state(&pos.0);
+            let state = GenerationCache::get_block_state(chunk, &pos.0);
             if !TreeFeature::is_air_or_leaves(state.to_state(), state.to_block()) {
                 continue;
             }

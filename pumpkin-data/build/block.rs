@@ -4,8 +4,10 @@ use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     fs,
+    io::{Cursor, Read},
+    panic,
 };
 use syn::{Ident, LitInt, LitStr};
 
@@ -22,6 +24,18 @@ fn fill_array<T: Clone + quote::ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStre
     }
 
     raw_id_from_state_id_ordered
+}
+
+fn fill_state_array(array: Vec<(Ident, usize, u16)>) -> Vec<TokenStream> {
+    let max_index = array.iter().map(|(_, _, index)| index).max().unwrap();
+    let mut ret = vec![quote! { Missed State }; (max_index + 1) as usize];
+
+    for (block, index, state_id) in array {
+        let index_lit = LitInt::new(&index.to_string(), Span::call_site());
+        ret[state_id as usize] = quote! { &Self::#block.states[#index_lit] };
+    }
+
+    ret
 }
 
 fn const_block_name_from_block_name(block: &str) -> String {
@@ -149,7 +163,7 @@ impl ToTokens for PropertyStruct {
                 fn from_value(value: &str) -> Self {
                     match value {
                         #(#from_values),*,
-                        _ => panic!("Invalid value: {value:?}"),
+                        _ => panic!("Invalid value: {value}"),
                     }
                 }
 
@@ -255,7 +269,7 @@ impl ToTokens for BlockPropertyStruct {
             match &entry.property_type {
                 PropertyType::Bool => quote! {
                     #key => {
-                        block_props.#field_name = matches!(value, "true")
+                        block_props.#field_name = matches!(*value, "true")
                     }
                 },
                 PropertyType::Enum { name } => {
@@ -323,16 +337,16 @@ impl ToTokens for BlockPropertyStruct {
                     Self::from_state_id(block.default_state.id, block)
                 }
 
-                fn to_props(&self) -> HashMap<String, String> {
-                   HashMap::from([#(#to_props_values)*])
+                fn to_props(&self) -> Box<[(String, String)]> {
+                   [#(#to_props_values)*].into()
                 }
-                fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self {
+                fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
                     for (key, value) in props {
-                        match key {
+                        match *key {
                             #(#from_props_values),*,
                             _ => panic!("Invalid key: {key}"),
                         }
@@ -392,7 +406,7 @@ impl ToTokens for CollisionShape {
 #[derive(Deserialize, Clone, Debug)]
 pub struct BlockState {
     pub id: u16,
-    pub state_flags: u8,
+    pub state_flags: u16,
     pub side_flags: u8,
     pub instrument: String, // TODO: make this an enum
     pub luminance: u8,
@@ -400,7 +414,6 @@ pub struct BlockState {
     pub hardness: f32,
     pub collision_shapes: Vec<u16>,
     pub outline_shapes: Vec<u16>,
-    pub has_random_ticks: bool,
     pub opacity: Option<u8>,
     pub block_entity_type: Option<u16>,
 }
@@ -428,6 +441,12 @@ impl PistonBehavior {
 }
 
 impl BlockState {
+    const HAS_RANDOM_TICKS: u16 = 1 << 9;
+
+    fn has_random_ticks(&self) -> bool {
+        self.state_flags & Self::HAS_RANDOM_TICKS != 0
+    }
+
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
@@ -460,7 +479,6 @@ impl BlockState {
             .outline_shapes
             .iter()
             .map(|shape_id| LitInt::new(&shape_id.to_string(), Span::call_site()));
-        let has_random_ticks = self.has_random_ticks;
         let piston_behavior = &self.piston_behavior.to_tokens();
 
         tokens.extend(quote! {
@@ -474,7 +492,6 @@ impl BlockState {
                 hardness: #hardness,
                 collision_shapes: &[#(#collision_shapes),*],
                 outline_shapes: &[#(#outline_shapes),*],
-                has_random_tick: #has_random_ticks,
                 opacity: #opacity,
                 block_entity_type: #block_entity_type,
             }
@@ -633,7 +650,12 @@ pub struct BlockAssets {
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/blocks.json");
+    println!("cargo:rerun-if-changed=../assets/bedrock_block_states.nbt");
     println!("cargo:rerun-if-changed=../assets/properties.json");
+
+    let be_blocks = fs::read("../assets/bedrock_block_states.nbt").unwrap();
+    let mut be_blocks = Cursor::new(be_blocks);
+    let be_blocks = get_be_data_from_nbt(&mut be_blocks);
 
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
@@ -647,44 +669,28 @@ pub(crate) fn build() -> TokenStream {
     let mut block_from_name = TokenStream::new();
     let mut raw_id_from_state_id = TokenStream::new();
     let mut block_from_item_id = TokenStream::new();
+    let mut state_from_state_id = TokenStream::new();
     let mut random_tick_states = Vec::new();
     let mut block_properties_from_state_and_block_id = TokenStream::new();
     let mut block_properties_from_props_and_name = TokenStream::new();
     let mut existing_item_ids: Vec<u16> = Vec::new();
     let mut constants = TokenStream::new();
-
-    // Collect unique block states to create partial block states to save memory.
-    let mut unique_states = Vec::new();
-    for block in blocks_assets.blocks.clone() {
-        for state in block.states.clone() {
-            // Check if this state is already in `unique_states` by comparing all fields except `id`.
-            let already_exists = unique_states.iter().any(|s: &BlockState| {
-                s.state_flags == state.state_flags
-                    && s.luminance == state.luminance
-                    && s.hardness == state.hardness
-                    && s.collision_shapes == state.collision_shapes
-            });
-
-            if !already_exists {
-                unique_states.push(state);
-            }
-        }
-    }
+    let mut block_state_to_bedrock = Vec::new();
 
     // Used to create property `enum`s.
-    let mut property_enums: HashMap<String, PropertyStruct> = HashMap::new();
+    let mut property_enums: BTreeMap<String, PropertyStruct> = BTreeMap::new();
     // Property implementation for a block.
     let mut block_properties: Vec<BlockPropertyStruct> = Vec::new();
     // Mapping of a collection of property hashes -> blocks that have these properties.
-    let mut property_collection_map: HashMap<Vec<i32>, PropertyCollectionData> = HashMap::new();
+    let mut property_collection_map: BTreeMap<Vec<i32>, PropertyCollectionData> = BTreeMap::new();
     // Validator that we have no `enum` collisions.
-    let mut optimized_blocks: Vec<(String, Block)> = Vec::new();
+    let mut optimized_blocks: Vec<Block> = Vec::new();
     for block in blocks_assets.blocks.clone() {
-        optimized_blocks.push((block.name.clone(), block.clone()));
+        optimized_blocks.push(block.clone());
 
         // Collect state IDs that have random ticks.
         for state in &block.states {
-            if state.has_random_ticks {
+            if state.has_random_ticks() {
                 let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
                 random_tick_states.push(state_id);
             }
@@ -752,11 +758,11 @@ pub(crate) fn build() -> TokenStream {
             let id_lit = LitInt::new(&id.to_string(), Span::call_site());
 
             block_properties_from_state_and_block_id.extend(quote! {
-                #id_lit => Some(Box::new(#property_name::from_state_id(state_id, &Block::#const_block_name))),
+                #id_lit => Box::new(#property_name::from_state_id(state_id, &Block::#const_block_name)),
             });
 
             block_properties_from_props_and_name.extend(quote! {
-                #id_lit => Some(Box::new(#property_name::from_props(props, &Block::#const_block_name))),
+                #id_lit => Box::new(#property_name::from_props(props, &Block::#const_block_name)),
             });
         }
 
@@ -788,10 +794,14 @@ pub(crate) fn build() -> TokenStream {
 
     let mut raw_id_from_state_id_array = vec![];
     let mut type_from_raw_id_array = vec![];
+    let mut state_from_state_id_array = Vec::<(Ident, usize, u16)>::new(); // block index state_id
+
+    //let mut file = fs::File::create("../debug/debug.txt").unwrap();
 
     // Generate constants and `match` arms for each block.
-    for (name, block) in optimized_blocks {
-        let const_ident = format_ident!("{}", const_block_name_from_block_name(&name));
+    for block in optimized_blocks {
+        let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
+        let name = &block.name;
         let mut block_tokens = TokenStream::new();
         block.to_tokens(&mut block_tokens);
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
@@ -809,8 +819,39 @@ pub(crate) fn build() -> TokenStream {
             #name => Self::#const_ident,
         });
 
-        for state in &block.states {
+        let be_name = match block.name.as_str() {
+            "dead_bush" => "deadbush",
+            "tripwire" => "trip_wire",
+            "note_block" => "noteblock",
+            "powered_rail" => "golden_rail",
+            "cobweb" => "web",
+            "tall_seagrass" => "seagrass",
+            "wall_torch" => "torch",
+            "spawner" => "mob_spawner",
+            "snow" => "snow_layer",
+            "snow_block" => "snow",
+            name => name,
+        };
+
+        let (state_count, id) = *be_blocks.get(be_name).unwrap_or(&(0, 1));
+
+        for (i, state) in block.states.iter().enumerate() {
+            if state_count != 0 {
+                if state_count > i as u32 {
+                    let start_id = id as u16 + i as u16;
+                    block_state_to_bedrock.push((state.id, start_id))
+                } else {
+                    block_state_to_bedrock.push((state.id, id as u16))
+                }
+            }
+            //else {
+            //file.write_all(format!("{be_name}\n").as_bytes()).unwrap();
+            //}
             raw_id_from_state_id_array.push((state.id, id_lit.clone()));
+        }
+
+        for (index, state) in block.states.iter().enumerate() {
+            state_from_state_id_array.push((const_ident.clone(), index, state.id));
         }
 
         if !existing_item_ids.contains(&item_id) {
@@ -828,6 +869,25 @@ pub(crate) fn build() -> TokenStream {
             #id_lit,
         });
     }
+
+    let max_index = block_state_to_bedrock
+        .iter()
+        .map(|(index, _)| index)
+        .max()
+        .unwrap();
+    let mut state_to_bedrock_id = vec![quote! { 1 }; (max_index + 1) as usize];
+    let mut block_state_to_bedrock_t = TokenStream::new();
+
+    for (state_id, id_lit) in block_state_to_bedrock {
+        state_to_bedrock_id[state_id as usize] = quote! { #id_lit };
+    }
+
+    for id_lit in state_to_bedrock_id {
+        block_state_to_bedrock_t.extend(quote! {
+            #id_lit,
+        });
+    }
+
     let type_from_raw_id_array = fill_array(type_from_raw_id_array);
     let max_type_id = type_from_raw_id_array.len();
     for type_lit in type_from_raw_id_array {
@@ -835,6 +895,15 @@ pub(crate) fn build() -> TokenStream {
             #type_lit,
         });
     }
+    let state_from_state_id_array = fill_state_array(state_from_state_id_array);
+    let max_state_id_2 = state_from_state_id_array.len();
+    for token in state_from_state_id_array {
+        state_from_state_id.extend(quote! {
+            #token,
+        });
+    }
+
+    assert_eq!(max_state_id, max_state_id_2);
 
     quote! {
         use crate::{BlockState, Block, CollisionShape, blocks::Flammable};
@@ -843,7 +912,7 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
-        use std::collections::HashMap;
+        use std::collections::BTreeMap;
         use phf;
 
 
@@ -870,10 +939,10 @@ pub(crate) fn build() -> TokenStream {
             fn default(block: &Block) -> Self where Self: Sized;
 
             // Convert properties to a `Vec` of `(name, value)`
-            fn to_props(&self) -> HashMap<String, String>;
+            fn to_props(&self) -> Box<[(String, String)]>;
 
             // Convert properties to a block state, and add them onto the default state.
-            fn from_props(props: HashMap<&str, &str>, block: &Block) -> Self where Self: Sized;
+            fn from_props(props: &[(&str, &str)], block: &Block) -> Self where Self: Sized;
         }
 
         pub trait EnumVariants {
@@ -896,44 +965,41 @@ pub(crate) fn build() -> TokenStream {
             #(#block_entity_types),*
         ];
 
-        pub fn get_block(registry_id: &str) -> Option<&'static Block> {
-           let key = registry_id.strip_prefix("minecraft:").unwrap_or(registry_id);
-           Block::from_registry_key(key)
-        }
-
-        pub fn get_block_by_id(id: u16) -> &'static Block {
-            Block::from_id(id)
-        }
-
-        pub fn get_state_by_state_id(id: u16) -> &'static BlockState {
-            let state: &BlockState = Block::from_state_id(id).states.iter().find(|state| state.id == id).unwrap();
-            state
-        }
-
-        pub fn get_block_by_state_id(id: u16) -> &'static Block {
-            Block::from_state_id(id)
-        }
-
-        pub fn get_block_and_state_by_state_id(id: u16) -> (&'static Block, &'static BlockState) {
-            let block = Block::from_state_id(id);
-            let state: &BlockState = block.states.iter().find(|state| state.id == id).unwrap();
-            (block, state)
-        }
-
-        pub fn get_block_by_item(item_id: u16) -> Option<&'static Block> {
-            Block::from_item_id(item_id)
-        }
-
         pub fn has_random_ticks(state_id: u16) -> bool {
             matches!(state_id, #random_tick_state_ids)
         }
 
         pub fn blocks_movement(block_state: &BlockState) -> bool {
             if block_state.is_solid() {
-                let block = get_block_by_state_id(block_state.id);
+                let block = Block::from_state_id(block_state.id);
                 return block != &Block::COBWEB && block != &Block::BAMBOO_SAPLING;
             }
             false
+        }
+
+        impl BlockState {
+            const STATE_ID_TO_BEDROCK: &[u16] = &[
+                #block_state_to_bedrock_t
+            ];
+
+            #[doc = r" Get a block state from a state id."]
+            #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
+            #[inline]
+            pub fn from_id(id: u16) -> &'static Self {
+                Block::STATE_FROM_STATE_ID[id as usize]
+            }
+
+            #[doc = r" Get a block state from a state id and the corresponding block."]
+            #[inline]
+            pub fn from_id_with_block(id: u16) -> (&'static Block, &'static Self) {
+                let block = Block::from_state_id(id);
+                let state: &Self = Block::STATE_FROM_STATE_ID[id as usize];
+                (block, state)
+            }
+
+            pub fn to_be_network_id(id: u16) -> u16 {
+                Self::STATE_ID_TO_BEDROCK[id as usize]
+            }
         }
 
         impl Block {
@@ -953,12 +1019,24 @@ pub(crate) fn build() -> TokenStream {
                 #type_from_raw_id_items
             ];
 
+            const STATE_FROM_STATE_ID: [&'static BlockState; #max_state_id] = [
+                #state_from_state_id
+            ];
+
             #[doc = r" Try to parse a block from a resource location string."]
+            #[inline]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
                 Self::BLOCK_FROM_NAME_MAP.get(name)
             }
 
-            #[doc = r" Try to parse a block from a raw id."]
+            #[doc = r" Try to get a block from a namespace prefixed name."]
+            pub fn from_name(name: &str) -> Option<&'static Self> {
+                let key = name.strip_prefix("minecraft:").unwrap_or(name);
+                Self::BLOCK_FROM_NAME_MAP.get(key)
+            }
+
+            #[doc = r" Get a block from a raw block id."]
+            #[inline]
             pub const fn from_id(id: u16) -> &'static Self {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     &Self::AIR
@@ -967,7 +1045,18 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            #[doc = r" Try to parse a block from a state id."]
+             #[doc = r" Get a raw ID from an State ID."]
+            #[inline]
+            pub const fn get_raw_id_from_state_id(state_id: u16) -> u16 {
+                if state_id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
+                    0
+                } else {
+                    Self::RAW_ID_FROM_STATE_ID[state_id as usize]
+                }
+            }
+
+            #[doc = r" Get a block from a state id."]
+            #[inline]
             pub const fn from_state_id(id: u16) -> &'static Self {
                 if id as usize >= Self::RAW_ID_FROM_STATE_ID.len() {
                     return &Self::AIR;
@@ -984,19 +1073,21 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
+            #[track_caller]
             #[doc = r" Get the properties of the block."]
             pub fn properties(&self, state_id: u16) -> Option<Box<dyn BlockProperties>> {
-                match self.id {
+                Some(match self.id {
                     #block_properties_from_state_and_block_id
-                    _ => None
-                }
+                    _ => return None,
+                })
             }
 
+            #[track_caller]
             #[doc = r" Get the properties of the block."]
-            pub fn from_properties(&self, props: HashMap<&str, &str>) -> Option<Box<dyn BlockProperties>> {
+            pub fn from_properties(&self, props: &[(&str, &str)]) -> Box<dyn BlockProperties> {
                 match self.id {
                     #block_properties_from_props_and_name
-                    _ => None
+                    _ => panic!("Invalid props")
                 }
             }
         }
@@ -1078,4 +1169,89 @@ pub(crate) fn build() -> TokenStream {
             }
         }
     }
+}
+
+fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> BTreeMap<String, (u32, u32)> {
+    let mut block_data: BTreeMap<String, (u32, u32)> = BTreeMap::new();
+    let mut current_id = 0;
+
+    while read_byte(reader) == 10 {
+        let len = read_varint(reader);
+        let mut buf = vec![0; len as usize];
+        reader.read_exact(&mut buf).unwrap();
+
+        let mut name = String::new();
+        let mut byte = read_byte(reader);
+
+        while byte != 0 {
+            let mut name_buf = vec![0; read_varint(reader) as usize];
+            reader.read_exact(&mut name_buf).unwrap();
+            let cp_name = String::from_utf8(name_buf).unwrap();
+
+            match cp_name.as_str() {
+                "name" => {
+                    let mut name_buf = vec![0; read_varint(reader) as usize];
+                    reader.read_exact(&mut name_buf).unwrap();
+                    name = String::from_utf8(name_buf)
+                        .unwrap()
+                        .strip_prefix("minecraft:")
+                        .unwrap()
+                        .to_string();
+                }
+                "states" => {
+                    let mut byte = read_byte(reader);
+                    while byte != 0 {
+                        let b = &mut vec![0; read_varint(reader) as usize];
+                        reader.read_exact(b).unwrap();
+
+                        match byte {
+                            8 => {
+                                let b = &mut vec![0; read_varint(reader) as usize];
+                                reader.read_exact(b).unwrap();
+                            }
+                            3 => {
+                                read_varint(reader);
+                            }
+                            1 => {
+                                read_byte(reader);
+                            }
+                            _ => panic!("{}", byte),
+                        }
+                        byte = read_byte(reader);
+                    }
+                }
+                "version" => {
+                    read_varint(reader);
+                }
+                _ => panic!(),
+            }
+            byte = read_byte(reader);
+        }
+
+        block_data
+            .entry(name)
+            .and_modify(|(v, _)| *v += 1)
+            .or_insert((1, current_id));
+        current_id += 1;
+    }
+    block_data
+}
+
+fn read_varint<W: Read>(reader: &mut W) -> u32 {
+    let mut val = 0;
+    for i in 0..5u32 {
+        let byte = &mut [0];
+        reader.read_exact(byte).unwrap();
+        val |= (u32::from(byte[0]) & 0x7F) << (i * 7);
+        if byte[0] & 0x80 == 0 {
+            return val;
+        }
+    }
+    panic!()
+}
+
+fn read_byte<W: Read>(reader: &mut W) -> u8 {
+    let byte = &mut [0];
+    reader.read_exact(byte).unwrap_or_default();
+    byte[0]
 }

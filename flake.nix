@@ -1,54 +1,95 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+
     flake-parts.url = "github:hercules-ci/flake-parts";
+
     flake-compat.url = "https://flakehub.com/f/edolstra/flake-compat/1.tar.gz";
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
+
+    fenix = {
+      url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    naersk = {
+      url = "github:nix-community/naersk";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        fenix.follows = "fenix";
+      };
     };
   };
 
-  outputs = inputs@{ nixpkgs, flake-parts, ... }:
-    flake-parts.lib.mkFlake {inherit inputs;} {
+  outputs =
+    inputs@{
+      flake-parts,
+      naersk,
+      nixpkgs,
+      ...
+    }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
       systems = nixpkgs.lib.systems.flakeExposed;
-      perSystem = {
-        pkgs,
-        system,
-        ...
-      }:
-      let
-        rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-        manifest = (pkgs.lib.importTOML ./pumpkin/Cargo.toml).package;
-      in
-      {
-        formatter = pkgs.nixfmt-rfc-style;
-        _module.args.pkgs = import nixpkgs {
-          inherit system;
-          overlays = [
-            (import inputs.rust-overlay)
-          ];
-        };
 
-        devShells.default = pkgs.mkShell
-        {
-          nativeBuildInputs = with pkgs; [
-            (rustToolchain.override {
-                extensions = ["rust-src"];
-            })
-            pkg-config
-          ];
-        };
+      imports = [ flake-parts.flakeModules.partitions ];
 
-        packages.default = (pkgs.makeRustPlatform {rustc = rustToolchain; cargo = rustToolchain;}).buildRustPackage {
-            pname = manifest.name;
-            version = manifest.version;
-
-            useFetchCargoVendor = true;
-            cargoLock = {
-                lockFile = ./Cargo.lock;
-            };
-        };
+      partitionedAttrs = {
+        checks = "dev";
+        devShells = "dev";
+        formatter = "dev";
       };
+
+      partitions.dev = {
+        extraInputsFlake = ./nix/dev;
+        module.imports = [ ./nix/dev ];
+      };
+
+      perSystem =
+        {
+          inputs',
+          lib,
+          pkgs,
+          ...
+        }:
+        let
+          toolchain = inputs'.fenix.packages.fromToolchainFile {
+            file = ./rust-toolchain.toml;
+            sha256 = "sha256-+9FmLhAOezBZCOziO0Qct1NOrfpjNsXxc/8I0c7BdKE=";
+          };
+
+          naersk' = pkgs.callPackage naersk {
+            cargo = toolchain;
+            rustc = toolchain;
+          };
+
+          manifest = (lib.importTOML ./pumpkin/Cargo.toml).package;
+          workspace-manifest = (lib.importTOML ./Cargo.toml).workspace.package;
+        in
+        {
+          packages.default = naersk'.buildPackage {
+            pname = manifest.name;
+            inherit (workspace-manifest) version;
+            src = lib.fileset.toSource {
+              root = ./.;
+              fileset = lib.fileset.unions [
+                ./Cargo.lock
+                ./Cargo.toml
+
+                ./assets
+                ./pumpkin
+                ./pumpkin-api-macros
+                ./pumpkin-config
+                ./pumpkin-data
+                ./pumpkin-inventory
+                ./pumpkin-inventory
+                ./pumpkin-macros
+                ./pumpkin-nbt
+                ./pumpkin-protocol
+                ./pumpkin-registry
+                ./pumpkin-util
+                ./pumpkin-world
+              ];
+            };
+          };
+        };
     };
 }

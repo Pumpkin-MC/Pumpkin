@@ -4,12 +4,12 @@ use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
         args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
-        tree::CommandTree,
-        tree::builder::argument,
+        tree::{CommandTree, builder::argument},
     },
     data::{
         SaveJSONConfiguration, banlist_serializer::BannedIpEntry, banned_ip_data::BANNED_IP_LIST,
     },
+    net::DisconnectReason,
     server::Server,
 };
 use CommandError::InvalidConsumption;
@@ -72,7 +72,7 @@ impl CommandExecutor for ReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_REASON.into())));
         };
 
-        ban_ip(sender, server, target, Some(reason.to_string())).await;
+        ban_ip(sender, server, target, Some(reason.clone())).await;
         Ok(())
     }
 }
@@ -136,10 +136,10 @@ async fn ban_ip(sender: &CommandSender, server: &Server, target: &str, reason: O
 
     for target in affected {
         target
-            .kick(TextComponent::translate(
-                "multiplayer.disconnect.ip_banned",
-                [],
-            ))
+            .kick(
+                DisconnectReason::Kicked,
+                TextComponent::translate("multiplayer.disconnect.ip_banned", []),
+            )
             .await;
     }
 }

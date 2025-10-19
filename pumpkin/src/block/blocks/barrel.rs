@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::block::pumpkin_block::{OnPlaceArgs, OnStateReplacedArgs, PlacedArgs};
+use crate::block::{OnPlaceArgs, PlacedArgs};
 use crate::block::{
-    pumpkin_block::{NormalUseArgs, PumpkinBlock},
     registry::BlockActionResult,
+    {BlockBehaviour, NormalUseArgs},
 };
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
@@ -27,12 +27,9 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         _player: &dyn InventoryPlayer,
     ) -> Option<Arc<Mutex<dyn ScreenHandler>>> {
-        #[allow(clippy::option_if_let_else)]
-        Some(Arc::new(Mutex::new(create_generic_9x3(
-            sync_id,
-            player_inventory,
-            self.0.clone(),
-        ))))
+        Some(Arc::new(Mutex::new(
+            create_generic_9x3(sync_id, player_inventory, self.0.clone()).await,
+        )))
     }
 
     fn get_display_name(&self) -> TextComponent {
@@ -44,23 +41,23 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
 pub struct BarrelBlock;
 
 #[async_trait]
-impl PumpkinBlock for BarrelBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if let Some(inventory) = block_entity.get_inventory() {
-                args.player
-                    .open_handled_screen(&BarrelScreenFactory(inventory))
-                    .await;
-            }
-        }
-
-        BlockActionResult::Success
-    }
-
+impl BlockBehaviour for BarrelBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = BarrelLikeProperties::default(args.block);
         props.facing = args.player.living_entity.entity.get_facing().opposite();
         props.to_state_id(args.block)
+    }
+
+    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            && let Some(inventory) = block_entity.get_inventory()
+        {
+            args.player
+                .open_handled_screen(&BarrelScreenFactory(inventory))
+                .await;
+        }
+
+        BlockActionResult::Success
     }
 
     async fn placed(&self, args: PlacedArgs<'_>) {
@@ -68,9 +65,5 @@ impl PumpkinBlock for BarrelBlock {
         args.world
             .add_block_entity(Arc::new(barrel_block_entity))
             .await;
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
     }
 }

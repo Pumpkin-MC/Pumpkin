@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::block::{
-    blocks::abstruct_wall_mounting::WallMountedBlock,
-    pumpkin_block::{
+    blocks::abstract_wall_mounting::WallMountedBlock,
+    {
         CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
         GetStateForNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs,
     },
@@ -18,16 +18,16 @@ use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::{
-        pumpkin_block::{NormalUseArgs, PumpkinBlock},
         registry::BlockActionResult,
+        {BlockBehaviour, NormalUseArgs},
     },
     world::World,
 };
 
 async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_block_state(block_pos).await;
+    let (block, state) = world.get_block_and_state_id(block_pos).await;
 
-    let mut lever_props = LeverLikeProperties::from_state_id(state.id, block);
+    let mut lever_props = LeverLikeProperties::from_state_id(state, block);
     lever_props.powered = !lever_props.powered;
     world
         .set_block_state(
@@ -44,7 +44,7 @@ async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
 pub struct LeverBlock;
 
 #[async_trait]
-impl PumpkinBlock for LeverBlock {
+impl BlockBehaviour for LeverBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         toggle_lever(args.world, args.position).await;
 

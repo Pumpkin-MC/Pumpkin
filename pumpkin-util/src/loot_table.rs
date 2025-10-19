@@ -16,6 +16,8 @@ pub struct LootPool {
     pub entries: &'static [LootPoolEntry],
     pub rolls: LootNumberProviderTypes,
     pub bonus_rolls: f32,
+    pub conditions: Option<&'static [LootCondition]>,
+    pub functions: Option<&'static [LootFunction]>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -171,8 +173,7 @@ impl UniformLootNumberProvider {
     }
 
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // TODO
-        random.next_f32()
+        random.next_f32() * (self.max - self.min) + self.min
     }
 
     pub fn get_max(&self) -> f32 {

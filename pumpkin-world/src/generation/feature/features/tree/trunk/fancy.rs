@@ -1,9 +1,8 @@
 use core::f32;
-use std::sync::Arc;
 
 use pumpkin_data::{
-    BlockState,
-    block_properties::{Axis, EnumVariants, get_block_by_state_id, get_state_by_state_id},
+    Block, BlockState,
+    block_properties::{Axis, EnumVariants},
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
@@ -11,25 +10,20 @@ use pumpkin_util::{
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk,
-    generation::feature::features::tree::{TreeFeature, TreeNode},
-    level::Level,
-};
-
 use super::TrunkPlacer;
+use crate::generation::feature::features::tree::{TreeFeature, TreeNode};
+use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct FancyTrunkPlacer;
 
 impl FancyTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate<T: GenerationCache>(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         force_dirt: bool,
         dirt_state: &BlockState,
@@ -64,13 +58,11 @@ impl FancyTrunkPlacer {
 
                 let (i, new_logs) = Self::make_or_check_branch(
                     chunk,
-                    level,
                     block_pos.0,
                     block_pos_2.0,
                     trunk_block,
                     false,
-                )
-                .await;
+                );
                 logs.extend_from_slice(&new_logs);
 
                 if !i {
@@ -86,13 +78,11 @@ impl FancyTrunkPlacer {
 
                 let (i, new_logs) = Self::make_or_check_branch(
                     chunk,
-                    level,
                     block_pos_3.0,
                     block_pos.0,
                     trunk_block,
                     false,
-                )
-                .await;
+                );
                 logs.extend_from_slice(&new_logs);
 
                 if !i {
@@ -104,14 +94,12 @@ impl FancyTrunkPlacer {
 
         Self::make_or_check_branch(
             chunk,
-            level,
             start_pos.0,
             start_pos.up_height(k).0,
             trunk_block,
             true,
-        )
-        .await;
-        Self::make_branches(chunk, level, j, start_pos.0, trunk_block, &list).await;
+        );
+        Self::make_branches(chunk, j, start_pos.0, trunk_block, &list);
 
         let mut list_2: Vec<TreeNode> = Vec::new();
         for branch_position in list {
@@ -122,9 +110,8 @@ impl FancyTrunkPlacer {
         (list_2, logs)
     }
 
-    async fn make_or_check_branch(
-        chunk: &mut ProtoChunk<'_>,
-        _level: &Arc<Level>,
+    fn make_or_check_branch<T: GenerationCache>(
+        chunk: &mut T,
         start_pos: Vector3<i32>,
         branch_pos: Vector3<i32>,
         trunk_provider: &BlockState,
@@ -153,17 +140,17 @@ impl FancyTrunkPlacer {
                 (0.5f32 + j as f32 * h).floor() as i32,
             ));
 
-            let block = chunk.get_block_state(&block_pos_2.0);
+            let block = GenerationCache::get_block_state(chunk, &block_pos_2.0);
 
             if make {
                 let axis = Self::get_log_axis(start_pos, block_pos_2.0);
 
                 if TreeFeature::can_replace(block.to_state(), block.to_block()) {
-                    let block = get_block_by_state_id(trunk_provider.id);
+                    let block = Block::from_state_id(trunk_provider.id);
                     let original_props = &block.properties(trunk_provider.id).unwrap().to_props();
                     let axis = axis.to_value();
                     // Set the right Axis
-                    let props = original_props
+                    let props: Vec<(&str, &str)> = original_props
                         .iter()
                         .map(|(key, value)| {
                             if key == "axis" {
@@ -173,12 +160,8 @@ impl FancyTrunkPlacer {
                             }
                         })
                         .collect();
-                    let state = block.from_properties(props).unwrap().to_state_id(block);
-                    if chunk.chunk_pos == block_pos_2.chunk_and_chunk_relative_position().0 {
-                        chunk.set_block_state(&block_pos_2.0, get_state_by_state_id(state));
-                    } else {
-                        // level.set_block_state(&block_pos_2, state).await;
-                    }
+                    let state = block.from_properties(&props).to_state_id(block);
+                    chunk.set_block_state(&block_pos_2.0, BlockState::from_id(state));
                     logs.push(block_pos_2);
                     continue;
                 }
@@ -192,13 +175,12 @@ impl FancyTrunkPlacer {
         (true, logs)
     }
 
-    async fn make_branches(
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+    fn make_branches<T: GenerationCache>(
+        chunk: &mut T,
         tree_height: i32,
         start_pos: Vector3<i32>,
         trunk_provider: &BlockState,
-        branch_positions: &Vec<BranchPosition>,
+        branch_positions: &[BranchPosition],
     ) {
         for branch_position in branch_positions {
             let i = branch_position.get_end_y();
@@ -210,13 +192,11 @@ impl FancyTrunkPlacer {
             }
             Self::make_or_check_branch(
                 chunk,
-                level,
                 block_pos.0,
                 branch_position.node.center.0,
                 trunk_provider,
                 true,
-            )
-            .await;
+            );
         }
     }
 

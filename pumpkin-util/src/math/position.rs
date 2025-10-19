@@ -7,7 +7,7 @@ use std::hash::Hash;
 
 use crate::math::vector2::Vector2;
 use num_traits::Euclid;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub struct BlockPosIterator {
     start_x: i32,
@@ -228,19 +228,18 @@ impl BlockPos {
     pub fn chunk_and_chunk_relative_position(&self) -> (Vector2<i32>, Vector3<i32>) {
         let (z_chunk, z_rem) = self.0.z.div_rem_euclid(&16);
         let (x_chunk, x_rem) = self.0.x.div_rem_euclid(&16);
-        let chunk_coordinate = Vector2 {
-            x: x_chunk,
-            y: z_chunk,
-        };
-
-        // Since we divide by 16, remnant can never exceed u8
-        let relative = Vector3 {
-            x: x_rem,
-            z: z_rem,
-
-            y: self.0.y,
-        };
-        (chunk_coordinate, relative)
+        (
+            Vector2 {
+                x: x_chunk,
+                y: z_chunk,
+            },
+            // Since we divide by 16, remnant can never exceed u8
+            Vector3 {
+                x: x_rem,
+                z: z_rem,
+                y: self.0.y,
+            },
+        )
     }
     pub fn section_relative_position(&self) -> Vector3<i32> {
         let (_z_chunk, z_rem) = self.0.z.div_rem_euclid(&16);
@@ -267,6 +266,22 @@ impl BlockPos {
             x.floor() as i32,
             y.floor() as i32,
             z.floor() as i32,
+        ))
+    }
+
+    pub fn floored_v(pos: Vector3<f64>) -> Self {
+        Self(Vector3::new(
+            pos.x.floor() as i32,
+            pos.y.floor() as i32,
+            pos.z.floor() as i32,
+        ))
+    }
+
+    pub fn ceiled_v(pos: Vector3<f64>) -> Self {
+        Self(Vector3::new(
+            pos.x.ceil() as i32,
+            pos.y.ceil() as i32,
+            pos.z.ceil() as i32,
         ))
     }
 
@@ -318,19 +333,36 @@ impl BlockPos {
         self.offset(Vector3::new(0, -height, 0))
     }
 
+    pub fn west(&self) -> Self {
+        self.offset(Vector3::new(-1, 0, 0))
+    }
+
+    pub fn north(&self) -> Self {
+        self.offset(Vector3::new(0, 0, -1))
+    }
+
+    pub fn east(&self) -> Self {
+        self.offset(Vector3::new(1, 0, 0))
+    }
+
+    pub fn south(&self) -> Self {
+        self.offset(Vector3::new(0, 0, 1))
+    }
+
     pub fn manhattan_distance(&self, other: Self) -> i32 {
         let x = (other.0.x - self.0.x).abs();
         let y = (other.0.y - self.0.y).abs();
         let z = (other.0.z - self.0.z).abs();
         x + y + z
     }
+
+    pub fn squared_distance(&self, other: Self) -> i32 {
+        self.0.squared_distance_to_vec(other.0)
+    }
 }
 
 impl Serialize for BlockPos {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let long = ((self.0.x as i64 & 0x3FFFFFF) << 38)
             | ((self.0.z as i64 & 0x3FFFFFF) << 12)
             | (self.0.y as i64 & 0xFFF);
@@ -339,20 +371,14 @@ impl Serialize for BlockPos {
 }
 
 impl<'de> Deserialize<'de> for BlockPos {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl serde::de::Visitor<'_> for Visitor {
             type Value = BlockPos;
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("An i64 int")
             }
-            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
                 Ok(BlockPos(Vector3 {
                     x: (v >> 38) as i32,
                     y: (v << 52 >> 52) as i32,

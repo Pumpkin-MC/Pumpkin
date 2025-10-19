@@ -7,9 +7,9 @@ use crate::VarInt;
 #[derive(Serialize)]
 #[packet(PLAY_CONTAINER_SET_DATA)]
 pub struct CSetContainerProperty {
-    window_id: VarInt,
-    property: i16,
-    value: i16,
+    pub window_id: VarInt,
+    pub property: i16,
+    pub value: i16,
 }
 
 impl CSetContainerProperty {

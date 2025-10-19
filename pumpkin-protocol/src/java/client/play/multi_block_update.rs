@@ -11,8 +11,8 @@ use crate::codec::{var_int::VarInt, var_long::VarLong};
 
 #[packet(PLAY_SECTION_BLOCKS_UPDATE)]
 pub struct CMultiBlockUpdate {
-    chunk_section: Vector3<i32>,
-    positions_to_state_ids: Vec<(i16, i32)>,
+    pub chunk_section: Vector3<i32>,
+    pub positions_to_state_ids: Vec<(i16, i32)>,
 }
 
 impl CMultiBlockUpdate {
@@ -29,10 +29,7 @@ impl CMultiBlockUpdate {
 }
 
 impl Serialize for CMultiBlockUpdate {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut tuple = serializer.serialize_tuple(2 + self.positions_to_state_ids.len())?;
 
         tuple.serialize_element(&vector3::packed_chunk_pos(&self.chunk_section))?;

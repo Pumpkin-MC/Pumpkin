@@ -15,6 +15,11 @@
 #![deny(clippy::branches_sharing_code)]
 #![deny(clippy::equatable_if_let)]
 #![deny(clippy::option_if_let_else)]
+#![deny(clippy::needless_pass_by_ref_mut)]
+#![deny(clippy::needless_collect)]
+#![deny(clippy::redundant_clone)]
+#![deny(clippy::set_contains_or_insert)]
+#![deny(clippy::significant_drop_in_scrutinee)]
 // use log crate
 #![deny(clippy::print_stdout)]
 #![deny(clippy::print_stderr)]
@@ -49,8 +54,8 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
-use crate::server::CURRENT_MC_VERSION;
-use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+use pumpkin::{LOGGER_IMPL, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
     text::{TextComponent, color::NamedColor},
@@ -76,15 +81,8 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 #[cfg(feature = "dhat-heap")]
 use pumpkin::HEAP_PROFILER;
 
-pub static PLUGIN_MANAGER: LazyLock<Arc<RwLock<PluginManager>>> = LazyLock::new(|| {
-    let manager = PluginManager::new();
-    let arc_manager = Arc::new(RwLock::new(manager));
-    let clone = Arc::clone(&arc_manager);
-    let arc_manager_clone = arc_manager.clone();
-    let mut manager = futures::executor::block_on(arc_manager_clone.write());
-    manager.set_self_ref(clone);
-    arc_manager
-});
+pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
+    LazyLock::new(|| Arc::new(PluginManager::new()));
 
 pub static PERMISSION_REGISTRY: LazyLock<Arc<RwLock<PermissionRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(PermissionRegistry::new())));
@@ -102,6 +100,8 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 // runtime with a channel! See `Level::fetch_chunks` as an example!
 #[tokio::main]
 async fn main() {
+    #[cfg(feature = "console-subscriber")]
+    console_subscriber::init();
     #[cfg(feature = "dhat-heap")]
     {
         let profiler = dhat::Profiler::new_heap();
@@ -115,19 +115,16 @@ async fn main() {
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        if let Some((wrapper, _)) = LOGGER_IMPL.as_ref() {
+            // Drop readline to reset terminal state
+            let _ = wrapper.take_readline();
+        }
         default_panic(info);
         // TODO: Gracefully exit?
         // We need to abide by the panic rules here.
         std::process::exit(1);
     }));
-
-    rayon::ThreadPoolBuilder::new()
-        .thread_name(|_| "rayon-worker".to_string())
-        .build_global()
-        .expect("Rayon thread pool can only be initialized once");
-    log::info!(
-        "Starting Pumpkin {CARGO_PKG_VERSION} for Minecraft {CURRENT_MC_VERSION} (Protocol {CURRENT_MC_PROTOCOL})",
-    );
+    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
 
     log::debug!(
         "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
@@ -156,7 +153,7 @@ async fn main() {
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());
     log::info!(
-        "Server is now running. Connect using: {}{}{}",
+        "Server is now running. Connect using port: {}{}{}",
         if BASIC_CONFIG.java_edition {
             format!("Java Edition: {}", BASIC_CONFIG.java_edition_address)
         } else {
@@ -168,10 +165,7 @@ async fn main() {
             ""
         },
         if BASIC_CONFIG.bedrock_edition {
-            format!(
-                "Bedrock/Pocket Edition: {}",
-                BASIC_CONFIG.bedrock_edition_address
-            )
+            format!("Bedrock Edition: {}", BASIC_CONFIG.bedrock_edition_address)
         } else {
             String::new()
         }

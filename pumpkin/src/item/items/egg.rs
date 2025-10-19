@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::entity::Entity;
 use crate::entity::player::Player;
 use crate::entity::projectile::ThrownItemEntity;
-use crate::item::pumpkin_item::{ItemMetadata, PumpkinItem};
+use crate::item::{ItemBehaviour, ItemMetadata};
 use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -21,10 +21,10 @@ impl ItemMetadata for EggItem {
 const POWER: f32 = 1.5;
 
 #[async_trait]
-impl PumpkinItem for EggItem {
+impl ItemBehaviour for EggItem {
     async fn normal_use(&self, _block: &Item, player: &Player) {
         let position = player.position();
-        let world = player.world().await;
+        let world = player.world();
         world
             .play_sound(
                 Sound::EntityEggThrow,
@@ -37,13 +37,17 @@ impl PumpkinItem for EggItem {
             Uuid::new_v4(),
             world.clone(),
             position,
-            EntityType::EGG,
+            &EntityType::EGG,
             false,
         );
-        let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);
+        let egg = ThrownItemEntity::new(entity, &player.living_entity.entity);
         let yaw = player.living_entity.entity.yaw.load();
         let pitch = player.living_entity.entity.pitch.load();
-        snowball.set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
-        world.spawn_entity(Arc::new(snowball)).await;
+        egg.set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
+        world.spawn_entity(Arc::new(egg)).await;
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

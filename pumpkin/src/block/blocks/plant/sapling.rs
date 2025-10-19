@@ -1,25 +1,25 @@
 use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, Integer0To1};
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::pumpkin_block::{
-    BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock, RandomTickArgs,
-};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs};
 use crate::world::World;
 
 type SaplingProperties = pumpkin_data::block_properties::OakSaplingLikeProperties;
 
+#[pumpkin_block_from_tag("minecraft:saplings")]
 pub struct SaplingBlock;
 
 impl SaplingBlock {
     async fn generate(&self, world: &Arc<World>, pos: &BlockPos) {
-        let (block, state) = world.get_block_and_block_state(pos).await;
-        let mut props = SaplingProperties::from_state_id(state.id, block);
+        let (block, state) = world.get_block_and_state_id(pos).await;
+        let mut props = SaplingProperties::from_state_id(state, block);
         if props.stage == Integer0To1::L0 {
             props.stage = Integer0To1::L1;
             world
@@ -31,18 +31,8 @@ impl SaplingBlock {
     }
 }
 
-impl BlockMetadata for SaplingBlock {
-    fn namespace(&self) -> &'static str {
-        "minecraft"
-    }
-
-    fn ids(&self) -> &'static [&'static str] {
-        get_tag_values(RegistryKey::Block, "minecraft:saplings").unwrap()
-    }
-}
-
 #[async_trait]
-impl PumpkinBlock for SaplingBlock {
+impl BlockBehaviour for SaplingBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
     }

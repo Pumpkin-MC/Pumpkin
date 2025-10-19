@@ -9,8 +9,8 @@ use pumpkin_util::resource_location::ResourceLocation;
 
 #[packet(PLAY_STOP_SOUND)]
 pub struct CStopSound {
-    sound_id: Option<ResourceLocation>,
-    category: Option<SoundCategory>,
+    pub sound_id: Option<ResourceLocation>,
+    pub category: Option<SoundCategory>,
 }
 
 impl CStopSound {

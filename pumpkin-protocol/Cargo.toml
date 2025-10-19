@@ -19,7 +19,6 @@ pumpkin-util = { path = "../pumpkin-util" }
 uuid.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-log.workspace = true
 tokio.workspace = true
 bytes.workspace = true
 
@@ -28,11 +27,11 @@ aes = "0.8"
 cfb8 = "0.8"
 
 # compression
-async-compression = { version = "0.4.25", features = ["tokio", "zlib"] }
+async-compression = { version = "0.4.32", features = ["tokio", "zlib"] }
 
 take_mut = "0.2.2"
-bitflags = "2.9.1"
+bitflags = "2.9.4"
 
 [dev-dependencies]
 # Validate correctness
-flate2 = "1.1.2"
+flate2 = "1.1.4"

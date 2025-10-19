@@ -8,12 +8,12 @@ use crate::{IdOr, SoundEvent, VarInt};
 #[derive(Serialize)]
 #[packet(PLAY_SOUND)]
 pub struct CSoundEffect {
-    sound_event: IdOr<SoundEvent>,
-    sound_category: VarInt,
-    position: Vector3<i32>,
-    volume: f32,
-    pitch: f32,
-    seed: f64,
+    pub sound_event: IdOr<SoundEvent>,
+    pub sound_category: VarInt,
+    pub position: Vector3<i32>,
+    pub volume: f32,
+    pub pitch: f32,
+    pub seed: f64,
 }
 
 impl CSoundEffect {

@@ -4,12 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-pumpkin-data = { path = "../pumpkin-data" }
 pumpkin-protocol = { path = "../pumpkin-protocol" }
-pumpkin-nbt = { path = "../pumpkin-nbt" }
 pumpkin-util = { path = "../pumpkin-util" }
 
-indexmap = { version = "2.10", features = ["serde"] }
+indexmap = { version = "2.11", features = ["serde"] }
 
 serde.workspace = true
 serde_json.workspace = true

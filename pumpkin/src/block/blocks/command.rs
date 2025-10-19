@@ -3,11 +3,11 @@ use std::sync::atomic::Ordering;
 use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_util::{GameMode, math::position::BlockPos};
-use pumpkin_world::{block::entities::command_block::CommandBlockEntity, chunk::TickPriority};
+use pumpkin_world::{block::entities::command_block::CommandBlockEntity, tick::TickPriority};
 
 use crate::{
-    block::pumpkin_block::{
-        BlockMetadata, CanPlaceAtArgs, OnNeighborUpdateArgs, OnScheduledTickArgs, PumpkinBlock,
+    block::{
+        BlockBehaviour, BlockMetadata, CanPlaceAtArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
     },
     world::World,
 };
@@ -51,7 +51,7 @@ impl BlockMetadata for CommandBlock {
 }
 
 #[async_trait]
-impl PumpkinBlock for CommandBlock {
+impl BlockBehaviour for CommandBlock {
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         if let Some(block_entity) = args.world.get_block_entity(args.position).await {
             if block_entity.resource_location() != CommandBlockEntity::ID {
@@ -74,19 +74,19 @@ impl PumpkinBlock for CommandBlock {
     }
 
     async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if block_entity.resource_location() != CommandBlockEntity::ID {
-                return;
-            }
-            // TODO
+        if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            && block_entity.resource_location() != CommandBlockEntity::ID
+        {
+            return;
         }
+        // TODO
     }
 
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        if let Some(player) = args.player {
-            if player.gamemode.load() == GameMode::Creative {
-                return true;
-            }
+        if let Some(player) = args.player
+            && player.gamemode.load() == GameMode::Creative
+        {
+            return true;
         }
 
         false

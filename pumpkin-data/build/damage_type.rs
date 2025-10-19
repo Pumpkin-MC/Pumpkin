@@ -2,7 +2,7 @@ use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 use syn::{Ident, LitInt};
 
 #[derive(Deserialize)]
@@ -50,7 +50,7 @@ pub enum DeathMessageType {
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/damage_type.json");
 
-    let damage_types: HashMap<String, DamageTypeEntry> =
+    let damage_types: BTreeMap<String, DamageTypeEntry> =
         serde_json::from_str(&fs::read_to_string("../assets/damage_type.json").unwrap())
             .expect("Failed to parse damage_type.json");
 
@@ -69,9 +69,9 @@ pub(crate) fn build() -> TokenStream {
         let death_message_type = match &data.death_message_type {
             Some(msg) => {
                 let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
-                quote! { Some(DeathMessageType::#msg_ident) }
+                quote! { DeathMessageType::#msg_ident }
             }
-            None => quote! { None },
+            None => quote! { DeathMessageType::Default },
         };
 
         let effects = match &data.effects {
@@ -106,7 +106,7 @@ pub(crate) fn build() -> TokenStream {
     quote! {
         #[derive(Clone, Copy, Debug, PartialEq)]
         pub struct DamageType {
-            pub death_message_type: Option<DeathMessageType>,
+            pub death_message_type: DeathMessageType,
             pub exhaustion: f32,
             pub effects: Option<DamageEffects>,
             pub message_id: &'static str,

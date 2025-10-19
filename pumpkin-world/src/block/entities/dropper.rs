@@ -4,15 +4,16 @@ use crate::item::ItemStack;
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 use rand::{Rng, rng};
+use std::any::Any;
 use std::array::from_fn;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{Mutex, MutexGuard};
 
 #[derive(Debug)]
 pub struct DropperBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; 9],
+    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub dirty: AtomicBool,
 }
 
@@ -30,7 +31,7 @@ impl BlockEntity for DropperBlockEntity {
     {
         let dropper = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
         };
 
@@ -52,7 +53,7 @@ impl BlockEntity for DropperBlockEntity {
     }
 
     fn is_dirty(&self) -> bool {
-        self.dirty.load(std::sync::atomic::Ordering::Relaxed)
+        self.dirty.load(Ordering::Relaxed)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -61,22 +62,24 @@ impl BlockEntity for DropperBlockEntity {
 }
 
 impl DropperBlockEntity {
+    pub const INVENTORY_SIZE: usize = 9;
     pub const ID: &'static str = "minecraft:dropper";
+
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY))),
+            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
         }
     }
-    pub async fn get_random_slot(&self) -> Option<MutexGuard<ItemStack>> {
+    pub async fn get_random_slot(&self) -> Option<MutexGuard<'_, ItemStack>> {
         // this.unpackLootTable(null);
         let mut ret = None;
-        let mut j = 0;
+        let mut j = 1;
         for i in &self.items {
             let item = i.lock().await;
             if !item.is_empty() {
-                if rng().random_range(0..=j) == 0 {
+                if rng().random_range(0..j) == 0 {
                     ret = Some(item);
                 }
                 j += 1;
@@ -107,7 +110,7 @@ impl Inventory for DropperBlockEntity {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY;
+        let mut removed = ItemStack::EMPTY.clone();
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -122,7 +125,11 @@ impl Inventory for DropperBlockEntity {
     }
 
     fn mark_dirty(&self) {
-        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -130,7 +137,7 @@ impl Inventory for DropperBlockEntity {
 impl Clearable for DropperBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY;
+            *slot.lock().await = ItemStack::EMPTY.clone();
         }
     }
 }

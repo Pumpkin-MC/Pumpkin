@@ -1,33 +1,44 @@
+use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_util::{Hand, PermissionLvl};
+use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
+use rsa::signature::Verifier;
+use sha1::Sha1;
 use std::num::NonZeroU8;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use pumpkin_util::PermissionLvl;
-use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
-use rsa::signature::Verifier;
-use sha1::Sha1;
 use thiserror::Error;
 
+use crate::block::BlockHitResult;
+use crate::block::registry::BlockActionResult;
+use crate::block::{self, BlockIsReplacing};
+use crate::command::CommandSender;
+use crate::entity::EntityBase;
+use crate::entity::player::{ChatMode, ChatSession, Player};
+use crate::error::PumpkinError;
+use crate::net::PlayerConfig;
+use crate::net::java::JavaClient;
+use crate::plugin::player::player_chat::PlayerChatEvent;
+use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
+use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
+use crate::plugin::player::player_move::PlayerMoveEvent;
+use crate::server::{Server, seasonal_events};
+use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block_properties::{
-    BlockProperties, WaterLikeProperties, get_block_by_item, get_state_by_state_id,
-};
-use pumpkin_data::entity::{EntityType, entity_from_egg};
+use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
+use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_inventory::InventoryError;
-use pumpkin_inventory::equipment_slot::EquipmentSlot;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_inventory::screen_handler::ScreenHandler;
+use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    Animation, CBlockUpdate, CCommandSuggestions, CEntityAnimation, CEntityPositionSync, CHeadRot,
-    COpenSignEditor, CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot,
-    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
-    PlayerAction,
+    CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
+    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot, CSystemChatMessage,
+    CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
@@ -46,24 +57,7 @@ use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
-use uuid::Uuid;
-
-use crate::block::pumpkin_block::BlockHitResult;
-use crate::block::registry::BlockActionResult;
-use crate::block::{self, BlockIsReplacing};
-use crate::command::CommandSender;
-use crate::entity::EntityBase;
-use crate::entity::player::{ChatMode, ChatSession, Hand, Player};
-use crate::entity::r#type::from_type;
-use crate::error::PumpkinError;
-use crate::net::PlayerConfig;
-use crate::net::java::JavaClientPlatform;
-use crate::plugin::player::player_chat::PlayerChatEvent;
-use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
-use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
-use crate::plugin::player::player_move::PlayerMoveEvent;
-use crate::server::{Server, seasonal_events};
-use crate::world::{World, chunker};
+use tokio::sync::Mutex;
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -72,6 +66,7 @@ const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
     BlockOutOfReach,
+    InvalidHand,
     InvalidBlockFace,
     BlockOutOfWorld,
     InvalidGamemode,
@@ -87,14 +82,14 @@ impl PumpkinError for BlockPlacingError {
     fn is_kick(&self) -> bool {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => false,
-            Self::InvalidBlockFace => true,
+            Self::InvalidBlockFace | Self::InvalidHand => true,
         }
     }
 
     fn severity(&self) -> log::Level {
         match self {
             Self::BlockOutOfWorld | Self::InvalidGamemode => log::Level::Trace,
-            Self::BlockOutOfReach | Self::InvalidBlockFace => log::Level::Warn,
+            Self::BlockOutOfReach | Self::InvalidBlockFace | Self::InvalidHand => log::Level::Warn,
         }
     }
 
@@ -102,6 +97,7 @@ impl PumpkinError for BlockPlacingError {
         match self {
             Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => None,
             Self::InvalidBlockFace => Some("Invalid block face".into()),
+            Self::InvalidHand => Some("Invalid hand".into()),
         }
     }
 }
@@ -170,7 +166,7 @@ impl PumpkinError for ChatError {
 
 /// Handles all Play packets sent by a real player.
 /// NEVER TRUST THE CLIENT. HANDLE EVERY ERROR; UNWRAP/EXPECT ARE FORBIDDEN.
-impl JavaClientPlatform {
+impl JavaClient {
     pub async fn handle_confirm_teleport(
         &self,
         player: &Player,
@@ -181,9 +177,10 @@ impl JavaClientPlatform {
             if id == &confirm_teleport.teleport_id {
                 // We should set the position now to what we requested in the teleport packet.
                 // This may fix issues when the client sends the position while being teleported.
-                player.living_entity.set_pos(*position);
+                player.living_entity.entity.set_pos(*position);
 
                 *awaiting_teleport = None;
+                drop(awaiting_teleport);
             } else {
                 self.kick(TextComponent::text("Wrong teleport id")).await;
             }
@@ -202,8 +199,10 @@ impl JavaClientPlatform {
     ) {
         if player.permission_lvl.load() >= PermissionLvl::Two {
             player.set_gamemode(change_game_mode.game_mode).await;
-            let gamemode_string = format!("{:?}", change_game_mode.game_mode).to_lowercase();
-            let gamemode_string = format!("gameMode.{gamemode_string}");
+            let gamemode_string = format!(
+                "gameMode.{}",
+                change_game_mode.game_mode.to_str().to_lowercase()
+            );
             player
                 .send_system_message(&TextComponent::translate(
                     "commands.gamemode.success.self",
@@ -293,7 +292,7 @@ impl JavaClientPlatform {
                 let pos = event.to;
                 let entity = &player.living_entity.entity;
                 let last_pos = entity.pos.load();
-                player.living_entity.set_pos(pos);
+                player.living_entity.entity.set_pos(pos);
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed) && packet.collision & FLAG_ON_GROUND == 0 && height_difference > 0.0 {
@@ -301,7 +300,7 @@ impl JavaClientPlatform {
                 }
 
                 entity.on_ground.store(packet.collision & FLAG_ON_GROUND != 0, Ordering::Relaxed);
-                let world = &player.world().await;
+                let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
                 if !self.sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0).await {
@@ -325,6 +324,7 @@ impl JavaClientPlatform {
                 if !player.abilities.lock().await.flying {
                     player.living_entity
                         .update_fall_distance(
+                            player.clone(),
                             height_difference,
                             packet.collision & FLAG_ON_GROUND != 0,
                             player.gamemode.load() == GameMode::Creative,
@@ -342,12 +342,12 @@ impl JavaClientPlatform {
 
             'cancelled: {
                 self.enqueue_packet(&CPlayerPosition::new(
-                    player.teleport_id_count.load(std::sync::atomic::Ordering::Relaxed).into(),
+                    player.teleport_id_count.load(Ordering::Relaxed).into(),
                     player.living_entity.entity.pos.load(),
                     Vector3::new(0.0, 0.0, 0.0),
                     player.living_entity.entity.yaw.load(),
                     player.living_entity.entity.pitch.load(),
-                    &[],
+                    Vec::new(),
                 )).await;
             }
         }}
@@ -394,10 +394,10 @@ impl JavaClientPlatform {
                 let pos = event.to;
                 let entity = &player.living_entity.entity;
                 let last_pos = entity.pos.load();
-                player.living_entity.set_pos(pos);
+                player.living_entity.entity.set_pos(pos);
 
                 let height_difference = pos.y - last_pos.y;
-                if entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+                if entity.on_ground.load(Ordering::Relaxed)
                     && (packet.collision & FLAG_ON_GROUND) != 0
                     && height_difference > 0.0
                 {
@@ -405,7 +405,7 @@ impl JavaClientPlatform {
                 }
                 entity
                     .on_ground
-                    .store((packet.collision & FLAG_ON_GROUND) != 0, std::sync::atomic::Ordering::Relaxed);
+                    .store((packet.collision & FLAG_ON_GROUND) != 0, Ordering::Relaxed);
 
                 entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
@@ -414,7 +414,7 @@ impl JavaClientPlatform {
                 let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
                 let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
                 // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
-                let world = &entity.world.read().await;
+                let world = &entity.world;
 
                 // TODO: Warn when player moves to quickly
                 if !self
@@ -449,6 +449,7 @@ impl JavaClientPlatform {
                 if !player.abilities.lock().await.flying {
                     player.living_entity
                         .update_fall_distance(
+                            player.clone(),
                             height_difference,
                             (packet.collision & FLAG_ON_GROUND) != 0,
                             player.gamemode.load() == GameMode::Creative,
@@ -471,10 +472,7 @@ impl JavaClientPlatform {
     }
 
     pub async fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
-        let teleport_id = player
-            .teleport_id_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-            + 1;
+        let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
         *player.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
         self.enqueue_packet(&CPlayerPosition::new(
             teleport_id.into(),
@@ -482,7 +480,7 @@ impl JavaClientPlatform {
             Vector3::new(0.0, 0.0, 0.0),
             player.living_entity.entity.yaw.load(),
             player.living_entity.entity.pitch.load(),
-            &[],
+            Vec::new(),
         ))
         .await;
     }
@@ -500,9 +498,7 @@ impl JavaClientPlatform {
             return;
         }
         let entity = &player.living_entity.entity;
-        entity
-            .on_ground
-            .store(rotation.ground, std::sync::atomic::Ordering::Relaxed);
+        entity.on_ground.store(rotation.ground, Ordering::Relaxed);
         entity.set_rotation(
             wrap_degrees(rotation.yaw) % 360.0,
             wrap_degrees(rotation.pitch),
@@ -513,7 +509,7 @@ impl JavaClientPlatform {
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
         // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
-        let world = &entity.world.read().await;
+        let world = &entity.world;
         let packet =
             CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
         world
@@ -546,8 +542,7 @@ impl JavaClientPlatform {
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
                 server.spawn_task(async move {
-                    let dispatcher = server_clone.command_dispatcher.read().await;
-                    dispatcher
+                    server_clone.command_dispatcher.read().await
                         .handle_command(
                             &mut CommandSender::Player(player_clone),
                             &server_clone,
@@ -572,7 +567,7 @@ impl JavaClientPlatform {
             .living_entity
             .entity
             .on_ground
-            .store(ground.on_ground, std::sync::atomic::Ordering::Relaxed);
+            .store(ground.on_ground, Ordering::Relaxed);
     }
 
     pub async fn handle_pick_item_from_block(
@@ -584,7 +579,7 @@ impl JavaClientPlatform {
             return;
         }
 
-        let world = player.world().await;
+        let world = player.world();
         let block = world.get_block(&pick_item.pos).await;
 
         if block.item_id == 0 {
@@ -630,7 +625,7 @@ impl JavaClientPlatform {
     pub async fn handle_set_command_block(&self, player: &Arc<Player>, command: SSetCommandBlock) {
         // TODO: check things
         let pos = command.pos;
-        if let Some(block_entity) = player.world().await.get_block_entity(&pos).await {
+        if let Some(block_entity) = player.world().get_block_entity(&pos).await {
             if block_entity.resource_location() != CommandBlockEntity::ID {
                 log::warn!(
                     "Client tried to change Command block but not Command block entity found"
@@ -663,30 +658,24 @@ impl JavaClientPlatform {
         if let Ok(action) = Action::try_from(command.action.0) {
             let entity = &player.living_entity.entity;
             match action {
-                pumpkin_protocol::java::server::play::Action::StartSprinting => {
-                    if !entity.sprinting.load(std::sync::atomic::Ordering::Relaxed) {
+                Action::StartSprinting => {
+                    if !entity.sprinting.load(Ordering::Relaxed) {
                         entity.set_sprinting(true).await;
                     }
                 }
-                pumpkin_protocol::java::server::play::Action::StopSprinting => {
-                    if entity.sprinting.load(std::sync::atomic::Ordering::Relaxed) {
+                Action::StopSprinting => {
+                    if entity.sprinting.load(Ordering::Relaxed) {
                         entity.set_sprinting(false).await;
                     }
                 }
-                pumpkin_protocol::java::server::play::Action::LeaveBed => player.wake_up().await,
+                Action::LeaveBed => player.wake_up().await,
 
-                pumpkin_protocol::java::server::play::Action::StartHorseJump
-                | pumpkin_protocol::java::server::play::Action::StopHorseJump
-                | pumpkin_protocol::java::server::play::Action::OpenVehicleInventory => {
+                Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
                     log::debug!("todo");
                 }
-                pumpkin_protocol::java::server::play::Action::StartFlyingElytra => {
+                Action::StartFlyingElytra => {
                     let fall_flying = entity.check_fall_flying();
-                    if entity
-                        .fall_flying
-                        .load(std::sync::atomic::Ordering::Relaxed)
-                        != fall_flying
-                    {
+                    if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
                         entity.set_fall_flying(fall_flying).await;
                     }
                 } // TODO
@@ -699,37 +688,16 @@ impl JavaClientPlatform {
 
     pub async fn handle_player_input(&self, player: &Arc<Player>, input: SPlayerInput) {
         let sneak = input.input & SPlayerInput::SNEAK != 0;
-        if player
-            .get_entity()
-            .sneaking
-            .load(std::sync::atomic::Ordering::Relaxed)
-            != sneak
-        {
+        if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
             player.get_entity().set_sneaking(sneak).await;
         }
     }
 
     pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {
-        let animation = match swing_arm.hand.0 {
-            0 => Animation::SwingMainArm,
-            1 => Animation::SwingOffhand,
-            _ => {
-                self.kick(TextComponent::text("Invalid hand")).await;
-                return;
-            }
+        let Ok(hand) = Hand::try_from(swing_arm.hand.0) else {
+            self.kick(TextComponent::text("Invalid hand")).await;
+            return;
         };
-        // Invert hand if player is left handed
-        let animation = match player.config.read().await.main_hand {
-            Hand::Left => match animation {
-                Animation::SwingMainArm => Animation::SwingOffhand,
-                Animation::SwingOffhand => Animation::SwingMainArm,
-                _ => unreachable!(),
-            },
-            Hand::Right => animation,
-        };
-
-        let id = player.entity_id();
-        let world = player.world().await;
 
         let inventory = player.inventory();
         let item = inventory.held_item();
@@ -737,7 +705,6 @@ impl JavaClientPlatform {
         let (yaw, pitch) = player.rotation();
         let hit_result = player
             .world()
-            .await
             .raycast(
                 player.eye_position(),
                 player
@@ -755,7 +722,7 @@ impl JavaClientPlatform {
                 player,
                 InteractAction::LeftClickBlock,
                 &item,
-                player.world().await.get_block(&hit_pos).await,
+                player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
             )
         } else {
@@ -771,12 +738,7 @@ impl JavaClientPlatform {
         send_cancellable! {{
             event;
             'after: {
-                world
-                    .broadcast_packet_except(
-                        &[player.gameprofile.id],
-                        &CEntityAnimation::new(id.into(), animation),
-                    )
-                    .await;
+                player.swing_hand(hand, false).await;
             }
         }}
     }
@@ -792,10 +754,10 @@ impl JavaClientPlatform {
                 gameprofile.id,
                 err
             );
-            if err.is_kick() {
-                if let Some(reason) = err.client_kick_reason() {
-                    self.kick(TextComponent::text(reason)).await;
-                }
+            if err.is_kick()
+                && let Some(reason) = err.client_kick_reason()
+            {
+                self.kick(TextComponent::text(reason)).await;
             }
             return;
         }
@@ -816,19 +778,23 @@ impl JavaClientPlatform {
                 let decorated_message = &TextComponent::chat_decorated(
                     config.chat.format.clone(),
                     gameprofile.name.clone(),
-                    message,
+                    message.clone(),
                 );
 
                 let entity = &player.living_entity.entity;
-                let world = &entity.world.read().await;
+                let world = &entity.world;
                 if BASIC_CONFIG.allow_chat_reports {
                     world.broadcast_secure_player_chat(player, &chat_message, decorated_message).await;
                 } else {
-                    let no_reports_packet = &CSystemChatMessage::new(
+                    let je_packet = CSystemChatMessage::new(
                         decorated_message,
                         false,
                     );
-                    world.broadcast_packet_all(no_reports_packet).await;
+                    let be_packet = SText::new(
+                        message, player.gameprofile.name.clone()
+                    );
+
+                    world.broadcast_editioned(&je_packet, &be_packet).await;
                 }
             }
         }}
@@ -911,19 +877,16 @@ impl JavaClientPlatform {
                 player.gameprofile.id,
                 err
             );
-            if err.is_kick() {
-                if let Some(reason) = err.client_kick_reason() {
-                    self.kick(TextComponent::text(reason)).await;
-                }
+            if err.is_kick()
+                && let Some(reason) = err.client_kick_reason()
+            {
+                self.kick(TextComponent::text(reason)).await;
             }
             return;
         }
 
         // Update the chat session fields
-        let mut chat_session = player.chat_session.lock().await; // Await the lock
-
-        // Update the chat session fields
-        *chat_session = ChatSession::new(
+        *player.chat_session.lock().await = ChatSession::new(
             session.session_id,
             session.expires_at,
             session.public_key.clone(),
@@ -1060,7 +1023,7 @@ impl JavaClientPlatform {
                     player.gameprofile.name,
                     self.id,
                 );
-                player.send_client_information().await;
+                player.send_client_information();
             }
         } else {
             self.kick(TextComponent::text("Invalid hand or chat type"))
@@ -1075,7 +1038,7 @@ impl JavaClientPlatform {
                 if player.living_entity.health.load() > 0.0 {
                     return;
                 }
-                player.world().await.respawn_player(player, false).await;
+                player.world().respawn_player(player, false).await;
 
                 let screen_handler = player.current_screen_handler.lock().await;
                 let mut screen_handler = screen_handler.lock().await;
@@ -1099,15 +1062,21 @@ impl JavaClientPlatform {
         }
     }
 
-    pub async fn handle_interact(&self, player: &Player, interact: SInteract) {
+    pub async fn handle_interact(
+        &self,
+        player: &Player,
+        interact: SInteract,
+        server: &Arc<Server>,
+    ) {
         if !player.has_client_loaded() {
             return;
         }
+        let entity_id = interact.entity_id;
 
         let sneaking = interact.sneaking;
-        let entity = &player.living_entity.entity;
-        if entity.sneaking.load(std::sync::atomic::Ordering::Relaxed) != sneaking {
-            entity.set_sneaking(sneaking).await;
+        let player_entity = &player.living_entity.entity;
+        if player_entity.sneaking.load(Ordering::Relaxed) != sneaking {
+            player_entity.set_sneaking(sneaking).await;
         }
         let Ok(action) = ActionType::try_from(interact.r#type.0) else {
             self.kick(TextComponent::text("Invalid action type")).await;
@@ -1116,7 +1085,6 @@ impl JavaClientPlatform {
 
         match action {
             ActionType::Attack => {
-                let entity_id = interact.entity_id;
                 let config = &advanced_config().pvp;
                 // TODO: do validation and stuff
                 if !config.enabled {
@@ -1125,7 +1093,7 @@ impl JavaClientPlatform {
 
                 // TODO: set as camera entity when spectator
 
-                let world = &entity.world.read().await;
+                let world = &player_entity.world;
                 let player_victim = world.get_player_by_id(entity_id.0).await;
                 if entity_id.0 == player.entity_id() {
                     // This can't be triggered from a non-modded client.
@@ -1171,7 +1139,16 @@ impl JavaClientPlatform {
                 }
             }
             ActionType::Interact | ActionType::InteractAt => {
-                log::debug!("todo");
+                // TODO: split this up
+                let entity = player.world().get_player_by_id(entity_id.0).await;
+                if let Some(entity) = entity {
+                    let held = player.inventory.held_item();
+                    let mut stack = held.lock().await;
+                    server
+                        .item_registry
+                        .use_on_entity(&mut stack, player, entity)
+                        .await;
+                }
             }
         }
     }
@@ -1199,8 +1176,8 @@ impl JavaClientPlatform {
                     }
                     let position = player_action.position;
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world.read().await;
-                    let (block, state) = world.get_block_and_block_state(&position).await;
+                    let world = &entity.world;
+                    let (block, state) = world.get_block_and_state(&position).await;
 
                     let inventory = player.inventory();
                     let held = inventory.held_item();
@@ -1236,13 +1213,11 @@ impl JavaClientPlatform {
                         return;
                     }
                     player.start_mining_time.store(
-                        player
-                            .tick_counter
-                            .load(std::sync::atomic::Ordering::Relaxed),
-                        std::sync::atomic::Ordering::Relaxed,
+                        player.tick_counter.load(Ordering::Relaxed),
+                        Ordering::Relaxed,
                     );
                     if !state.is_air() {
-                        let speed = block::calc_block_breaking(player, state, block.name).await;
+                        let speed = block::calc_block_breaking(player, state, block).await;
                         // Instant break
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&position).await;
@@ -1258,15 +1233,13 @@ impl JavaClientPlatform {
                                 .broken(world, block, player, &position, server, broken_state)
                                 .await;
                         } else {
-                            player
-                                .mining
-                                .store(true, std::sync::atomic::Ordering::Relaxed);
+                            player.mining.store(true, Ordering::Relaxed);
                             *player.mining_pos.lock().await = position;
                             let progress = (speed * 10.0) as i32;
                             world.set_block_breaking(entity, position, progress).await;
                             player
                                 .current_block_destroy_stage
-                                .store(progress, std::sync::atomic::Ordering::Relaxed);
+                                .store(progress, Ordering::Relaxed);
                         }
                     }
                     self.update_sequence(player, player_action.sequence.0);
@@ -1280,12 +1253,10 @@ impl JavaClientPlatform {
                         );
                         return;
                     }
-                    player
-                        .mining
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
+                    player.mining.store(false, Ordering::Relaxed);
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world.read().await;
-                    world
+                    entity
+                        .world
                         .set_block_breaking(entity, player_action.position, -1)
                         .await;
                     self.update_sequence(player, player_action.sequence.0);
@@ -1304,22 +1275,20 @@ impl JavaClientPlatform {
 
                     // Block break & play sound
                     let entity = &player.living_entity.entity;
-                    let world = &entity.world.read().await;
+                    let world = &entity.world;
 
-                    player
-                        .mining
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
+                    player.mining.store(false, Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
 
-                    let (block, state) = world.get_block_and_block_state(&location).await;
-                    let drop = player.gamemode.load() != GameMode::Creative
-                        && player.can_harvest(state, block.name).await;
+                    let (block, state) = world.get_block_and_state(&location).await;
+                    let block_drop = player.gamemode.load() != GameMode::Creative
+                        && player.can_harvest(state, block).await;
 
                     world
                         .break_block(
                             &location,
                             Some(player.clone()),
-                            if drop {
+                            if block_drop {
                                 BlockFlags::NOTIFY_NEIGHBORS
                             } else {
                                 BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
@@ -1340,8 +1309,8 @@ impl JavaClientPlatform {
                 Status::DropItemStack => {
                     player.drop_held_item(true).await;
                 }
-                Status::ShootArrowOrFinishEating => {
-                    log::debug!("todo");
+                Status::ReleaseItemInUse => {
+                    player.living_entity.clear_active_hand().await;
                 }
                 Status::SwapItem => {
                     player.swap_item().await;
@@ -1352,19 +1321,15 @@ impl JavaClientPlatform {
     }
 
     pub async fn handle_keep_alive(&self, player: &Player, keep_alive: SKeepAlive) {
-        if player
-            .wait_for_keep_alive
-            .load(std::sync::atomic::Ordering::Relaxed)
-            && keep_alive.keep_alive_id
-                == player
-                    .keep_alive_id
-                    .load(std::sync::atomic::Ordering::Relaxed)
+        if player.wait_for_keep_alive.load(Ordering::Relaxed)
+            && keep_alive.keep_alive_id == player.keep_alive_id.load(Ordering::Relaxed)
         {
-            player
-                .wait_for_keep_alive
-                .store(false, std::sync::atomic::Ordering::Relaxed);
+            player.wait_for_keep_alive.store(false, Ordering::Relaxed);
         } else {
-            self.kick(TextComponent::text("Timeout")).await;
+            self.kick(TextComponent::text(
+                "Timeout, The server probably has a deadlock!",
+            ))
+            .await;
         }
     }
 
@@ -1373,11 +1338,8 @@ impl JavaClientPlatform {
             log::error!("Expected packet sequence >= 0");
         }
         player.packet_sequence.store(
-            player
-                .packet_sequence
-                .load(std::sync::atomic::Ordering::Relaxed)
-                .max(sequence),
-            std::sync::atomic::Ordering::Relaxed,
+            player.packet_sequence.load(Ordering::Relaxed).max(sequence),
+            Ordering::Relaxed,
         );
     }
 
@@ -1407,7 +1369,7 @@ impl JavaClientPlatform {
         player: &Player,
         use_item_on: SUseItemOn,
         server: &Arc<Server>,
-    ) -> Result<(), Box<dyn PumpkinError>> {
+    ) -> Result<(), BlockPlacingError> {
         if !player.has_client_loaded() {
             return Ok(());
         }
@@ -1420,133 +1382,170 @@ impl JavaClientPlatform {
 
         if !player.can_interact_with_block_at(&position, 1.0) {
             // TODO: maybe log?
-            return Err(BlockPlacingError::BlockOutOfReach.into());
+            return Err(BlockPlacingError::BlockOutOfReach);
         }
 
         let Ok(face) = BlockDirection::try_from(use_item_on.face.0) else {
-            return Err(BlockPlacingError::InvalidBlockFace.into());
+            return Err(BlockPlacingError::InvalidBlockFace);
         };
+
+        let Ok(hand) = Hand::try_from(use_item_on.hand.0) else {
+            return Err(BlockPlacingError::InvalidHand);
+        };
+
+        //TODO this.player.resetLastActionTime();
+        //TODO this.gameModeForPlayer == GameType.SPECTATOR
 
         let inventory = player.inventory();
         let held_item = inventory.held_item();
         let off_hand_item = inventory.off_hand_item().await;
+        let held_item_empty = held_item.lock().await.is_empty();
+        let off_hand_item_empty = off_hand_item.lock().await.is_empty();
+        let item = if matches!(hand, Hand::Left) {
+            held_item
+        } else {
+            off_hand_item
+        };
 
         let entity = &player.living_entity.entity;
-        let world = &entity.world.read().await;
+        let world = &entity.world;
         let block = world.get_block(&position).await;
 
-        let sneaking = player
-            .living_entity
-            .entity
-            .sneaking
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
+
         // Code based on the java class ServerPlayerInteractionManager
-        if !(sneaking
-            && (!held_item.lock().await.is_empty() || !off_hand_item.lock().await.is_empty()))
-        {
-            match match server
-                .block_registry
-                .use_with_item(
-                    block,
+        if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
+            let result = self
+                .call_use_item_on(
                     player,
                     &position,
-                    &BlockHitResult {
-                        side: &face,
-                        cursor_pos: &cursor_pos,
-                    },
-                    &held_item,
-                    server,
+                    &cursor_pos,
+                    &face,
+                    &item,
                     world,
+                    block,
+                    server,
                 )
-                .await
-            {
-                BlockActionResult::PassToDefault => {
-                    server
-                        .block_registry
-                        .on_use(
-                            block,
-                            player,
-                            &position,
-                            &BlockHitResult {
-                                side: &face,
-                                cursor_pos: &cursor_pos,
-                            },
-                            server,
-                            world,
-                        )
-                        .await
+                .await;
+            if result.consumes_action() {
+                // TODO: Trigger ANY_BLOCK_USE Criteria
+
+                if matches!(result, BlockActionResult::SuccessServer) {
+                    player.swing_hand(hand, true).await;
                 }
-                BlockActionResult::Fail => BlockActionResult::Fail,
-                BlockActionResult::Consume => BlockActionResult::Consume,
-                BlockActionResult::Continue => BlockActionResult::Continue,
-                BlockActionResult::Success => BlockActionResult::Success,
-            } {
-                BlockActionResult::Fail => return Ok(()),
-                BlockActionResult::Success | BlockActionResult::Consume => {
-                    /* TODO: Swing hand */
-                    return Ok(());
-                }
-                BlockActionResult::Continue | BlockActionResult::PassToDefault => {} // Do nothing,
+                return Ok(());
             }
         }
+        let mut stack = item.lock().await;
 
-        if held_item.lock().await.is_empty() {
+        if stack.is_empty() {
+            // TODO item cool down
             // If the hand is empty we stop here
             return Ok(());
         }
 
         server
             .item_registry
-            .use_on_block(
-                held_item.lock().await.item,
-                player,
-                position,
-                face,
-                block,
-                server,
-            )
+            .use_on_block(&mut stack, player, position, face, block, server)
             .await;
-        self.update_sequence(player, use_item_on.sequence.0);
 
         // Check if the item is a block, because not every item can be placed :D
-        if let Some(block) = get_block_by_item(held_item.lock().await.item.id) {
+        let item_id = stack.item.id;
+        if let Some(block) = Block::from_item_id(item_id) {
             should_try_decrement = self
                 .run_is_block_place(player, block, server, use_item_on, position, face)
                 .await?;
-        }
-
-        // Check if the item is a spawn egg
-        if let Some(entity) = entity_from_egg(held_item.lock().await.item.id) {
-            self.spawn_entity_from_egg(player, entity, position, face)
-                .await;
-            should_try_decrement = true;
         }
 
         if should_try_decrement {
             // TODO: Config
             // Decrease block count
             if player.gamemode.load() != GameMode::Creative {
-                held_item.lock().await.decrement(1);
+                stack.decrement(1);
             }
         }
 
         Ok(())
     }
 
-    pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
-        let world = &player.living_entity.entity.world.read().await;
-        let updated_sign = SignBlockEntity::new(
-            sign_data.location,
-            sign_data.is_front_text,
-            [
-                sign_data.line_1,
-                sign_data.line_2,
-                sign_data.line_3,
-                sign_data.line_4,
-            ],
-        );
+    #[allow(clippy::too_many_arguments)]
+    async fn call_use_item_on(
+        &self,
+        player: &Player,
+        position: &BlockPos,
+        cursor_pos: &Vector3<f32>,
+        face: &BlockDirection,
+        held_item: &Arc<Mutex<ItemStack>>,
+        world: &Arc<World>,
+        block: &Block,
+        server: &Arc<Server>,
+    ) -> BlockActionResult {
+        let result = server
+            .block_registry
+            .use_with_item(
+                block,
+                player,
+                position,
+                &BlockHitResult { face, cursor_pos },
+                held_item,
+                server,
+                world,
+            )
+            .await;
 
-        world.add_block_entity(Arc::new(updated_sign)).await;
+        if result.consumes_action() {
+            // TODO: Trigger ITEM_USED_ON_BLOCK Criteria
+            return result;
+        }
+
+        if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+            let result = server
+                .block_registry
+                .on_use(
+                    block,
+                    player,
+                    position,
+                    &BlockHitResult { face, cursor_pos },
+                    server,
+                    world,
+                )
+                .await;
+
+            if result.consumes_action() {
+                // TODO: Trigger DEFAULT_BLOCK_USE Criteria
+                return result;
+            }
+        }
+
+        BlockActionResult::Pass
+    }
+
+    pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
+        let world = &player.living_entity.entity.world;
+        let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
+            return;
+        };
+        let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
+            return;
+        };
+        if sign_entity.is_waxed.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let text = if sign_data.is_front_text {
+            &sign_entity.front_text
+        } else {
+            &sign_entity.back_text
+        };
+
+        *text.messages.lock().unwrap() = [
+            sign_data.line_1,
+            sign_data.line_2,
+            sign_data.line_3,
+            sign_data.line_4,
+        ];
+        *sign_entity.currently_editing_player.lock().await = None;
+        world.update_block_entity(&block_entity).await;
     }
 
     pub async fn handle_use_item(
@@ -1560,11 +1559,19 @@ impl JavaClientPlatform {
         }
 
         let inventory = player.inventory();
-        let binding = inventory.held_item();
+        let Ok(hand) = Hand::try_from(use_item.hand.0) else {
+            self.kick(TextComponent::text("InvalidHand")).await;
+            return;
+        };
+        self.update_sequence(player, use_item.sequence.0);
+        let item_in_hand = if hand == Hand::Left {
+            inventory.held_item()
+        } else {
+            inventory.off_hand_item().await
+        };
 
         let hit_result = player
             .world()
-            .await
             .raycast(
                 player.eye_position(),
                 player.eye_position().add(
@@ -1582,28 +1589,63 @@ impl JavaClientPlatform {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickBlock,
-                &binding,
-                player.world().await.get_block(&hit_pos).await,
+                &item_in_hand,
+                player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
             )
         } else {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickAir,
-                &binding,
+                &item_in_hand,
                 &Block::AIR,
                 None,
             )
         };
+        let mut held = item_in_hand.lock().await;
+        if held.get_data_component::<ConsumableImpl>().is_some() {
+            // If its food we want to make sure we can actually consume it
+            if let Some(food) = held.get_data_component::<FoodImpl>() {
+                if player.abilities.lock().await.invulnerable
+                    || food.can_always_eat
+                    || player.hunger_manager.level.load() < 20
+                {
+                    player
+                        .living_entity
+                        .set_active_hand(hand, held.clone())
+                        .await;
+                }
+            } else {
+                player
+                    .living_entity
+                    .set_active_hand(hand, held.clone())
+                    .await;
+            }
+        }
+        if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
+            // If it can be equipped we want to make sure we can actually equip it
+            player
+                .enqueue_equipment_change(equippable.slot, &held)
+                .await;
+
+            let binding = inventory.entity_equipment.lock().await.get(equippable.slot);
+            let mut equip_item = binding.lock().await;
+            if equip_item.is_empty() {
+                *equip_item = held.clone();
+                held.decrement_unless_creative(player.gamemode.load(), 1);
+            } else {
+                let binding = held.clone();
+                *held = equip_item.clone();
+                *equip_item = binding;
+            }
+        }
 
         send_cancellable! {{
             event;
             'after: {
-                let held = binding.lock().await;
                 let item = held.item;
                 drop(held);
                 server.item_registry.on_use(item, player).await;
-                self.update_sequence(player, use_item.sequence.0);
             }
         }}
     }
@@ -1616,7 +1658,7 @@ impl JavaClientPlatform {
         }
         let inv = player.inventory();
         inv.set_selected_slot(slot as u8);
-        let stack = *inv.held_item().lock().await;
+        let stack = inv.held_item().lock().await.clone();
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         player.living_entity.send_equipment_changes(equipment).await;
     }
@@ -1637,13 +1679,46 @@ impl JavaClientPlatform {
 
         if valid_slot && is_legal {
             let mut player_screen_handler = player.player_screen_handler.lock().await;
+
+            let is_armor_equipped = player_screen_handler
+                .get_slot(packet.slot as usize)
+                .await
+                .get_stack()
+                .await
+                .lock()
+                .await
+                .are_equal(&item_stack);
+            if !is_armor_equipped {
+                if (5..9).contains(&packet.slot) {
+                    player
+                        .enqueue_equipment_change(
+                            &match packet.slot {
+                                5 => EquipmentSlot::HEAD,
+                                6 => EquipmentSlot::CHEST,
+                                7 => EquipmentSlot::LEGS,
+                                8 => EquipmentSlot::FEET,
+                                _ => unreachable!(),
+                            },
+                            &item_stack,
+                        )
+                        .await;
+                } else if (36..45).contains(&packet.slot) {
+                    let slot = packet.slot - 36;
+                    if player.inventory().get_selected_slot() == slot as u8 {
+                        let equipment = &[(EquipmentSlot::MAIN_HAND, item_stack.clone())];
+                        player.living_entity.send_equipment_changes(equipment).await;
+                    }
+                }
+            }
+
             player_screen_handler
                 .get_slot(packet.slot as usize)
                 .await
-                .set_stack(item_stack)
+                .set_stack(item_stack.clone())
                 .await;
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
             player_screen_handler.send_content_updates().await;
+            drop(player_screen_handler);
         } else if is_negative && is_legal {
             // Item drop
             player.drop_item(item_stack).await;
@@ -1652,8 +1727,11 @@ impl JavaClientPlatform {
     }
 
     pub async fn handle_chunk_batch(&self, player: &Player, packet: SChunkBatch) {
-        let mut chunk_manager = player.chunk_manager.lock().await;
-        chunk_manager.handle_acknowledge(packet.chunks_per_tick);
+        player
+            .chunk_manager
+            .lock()
+            .await
+            .handle_acknowledge(packet.chunks_per_tick);
         log::trace!(
             "Client requested {} chunks per tick",
             packet.chunks_per_tick
@@ -1675,7 +1753,7 @@ impl JavaClientPlatform {
         packet: SCommandSuggestion,
         server: &Arc<Server>,
     ) {
-        let mut src = CommandSender::Player(player.clone());
+        let src = CommandSender::Player(player.clone());
         let Some(cmd) = &packet.command.get(1..) else {
             return;
         };
@@ -1685,8 +1763,12 @@ impl JavaClientPlatform {
             return;
         };
 
-        let dispatcher = server.command_dispatcher.read().await;
-        let suggestions = dispatcher.find_suggestions(&mut src, server, cmd).await;
+        let suggestions = server
+            .command_dispatcher
+            .read()
+            .await
+            .find_suggestions(&src, server, cmd)
+            .await;
 
         let response = CCommandSuggestions::new(
             packet.id,
@@ -1707,36 +1789,6 @@ impl JavaClientPlatform {
         );
     }
 
-    async fn spawn_entity_from_egg(
-        &self,
-        player: &Player,
-        entity_type: EntityType,
-        location: BlockPos,
-        face: BlockDirection,
-    ) {
-        let world_pos = BlockPos(location.0 + face.to_offset());
-        // Align the position like Vanilla does
-        let pos = Vector3::new(
-            f64::from(world_pos.0.x) + 0.5,
-            f64::from(world_pos.0.y),
-            f64::from(world_pos.0.z) + 0.5,
-        );
-        // Create rotation like Vanilla
-        let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
-
-        let world = player.world().await;
-        // Create a new mob and UUID based on the spawn egg id
-        let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
-
-        // Set the rotation
-        mob.get_entity().set_rotation(yaw, 0.0);
-
-        // Broadcast the new mob to all players
-        world.spawn_entity(mob).await;
-
-        // TODO: send/configure additional commands/data based on the type of entity (horse, slime, etc)
-    }
-
     const WORLD_LOWEST_Y: i8 = -64;
     const WORLD_MAX_Y: u16 = 320;
 
@@ -1749,13 +1801,12 @@ impl JavaClientPlatform {
         use_item_on: SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
-    ) -> Result<bool, Box<dyn PumpkinError>> {
+    ) -> Result<bool, BlockPlacingError> {
         let entity = &player.living_entity.entity;
-        let world = &entity.world.read().await;
 
         // Check if the block is under the world
         if location.0.y + face.to_offset().y < i32::from(Self::WORLD_LOWEST_Y) {
-            return Err(BlockPlacingError::BlockOutOfWorld.into());
+            return Err(BlockPlacingError::BlockOutOfWorld);
         }
 
         // Check the world's max build height
@@ -1770,19 +1821,21 @@ impl JavaClientPlatform {
                     true,
                 )
                 .await;
-            return Err(BlockPlacingError::BlockOutOfWorld.into());
+            return Err(BlockPlacingError::BlockOutOfWorld);
         }
 
         match player.gamemode.load() {
             GameMode::Spectator | GameMode::Adventure => {
-                return Err(BlockPlacingError::InvalidGamemode.into());
+                return Err(BlockPlacingError::InvalidGamemode);
             }
             _ => {}
         }
 
         let clicked_block_pos = BlockPos(location.0);
+        let world = &entity.world;
+
         let (clicked_block, clicked_block_state) =
-            world.get_block_and_block_state(&clicked_block_pos).await;
+            world.get_block_and_state(&clicked_block_pos).await;
 
         let replace_clicked_block = if clicked_block == block {
             world
@@ -1816,7 +1869,7 @@ impl JavaClientPlatform {
             } else {
                 let block_pos = BlockPos(location.0 + face.to_offset());
                 let (previous_block, previous_block_state) =
-                    world.get_block_and_block_state(&block_pos).await;
+                    world.get_block_and_state(&block_pos).await;
 
                 let replace_previous_block = if previous_block == block {
                     world
@@ -1887,7 +1940,7 @@ impl JavaClientPlatform {
             .await;
 
         // Check if there is a player in the way of the block being placed
-        let shapes = get_state_by_state_id(new_state).get_block_collision_shapes();
+        let shapes = BlockState::from_id(new_state).get_block_collision_shapes();
         for player in world.get_nearby_players(location.0.to_f64(), 3.0).await {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {
@@ -1911,8 +1964,8 @@ impl JavaClientPlatform {
     }
 
     /// Checks if the block placed was a sign, then opens a dialog.
-    pub async fn send_sign_packet(&self, block_position: BlockPos) {
-        self.enqueue_packet(&COpenSignEditor::new(block_position, true))
+    pub async fn send_sign_packet(&self, block_position: BlockPos, is_front_text: bool) {
+        self.enqueue_packet(&COpenSignEditor::new(block_position, is_front_text))
             .await;
     }
 }

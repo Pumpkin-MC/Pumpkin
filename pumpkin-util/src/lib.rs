@@ -19,6 +19,8 @@ pub mod serde_enum_as_integer;
 pub mod text;
 pub mod translation;
 
+pub mod jwt;
+
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum HeightMap {
@@ -44,13 +46,22 @@ macro_rules! global_path {
     }};
 }
 
+/// Reads JSON files from disk. Don't use this for static files!
 #[macro_export]
 macro_rules! read_data_from_file {
     ($path:expr) => {{
-        use std::fs;
         use $crate::global_path;
-        serde_json::from_str(&fs::read_to_string(global_path!($path)).expect("no data file"))
+        serde_json::from_str(&std::fs::read_to_string(global_path!($path)).expect("no data file"))
             .expect("failed to decode data")
+    }};
+}
+
+/// Includes a JSON file on build time. Use this for static files.
+#[macro_export]
+macro_rules! include_json_static {
+    ($path:expr, $ty:ty) => {{
+        serde_json::from_str::<$ty>(include_str!($path))
+            .expect(concat!("Could not parse JSON file: ", $path))
     }};
 }
 
@@ -139,4 +150,33 @@ macro_rules! assert_eq_delta {
             panic!("{} vs {} ({} vs {})", $x, $y, ($x - $y).abs(), $d);
         }
     };
+}
+
+/// Represents the player's dominant hand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hand {
+    /// Usually the player's off-hand.
+    Left,
+    /// Usually the player's primary hand.
+    Right,
+}
+
+impl Hand {
+    pub fn all() -> [Self; 2] {
+        [Self::Right, Self::Left]
+    }
+}
+
+pub struct InvalidHand;
+
+impl TryFrom<i32> for Hand {
+    type Error = InvalidHand;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Left),
+            1 => Ok(Self::Right),
+            _ => Err(InvalidHand),
+        }
+    }
 }

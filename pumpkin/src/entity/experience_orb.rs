@@ -1,13 +1,17 @@
-use std::sync::{Arc, atomic::AtomicU32};
+use core::f32;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering},
+};
 
 use async_trait::async_trait;
-use pumpkin_data::{damage::DamageType, entity::EntityType};
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
 use crate::{server::Server, world::World};
 
-use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
@@ -34,7 +38,7 @@ impl ExperienceOrbEntity {
                 Uuid::new_v4(),
                 world.clone(),
                 position,
-                EntityType::EXPERIENCE_ORB,
+                &EntityType::EXPERIENCE_ORB,
                 false,
             );
             let orb = Arc::new(Self::new(entity, i));
@@ -69,14 +73,36 @@ impl ExperienceOrbEntity {
     }
 }
 
+impl NBTStorage for ExperienceOrbEntity {}
+
 #[async_trait]
 impl EntityBase for ExperienceOrbEntity {
     async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
-        self.entity.tick(caller, server).await;
+        let entity = &self.entity;
+        entity.tick(caller.clone(), server).await;
+        let bounding_box = entity.bounding_box.load();
 
-        let age = self
-            .orb_age
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let original_velo = entity.velocity.load();
+
+        let mut velo = original_velo;
+
+        let no_clip = !self
+            .entity
+            .world
+            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
+            .await;
+        // TODO: isSubmergedIn
+        if !no_clip {
+            velo.y -= self.get_gravity();
+        }
+
+        entity.velocity.store(velo);
+
+        entity.move_entity(caller.clone(), velo).await;
+
+        entity.tick_block_collisions(&caller, server).await;
+
+        let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
         if age >= 6000 {
             self.entity.remove().await;
         }
@@ -99,11 +125,15 @@ impl EntityBase for ExperienceOrbEntity {
         }
     }
 
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
-        false
-    }
-
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn get_gravity(&self) -> f64 {
+        0.03
     }
 }

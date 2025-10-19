@@ -1,10 +1,13 @@
-use std::f32::{self};
+use std::{
+    f32::{self},
+    sync::atomic::Ordering,
+};
 
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use async_trait::async_trait;
-use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;
 
-use super::{Entity, EntityBase, living::LivingEntity};
+pub mod wind_charge;
 
 pub struct ThrownItemEntity {
     entity: Entity,
@@ -45,7 +48,7 @@ impl ThrownItemEntity {
             .velocity
             .store(self.entity.velocity.load().add_raw(
                 shooter_vel.x,
-                if shooter.on_ground.load(std::sync::atomic::Ordering::Relaxed) {
+                if shooter.on_ground.load(Ordering::Relaxed) {
                     0.0
                 } else {
                     shooter_vel.y
@@ -75,17 +78,23 @@ impl ThrownItemEntity {
     }
 }
 
+impl NBTStorage for ThrownItemEntity {}
+
 #[async_trait]
 impl EntityBase for ThrownItemEntity {
     fn get_entity(&self) -> &Entity {
         &self.entity
     }
 
-    async fn damage(&self, _amount: f32, _damage_type: DamageType) -> bool {
-        false
-    }
-
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn get_gravity(&self) -> f64 {
+        0.03
     }
 }

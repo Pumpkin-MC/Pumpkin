@@ -7,17 +7,17 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
-use crate::block::pumpkin_block::CanPlaceAtArgs;
-use crate::block::pumpkin_block::PumpkinBlock;
-use crate::block::pumpkin_block::{GetStateForNeighborUpdateArgs, OnPlaceArgs};
+use crate::block::BlockBehaviour;
+use crate::block::CanPlaceAtArgs;
+use crate::block::{GetStateForNeighborUpdateArgs, OnPlaceArgs};
 
-use super::abstruct_wall_mounting::WallMountedBlock;
+use super::abstract_wall_mounting::WallMountedBlock;
 
 #[pumpkin_block("minecraft:grindstone")]
 pub struct GrindstoneBlock;
 
 #[async_trait]
-impl PumpkinBlock for GrindstoneBlock {
+impl BlockBehaviour for GrindstoneBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props =
             GrindstoneLikeProperties::from_state_id(args.block.default_state.id, args.block);

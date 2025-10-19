@@ -8,10 +8,10 @@ use crate::{IdOr, SoundEvent, codec::var_int::VarInt};
 #[derive(Serialize)]
 #[packet(PLAY_EXPLODE)]
 pub struct CExplosion {
-    center: Vector3<f64>,
-    knockback: Option<Vector3<f64>>,
-    particle: VarInt,
-    sound: IdOr<SoundEvent>,
+    pub center: Vector3<f64>,
+    pub knockback: Option<Vector3<f64>>,
+    pub particle: VarInt,
+    pub sound: IdOr<SoundEvent>,
 }
 
 impl CExplosion {

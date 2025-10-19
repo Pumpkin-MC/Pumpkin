@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -7,8 +7,8 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct Packets {
     version: u32,
-    serverbound: HashMap<String, Vec<String>>,
-    clientbound: HashMap<String, Vec<String>>,
+    serverbound: BTreeMap<String, Vec<String>>,
+    clientbound: BTreeMap<String, Vec<String>>,
 }
 
 pub(crate) fn build() -> TokenStream {
@@ -35,7 +35,7 @@ pub(crate) fn build() -> TokenStream {
     )
 }
 
-pub(crate) fn parse_packets(packets: HashMap<String, Vec<String>>) -> proc_macro2::TokenStream {
+pub(crate) fn parse_packets(packets: BTreeMap<String, Vec<String>>) -> proc_macro2::TokenStream {
     let mut consts = TokenStream::new();
 
     for packet in packets {
@@ -43,6 +43,7 @@ pub(crate) fn parse_packets(packets: HashMap<String, Vec<String>>) -> proc_macro
 
         for (id, packet_name) in packet.1.iter().enumerate() {
             let packet_id = id as i32;
+            let packet_name = packet_name.replace("/", "_");
             let name = format!("{phase}_{packet_name}").to_uppercase();
             let name = format_ident!("{}", name);
             consts.extend([quote! {

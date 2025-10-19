@@ -1,5 +1,5 @@
 use std::{
-    io::{ErrorKind, Read, Write},
+    io::{Error, ErrorKind, Read, Write},
     num::NonZeroUsize,
 };
 
@@ -10,7 +10,10 @@ use serde::{
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
+use crate::{
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
+    serial::{PacketRead, PacketWrite},
+};
 
 pub type VarUIntType = u32;
 
@@ -116,29 +119,24 @@ gen_from!(i16);
 gen_from!(u16);
 gen_from!(u32);
 
-macro_rules! gen_try_from {
+macro_rules! gen_from {
     ($ty: ty) => {
-        impl TryFrom<$ty> for VarUInt {
-            type Error = <i32 as TryFrom<$ty>>::Error;
-
-            fn try_from(value: $ty) -> Result<Self, Self::Error> {
-                Ok(VarUInt(value as u32))
+        impl From<$ty> for VarUInt {
+            fn from(value: $ty) -> Self {
+                VarUInt(value as u32)
             }
         }
     };
 }
 
-gen_try_from!(i32);
-gen_try_from!(i64);
-gen_try_from!(u64);
-gen_try_from!(isize);
-gen_try_from!(usize);
+gen_from!(i32);
+gen_from!(i64);
+gen_from!(u64);
+gen_from!(isize);
+gen_from!(usize);
 
 impl Serialize for VarUInt {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut value = self.0;
         let mut buf = Vec::with_capacity(5);
 
@@ -154,10 +152,7 @@ impl Serialize for VarUInt {
 }
 
 impl<'de> Deserialize<'de> for VarUInt {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct VarIntVisitor;
 
         impl<'de> Visitor<'de> for VarIntVisitor {
@@ -167,10 +162,7 @@ impl<'de> Deserialize<'de> for VarUInt {
                 formatter.write_str("a valid VarInt encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let mut val = 0;
                 for i in 0..VarUInt::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
@@ -187,5 +179,37 @@ impl<'de> Deserialize<'de> for VarUInt {
         }
 
         deserializer.deserialize_seq(VarIntVisitor)
+    }
+}
+
+impl PacketWrite for VarUInt {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        let mut val = self.0;
+        loop {
+            let mut byte = (val & 0x7F) as u8;
+            val >>= 7;
+            if val != 0 {
+                byte |= 0x80;
+            }
+            byte.write(writer)?;
+            if val == 0 {
+                break;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl PacketRead for VarUInt {
+    fn read<W: Read>(reader: &mut W) -> Result<Self, Error> {
+        let mut val = 0;
+        for i in 0..Self::MAX_SIZE.get() {
+            let byte = u8::read(reader)?;
+            val |= (u32::from(byte) & 0x7F) << (i * 7);
+            if byte & 0x80 == 0 {
+                return Ok(VarUInt(val));
+            }
+        }
+        Err(Error::new(ErrorKind::InvalidData, ""))
     }
 }

@@ -1,11 +1,13 @@
 pub mod ack;
 pub mod client;
 pub mod frame_set;
+pub mod network_item;
 pub mod packet_decoder;
 pub mod packet_encoder;
 pub mod server;
 
 pub const UDP_HEADER_SIZE: u16 = 28;
+pub const MTU: usize = 1400;
 
 pub const RAKNET_MAGIC: [u8; 16] = [
     0x00, 0xff, 0xff, 0x0, 0xfe, 0xfe, 0xfe, 0xfe, 0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78,

@@ -6,7 +6,7 @@ use pumpkin_data::chunk::{Biome, BiomeTree, NETHER_BIOME_SOURCE, OVERWORLD_BIOME
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
-    dimension::Dimension, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
+    dimension::Dimension, generation::noise::router::multi_noise_sampler::MultiNoiseSampler,
 };
 pub mod end;
 pub mod multi_noise;
@@ -54,18 +54,23 @@ pub fn hash_seed(seed: u64) -> i64 {
 #[cfg(test)]
 mod test {
     use pumpkin_data::{chunk::Biome, noise_router::OVERWORLD_BASE_NOISE_ROUTER};
-    use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+    use pumpkin_util::{
+        math::{vector2::Vector2, vector3::Vector3},
+        read_data_from_file,
+    };
     use serde::Deserialize;
 
     use crate::{
         GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
         chunk::palette::BIOME_NETWORK_MAX_BITS,
         dimension::Dimension,
-        generation::noise_router::{
-            multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
-            proto_noise_router::ProtoNoiseRouters,
+        generation::{
+            noise::router::{
+                multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+                proto_noise_router::ProtoNoiseRouters,
+            },
+            proto_chunk::TerrainCache,
         },
-        read_data_from_file,
     };
 
     use super::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed};
@@ -106,12 +111,41 @@ mod test {
         let surface_settings = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
+        let _terrain_cache = TerrainCache::from_random(&random_config);
+        let default_block = surface_settings.default_block.get_state();
 
         for data in expected_data.into_iter() {
             let chunk_pos = Vector2::new(data.x, data.z);
+
+            // Calculate biome mixer seed
+            use crate::biome::hash_seed;
+            let biome_mixer_seed = hash_seed(random_config.seed);
+
             let mut chunk =
-                ProtoChunk::new(chunk_pos, &noise_router, &random_config, surface_settings);
-            chunk.populate_biomes(Dimension::Overworld);
+                ProtoChunk::new(chunk_pos, surface_settings, default_block, biome_mixer_seed);
+
+            // Create MultiNoiseSampler for populate_biomes
+            use crate::generation::noise::router::multi_noise_sampler::{
+                MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+            };
+            use crate::generation::{biome_coords, positions::chunk_pos};
+
+            let start_x = chunk_pos::start_block_x(&chunk_pos);
+            let start_z = chunk_pos::start_block_z(&chunk_pos);
+            let biome_pos = Vector2::new(
+                biome_coords::from_block(start_x),
+                biome_coords::from_block(start_z),
+            );
+            let horizontal_biome_end = biome_coords::from_block(16);
+            let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
+                biome_pos.x,
+                biome_pos.y,
+                horizontal_biome_end as usize,
+            );
+            let mut multi_noise_sampler =
+                MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
+
+            chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
 
             for (biome_x, biome_y, biome_z, biome_id) in data.data {
                 let global_biome_pos = Vector3::new(biome_x, biome_y, biome_z);

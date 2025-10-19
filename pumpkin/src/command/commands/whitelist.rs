@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use pumpkin_config::{BASIC_CONFIG, whitelist::WhitelistEntry};
 use pumpkin_util::text::TextComponent;
 
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandExecutor, CommandSender,
@@ -18,6 +19,7 @@ use crate::{
         LoadJSONConfiguration, SaveJSONConfiguration,
         whitelist_data::{WHITELIST_CONFIG, WhitelistConfig},
     },
+    net::DisconnectReason,
     server::Server,
 };
 
@@ -33,10 +35,10 @@ async fn kick_non_whitelisted_players(server: &Server) {
                 continue;
             }
             player
-                .kick(TextComponent::translate(
-                    "multiplayer.disconnect.not_whitelisted",
-                    &[],
-                ))
+                .kick(
+                    DisconnectReason::Kicked,
+                    TextComponent::translate("multiplayer.disconnect.not_whitelisted", &[]),
+                )
                 .await;
         }
     }
@@ -223,7 +225,7 @@ impl CommandExecutor for RemoveExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.whitelist.remove.success",
-                            [TextComponent::text(player.gameprofile.name.clone())],
+                            [player.get_display_name().await],
                         ))
                         .await;
                 }

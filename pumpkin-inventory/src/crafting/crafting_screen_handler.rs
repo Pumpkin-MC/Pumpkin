@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use super::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
 use crate::crafting::crafting_inventory::CraftingInventory;
@@ -13,7 +13,8 @@ use async_trait::async_trait;
 use crossbeam_utils::atomic::AtomicCell;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING, RecipeResultStruct};
 use pumpkin_data::screen::WindowType;
-use pumpkin_data::tag::Tagable;
+use pumpkin_data::tag;
+use pumpkin_data::tag::Taggable;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
@@ -215,8 +216,7 @@ async fn recipe_matches<'a>(
                 if slot.is_empty()
                     || !slot
                         .item
-                        .is_tagged_with("#minecraft:decorated_pot_ingredients")
-                        .unwrap()
+                        .has_tag(&tag::Item::MINECRAFT_DECORATED_POT_INGREDIENTS)
                 {
                     return None;
                 }
@@ -239,7 +239,7 @@ impl ResultSlot {
         Self {
             inventory,
             id: AtomicU8::new(0),
-            result: Arc::new(Mutex::new(ItemStack::EMPTY)),
+            result: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             recipe_cache: AtomicCell::new(None),
         }
     }
@@ -316,8 +316,8 @@ impl ResultSlot {
             .match_recipe()
             .await
             .map(|x| ItemStack::from(x.0))
-            .unwrap_or(ItemStack::EMPTY);
-        *self.result.lock().await = result;
+            .unwrap_or(ItemStack::EMPTY.clone());
+        *self.result.lock().await = result.clone();
         result
     }
 }
@@ -333,8 +333,7 @@ impl Slot for ResultSlot {
     }
 
     fn set_id(&self, id: usize) {
-        self.id
-            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
+        self.id.store(id as u8, Ordering::Relaxed);
     }
 
     async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {
@@ -364,7 +363,7 @@ impl Slot for ResultSlot {
     }
 
     async fn get_cloned_stack(&self) -> ItemStack {
-        *self.result.lock().await
+        self.result.lock().await.clone()
     }
 
     async fn has_stack(&self) -> bool {
@@ -400,9 +399,9 @@ impl Slot for ResultSlot {
             let stack = self.result.lock().await;
             // Vanilla: net.minecraft.world.inventory.ResultContainer#removeItem
             // Regardless of the amount, we always return the full stack
-            *stack
+            stack.clone()
         } else {
-            ItemStack::EMPTY
+            ItemStack::EMPTY.clone()
         }
     }
 }
@@ -509,17 +508,17 @@ impl ScreenHandler for CraftingTableScreenHandler {
         if slot.has_stack().await {
             let slot_stack = slot.get_stack().await;
             let mut slot_stack = slot_stack.lock().await;
-            let stack_prev = *slot_stack;
+            let stack_prev = slot_stack.clone();
 
             if slot_index == 0 {
                 // From crafting result slot - move to player inventory (slots 10-46)
                 if !self.insert_item(&mut slot_stack, 10, 46, true).await {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (1..=9).contains(&slot_index) {
                 // From crafting input slots - try to move to player inventory (slots 10-46)
                 if !self.insert_item(&mut slot_stack, 10, 46, false).await {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             } else if (10..46).contains(&slot_index) {
                 // From player inventory - try to move to crafting input slots first (1-9)
@@ -528,40 +527,42 @@ impl ScreenHandler for CraftingTableScreenHandler {
                     if slot_index < 37 {
                         // From main inventory to hotbar
                         if !self.insert_item(&mut slot_stack, 37, 46, false).await {
-                            return ItemStack::EMPTY;
+                            return ItemStack::EMPTY.clone();
                         }
                     } else {
                         // From hotbar to main inventory
                         if !self.insert_item(&mut slot_stack, 10, 37, false).await {
-                            return ItemStack::EMPTY;
+                            return ItemStack::EMPTY.clone();
                         }
                     }
                 }
             } else {
                 // Any other slot - try to move to player inventory
                 if !self.insert_item(&mut slot_stack, 10, 46, false).await {
-                    return ItemStack::EMPTY;
+                    return ItemStack::EMPTY.clone();
                 }
             }
 
-            let stack = *slot_stack;
+            let stack = slot_stack.clone();
             drop(slot_stack); // release the lock before calling other methods
 
             if stack.is_empty() {
-                slot.set_stack_prev(ItemStack::EMPTY, stack_prev).await;
+                slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone())
+                    .await;
             } else {
                 slot.mark_dirty().await;
             }
 
             if stack.item_count == stack_prev.item_count {
                 // Nothing changed
-                return ItemStack::EMPTY;
+                return ItemStack::EMPTY.clone();
             }
 
             slot.on_take_item(player, &stack).await;
 
             if slot_index == 0 {
-                slot.on_quick_move_crafted(stack, stack_prev).await;
+                slot.on_quick_move_crafted(stack.clone(), stack_prev.clone())
+                    .await;
                 // For crafting result slot, drop any remaining items
                 if !stack.is_empty() {
                     player.drop_item(stack, false).await;
@@ -571,7 +572,7 @@ impl ScreenHandler for CraftingTableScreenHandler {
             return stack_prev;
         }
 
-        ItemStack::EMPTY
+        ItemStack::EMPTY.clone()
     }
 }
 

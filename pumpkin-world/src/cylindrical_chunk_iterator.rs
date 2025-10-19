@@ -19,20 +19,20 @@ impl Cylindrical {
     pub fn for_each_changed_chunk(
         old_cylindrical: Cylindrical,
         new_cylindrical: Cylindrical,
-        mut newly_included: impl FnMut(Vector2<i32>),
-        mut just_removed: impl FnMut(Vector2<i32>),
+        newly_included: &mut Vec<Vector2<i32>>,
+        just_removed: &mut Vec<Vector2<i32>>,
     ) {
         for new_cylindrical_chunk in new_cylindrical.all_chunks_within() {
             if !old_cylindrical.is_within_distance(new_cylindrical_chunk.x, new_cylindrical_chunk.y)
             {
-                newly_included(new_cylindrical_chunk);
+                newly_included.push(new_cylindrical_chunk);
             }
         }
 
         for old_cylindrical_chunk in old_cylindrical.all_chunks_within() {
             if !new_cylindrical.is_within_distance(old_cylindrical_chunk.x, old_cylindrical_chunk.y)
             {
-                just_removed(old_cylindrical_chunk);
+                just_removed.push(old_cylindrical_chunk);
             }
         }
     }
@@ -54,6 +54,9 @@ impl Cylindrical {
     }
 
     pub fn is_within_distance(&self, x: i32, z: i32) -> bool {
+        if self.view_distance.get() == 1 {
+            return false;
+        }
         let rel_x = ((x - self.center.x).abs() as i64 - 2).max(0);
         let rel_z = ((z - self.center.y).abs() as i64 - 2).max(0);
 
@@ -64,12 +67,15 @@ impl Cylindrical {
 
     /// Returns an iterator of all chunks within this cylinder
     pub fn all_chunks_within(&self) -> Vec<Vector2<i32>> {
+        if self.view_distance.get() == 1 {
+            return Vec::new();
+        }
         // I came up with this values by testing
         // for view distances 2-32 it usually gives 5 - 20 chunks more than needed if the player is on ground
         // this looks scary but this few calculations are definitely faster than ~5 reallocations
         // this part "3167) >> 10" is a replacement for flointing point multiplication
-        let estimated_capacity = ((self.view_distance.get() as u64 + 3).pow(2) * 3167) >> 10;
-        let mut all_chunks = Vec::with_capacity(estimated_capacity as usize);
+        let estimated_capacity = ((self.view_distance.get() as usize + 3).pow(2) * 3167) >> 10;
+        let mut all_chunks = Vec::with_capacity(estimated_capacity);
 
         for x in self.left()..=self.right() {
             let mut was_in = false;

@@ -2,19 +2,19 @@ use pumpkin_data::BlockState;
 use pumpkin_util::math::position::BlockPos;
 use serde::Deserialize;
 
-use crate::{ProtoChunk, generation::feature::features::tree::TreeNode};
-
 use super::TrunkPlacer;
+use crate::generation::feature::features::tree::TreeNode;
+use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct StraightTrunkPlacer;
 
 impl StraightTrunkPlacer {
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk,
+        chunk: &mut T,
         force_dirt: bool,
         dirt_state: &BlockState,
         trunk_state: &BlockState,

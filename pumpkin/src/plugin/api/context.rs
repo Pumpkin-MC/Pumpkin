@@ -13,7 +13,7 @@ use crate::{
     server::Server,
 };
 
-use super::{Event, EventPriority, PluginMetadata};
+use super::{EventPriority, Payload, PluginMetadata};
 
 /// The `Context` struct represents the context of a plugin, containing metadata,
 /// a server reference, and event handlers.
@@ -26,7 +26,7 @@ pub struct Context {
     metadata: PluginMetadata<'static>,
     pub server: Arc<Server>,
     pub handlers: Arc<RwLock<HandlerMap>>,
-    pub plugin_manager: Arc<RwLock<PluginManager>>,
+    pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<RwLock<PermissionManager>>,
 }
 impl Context {
@@ -44,7 +44,7 @@ impl Context {
         metadata: PluginMetadata<'static>,
         server: Arc<Server>,
         handlers: Arc<RwLock<HandlerMap>>,
-        plugin_manager: Arc<RwLock<PluginManager>>,
+        plugin_manager: Arc<PluginManager>,
         permission_manager: Arc<RwLock<PermissionManager>>,
     ) -> Self {
         Self {
@@ -78,6 +78,57 @@ impl Context {
     /// An optional reference to the player if found, or `None` if not.
     pub async fn get_player_by_name(&self, player_name: String) -> Option<Arc<Player>> {
         self.server.get_player_by_name(&player_name).await
+    }
+
+    /// Registers a service with the plugin context.
+    ///
+    /// This method allows you to associate a service instance with a given name,
+    /// making it available for retrieval by plugins or other components.
+    /// The service must be wrapped in an `Arc` and implement `Payload`.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The unique name to register the service under.
+    /// * `service` - The service instance to register, wrapped in an `Arc`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// context.register_service("my_service".to_string(), Arc::new(MyService::new())).await;
+    /// ```
+    pub async fn register_service<T: Payload + 'static>(&self, name: String, service: Arc<T>) {
+        let mut services = self.plugin_manager.services.write().await;
+        services.insert(name, service);
+    }
+
+    /// Retrieves a registered service by name and type.
+    ///
+    /// This method attempts to fetch a service previously registered under the given name,
+    /// and downcasts it to the requested type using name-based type checking.
+    /// Returns `Some(Arc<T>)` if the service exists and the type matches, or `None` otherwise.
+    ///
+    /// This method is safe to use across compilation boundaries as it uses string-based
+    /// type identification instead of `TypeId`.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the service to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<Arc<T>>` containing the service if found and type matches, or `None`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// if let Some(service) = context.get_service::<MyService>("my_service").await {
+    ///     // Use the service
+    /// }
+    /// ```
+    pub async fn get_service<T: Payload + 'static>(&self, name: &str) -> Option<Arc<T>> {
+        let services = self.plugin_manager.services.read().await;
+        let service = services.get(name)?.clone();
+        <dyn Payload>::downcast_arc::<T>(service)
     }
 
     /// Asynchronously registers a command with the server.
@@ -140,9 +191,8 @@ impl Context {
             ));
         }
 
-        let manager = self.permission_manager.read().await;
-        let mut registry = manager.registry.write().await;
-        registry.register_permission(permission)
+        let registry = &self.permission_manager.read().await.registry;
+        registry.write().await.register_permission(permission)
     }
 
     /// Check if a player has a permission
@@ -171,7 +221,7 @@ impl Context {
     ///
     /// # Constraints
     /// The handler must implement the `EventHandler<E>` trait.
-    pub async fn register_event<E: Event + 'static, H>(
+    pub async fn register_event<E: Payload + 'static, H>(
         &self,
         handler: Arc<H>,
         priority: EventPriority,
@@ -218,10 +268,9 @@ impl Context {
         &self,
         loader: Arc<dyn crate::plugin::loader::PluginLoader>,
     ) -> bool {
-        let mut manager = self.plugin_manager.write().await;
-        let before_count = manager.loaded_plugins().len();
-        manager.add_loader(loader).await;
-        let after_count = manager.loaded_plugins().len();
+        let before_count = self.plugin_manager.loaded_plugins().await.len();
+        self.plugin_manager.add_loader(loader).await;
+        let after_count = self.plugin_manager.loaded_plugins().await.len();
 
         // Return true if any new plugins were loaded
         after_count > before_count

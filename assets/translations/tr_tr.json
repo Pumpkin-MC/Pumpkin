@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Herkesin hızlı ve verimli Minecraft sunucuları kurmasını sağlar.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Protokol %s)\n",
+    "commands.pumpkin.github": "[Github Deposu]",
+    "commands.pumpkin.website": "[Web Sitesi]",
+    "commands.pumpkin.version.hover": "Sürümü kopyalamak için tıkla",
+    "commands.pumpkin.description.hover": "Açıklamayı kopyalamak için tıkla",
+    "commands.pumpkin.minecraft_version.hover": "Minecraft sürümünü kopyalamak için tıkla",
+    "commands.pumpkin.github.hover": "Depoyu açmak için tıkla.",
+    "commands.pumpkin.website.hover": "Web sitesini açmak için tıkla."
+}

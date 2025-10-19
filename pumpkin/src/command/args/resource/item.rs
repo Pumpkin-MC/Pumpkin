@@ -17,8 +17,8 @@ use crate::server::Server;
 pub struct ItemArgumentConsumer;
 
 impl GetClientSideArgParser for ItemArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType {
-        ArgumentType::Resource { identifier: "item" }
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+        ArgumentType::ItemStack
     }
 
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {

@@ -16,20 +16,20 @@ impl EndPortal {
 
     pub async fn get_new_portal(world: &Arc<World>, pos: BlockPos) {
         let mid_pos = Self::get_mid_pos(world, pos);
-        if let Some(mid_pos) = mid_pos.await {
-            if Self::is_valid_portal(world, mid_pos).await {
-                Self::create_portal(world, mid_pos).await;
-            }
+        if let Some(mid_pos) = mid_pos.await
+            && Self::is_valid_portal(world, mid_pos).await
+        {
+            Self::create_portal(world, mid_pos).await;
         }
     }
 
     async fn get_mid_pos(world: &World, pos: BlockPos) -> Option<BlockPos> {
-        let (block, state) = world.get_block_and_block_state(&pos).await;
+        let (block, state) = world.get_block_and_state_id(&pos).await;
         if block != &Self::FRAME_BLOCK {
             return None;
         }
 
-        let properties = EndPortalFrameProperties::from_state_id(state.id, block);
+        let properties = EndPortalFrameProperties::from_state_id(state, block);
         let facing_dir = properties.facing;
         let left_pos = pos.offset_dir(facing_dir.rotate_clockwise().to_offset(), 1);
         let right_pos = pos.offset_dir(facing_dir.rotate_counter_clockwise().to_offset(), 1);
@@ -57,9 +57,9 @@ impl EndPortal {
             let left_pos = mid_pos.offset_dir(facing.rotate_clockwise().to_offset(), 1);
             let right_pos = mid_pos.offset_dir(facing.rotate_counter_clockwise().to_offset(), 1);
 
-            let (mid_block, mid_state) = world.get_block_and_block_state(&mid_pos).await;
-            let (left_block, left_state) = world.get_block_and_block_state(&left_pos).await;
-            let (right_block, right_state) = world.get_block_and_block_state(&right_pos).await;
+            let (mid_block, mid_state) = world.get_block_and_state_id(&mid_pos).await;
+            let (left_block, left_state) = world.get_block_and_state_id(&left_pos).await;
+            let (right_block, right_state) = world.get_block_and_state_id(&right_pos).await;
 
             if left_block.id != Self::FRAME_BLOCK_ID
                 || mid_block.id != Self::FRAME_BLOCK_ID
@@ -68,11 +68,10 @@ impl EndPortal {
                 return false;
             }
 
-            let mid_properties = EndPortalFrameProperties::from_state_id(mid_state.id, mid_block);
-            let left_properties =
-                EndPortalFrameProperties::from_state_id(left_state.id, left_block);
+            let mid_properties = EndPortalFrameProperties::from_state_id(mid_state, mid_block);
+            let left_properties = EndPortalFrameProperties::from_state_id(left_state, left_block);
             let right_properties =
-                EndPortalFrameProperties::from_state_id(right_state.id, right_block);
+                EndPortalFrameProperties::from_state_id(right_state, right_block);
 
             if left_properties.facing != facing.opposite()
                 || mid_properties.facing != facing.opposite()

@@ -7,10 +7,10 @@ use crate::{VarInt, ser::network_serialize_no_prefix};
 #[derive(Serialize)]
 #[packet(PLAY_SET_ENTITY_DATA)]
 pub struct CSetEntityMetadata {
-    entity_id: VarInt,
+    pub entity_id: VarInt,
     // TODO: We should migrate the serialization of this into this file
     #[serde(serialize_with = "network_serialize_no_prefix")]
-    metadata: Box<[u8]>,
+    pub metadata: Box<[u8]>,
 }
 
 impl CSetEntityMetadata {
@@ -48,27 +48,33 @@ pub enum MetaDataType {
     TextComponent,
     OptionalTextComponent,
     ItemStack,
+    BlockState,
+    OptionalBlockState,
     Boolean,
+    Particle,
+    ParticleList,
     Rotation,
     BlockPos,
     OptionalBlockPos,
     Facing,
-    OptionalUuid,
-    BlockState,
-    OptionalBlockState,
-    NbtCompound,
-    Particle,
-    ParticleList,
+    LazyEntityReference,
+    OptionalGlobalPos,
     VillagerData,
     OptionalInt,
     EntityPose,
     CatVariant,
+    ChickenVariant,
+    CowVariant,
     WolfVariant,
+    WolfSoundVariant,
     FrogVariant,
-    OptionalGlobalPos,
+    PigVariant,
     PaintingVariant,
-    SnifferState,
     ArmadilloState,
+    SnifferState,
+    OxidationLevel,
+    CopperGolemState,
     Vector3f,
     QuaternionF,
+    Profile,
 }

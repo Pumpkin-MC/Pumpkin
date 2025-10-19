@@ -6,14 +6,19 @@ use bed::BedBlockEntity;
 use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
 use end_portal::EndPortalBlockEntity;
+use furnace::FurnaceBlockEntity;
 use piston::PistonBlockEntity;
 use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
+use crate::block::entities::ender_chest::EnderChestBlockEntity;
+use crate::block::entities::hopper::HopperBlockEntity;
+use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
+use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::{
-    block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
+    BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
     block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
 };
 
@@ -25,7 +30,12 @@ pub mod command_block;
 pub mod comparator;
 pub mod dropper;
 pub mod end_portal;
+pub mod ender_chest;
+pub mod furnace;
+pub mod hopper;
+pub mod mob_spawner;
 pub mod piston;
+pub mod shulker_box;
 pub mod sign;
 
 //TODO: We need a mark_dirty for chests
@@ -35,7 +45,7 @@ pub trait BlockEntity: Send + Sync {
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized;
-    async fn tick(&self, _world: &Arc<dyn SimpleWorld>) {}
+    async fn tick(&self, _world: Arc<dyn SimpleWorld>) {}
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
     async fn write_internal(&self, nbt: &mut NbtCompound) {
@@ -60,10 +70,20 @@ pub trait BlockEntity: Send + Sync {
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
     }
+    fn set_block_state(&mut self, _block_state: BlockStateId) {}
+    async fn on_block_replaced(self: Arc<Self>, world: Arc<dyn SimpleWorld>, position: BlockPos) {
+        if let Some(inventory) = self.get_inventory() {
+            world.scatter_inventory(&position, &inventory).await;
+        }
+    }
     fn is_dirty(&self) -> bool {
         false
     }
+
     fn as_any(&self) -> &dyn Any;
+    fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
+        None
+    }
 }
 
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
@@ -74,33 +94,43 @@ pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
 }
 
 pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> {
-    let id = nbt.get_string("id").unwrap();
-    match id.as_str() {
-        ChestBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt))),
-        SignBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt))),
-        BedBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<BedBlockEntity>(nbt))),
-        ComparatorBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<
-            ComparatorBlockEntity,
-        >(nbt))),
-        BarrelBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<BarrelBlockEntity>(
-            nbt,
-        ))),
-        DropperBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<DropperBlockEntity>(
-            nbt,
-        ))),
-        PistonBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<PistonBlockEntity>(
-            nbt,
-        ))),
-        EndPortalBlockEntity::ID => Some(Arc::new(
-            block_entity_from_generic::<EndPortalBlockEntity>(nbt),
-        )),
-        ChiseledBookshelfBlockEntity::ID => Some(Arc::new(block_entity_from_generic::<
+    Some(match nbt.get_string("id").unwrap() {
+        ChestBlockEntity::ID => Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt)),
+        EnderChestBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<EnderChestBlockEntity>(nbt))
+        }
+        SignBlockEntity::ID => Arc::new(block_entity_from_generic::<SignBlockEntity>(nbt)),
+        BedBlockEntity::ID => Arc::new(block_entity_from_generic::<BedBlockEntity>(nbt)),
+        ComparatorBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<ComparatorBlockEntity>(nbt))
+        }
+        BarrelBlockEntity::ID => Arc::new(block_entity_from_generic::<BarrelBlockEntity>(nbt)),
+        HopperBlockEntity::ID => Arc::new(block_entity_from_generic::<HopperBlockEntity>(nbt)),
+        MobSpawnerBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<MobSpawnerBlockEntity>(nbt))
+        }
+        DropperBlockEntity::ID => Arc::new(block_entity_from_generic::<DropperBlockEntity>(nbt)),
+        ShulkerBoxBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<ShulkerBoxBlockEntity>(nbt))
+        }
+        PistonBlockEntity::ID => Arc::new(block_entity_from_generic::<PistonBlockEntity>(nbt)),
+        EndPortalBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<EndPortalBlockEntity>(nbt))
+        }
+        ChiseledBookshelfBlockEntity::ID => Arc::new(block_entity_from_generic::<
             ChiseledBookshelfBlockEntity,
-        >(nbt))),
-        _ => None,
-    }
+        >(nbt)),
+        FurnaceBlockEntity::ID => Arc::new(block_entity_from_generic::<FurnaceBlockEntity>(nbt)),
+        _ => return None,
+    })
 }
 
 pub fn has_block_block_entity(block: &Block) -> bool {
     BLOCK_ENTITY_TYPES.contains(&block.name)
+}
+
+pub trait PropertyDelegate: Sync + Send {
+    fn get_property(&self, _index: i32) -> i32;
+    fn set_property(&self, _index: i32, _value: i32);
+    fn get_properties_size(&self) -> i32;
 }

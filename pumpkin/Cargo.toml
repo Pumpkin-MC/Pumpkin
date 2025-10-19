@@ -3,7 +3,7 @@ name = "pumpkin"
 version.workspace = true
 description = "Empowering everyone to host fast and efficient Minecraft servers."
 edition.workspace = true
-rust-version = "1.87"
+rust-version = "1.89"
 
 [package.metadata.tauri-winres]
 # FileDescription is handled as the Program name by Windows!
@@ -47,14 +47,14 @@ rand = "0.9"
 num-bigint = "0.4"
 
 # Console line reading
-rustyline-async = "0.4.6"
+rustyline-async = "0.4.7"
 
 # encryption
-rsa = { version = "=0.10.0-rc.1", features = ["sha1"] }
+rsa = { version = "=0.10.0-rc.5", features = ["sha1"] }
 rsa-der = "0.3"
 
 # authentication
-ureq = { version = "3.0.12", features = [
+ureq = { version = "3.1.2", features = [
     "json",
 ] }
 
@@ -64,7 +64,7 @@ sha1 = "=0.11.0-rc.0"
 hmac = "=0.13.0-rc.0"
 sha2 = "=0.11.0-rc.0"
 
-base64 = "0.22"
+base64 = "0.22.1"
 
 # logging
 simplelog = { version = "0.12.2", features = ["ansi_term"] }
@@ -74,17 +74,17 @@ time = "0.3"
 
 # plugins
 libloading = "0.8"
-bitflags = "2.9.1"
 rustc-hash = "2.1.1"
 
 # Task handling
-tokio-util = { version = "0.7.15", features = ["rt"] }
+tokio-util = { version = "0.7.16", features = ["rt"] }
 
 # Memory profiling
 dhat = { version = "0.3.3", optional = true }
 
-flate2 = "1.1.2"
-
+flate2 = "1.1.4"
+console-subscriber = { version = "0.4.1", optional = true }
+signature = "2.2.0"
 [dev-dependencies]
 tempfile.workspace = true
 
@@ -92,3 +92,5 @@ tempfile.workspace = true
 #https://nnethercote.github.io/dh_view/dh_view.html
 #https://valgrind.org/docs/manual/dh-manual.html
 dhat-heap = ["dep:dhat"]
+console-subscriber = ["dep:console-subscriber"]
+tokio_taskdump = ["pumpkin-world/tokio_taskdump"]

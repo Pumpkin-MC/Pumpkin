@@ -9,8 +9,10 @@ use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender};
+use crate::entity::EntityBase;
 use crate::server::Server;
 use async_trait::async_trait;
+use pumpkin_data::potion::Effect;
 use pumpkin_util::text::color::{Color, NamedColor};
 
 const NAMES: [&str; 1] = ["effect"];
@@ -90,10 +92,10 @@ impl CommandExecutor for GiveExecutor {
         let mut failed = 0;
 
         for target in targets {
-            if target.living_entity.has_effect(*effect).await
+            if target.living_entity.has_effect(effect).await
                 && target
                     .living_entity
-                    .get_effect(*effect)
+                    .get_effect(effect)
                     .await
                     .unwrap()
                     .amplifier
@@ -102,8 +104,8 @@ impl CommandExecutor for GiveExecutor {
                 failed += 1;
             } else {
                 target
-                    .add_effect(crate::entity::effect::Effect {
-                        r#type: *effect,
+                    .add_effect(Effect {
+                        effect_type: effect,
                         duration: second,
                         amplifier: amplifier as u8,
                         ambient: false, //this is not a beacon effect
@@ -115,8 +117,7 @@ impl CommandExecutor for GiveExecutor {
             }
         }
 
-        let translation_name =
-            TextComponent::translate(format!("effect.minecraft.{}", effect.to_name()), []);
+        let translation_name = TextComponent::translate(effect.translation_key.to_string(), []);
 
         if failed == targets.len() {
             sender
@@ -129,10 +130,7 @@ impl CommandExecutor for GiveExecutor {
             sender
                 .send_message(TextComponent::translate(
                     "commands.effect.give.success.single",
-                    [
-                        translation_name,
-                        TextComponent::text(targets[0].gameprofile.name.clone()),
-                    ],
+                    [translation_name, targets[0].get_display_name().await],
                 ))
                 .await;
         } else {
@@ -190,7 +188,7 @@ impl CommandExecutor for ClearExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         "commands.effect.clear.everything.success.single",
-                        [TextComponent::text(targets[0].gameprofile.name.to_string())],
+                        [targets[0].get_display_name().await],
                     ))
                     .await;
             } else {
@@ -233,8 +231,8 @@ impl CommandExecutor for ClearExecutor {
                         .send_message(TextComponent::translate(
                             "commands.effect.clear.specific.success.single",
                             [
-                                TextComponent::text(effect.to_name()),
-                                TextComponent::text(targets[0].gameprofile.name.to_string()),
+                                TextComponent::translate(effect.translation_key, []),
+                                targets[0].get_display_name().await,
                             ],
                         ))
                         .await;
@@ -245,7 +243,7 @@ impl CommandExecutor for ClearExecutor {
                         .send_message(TextComponent::translate(
                             "commands.effect.clear.specific.success.multiple",
                             [
-                                TextComponent::text(effect.to_name()),
+                                TextComponent::translate(effect.translation_key, []),
                                 TextComponent::text(targets.len().to_string()),
                             ],
                         ))

@@ -1,5 +1,5 @@
 use std::{
-    io::{Read, Write},
+    io::{Error, Read, Write},
     num::NonZeroUsize,
     ops::Deref,
 };
@@ -12,6 +12,7 @@ use serde::{
 use crate::{
     WritingError,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
+    serial::{PacketRead, PacketWrite},
 };
 
 pub type VarULongType = u64;
@@ -19,7 +20,7 @@ pub type VarULongType = u64;
 /**
  * A variable-length long type used by the Minecraft network protocol.
  */
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VarULong(pub VarULongType);
 
 impl VarULong {
@@ -37,7 +38,7 @@ impl VarULong {
 
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut x = self.0;
-        for _ in 0..Self::MAX_SIZE.get() {
+        loop {
             let byte = (x & 0x7F) as u8;
             x >>= 7;
             if x == 0 {
@@ -109,10 +110,7 @@ impl Deref for VarULong {
 }
 
 impl Serialize for VarULong {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut value = self.0;
         let mut buf = Vec::new();
 
@@ -128,10 +126,7 @@ impl Serialize for VarULong {
 }
 
 impl<'de> Deserialize<'de> for VarULong {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct VarLongVisitor;
 
         impl<'de> Visitor<'de> for VarLongVisitor {
@@ -141,10 +136,7 @@ impl<'de> Deserialize<'de> for VarULong {
                 formatter.write_str("a valid VarInt encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let mut val = 0;
                 for i in 0..VarULong::MAX_SIZE.get() {
                     if let Some(byte) = seq.next_element::<u8>()? {
@@ -161,5 +153,36 @@ impl<'de> Deserialize<'de> for VarULong {
         }
 
         deserializer.deserialize_seq(VarLongVisitor)
+    }
+}
+
+impl PacketWrite for VarULong {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        let mut x = self.0;
+        loop {
+            let byte = (x & 0x7F) as u8;
+            x >>= 7;
+            if x == 0 {
+                byte.write(writer)?;
+                break;
+            }
+            (byte | 0x80).write(writer)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl PacketRead for VarULong {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let mut val = 0;
+        for i in 0..Self::MAX_SIZE.get() {
+            let byte = u8::read(reader)?;
+            val |= (u64::from(byte) & 0b01111111) << (i * 7);
+            if byte & 0b10000000 == 0 {
+                return Ok(VarULong(val));
+            }
+        }
+        Err(Error::other("Invalid VarUInt"))
     }
 }

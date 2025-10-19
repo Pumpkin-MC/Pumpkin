@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro2::TokenStream;
@@ -8,7 +8,7 @@ use serde_json::Value;
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/game_rules.json");
 
-    let game_rules: HashMap<String, Value> =
+    let game_rules: BTreeMap<String, Value> =
         serde_json::from_str(&fs::read_to_string("../assets/game_rules.json").unwrap())
             .expect("Failed to parse game_rules.json");
 
@@ -153,11 +153,7 @@ pub(crate) fn build() -> TokenStream {
             use serde::{Serialize, Deserialize, Serializer, Deserializer};
             use std::{fmt::Display, str::FromStr};
 
-            pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                T: Display,
-                S: Serializer,
-            {
+            pub fn serialize<T: Display, S: Serializer>(value: &T, serializer: S) -> Result<S::Ok, S::Error> {
                 serializer.serialize_str(&value.to_string())
             }
 

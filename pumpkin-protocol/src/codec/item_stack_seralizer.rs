@@ -1,21 +1,20 @@
-use std::borrow::Cow;
-
 use crate::VarInt;
+use crate::codec::data_component::{deserialize, serialize};
+use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::item::Item;
 use pumpkin_world::item::ItemStack;
+use serde::ser::SerializeStruct;
 use serde::{
     Deserialize, Serialize, Serializer,
     de::{self, SeqAccess},
 };
+use std::borrow::Cow;
 
 #[derive(Debug, Clone)]
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
 
 impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
+    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
             type Value = ItemStackSerializer<'static>;
@@ -24,16 +23,13 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                 formatter.write_str("a valid Slot encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let item_count = seq
                     .next_element::<VarInt>()?
                     .ok_or(de::Error::custom("Failed to decode VarInt"))?;
 
                 let slot = if item_count.0 == 0 {
-                    ItemStackSerializer(Cow::Borrowed(&ItemStack::EMPTY))
+                    ItemStackSerializer(Cow::Borrowed(ItemStack::EMPTY))
                 } else {
                     let item_id = seq
                         .next_element::<VarInt>()?
@@ -41,15 +37,39 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
 
                     let num_components_to_add = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No component add length VarInt!"))?;
+                        .ok_or(de::Error::custom("No component add length VarInt!"))?
+                        .0 as usize;
                     let num_components_to_remove = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No component remove length VarInt!"))?;
+                        .ok_or(de::Error::custom("No component remove length VarInt!"))?
+                        .0 as usize;
 
-                    if num_components_to_add.0 != 0 || num_components_to_remove.0 != 0 {
-                        return Err(de::Error::custom(
-                            "Slot components are currently unsupported",
-                        ));
+                    let mut patch =
+                        Vec::with_capacity(num_components_to_add + num_components_to_remove);
+                    for _ in 0..num_components_to_add {
+                        let id = seq
+                            .next_element::<VarInt>()?
+                            .ok_or(de::Error::custom("No component id VarInt!"))?
+                            .0;
+                        let id = u8::try_from(id)
+                            .map_err(|_| de::Error::custom("Unknown component id VarInt!"))?;
+                        let id = DataComponent::try_from_id(id)
+                            .ok_or(de::Error::custom("Unknown component id VarInt!"))?;
+                        let _byte_len = seq
+                            .next_element::<VarInt>()?
+                            .ok_or(de::Error::custom("No data len VarInt!"))?;
+                        patch.push((id, Some(deserialize(id, &mut seq)?)))
+                    }
+                    for _ in 0..num_components_to_remove {
+                        let id = seq
+                            .next_element::<VarInt>()?
+                            .ok_or(de::Error::custom("No component id VarInt!"))?
+                            .0;
+                        let id = u8::try_from(id)
+                            .map_err(|_| de::Error::custom("Unknown component id VarInt!"))?;
+                        let id = DataComponent::try_from_id(id)
+                            .ok_or(de::Error::custom("Unknown component id VarInt!"))?;
+                        patch.push((id, None))
                     }
 
                     let item_id: u16 = item_id
@@ -57,9 +77,10 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                         .try_into()
                         .map_err(|_| de::Error::custom("Invalid item id!"))?;
 
-                    ItemStackSerializer(Cow::Owned(ItemStack::new(
+                    ItemStackSerializer(Cow::Owned(ItemStack::new_with_component(
                         item_count.0 as u8,
                         Item::from_id(item_id).unwrap_or(&Item::AIR),
+                        patch,
                     )))
                 };
 
@@ -72,30 +93,40 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
 }
 
 impl Serialize for ItemStackSerializer<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if self.0.is_empty() {
             VarInt(0).serialize(serializer)
         } else {
-            // TODO: Components
-
-            #[derive(Serialize)]
-            struct NetworkRepr {
-                item_count: VarInt,
-                item_id: VarInt,
-                components_to_add: VarInt,
-                components_to_remove: VarInt,
+            let calc = || {
+                let mut to_add = 0u8;
+                let mut to_remove = 0u8;
+                for (_id, data) in &self.0.patch {
+                    if data.is_none() {
+                        to_remove += 1;
+                    } else {
+                        to_add += 1;
+                    }
+                }
+                (to_add, to_remove)
+            };
+            let (to_add, to_remove) = calc();
+            let mut seq = serializer.serialize_struct("", 0)?;
+            seq.serialize_field::<VarInt>("", &VarInt::from(self.0.item_count))?;
+            seq.serialize_field::<VarInt>("", &VarInt::from(self.0.item.id))?;
+            seq.serialize_field::<VarInt>("", &VarInt::from(to_add))?;
+            seq.serialize_field::<VarInt>("", &VarInt::from(to_remove))?;
+            for (id, data) in &self.0.patch {
+                if let Some(data) = data {
+                    seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
+                    serialize(*id, data.as_ref(), &mut seq)?;
+                }
             }
-
-            NetworkRepr {
-                item_count: self.0.item_count.into(),
-                item_id: self.0.item.id.into(),
-                components_to_add: 0.into(),
-                components_to_remove: 0.into(),
+            for (id, data) in &self.0.patch {
+                if data.is_none() {
+                    seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
+                }
             }
-            .serialize(serializer)
+            seq.end()
         }
     }
 }
@@ -116,14 +147,14 @@ impl From<Option<ItemStack>> for ItemStackSerializer<'_> {
     fn from(item: Option<ItemStack>) -> Self {
         match item {
             Some(item) => ItemStackSerializer::from(item),
-            None => ItemStackSerializer(Cow::Borrowed(&ItemStack::EMPTY)),
+            None => ItemStackSerializer(Cow::Borrowed(ItemStack::EMPTY)),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ItemComponentHash {
-    pub added: Vec<(VarInt, VarInt)>,
+    pub added: Vec<(VarInt, i32)>,
     pub removed: Vec<VarInt>,
 }
 
@@ -138,8 +169,48 @@ pub struct ItemStackHash {
 impl OptionalItemStackHash {
     pub fn hash_equals(&self, other: &ItemStack) -> bool {
         if let Some(hash) = &self.0 {
-            // TODO: Components
-            hash.item_id == other.item.id.into() && hash.count == other.item_count.into()
+            if hash.item_id != other.item.id.into() || hash.count != other.item_count.into() {
+                return false;
+            }
+            let calc = || {
+                let mut to_add = 0u8;
+                let mut to_remove = 0u8;
+                for (_id, data) in &other.patch {
+                    if data.is_none() {
+                        to_remove += 1;
+                    } else {
+                        to_add += 1;
+                    }
+                }
+                (to_add, to_remove)
+            };
+            let (to_add, to_remove) = calc();
+            if to_add as usize != hash.components.added.len()
+                || to_remove as usize != hash.components.removed.len()
+            {
+                return false;
+            }
+            for (other_id, data) in &other.patch {
+                if let Some(data) = data {
+                    let checksum = data.get_hash();
+                    for (id, hash) in &hash.components.added {
+                        if id == &VarInt::from(other_id.to_id()) {
+                            if hash != &checksum {
+                                return false;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                } else if !hash
+                    .components
+                    .removed
+                    .contains(&VarInt::from(other_id.to_id()))
+                {
+                    return false;
+                }
+            }
+            true
         } else {
             other.is_empty()
         }
@@ -150,10 +221,7 @@ impl OptionalItemStackHash {
 pub struct OptionalItemStackHash(pub Option<ItemStackHash>);
 
 impl<'de> Deserialize<'de> for OptionalItemStackHash {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
+    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
             type Value = OptionalItemStackHash;
@@ -162,10 +230,7 @@ impl<'de> Deserialize<'de> for OptionalItemStackHash {
                 formatter.write_str("a valid Slot encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let is_some = seq
                     .next_element::<bool>()?
                     .ok_or(de::Error::custom("No is some bool!"))?;
@@ -198,10 +263,7 @@ impl<'de> Deserialize<'de> for OptionalItemStackHash {
 }
 
 impl<'de> Deserialize<'de> for ItemComponentHash {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
+    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl<'de> de::Visitor<'de> for Visitor {
             type Value = ItemComponentHash;
@@ -210,10 +272,7 @@ impl<'de> Deserialize<'de> for ItemComponentHash {
                 formatter.write_str("a valid Slot encoded in a byte sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 let mut added = Vec::new();
                 let mut removed = Vec::new();
 
@@ -225,8 +284,8 @@ impl<'de> Deserialize<'de> for ItemComponentHash {
                         .next_element::<VarInt>()?
                         .ok_or(de::Error::custom("No component id VarInt!"))?;
                     let component_value = seq
-                        .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No component value VarInt!"))?;
+                        .next_element::<i32>()?
+                        .ok_or(de::Error::custom("No component value i32!"))?;
                     added.push((component_id, component_value));
                 }
 

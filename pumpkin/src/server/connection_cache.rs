@@ -1,4 +1,3 @@
-use super::CURRENT_MC_VERSION;
 use crate::entity::player::Player;
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
@@ -9,6 +8,7 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
+use pumpkin_world::CURRENT_MC_VERSION;
 use std::{fs::File, io::Read, path::Path};
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
@@ -28,7 +28,7 @@ fn load_icon_from_bytes(png_data: &[u8]) -> String {
 }
 
 pub struct CachedStatus {
-    status_response: StatusResponse,
+    pub status_response: StatusResponse,
     // We cache the json response here so we don't parse it every time someone makes a status request.
     // Keep in mind that we must parse this again when the StatusResponse changes, which usually happen when a player joins or leaves.
     status_response_json: String,
@@ -39,18 +39,18 @@ pub struct CachedBranding {
     cached_server_brand: Box<[u8]>,
 }
 
-impl CachedBranding {
+impl<'a> CachedBranding {
     pub fn new() -> Self {
         let cached_server_brand = Self::build_brand();
         Self {
             cached_server_brand,
         }
     }
-    pub fn get_branding(&self) -> CPluginMessage {
+    pub fn get_branding(&self) -> CPluginMessage<'_> {
         CPluginMessage::new("minecraft:brand", &self.cached_server_brand)
     }
-    const BRAND: &str = "Pumpkin";
-    const BRAND_BYTES: &[u8] = Self::BRAND.as_bytes();
+    const BRAND: &'a str = "Pumpkin";
+    const BRAND_BYTES: &'a [u8] = Self::BRAND.as_bytes();
 
     fn build_brand() -> Box<[u8]> {
         let mut buf = Vec::new();
@@ -73,8 +73,8 @@ impl CachedStatus {
         }
     }
 
-    pub fn get_status(&self) -> CStatusResponse<'_> {
-        CStatusResponse::new(&self.status_response_json)
+    pub fn get_status(&self) -> CStatusResponse {
+        CStatusResponse::new(self.status_response_json.clone())
     }
 
     // TODO: Player samples

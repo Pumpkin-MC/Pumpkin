@@ -1,7 +1,8 @@
 use flate2::write::GzEncoder;
-use log::{LevelFilter, Log};
+use log::{LevelFilter, Log, Record};
 use rustyline_async::Readline;
 use simplelog::{CombinedLogger, Config, SharedLogger, WriteLogger};
+use std::fmt::format;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -41,9 +42,8 @@ impl GzipRollingLogger {
             let mut file = File::open(format!("logs/{filename}"))?;
             let mut encoder = GzEncoder::new(
                 BufWriter::new(File::create(&new_filename)?),
-                flate2::Compression::default(),
+                flate2::Compression::best(),
             );
-            println!("logs/{filename}");
             std::io::copy(&mut file, &mut encoder)?;
             encoder.finish()?;
         }
@@ -90,7 +90,7 @@ impl GzipRollingLogger {
         let mut file = File::open(format!("logs/{}", data.latest_filename))?;
         let mut encoder = GzEncoder::new(
             BufWriter::new(File::create(format!("logs/{new_filename}"))?),
-            flate2::Compression::default(),
+            flate2::Compression::best(),
         );
         std::io::copy(&mut file, &mut encoder)?;
         encoder.finish()?;
@@ -106,12 +106,32 @@ impl GzipRollingLogger {
     }
 }
 
+fn remove_ansi_color_code(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut in_escape_sequence = false;
+
+    for c in s.chars() {
+        if in_escape_sequence {
+            if c.is_ascii_alphabetic() {
+                // This broadly covers 'm', 'J', 'H', etc.
+                in_escape_sequence = false;
+            }
+        } else if c == '\x1B' {
+            in_escape_sequence = true;
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}
+
 impl Log for GzipRollingLogger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
         metadata.level() <= self.log_level
     }
 
-    fn log(&self, record: &log::Record) {
+    fn log(&self, record: &Record) {
         if !self.enabled(record.metadata()) {
             return;
         }
@@ -119,7 +139,17 @@ impl Log for GzipRollingLogger {
         let now = time::OffsetDateTime::now_utc();
 
         if let Ok(data) = self.data.lock() {
-            data.latest_logger.log(record);
+            let original_string = format(*record.args());
+            let string = remove_ansi_color_code(&original_string);
+            data.latest_logger.log(
+                &Record::builder()
+                    .args(format_args!("{string}"))
+                    .metadata(record.metadata().clone())
+                    .module_path(record.module_path())
+                    .file(record.file())
+                    .line(record.line())
+                    .build(),
+            );
             if data.current_day_of_month != now.day() {
                 drop(data);
                 if let Err(e) = self.rotate_log() {
@@ -163,7 +193,7 @@ impl ReadlineLogWrapper {
         }
     }
 
-    pub(crate) fn take_readline(&self) -> Option<Readline> {
+    pub fn take_readline(&self) -> Option<Readline> {
         if let Ok(mut result) = self.readline.lock() {
             result.take()
         } else {
@@ -183,19 +213,19 @@ impl ReadlineLogWrapper {
 impl Log for ReadlineLogWrapper {
     fn log(&self, record: &log::Record) {
         self.internal.log(record);
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
+        if let Ok(mut lock) = self.readline.lock()
+            && let Some(rl) = lock.as_mut()
+        {
+            let _ = rl.flush();
         }
     }
 
     fn flush(&self) {
         self.internal.flush();
-        if let Ok(mut lock) = self.readline.lock() {
-            if let Some(rl) = lock.as_mut() {
-                let _ = rl.flush();
-            }
+        if let Ok(mut lock) = self.readline.lock()
+            && let Some(rl) = lock.as_mut()
+        {
+            let _ = rl.flush();
         }
     }
 

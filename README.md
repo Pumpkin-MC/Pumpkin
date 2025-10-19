@@ -5,15 +5,14 @@
 ![CI](https://github.com/Snowiiii/Pumpkin/actions/workflows/rust.yml/badge.svg)
 [![Discord](https://img.shields.io/discord/1268592337445978193.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/wT8XjrjKkf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Current version)](https://img.shields.io/badge/current_version-1.21.7-blue)
-
+![Current version)](https://img.shields.io/badge/current_version-1.21.9-blue)
 
 </div>
 
 [Pumpkin](https://pumpkinmc.org/) is a Minecraft server built entirely in Rust, offering a fast, efficient,
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
 <div align="center">
-    
+
 ![chunk loading](/assets/pumpkin_chunk_loading.GIF)
 
 </div>
@@ -21,7 +20,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 ## Goals
 
 - **Performance**: Leveraging multi-threading for maximum speed and efficiency.
-- **Compatibility**: Supports the latest Java & Bedrock/Pocket Minecraft server version while adhering to Vanilla game mechanics.
+- **Compatibility**: Supports the latest Java & Bedrock Minecraft server version while adhering to Vanilla game mechanics.
 - **Security**: Prioritizes security by preventing known security exploits.
 - **Flexibility**: Highly configurable, with the ability to disable unnecessary features.
 - **Extensibility**: Provides a foundation for plugin development.
@@ -49,7 +48,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] World Loading
   - [x] World Time
   - [x] World Borders
-  - [x] World Saving 
+  - [x] World Saving
   - [x] Lighting
   - [x] Entity Spawning
   - [x] Item drops (W.I.P)
@@ -74,8 +73,8 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Experience
   - [x] Hunger
   - [X] Off Hand
-  - [ ] Advancements 
-  - [ ] Eating
+  - [ ] Advancements
+  - [x] Eating
 - Entities
   - [x] Non-Living (Minecart, Eggs...) (W.I.P)
   - [x] Entity Effects
@@ -105,7 +104,7 @@ Check out our [Github Project](https://github.com/orgs/Pumpkin-MC/projects/3) to
 
 ## How to run
 
-See our [Quick Start](https://pumpkinmc.org/about/quick-start.html) guide to get Pumpkin running.
+See our [Quick Start](https://docs.pumpkinmc.org/#quick-start) guide to get Pumpkin running.
 
 ## Contributions
 
@@ -113,7 +112,7 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Docs
 
-Pumpkin's documentation can be found at https://pumpkinmc.org/
+Pumpkin's documentation can be found at <https://pumpkinmc.org/>
 
 ## Communication
 

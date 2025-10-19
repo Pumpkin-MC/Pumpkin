@@ -2,9 +2,8 @@ use std::io::Write;
 
 use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
+use crate::codec::var_int::VarInt;
 use pumpkin_data::{
-    block_properties::get_block,
-    fluid::Fluid,
     packet::clientbound::CONFIG_UPDATE_TAGS,
     tag::{RegistryKey, get_registry_key_tags},
 };
@@ -13,11 +12,11 @@ use pumpkin_util::resource_location::ResourceLocation;
 
 #[packet(CONFIG_UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {
-    tags: &'a [pumpkin_data::tag::RegistryKey],
+    pub tags: &'a [pumpkin_data::tag::RegistryKey],
 }
 
 impl<'a> CUpdateTags<'a> {
-    pub fn new(tags: &'a [pumpkin_data::tag::RegistryKey]) -> Self {
+    pub fn new(tags: &'a [RegistryKey]) -> Self {
         Self { tags }
     }
 }
@@ -38,15 +37,7 @@ impl ClientPacket for CUpdateTags<'_> {
             for (key, values) in values.entries() {
                 // This is technically a `ResourceLocation` but same thing
                 p.write_string_bounded(key, u16::MAX as usize)?;
-                p.write_list(values, |p, string_id| {
-                    let id = match registry_key {
-                        RegistryKey::Block => get_block(string_id).unwrap().id as i32,
-                        RegistryKey::Fluid => Fluid::ident_to_fluid_id(string_id).unwrap() as i32,
-                        _ => unimplemented!(),
-                    };
-
-                    p.write_var_int(&id.into())
-                })?;
+                p.write_list(values.1, |p, id| p.write_var_int(&VarInt::from(*id)))?;
             }
 
             Ok(())

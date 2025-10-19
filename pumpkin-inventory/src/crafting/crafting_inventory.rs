@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -24,7 +25,7 @@ impl CraftingInventory {
                 // Creates a Vec with different Mutexes for each slot
                 let mut v = Vec::with_capacity(width as usize * height as usize);
                 (0..width as usize * height as usize)
-                    .for_each(|_| v.push(Arc::new(Mutex::new(ItemStack::EMPTY))));
+                    .for_each(|_| v.push(Arc::new(Mutex::new(ItemStack::EMPTY.clone()))));
                 v
             },
         }
@@ -52,7 +53,7 @@ impl Inventory for CraftingInventory {
     }
 
     async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY;
+        let mut removed = ItemStack::EMPTY.clone();
         let mut guard = self.items[slot].lock().await;
         std::mem::swap(&mut removed, &mut *guard);
         removed
@@ -64,6 +65,10 @@ impl Inventory for CraftingInventory {
 
     async fn set_stack(&self, slot: usize, stack: ItemStack) {
         *self.items[slot].lock().await = stack;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -81,7 +86,7 @@ impl RecipeInputInventory for CraftingInventory {
 impl Clearable for CraftingInventory {
     async fn clear(&self) {
         for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY;
+            *slot.lock().await = ItemStack::EMPTY.clone();
         }
     }
 }

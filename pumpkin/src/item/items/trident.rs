@@ -4,7 +4,7 @@ use pumpkin_util::GameMode;
 
 use crate::{
     entity::player::Player,
-    item::pumpkin_item::{ItemMetadata, PumpkinItem},
+    item::{ItemBehaviour, ItemMetadata},
 };
 
 pub struct TridentItem;
@@ -16,8 +16,12 @@ impl ItemMetadata for TridentItem {
 }
 
 #[async_trait]
-impl PumpkinItem for TridentItem {
+impl ItemBehaviour for TridentItem {
     fn can_mine(&self, player: &Player) -> bool {
         player.gamemode.load() != GameMode::Creative
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

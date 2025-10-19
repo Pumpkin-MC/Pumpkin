@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::get_block_by_state_id};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
@@ -38,7 +38,7 @@ impl PistonBlockEntity {
                     .set_block_state(&pos, state, BlockFlags::NOTIFY_ALL)
                     .await;
                 world
-                    .update_neighbor(&pos, get_block_by_state_id(state))
+                    .update_neighbor(&pos, Block::from_state_id(state))
                     .await;
             }
         }
@@ -60,7 +60,7 @@ impl BlockEntity for PistonBlockEntity {
         self.position
     }
 
-    async fn tick(&self, world: &Arc<dyn SimpleWorld>) {
+    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
         let current_progress = self.current_progress.load();
         self.last_progress.store(current_progress);
         if current_progress >= 1.0 {
@@ -87,7 +87,7 @@ impl BlockEntity for PistonBlockEntity {
                         .await;
                     world
                         .clone()
-                        .update_neighbor(&pos, get_block_by_state_id(self.pushed_block_state.id))
+                        .update_neighbor(&pos, Block::from_state_id(self.pushed_block_state.id))
                         .await;
                 }
             }
@@ -134,7 +134,7 @@ impl BlockEntity for PistonBlockEntity {
         nbt.put_float(LAST_PROGRESS, self.last_progress.load());
         nbt.put_bool(EXTENDING, self.extending);
         nbt.put_bool(SOURCE, self.source);
-        // TODO: duplicated code :c
+        // TODO: duplicated code because of async :c
         Some(nbt)
     }
 

@@ -9,9 +9,7 @@ use rand::Rng;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;
-use crate::block::pumpkin_block::{
-    CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PumpkinBlock, RandomTickArgs,
-};
+use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs};
 
 type BeetrootProperties = NetherWartLikeProperties;
 
@@ -19,7 +17,7 @@ type BeetrootProperties = NetherWartLikeProperties;
 pub struct BeetrootBlock;
 
 #[async_trait]
-impl PumpkinBlock for BeetrootBlock {
+impl BlockBehaviour for BeetrootBlock {
     async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as CropBlockBase>::can_plant_on_top(self, args.block_accessor, &args.position.down())
             .await
@@ -52,18 +50,13 @@ impl CropBlockBase for BeetrootBlock {
         3
     }
 
-    fn get_age(&self, state: &pumpkin_data::BlockState, block: &Block) -> i32 {
-        let props = BeetrootProperties::from_state_id(state.id, block);
+    fn get_age(&self, state: u16, block: &Block) -> i32 {
+        let props = BeetrootProperties::from_state_id(state, block);
         i32::from(props.age.to_index())
     }
 
-    fn state_with_age(
-        &self,
-        block: &Block,
-        state: &pumpkin_data::BlockState,
-        age: i32,
-    ) -> BlockStateId {
-        let mut props = BeetrootProperties::from_state_id(state.id, block);
+    fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
+        let mut props = BeetrootProperties::from_state_id(state, block);
         props.age = Integer0To3::from_index(age as u16);
         props.to_state_id(block)
     }

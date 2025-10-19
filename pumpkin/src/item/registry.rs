@@ -1,22 +1,25 @@
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::item::ItemStack;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::pumpkin_item::{ItemMetadata, PumpkinItem};
+use super::{ItemBehaviour, ItemMetadata};
 
 #[derive(Default)]
 pub struct ItemRegistry {
-    items: HashMap<&'static Item, Arc<dyn PumpkinItem>>,
+    items: HashMap<&'static Item, Arc<dyn ItemBehaviour>>,
 }
 
 impl ItemRegistry {
-    pub fn register<T: PumpkinItem + ItemMetadata + 'static>(&mut self, item: T) {
+    pub fn register<T: ItemBehaviour + ItemMetadata + 'static>(&mut self, item: T) {
         let val = Arc::new(item);
+        self.items.reserve(T::ids().len());
         for i in T::ids() {
             self.items.insert(Item::from_id(i).unwrap(), val.clone());
         }
@@ -31,18 +34,30 @@ impl ItemRegistry {
 
     pub async fn use_on_block(
         &self,
-        item: &Item,
+        stack: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
         block: &Block,
         server: &Server,
     ) {
-        let pumpkin_item = self.get_pumpkin_item(item);
+        let pumpkin_item = self.get_pumpkin_item(stack.item);
         if let Some(pumpkin_item) = pumpkin_item {
-            return pumpkin_item
-                .use_on_block(item, player, location, face, block, server)
+            pumpkin_item
+                .use_on_block(stack, player, location, face, block, server)
                 .await;
+        }
+    }
+
+    pub async fn use_on_entity(
+        &self,
+        stack: &mut ItemStack,
+        player: &Player,
+        entity: Arc<dyn EntityBase>,
+    ) {
+        let pumpkin_item = self.get_pumpkin_item(stack.item);
+        if let Some(pumpkin_item) = pumpkin_item {
+            pumpkin_item.use_on_entity(stack, player, entity).await;
         }
     }
 
@@ -55,7 +70,7 @@ impl ItemRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_item(&self, item: &Item) -> Option<&Arc<dyn PumpkinItem>> {
-        self.items.get(item)
+    pub fn get_pumpkin_item(&self, item: &Item) -> Option<&dyn ItemBehaviour> {
+        self.items.get(item).map(|value| &**value)
     }
 }

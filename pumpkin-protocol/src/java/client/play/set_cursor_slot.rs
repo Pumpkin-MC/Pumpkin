@@ -7,7 +7,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 #[packet(PLAY_SET_CURSOR_ITEM)]
 pub struct CSetCursorItem<'a> {
-    stack: &'a ItemStackSerializer<'a>,
+    pub stack: &'a ItemStackSerializer<'a>,
 }
 
 impl<'a> CSetCursorItem<'a> {

@@ -17,6 +17,7 @@ use crate::command::{
         builder::{argument, literal},
     },
 };
+use crate::entity::EntityBase;
 
 const NAMES: [&str; 1] = ["damage"];
 const DESCRIPTION: &str = "Deals damage to entities";
@@ -35,10 +36,10 @@ struct LocationExecutor;
 struct EntityExecutor(bool);
 
 async fn send_damage_result(
-    sender: &mut CommandSender,
+    sender: &CommandSender,
     success: bool,
     amount: f32,
-    target_name: String,
+    target_name: TextComponent,
 ) {
     if !success {
         sender
@@ -53,10 +54,7 @@ async fn send_damage_result(
     sender
         .send_message(TextComponent::translate(
             "commands.damage.success",
-            [
-                TextComponent::text(amount.to_string()),
-                TextComponent::text(target_name),
-            ],
+            [TextComponent::text(amount.to_string()), target_name],
         ))
         .await;
 }
@@ -91,11 +89,17 @@ impl CommandExecutor for LocationExecutor {
         let location = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
 
         let success = target
-            .living_entity
-            .damage_with_context(amount, damage_type, Some(location), None, None)
+            .damage_with_context(
+                target.clone(),
+                amount,
+                damage_type,
+                Some(location),
+                None,
+                None,
+            )
             .await;
 
-        send_damage_result(sender, success, amount, target.gameprofile.name.clone()).await;
+        send_damage_result(sender, success, amount, target.get_display_name().await).await;
 
         Ok(())
     }
@@ -136,17 +140,17 @@ impl CommandExecutor for EntityExecutor {
         };
 
         let success = target
-            .living_entity
             .damage_with_context(
+                target.clone(),
                 amount,
                 damage_type,
                 None,
-                source.as_ref().map(|e| &e.living_entity.entity),
-                cause.as_ref().map(|e| &e.living_entity.entity),
+                source.as_ref().map(|e| e.as_ref() as &dyn EntityBase),
+                cause.as_ref().map(|e| e.as_ref() as &dyn EntityBase),
             )
             .await;
 
-        send_damage_result(sender, success, amount, target.gameprofile.name.clone()).await;
+        send_damage_result(sender, success, amount, target.get_display_name().await).await;
 
         Ok(())
     }

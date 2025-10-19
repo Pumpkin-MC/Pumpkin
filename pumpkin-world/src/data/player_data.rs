@@ -28,10 +28,10 @@ impl PlayerDataStorage {
     /// Creates a new `PlayerDataStorage` with the specified data path and cache expiration time.
     pub fn new(data_path: impl Into<PathBuf>) -> Self {
         let path = data_path.into();
-        if !path.exists() {
-            if let Err(e) = create_dir_all(&path) {
-                log::error!("Failed to create player data directory at {path:?}: {e}");
-            }
+        if !path.exists()
+            && let Err(e) = create_dir_all(&path)
+        {
+            log::error!("Failed to create player data directory at {path:?}: {e}");
         }
 
         Self {
@@ -126,11 +126,11 @@ impl PlayerDataStorage {
         let path = self.get_player_data_path(uuid);
 
         // Ensure parent directory exists
-        if let Some(parent) = path.parent() {
-            if let Err(e) = create_dir_all(parent) {
-                log::error!("Failed to create player data directory for {uuid}: {e}");
-                return Err(PlayerDataError::Io(e));
-            }
+        if let Some(parent) = path.parent()
+            && let Err(e) = create_dir_all(parent)
+        {
+            log::error!("Failed to create player data directory for {uuid}: {e}");
+            return Err(PlayerDataError::Io(e));
         }
 
         // Create the file and write directly with GZip compression

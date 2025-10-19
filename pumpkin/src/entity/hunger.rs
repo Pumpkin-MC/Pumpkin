@@ -1,4 +1,6 @@
-use super::{EntityBase, NBTStorage, player::Player};
+use std::sync::Arc;
+
+use super::{EntityBase, NBTStorage, NBTStorageInit, player::Player};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
@@ -27,12 +29,12 @@ impl Default for HungerManager {
 }
 
 impl HungerManager {
-    pub async fn tick(&self, player: &Player) {
+    pub async fn tick(&self, player: &Arc<Player>) {
         let saturation = self.saturation.load();
         let level = self.level.load();
         let exhaustion = self.exhaustion.load();
         let health = player.living_entity.health.load();
-        let difficulty = player.world().await.level_info.read().await.difficulty;
+        let difficulty = player.world().level_info.read().await.difficulty;
         // Decrease hunger level on exhaustion
         if level != 0 && exhaustion > 4.0 {
             self.exhaustion.store(exhaustion - 4.0);
@@ -68,13 +70,27 @@ impl HungerManager {
                     || (difficulty == Difficulty::Hard)
                     || (health > 1.0 && difficulty == Difficulty::Normal)
                 {
-                    player.damage(1.0, DamageType::STARVE).await;
+                    player.damage(player.clone(), 1.0, DamageType::STARVE).await;
                 }
                 self.tick_timer.store(0);
             }
         } else {
             self.tick_timer.store(0);
         }
+    }
+
+    pub async fn add_modifier(&self, player: &Player, food: u8, saturation_modifier: f32) {
+        let saturation = f32::from(food) * saturation_modifier * 2.0;
+        self.level.store(food + self.level.load());
+        self.saturation.store(saturation + self.saturation.load());
+        player.send_health().await;
+    }
+
+    pub async fn eat(&self, player: &Player, food: u8, saturation: f32) {
+        self.level.store(food + self.level.load());
+        self.saturation.store(saturation + self.saturation.load());
+
+        player.send_health().await;
     }
 
     pub fn add_exhaustion(&self, exhaustion: f32) {
@@ -112,3 +128,5 @@ impl NBTStorage for HungerManager {
             .store(nbt.get_int("foodTickTimer").unwrap_or(0) as u32);
     }
 }
+
+impl NBTStorageInit for HungerManager {}

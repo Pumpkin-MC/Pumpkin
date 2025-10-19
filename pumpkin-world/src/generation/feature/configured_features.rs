@@ -1,12 +1,7 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock},
-};
+use std::{collections::HashMap, sync::LazyLock};
 
-use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+use pumpkin_util::{include_json_static, math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
-
-use crate::{ProtoChunk, level::Level, world::BlockRegistryExt};
 
 use super::features::{
     bamboo::BambooFeature,
@@ -72,12 +67,12 @@ use super::features::{
     waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature,
     weeping_vines::WeepingVinesFeature,
 };
+use crate::generation::proto_chunk::GenerationCache;
+use crate::world::BlockRegistryExt;
 
-pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> =
-    LazyLock::new(|| {
-        serde_json::from_str(include_str!("../../../../assets/configured_features.json"))
-            .expect("Could not parse configured_features.json registry.")
-    });
+pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> = LazyLock::new(
+    || include_json_static!("../../../../assets/configured_features.json", HashMap<String, ConfiguredFeature>),
+);
 
 // Yes this may look ugly and you wonder why this is hard coded, but its makes sense to hardcode since we have to add logic for these in code
 #[derive(Deserialize)]
@@ -213,10 +208,9 @@ pub enum ConfiguredFeature {
 
 impl ConfiguredFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        chunk: &mut T,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
@@ -234,19 +228,15 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::NetherForestVegetation(feature) => {
-                feature
-                    .generate(
-                        chunk,
-                        block_registry,
-                        min_y,
-                        height,
-                        feature_name,
-                        random,
-                        pos,
-                    )
-                    .await
-            }
+            Self::NetherForestVegetation(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::PointedDripstone(feature) => feature.generate(chunk, random, pos),
             Self::CoralMushroom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
@@ -277,124 +267,84 @@ impl ConfiguredFeature {
             ),
             Self::SpringFeature(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::SimpleBlock(feature) => feature.generate(block_registry, chunk, random, pos),
-            Self::Flower(feature) => {
-                feature
-                    .generate(
-                        chunk,
-                        level,
-                        block_registry,
-                        min_y,
-                        height,
-                        feature_name,
-                        random,
-                        pos,
-                    )
-                    .await
-            }
-            Self::NoBonemealFlower(feature) => {
-                feature
-                    .generate(
-                        chunk,
-                        level,
-                        block_registry,
-                        min_y,
-                        height,
-                        feature_name,
-                        random,
-                        pos,
-                    )
-                    .await
-            }
+            Self::Flower(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::NoBonemealFlower(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::DesertWell(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::Bamboo(feature) => {
-                feature
-                    .generate(
-                        chunk,
-                        block_registry,
-                        min_y,
-                        height,
-                        feature_name,
-                        random,
-                        pos,
-                    )
-                    .await
-            }
-            Self::BlockColumn(feature) => {
-                feature
-                    .generate(
-                        chunk,
-                        block_registry,
-                        min_y,
-                        height,
-                        feature_name,
-                        random,
-                        pos,
-                    )
-                    .await
-            }
-            Self::RandomPatch(feature) => {
-                feature
-                    .generate(
-                        chunk,
-                        level,
-                        block_registry,
-                        min_y,
-                        height,
-                        feature_name,
-                        random,
-                        pos,
-                    )
-                    .await
-            }
-            Self::RandomBooleanSelector(feature) => {
-                feature
-                    .generate(
-                        chunk,
-                        level,
-                        block_registry,
-                        min_y,
-                        height,
-                        feature_name,
-                        random,
-                        pos,
-                    )
-                    .await
-            }
+            Self::Bamboo(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::BlockColumn(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::RandomPatch(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::RandomBooleanSelector(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::Tree(feature) => {
-                feature
-                    .generate(chunk, level, min_y, height, feature_name, random, pos)
-                    .await
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::RandomSelector(feature) => {
-                feature
-                    .generate(
-                        chunk,
-                        level,
-                        block_registry,
-                        min_y,
-                        height,
-                        feature_name,
-                        random,
-                        pos,
-                    )
-                    .await
-            }
-            Self::SimpleRandomSelector(feature) => {
-                feature
-                    .generate(
-                        chunk,
-                        level,
-                        block_registry,
-                        min_y,
-                        height,
-                        feature_name,
-                        random,
-                        pos,
-                    )
-                    .await
-            }
+            Self::RandomSelector(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::SimpleRandomSelector(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::Vines(feature) => feature.generate(
                 chunk,
                 block_registry,

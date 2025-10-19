@@ -1,30 +1,27 @@
+use std::io::{Error, Write};
+
 use crate::{
     bedrock::client::gamerules_changed::GameRules,
     codec::{
-        bedrock_block_pos::BedrockPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt,
+        bedrock_block_pos::NetworkPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt,
         var_ulong::VarULong,
     },
+    serial::PacketWrite,
 };
 use pumpkin_macros::packet;
-use pumpkin_util::math::vector3::Vector3;
-use serde::{Deserialize, Serialize};
+use pumpkin_util::{GameMode, math::vector3::Vector3};
 use uuid::Uuid;
 
-pub const GAME_PUBLISH_SETTING_NO_MULTI_PLAY: i32 = 0;
-pub const GAME_PUBLISH_SETTING_INVITE_ONLY: i32 = 1;
-pub const GAME_PUBLISH_SETTING_FRIENDS_ONLY: i32 = 2;
-pub const GAME_PUBLISH_SETTING_FRIENDS_OF_FRIENDS: i32 = 3;
-pub const GAME_PUBLISH_SETTING_PUBLIC: i32 = 4;
-
-#[derive(Serialize)]
+#[derive(PacketWrite)]
 #[packet(11)]
 pub struct CStartGame {
+    // https://mojang.github.io/bedrock-protocol-docs/html/StartGamePacket.html
     pub entity_id: VarLong,
     pub runtime_entity_id: VarULong,
-    pub player_gamemode: VarInt,
+    pub player_gamemode: GameMode,
     pub position: Vector3<f32>,
-    pub yaw: f32,
     pub pitch: f32,
+    pub yaw: f32,
     pub level_settings: LevelSettings,
 
     pub level_id: String,
@@ -38,7 +35,7 @@ pub struct CStartGame {
     pub current_level_time: u64,
     pub enchantment_seed: VarInt,
     pub block_properties_size: VarUInt,
-
+    //pub block_properties: [GG; 2],
     pub multiplayer_correlation_id: String,
     pub enable_itemstack_net_manager: bool,
     pub server_version: String,
@@ -53,12 +50,13 @@ pub struct CStartGame {
 
     pub enable_clientside_generation: bool,
     pub blocknetwork_ids_are_hashed: bool,
+    pub tick_death_system_enabled: bool,
     pub server_auth_sounds: bool,
 }
 
-#[derive(Serialize)]
-// https://mojang.github.io/bedrock-protocol-docs/html/LevelSettings.html
+#[derive(PacketWrite)]
 pub struct LevelSettings {
+    // https://mojang.github.io/bedrock-protocol-docs/html/LevelSettings.html
     pub seed: u64,
 
     // Spawn Settings
@@ -69,10 +67,10 @@ pub struct LevelSettings {
 
     // Level Settings
     pub generator_type: VarInt,
-    pub world_gamemode: VarInt,
+    pub world_gamemode: GameMode,
     pub hardcore: bool,
     pub difficulty: VarInt,
-    pub spawn_position: BedrockPos,
+    pub spawn_position: NetworkPos,
     pub has_achievements_disabled: bool,
     pub editor_world_type: VarInt,
     pub is_created_in_editor: bool,
@@ -86,8 +84,8 @@ pub struct LevelSettings {
     pub has_confirmed_platform_locked_content: bool,
     pub was_multiplayer_intended: bool,
     pub was_lan_broadcasting_intended: bool,
-    pub xbox_live_broadcast_setting: VarInt,
-    pub platform_broadcast_setting: VarInt,
+    pub xbox_live_broadcast_setting: GamePublishSetting,
+    pub platform_broadcast_setting: GamePublishSetting,
     pub commands_enabled: bool,
     pub is_texture_packs_required: bool,
 
@@ -97,7 +95,7 @@ pub struct LevelSettings {
     pub bonus_chest: bool,
     pub has_start_with_map_enabled: bool,
     pub permission_level: VarInt,
-    pub server_chunk_tick_range: i32,
+    pub server_simulation_distance: i32,
     pub has_locked_behavior_pack: bool,
     pub has_locked_resource_pack: bool,
     pub is_from_locked_world_template: bool,
@@ -113,7 +111,7 @@ pub struct LevelSettings {
     // TODO: LE
     pub limited_world_width: i32,
     pub limited_world_height: i32,
-    pub is_nether_type: bool,
+    pub new_nether: bool,
     pub edu_shared_uri_button_name: String,
     pub edu_shared_uri_link_uri: String,
     pub override_force_experimental_gameplay_has_value: bool,
@@ -125,9 +123,32 @@ pub struct LevelSettings {
     pub owner_id: String,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Default, PacketWrite)]
 pub struct Experiments {
-    pub names_size: u32,
     //TODO! https://mojang.github.io/bedrock-protocol-docs/html/Experiments.html
+    pub names_size: u32,
     pub experiments_ever_toggled: bool,
+}
+
+#[derive(Clone, Copy)]
+pub enum GamePublishSetting {
+    NoMultiPlay = 0,
+    InviteOnly = 1,
+    FriendsOnly = 2,
+    FriendsOfFriends = 3,
+    Public = 4,
+}
+
+impl PacketWrite for GamePublishSetting {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarInt(*self as i32).write(writer)
+    }
+}
+
+#[derive(PacketWrite)]
+pub struct GG {
+    pub name: String,
+    pub id: i8,
+    pub len: VarUInt,
+    pub end: i8,
 }

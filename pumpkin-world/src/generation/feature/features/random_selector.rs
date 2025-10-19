@@ -1,15 +1,11 @@
-use std::sync::Arc;
-
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
 
-use crate::{
-    ProtoChunk, generation::feature::placed_features::PlacedFeatureWrapper, level::Level,
-    world::BlockRegistryExt,
-};
+use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::feature::placed_features::PlacedFeatureWrapper, world::BlockRegistryExt};
 
 #[derive(Deserialize)]
 pub struct RandomFeature {
@@ -25,10 +21,9 @@ struct RandomFeatureEntry {
 
 impl RandomFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        chunk: &mut T,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
@@ -40,28 +35,24 @@ impl RandomFeature {
             if random.next_f32() >= feature.chance {
                 continue;
             }
-            return Box::pin(feature.feature.get().generate(
+            return feature.feature.get().generate(
                 chunk,
-                level,
                 block_registry,
                 min_y,
                 height,
                 feature_name,
                 random,
                 pos,
-            ))
-            .await;
+            );
         }
-        Box::pin(self.default.get().generate(
+        self.default.get().generate(
             chunk,
-            level,
             block_registry,
             min_y,
             height,
             feature_name,
             random,
             pos,
-        ))
-        .await
+        )
     }
 }

@@ -2,15 +2,14 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_CHAT;
 use pumpkin_macros::packet;
-use serde::Serialize;
 
 use crate::{
-    ServerPacket,
+    ClientPacket, ServerPacket,
     codec::var_int::VarInt,
+    ser::NetworkWriteExt,
     ser::{NetworkReadExt, ReadingError},
 };
 
-#[derive(Serialize)]
 #[packet(PLAY_CHAT)]
 pub struct SChatMessage {
     pub message: String,
@@ -34,5 +33,22 @@ impl ServerPacket for SChatMessage {
             acknowledged: read.get_fixed_bitset(20)?,
             checksum: read.get_u8()?,
         })
+    }
+}
+
+impl ClientPacket for SChatMessage {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_string(&self.message)?;
+        write.write_i64_be(self.timestamp)?;
+        write.write_i64_be(self.salt)?;
+        write.write_option(&self.signature, |p, v| p.write_slice(v))?;
+        write.write_var_int(&self.message_count)?;
+        write.write_fixed_bitset(20, self.acknowledged.clone())?;
+        write.write_u8(self.checksum)?;
+
+        Ok(())
     }
 }

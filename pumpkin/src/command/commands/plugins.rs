@@ -22,8 +22,7 @@ impl CommandExecutor for Executor {
         _server: &crate::server::Server,
         _args: &ConsumedArgs<'a>,
     ) -> Result<(), CommandError> {
-        let plugin_manager = PLUGIN_MANAGER.read().await;
-        let plugins = plugin_manager.active_plugins();
+        let plugins = PLUGIN_MANAGER.active_plugins().await;
 
         let message_text = if plugins.is_empty() {
             "There are no loaded plugins.".to_string()

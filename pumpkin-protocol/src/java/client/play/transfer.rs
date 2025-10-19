@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[packet(PLAY_TRANSFER)]
 pub struct CTransfer<'a> {
-    host: &'a str,
-    port: VarInt,
+    pub host: &'a str,
+    pub port: VarInt,
 }
 
 impl<'a> CTransfer<'a> {

@@ -1,3 +1,4 @@
+use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -9,6 +10,7 @@ use crate::{
         banned_player_data::BANNED_PLAYER_LIST,
     },
     entity::player::Player,
+    net::DisconnectReason,
 };
 use CommandError::InvalidConsumption;
 use async_trait::async_trait;
@@ -57,7 +59,7 @@ impl CommandExecutor for ReasonExecutor {
             return Err(InvalidConsumption(Some(ARG_REASON.into())));
         };
 
-        ban_player(sender, &targets[0], Some(reason.to_string())).await;
+        ban_player(sender, &targets[0], Some(reason.clone())).await;
         Ok(())
     }
 }
@@ -89,18 +91,15 @@ async fn ban_player(sender: &CommandSender, player: &Player, reason: Option<Stri
     sender
         .send_message(TextComponent::translate(
             "commands.ban.success",
-            [
-                TextComponent::text(player.gameprofile.name.clone()),
-                TextComponent::text(reason),
-            ],
+            [player.get_display_name().await, TextComponent::text(reason)],
         ))
         .await;
 
     player
-        .kick(TextComponent::translate(
-            "multiplayer.disconnect.banned",
-            [],
-        ))
+        .kick(
+            DisconnectReason::Kicked,
+            TextComponent::translate("multiplayer.disconnect.banned", []),
+        )
         .await;
 }
 

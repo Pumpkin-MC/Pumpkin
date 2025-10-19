@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_util::HeightMap;
+use pumpkin_util::{HeightMap, include_json_static};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter;
 use std::ops::Deref;
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
 use pumpkin_util::biome::FOLIAGE_NOISE;
 use pumpkin_util::math::int_provider::IntProvider;
@@ -14,20 +14,17 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
-use crate::ProtoChunk;
 use crate::block::RawBlockState;
 use crate::generation::block_predicate::BlockPredicate;
-use crate::generation::height_limit::HeightLimitView;
 use crate::generation::height_provider::HeightProvider;
-use crate::level::Level;
+use crate::generation::proto_chunk::GenerationCache;
 use crate::world::BlockRegistryExt;
 
 use super::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
 
-pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../../assets/placed_feature.json"))
-        .expect("Could not parse placed_feature.json registry.")
-});
+pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> = LazyLock::new(
+    || include_json_static!("../../../../assets/placed_feature.json", HashMap<String, PlacedFeature>),
+);
 
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -63,10 +60,9 @@ pub enum Feature {
 
 impl PlacedFeature {
     #[expect(clippy::too_many_arguments)]
-    pub async fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        chunk: &mut T,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
@@ -79,17 +75,15 @@ impl PlacedFeature {
             let mut new_stream = Vec::with_capacity(stream.len());
 
             for block_pos in stream {
-                let positions = modifier
-                    .get_positions(
-                        chunk,
-                        block_registry,
-                        min_y,
-                        height,
-                        feature_name,
-                        random,
-                        block_pos,
-                    )
-                    .await;
+                let positions = modifier.get_positions(
+                    chunk,
+                    block_registry,
+                    min_y,
+                    height,
+                    feature_name,
+                    random,
+                    block_pos,
+                );
                 new_stream.extend(positions);
             }
 
@@ -105,19 +99,15 @@ impl PlacedFeature {
 
         let mut ret = false;
         for pos in stream {
-            if feature
-                .generate(
-                    chunk,
-                    level,
-                    block_registry,
-                    min_y,
-                    height,
-                    feature_name,
-                    random,
-                    pos,
-                )
-                .await
-            {
+            if feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ) {
                 ret = true;
             }
         }
@@ -162,9 +152,9 @@ pub enum PlacementModifier {
 
 impl PlacementModifier {
     #[expect(clippy::too_many_arguments)]
-    pub async fn get_positions(
+    pub fn get_positions<T: GenerationCache>(
         &self,
-        chunk: &ProtoChunk<'_>,
+        chunk: &T,
         block_registry: &dyn BlockRegistryExt,
         min_y: i8,
         height: u16,
@@ -174,29 +164,19 @@ impl PlacementModifier {
     ) -> Box<dyn Iterator<Item = BlockPos>> {
         match self {
             PlacementModifier::BlockPredicateFilter(modifier) => {
-                modifier
-                    .get_positions(block_registry, chunk, feature, random, pos)
-                    .await
+                modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
             PlacementModifier::RarityFilter(modifier) => {
-                modifier
-                    .get_positions(block_registry, chunk, feature, random, pos)
-                    .await
+                modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
             PlacementModifier::SurfaceRelativeThresholdFilter(modifier) => {
-                modifier
-                    .get_positions(block_registry, chunk, feature, random, pos)
-                    .await
+                modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
             PlacementModifier::SurfaceWaterDepthFilter(modifier) => {
-                modifier
-                    .get_positions(block_registry, chunk, feature, random, pos)
-                    .await
+                modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
             PlacementModifier::Biome(modifier) => {
-                modifier
-                    .get_positions(block_registry, chunk, feature, random, pos)
-                    .await
+                modifier.get_positions(block_registry, chunk, feature, random, pos)
             }
             PlacementModifier::Count(modifier) => modifier.get_positions(random, pos),
             PlacementModifier::NoiseBasedCount(modifier) => {
@@ -207,7 +187,7 @@ impl PlacementModifier {
                 modifier.get_positions(random, chunk, pos)
             }
             PlacementModifier::EnvironmentScan(modifier) => {
-                modifier.get_positions(chunk, block_registry, pos).await
+                modifier.get_positions(chunk, block_registry, pos)
             }
             PlacementModifier::Heightmap(modifier) => {
                 modifier.get_positions(chunk, min_y, height, random, pos)
@@ -269,9 +249,9 @@ pub struct EnvironmentScanPlacementModifier {
 }
 
 impl EnvironmentScanPlacementModifier {
-    pub async fn get_positions(
+    pub fn get_positions<T: GenerationCache>(
         &self,
-        chunk: &ProtoChunk<'_>,
+        chunk: &T,
         block_registry: &dyn BlockRegistryExt,
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {
@@ -280,19 +260,12 @@ impl EnvironmentScanPlacementModifier {
             .as_ref()
             .unwrap_or(&BlockPredicate::AlwaysTrue);
 
-        if !allowed_search_condition
-            .test(block_registry, chunk, &pos)
-            .await
-        {
+        if !allowed_search_condition.test(block_registry, chunk, &pos) {
             return Box::new(iter::empty());
         }
         let mut pos = pos;
         for _ in 0..self.max_steps {
-            if self
-                .target_condition
-                .test(block_registry, chunk, &pos)
-                .await
-            {
+            if self.target_condition.test(block_registry, chunk, &pos) {
                 return Box::new(iter::once(pos));
             }
             pos = pos.offset(self.direction_of_search.to_offset());
@@ -301,18 +274,11 @@ impl EnvironmentScanPlacementModifier {
                 return Box::new(iter::empty());
             }
 
-            if !allowed_search_condition
-                .test(block_registry, chunk, &pos)
-                .await
-            {
+            if !allowed_search_condition.test(block_registry, chunk, &pos) {
                 break;
             }
         }
-        if self
-            .target_condition
-            .test(block_registry, chunk, &pos)
-            .await
-        {
+        if self.target_condition.test(block_registry, chunk, &pos) {
             return Box::new(iter::once(pos));
         }
 
@@ -345,10 +311,10 @@ pub struct CountOnEveryLayerPlacementModifier {
 }
 
 impl CountOnEveryLayerPlacementModifier {
-    pub fn get_positions(
+    pub fn get_positions<T: GenerationCache>(
         &self,
         random: &mut RandomGenerator,
-        chunk: &ProtoChunk,
+        chunk: &T,
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {
         let mut positions = Vec::new(); // Using a Vec to collect results, analogous to Stream.builder()
@@ -362,7 +328,7 @@ impl CountOnEveryLayerPlacementModifier {
                 let z = random.next_bounded_i32(16) + pos.0.z;
                 let y = chunk.top_motion_blocking_block_height_exclusive(&Vector2::new(x, z));
 
-                let n = Self::find_pos(chunk, x, y as i32, z, i);
+                let n = Self::find_pos(chunk, x, y, z, i);
 
                 if n == i32::MAX {
                     continue;
@@ -378,14 +344,14 @@ impl CountOnEveryLayerPlacementModifier {
         Box::new(positions.into_iter())
     }
 
-    fn find_pos(chunk: &ProtoChunk, x: i32, y: i32, z: i32, target_y: i32) -> i32 {
+    fn find_pos<T: GenerationCache>(chunk: &T, x: i32, y: i32, z: i32, target_y: i32) -> i32 {
         let mut mutable_pos = BlockPos::new(x, y, z);
         let mut found_count = 0;
-        let mut current_block_state = chunk.get_block_state(&mutable_pos.0);
+        let mut current_block_state = GenerationCache::get_block_state(chunk, &mutable_pos.0);
 
         for j in (chunk.bottom_y() as i32 + 1..=y).rev() {
             mutable_pos.0.y = j - 1;
-            let next_block_state = chunk.get_block_state(&mutable_pos.0);
+            let next_block_state = GenerationCache::get_block_state(chunk, &mutable_pos.0);
 
             if !Self::blocks_spawn(&next_block_state)
                 && Self::blocks_spawn(&current_block_state)
@@ -414,15 +380,15 @@ pub struct BlockFilterPlacementModifier {
 
 #[async_trait]
 impl ConditionalPlacementModifier for BlockFilterPlacementModifier {
-    async fn should_place(
+    fn should_place<T: GenerationCache>(
         &self,
         block_registry: &dyn BlockRegistryExt,
         _feature: &str,
-        chunk: &ProtoChunk,
+        chunk: &T,
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        self.predicate.test(block_registry, chunk, &pos).await
+        self.predicate.test(block_registry, chunk, &pos)
     }
 }
 
@@ -435,18 +401,18 @@ pub struct SurfaceThresholdFilterPlacementModifier {
 
 #[async_trait]
 impl ConditionalPlacementModifier for SurfaceThresholdFilterPlacementModifier {
-    async fn should_place(
+    fn should_place<T: GenerationCache>(
         &self,
         _block_registry: &dyn BlockRegistryExt,
         _feature: &str,
-        chunk: &ProtoChunk,
+        chunk: &T,
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
         let y = chunk.get_top_y(&self.heightmap, &pos.0.to_vec2_i32());
-        let min = y.saturating_add(self.min_inclusive.unwrap_or(i32::MIN) as i64);
-        let max = y.saturating_add(self.max_inclusive.unwrap_or(i32::MAX) as i64);
-        min <= pos.0.y as i64 && pos.0.y as i64 <= max
+        let min = y.saturating_add(self.min_inclusive.unwrap_or(i32::MIN));
+        let max = y.saturating_add(self.max_inclusive.unwrap_or(i32::MAX));
+        min <= pos.0.y && pos.0.y <= max
     }
 }
 
@@ -457,11 +423,11 @@ pub struct RarityFilterPlacementModifier {
 
 #[async_trait]
 impl ConditionalPlacementModifier for RarityFilterPlacementModifier {
-    async fn should_place(
+    fn should_place<T: GenerationCache>(
         &self,
         _block_registry: &dyn BlockRegistryExt,
         _feature: &str,
-        _chunk: &ProtoChunk,
+        _chunk: &T,
         random: &mut RandomGenerator,
         _pos: BlockPos,
     ) -> bool {
@@ -501,16 +467,16 @@ pub struct SurfaceWaterDepthFilterPlacementModifier {
 
 #[async_trait]
 impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
-    async fn should_place(
+    fn should_place<T: GenerationCache>(
         &self,
         _block_registry: &dyn BlockRegistryExt,
         _feature: &str,
-        chunk: &ProtoChunk,
+        chunk: &T,
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let world_top = chunk.top_block_height_exclusive(&Vector2::new(pos.0.x, pos.0.z)) as i32;
-        let ocean = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x, pos.0.z)) as i32;
+        let world_top = chunk.top_block_height_exclusive(&Vector2::new(pos.0.x, pos.0.z));
+        let ocean = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x, pos.0.z));
         world_top - ocean <= self.max_water_depth
     }
 }
@@ -520,11 +486,11 @@ pub struct BiomePlacementModifier;
 
 #[async_trait]
 impl ConditionalPlacementModifier for BiomePlacementModifier {
-    async fn should_place(
+    fn should_place<T: GenerationCache>(
         &self,
         _block_registry: &dyn BlockRegistryExt,
         this_feature: &str,
-        chunk: &ProtoChunk,
+        chunk: &T,
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
@@ -566,9 +532,9 @@ pub struct HeightmapPlacementModifier {
 }
 
 impl HeightmapPlacementModifier {
-    pub fn get_positions(
+    pub fn get_positions<T: GenerationCache>(
         &self,
-        chunk: &ProtoChunk,
+        chunk: &T,
         min_y: i8,
         _height: u16,
         _random: &mut RandomGenerator,
@@ -576,7 +542,7 @@ impl HeightmapPlacementModifier {
     ) -> Box<dyn Iterator<Item = BlockPos>> {
         let x = pos.0.x;
         let z = pos.0.z;
-        let top = chunk.get_top_y(&self.heightmap, &Vector2::new(x, z)) as i32;
+        let top = chunk.get_top_y(&self.heightmap, &Vector2::new(x, z));
         if top > min_y as i32 {
             return Box::new(iter::once(BlockPos(Vector3::new(x, top, z))));
         }
@@ -599,29 +565,26 @@ pub trait CountPlacementModifierBase {
 
 #[async_trait]
 pub trait ConditionalPlacementModifier {
-    async fn get_positions(
+    fn get_positions<T: GenerationCache>(
         &self,
         block_registry: &dyn BlockRegistryExt,
-        chunk: &ProtoChunk,
+        chunk: &T,
         feature: &str,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {
-        if self
-            .should_place(block_registry, feature, chunk, random, pos)
-            .await
-        {
+        if self.should_place(block_registry, feature, chunk, random, pos) {
             Box::new(iter::once(pos))
         } else {
             Box::new(iter::empty())
         }
     }
 
-    async fn should_place(
+    fn should_place<T: GenerationCache>(
         &self,
         block_registry: &dyn BlockRegistryExt,
         feature: &str,
-        chunk: &ProtoChunk,
+        chunk: &T,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool;

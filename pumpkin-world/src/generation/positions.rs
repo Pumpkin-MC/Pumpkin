@@ -36,6 +36,8 @@ pub mod block_pos {
 pub mod chunk_pos {
     use pumpkin_util::math::vector2::Vector2;
 
+    use crate::generation::section_coords::get_offset_pos;
+
     // A chunk outside of normal bounds
     pub const MARKER: u64 = packed(&Vector2::new(1875066, 1875066));
 
@@ -49,6 +51,22 @@ pub mod chunk_pos {
 
     pub const fn unpack_z(packed: u64) -> i32 {
         ((packed >> 32) & 4294967295u64) as i32
+    }
+
+    pub fn get_offset_x(coord: i32, offset: i32) -> i32 {
+        get_offset_pos(coord, offset)
+    }
+
+    pub fn get_center_x(coord: i32) -> i32 {
+        get_offset_x(coord, 8)
+    }
+
+    pub fn get_center_z(coord: i32) -> i32 {
+        get_offset_z(coord, 8)
+    }
+
+    pub fn get_offset_z(coord: i32, offset: i32) -> i32 {
+        get_offset_pos(coord, offset)
     }
 
     pub const fn start_block_x(vec: &Vector2<i32>) -> i32 {

@@ -13,10 +13,12 @@ mod banlist;
 mod bossbar;
 mod clear;
 mod damage;
+mod data;
 pub mod defaultgamemode;
 mod deop;
 mod difficulty;
 mod effect;
+mod enchant;
 mod experience;
 mod fill;
 mod gamemode;
@@ -39,6 +41,7 @@ mod pumpkin;
 mod say;
 mod seed;
 mod setblock;
+mod setworldspawn;
 mod stop;
 mod stopsound;
 mod summon;
@@ -78,6 +81,7 @@ pub async fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(time::init_command_tree(), "minecraft:command.time");
     dispatcher.register(tick::init_command_tree(), "minecraft:command.tick");
     dispatcher.register(give::init_command_tree(), "minecraft:command.give");
+    dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
     dispatcher.register(setblock::init_command_tree(), "minecraft:command.setblock");
     dispatcher.register(seed::init_command_tree(), "minecraft:command.seed");
@@ -112,6 +116,11 @@ pub async fn default_dispatcher() -> CommandDispatcher {
         defaultgamemode::init_command_tree(),
         "minecraft:command.defaultgamemode",
     );
+    dispatcher.register(
+        setworldspawn::init_command_tree(),
+        "minecraft:command.setworldspawn",
+    );
+    dispatcher.register(data::init_command_tree(), "minecraft:command.data");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -370,10 +379,31 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.data",
+            "Query and modify data of entities and blocks",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.enchant",
+            "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
 }
 
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Three
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.setworldspawn",
+            "Sets the world spawn point",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
     registry
         .register_permission(Permission::new(
             "minecraft:command.op",

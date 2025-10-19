@@ -79,18 +79,17 @@ mod format {
 
         use super::DATE_FORMAT;
 
-        pub fn serialize<S>(date: &OffsetDateTime, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            let s = date.format(DATE_FORMAT).unwrap().to_string();
+        pub fn serialize<S: Serializer>(
+            date: &OffsetDateTime,
+            serializer: S,
+        ) -> Result<S::Ok, S::Error> {
+            let s = date.format(DATE_FORMAT).unwrap();
             serializer.serialize_str(&s)
         }
 
-        pub fn deserialize<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
+        pub fn deserialize<'de, D: Deserializer<'de>>(
+            deserializer: D,
+        ) -> Result<OffsetDateTime, D::Error> {
             let s = String::deserialize(deserializer)?;
             OffsetDateTime::parse(&s, DATE_FORMAT).map_err(serde::de::Error::custom)
         }
@@ -103,22 +102,21 @@ mod format {
         use crate::data::banlist_serializer::format::DATE_FORMAT;
 
         #[allow(clippy::ref_option)]
-        pub fn serialize<S>(date: &Option<OffsetDateTime>, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
+        pub fn serialize<S: Serializer>(
+            date: &Option<OffsetDateTime>,
+            serializer: S,
+        ) -> Result<S::Ok, S::Error> {
             if let Some(date) = date {
-                let s = date.format(DATE_FORMAT).unwrap().to_string();
+                let s = date.format(DATE_FORMAT).unwrap();
                 serializer.serialize_str(&s)
             } else {
                 serializer.serialize_str("forever")
             }
         }
 
-        pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<OffsetDateTime>, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
+        pub fn deserialize<'de, D: Deserializer<'de>>(
+            deserializer: D,
+        ) -> Result<Option<OffsetDateTime>, D::Error> {
             let s = String::deserialize(deserializer)?;
             if s == "forever" {
                 Ok(None)
