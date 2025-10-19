@@ -22,7 +22,6 @@ impl BlockMetadata for CarvedPumpkinBlock {
 #[async_trait]
 impl BlockBehaviour for CarvedPumpkinBlock {
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        println!("on_place called");
         let mut props = WallTorchLikeProperties::default(args.block);
         props.facing = args
             .player
@@ -33,7 +32,5 @@ impl BlockBehaviour for CarvedPumpkinBlock {
         props.to_state_id(args.block)
     }
 
-    async fn placed(&self, _args: PlacedArgs<'_>) {
-        println!("CarvedPumpkinBlock placed");
-    }
+    async fn placed(&self, _args: PlacedArgs<'_>) {}
 }
