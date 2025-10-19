@@ -7,9 +7,11 @@ use async_trait::async_trait;
 use pumpkin_data::block_properties::{
     BlockProperties, CopperGolemPose, CopperGolemStatueLikeProperties,
 };
+use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::RegistryKey;
+use pumpkin_data::tag;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::tag::{RegistryKey, Taggable};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
@@ -22,6 +24,13 @@ impl GolemStatueBlock {}
 #[async_trait]
 impl BlockBehaviour for GolemStatueBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let item_hand = args.player.inventory.held_item().lock().await.item;
+        if item_hand.id == Item::HONEYCOMB.id && !is_waxed(args.block.name) {
+            return BlockActionResult::Pass;
+        }
+        if item_hand.has_tag(&tag::Item::MINECRAFT_AXES) {
+            return BlockActionResult::Pass;
+        }
         let state = args.world.get_block_state(args.position).await;
         let mut golem_props = CopperGolemStatueLikeProperties::from_state_id(state.id, args.block);
         golem_props.copper_golem_pose = get_next_pose(golem_props.copper_golem_pose);
@@ -39,7 +48,7 @@ impl BlockBehaviour for GolemStatueBlock {
                 *args.position,
             )
             .await;
-        BlockActionResult::Pass
+        BlockActionResult::Success
     }
 
     async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
@@ -83,5 +92,5 @@ fn get_next_pose(pose: CopperGolemPose) -> CopperGolemPose {
 }
 
 fn is_waxed(name: &str) -> bool {
-    name.contains("WAXED")
+    name.to_lowercase().contains("waxed")
 }

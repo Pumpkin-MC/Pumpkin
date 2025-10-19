@@ -247,7 +247,7 @@ fn get_deoxidized_equivalent(block: &Block) -> u16 {
         id if id == Block::EXPOSED_COPPER_CHEST.id => Block::COPPER_CHEST.id,
         id if id == Block::WEATHERED_COPPER_CHEST.id => Block::EXPOSED_COPPER_CHEST.id,
         id if id == Block::OXIDIZED_COPPER_CHEST.id => Block::WEATHERED_COPPER_CHEST.id,
-        id if id == Block::COPPER_GOLEM_STATUE.id => Block::AIR.id, // To spawn golem
+        // id if id == Block::COPPER_GOLEM_STATUE.id => Block::AIR.id, // To spawn golem //TODO rework the whole system
         id if id == Block::EXPOSED_COPPER_GOLEM_STATUE.id => Block::COPPER_GOLEM_STATUE.id,
         id if id == Block::WEATHERED_COPPER_GOLEM_STATUE.id => {
             Block::EXPOSED_COPPER_GOLEM_STATUE.id
