@@ -53,7 +53,7 @@ impl BlockEntity for CommandBlockEntity {
         Self: Sized,
     {
         let condition_met = AtomicBool::new(nbt.get_bool("conditionMet").unwrap_or(false));
-        let auto = AtomicBool::new(nbt.get_bool("conditionMet").unwrap_or(false));
+        let auto = AtomicBool::new(nbt.get_bool("auto").unwrap_or(false));
         let powered = AtomicBool::new(nbt.get_bool("powered").unwrap_or(false));
         let command = Mutex::new(nbt.get_string("Command").unwrap_or("").to_string());
         let last_output = Mutex::new(nbt.get_string("LastOutput").unwrap_or("").to_string());
