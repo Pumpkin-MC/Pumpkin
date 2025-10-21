@@ -24,7 +24,7 @@ use pumpkin_world::block::entities::shelf::ShelfBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::tick::TickPriority;
-use pumpkin_world::world::{BlockFlags, SimpleWorld};
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:wooden_shelves")]
@@ -160,6 +160,7 @@ impl BlockBehaviour for Shelf {
     }
 
     async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        // TODO: only allow the back comparator to get signal! (opposite facing comparator should get the signal)
         if let Some(entity) = args.world.get_block_entity(args.position).await {
             if let Some(shelf_entity) = entity.as_any().downcast_ref::<ShelfBlockEntity>() {
                 let i = if shelf_entity.items[0].lock().await.is_empty() {
