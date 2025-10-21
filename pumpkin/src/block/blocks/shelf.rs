@@ -24,7 +24,7 @@ use pumpkin_world::block::entities::shelf::ShelfBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::tick::TickPriority;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::world::{BlockFlags, SimpleWorld};
 use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:wooden_shelves")]
@@ -37,52 +37,52 @@ impl BlockBehaviour for Shelf {
         BlockActionResult::Pass
     }
 
-    async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
+    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state = AcaciaShelfLikeProperties::from_state_id(
-            _args.world.get_block_state(_args.position).await.id,
-            _args.block,
+            args.world.get_block_state(args.position).await.id,
+            args.block,
         );
-        if let Some(block_entity_any) = _args.world.get_block_entity(_args.position).await
+        if let Some(block_entity_any) = args.world.get_block_entity(args.position).await
             && let Some(block_entity) = block_entity_any.as_any().downcast_ref::<ShelfBlockEntity>()
         {
             if state.powered {
                 todo!("Do the full hotbar swap")
             } else {
-                if let Some(slot) = Self::get_slot_for_hit(_args.hit, state.facing) {
+                if let Some(slot) = Self::get_slot_for_hit(args.hit, state.facing) {
                     let swaped = swap_single_stack(
-                        &*_args.item_stack.lock().await,
-                        &_args.player,
+                        &*args.item_stack.lock().await,
+                        &args.player,
                         block_entity,
                         slot as usize,
                     );
                     if swaped {
-                        _args
-                            .world
+                        args.world
                             .play_block_sound(
-                                if _args.item_stack.lock().await.is_empty() {
+                                if args.item_stack.lock().await.is_empty() {
                                     Sound::BlockShelfTakeItem
                                 } else {
                                     Sound::BlockShelfSingleSwap
                                 },
                                 SoundCategory::Blocks,
-                                *_args.position,
+                                *args.position,
                             )
                             .await;
                     } else {
-                        _args
-                            .world
+                        args.world
                             .play_block_sound(
                                 Sound::BlockShelfPlaceItem,
                                 SoundCategory::Blocks,
-                                *_args.position,
+                                *args.position,
                             )
                             .await;
-                        if _args.item_stack.lock().await.is_empty() {
+                        if args.item_stack.lock().await.is_empty() {
                             return BlockActionResult::Pass;
                         }
                     }
-                    _args.world.update_block_entity(&block_entity_any).await;
-                    return BlockActionResult::Success;
+                    args.world.update_block_entity(&block_entity_any).await;
+                    // TODO: I'm not happy with it and maybe better solution
+                    args.world.update_neighbors(args.position, None).await;
+                    return BlockActionResult::Consume;
                 }
             }
         }
@@ -177,7 +177,7 @@ impl BlockBehaviour for Shelf {
                 } else {
                     1
                 };
-                Some( i | j << 1 | k <<2)
+                return Some((i | j << 1 | k << 2) as u8);
             }
         }
         None
