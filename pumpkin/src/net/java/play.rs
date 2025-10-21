@@ -624,7 +624,11 @@ impl JavaClient {
     //     // TODO: Implement and merge any redundant code with pick_item_from_block
     // }
 
-    pub async fn handle_set_command_block(&self, player: &Arc<Player>, command: SSetCommandBlock) {
+    pub async fn handle_set_command_block(
+        &self,
+        player: &Arc<Player>,
+        mut command: SSetCommandBlock,
+    ) {
         if !player.is_creative() {
             return;
         }
@@ -648,34 +652,55 @@ impl JavaClient {
 
             let block = player.world().get_block(&pos).await;
             let old_state_id = player.world().get_block_state_id(&pos).await;
-            let old_props = CommandBlockLikeProperties::from_state_id(old_state_id, block);
-            let old_facing = old_props.facing;
+            let mut props = CommandBlockLikeProperties::from_state_id(old_state_id, block);
 
             let block_type = match command_block_mode {
                 CommandBlockMode::Chain => Block::CHAIN_COMMAND_BLOCK,
                 CommandBlockMode::Repeating => Block::REPEATING_COMMAND_BLOCK,
                 CommandBlockMode::Impulse => Block::COMMAND_BLOCK,
             };
-            let mut props = CommandBlockLikeProperties::default(&block_type);
-            props.conditional = command.flags & 0x02 != 0;
-            props.facing = old_facing;
+
+            let old_command_block: &CommandBlockEntity =
+                block_entity.as_any().downcast_ref().unwrap();
+
+            props.conditional = command.flags & 0x2 != 0;
+
             let new_state_id = props.to_state_id(&block_type);
             player
                 .world()
-                .set_block_state(&command.pos, new_state_id, BlockFlags::empty())
+                .set_block_state(
+                    &command.pos,
+                    new_state_id,
+                    BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                )
                 .await;
 
-            let command_block: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
-            if !command.command.is_empty() {
-                *command_block.command.lock().await = command.command;
+            if command.command.starts_with('/') {
+                command.command.remove(0);
             }
-            command_block
-                .auto
-                .store(command.flags & 0x04 != 0, Ordering::SeqCst);
-            command_block
-                .track_output
-                .store(command.flags & 0x01 != 0, Ordering::SeqCst);
-            command_block.dirty.store(true, Ordering::SeqCst);
+
+            let command_block = CommandBlockEntity {
+                position: pos,
+                powered: old_command_block.powered.load(Ordering::SeqCst).into(),
+                condition_met: old_command_block
+                    .condition_met
+                    .load(Ordering::SeqCst)
+                    .into(),
+                auto: (command.flags & 0x4 != 0).into(),
+                dirty: old_command_block.dirty.load(Ordering::SeqCst).into(),
+                command: Mutex::new(command.command),
+                last_output: old_command_block.last_output.lock().await.clone().into(),
+                track_output: (command.flags & 0x1 != 0).into(),
+                success_count: old_command_block
+                    .success_count
+                    .load(Ordering::SeqCst)
+                    .into(),
+            };
+            player
+                .world()
+                .add_block_entity(Arc::new(command_block))
+                .await;
+
             if command.flags & 0x4 != 0 {
                 player
                     .world()
