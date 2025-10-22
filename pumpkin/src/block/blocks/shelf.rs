@@ -2,13 +2,13 @@ use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockHitResult, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs,
-    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
+    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs,
+    UseWithItemArgs,
 };
 use crate::entity::player::Player;
 use crate::world::World;
 use async_trait::async_trait;
 use futures::executor::block_on;
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::SideChain;
 use pumpkin_data::block_properties::{AcaciaShelfLikeProperties, HorizontalFacing};
@@ -16,6 +16,7 @@ use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -24,7 +25,7 @@ use pumpkin_world::block::entities::shelf::ShelfBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::tick::TickPriority;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:wooden_shelves")]
@@ -159,6 +160,11 @@ impl BlockBehaviour for Shelf {
         props.to_state_id(args.block)
     }
 
+    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        let props = AcaciaShelfLikeProperties::from_state_id(args.old_state_id, args.block);
+        self.disconnect_neighbors(args.world, args.position, &props)
+    }
+
     async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
         // TODO: only allow the back comparator to get signal! (opposite facing comparator should get the signal)
         if let Some(entity) = args.world.get_block_entity(args.position).await {
@@ -182,30 +188,6 @@ impl BlockBehaviour for Shelf {
             }
         }
         None
-    }
-}
-async fn is_left_shelf(
-    cur_block_pos: &BlockPos,
-    cur_block: &Block,
-    world: &World,
-    facing: HorizontalFacing,
-) -> Option<SideChain> {
-    match facing {
-        HorizontalFacing::South => {
-            let new_pos = &cur_block_pos.west();
-            let block = world.get_block(new_pos).await;
-            if block.id == cur_block.id {
-                let state = AcaciaShelfLikeProperties::from_state_id(
-                    world.get_block_state(new_pos).await.id,
-                    cur_block,
-                );
-                if block.id == cur_block.id && state.facing == facing && state.powered {
-                    return Some(state.side_chain);
-                }
-            }
-            None
-        }
-        _ => None,
     }
 }
 
@@ -241,8 +223,52 @@ impl Shelf {
             2
         }
     }
+    pub fn disconnect_neighbors(
+        &self,
+        world: &World,
+        position: &BlockPos,
+        props: &AcaciaShelfLikeProperties,
+    ) {
+    }
+    fn connect_neighbors(
+        &self,
+        world: World,
+        position: &BlockPos,
+        props: &AcaciaShelfLikeProperties,
+        old_props: &AcaciaShelfLikeProperties,
+    ) {
+    }
 }
-async fn is_right_shelf(
+
+fn disconnect_from_right(side: SideChain) -> SideChain {
+    match side {
+        SideChain::Unconnected | SideChain::Left => SideChain::Unconnected,
+        SideChain::Center | SideChain::Right => SideChain::Right,
+    }
+}
+
+fn disconnect_from_left(side: SideChain) -> SideChain {
+    match side {
+        SideChain::Unconnected | SideChain::Right => SideChain::Unconnected,
+        SideChain::Center | SideChain::Left => SideChain::Left,
+    }
+}
+
+fn connect_from_right(side: SideChain) -> SideChain {
+    match side {
+        SideChain::Unconnected | SideChain::Left => SideChain::Left,
+        SideChain::Center | SideChain::Right => SideChain::Center,
+    }
+}
+
+fn connect_from_left(side: SideChain) -> SideChain {
+    match side {
+        SideChain::Unconnected | SideChain::Right => SideChain::Right,
+        SideChain::Center | SideChain::Left => SideChain::Center,
+    }
+}
+
+async fn get_right_shelf(
     cur_block_pos: &BlockPos,
     cur_block: &Block,
     world: &World,
@@ -256,6 +282,31 @@ async fn is_right_shelf(
                 let state = AcaciaShelfLikeProperties::from_state_id(
                     world.get_block_state(new_pos).await.id,
                     block,
+                );
+                if block.id == cur_block.id && state.facing == facing && state.powered {
+                    return Some(state.side_chain);
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+async fn get_left_shelf(
+    cur_block_pos: &BlockPos,
+    cur_block: &Block,
+    world: &World,
+    facing: HorizontalFacing,
+) -> Option<SideChain> {
+    match facing {
+        HorizontalFacing::South => {
+            let new_pos = &cur_block_pos.west();
+            let block = world.get_block(new_pos).await;
+            if block.id == cur_block.id {
+                let state = AcaciaShelfLikeProperties::from_state_id(
+                    world.get_block_state(new_pos).await.id,
+                    cur_block,
                 );
                 if block.id == cur_block.id && state.facing == facing && state.powered {
                     return Some(state.side_chain);
