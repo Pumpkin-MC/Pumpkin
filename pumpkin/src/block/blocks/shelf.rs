@@ -14,8 +14,9 @@ use pumpkin_data::block_properties::SideChain;
 use pumpkin_data::block_properties::{AcaciaShelfLikeProperties, HorizontalFacing};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::RegistryKey;
+use pumpkin_data::tag::Block::MINECRAFT_WOODEN_SHELVES;
 use pumpkin_data::tag::get_tag_values;
+use pumpkin_data::tag::{RegistryKey, Taggable};
 use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
@@ -273,24 +274,24 @@ async fn get_right_shelf(
     cur_block: &Block,
     world: &World,
     facing: HorizontalFacing,
-) -> Option<SideChain> {
-    match facing {
-        HorizontalFacing::South => {
-            let new_pos = &cur_block_pos.east();
-            let block = world.get_block(new_pos).await;
-            if block.id == cur_block.id {
-                let state = AcaciaShelfLikeProperties::from_state_id(
-                    world.get_block_state(new_pos).await.id,
-                    block,
-                );
-                if block.id == cur_block.id && state.facing == facing && state.powered {
-                    return Some(state.side_chain);
-                }
-            }
-            None
+) -> Option<(&'_ Block, AcaciaShelfLikeProperties)> {
+    let new_pos = match facing {
+        HorizontalFacing::South => &cur_block_pos.east(),
+        HorizontalFacing::North => &cur_block_pos.west(),
+        HorizontalFacing::West => &cur_block_pos.south(),
+        HorizontalFacing::East => &cur_block_pos.north(),
+    };
+    let block = world.get_block(new_pos).await;
+    if block.has_tag(&MINECRAFT_WOODEN_SHELVES) {
+        let state = AcaciaShelfLikeProperties::from_state_id(
+            world.get_block_state(new_pos).await.id,
+            cur_block,
+        );
+        if block.id == cur_block.id && state.facing == facing && state.powered {
+            return Some((block, state));
         }
-        _ => None,
     }
+    None
 }
 
 async fn get_left_shelf(
@@ -298,24 +299,24 @@ async fn get_left_shelf(
     cur_block: &Block,
     world: &World,
     facing: HorizontalFacing,
-) -> Option<SideChain> {
-    match facing {
-        HorizontalFacing::South => {
-            let new_pos = &cur_block_pos.west();
-            let block = world.get_block(new_pos).await;
-            if block.id == cur_block.id {
-                let state = AcaciaShelfLikeProperties::from_state_id(
-                    world.get_block_state(new_pos).await.id,
-                    cur_block,
-                );
-                if block.id == cur_block.id && state.facing == facing && state.powered {
-                    return Some(state.side_chain);
-                }
-            }
-            None
+) -> Option<(&'_ Block, AcaciaShelfLikeProperties)> {
+    let new_pos = match facing {
+        HorizontalFacing::South => &cur_block_pos.west(),
+        HorizontalFacing::North => &cur_block_pos.east(),
+        HorizontalFacing::West => &cur_block_pos.north(),
+        HorizontalFacing::East => &cur_block_pos.south(),
+    };
+    let block = world.get_block(new_pos).await;
+    if block.has_tag(&MINECRAFT_WOODEN_SHELVES) {
+        let state = AcaciaShelfLikeProperties::from_state_id(
+            world.get_block_state(new_pos).await.id,
+            cur_block,
+        );
+        if block.id == cur_block.id && state.facing == facing && state.powered {
+            return Some((block, state));
         }
-        _ => None,
     }
+    None
 }
 
 fn swap_single_stack(
