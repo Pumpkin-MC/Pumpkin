@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use fancy::FancyTrunkPlacer;
 use pumpkin_data::tag;
 use pumpkin_data::{Block, BlockState, tag::Taggable};
@@ -10,17 +8,13 @@ use pumpkin_util::{
 use serde::Deserialize;
 use straight::StraightTrunkPlacer;
 
-use crate::{
-    ProtoChunk,
-    generation::feature::features::tree::trunk::{
-        bending::BendingTrunkPlacer, cherry::CherryTrunkPlacer, dark_oak::DarkOakTrunkPlacer,
-        forking::ForkingTrunkPlacer, giant::GiantTrunkPlacer, mega_jungle::MegaJungleTrunkPlacer,
-        upwards_branching::UpwardsBranchingTrunkPlacer,
-    },
-    level::Level,
-};
-
 use super::{TreeFeature, TreeNode};
+use crate::generation::feature::features::tree::trunk::{
+    bending::BendingTrunkPlacer, cherry::CherryTrunkPlacer, dark_oak::DarkOakTrunkPlacer,
+    forking::ForkingTrunkPlacer, giant::GiantTrunkPlacer, mega_jungle::MegaJungleTrunkPlacer,
+    upwards_branching::UpwardsBranchingTrunkPlacer,
+};
+use crate::generation::proto_chunk::GenerationCache;
 
 mod bending;
 mod cherry;
@@ -48,14 +42,14 @@ impl TrunkPlacer {
             + random.next_bounded_i32(self.height_rand_b as i32 + 1) as u32
     }
 
-    pub fn set_dirt(
+    pub fn set_dirt<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut T,
         pos: &BlockPos,
         force_dirt: bool,
         dirt_state: &BlockState,
     ) {
-        let block = chunk.get_block_state(&pos.0).to_block();
+        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block();
         if force_dirt
             || !(block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)
                 && block != &Block::GRASS_BLOCK
@@ -65,13 +59,13 @@ impl TrunkPlacer {
         }
     }
 
-    pub fn place(
+    pub fn place<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut T,
         pos: &BlockPos,
         trunk_block: &BlockState,
     ) -> bool {
-        let block = chunk.get_block_state(&pos.0);
+        let block = GenerationCache::get_block_state(chunk, &pos.0);
         if TreeFeature::can_replace(block.to_state(), block.to_block()) {
             chunk.set_block_state(&pos.0, trunk_block);
             return true;
@@ -79,13 +73,13 @@ impl TrunkPlacer {
         false
     }
 
-    pub fn try_place(
+    pub fn try_place<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
+        chunk: &mut T,
         pos: &BlockPos,
         trunk_block: &BlockState,
     ) -> bool {
-        let block = chunk.get_block_state(&pos.0);
+        let block = GenerationCache::get_block_state(chunk, &pos.0);
         if TreeFeature::can_replace_or_log(block.to_state(), block.to_block()) {
             return self.place(chunk, pos, trunk_block);
         }
@@ -93,12 +87,11 @@ impl TrunkPlacer {
     }
 
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         force_dirt: bool,
         dirt_state: &BlockState,
@@ -109,7 +102,6 @@ impl TrunkPlacer {
             height,
             start_pos,
             chunk,
-            level,
             random,
             force_dirt,
             dirt_state,
@@ -143,13 +135,12 @@ pub enum TrunkType {
 
 impl TrunkType {
     #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        chunk: &mut T,
         random: &mut RandomGenerator,
         force_dirt: bool,
         dirt_state: &BlockState,
@@ -171,7 +162,6 @@ impl TrunkType {
                 height,
                 start_pos,
                 chunk,
-                level,
                 random,
                 force_dirt,
                 dirt_state,
@@ -182,7 +172,6 @@ impl TrunkType {
                 height,
                 start_pos,
                 chunk,
-                level,
                 random,
                 force_dirt,
                 dirt_state,
@@ -193,7 +182,6 @@ impl TrunkType {
                 height,
                 start_pos,
                 chunk,
-                level,
                 random,
                 force_dirt,
                 dirt_state,
@@ -204,7 +192,6 @@ impl TrunkType {
                 height,
                 start_pos,
                 chunk,
-                level,
                 random,
                 force_dirt,
                 dirt_state,
@@ -215,7 +202,6 @@ impl TrunkType {
                 height,
                 start_pos,
                 chunk,
-                level,
                 random,
                 force_dirt,
                 dirt_state,
