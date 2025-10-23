@@ -189,9 +189,7 @@ impl HopperBlockEntity {
             return false;
         }
         let (block, state) = world.get_block_and_state(pos_up).await;
-        if !(state.is_solid()
-            && block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS))
-        {
+        if !(state.is_solid() && block.has_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS)) {
             // TODO getItemsAtAndAbove(level, hopper)
             return false;
         }

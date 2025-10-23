@@ -243,7 +243,7 @@ impl ItemStack {
                 };
                 match &rule.blocks {
                     IDSet::Tag(tag) => {
-                        if block.is_tagged_with_by_tag(tag) {
+                        if block.has_tag(tag) {
                             return speed;
                         }
                     }
@@ -271,7 +271,7 @@ impl ItemStack {
                 };
                 match &rule.blocks {
                     IDSet::Tag(tag) => {
-                        if block.is_tagged_with_by_tag(tag) {
+                        if block.has_tag(tag) {
                             return correct;
                         }
                     }

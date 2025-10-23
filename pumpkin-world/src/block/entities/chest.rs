@@ -9,7 +9,7 @@ use std::{
 
 use async_trait::async_trait;
 use pumpkin_data::{
-    Block, HorizontalFacingExt,
+    HorizontalFacingExt,
     block_properties::{BlockProperties, ChestLikeProperties, ChestType},
     sound::{Sound, SoundCategory},
 };
@@ -60,7 +60,6 @@ impl BlockEntity for ChestBlockEntity {
         };
 
         chest.read_data(nbt, &chest.items);
-
         chest
     }
 
@@ -134,7 +133,8 @@ impl ChestBlockEntity {
         let mut rng = Xoroshiro::from_seed(get_seed());
 
         let state = world.get_block_state(&self.position).await;
-        let properties = ChestLikeProperties::from_state_id(state.id, &Block::CHEST);
+        let block = world.get_block(&self.position).await;
+        let properties = ChestLikeProperties::from_state_id(state.id, block);
         let position = match properties.r#type {
             ChestType::Left => return,
             ChestType::Single => Vector3::new(

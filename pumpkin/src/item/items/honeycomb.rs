@@ -8,7 +8,9 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::{
+    BlockProperties, ChestLikeProperties, ChestType, CopperGolemStatueLikeProperties,
+};
 use pumpkin_data::block_properties::{
     LanternLikeProperties, LightningRodLikeProperties, OakDoorLikeProperties,
     OakFenceLikeProperties, OakTrapdoorLikeProperties,
@@ -53,7 +55,7 @@ impl ItemBehaviour for HoneyCombItem {
             // create new properties for the new log.
             let new_block = &Block::from_id(replacement_block);
 
-            let new_state_id = if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DOORS) {
+            let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
                 // get block state of the old log.
                 let door_information = world.get_block_state_id(&location).await;
                 // get the log properties
@@ -67,7 +69,7 @@ impl ItemBehaviour for HoneyCombItem {
                 new_door_properties.hinge = door_props.hinge;
                 new_door_properties.powered = door_props.powered;
                 new_door_properties.to_state_id(new_block)
-            } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_BARS) {
+            } else if block.has_tag(&tag::Block::MINECRAFT_BARS) {
                 let bar_information = world.get_block_state_id(&location).await;
                 let bar_props = OakFenceLikeProperties::from_state_id(bar_information, block);
                 let mut new_bars_props = OakFenceLikeProperties::default(new_block);
@@ -77,7 +79,7 @@ impl ItemBehaviour for HoneyCombItem {
                 new_bars_props.east = bar_props.east;
                 new_bars_props.waterlogged = bar_props.waterlogged;
                 new_bars_props.to_state_id(new_block)
-            } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LANTERNS) {
+            } else if block.has_tag(&tag::Block::MINECRAFT_LANTERNS) {
                 let lantern_information = world.get_block_state_id(&location).await;
                 let lantern_props =
                     LanternLikeProperties::from_state_id(lantern_information, block);
@@ -85,7 +87,7 @@ impl ItemBehaviour for HoneyCombItem {
                 new_lantern_props.hanging = lantern_props.hanging;
                 new_lantern_props.waterlogged = lantern_props.waterlogged;
                 new_lantern_props.to_state_id(new_block)
-            } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+            } else if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
                 let info = world.get_block_state_id(&location).await;
                 let trapdoor_props = OakTrapdoorLikeProperties::from_state_id(info, block);
                 let mut new_props = OakTrapdoorLikeProperties::default(new_block);
@@ -95,13 +97,51 @@ impl ItemBehaviour for HoneyCombItem {
                 new_props.half = trapdoor_props.half;
                 new_props.waterlogged = trapdoor_props.waterlogged;
                 new_props.to_state_id(new_block)
-            } else if block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LIGHTNING_RODS) {
+            } else if block.has_tag(&tag::Block::MINECRAFT_LIGHTNING_RODS) {
                 let info = world.get_block_state_id(&location).await;
                 let rod_props = LightningRodLikeProperties::from_state_id(info, block);
                 let mut new_props = LightningRodLikeProperties::default(new_block);
                 new_props.powered = rod_props.powered;
                 new_props.facing = rod_props.facing;
                 new_props.waterlogged = rod_props.waterlogged;
+                new_props.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_CHESTS) {
+                let info = world.get_block_state_id(&location).await;
+                let chest_props = ChestLikeProperties::from_state_id(info, block);
+                let mut new_props = ChestLikeProperties::default(new_block);
+                new_props.r#type = chest_props.r#type;
+                new_props.facing = chest_props.facing;
+                new_props.waterlogged = chest_props.waterlogged;
+                if new_props.r#type != ChestType::Single {
+                    let connected_towards = match chest_props.r#type {
+                        ChestType::Single => return,
+                        ChestType::Left => chest_props.facing.rotate_clockwise(),
+                        ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
+                    };
+                    let neighbor_location = location.offset(connected_towards.to_offset());
+                    let neighbor_info = world.get_block_state_id(&neighbor_location).await;
+                    let neighbor_chest_props =
+                        ChestLikeProperties::from_state_id(neighbor_info, block);
+                    let mut neighbor_props = ChestLikeProperties::default(new_block);
+                    neighbor_props.r#type = neighbor_chest_props.r#type;
+                    neighbor_props.facing = neighbor_chest_props.facing;
+                    neighbor_props.waterlogged = neighbor_chest_props.waterlogged;
+                    world
+                        .set_block_state(
+                            &neighbor_location,
+                            neighbor_props.to_state_id(new_block),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                }
+                new_props.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_GOLEM_STATUES) {
+                let info = world.get_block_state_id(&location).await;
+                let old_props = CopperGolemStatueLikeProperties::from_state_id(info, block);
+                let mut new_props = CopperGolemStatueLikeProperties::default(new_block);
+                new_props.copper_golem_pose = old_props.copper_golem_pose;
+                new_props.facing = old_props.facing;
+                new_props.waterlogged = old_props.waterlogged;
                 new_props.to_state_id(new_block)
             } else {
                 new_block.default_state.id
@@ -226,6 +266,22 @@ fn get_waxed_equivalent(block: &Block) -> Option<u16> {
         }
         id if id == Block::OXIDIZED_LIGHTNING_ROD.id => {
             Some(Block::WAXED_OXIDIZED_LIGHTNING_ROD.id)
+        }
+        id if id == Block::COPPER_CHEST.id => Some(Block::WAXED_COPPER_CHEST.id),
+        id if id == Block::EXPOSED_COPPER_CHEST.id => Some(Block::WAXED_EXPOSED_COPPER_CHEST.id),
+        id if id == Block::WEATHERED_COPPER_CHEST.id => {
+            Some(Block::WAXED_WEATHERED_COPPER_CHEST.id)
+        }
+        id if id == Block::OXIDIZED_COPPER_CHEST.id => Some(Block::WAXED_OXIDIZED_COPPER_CHEST.id),
+        id if id == Block::COPPER_GOLEM_STATUE.id => Some(Block::WAXED_COPPER_GOLEM_STATUE.id),
+        id if id == Block::EXPOSED_COPPER_GOLEM_STATUE.id => {
+            Some(Block::WAXED_EXPOSED_COPPER_GOLEM_STATUE.id)
+        }
+        id if id == Block::WEATHERED_COPPER_GOLEM_STATUE.id => {
+            Some(Block::WAXED_WEATHERED_COPPER_GOLEM_STATUE.id)
+        }
+        id if id == Block::OXIDIZED_COPPER_GOLEM_STATUE.id => {
+            Some(Block::WAXED_OXIDIZED_COPPER_GOLEM_STATUE.id)
         }
         _ => None,
     }
