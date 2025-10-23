@@ -15,8 +15,8 @@ use pumpkin_data::block_properties::{AcaciaShelfLikeProperties, HorizontalFacing
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Block::MINECRAFT_WOODEN_SHELVES;
-use pumpkin_data::tag::get_tag_values;
-use pumpkin_data::tag::{RegistryKey, Taggable};
+use pumpkin_data::tag::RegistryKey;
+use pumpkin_data::tag::{Taggable, get_tag_values};
 use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
@@ -26,7 +26,7 @@ use pumpkin_world::block::entities::shelf::ShelfBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::tick::TickPriority;
-use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:wooden_shelves")]
@@ -108,6 +108,14 @@ impl BlockBehaviour for Shelf {
     async fn placed(&self, args: PlacedArgs<'_>) {
         let block_entity = ShelfBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(block_entity)).await;
+        let state = AcaciaShelfLikeProperties::from_state_id(
+            args.world.get_block_state(args.position).await.id,
+            args.block,
+        );
+        let old_state = AcaciaShelfLikeProperties::from_state_id(args.old_state_id, args.block);
+        if state.powered {
+            self.connect_neighbors(args.world, args.position, &state, &old_state)
+        }
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
@@ -164,6 +172,7 @@ impl BlockBehaviour for Shelf {
     async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
         let props = AcaciaShelfLikeProperties::from_state_id(args.old_state_id, args.block);
         self.disconnect_neighbors(args.world, args.position, &props)
+            .await;
     }
 
     async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
@@ -224,16 +233,33 @@ impl Shelf {
             2
         }
     }
-    pub fn disconnect_neighbors(
+    pub async fn disconnect_neighbors<'a>(
         &self,
-        world: &World,
+        world: &Arc<World>,
         position: &BlockPos,
         props: &AcaciaShelfLikeProperties,
     ) {
+        let new_pos = get_left_pos(position, props.facing);
+        let block = world.get_block(&new_pos).await;
+        if let Some(mut prop) = properties_if_shelf(&new_pos, world, block, props.facing).await {
+            prop.side_chain = disconnect_from_right(prop.side_chain);
+            world
+                .set_block_state(&new_pos, prop.to_state_id(block), BlockFlags::NOTIFY_ALL)
+                .await;
+        }
+        let new_pos = get_right_pos(position, props.facing);
+        let block = world.get_block(&new_pos).await;
+        if let Some(mut prop) = properties_if_shelf(&new_pos, world, block, props.facing).await {
+            prop.side_chain = disconnect_from_left(prop.side_chain);
+            world
+                .set_block_state(&new_pos, prop.to_state_id(block), BlockFlags::NOTIFY_ALL)
+                .await;
+        }
     }
+
     fn connect_neighbors(
         &self,
-        world: World,
+        world: &Arc<World>,
         position: &BlockPos,
         props: &AcaciaShelfLikeProperties,
         old_props: &AcaciaShelfLikeProperties,
@@ -269,51 +295,37 @@ fn connect_from_left(side: SideChain) -> SideChain {
     }
 }
 
-async fn get_right_shelf(
-    cur_block_pos: &BlockPos,
-    cur_block: &Block,
-    world: &World,
-    facing: HorizontalFacing,
-) -> Option<(&'_ Block, AcaciaShelfLikeProperties)> {
-    let new_pos = match facing {
-        HorizontalFacing::South => &cur_block_pos.east(),
-        HorizontalFacing::North => &cur_block_pos.west(),
-        HorizontalFacing::West => &cur_block_pos.south(),
-        HorizontalFacing::East => &cur_block_pos.north(),
-    };
-    let block = world.get_block(new_pos).await;
-    if block.has_tag(&MINECRAFT_WOODEN_SHELVES) {
-        let state = AcaciaShelfLikeProperties::from_state_id(
-            world.get_block_state(new_pos).await.id,
-            cur_block,
-        );
-        if block.id == cur_block.id && state.facing == facing && state.powered {
-            return Some((block, state));
-        }
+fn get_right_pos(cur_block_pos: &BlockPos, facing: HorizontalFacing) -> BlockPos {
+    match facing {
+        HorizontalFacing::South => cur_block_pos.east(),
+        HorizontalFacing::North => cur_block_pos.west(),
+        HorizontalFacing::West => cur_block_pos.south(),
+        HorizontalFacing::East => cur_block_pos.north(),
     }
-    None
 }
 
-async fn get_left_shelf(
-    cur_block_pos: &BlockPos,
-    cur_block: &Block,
+fn get_left_pos(cur_block_pos: &BlockPos, facing: HorizontalFacing) -> BlockPos {
+    match facing {
+        HorizontalFacing::South => cur_block_pos.west(),
+        HorizontalFacing::North => cur_block_pos.east(),
+        HorizontalFacing::West => cur_block_pos.north(),
+        HorizontalFacing::East => cur_block_pos.south(),
+    }
+}
+
+async fn properties_if_shelf(
+    new_pos: &BlockPos,
     world: &World,
+    block: &Block,
     facing: HorizontalFacing,
-) -> Option<(&'_ Block, AcaciaShelfLikeProperties)> {
-    let new_pos = match facing {
-        HorizontalFacing::South => &cur_block_pos.west(),
-        HorizontalFacing::North => &cur_block_pos.east(),
-        HorizontalFacing::West => &cur_block_pos.north(),
-        HorizontalFacing::East => &cur_block_pos.south(),
-    };
-    let block = world.get_block(new_pos).await;
+) -> Option<AcaciaShelfLikeProperties> {
     if block.has_tag(&MINECRAFT_WOODEN_SHELVES) {
         let state = AcaciaShelfLikeProperties::from_state_id(
             world.get_block_state(new_pos).await.id,
-            cur_block,
+            block,
         );
-        if block.id == cur_block.id && state.facing == facing && state.powered {
-            return Some((block, state));
+        if state.facing == facing && state.powered {
+            return Some(state);
         }
     }
     None
