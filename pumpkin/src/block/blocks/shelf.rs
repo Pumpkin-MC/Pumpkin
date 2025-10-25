@@ -27,6 +27,7 @@ use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
+use std::os::linux::raw::stat;
 use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:wooden_shelves")]
@@ -108,13 +109,16 @@ impl BlockBehaviour for Shelf {
     async fn placed(&self, args: PlacedArgs<'_>) {
         let block_entity = ShelfBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(block_entity)).await;
-        let state = AcaciaShelfLikeProperties::from_state_id(
+        let mut state = AcaciaShelfLikeProperties::from_state_id(
             args.world.get_block_state(args.position).await.id,
             args.block,
         );
         let old_state = AcaciaShelfLikeProperties::from_state_id(args.old_state_id, args.block);
         if state.powered {
-            self.connect_neighbors(args.world, args.position, &state, &old_state)
+            self.connect_neighbors(args.world, args.position, &mut state, &old_state)
+        } else {
+            self.disconnect_neighbors(args.world, args.position, &state)
+                .await
         }
     }
 
@@ -224,6 +228,7 @@ impl Shelf {
     }
     const OFFSET_SLOT_0: f32 = 0.375;
     const OFFSET_SLOT_1: f32 = 0.6875;
+    const MAX_SIDE_CHAIN_LENGTH: u32 = 3;
     fn get_column(x: f32) -> i8 {
         if x < Self::OFFSET_SLOT_0 {
             0
@@ -261,10 +266,59 @@ impl Shelf {
         &self,
         world: &Arc<World>,
         position: &BlockPos,
-        props: &AcaciaShelfLikeProperties,
+        props: &mut AcaciaShelfLikeProperties,
         old_props: &AcaciaShelfLikeProperties,
     ) {
+        if props.powered
+            && !(props.side_chain != SideChain::Unconnected
+                || (old_props.powered && old_props.side_chain != SideChain::Unconnected))
+        {
+            let shelf = block_on(world.get_block(position));
+            let new_pos = get_left_pos(position, props.facing);
+            let block = block_on(world.get_block(&new_pos));
+            let mut k = 1;
+            if let Some(mut prop) =
+                block_on(properties_if_shelf(&new_pos, world, block, props.facing))
+            {
+                let i = get_chain_length(world, &new_pos);
+                if can_add_chain_length(i, k) {
+                    props.side_chain = connect_to_left(SideChain::Unconnected);
+                    prop.side_chain = connect_to_right(prop.side_chain);
+                    block_on(world.set_block_state(
+                        &new_pos,
+                        prop.to_state_id(block),
+                        BlockFlags::NOTIFY_ALL,
+                    ));
+                    k += i;
+                }
+            }
+            let new_pos = get_right_pos(position, props.facing);
+            let block = block_on(world.get_block(&new_pos));
+            if let Some(mut prop) =
+                block_on(properties_if_shelf(&new_pos, world, block, props.facing))
+            {
+                let j = get_chain_length(world, &new_pos);
+                if can_add_chain_length(j, k) {
+                    props.side_chain = connect_to_right(props.side_chain);
+                    prop.side_chain = connect_to_left(prop.side_chain);
+                    block_on(world.set_block_state(
+                        &new_pos,
+                        prop.to_state_id(block),
+                        BlockFlags::NOTIFY_ALL,
+                    ));
+                }
+            }
+            block_on(world.set_block_state(
+                &position,
+                props.to_state_id(shelf),
+                BlockFlags::NOTIFY_ALL,
+            ));
+        }
     }
+}
+
+fn can_add_chain_length(length: u32, add: u32) -> bool {
+    length > 0 && length + add <= Shelf::MAX_SIDE_CHAIN_LENGTH
 }
 
 fn disconnect_from_right(side: SideChain) -> SideChain {
@@ -281,14 +335,14 @@ fn disconnect_from_left(side: SideChain) -> SideChain {
     }
 }
 
-fn connect_from_right(side: SideChain) -> SideChain {
+fn connect_to_right(side: SideChain) -> SideChain {
     match side {
         SideChain::Unconnected | SideChain::Left => SideChain::Left,
         SideChain::Center | SideChain::Right => SideChain::Center,
     }
 }
 
-fn connect_from_left(side: SideChain) -> SideChain {
+fn connect_to_left(side: SideChain) -> SideChain {
     match side {
         SideChain::Unconnected | SideChain::Right => SideChain::Right,
         SideChain::Center | SideChain::Left => SideChain::Center,
@@ -310,6 +364,56 @@ fn get_left_pos(cur_block_pos: &BlockPos, facing: HorizontalFacing) -> BlockPos 
         HorizontalFacing::North => cur_block_pos.east(),
         HorizontalFacing::West => cur_block_pos.north(),
         HorizontalFacing::East => cur_block_pos.south(),
+    }
+}
+
+fn get_chain_length(world: &Arc<World>, &block_pos: &BlockPos) -> u32 {
+    let state = AcaciaShelfLikeProperties::from_state_id(
+        block_on(world.get_block_state_id(&block_pos)),
+        block_on(world.get_block(&block_pos)),
+    );
+    if !state.powered {
+        return 0;
+    }
+    match state.side_chain {
+        SideChain::Unconnected => 0,
+        SideChain::Right => {
+            let left_pos = get_left_pos(&block_pos, state.facing);
+            if let Some(prop) = block_on(properties_if_shelf(
+                &left_pos,
+                world,
+                block_on(world.get_block(&left_pos)),
+                state.facing,
+            )) {
+                return if prop.side_chain == SideChain::Left {
+                    2
+                } else if prop.side_chain == SideChain::Center {
+                    3
+                } else {
+                    0
+                };
+            }
+            0
+        }
+        SideChain::Center => 3,
+        SideChain::Left => {
+            let right_pos = get_right_pos(&block_pos, state.facing);
+            if let Some(prop) = block_on(properties_if_shelf(
+                &right_pos,
+                world,
+                block_on(world.get_block(&right_pos)),
+                state.facing,
+            )) {
+                return if prop.side_chain == SideChain::Right {
+                    2
+                } else if prop.side_chain == SideChain::Center {
+                    3
+                } else {
+                    0
+                };
+            }
+            0
+        }
     }
 }
 
