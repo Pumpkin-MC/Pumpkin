@@ -9,6 +9,7 @@ use crate::entity::player::Player;
 use crate::world::World;
 use async_trait::async_trait;
 use futures::executor::block_on;
+use pumpkin_data::Block;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::SideChain;
 use pumpkin_data::block_properties::{AcaciaShelfLikeProperties, HorizontalFacing};
@@ -17,7 +18,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Block::MINECRAFT_WOODEN_SHELVES;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::{Taggable, get_tag_values};
-use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -27,7 +27,6 @@ use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
-use std::os::linux::raw::stat;
 use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:wooden_shelves")]
@@ -113,25 +112,29 @@ impl BlockBehaviour for Shelf {
             args.world.get_block_state(args.position).await.id,
             args.block,
         );
-        let old_state = AcaciaShelfLikeProperties::from_state_id(args.old_state_id, args.block);
-        if state.powered {
-            self.connect_neighbors(args.world, args.position, &mut state, &old_state)
-        } else {
-            self.disconnect_neighbors(args.world, args.position, &state)
-                .await
+        if args.block.has_tag(&MINECRAFT_WOODEN_SHELVES) {
+            if state.powered {
+                self.connect_neighbors(args.world, args.position, &mut state, args.state_id)
+                    .await;
+            } else {
+                self.disconnect_neighbors(args.world, args.position, &state)
+                    .await;
+            }
         }
     }
 
     async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let mut own_state = AcaciaShelfLikeProperties::from_state_id(
-            args.world.get_block_state(args.position).await.id,
-            args.block,
-        );
+        let state_id = args.world.get_block_state(args.position).await.id;
+        let mut own_state = AcaciaShelfLikeProperties::from_state_id(state_id, args.block);
         let powered = block_receives_redstone_power(args.world, args.position).await;
         if own_state.powered != powered {
             own_state.powered = powered;
-            if !powered {
-                own_state.side_chain = SideChain::Unconnected;
+            if powered {
+                self.connect_neighbors(args.world, args.position, &mut own_state, state_id)
+                    .await;
+            } else {
+                self.disconnect_neighbors(args.world, args.position, &own_state)
+                    .await;
             }
             args.world
                 .play_block_sound(
@@ -246,74 +249,93 @@ impl Shelf {
     ) {
         let new_pos = get_left_pos(position, props.facing);
         let block = world.get_block(&new_pos).await;
-        if let Some(mut prop) = properties_if_shelf(&new_pos, world, block, props.facing).await {
-            prop.side_chain = disconnect_from_right(prop.side_chain);
-            world
-                .set_block_state(&new_pos, prop.to_state_id(block), BlockFlags::NOTIFY_ALL)
-                .await;
+        if block.has_tag(&MINECRAFT_WOODEN_SHELVES) {
+            if let Some(mut prop) = properties_if_shelf(&new_pos, world, block, props.facing).await
+            {
+                prop.side_chain = disconnect_from_right(prop.side_chain);
+                world
+                    .set_block_state(&new_pos, prop.to_state_id(block), BlockFlags::NOTIFY_ALL)
+                    .await;
+            }
         }
         let new_pos = get_right_pos(position, props.facing);
         let block = world.get_block(&new_pos).await;
-        if let Some(mut prop) = properties_if_shelf(&new_pos, world, block, props.facing).await {
-            prop.side_chain = disconnect_from_left(prop.side_chain);
-            world
-                .set_block_state(&new_pos, prop.to_state_id(block), BlockFlags::NOTIFY_ALL)
-                .await;
+        if block.has_tag(&MINECRAFT_WOODEN_SHELVES) {
+            if let Some(mut prop) = properties_if_shelf(&new_pos, world, block, props.facing).await
+            {
+                prop.side_chain = disconnect_from_left(prop.side_chain);
+                world
+                    .set_block_state(&new_pos, prop.to_state_id(block), BlockFlags::NOTIFY_ALL)
+                    .await;
+            }
         }
     }
 
-    fn connect_neighbors(
+    async fn connect_neighbors(
         &self,
         world: &Arc<World>,
         position: &BlockPos,
         props: &mut AcaciaShelfLikeProperties,
-        old_props: &AcaciaShelfLikeProperties,
+        old_props: u16,
     ) {
-        if props.powered
-            && !(props.side_chain != SideChain::Unconnected
-                || (old_props.powered && old_props.side_chain != SideChain::Unconnected))
-        {
-            let shelf = block_on(world.get_block(position));
-            let new_pos = get_left_pos(position, props.facing);
-            let block = block_on(world.get_block(&new_pos));
-            let mut k = 1;
-            if let Some(mut prop) =
-                block_on(properties_if_shelf(&new_pos, world, block, props.facing))
+        if props.powered {
+            if !(props.side_chain != SideChain::Unconnected
+                || old_state_chained(world, position, old_props).await)
             {
-                let i = get_chain_length(world, &new_pos);
-                if can_add_chain_length(i, k) {
-                    props.side_chain = connect_to_left(SideChain::Unconnected);
-                    prop.side_chain = connect_to_right(prop.side_chain);
-                    block_on(world.set_block_state(
-                        &new_pos,
-                        prop.to_state_id(block),
-                        BlockFlags::NOTIFY_ALL,
-                    ));
-                    k += i;
+                let shelf = world.get_block(position).await;
+                let new_pos = get_left_pos(position, props.facing);
+                let block = world.get_block(&new_pos).await;
+                let mut k = 1;
+                if let Some(mut prop) =
+                    properties_if_shelf(&new_pos, world, block, props.facing).await
+                {
+                    let i = get_chain_length(world, &new_pos);
+                    if can_add_chain_length(i, k) {
+                        props.side_chain = connect_to_left(SideChain::Unconnected);
+                        prop.side_chain = connect_to_right(prop.side_chain);
+                        world
+                            .set_block_state(
+                                &new_pos,
+                                prop.to_state_id(block),
+                                BlockFlags::NOTIFY_ALL,
+                            )
+                            .await;
+                        k += i;
+                    }
                 }
-            }
-            let new_pos = get_right_pos(position, props.facing);
-            let block = block_on(world.get_block(&new_pos));
-            if let Some(mut prop) =
-                block_on(properties_if_shelf(&new_pos, world, block, props.facing))
-            {
-                let j = get_chain_length(world, &new_pos);
-                if can_add_chain_length(j, k) {
-                    props.side_chain = connect_to_right(props.side_chain);
-                    prop.side_chain = connect_to_left(prop.side_chain);
-                    block_on(world.set_block_state(
-                        &new_pos,
-                        prop.to_state_id(block),
-                        BlockFlags::NOTIFY_ALL,
-                    ));
+                let new_pos = get_right_pos(position, props.facing);
+                let block = world.get_block(&new_pos).await;
+                if let Some(mut prop) =
+                    properties_if_shelf(&new_pos, world, block, props.facing).await
+                {
+                    let j = get_chain_length(world, &new_pos);
+                    if can_add_chain_length(j, k) {
+                        props.side_chain = connect_to_right(props.side_chain);
+                        prop.side_chain = connect_to_left(prop.side_chain);
+                        world
+                            .set_block_state(
+                                &new_pos,
+                                prop.to_state_id(block),
+                                BlockFlags::NOTIFY_ALL,
+                            )
+                            .await;
+                    }
                 }
+                world
+                    .set_block_state(&position, props.to_state_id(shelf), BlockFlags::NOTIFY_ALL)
+                    .await;
             }
-            block_on(world.set_block_state(
-                &position,
-                props.to_state_id(shelf),
-                BlockFlags::NOTIFY_ALL,
-            ));
         }
+    }
+}
+
+async fn old_state_chained(world: &Arc<World>, pos: &BlockPos, state_id: u16) -> bool {
+    let block = world.get_block(pos).await;
+    if state_id != 0 && block.has_tag(&MINECRAFT_WOODEN_SHELVES) {
+        let prop = AcaciaShelfLikeProperties::from_state_id(state_id, block);
+        prop.side_chain != SideChain::Unconnected && prop.powered
+    } else {
+        false
     }
 }
 
@@ -376,7 +398,7 @@ fn get_chain_length(world: &Arc<World>, &block_pos: &BlockPos) -> u32 {
         return 0;
     }
     match state.side_chain {
-        SideChain::Unconnected => 0,
+        SideChain::Unconnected => 1,
         SideChain::Right => {
             let left_pos = get_left_pos(&block_pos, state.facing);
             if let Some(prop) = block_on(properties_if_shelf(
