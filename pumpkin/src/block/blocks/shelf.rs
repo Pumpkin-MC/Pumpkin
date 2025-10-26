@@ -129,8 +129,12 @@ impl BlockBehaviour for Shelf {
         let powered = block_receives_redstone_power(args.world, args.position).await;
         if own_state.powered != powered {
             own_state.powered = powered;
-            if !powered {
-                own_state.side_chain = SideChain::Unconnected;
+            if powered {
+                self.connect_neighbors(args.world, args.position, &mut own_state, state_id)
+                    .await;
+            } else {
+                self.disconnect_neighbors(args.world, args.position, &own_state)
+                    .await;
             }
             args.world
                 .play_block_sound(
@@ -158,7 +162,7 @@ impl BlockBehaviour for Shelf {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let state = args.world.get_block_state(args.position).await;
-        let props = AcaciaShelfLikeProperties::from_state_id(state.id, args.block);
+        let mut props = AcaciaShelfLikeProperties::from_state_id(state.id, args.block);
         if props.waterlogged {
             args.world
                 .schedule_fluid_tick(
