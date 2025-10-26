@@ -1,7 +1,9 @@
+use std::cmp::min;
 use std::sync::Arc;
 
 use crate::block::{
-    BlockMetadata, BrokenArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
+    BlockMetadata, BrokenArgs, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
+    OnSyncedBlockEventArgs, PlacedArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -21,6 +23,7 @@ use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerFactory};
+use pumpkin_util::math::lerp_positive;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
@@ -55,6 +58,8 @@ impl ScreenHandlerFactory for ChestScreenFactory {
         }
     }
 }
+
+impl ChestScreenFactory {}
 
 pub struct ChestBlock;
 
@@ -128,11 +133,15 @@ impl BlockBehaviour for ChestBlock {
     }
 
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        chest_normal_use(args).await
+        chest_normal_use(&args).await
     }
 
     async fn broken(&self, args: BrokenArgs<'_>) {
         chest_broken(args).await;
+    }
+
+    async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        calculate_comparator_output(args).await
     }
 }
 
@@ -140,28 +149,23 @@ impl ChestBlock {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
 }
 
-pub async fn chest_normal_use(args: NormalUseArgs<'_>) -> BlockActionResult {
-    let (state, first_chest) = join(
-        args.world.get_block_state_id(args.position),
-        args.world.get_block_entity(args.position),
-    )
-    .await;
-
-    let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
-        return BlockActionResult::Fail;
-    };
-
-    let chest_props = ChestLikeProperties::from_state_id(state, args.block);
+pub async fn get_inventory(
+    world: &World,
+    position: &BlockPos,
+    block: &Block,
+    state: u16,
+    first_inventory: Arc<dyn Inventory>,
+) -> Arc<dyn Inventory> {
+    let chest_props = ChestLikeProperties::from_state_id(state, block);
     let connected_towards = match chest_props.r#type {
         ChestType::Single => None,
         ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
     };
 
-    let inventory = if let Some(direction) = connected_towards
-        && let Some(second_inventory) = args
-            .world
-            .get_block_entity(&args.position.offset(direction.to_offset()))
+    if let Some(direction) = connected_towards
+        && let Some(second_inventory) = world
+            .get_block_entity(&position.offset(direction.to_offset()))
             .await
             .and_then(BlockEntity::get_inventory)
     {
@@ -173,13 +177,59 @@ pub async fn chest_normal_use(args: NormalUseArgs<'_>) -> BlockActionResult {
         }
     } else {
         first_inventory
-    };
+    }
+}
 
+pub async fn chest_normal_use(args: &NormalUseArgs<'_>) -> BlockActionResult {
+    let (state, first_chest) = join(
+        args.world.get_block_state_id(args.position),
+        args.world.get_block_entity(args.position),
+    )
+    .await;
+    let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
+        return BlockActionResult::Fail;
+    };
+    let inventory = get_inventory(
+        args.world,
+        args.position,
+        args.block,
+        state,
+        first_inventory,
+    )
+    .await;
     args.player
         .open_handled_screen(&ChestScreenFactory(inventory))
         .await;
 
     BlockActionResult::Success
+}
+
+pub async fn calculate_comparator_output(args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+    let first_chest = args.world.get_block_entity(args.position).await;
+    let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
+        return Some(0);
+    };
+    let inventory = get_inventory(
+        args.world,
+        args.position,
+        args.block,
+        args.state.id,
+        first_inventory,
+    )
+    .await;
+    let mut f: f32 = 0.0;
+    for i in 0..inventory.size() {
+        let stack = inventory.get_stack(i).await.lock_owned().await;
+        if !stack.is_empty() {
+            f += stack.item_count as f32
+                / min(
+                    stack.get_max_stack_size(),
+                    inventory.get_max_count_per_stack(),
+                ) as f32;
+        }
+    }
+    f = f / inventory.size() as f32;
+    Some(lerp_positive(f, 0, 15) as u8)
 }
 
 pub async fn chest_broken(args: BrokenArgs<'_>) {

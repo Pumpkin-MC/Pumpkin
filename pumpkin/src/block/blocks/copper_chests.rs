@@ -2,9 +2,13 @@ use pumpkin_data::tag::{Taggable, get_tag_values};
 use std::sync::Arc;
 
 use crate::block::blocks::chests::{
-    ChestTypeExt, chest_broken, chest_normal_use, player_crouching_behaviour,
+    ChestTypeExt, calculate_comparator_output, chest_broken, chest_normal_use,
+    player_crouching_behaviour,
 };
-use crate::block::{BrokenArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs};
+use crate::block::{
+    BrokenArgs, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs,
+    PlacedArgs,
+};
 use crate::entity::EntityBase;
 use crate::world::World;
 use crate::{
@@ -31,7 +35,7 @@ pub struct CopperChestBlock;
 #[async_trait]
 impl BlockBehaviour for CopperChestBlock {
     async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        chest_normal_use(args).await
+        chest_normal_use(&args).await
     }
 
     async fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
@@ -110,6 +114,10 @@ impl BlockBehaviour for CopperChestBlock {
 
     async fn broken(&self, args: BrokenArgs<'_>) {
         chest_broken(args).await;
+    }
+
+    async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        calculate_comparator_output(args).await
     }
 }
 
