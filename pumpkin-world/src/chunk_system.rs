@@ -16,7 +16,7 @@ use crate::dimension::Dimension;
 use crate::generation::height_limit::HeightLimitView;
 
 use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
-use crate::generation::settings::{GenerationSettings, gen_settings_from_dimension};
+use crate::generation::settings::{gen_settings_from_dimension, GenerationSettings};
 use crate::level::{Level, SyncChunk};
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
@@ -29,14 +29,14 @@ use num_traits::abs;
 use pumpkin_data::biome::Biome;
 
 use pumpkin_data::{Block, BlockState};
-use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::HeightMap;
 
-use std::cmp::{Ordering, PartialEq, max, min};
-use std::collections::BinaryHeap;
+use std::cmp::{max, min, Ordering, PartialEq};
 use std::collections::hash_map::Entry;
+use std::collections::BinaryHeap;
 use std::mem::swap;
 use std::ops::Deref;
 use std::sync::{Arc, Condvar, Mutex};
@@ -52,7 +52,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::atomic::Ordering::Relaxed;
 use std::thread;
 use std::thread::JoinHandle;
-use tokio::sync::{RwLock, oneshot};
+use tokio::sync::{oneshot, RwLock};
 use tokio::task;
 
 type HashMapType<K, V> = FxHashMap<K, V>;
@@ -89,6 +89,58 @@ impl From<HeapNode> for (ChunkPos, i8) {
     }
 }
 
+struct LevelCache(i32, i32, usize, [(i8, i8); 256 * 256]);
+impl Default for LevelCache {
+    fn default() -> Self {
+        Self(0, 0, 0, [(0, 0); 256 * 256])
+    }
+}
+impl LevelCache {
+    fn clean(&mut self, pos: ChunkPos, level: i8) {
+        let dst = ChunkLoading::MAX_LEVEL - level + 1;
+        self.0 = pos.x - dst as i32;
+        self.1 = pos.y - dst as i32;
+        self.2 = (dst as usize) << 1 | 1;
+        self.3[..self.2 * self.2].fill((-127, -127));
+    }
+    fn get(&mut self, map: &ChunkLevel, pos: ChunkPos) -> i8 {
+        let dx = (pos.x - self.0) as usize;
+        let dy = (pos.y - self.1) as usize;
+        debug_assert!(pos.x >= self.0 && pos.y >= self.1);
+        let value = &mut self.3[dx * self.2 + dy];
+        if value.0 == -127 {
+            value.0 = *map.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL);
+            value.1 = value.0;
+        }
+        value.1
+    }
+    fn set(&mut self, map: &ChunkLevel, pos: ChunkPos, level: i8) {
+        let dx = (pos.x - self.0) as usize;
+        let dy = (pos.y - self.1) as usize;
+        debug_assert!(pos.x >= self.0 && pos.y >= self.1);
+        let value = &mut self.3[dx * self.2 + dy];
+        if value.0 == -127 {
+            value.0 = *map.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL);
+        }
+        value.1 = level;
+    }
+    fn write(&mut self, map: &mut ChunkLevel) {
+        for i in 0..self.2 {
+            for j in 0..self.2 {
+                let value = self.3[i * self.2 + j];
+                if value.0 != value.1 {
+                    let pos = ChunkPos::new(i as i32 + self.0, j as i32 + self.1);
+                    if value.1 == ChunkLoading::MAX_LEVEL {
+                        map.remove(&pos);
+                    } else {
+                        map.insert(pos, value.1);
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub struct ChunkLoading {
     pub is_dirty: bool,
     pub is_priority_dirty: bool,
@@ -98,11 +150,17 @@ pub struct ChunkLoading {
     pub sender: Arc<LevelChannel>,
     pub increase_update: BinaryHeap<HeapNode>,
     pub decrease_update: BinaryHeap<HeapNode>,
+    cache: LevelCache,
 }
 
 #[test]
 fn test() {
     let mut a = ChunkLoading::new(Arc::new(LevelChannel::new()));
+
+    a.add_ticket((0, 0).into(), 44);
+    a.add_ticket((0, 1).into(), 44);
+    a.remove_ticket((0, 0).into(), 44);
+
     a.add_ticket((0, 0).into(), 30);
     a.add_ticket((0, 10).into(), 25);
     a.add_ticket((10, 10).into(), 26);
@@ -231,8 +289,9 @@ impl ChunkLoading {
         debug!("\nloading level:\n{header}\n{grid}");
     }
 
+    #[inline]
     pub const fn get_level_from_view_distance(view_distance: u8) -> i8 {
-        Self::FULL_CHUNK_LEVEL + 1 - (view_distance as i8)
+        Self::FULL_CHUNK_LEVEL - (view_distance as i8)
     }
 
     pub fn new(sender: Arc<LevelChannel>) -> Self {
@@ -245,6 +304,7 @@ impl ChunkLoading {
             sender,
             increase_update: Default::default(),
             decrease_update: Default::default(),
+            cache: LevelCache::default(),
         }
     }
 
@@ -270,10 +330,10 @@ impl ChunkLoading {
         while let Some(node) = self.increase_update.pop() {
             let (pos, level) = node.into();
             debug_assert!(level < Self::MAX_LEVEL);
-            if level > *self.pos_level.get(&pos).unwrap_or(&Self::MAX_LEVEL) {
+            if level > self.cache.get(&self.pos_level, pos) {
                 continue;
             }
-            debug_assert_eq!(level, *self.pos_level.get(&pos).unwrap_or(&Self::MAX_LEVEL));
+            debug_assert_eq!(level, self.cache.get(&self.pos_level, pos));
             let spread_level = level + 1;
             if spread_level >= Self::MAX_LEVEL {
                 continue;
@@ -291,18 +351,11 @@ impl ChunkLoading {
 
     fn check_then_push(&mut self, pos: ChunkPos, level: i8) {
         debug_assert!(level < Self::MAX_LEVEL);
-        match self.pos_level.entry(pos) {
-            Entry::Occupied(mut entry) => {
-                let old = entry.get_mut();
-                if *old <= level {
-                    return;
-                }
-                *old = level;
-            }
-            Entry::Vacant(empty) => {
-                empty.insert(level);
-            }
+        let old = self.cache.get(&self.pos_level, pos);
+        if old <= level {
+            return;
         }
+        self.cache.set(&self.pos_level, pos, level);
         self.increase_update.push((pos, level).into());
     }
 
@@ -317,20 +370,18 @@ impl ChunkLoading {
                     if new_pos == pos {
                         continue;
                     }
-                    match self.pos_level.entry(new_pos) {
-                        Entry::Occupied(entry) => {
-                            let new_pos_level = *entry.get();
-                            debug_assert!(new_pos_level <= spread_level);
-                            if new_pos_level == spread_level {
-                                entry.remove();
-                                if spread_level < Self::MAX_LEVEL {
-                                    self.decrease_update.push((new_pos, spread_level).into());
-                                }
-                            } else {
-                                self.increase_update.push((new_pos, new_pos_level).into());
-                            }
+                    let new_pos_level = self.cache.get(&self.pos_level, new_pos);
+                    if new_pos_level == Self::MAX_LEVEL {
+                        continue;
+                    }
+                    debug_assert!(new_pos_level <= spread_level);
+                    if new_pos_level == spread_level {
+                        self.cache.set(&self.pos_level, new_pos, Self::MAX_LEVEL);
+                        if spread_level < Self::MAX_LEVEL {
+                            self.decrease_update.push((new_pos, spread_level).into());
                         }
-                        Entry::Vacant(_) => continue,
+                    } else {
+                        self.increase_update.push((new_pos, new_pos_level).into());
                     }
                 }
             }
@@ -340,18 +391,11 @@ impl ChunkLoading {
             if abs(ticket_pos.x - pos.x) <= range && abs(ticket_pos.y - pos.y) <= range {
                 let level = *levels.iter().min().unwrap();
                 debug_assert!(level < Self::MAX_LEVEL);
-                match self.pos_level.entry(*ticket_pos) {
-                    Entry::Occupied(mut entry) => {
-                        let old = entry.get_mut();
-                        if *old <= level {
-                            continue;
-                        }
-                        *old = level;
-                    }
-                    Entry::Vacant(empty) => {
-                        empty.insert(level);
-                    }
+                let old = self.cache.get(&self.pos_level, *ticket_pos);
+                if old <= level {
+                    continue;
                 }
+                self.cache.set(&self.pos_level, *ticket_pos, level);
                 self.increase_update.push((*ticket_pos, level).into());
             }
         }
@@ -387,22 +431,19 @@ impl ChunkLoading {
                 empty.insert(vec![level]);
             }
         }
-        match self.pos_level.entry(pos) {
-            Entry::Occupied(mut entry) => {
-                let old = entry.get_mut();
-                if *old < level {
-                    return;
-                }
-                *old = level;
-            }
-            Entry::Vacant(empty) => {
-                empty.insert(level);
-            }
+
+        let old = *self.pos_level.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL);
+        if old <= level {
+            return;
         }
+        self.cache.clean(pos, level);
+        self.cache.set(&self.pos_level, pos, level);
+
         self.is_dirty = true;
         debug_assert!(self.increase_update.is_empty());
         self.increase_update.push((pos, level).into());
         self.run_increase_update();
+        self.cache.write(&mut self.pos_level);
         debug_assert!(self.debug_check_error());
     }
     pub fn remove_ticket(&mut self, pos: ChunkPos, level: i8) {
@@ -420,16 +461,18 @@ impl ChunkLoading {
         match self.pos_level.entry(pos) {
             Entry::Occupied(entry) => {
                 let old_level = *entry.get();
-                let source = *vec.iter().max().unwrap_or(&Self::MAX_LEVEL);
+                let source = *vec.iter().min().unwrap_or(&Self::MAX_LEVEL);
                 if vec.is_empty() {
                     self.ticket.remove(&pos);
                 }
                 if level == old_level && source != level {
                     self.is_dirty = true;
-                    entry.remove();
+                    self.cache.clean(pos, old_level);
+                    self.cache.set(&self.pos_level, pos, Self::MAX_LEVEL);
                     debug_assert!(self.decrease_update.is_empty());
                     self.decrease_update.push((pos, level).into());
                     self.run_decrease_update(pos, (Self::MAX_LEVEL - level - 1) as i32);
+                    self.cache.write(&mut self.pos_level);
                 }
             }
             Entry::Vacant(_) => panic!(),
