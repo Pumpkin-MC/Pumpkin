@@ -51,13 +51,13 @@ impl BlockBehaviour for Shelf {
                 todo!("Do the full hotbar swap")
             } else {
                 if let Some(slot) = Self::get_slot_for_hit(args.hit, state.facing) {
-                    let swaped = swap_single_stack(
+                    let swapped = swap_single_stack(
                         &*args.item_stack.lock().await,
                         &args.player,
                         block_entity,
                         slot as usize,
                     );
-                    if swaped {
+                    if swapped {
                         args.world
                             .play_block_sound(
                                 if args.item_stack.lock().await.is_empty() {
