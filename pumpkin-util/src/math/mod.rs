@@ -234,3 +234,8 @@ fn test_java_hash() {
         assert_eq!(java_array_hash(string.as_bytes()), value);
     }
 }
+
+pub fn lerp_positive(delta: f32, start: i32, end: i32) -> f32 {
+    let k = end - start;
+    start as f32 + (delta * (k - 1) as f32).floor() + if delta > 0.0 { 1.0 } else { 0.0 }
+}
