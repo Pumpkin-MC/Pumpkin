@@ -457,11 +457,40 @@ impl<'de> Deserialize<'de> for NbtTag {
                 self,
                 mut seq: A,
             ) -> Result<Self::Value, A::Error> {
-                let mut vec = Vec::new();
+                let curr = deserializer::get_curr_visitor_seq_list_id();
+
+                if let Some(curr) = curr {
+                    match curr {
+                        INT_ARRAY_ID => {
+                            let mut vec = Vec::new();
+                            while let Some(value) = seq.next_element()? {
+                                vec.push(value);
+                            }
+                            Ok(NbtTag::IntArray(vec))
+                        }
+                        LONG_ARRAY_ID => {
+                            let mut vec = Vec::new();
+                            while let Some(value) = seq.next_element()? {
+                                vec.push(value);
+                            }
+                            Ok(NbtTag::LongArray(vec))
+                        },
+                        BYTE_ARRAY_ID => {
+                            let mut vec = Vec::new();
+                            while let Some(value) = seq.next_element()? {
+                                vec.push(value);
+                            }
+                            Ok(NbtTag::ByteArray(vec.into_boxed_slice()))
+                        },
+                        _ => unreachable!()
+                    }
+                } else {
+                    let mut vec = Vec::new();
                 while let Some(value) = seq.next_element()? {
                     vec.push(value);
                 }
                 Ok(NbtTag::List(vec))
+                }
             }
 
             fn visit_map<A: serde::de::MapAccess<'de>>(
