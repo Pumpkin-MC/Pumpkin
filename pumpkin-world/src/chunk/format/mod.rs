@@ -294,19 +294,11 @@ impl ChunkEntityData {
                         | (uuid[3] as u128),
                 ),
                 None => {
-                    match entity_nbt.get_list("UUID") {
-                        Some(uuid) => Uuid::from_u128(
-                            (uuid.first().unwrap().extract_int().unwrap() as u128) << 96
-                                | (uuid.get(1).unwrap().extract_int().unwrap() as u128) << 64
-                                | (uuid.get(2).unwrap().extract_int().unwrap() as u128) << 32
-                                | (uuid.get(3).unwrap().extract_int().unwrap() as u128),
-                        ),
-                        None => {
-                            return Err(ChunkParsingError::ErrorDeserializingChunk(
-                                "Entity is missing UUID!".to_string(),
-                            ));
-                        }
-                    }
+                    println!(
+                        "Entity in chunk {},{} is missing UUID: {:?}",
+                        position.x, position.y, entity_nbt
+                    );
+                    continue;
                 }
             };
 
