@@ -32,7 +32,7 @@ pub struct ServerInfo {
     pub player_count: i32,
     pub max_player_count: u32,
     pub server_unique_id: u64,
-    pub motd_line_2: &'static str,
+    pub motd_line_2: String,
     pub game_mode: &'static str,
     pub game_mode_numeric: u32,
     pub port_ipv4: u16,
