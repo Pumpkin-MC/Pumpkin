@@ -953,15 +953,15 @@ pub(crate) fn build() -> TokenStream {
             fn from_value(value: &str) -> Self;
         }
 
-        pub static COLLISION_SHAPES: &[CollisionShape] = &[
+        pub const COLLISION_SHAPES: &[CollisionShape] = &[
             #(#shapes),*
         ];
 
-        //pub static BLOCK_STATES: &[BlockState] = &[
+        //pub const BLOCK_STATES: &[BlockState] = &[
         //    #(#unique_states_tokens),*
         //];
 
-        pub static BLOCK_ENTITY_TYPES: &[&str] = &[
+        pub const BLOCK_ENTITY_TYPES: &[&str] = &[
             #(#block_entity_types),*
         ];
 
