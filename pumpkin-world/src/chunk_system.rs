@@ -622,14 +622,13 @@ impl StagedChunkEnum {
     }
 }
 
+type LevelChange = (
+    HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
+    ChunkLevel,
+);
+
 pub struct LevelChannel {
-    pub value: Mutex<(
-        Option<(
-            HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
-            ChunkLevel,
-        )>,
-        Option<Vec<ChunkPos>>,
-    )>,
+    pub value: Mutex<(Option<LevelChange>, Option<Vec<ChunkPos>>)>,
     pub notify: Condvar,
 }
 
@@ -719,30 +718,13 @@ impl LevelChannel {
         self.value.lock().unwrap().1 = Some(pos);
         self.notify.notify_one();
     }
-    pub fn get(
-        &self,
-    ) -> (
-        Option<(
-            HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
-            ChunkLevel,
-        )>,
-        Option<Vec<ChunkPos>>,
-    ) {
+    pub fn get(&self) -> (Option<LevelChange>, Option<Vec<ChunkPos>>) {
         let mut lock = self.value.lock().unwrap();
         let mut ret = (None, None);
         swap(&mut ret, &mut *lock);
         ret
     }
-    pub fn wait_and_get(
-        &self,
-        level: &Arc<Level>,
-    ) -> (
-        Option<(
-            HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
-            ChunkLevel,
-        )>,
-        Option<Vec<ChunkPos>>,
-    ) {
+    pub fn wait_and_get(&self, level: &Arc<Level>) -> (Option<LevelChange>, Option<Vec<ChunkPos>>) {
         let mut lock = self.value.lock().unwrap();
         while lock.0.is_none()
             && lock.1.is_none()
@@ -1252,6 +1234,7 @@ new_key_type! { struct NodeKey; }
 new_key_type! { struct EdgeKey; }
 
 #[derive(Default)]
+#[allow(clippy::upper_case_acronyms)]
 struct DAG {
     pub nodes: SlotMap<NodeKey, Node>,
     pub edges: SlotMap<EdgeKey, Edge>,
@@ -1420,16 +1403,7 @@ impl GenerationSchedule {
         self.queue = new_queue;
     }
 
-    fn resort_work(
-        &mut self,
-        new_data: (
-            Option<(
-                HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
-                ChunkLevel,
-            )>,
-            Option<Vec<ChunkPos>>,
-        ),
-    ) -> bool {
+    fn resort_work(&mut self, new_data: (Option<LevelChange>, Option<Vec<ChunkPos>>)) -> bool {
         // true -> updated | false -> not update
         if new_data.0.is_none() && new_data.1.is_none() {
             return false;
@@ -1526,10 +1500,8 @@ impl GenerationSchedule {
                                 }
                                 let ano_task = &mut ano_chunk.tasks[req_stage as usize];
                                 if ano_task.is_null() {
-                                    *ano_task = self
-                                        .graph
-                                        .nodes
-                                        .insert(Node::new(new_pos, req_stage.into()));
+                                    *ano_task =
+                                        self.graph.nodes.insert(Node::new(new_pos, req_stage));
                                 }
                                 self.graph.add_edge(*ano_task, task); // task depend on ano_task
                             }
@@ -1832,7 +1804,7 @@ impl GenerationSchedule {
                         let result = self.public_chunk_map.insert(pos, data.clone());
                         debug_assert!(result.is_none());
                         holder.public = true;
-                        self.listener.process_new_chunk(pos, &data);
+                        self.listener.process_new_chunk(pos, data);
                     }
                     Chunk::Proto(_) => {}
                 }
@@ -2091,10 +2063,7 @@ impl GenerationSchedule {
             debug_assert_eq!(
                 holder.target_stage,
                 StagedChunkEnum::level_to_stage(
-                    *self
-                        .last_level
-                        .get(&pos)
-                        .unwrap_or(&ChunkLoading::MAX_LEVEL)
+                    *self.last_level.get(pos).unwrap_or(&ChunkLoading::MAX_LEVEL)
                 )
             );
             debug_assert!(holder.current_stage >= holder.target_stage);
