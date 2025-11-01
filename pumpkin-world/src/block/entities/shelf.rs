@@ -2,42 +2,60 @@ use crate::block::entities::BlockEntity;
 use crate::inventory::{Clearable, Inventory, split_stack};
 use crate::item::ItemStack;
 use async_trait::async_trait;
+use futures::executor::block_on;
+use pumpkin_data::item::Item;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use rand::{Rng, rng};
 use std::any::Any;
 use std::array::from_fn;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::Mutex;
 
 #[derive(Debug)]
-pub struct DropperBlockEntity {
+pub struct ShelfBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub dirty: AtomicBool,
+    pub align_to_bottom: bool,
+}
+
+impl ShelfBlockEntity {
+    pub const INVENTORY_SIZE: usize = 3;
+    pub const ID: &'static str = "minecraft:shelf";
+    pub const ALIGN_ITEMS_TO_BOTTOM_KEY: &'static str = "align_items_to_bottom";
+
+    pub fn new(position: BlockPos) -> Self {
+        let item_template = ItemStack::new(1, &Item::REDSTONE);
+        let items = from_fn(|_| Arc::new(Mutex::new(item_template.clone())));
+        Self {
+            position,
+            items,
+            dirty: AtomicBool::new(false),
+            align_to_bottom: false,
+        }
+    }
 }
 
 #[async_trait]
-impl BlockEntity for DropperBlockEntity {
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+impl BlockEntity for ShelfBlockEntity {
+    async fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.write_data(nbt, &self.items, true).await;
-        // Safety precaution
-        //self.clear().await;
+        nbt.put_bool(Self::ALIGN_ITEMS_TO_BOTTOM_KEY, self.align_to_bottom);
     }
 
-    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
+    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
-        let dropper = Self {
+        let wooden_shelf = Self {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
+            align_to_bottom: nbt.get_bool(Self::ALIGN_ITEMS_TO_BOTTOM_KEY).unwrap(),
         };
-
-        dropper.read_data(nbt, &dropper.items);
-
-        dropper
+        wooden_shelf.read_data(nbt, &wooden_shelf.items);
+        wooden_shelf
     }
 
     fn resource_location(&self) -> &'static str {
@@ -48,15 +66,18 @@ impl BlockEntity for DropperBlockEntity {
         self.position
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        nbt.put_bool(Self::ALIGN_ITEMS_TO_BOTTOM_KEY, self.align_to_bottom);
+        block_on(self.write_data(&mut nbt, &self.items, true));
+        Some(nbt)
+    }
+
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
     }
 
-    fn is_dirty(&self) -> bool {
-        self.dirty.load(Ordering::Relaxed)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 
@@ -64,37 +85,8 @@ impl BlockEntity for DropperBlockEntity {
         self
     }
 }
-
-impl DropperBlockEntity {
-    pub const INVENTORY_SIZE: usize = 9;
-    pub const ID: &'static str = "minecraft:dropper";
-
-    pub fn new(position: BlockPos) -> Self {
-        Self {
-            position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
-            dirty: AtomicBool::new(false),
-        }
-    }
-    pub async fn get_random_slot(&self) -> Option<MutexGuard<'_, ItemStack>> {
-        // this.unpackLootTable(null);
-        let mut ret = None;
-        let mut j = 1;
-        for i in &self.items {
-            let item = i.lock().await;
-            if !item.is_empty() {
-                if rng().random_range(0..j) == 0 {
-                    ret = Some(item);
-                }
-                j += 1;
-            }
-        }
-        ret
-    }
-}
-
 #[async_trait]
-impl Inventory for DropperBlockEntity {
+impl Inventory for ShelfBlockEntity {
     fn size(&self) -> usize {
         self.items.len()
     }
@@ -105,7 +97,6 @@ impl Inventory for DropperBlockEntity {
                 return false;
             }
         }
-
         true
     }
 
@@ -138,7 +129,7 @@ impl Inventory for DropperBlockEntity {
 }
 
 #[async_trait]
-impl Clearable for DropperBlockEntity {
+impl Clearable for ShelfBlockEntity {
     async fn clear(&self) {
         for slot in self.items.iter() {
             *slot.lock().await = ItemStack::EMPTY.clone();

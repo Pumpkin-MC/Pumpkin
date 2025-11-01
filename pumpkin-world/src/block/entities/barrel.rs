@@ -86,6 +86,10 @@ impl BlockEntity for BarrelBlockEntity {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn as_block_entity(&self) -> &dyn BlockEntity {
+        self
+    }
 }
 
 #[async_trait]
