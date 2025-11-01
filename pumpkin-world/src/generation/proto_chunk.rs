@@ -274,6 +274,7 @@ impl ProtoChunk {
 
         proto_chunk
     }
+    #[inline]
     pub fn stage_id(&self) -> u8 {
         self.stage as u8
     }
