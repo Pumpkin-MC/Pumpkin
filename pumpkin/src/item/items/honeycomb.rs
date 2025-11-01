@@ -8,8 +8,13 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::OakDoorLikeProperties;
+use pumpkin_data::block_properties::{
+    BlockProperties, ChestLikeProperties, ChestType, CopperGolemStatueLikeProperties,
+};
+use pumpkin_data::block_properties::{
+    LanternLikeProperties, LightningRodLikeProperties, OakDoorLikeProperties,
+    OakFenceLikeProperties, OakTrapdoorLikeProperties,
+};
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
@@ -50,9 +55,7 @@ impl ItemBehaviour for HoneyCombItem {
             // create new properties for the new log.
             let new_block = &Block::from_id(replacement_block);
 
-            let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS)
-                && block.has_tag(&tag::Block::MINECRAFT_DOORS)
-            {
+            let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
                 // get block state of the old log.
                 let door_information = world.get_block_state_id(&location).await;
                 // get the log properties
@@ -66,11 +69,83 @@ impl ItemBehaviour for HoneyCombItem {
                 new_door_properties.hinge = door_props.hinge;
                 new_door_properties.powered = door_props.powered;
                 new_door_properties.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_BARS) {
+                let bar_information = world.get_block_state_id(&location).await;
+                let bar_props = OakFenceLikeProperties::from_state_id(bar_information, block);
+                let mut new_bars_props = OakFenceLikeProperties::default(new_block);
+                new_bars_props.north = bar_props.north;
+                new_bars_props.south = bar_props.south;
+                new_bars_props.west = bar_props.west;
+                new_bars_props.east = bar_props.east;
+                new_bars_props.waterlogged = bar_props.waterlogged;
+                new_bars_props.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_LANTERNS) {
+                let lantern_information = world.get_block_state_id(&location).await;
+                let lantern_props =
+                    LanternLikeProperties::from_state_id(lantern_information, block);
+                let mut new_lantern_props = LanternLikeProperties::default(new_block);
+                new_lantern_props.hanging = lantern_props.hanging;
+                new_lantern_props.waterlogged = lantern_props.waterlogged;
+                new_lantern_props.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+                let info = world.get_block_state_id(&location).await;
+                let trapdoor_props = OakTrapdoorLikeProperties::from_state_id(info, block);
+                let mut new_props = OakTrapdoorLikeProperties::default(new_block);
+                new_props.powered = trapdoor_props.powered;
+                new_props.open = trapdoor_props.open;
+                new_props.facing = trapdoor_props.facing;
+                new_props.half = trapdoor_props.half;
+                new_props.waterlogged = trapdoor_props.waterlogged;
+                new_props.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_LIGHTNING_RODS) {
+                let info = world.get_block_state_id(&location).await;
+                let rod_props = LightningRodLikeProperties::from_state_id(info, block);
+                let mut new_props = LightningRodLikeProperties::default(new_block);
+                new_props.powered = rod_props.powered;
+                new_props.facing = rod_props.facing;
+                new_props.waterlogged = rod_props.waterlogged;
+                new_props.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_CHESTS) {
+                let info = world.get_block_state_id(&location).await;
+                let chest_props = ChestLikeProperties::from_state_id(info, block);
+                let mut new_props = ChestLikeProperties::default(new_block);
+                new_props.r#type = chest_props.r#type;
+                new_props.facing = chest_props.facing;
+                new_props.waterlogged = chest_props.waterlogged;
+                if new_props.r#type != ChestType::Single {
+                    let connected_towards = match chest_props.r#type {
+                        ChestType::Single => return,
+                        ChestType::Left => chest_props.facing.rotate_clockwise(),
+                        ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
+                    };
+                    let neighbor_location = location.offset(connected_towards.to_offset());
+                    let neighbor_info = world.get_block_state_id(&neighbor_location).await;
+                    let neighbor_chest_props =
+                        ChestLikeProperties::from_state_id(neighbor_info, block);
+                    let mut neighbor_props = ChestLikeProperties::default(new_block);
+                    neighbor_props.r#type = neighbor_chest_props.r#type;
+                    neighbor_props.facing = neighbor_chest_props.facing;
+                    neighbor_props.waterlogged = neighbor_chest_props.waterlogged;
+                    world
+                        .set_block_state(
+                            &neighbor_location,
+                            neighbor_props.to_state_id(new_block),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                }
+                new_props.to_state_id(new_block)
+            } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_GOLEM_STATUES) {
+                let info = world.get_block_state_id(&location).await;
+                let old_props = CopperGolemStatueLikeProperties::from_state_id(info, block);
+                let mut new_props = CopperGolemStatueLikeProperties::default(new_block);
+                new_props.copper_golem_pose = old_props.copper_golem_pose;
+                new_props.facing = old_props.facing;
+                new_props.waterlogged = old_props.waterlogged;
+                new_props.to_state_id(new_block)
             } else {
                 new_block.default_state.id
             };
-
-            // TODO Implements trapdoors
             world
                 .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
                 .await;
@@ -102,69 +177,112 @@ impl HoneyCombItem {
 }
 
 fn get_waxed_equivalent(block: &Block) -> Option<u16> {
-    match &block.id {
-        id if id == &Block::OXIDIZED_COPPER.id => Some(Block::WAXED_OXIDIZED_COPPER.id),
-        id if id == &Block::WEATHERED_COPPER.id => Some(Block::WAXED_WEATHERED_COPPER.id),
-        id if id == &Block::EXPOSED_COPPER.id => Some(Block::WAXED_EXPOSED_COPPER.id),
-        id if id == &Block::COPPER_BLOCK.id => Some(Block::WAXED_COPPER_BLOCK.id),
-        id if id == &Block::OXIDIZED_CHISELED_COPPER.id => {
+    match block.id {
+        id if id == Block::OXIDIZED_COPPER.id => Some(Block::WAXED_OXIDIZED_COPPER.id),
+        id if id == Block::WEATHERED_COPPER.id => Some(Block::WAXED_WEATHERED_COPPER.id),
+        id if id == Block::EXPOSED_COPPER.id => Some(Block::WAXED_EXPOSED_COPPER.id),
+        id if id == Block::COPPER_BLOCK.id => Some(Block::WAXED_COPPER_BLOCK.id),
+        id if id == Block::OXIDIZED_CHISELED_COPPER.id => {
             Some(Block::WAXED_OXIDIZED_CHISELED_COPPER.id)
         }
-        id if id == &Block::WEATHERED_CHISELED_COPPER.id => {
+        id if id == Block::WEATHERED_CHISELED_COPPER.id => {
             Some(Block::WAXED_WEATHERED_CHISELED_COPPER.id)
         }
-        id if id == &Block::EXPOSED_CHISELED_COPPER.id => {
+        id if id == Block::EXPOSED_CHISELED_COPPER.id => {
             Some(Block::WAXED_EXPOSED_CHISELED_COPPER.id)
         }
-        id if id == &Block::CHISELED_COPPER.id => Some(Block::WAXED_CHISELED_COPPER.id),
-        id if id == &Block::OXIDIZED_COPPER_GRATE.id => Some(Block::WAXED_OXIDIZED_COPPER_GRATE.id),
-        id if id == &Block::WEATHERED_COPPER_GRATE.id => {
+        id if id == Block::CHISELED_COPPER.id => Some(Block::WAXED_CHISELED_COPPER.id),
+        id if id == Block::OXIDIZED_COPPER_GRATE.id => Some(Block::WAXED_OXIDIZED_COPPER_GRATE.id),
+        id if id == Block::WEATHERED_COPPER_GRATE.id => {
             Some(Block::WAXED_WEATHERED_COPPER_GRATE.id)
         }
-        id if id == &Block::EXPOSED_COPPER_GRATE.id => Some(Block::WAXED_EXPOSED_COPPER_GRATE.id),
-        id if id == &Block::COPPER_GRATE.id => Some(Block::WAXED_COPPER_GRATE.id),
-        id if id == &Block::OXIDIZED_CUT_COPPER.id => Some(Block::WAXED_OXIDIZED_CUT_COPPER.id),
-        id if id == &Block::WEATHERED_CUT_COPPER.id => Some(Block::WAXED_WEATHERED_CUT_COPPER.id),
-        id if id == &Block::EXPOSED_CUT_COPPER.id => Some(Block::WAXED_EXPOSED_CUT_COPPER.id),
-        id if id == &Block::CUT_COPPER.id => Some(Block::WAXED_CUT_COPPER.id),
-        id if id == &Block::OXIDIZED_CUT_COPPER_STAIRS.id => {
+        id if id == Block::EXPOSED_COPPER_GRATE.id => Some(Block::WAXED_EXPOSED_COPPER_GRATE.id),
+        id if id == Block::COPPER_GRATE.id => Some(Block::WAXED_COPPER_GRATE.id),
+        id if id == Block::OXIDIZED_CUT_COPPER.id => Some(Block::WAXED_OXIDIZED_CUT_COPPER.id),
+        id if id == Block::WEATHERED_CUT_COPPER.id => Some(Block::WAXED_WEATHERED_CUT_COPPER.id),
+        id if id == Block::EXPOSED_CUT_COPPER.id => Some(Block::WAXED_EXPOSED_CUT_COPPER.id),
+        id if id == Block::CUT_COPPER.id => Some(Block::WAXED_CUT_COPPER.id),
+        id if id == Block::OXIDIZED_CUT_COPPER_STAIRS.id => {
             Some(Block::WAXED_OXIDIZED_CUT_COPPER_STAIRS.id)
         }
-        id if id == &Block::WEATHERED_CUT_COPPER_STAIRS.id => {
+        id if id == Block::WEATHERED_CUT_COPPER_STAIRS.id => {
             Some(Block::WAXED_WEATHERED_CUT_COPPER_STAIRS.id)
         }
-        id if id == &Block::EXPOSED_CUT_COPPER_STAIRS.id => {
+        id if id == Block::EXPOSED_CUT_COPPER_STAIRS.id => {
             Some(Block::WAXED_EXPOSED_CUT_COPPER_STAIRS.id)
         }
-        id if id == &Block::CUT_COPPER_STAIRS.id => Some(Block::WAXED_CUT_COPPER_STAIRS.id),
-        id if id == &Block::OXIDIZED_CUT_COPPER_SLAB.id => {
+        id if id == Block::CUT_COPPER_STAIRS.id => Some(Block::WAXED_CUT_COPPER_STAIRS.id),
+        id if id == Block::OXIDIZED_CUT_COPPER_SLAB.id => {
             Some(Block::WAXED_OXIDIZED_CUT_COPPER_SLAB.id)
         }
-        id if id == &Block::WEATHERED_CUT_COPPER_SLAB.id => {
+        id if id == Block::WEATHERED_CUT_COPPER_SLAB.id => {
             Some(Block::WAXED_WEATHERED_CUT_COPPER_SLAB.id)
         }
-        id if id == &Block::EXPOSED_CUT_COPPER_SLAB.id => {
+        id if id == Block::EXPOSED_CUT_COPPER_SLAB.id => {
             Some(Block::WAXED_EXPOSED_CUT_COPPER_SLAB.id)
         }
-        id if id == &Block::CUT_COPPER_SLAB.id => Some(Block::WAXED_CUT_COPPER_SLAB.id),
-        id if id == &Block::OXIDIZED_COPPER_BULB.id => Some(Block::WAXED_OXIDIZED_COPPER_BULB.id),
-        id if id == &Block::WEATHERED_COPPER_BULB.id => Some(Block::WAXED_WEATHERED_COPPER_BULB.id),
-        id if id == &Block::EXPOSED_COPPER_BULB.id => Some(Block::WAXED_EXPOSED_COPPER_BULB.id),
-        id if id == &Block::COPPER_BULB.id => Some(Block::WAXED_COPPER_BULB.id),
-        id if id == &Block::OXIDIZED_COPPER_DOOR.id => Some(Block::WAXED_OXIDIZED_COPPER_DOOR.id),
-        id if id == &Block::WEATHERED_COPPER_DOOR.id => Some(Block::WAXED_WEATHERED_COPPER_DOOR.id),
-        id if id == &Block::EXPOSED_COPPER_DOOR.id => Some(Block::WAXED_EXPOSED_COPPER_DOOR.id),
-        id if id == &Block::COPPER_DOOR.id => Some(Block::WAXED_COPPER_DOOR.id),
-        id if id == &Block::OXIDIZED_COPPER_TRAPDOOR.id => {
+        id if id == Block::CUT_COPPER_SLAB.id => Some(Block::WAXED_CUT_COPPER_SLAB.id),
+        id if id == Block::OXIDIZED_COPPER_BULB.id => Some(Block::WAXED_OXIDIZED_COPPER_BULB.id),
+        id if id == Block::WEATHERED_COPPER_BULB.id => Some(Block::WAXED_WEATHERED_COPPER_BULB.id),
+        id if id == Block::EXPOSED_COPPER_BULB.id => Some(Block::WAXED_EXPOSED_COPPER_BULB.id),
+        id if id == Block::COPPER_BULB.id => Some(Block::WAXED_COPPER_BULB.id),
+        id if id == Block::OXIDIZED_COPPER_DOOR.id => Some(Block::WAXED_OXIDIZED_COPPER_DOOR.id),
+        id if id == Block::WEATHERED_COPPER_DOOR.id => Some(Block::WAXED_WEATHERED_COPPER_DOOR.id),
+        id if id == Block::EXPOSED_COPPER_DOOR.id => Some(Block::WAXED_EXPOSED_COPPER_DOOR.id),
+        id if id == Block::COPPER_DOOR.id => Some(Block::WAXED_COPPER_DOOR.id),
+        id if id == Block::OXIDIZED_COPPER_TRAPDOOR.id => {
             Some(Block::WAXED_OXIDIZED_COPPER_TRAPDOOR.id)
         }
-        id if id == &Block::WEATHERED_COPPER_TRAPDOOR.id => {
+        id if id == Block::WEATHERED_COPPER_TRAPDOOR.id => {
             Some(Block::WAXED_WEATHERED_COPPER_TRAPDOOR.id)
         }
-        id if id == &Block::EXPOSED_COPPER_TRAPDOOR.id => {
+        id if id == Block::EXPOSED_COPPER_TRAPDOOR.id => {
             Some(Block::WAXED_EXPOSED_COPPER_TRAPDOOR.id)
         }
-        id if id == &Block::COPPER_TRAPDOOR.id => Some(Block::WAXED_COPPER_TRAPDOOR.id),
+        id if id == Block::COPPER_CHAIN.id => Some(Block::WAXED_COPPER_CHAIN.id),
+        id if id == Block::EXPOSED_COPPER_CHAIN.id => Some(Block::WAXED_EXPOSED_COPPER_CHAIN.id),
+        id if id == Block::WEATHERED_COPPER_CHAIN.id => {
+            Some(Block::WAXED_WEATHERED_COPPER_CHAIN.id)
+        }
+        id if id == Block::OXIDIZED_COPPER_CHAIN.id => Some(Block::WAXED_OXIDIZED_COPPER_CHAIN.id),
+        id if id == Block::COPPER_BARS.id => Some(Block::WAXED_COPPER_BARS.id),
+        id if id == Block::EXPOSED_COPPER_BARS.id => Some(Block::WAXED_EXPOSED_COPPER_BARS.id),
+        id if id == Block::WEATHERED_COPPER_BARS.id => Some(Block::WAXED_WEATHERED_COPPER_BARS.id),
+        id if id == Block::OXIDIZED_COPPER_BARS.id => Some(Block::WAXED_OXIDIZED_COPPER_BARS.id),
+        id if id == Block::COPPER_LANTERN.id => Some(Block::WAXED_COPPER_LANTERN.id),
+        id if id == Block::EXPOSED_COPPER_LANTERN.id => {
+            Some(Block::WAXED_EXPOSED_COPPER_LANTERN.id)
+        }
+        id if id == Block::WEATHERED_COPPER_LANTERN.id => {
+            Some(Block::WAXED_WEATHERED_COPPER_LANTERN.id)
+        }
+        id if id == Block::OXIDIZED_COPPER_LANTERN.id => {
+            Some(Block::WAXED_OXIDIZED_COPPER_LANTERN.id)
+        }
+        id if id == Block::LIGHTNING_ROD.id => Some(Block::WAXED_LIGHTNING_ROD.id),
+        id if id == Block::EXPOSED_LIGHTNING_ROD.id => Some(Block::WAXED_EXPOSED_LIGHTNING_ROD.id),
+        id if id == Block::WEATHERED_LIGHTNING_ROD.id => {
+            Some(Block::WAXED_WEATHERED_LIGHTNING_ROD.id)
+        }
+        id if id == Block::OXIDIZED_LIGHTNING_ROD.id => {
+            Some(Block::WAXED_OXIDIZED_LIGHTNING_ROD.id)
+        }
+        id if id == Block::COPPER_CHEST.id => Some(Block::WAXED_COPPER_CHEST.id),
+        id if id == Block::EXPOSED_COPPER_CHEST.id => Some(Block::WAXED_EXPOSED_COPPER_CHEST.id),
+        id if id == Block::WEATHERED_COPPER_CHEST.id => {
+            Some(Block::WAXED_WEATHERED_COPPER_CHEST.id)
+        }
+        id if id == Block::OXIDIZED_COPPER_CHEST.id => Some(Block::WAXED_OXIDIZED_COPPER_CHEST.id),
+        id if id == Block::COPPER_GOLEM_STATUE.id => Some(Block::WAXED_COPPER_GOLEM_STATUE.id),
+        id if id == Block::EXPOSED_COPPER_GOLEM_STATUE.id => {
+            Some(Block::WAXED_EXPOSED_COPPER_GOLEM_STATUE.id)
+        }
+        id if id == Block::WEATHERED_COPPER_GOLEM_STATUE.id => {
+            Some(Block::WAXED_WEATHERED_COPPER_GOLEM_STATUE.id)
+        }
+        id if id == Block::OXIDIZED_COPPER_GOLEM_STATUE.id => {
+            Some(Block::WAXED_OXIDIZED_COPPER_GOLEM_STATUE.id)
+        }
         _ => None,
     }
 }

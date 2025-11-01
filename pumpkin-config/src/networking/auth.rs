@@ -29,8 +29,8 @@ impl Default for AuthenticationConfig {
             url: None,
             prevent_proxy_connection_auth_url: None,
             services_url: None,
-            connect_timeout: 5000,
-            read_timeout: 5000,
+            connect_timeout: 50000,
+            read_timeout: 50000,
         }
     }
 }
