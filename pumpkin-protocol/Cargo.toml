@@ -30,8 +30,8 @@ cfb8 = "0.8"
 async-compression = { version = "0.4.32", features = ["tokio", "zlib"] }
 
 take_mut = "0.2.2"
-bitflags = "2.9.4"
+bitflags = "2.10.0"
 
 [dev-dependencies]
 # Validate correctness
-flate2 = "1.1.4"
+flate2 = "1.1.5"
