@@ -181,9 +181,10 @@ impl ChunkManager {
     pub fn update_center_and_view_distance(
         &mut self,
         center: Vector2<i32>,
-        view_distance: u8,
+        mut view_distance: u8,
         level: &Arc<Level>,
     ) {
+        view_distance += 1;
         let mut lock = level.chunk_loading.lock().unwrap();
         lock.add_ticket(
             center,

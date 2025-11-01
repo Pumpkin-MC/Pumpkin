@@ -571,14 +571,14 @@ impl World {
             let mut level_time = self.level_time.lock().await;
             level_time.tick_time();
             if level_time.world_age % 100 == 0 {
-                log::debug!("should unload set true");
+                // log::debug!("should unload set true");
                 self.level.should_unload.store(true, Relaxed);
                 if level_time.world_age % 300 != 0 {
                     self.level.level_channel.notify();
                 }
             }
             if level_time.world_age % 300 == 0 {
-                log::debug!("should save set true");
+                // log::debug!("should save set true");
                 self.level.should_save.store(true, Relaxed);
                 self.level.level_channel.notify();
             }
