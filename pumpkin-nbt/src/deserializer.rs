@@ -9,11 +9,11 @@ use serde::{Deserialize, forward_to_deserialize_any};
 pub type Result<T> = std::result::Result<T, Error>;
 
 thread_local! {
-    pub static CURR_VISITOR_LIST_TYPE: RefCell<Option<u8>> = std::cell::RefCell::new(None);
+    pub static CURR_VISITOR_LIST_TYPE: RefCell<Option<u8>> = const { std::cell::RefCell::new(None) };
 }
 
-pub(super) fn get_curr_visitor_seq_list_id() -> Option<u8> {
-    CURR_VISITOR_LIST_TYPE.with(|cell| *cell.borrow())
+pub(super) fn take_curr_visitor_seq_list_id() -> Option<u8> {
+    CURR_VISITOR_LIST_TYPE.with(|cell| cell.take())
 }
 
 pub(super) fn set_curr_visitor_seq_list_id(tag: Option<u8>) {
@@ -151,13 +151,13 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
                 }
 
                 //TODO this is a bit hacky but I couldn't think of a better way
+                // This flag gets auto cleared in visit_seq
                 set_curr_visitor_seq_list_id(Some(list_type));
                 let result = visitor.visit_seq(ListAccess {
                     de: self,
                     list_type,
                     remaining_values: remaining_values as usize,
                 })?;
-                set_curr_visitor_seq_list_id(None);
                 Ok(result)
             }
             COMPOUND_ID => visitor.visit_map(CompoundAccess { de: self }),

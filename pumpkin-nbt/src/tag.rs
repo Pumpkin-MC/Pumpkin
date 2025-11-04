@@ -405,7 +405,7 @@ impl Serialize for NbtTag {
             }
             NbtTag::Compound(v) => v.serialize(serializer),
             NbtTag::IntArray(v) => nbt_int_array(v, serializer),
-            NbtTag::LongArray(v) => nbt_long_array(v, serializer)
+            NbtTag::LongArray(v) => nbt_long_array(v, serializer),
         }
     }
 }
@@ -457,39 +457,41 @@ impl<'de> Deserialize<'de> for NbtTag {
                 self,
                 mut seq: A,
             ) -> Result<Self::Value, A::Error> {
-                let curr = deserializer::get_curr_visitor_seq_list_id();
+                let curr = deserializer::take_curr_visitor_seq_list_id().unwrap_or(LIST_ID);
 
-                if let Some(curr) = curr {
-                    match curr {
-                        INT_ARRAY_ID => {
-                            let mut vec = Vec::new();
-                            while let Some(value) = seq.next_element()? {
-                                vec.push(value);
-                            }
-                            Ok(NbtTag::IntArray(vec))
+                match curr {
+                    INT_ARRAY_ID => {
+                        let mut vec = Vec::new();
+                        while let Some(value) = seq.next_element()? {
+                            vec.push(value);
                         }
-                        LONG_ARRAY_ID => {
-                            let mut vec = Vec::new();
-                            while let Some(value) = seq.next_element()? {
-                                vec.push(value);
-                            }
-                            Ok(NbtTag::LongArray(vec))
-                        },
-                        BYTE_ARRAY_ID => {
-                            let mut vec = Vec::new();
-                            while let Some(value) = seq.next_element()? {
-                                vec.push(value);
-                            }
-                            Ok(NbtTag::ByteArray(vec.into_boxed_slice()))
-                        },
-                        _ => unreachable!()
+                        Ok(NbtTag::IntArray(vec))
                     }
-                } else {
-                    let mut vec = Vec::new();
-                while let Some(value) = seq.next_element()? {
-                    vec.push(value);
-                }
-                Ok(NbtTag::List(vec))
+                    LONG_ARRAY_ID => {
+                        let mut vec = Vec::new();
+                        while let Some(value) = seq.next_element()? {
+                            vec.push(value);
+                        }
+                        Ok(NbtTag::LongArray(vec))
+                    }
+                    BYTE_ARRAY_ID => {
+                        let mut vec = Vec::new();
+                        while let Some(value) = seq.next_element()? {
+                            vec.push(value);
+                        }
+                        Ok(NbtTag::ByteArray(vec.into_boxed_slice()))
+                    }
+                    LIST_ID => {
+                        let mut vec = Vec::new();
+                        while let Some(value) = seq.next_element()? {
+                            vec.push(value);
+                        }
+                        Ok(NbtTag::List(vec))
+                    }
+                    _ => Err(serde::de::Error::custom(format!(
+                        "Invalid list type id: {}",
+                        curr
+                    ))),
                 }
             }
 
