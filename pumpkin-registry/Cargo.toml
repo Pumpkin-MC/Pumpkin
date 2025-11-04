@@ -7,7 +7,7 @@ edition.workspace = true
 pumpkin-protocol = { path = "../pumpkin-protocol" }
 pumpkin-util = { path = "../pumpkin-util" }
 
-indexmap = { version = "2.11", features = ["serde"] }
+indexmap = { version = "2.12", features = ["serde"] }
 
 serde.workspace = true
 serde_json.workspace = true
