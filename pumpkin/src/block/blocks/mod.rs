@@ -1,6 +1,7 @@
 pub mod anvil;
 pub mod bamboo;
 pub mod barrel;
+pub mod barrier;
 pub mod bed;
 pub mod cactus;
 pub mod cake;
@@ -35,6 +36,7 @@ pub mod jukebox;
 pub mod ladder;
 pub mod lanterns;
 pub mod logs;
+pub mod mangrove_roots;
 pub mod nether_portal;
 pub mod note;
 pub mod piston;

@@ -28,7 +28,7 @@ struct Rail {
 impl Rail {
     async fn find_with_elevation(world: &World, position: BlockPos) -> Option<Self> {
         let (block, block_state) = world.get_block_and_state_id(&position).await;
-        if block.is_tagged_with_by_tag(&tag::Item::MINECRAFT_RAILS) {
+        if block.has_tag(&tag::Item::MINECRAFT_RAILS) {
             let properties = RailProperties::new(block_state, block);
             return Some(Self {
                 block,
@@ -40,7 +40,7 @@ impl Rail {
 
         let pos = position.up();
         let (block, block_state) = world.get_block_and_state_id(&pos).await;
-        if block.is_tagged_with_by_tag(&tag::Item::MINECRAFT_RAILS) {
+        if block.has_tag(&tag::Item::MINECRAFT_RAILS) {
             let properties = RailProperties::new(block_state, block);
             return Some(Self {
                 block,
@@ -52,7 +52,7 @@ impl Rail {
 
         let pos = position.down();
         let (block, block_state) = world.get_block_and_state_id(&pos).await;
-        if block.is_tagged_with_by_tag(&tag::Item::MINECRAFT_RAILS) {
+        if block.has_tag(&tag::Item::MINECRAFT_RAILS) {
             let properties = RailProperties::new(block_state, block);
             return Some(Self {
                 block,

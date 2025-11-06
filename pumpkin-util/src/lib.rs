@@ -19,6 +19,8 @@ pub mod serde_enum_as_integer;
 pub mod text;
 pub mod translation;
 
+pub mod jwt;
+
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum HeightMap {

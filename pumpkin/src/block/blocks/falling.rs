@@ -17,7 +17,7 @@ impl FallingBlock {
     #[must_use]
     pub fn can_fall_through(state: &BlockState, block: &Block) -> bool {
         state.is_air()
-            || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_FIRE)
+            || block.has_tag(&tag::Block::MINECRAFT_FIRE)
             || state.is_liquid()
             || state.replaceable()
     }

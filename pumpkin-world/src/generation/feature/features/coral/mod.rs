@@ -1,3 +1,4 @@
+use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties},
@@ -9,8 +10,6 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::ProtoChunk;
-
 pub mod coral_claw;
 pub mod coral_mushroom;
 pub mod coral_tree;
@@ -18,16 +17,16 @@ pub mod coral_tree;
 pub struct CoralFeature;
 
 impl CoralFeature {
-    pub fn generate_coral_piece(
-        chunk: &mut ProtoChunk,
+    pub fn generate_coral_piece<T: GenerationCache>(
+        chunk: &mut T,
         random: &mut RandomGenerator,
         state: &BlockState,
         pos: BlockPos,
     ) -> bool {
-        let block = chunk.get_block_state(&pos.0).to_block();
-        let above_block = chunk.get_block_state(&pos.up().0).to_block();
+        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block();
+        let above_block = GenerationCache::get_block_state(chunk, &pos.up().0).to_block();
 
-        if block != &Block::WATER && !block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_CORALS)
+        if block != &Block::WATER && !block.has_tag(&tag::Block::MINECRAFT_CORALS)
             || above_block != &Block::WATER
         {
             return false;
@@ -49,7 +48,7 @@ impl CoralFeature {
         for dir in BlockDirection::horizontal() {
             let dir_pos = pos.offset(dir.to_offset());
             if random.next_f32() >= 0.2
-                || chunk.get_block_state(&dir_pos.0).to_block() != &Block::WATER
+                || GenerationCache::get_block_state(chunk, &dir_pos.0).to_block() != &Block::WATER
             {
                 continue;
             }

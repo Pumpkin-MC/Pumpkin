@@ -66,7 +66,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --verbose --release
       - name: Export executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: pumpkin-${{ matrix.os }}
           compression-level: 9
