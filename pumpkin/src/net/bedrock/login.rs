@@ -100,7 +100,15 @@ impl BedrockClient {
         self.write_game_packet_to_set(&CPlayStatus::LoginSuccess, &mut frame_set)
             .await;
         self.write_game_packet_to_set(
-            &CResourcePacksInfo::new(false, false, false, false, Uuid::default(), String::new()),
+            &CResourcePacksInfo::new(
+                false,
+                false,
+                false,
+                false,
+                uuid::Uuid::default(),
+                String::new(),
+                Vec::new(),
+            ),
             &mut frame_set,
         )
         .await;
