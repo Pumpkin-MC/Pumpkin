@@ -65,6 +65,7 @@ impl CommandExecutor for Executor {
 
                 (player.world().clone(), pos)
             }
+            CommandSender::CommandBlock(c, w) => (w.clone(), c.get_position().to_centered_f64()),
         };
 
         world
