@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
+use pumpkin_config::world::LevelConfig;
 use serde::Deserialize;
 
 use crate::{level::Level, world::BlockRegistryExt};
@@ -15,6 +16,7 @@ pub enum Dimension {
 impl Dimension {
     pub fn into_level(
         &self,
+        level_config: &LevelConfig,
         mut base_directory: PathBuf,
         block_registry: Arc<dyn BlockRegistryExt>,
         seed: i64,
@@ -24,6 +26,6 @@ impl Dimension {
             Dimension::Nether => base_directory.push("DIM-1"),
             Dimension::End => base_directory.push("DIM1"),
         }
-        Level::from_root_folder(base_directory, block_registry, seed, *self)
+        Level::from_root_folder(level_config, base_directory, block_registry, seed, *self)
     }
 }

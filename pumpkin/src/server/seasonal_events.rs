@@ -1,4 +1,4 @@
-use pumpkin_config::advanced_config;
+use pumpkin_config::AdvancedConfiguration;
 use rand::{rng, seq::SliceRandom};
 use time::{Month, OffsetDateTime};
 
@@ -11,8 +11,11 @@ pub fn is_april() -> bool {
 }
 
 #[must_use]
-pub fn modify_chat_message(message: &str) -> Option<String> {
-    if !advanced_config().fun.april_fools || !is_april() {
+pub fn modify_chat_message(
+    message: &str,
+    advanced_config: &AdvancedConfiguration,
+) -> Option<String> {
+    if !advanced_config.fun.april_fools || !is_april() {
         return None;
     }
     let mut words: Vec<&str> = message.split_whitespace().collect();

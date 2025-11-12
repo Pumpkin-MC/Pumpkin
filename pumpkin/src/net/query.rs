@@ -6,7 +6,6 @@ use std::{
     time::Duration,
 };
 
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
@@ -148,12 +147,12 @@ async fn handle_packet(
 
                         let response = CFullStatus {
                             session_id: packet.session_id,
-                            hostname: CString::new(BASIC_CONFIG.motd.as_str())?,
+                            hostname: CString::new(server.basic_config.motd.as_str())?,
                             version: CString::new(CURRENT_MC_VERSION)?,
                             plugins: CString::new(plugins)?,
                             map: CString::new("world")?, // TODO: Get actual world name
                             num_players: server.get_player_count().await,
-                            max_players: BASIC_CONFIG.max_players as usize,
+                            max_players: server.basic_config.max_players as usize,
                             host_port: bound_addr.port(),
                             host_ip: CString::new(bound_addr.ip().to_string())?,
                             players,
@@ -165,10 +164,10 @@ async fn handle_packet(
                     } else {
                         let response = CBasicStatus {
                             session_id: packet.session_id,
-                            motd: CString::new(BASIC_CONFIG.motd.as_str())?,
+                            motd: CString::new(server.basic_config.motd.as_str())?,
                             map: CString::new("world")?,
                             num_players: server.get_player_count().await,
-                            max_players: BASIC_CONFIG.max_players as usize,
+                            max_players: server.basic_config.max_players as usize,
                             host_port: bound_addr.port(),
                             host_ip: CString::new(bound_addr.ip().to_string())?,
                         };
