@@ -306,7 +306,9 @@ impl ItemStack {
         }
 
         // Store custom data like enchantments, display name, etc. would go here
-        compound.put_component("components", tag);
+        if !tag.is_empty() {
+            compound.put_component("components", tag);
+        }
     }
 
     pub fn read_item_stack(compound: &NbtCompound) -> Option<Self> {
