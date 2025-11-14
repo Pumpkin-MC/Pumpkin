@@ -161,7 +161,7 @@ impl ChunkManager {
     }
 
     pub fn pull_new_chunks(&mut self) {
-        // log::debug!("pull new chunks");
+        log::debug!("pull new chunks");
         while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
             let dst = (pos.x - self.center.x)
                 .abs()
@@ -170,12 +170,12 @@ impl ChunkManager {
                 continue;
             }
             if self.chunk_sent.insert(pos) {
-                // log::debug!("receive new chunk {pos:?}");
+                log::debug!("receive new chunk {pos:?}");
                 self.chunk_queue.push(HeapNode(dst, pos, chunk));
             }
         }
-        // log::debug!("chunk_queue size {}", self.chunk_queue.len());
-        // log::debug!("chunk_sent size {}", self.chunk_sent.len());
+        log::debug!("chunk_queue size {}", self.chunk_queue.len());
+        log::debug!("chunk_sent size {}", self.chunk_sent.len());
     }
 
     pub fn update_center_and_view_distance(
@@ -282,7 +282,7 @@ impl ChunkManager {
             BatchState::Count(count) => {
                 count.add_assign(1);
             }
-            state @ BatchState::Initial => *state = BatchState::Waiting,
+            state @ BatchState::Initial => *state = BatchState::Count(1),
             BatchState::Waiting => (),
         }
 
@@ -301,7 +301,7 @@ impl ChunkManager {
             BatchState::Count(count) => {
                 count.add_assign(1);
             }
-            state @ BatchState::Initial => *state = BatchState::Waiting,
+            state @ BatchState::Initial => *state = BatchState::Count(1),
             BatchState::Waiting => unreachable!(),
         }
 
