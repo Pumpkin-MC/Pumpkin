@@ -1,6 +1,8 @@
-use std::io::{Error, Read, Write};
+use std::io::{Error, ErrorKind, Read, Write};
 
 use pumpkin_macros::packet;
+
+const MAX_ACK_RECORDS: u16 = 4096;
 
 use crate::{
     codec::u24,
@@ -30,7 +32,14 @@ impl Ack {
 
     pub fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let size = u16::read_be(reader)?;
-        // TODO: check size
+
+        if size > MAX_ACK_RECORDS {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "ACK packet range is too large.",
+            ));
+        }
+
         let mut sequences = Vec::with_capacity(size as usize);
         for _ in 0..size {
             let single = bool::read(reader)?;
