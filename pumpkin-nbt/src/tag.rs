@@ -393,14 +393,7 @@ impl Serialize for NbtTag {
             NbtTag::Long(v) => serializer.serialize_i64(*v),
             NbtTag::Float(v) => serializer.serialize_f32(*v),
             NbtTag::Double(v) => serializer.serialize_f64(*v),
-            NbtTag::ByteArray(v) => {
-                use serde::ser::SerializeSeq;
-                let mut seq = serializer.serialize_seq(Some(v.len()))?;
-                for byte in v.iter() {
-                    seq.serialize_element(byte)?;
-                }
-                seq.end()
-            }
+            NbtTag::ByteArray(v) => nbt_byte_array(v, serializer),
             NbtTag::String(v) => serializer.serialize_str(v),
             NbtTag::List(v) => {
                 use serde::ser::SerializeSeq;
@@ -411,22 +404,8 @@ impl Serialize for NbtTag {
                 seq.end()
             }
             NbtTag::Compound(v) => v.serialize(serializer),
-            NbtTag::IntArray(v) => {
-                use serde::ser::SerializeSeq;
-                let mut seq = serializer.serialize_seq(Some(v.len()))?;
-                for int in v.iter() {
-                    seq.serialize_element(int)?;
-                }
-                seq.end()
-            }
-            NbtTag::LongArray(v) => {
-                use serde::ser::SerializeSeq;
-                let mut seq = serializer.serialize_seq(Some(v.len()))?;
-                for long in v.iter() {
-                    seq.serialize_element(long)?;
-                }
-                seq.end()
-            }
+            NbtTag::IntArray(v) => nbt_int_array(v, serializer),
+            NbtTag::LongArray(v) => nbt_long_array(v, serializer),
         }
     }
 }
@@ -478,11 +457,42 @@ impl<'de> Deserialize<'de> for NbtTag {
                 self,
                 mut seq: A,
             ) -> Result<Self::Value, A::Error> {
-                let mut vec = Vec::new();
-                while let Some(value) = seq.next_element()? {
-                    vec.push(value);
+                let curr = deserializer::take_curr_visitor_seq_list_id().unwrap_or(LIST_ID);
+
+                match curr {
+                    INT_ARRAY_ID => {
+                        let mut vec = Vec::new();
+                        while let Some(value) = seq.next_element()? {
+                            vec.push(value);
+                        }
+                        Ok(NbtTag::IntArray(vec))
+                    }
+                    LONG_ARRAY_ID => {
+                        let mut vec = Vec::new();
+                        while let Some(value) = seq.next_element()? {
+                            vec.push(value);
+                        }
+                        Ok(NbtTag::LongArray(vec))
+                    }
+                    BYTE_ARRAY_ID => {
+                        let mut vec = Vec::new();
+                        while let Some(value) = seq.next_element()? {
+                            vec.push(value);
+                        }
+                        Ok(NbtTag::ByteArray(vec.into_boxed_slice()))
+                    }
+                    LIST_ID => {
+                        let mut vec = Vec::new();
+                        while let Some(value) = seq.next_element()? {
+                            vec.push(value);
+                        }
+                        Ok(NbtTag::List(vec))
+                    }
+                    _ => Err(serde::de::Error::custom(format!(
+                        "Invalid list type id: {}",
+                        curr
+                    ))),
                 }
-                Ok(NbtTag::List(vec))
             }
 
             fn visit_map<A: serde::de::MapAccess<'de>>(

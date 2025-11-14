@@ -286,21 +286,22 @@ impl ChunkEntityData {
         }
         let mut map = HashMap::new();
         for entity_nbt in chunk_entity_data.entities {
-            // TODO: This is wrong, we should use an int array, but our NBT lib for some reason does not work with int arrays and
-            // Just gives me a list when putting in a int array
-            let uuid = match entity_nbt.get_list("UUID") {
-                Some(uuid) => uuid,
+            let uuid = match entity_nbt.get_int_array("UUID") {
+                Some(uuid) => Uuid::from_u128(
+                    (uuid[0] as u128) << 96
+                        | (uuid[1] as u128) << 64
+                        | (uuid[2] as u128) << 32
+                        | (uuid[3] as u128),
+                ),
                 None => {
-                    log::warn!("TODO: use int arrays for UUID");
+                    println!(
+                        "Entity in chunk {},{} is missing UUID: {:?}",
+                        position.x, position.y, entity_nbt
+                    );
                     continue;
                 }
             };
-            let uuid = Uuid::from_u128(
-                (uuid.first().unwrap().extract_int().unwrap() as u128) << 96
-                    | (uuid.get(1).unwrap().extract_int().unwrap() as u128) << 64
-                    | (uuid.get(2).unwrap().extract_int().unwrap() as u128) << 32
-                    | (uuid.get(3).unwrap().extract_int().unwrap() as u128),
-            );
+
             map.insert(uuid, entity_nbt);
         }
 
