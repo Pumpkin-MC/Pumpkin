@@ -2211,6 +2211,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-advancements"
+version = "0.1.0"
+dependencies = [
+ "pumpkin-protocol",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "pumpkin-api-macros"
 version = "0.1.0-dev+1.21.9"
 dependencies = [

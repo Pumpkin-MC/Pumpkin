@@ -1,0 +1,10 @@
+[package]
+name = "pumpkin-advancements"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_json = "1.0"
+uuid = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+pumpkin-protocol = { path = "../pumpkin-protocol" }
