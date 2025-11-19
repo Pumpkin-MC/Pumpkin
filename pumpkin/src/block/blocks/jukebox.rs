@@ -71,12 +71,12 @@ impl BlockBehaviour for JukeboxBlock {
             return BlockActionResult::Pass;
         };
 
-        let Some(jukebox_song) = SYNCED_REGISTRIES.jukebox_song.get_index_of(song) else {
+        let Some(jukebox_song) = SYNCED_REGISTRIES.get_jukebox_song_index(song) else {
             log::error!("Jukebox playable song not registered!");
             return BlockActionResult::Pass;
         };
 
-        //TODO: Update block nbt
+        // TODO: Update block nbt
 
         self.set_record(true, args.block, args.position, world)
             .await;
