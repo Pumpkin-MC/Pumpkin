@@ -126,9 +126,7 @@ impl IndexToNoisePos for ChunkIndexMapper {
         if let Some(sample_options) = sample_options {
             sample_options.fill_index = index;
             if let SampleAction::CellCaches(wrapper_data) = &mut sample_options.action {
-                wrapper_data.cell_x_block_position = cell_x_position;
-                wrapper_data.cell_y_block_position = cell_y_position;
-                wrapper_data.cell_z_block_position = cell_z_position;
+                wrapper_data.update_position(cell_x_position, cell_y_position, cell_z_position);
             }
         }
 
@@ -276,13 +274,13 @@ impl<'a> ChunkNoiseGenerator<'a> {
 
             let mut options = ChunkNoiseFunctionSampleOptions::new(
                 false,
-                SampleAction::CellCaches(WrapperData {
-                    cell_x_block_position: 0,
-                    cell_y_block_position: 0,
-                    cell_z_block_position: 0,
-                    horizontal_cell_block_count: self.horizontal_cell_block_count() as usize,
-                    vertical_cell_block_count: self.vertical_cell_block_count() as usize,
-                }),
+                SampleAction::CellCaches(WrapperData::new(
+                    0,
+                    0,
+                    0,
+                    self.horizontal_cell_block_count() as usize,
+                    self.vertical_cell_block_count() as usize,
+                )),
                 self.cache_result_unique_id,
                 self.cache_fill_unique_id,
                 0,
@@ -349,13 +347,13 @@ impl<'a> ChunkNoiseGenerator<'a> {
 
         let mut sample_options = ChunkNoiseFunctionSampleOptions::new(
             true,
-            SampleAction::CellCaches(WrapperData {
-                cell_x_block_position: 0,
-                cell_y_block_position: 0,
-                cell_z_block_position: 0,
-                horizontal_cell_block_count: self.horizontal_cell_block_count() as usize,
-                vertical_cell_block_count: self.vertical_cell_block_count() as usize,
-            }),
+            SampleAction::CellCaches(WrapperData::new(
+                0,
+                0,
+                0,
+                self.horizontal_cell_block_count() as usize,
+                self.vertical_cell_block_count() as usize,
+            )),
             self.cache_result_unique_id,
             self.cache_fill_unique_id,
             0,
@@ -380,13 +378,13 @@ impl<'a> ChunkNoiseGenerator<'a> {
 
         let options = ChunkNoiseFunctionSampleOptions::new(
             false,
-            SampleAction::CellCaches(WrapperData {
-                cell_x_block_position: cell_pos.x as usize,
-                cell_y_block_position: cell_pos.y as usize,
-                cell_z_block_position: cell_pos.z as usize,
-                horizontal_cell_block_count: self.horizontal_cell_block_count() as usize,
-                vertical_cell_block_count: self.vertical_cell_block_count() as usize,
-            }),
+            SampleAction::CellCaches(WrapperData::new(
+                cell_pos.x as usize,
+                cell_pos.y as usize,
+                cell_pos.z as usize,
+                self.horizontal_cell_block_count() as usize,
+                self.vertical_cell_block_count() as usize,
+            )),
             self.cache_result_unique_id,
             self.cache_fill_unique_id,
             0,

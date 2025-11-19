@@ -4,6 +4,7 @@ use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use async_trait::async_trait;
 use pumpkin_data::Block;
+use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
@@ -21,11 +22,17 @@ impl crate::block::BlockBehaviour for PumpkinBlock {
         if args.item_stack.lock().await.item != &Item::SHEARS {
             return BlockActionResult::Pass;
         }
-        // TODO: set direction
+        let mut props = WallTorchLikeProperties::default(&Block::CARVED_PUMPKIN);
+        props.facing = args
+            .player
+            .living_entity
+            .entity
+            .get_horizontal_facing()
+            .opposite();
         args.world
             .set_block_state(
                 args.position,
-                Block::CARVED_PUMPKIN.default_state.id,
+                props.to_state_id(&Block::CARVED_PUMPKIN),
                 BlockFlags::NOTIFY_ALL,
             )
             .await;
