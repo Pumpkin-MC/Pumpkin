@@ -54,7 +54,7 @@ rsa = { version = "=0.10.0-rc.9", features = ["sha1"] }
 rsa-der = "0.3"
 
 # authentication
-ureq = { version = "3.1.2", features = [
+ureq = { version = "3.1.4", features = [
     "json",
 ] }
 
@@ -73,11 +73,11 @@ simplelog = { version = "0.12.2", features = ["ansi_term"] }
 time = "0.3"
 
 # plugins
-libloading = "0.8"
+libloading = "0.9"
 rustc-hash = "2.1.1"
 
 # Task handling
-tokio-util = { version = "0.7.16", features = ["rt"] }
+tokio-util = { version = "0.7.17", features = ["rt"] }
 
 # Memory profiling
 dhat = { version = "0.3.3", optional = true }
