@@ -454,7 +454,7 @@ impl ProtoChunk {
         if blocks_movement(block_state) || block_state.is_liquid() {
             self.maybe_update_motion_blocking_height_map(pos);
             let block = Block::from_state_id(block_state.id);
-            if !block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LEAVES) {
+            if !block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
                 {
                     self.maybe_update_motion_blocking_no_leaves_height_map(pos);
                 }
@@ -741,6 +741,7 @@ impl ProtoChunk {
     }
 
     pub fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> &'static Biome {
+        // TODO: See if we can cache this value
         let seed_biome_pos = biome::get_biome_blend(
             self.bottom_y(),
             self.height(),
@@ -797,8 +798,8 @@ impl ProtoChunk {
                     terrain_cache
                         .terrain_builder
                         .place_badlands_pillar(self, x, z, top_block);
-                    // Get the top block again if we placed a pillar!
 
+                    // Get the top block again if we placed a pillar!
                     top_block = self.top_block_height_exclusive(&Vector2::new(local_x, local_z));
                 }
 

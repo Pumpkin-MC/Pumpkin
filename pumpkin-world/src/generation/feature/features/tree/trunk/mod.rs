@@ -51,7 +51,7 @@ impl TrunkPlacer {
     ) {
         let block = GenerationCache::get_block_state(chunk, &pos.0).to_block();
         if force_dirt
-            || !(block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_DIRT)
+            || !(block.has_tag(&tag::Block::MINECRAFT_DIRT)
                 && block != &Block::GRASS_BLOCK
                 && block != &Block::MYCELIUM)
         {

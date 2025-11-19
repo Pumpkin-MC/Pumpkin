@@ -26,7 +26,7 @@ impl CoralFeature {
         let block = GenerationCache::get_block_state(chunk, &pos.0).to_block();
         let above_block = GenerationCache::get_block_state(chunk, &pos.up().0).to_block();
 
-        if block != &Block::WATER && !block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_CORALS)
+        if block != &Block::WATER && !block.has_tag(&tag::Block::MINECRAFT_CORALS)
             || above_block != &Block::WATER
         {
             return false;

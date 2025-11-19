@@ -9,10 +9,12 @@ use core::str;
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_protocol::{
     ConnectionState,
-    java::client::config::{CFinishConfig, CRegistryData},
-    java::server::config::{
-        ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
-        SConfigResourcePack, SKnownPacks, SPluginMessage,
+    java::{
+        client::config::{CFinishConfig, CRegistryData, CUpdateTags},
+        server::config::{
+            ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
+            SConfigResourcePack, SKnownPacks, SPluginMessage,
+        },
     },
 };
 use pumpkin_util::{Hand, text::TextComponent};
@@ -153,6 +155,16 @@ impl JavaClient {
             ))
             .await;
         }
+        self.send_packet_now(&CUpdateTags::new(&[
+            pumpkin_data::tag::RegistryKey::Block,
+            pumpkin_data::tag::RegistryKey::Fluid,
+            pumpkin_data::tag::RegistryKey::Enchantment,
+            pumpkin_data::tag::RegistryKey::WorldgenBiome,
+            pumpkin_data::tag::RegistryKey::Item,
+            pumpkin_data::tag::RegistryKey::EntityType,
+            pumpkin_data::tag::RegistryKey::Dialog,
+        ]))
+        .await;
 
         // We are done with configuring
         log::debug!("Finished config");

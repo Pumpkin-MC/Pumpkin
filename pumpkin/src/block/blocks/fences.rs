@@ -78,7 +78,7 @@ fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: Block
         return true;
     }
 
-    if to.is_tagged_with_by_tag(&tag::Block::C_FENCE_GATES) {
+    if to.has_tag(&tag::Block::C_FENCE_GATES) {
         let fence_gate_props = FenceGateProperties::from_state_id(to_state.id, to);
         if BlockDirection::from_cardinal_direction(fence_gate_props.facing).to_axis()
             == direction.rotate_clockwise().to_axis()
@@ -87,5 +87,5 @@ fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: Block
         }
     }
 
-    *from != Block::NETHER_BRICK_FENCE && to.is_tagged_with_by_tag(&tag::Block::C_FENCES_WOODEN)
+    *from != Block::NETHER_BRICK_FENCE && to.has_tag(&tag::Block::C_FENCES_WOODEN)
 }

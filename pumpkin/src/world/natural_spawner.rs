@@ -474,7 +474,7 @@ pub async fn get_random_spawn_mob_at(
     // TODO Holder<Biome> holder = level.getBiome(pos);
     let biome = world.level.get_rough_biome(block_pos).await;
     if category == &MobCategory::WATER_AMBIENT
-        && biome.is_tagged_with_by_tag(&MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
+        && biome.has_tag(&MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
         && rng().random::<f32>() < 0.98f32
     {
         None
@@ -542,16 +542,10 @@ pub async fn is_spawn_position_ok(
     entity_type: &'static EntityType,
 ) -> bool {
     match entity_type.spawn_restriction.location {
-        SpawnLocation::InLava => world
-            .get_fluid(block_pos)
-            .await
-            .is_tagged_with_by_tag(&MINECRAFT_LAVA),
+        SpawnLocation::InLava => world.get_fluid(block_pos).await.has_tag(&MINECRAFT_LAVA),
         SpawnLocation::InWater => {
             // TODO !level.getBlockState(blockPos).isRedstoneConductor(level, blockPos)
-            world
-                .get_fluid(block_pos)
-                .await
-                .is_tagged_with_by_tag(&MINECRAFT_WATER)
+            world.get_fluid(block_pos).await.has_tag(&MINECRAFT_WATER)
         }
         SpawnLocation::OnGround => {
             let down = world.get_block_state(&block_pos.down()).await;
@@ -575,5 +569,5 @@ pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
         return false;
     }
     // TODO !entityType.isBlockDangerous(blockState);
-    !Block::from_state_id(state.id).is_tagged_with_by_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE)
+    !Block::from_state_id(state.id).has_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE)
 }

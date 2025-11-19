@@ -68,7 +68,7 @@ async fn can_place_at(world: &World, position: &BlockPos) -> bool {
     if world
         .get_block(&position.down())
         .await
-        .is_tagged_with_by_tag(&tag::Block::C_FENCE_GATES)
+        .has_tag(&tag::Block::C_FENCE_GATES)
     {
         let fence_gate_props =
             pumpkin_data::block_properties::OakFenceGateLikeProperties::from_state_id(
@@ -84,5 +84,5 @@ async fn can_place_at(world: &World, position: &BlockPos) -> bool {
     let block_up_state = world.get_block_state(&position.up()).await;
     block_down_state.is_center_solid(BlockDirection::Up)
         || block_up_state.is_center_solid(BlockDirection::Down)
-        || block_down.is_tagged_with_by_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER)
+        || block_down.has_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER)
 }
