@@ -12,6 +12,14 @@ impl ResourceLocation {
     /// The maximum number of bytes for a [`ResourceLocation`] is the same as for a normal [`String`].
     pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(i16::MAX as usize).unwrap();
 
+    pub fn from(location: &str) -> Self {
+        let names = location.split_once(":").unwrap_or_default();
+        Self {
+            namespace: names.0.to_string(),
+            path: names.1.to_string(),
+        }
+    }
+
     pub fn vanilla(path: &str) -> Self {
         Self {
             namespace: "minecraft".to_string(),

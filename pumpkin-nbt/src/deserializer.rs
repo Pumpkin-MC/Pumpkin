@@ -188,22 +188,19 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
         }
     }
 
-    fn deserialize_u16<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType(
-            "u16; NBT only supports signed values".to_string(),
-        ))
+    fn deserialize_u16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        let value = self.input.get_i16_be()?;
+        visitor.visit_i16::<Error>(value)
     }
 
-    fn deserialize_u32<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType(
-            "u32; NBT only supports signed values".to_string(),
-        ))
+    fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        let value = self.input.get_i32_be()?;
+        visitor.visit_i32::<Error>(value)
     }
 
-    fn deserialize_u64<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType(
-            "u64; NBT only supports signed values".to_string(),
-        ))
+    fn deserialize_u64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        let value = self.input.get_i64_be()?;
+        visitor.visit_i64::<Error>(value)
     }
 
     fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
