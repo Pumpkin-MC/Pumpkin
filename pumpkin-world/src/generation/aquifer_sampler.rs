@@ -205,7 +205,7 @@ impl WorldAquiferSampler {
         let x0z1_index = x0z0_index + self.size_y;
         let x1z0_index = x0z0_index + self.size_y * self.size_z;
         let x1z1_index = x1z0_index + self.size_y;
-        // Remove bounds checks on subsequent indexs
+        // Remove bounds checks on subsequent indexes
         assert!(x1z1_index + 2 < self.packed_positions.len());
 
         [
