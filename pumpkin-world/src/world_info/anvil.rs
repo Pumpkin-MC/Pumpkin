@@ -252,7 +252,6 @@ mod test {
                 send_command_feedback: true,
                 show_death_messages: true,
                 snow_accumulation_height: 1,
-                spawn_chunk_radius: 2,
                 spawn_radius: 10,
                 spectators_generate_chunks: true,
                 tnt_explosion_drop_decay: false,

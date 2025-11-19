@@ -234,7 +234,7 @@ pub(crate) fn build() -> TokenStream {
             }
             pub fn get_fullname(&self, level: i32) -> TextComponent {
                 let mut ret = TextComponent::translate(self.description, []).color_named(
-                    if self.is_tagged_with_by_tag(&EnchantmentTag::MINECRAFT_CURSE) {
+                    if self.has_tag(&EnchantmentTag::MINECRAFT_CURSE) {
                         NamedColor::Red
                     } else {
                         NamedColor::Gray

@@ -1,42 +1,39 @@
-use super::{Control, Goal, GoalControl};
+use super::{Controls, Goal};
 use crate::entity::EntityBase;
 use crate::entity::ai::path::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
 use async_trait::async_trait;
-use crossbeam::atomic::AtomicCell;
 use pumpkin_util::math::vector3::Vector3;
-use std::sync::atomic::Ordering::Relaxed;
-use std::sync::atomic::{AtomicI32, AtomicI64};
 
 const MAX_ATTACK_TIME: i64 = 20;
 
 pub struct MeleeAttackGoal {
-    goal_control: GoalControl,
+    goal_control: Controls,
     speed: f64,
     pause_when_mob_idle: bool,
     //path: Path, TODO: add path when Navigation is implemented
     #[allow(dead_code)]
-    target_location: AtomicCell<Vector3<f64>>,
-    update_countdown_ticks: AtomicI32,
-    pub cooldown: AtomicI32,
+    target_location: Vector3<f64>,
+    update_countdown_ticks: i32,
+    pub cooldown: i32,
     #[allow(dead_code)]
     attack_interval_ticks: i32,
-    last_update_time: AtomicI64,
+    last_update_time: i64,
 }
 
 impl MeleeAttackGoal {
     #[must_use]
     pub fn new(speed: f64, pause_when_mob_idle: bool) -> Self {
         Self {
-            goal_control: GoalControl::from_array(&[Control::Move, Control::Look]),
+            goal_control: Controls::MOVE | Controls::LOOK,
             speed,
             pause_when_mob_idle,
-            target_location: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
-            update_countdown_ticks: AtomicI32::new(0),
-            cooldown: AtomicI32::new(0),
+            target_location: Vector3::new(0.0, 0.0, 0.0),
+            update_countdown_ticks: 0,
+            cooldown: 0,
             attack_interval_ticks: 20,
-            last_update_time: AtomicI64::new(0),
+            last_update_time: 0,
         }
     }
 
@@ -47,17 +44,17 @@ impl MeleeAttackGoal {
 
 #[async_trait]
 impl Goal for MeleeAttackGoal {
-    async fn can_start(&self, mob: &dyn Mob) -> bool {
+    async fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let time = {
             let world = &mob.get_entity().world;
             let level_time = world.level_time.lock().await;
             level_time.world_age
         };
 
-        if time - self.last_update_time.load(Relaxed) < MAX_ATTACK_TIME {
+        if time - self.last_update_time < MAX_ATTACK_TIME {
             return false;
         }
-        self.last_update_time.store(time, Relaxed);
+        self.last_update_time = time;
         let target = mob.get_mob_entity().target.lock().await;
         let Some(target) = target.as_ref() else {
             return false;
@@ -92,7 +89,7 @@ impl Goal for MeleeAttackGoal {
         }
     }
 
-    async fn start(&self, mob: &dyn Mob) {
+    async fn start(&mut self, mob: &dyn Mob) {
         // TODO: add missing fields like mob attacking to true and correct Navigation methods
         if let Some(target) = mob.get_mob_entity().target.lock().await.as_ref() {
             let mut navigator = mob.get_mob_entity().navigator.lock().await;
@@ -102,11 +99,11 @@ impl Goal for MeleeAttackGoal {
                 speed: self.speed,
             });
         }
-        self.update_countdown_ticks.store(0, Relaxed);
-        self.cooldown.store(0, Relaxed);
+        self.update_countdown_ticks = 0;
+        self.cooldown = 0;
     }
 
-    async fn stop(&self, mob: &dyn Mob) {
+    async fn stop(&mut self, mob: &dyn Mob) {
         let mut target = mob.get_mob_entity().target.lock().await;
         if target.is_none() {
             return;
@@ -121,7 +118,7 @@ impl Goal for MeleeAttackGoal {
         // TODO: set attacking to false and stop navigation
     }
 
-    async fn tick(&self, mob: &dyn Mob) {
+    async fn tick(&mut self, mob: &dyn Mob) {
         // TODO: implement
         // This code is not Vanilla, tick method needs to be reimplemented
         if let Some(target) = mob.get_mob_entity().target.lock().await.as_ref() {
@@ -138,7 +135,7 @@ impl Goal for MeleeAttackGoal {
         true
     }
 
-    fn get_goal_control(&self) -> &GoalControl {
-        &self.goal_control
+    fn controls(&self) -> Controls {
+        self.goal_control
     }
 }

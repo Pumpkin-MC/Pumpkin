@@ -10,7 +10,7 @@ use crate::{
     slot::NormalSlot,
 };
 
-pub fn create_generic_9x3(
+pub async fn create_generic_9x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
@@ -23,9 +23,10 @@ pub fn create_generic_9x3(
         3,
         9,
     )
+    .await
 }
 
-pub fn create_generic_9x6(
+pub async fn create_generic_9x6(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
@@ -38,9 +39,10 @@ pub fn create_generic_9x6(
         6,
         9,
     )
+    .await
 }
 
-pub fn create_generic_3x3(
+pub async fn create_generic_3x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
@@ -53,9 +55,10 @@ pub fn create_generic_3x3(
         3,
         3,
     )
+    .await
 }
 
-pub fn create_hopper(
+pub async fn create_hopper(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
@@ -68,6 +71,7 @@ pub fn create_hopper(
         1,
         5,
     )
+    .await
 }
 
 pub struct GenericContainerScreenHandler {
@@ -78,7 +82,7 @@ pub struct GenericContainerScreenHandler {
 }
 
 impl GenericContainerScreenHandler {
-    fn new(
+    async fn new(
         screen_type: WindowType,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -94,7 +98,8 @@ impl GenericContainerScreenHandler {
         };
 
         // TODO: Add player entity as a parameter
-        inventory.on_open();
+        inventory.on_open().await;
+
         handler.add_inventory_slots();
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);
@@ -118,7 +123,7 @@ impl GenericContainerScreenHandler {
 impl ScreenHandler for GenericContainerScreenHandler {
     async fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player).await;
-        self.inventory.on_close();
+        self.inventory.on_close().await;
     }
 
     fn as_any(&self) -> &dyn Any {

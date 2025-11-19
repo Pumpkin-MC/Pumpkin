@@ -28,7 +28,7 @@ pub(crate) fn build() -> TokenStream {
         .collect::<Vec<_>>();
 
     quote! {
-        pub static FUELS: [(u16,u16); #fuel_list_len] = [
+        pub const FUELS: [(u16,u16); #fuel_list_len] = [
                 #(#fuel_list_tokens),*
         ];
 

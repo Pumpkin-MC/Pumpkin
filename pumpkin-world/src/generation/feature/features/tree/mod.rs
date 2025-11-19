@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use decorator::TreeDecorator;
 use foliage::FoliagePlacer;
 use pumpkin_data::tag;
@@ -8,11 +6,8 @@ use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 use trunk::TrunkPlacer;
 
-use crate::{
-    ProtoChunk,
-    generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize},
-    level::Level,
-};
+use crate::generation::proto_chunk::GenerationCache;
+use crate::generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize};
 
 mod decorator;
 mod foliage;
@@ -38,11 +33,9 @@ pub struct TreeNode {
 }
 
 impl TreeFeature {
-    #[expect(clippy::too_many_arguments)]
-    pub fn generate(
+    pub fn generate<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        chunk: &mut T,
         min_y: i8,
         height: u16,
         feature_name: &str, // This placed feature
@@ -50,8 +43,7 @@ impl TreeFeature {
         pos: BlockPos,
     ) -> bool {
         // TODO
-        let log_positions =
-            self.generate_main(chunk, level, min_y, height, feature_name, random, pos);
+        let log_positions = self.generate_main(chunk, min_y, height, feature_name, random, pos);
 
         for decorator in &self.decorators {
             decorator.generate(chunk, random, Vec::new(), log_positions.clone());
@@ -60,22 +52,20 @@ impl TreeFeature {
     }
 
     pub fn can_replace_or_log(state: &BlockState, block: &Block) -> bool {
-        Self::can_replace(state, block) || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LOGS)
+        Self::can_replace(state, block) || block.has_tag(&tag::Block::MINECRAFT_LOGS)
     }
 
     pub fn is_air_or_leaves(state: &BlockState, block: &Block) -> bool {
-        state.is_air() || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_LEAVES)
+        state.is_air() || block.has_tag(&tag::Block::MINECRAFT_LEAVES)
     }
 
     pub fn can_replace(state: &BlockState, block: &Block) -> bool {
-        state.is_air() || block.is_tagged_with_by_tag(&tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
+        state.is_air() || block.has_tag(&tag::Block::MINECRAFT_REPLACEABLE_BY_TREES)
     }
 
-    #[expect(clippy::too_many_arguments)]
-    fn generate_main(
+    fn generate_main<T: GenerationCache>(
         &self,
-        chunk: &mut ProtoChunk<'_>,
-        level: &Arc<Level>,
+        chunk: &mut T,
         _min_y: i8,
         _height: u16,
         _feature_name: &str, // This placed feature
@@ -96,7 +86,6 @@ impl TreeFeature {
             top,
             pos,
             chunk,
-            level,
             random,
             self.force_dirt,
             dirt_state,
@@ -113,7 +102,6 @@ impl TreeFeature {
         for node in nodes {
             self.foliage_placer.generate(
                 chunk,
-                level,
                 random,
                 &node,
                 foliage_height,
@@ -124,13 +112,13 @@ impl TreeFeature {
         logs
     }
 
-    fn get_top(&self, height: u32, chunk: &ProtoChunk, init_pos: BlockPos) -> u32 {
+    fn get_top<T: GenerationCache>(&self, height: u32, chunk: &T, init_pos: BlockPos) -> u32 {
         for y in 0..=height + 1 {
             let j = self.minimum_size.r#type.get_radius(height, y as i32);
             for x in -j..=j {
                 for z in -j..=j {
                     let pos = BlockPos(init_pos.0.add_raw(x, y as i32, z));
-                    let rstate = chunk.get_block_state(&pos.0);
+                    let rstate = GenerationCache::get_block_state(chunk, &pos.0);
                     let block = rstate.to_block();
                     if Self::can_replace_or_log(rstate.to_state(), block)
                         && (self.ignore_vines || block != &Block::VINE)

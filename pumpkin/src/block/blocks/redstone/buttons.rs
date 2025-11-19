@@ -23,7 +23,7 @@ use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use crate::block::OnScheduledTickArgs;
 use crate::block::OnStateReplacedArgs;
-use crate::block::blocks::abstruct_wall_mounting::WallMountedBlock;
+use crate::block::blocks::abstract_wall_mounting::WallMountedBlock;
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, NormalUseArgs};

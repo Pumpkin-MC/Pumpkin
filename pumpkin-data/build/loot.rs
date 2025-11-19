@@ -6,7 +6,7 @@ use quote::{ToTokens, quote};
 use serde::Deserialize;
 use syn::LitStr;
 
-/// These are required to be defined twice because serde can't deseralize into static context for obvious reasons.
+/// These are required to be defined twice because serde can't deserialize into static context for obvious reasons.
 #[derive(Deserialize, Clone, Debug)]
 pub struct LootTableStruct {
     r#type: LootTableTypeStruct,

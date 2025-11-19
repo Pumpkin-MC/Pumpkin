@@ -10,7 +10,7 @@ pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-nbt = { path = "../pumpkin-nbt" }
 
 serde.workspace = true
-crc-fast = "1.4.0"
+crc-fast = "1.8.0"
 
 [build-dependencies]
 pumpkin-util = { path = "../pumpkin-util" }

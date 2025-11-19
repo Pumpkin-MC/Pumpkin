@@ -219,6 +219,7 @@ impl Server {
             .worlds
             .try_write()
             .expect("Nothing should hold a lock of worlds before server startup") =
+            // vec![overworld.into()];
             vec![overworld.into(), nether.into(), end.into()];
         server
     }
@@ -445,27 +446,26 @@ impl Server {
     /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
     pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: Option<bool>) {
         let mut level_info = self.level_info.write().await;
-        if force_update.unwrap_or_default() || !level_info.difficulty_locked {
-            level_info.difficulty = if BASIC_CONFIG.hardcore {
-                Difficulty::Hard
-            } else {
-                difficulty
-            };
-            // Minecraft server updates mob spawn options here
-            // but its not implemented in Pumpkin yet
-            // todo: update mob spawn options
-
-            for world in &*self.worlds.read().await {
-                world.level_info.write().await.difficulty = level_info.difficulty;
-            }
-
-            self.broadcast_packet_all(&CChangeDifficulty::new(
-                level_info.difficulty as u8,
-                level_info.difficulty_locked,
-            ))
-            .await;
-            drop(level_info);
+        if level_info.difficulty_locked && !force_update.unwrap_or_default() {
+            return;
         }
+
+        let difficulty = if BASIC_CONFIG.hardcore {
+            Difficulty::Hard
+        } else {
+            difficulty
+        };
+
+        level_info.difficulty = difficulty;
+        let locked = level_info.difficulty_locked;
+        drop(level_info);
+
+        for world in &*self.worlds.read().await {
+            world.level_info.write().await.difficulty = difficulty;
+        }
+
+        self.broadcast_packet_all(&CChangeDifficulty::new(difficulty as u8, locked))
+            .await;
     }
 
     /// Searches for a player by their username across all worlds.

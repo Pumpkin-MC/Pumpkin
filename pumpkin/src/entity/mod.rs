@@ -38,8 +38,10 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_world::entity::entity_data_flags::DATA_POSE;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::f32::consts::PI;
 use std::sync::{
     Arc,
     atomic::{
@@ -60,6 +62,7 @@ pub mod living;
 pub mod mob;
 pub mod player;
 pub mod projectile;
+pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
 
@@ -260,6 +263,8 @@ pub struct Entity {
     pub sneaking: AtomicBool,
     /// Indicates whether the entity is sprinting
     pub sprinting: AtomicBool,
+    /// Indicates whether the entity is invisible
+    pub invisible: AtomicBool,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka knockback
@@ -362,6 +367,7 @@ impl Entity {
                 get_section_cord(floor_z),
             )),
             sneaking: AtomicBool::new(false),
+            invisible: AtomicBool::new(false),
             world,
             sprinting: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
@@ -477,17 +483,14 @@ impl Entity {
     }
 
     /// Changes this entity's pitch and yaw to look at target
-    pub async fn look_at(&self, target: Vector3<f64>) {
+    pub fn look_at(&self, target: Vector3<f64>) {
         let position = self.pos.load();
         let delta = target.sub(&position);
         let root = delta.x.hypot(delta.z);
-        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / std::f32::consts::PI);
-        let yaw =
-            wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / std::f32::consts::PI) - 90.0);
+        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / PI);
+        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / PI) - 90.0);
         self.pitch.store(pitch);
         self.yaw.store(yaw);
-
-        self.send_rotation().await;
     }
 
     pub async fn send_rotation(&self) {
@@ -1422,6 +1425,12 @@ impl Entity {
         }
     }
 
+    pub async fn set_invisible(&self, invisible: bool) {
+        assert!(self.invisible.load(Relaxed) != invisible);
+        self.invisible.store(invisible, Relaxed);
+        self.set_flag(Flag::Invisible, invisible).await;
+    }
+
     pub async fn set_on_fire(&self, on_fire: bool) {
         if self.has_visual_fire.load(Ordering::Relaxed) != on_fire {
             self.has_visual_fire.store(on_fire, Ordering::Relaxed);
@@ -1605,8 +1614,12 @@ impl Entity {
     pub async fn set_pose(&self, pose: EntityPose) {
         self.pose.store(pose);
         let pose = pose as i32;
-        self.send_meta_data(&[Metadata::new(6, MetaDataType::EntityPose, VarInt(pose))])
-            .await;
+        self.send_meta_data(&[Metadata::new(
+            DATA_POSE,
+            MetaDataType::EntityPose,
+            VarInt(pose),
+        )])
+        .await;
     }
 
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {

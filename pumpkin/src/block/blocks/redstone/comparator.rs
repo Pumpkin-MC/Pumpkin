@@ -28,7 +28,7 @@ use crate::{
     world::World,
 };
 
-use super::abstruct_redstone_gate::{self, RedstoneGateBlock, RedstoneGateBlockProperties};
+use super::abstract_redstone_gate::{self, RedstoneGateBlock, RedstoneGateBlockProperties};
 
 #[pumpkin_block("minecraft:comparator")]
 pub struct ComparatorBlock;
@@ -209,7 +209,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
         state: &BlockState,
         block: &Block,
     ) -> u8 {
-        let redstone_level = abstruct_redstone_gate::get_power::<ComparatorLikeProperties>(
+        let redstone_level = abstract_redstone_gate::get_power::<ComparatorLikeProperties>(
             world, pos, state.id, block,
         )
         .await;

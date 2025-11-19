@@ -11,7 +11,7 @@ use crate::block::BlockBehaviour;
 use crate::block::CanPlaceAtArgs;
 use crate::block::{GetStateForNeighborUpdateArgs, OnPlaceArgs};
 
-use super::abstruct_wall_mounting::WallMountedBlock;
+use super::abstract_wall_mounting::WallMountedBlock;
 
 #[pumpkin_block("minecraft:grindstone")]
 pub struct GrindstoneBlock;

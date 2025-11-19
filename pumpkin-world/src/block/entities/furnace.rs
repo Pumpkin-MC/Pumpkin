@@ -35,7 +35,7 @@ pub struct FurnaceBlockEntity {
     pub lit_time_remaining: AtomicU16,
     pub lit_total_time: AtomicU16,
 
-    pub items: [Arc<Mutex<ItemStack>>; 3],
+    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
 }
 
 impl FurnaceBlockEntity {
@@ -96,11 +96,11 @@ impl FurnaceBlockEntity {
     }
 
     async fn craft_recipe(&self, recipe: Option<&CookingRecipe>) -> bool {
-        let can_accepet_output = self
+        let can_accept_output = self
             .can_accept_recipe_output(recipe, self.get_max_count_per_stack())
             .await;
         if let Some(recipe) = recipe {
-            if can_accepet_output {
+            if can_accept_output {
                 let mut side_items = self.items[2].lock().await;
                 let output_item = match Item::from_registry_key(
                     recipe.result.id.strip_prefix("minecraft:").unwrap(),
@@ -171,13 +171,13 @@ impl BlockEntity for FurnaceBlockEntity {
         let furnace_recipe = Self::get_furnace_cooking_recipe(top_items.item);
         drop(top_items);
 
-        let can_accepet_output = self
+        let can_accept_output = self
             .can_accept_recipe_output(furnace_recipe, self.get_max_count_per_stack())
             .await;
 
         let bottom_items_is_empty = self.items[1].lock().await.is_empty();
         if self.is_burning() || !bottom_items_is_empty && !is_top_items_empty {
-            if !self.is_burning() && can_accepet_output {
+            if !self.is_burning() && can_accept_output {
                 let mut bottom_items = self.items[1].lock().await;
 
                 let fuel_ticks = get_item_burn_ticks(bottom_items.item.id).unwrap_or(0);
@@ -199,7 +199,7 @@ impl BlockEntity for FurnaceBlockEntity {
                 }
             }
 
-            if self.is_burning() && can_accepet_output {
+            if self.is_burning() && can_accept_output {
                 self.cooking_time_spent.fetch_add(1, Ordering::Relaxed);
 
                 if self.cooking_time_spent.load(Ordering::Relaxed)
@@ -347,7 +347,9 @@ impl BlockEntity for FurnaceBlockEntity {
 }
 
 impl FurnaceBlockEntity {
+    pub const INVENTORY_SIZE: usize = 3;
     pub const ID: &'static str = "minecraft:furnace";
+
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
