@@ -1768,7 +1768,7 @@ impl World {
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
         let explosion = Explosion::new(power, position);
-        explosion.explode(self).await;
+        let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion
         } else {
@@ -1783,6 +1783,8 @@ impl World {
                 .client
                 .enqueue_packet(&CExplosion::new(
                     position,
+                    power,
+                    block_count as i32,
                     None,
                     VarInt(particle as i32),
                     sound.clone(),

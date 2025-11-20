@@ -490,7 +490,7 @@ impl Level {
             block_entities: Vec::new(),
         };
 
-        let mut rng = SmallRng::from_os_rng();
+        let mut rng = SmallRng::from_rng(&mut rand::rng());
         let chunks = self
             .loaded_chunks
             .iter()

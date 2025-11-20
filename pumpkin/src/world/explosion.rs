@@ -73,16 +73,17 @@ impl Explosion {
         map
     }
 
-    pub async fn explode(&self, world: &Arc<World>) {
+    /// Returns the removed block count
+    pub async fn explode(&self, world: &Arc<World>) -> u32 {
         let blocks = self.get_blocks_to_destroy(world).await;
         // TODO: Entity damage, fire
-        for (pos, (block, state)) in blocks {
+        for (pos, (block, state)) in &blocks {
             if state.is_air() {
                 continue;
             }
             let pumpkin_block = world.block_registry.get_pumpkin_block(block);
 
-            world.set_block_state(&pos, 0, BlockFlags::NOTIFY_ALL).await;
+            world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;
 
             if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
                 let params = LootContextParameters {
@@ -90,17 +91,18 @@ impl Explosion {
                     explosion_radius: Some(self.power),
                     ..Default::default()
                 };
-                drop_loot(world, block, &pos, false, params).await;
+                drop_loot(world, block, pos, false, params).await;
             }
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block
                     .explode(ExplodeArgs {
                         world,
                         block,
-                        position: &pos,
+                        position: pos,
                     })
                     .await;
             }
         }
+        blocks.len() as u32
     }
 }

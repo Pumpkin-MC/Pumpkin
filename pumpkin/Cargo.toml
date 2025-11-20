@@ -42,7 +42,7 @@ serde_json.workspace = true
 
 bytes.workspace = true
 
-rand = "0.9"
+rand = "=0.10.0-rc.5"
 
 num-bigint = "0.4"
 
@@ -50,7 +50,7 @@ num-bigint = "0.4"
 rustyline-async = "0.4.7"
 
 # encryption
-rsa = { version = "=0.10.0-rc.9", features = ["sha1"] }
+rsa = { version = "=0.10.0-rc.10", features = ["sha1"] }
 rsa-der = "0.3"
 
 # authentication
@@ -58,11 +58,11 @@ ureq = { version = "3.1.4", features = [
     "json",
 ] }
 
-sha1 = "=0.11.0-rc.2"
+sha1 = "=0.11.0-rc.3"
 
 # velocity en
-hmac = "=0.13.0-rc.2"
-sha2 = "=0.11.0-rc.2"
+hmac = "=0.13.0-rc.3"
+sha2 = "=0.11.0-rc.3"
 
 base64 = "0.22.1"
 
