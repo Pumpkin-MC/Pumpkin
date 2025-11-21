@@ -1,18 +1,17 @@
 use std::{num::NonZeroU8, sync::Arc};
 
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::java::client::play::{CCenterChunk, CUnloadChunk};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::{entity::player::Player, net::ClientPlatform};
 
 pub async fn get_view_distance(player: &Player) -> NonZeroU8 {
-    player
-        .config
-        .read()
-        .await
-        .view_distance
-        .clamp(NonZeroU8::new(2).unwrap(), BASIC_CONFIG.view_distance)
+    let server = player.world().server.upgrade().unwrap();
+
+    player.config.read().await.view_distance.clamp(
+        NonZeroU8::new(2).unwrap(),
+        server.basic_config.view_distance,
+    )
 }
 
 pub async fn update_position(player: &Arc<Player>) {

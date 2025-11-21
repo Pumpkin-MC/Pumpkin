@@ -92,6 +92,8 @@ pub trait ChunkSerializer: Send + Sync + Default {
     type Data: Send + Sync + Sized + Dirtiable;
     type WriteBackend;
 
+    type ChunkConfig;
+
     /// Get the key for the chunk (like the file name)
     fn get_chunk_key(chunk: &Vector2<i32>) -> String;
 
@@ -104,7 +106,11 @@ pub trait ChunkSerializer: Send + Sync + Default {
     fn read(r: Bytes) -> Result<Self, ChunkReadingError>;
 
     /// Add the chunk data to the serializer
-    async fn update_chunk(&mut self, chunk_data: &Self::Data) -> Result<(), ChunkWritingError>;
+    async fn update_chunk(
+        &mut self,
+        chunk_data: &Self::Data,
+        chunk_config: &Self::ChunkConfig,
+    ) -> Result<(), ChunkWritingError>;
 
     /// Get the chunks data from the serializer
     async fn get_chunks(

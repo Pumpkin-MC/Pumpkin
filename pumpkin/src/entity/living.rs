@@ -17,7 +17,6 @@ use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
@@ -1014,7 +1013,7 @@ impl EntityBase for LivingEntity {
         self.last_damage_taken.store(amount);
         damage_amount = damage_amount.max(0.0);
 
-        let config = &advanced_config().pvp;
+        let config = &world.server.upgrade().unwrap().advanced_config.pvp;
 
         if config.hurt_animation {
             let entity_id = VarInt(self.entity.entity_id);

@@ -9,7 +9,7 @@ use crate::{
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, get_world_gen},
+    generation::get_world_gen,
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
@@ -17,10 +17,11 @@ use crossbeam::channel::Sender;
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
-use pumpkin_config::{advanced_config, chunk::ChunkFormat};
+use pumpkin_config::{chunk::ChunkConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_util::world_seed::Seed;
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::sync::Mutex;
 // use std::time::Duration;
@@ -127,6 +128,7 @@ pub async fn dump() {
 
 impl Level {
     pub fn from_root_folder(
+        level_config: &LevelConfig,
         root_folder: PathBuf,
         block_registry: Arc<dyn BlockRegistryExt>,
         seed: i64,
@@ -151,21 +153,22 @@ impl Level {
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
-        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match advanced_config().chunk.format {
-            ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile<ChunkData>>::default()),
-            ChunkFormat::Anvil => {
-                Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkData>>::default())
-            }
+        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
+            ChunkConfig::Linear(chunk_config) => Arc::new(
+                ChunkFileManager::<LinearFile<ChunkData>>::new(chunk_config.clone()),
+            ),
+            ChunkConfig::Anvil(chunk_config) => Arc::new(ChunkFileManager::<
+                AnvilChunkFile<ChunkData>,
+            >::new(chunk_config.clone())),
         };
-        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> =
-            match advanced_config().chunk.format {
-                ChunkFormat::Linear => {
-                    Arc::new(ChunkFileManager::<LinearFile<ChunkEntityData>>::default())
-                }
-                ChunkFormat::Anvil => {
-                    Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkEntityData>>::default())
-                }
-            };
+        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
+            ChunkConfig::Linear(chunk_config) => Arc::new(ChunkFileManager::<
+                LinearFile<ChunkEntityData>,
+            >::new(chunk_config.clone())),
+            ChunkConfig::Anvil(chunk_config) => Arc::new(ChunkFileManager::<
+                AnvilChunkFile<ChunkEntityData>,
+            >::new(chunk_config.clone())),
+        };
 
         let (gen_entity_request_tx, gen_entity_request_rx) = crossbeam::channel::unbounded();
         let pending_entity_generations = Arc::new(DashMap::new());

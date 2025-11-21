@@ -6,7 +6,6 @@ use crate::{
     server::Server,
 };
 use core::str;
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_protocol::{
     ConnectionState,
     java::{
@@ -69,8 +68,12 @@ impl JavaClient {
         }
     }
 
-    pub async fn handle_resource_pack_response(&self, packet: SConfigResourcePack) {
-        let resource_config = &advanced_config().resource_pack;
+    pub async fn handle_resource_pack_response(
+        &self,
+        server: &Server,
+        packet: SConfigResourcePack,
+    ) {
+        let resource_config = &server.advanced_config.resource_pack;
         if resource_config.enabled {
             let expected_uuid =
                 uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
@@ -191,7 +194,7 @@ impl JavaClient {
             .await
         {
             world
-                .spawn_java_player(&BASIC_CONFIG, player.clone(), server)
+                .spawn_java_player(&server.basic_config, player.clone(), server)
                 .await;
             *self.player.lock().await = Some(player);
         }

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_util::text::TextComponent;
 
 use crate::{
@@ -32,7 +31,7 @@ impl CommandExecutor for Executor {
                 "commands.list.players",
                 [
                     TextComponent::text(players.len().to_string()),
-                    TextComponent::text(BASIC_CONFIG.max_players.to_string()),
+                    TextComponent::text(server.basic_config.max_players.to_string()),
                     TextComponent::text(get_player_names(players)),
                 ],
             ))
