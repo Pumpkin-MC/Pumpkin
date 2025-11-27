@@ -16,6 +16,7 @@ use sign::SignBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
+use crate::block::entities::shelf::ShelfBlockEntity;
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
@@ -35,6 +36,7 @@ pub mod furnace;
 pub mod hopper;
 pub mod mob_spawner;
 pub mod piston;
+pub mod shelf;
 pub mod shulker_box;
 pub mod sign;
 
@@ -84,6 +86,8 @@ pub trait BlockEntity: Send + Sync {
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
         None
     }
+
+    fn as_block_entity(&self) -> &dyn BlockEntity;
 }
 
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
@@ -121,6 +125,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             ChiseledBookshelfBlockEntity,
         >(nbt)),
         FurnaceBlockEntity::ID => Arc::new(block_entity_from_generic::<FurnaceBlockEntity>(nbt)),
+        ShelfBlockEntity::ID => Arc::new(block_entity_from_generic::<ShelfBlockEntity>(nbt)),
         _ => return None,
     })
 }

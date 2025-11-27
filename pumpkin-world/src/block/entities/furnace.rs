@@ -344,6 +344,10 @@ impl BlockEntity for FurnaceBlockEntity {
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
         Some(self as Arc<dyn PropertyDelegate>)
     }
+
+    fn as_block_entity(&self) -> &dyn BlockEntity {
+        self
+    }
 }
 
 impl FurnaceBlockEntity {

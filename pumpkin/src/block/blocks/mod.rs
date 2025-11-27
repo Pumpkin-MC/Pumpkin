@@ -2,6 +2,7 @@ pub mod anvil;
 pub mod bamboo;
 pub mod barrel;
 pub mod barrier;
+pub mod bars;
 pub mod bed;
 pub mod cactus;
 pub mod cake;
@@ -31,10 +32,10 @@ pub mod furnace;
 pub mod glass_panes;
 pub mod glazed_terracotta;
 pub mod grindstone;
-pub mod iron_bars;
 pub mod jukebox;
 pub mod ladder;
 pub mod lanterns;
+pub mod lightning_rod;
 pub mod logs;
 pub mod mangrove_roots;
 pub mod nether_portal;
@@ -56,16 +57,17 @@ pub mod vine;
 pub mod walls;
 
 pub mod banners;
-pub mod shulker_box;
-
 pub mod blast_furnace;
-
 pub mod hopper;
+pub mod shulker_box;
 
 pub mod smoker;
 
+pub mod copper_chests;
 pub mod ender_chest;
+pub mod golem_statue;
+pub mod lectern;
+pub mod shelf;
 
 // abstract
 pub mod abstract_wall_mounting;
-pub mod lectern;
