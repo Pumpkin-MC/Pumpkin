@@ -117,19 +117,20 @@ impl BlockState {
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize])
             .collect();
+
         let block = Block::from_state_id(self.id);
-        if block.properties(self.id).and_then(|properties| {
-            properties
+        if let Some(props) = block.properties(self.id) {
+            let is_waterlogged = props
                 .to_props()
-                .into_iter()
-                .find(|p| p.0 == "waterlogged")
-                .map(|(_, value)| value == true.to_string())
-        }) == Some(true)
-        {
-            // If the block is waterlogged, add a water shape
-            let shape =
-                &CollisionShape::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0));
-            shapes.push(*shape);
+                .iter()
+                .any(|(k, v)| *k == "waterlogged" && *v == "true");
+
+            if is_waterlogged {
+                shapes.push(CollisionShape::new(
+                    Vector3::new(0.0, 0.0, 0.0),
+                    Vector3::new(1.0, 0.875, 1.0),
+                ));
+            }
         }
 
         Some(shapes)

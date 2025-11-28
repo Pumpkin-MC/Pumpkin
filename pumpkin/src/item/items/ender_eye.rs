@@ -40,10 +40,10 @@ impl ItemBehaviour for EnderEyeItem {
         let props: Vec<(&str, &str)> = original_props
             .iter()
             .map(|(key, value)| {
-                if key == "eye" {
-                    (key.as_str(), "true")
+                if *key == "eye" {
+                    (*key, "true")
                 } else {
-                    (key.as_str(), value.as_str())
+                    (*key, *value)
                 }
             })
             .collect();

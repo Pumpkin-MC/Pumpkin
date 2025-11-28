@@ -52,18 +52,13 @@ fn can_be_lit(block: &Block, state_id: u16) -> Option<u16> {
         None => return None,
     };
 
-    if let Some((_, value)) = props.iter_mut().find(|(k, _)| k == "extinguished") {
-        *value = "false".into();
-    } else if let Some((_, value)) = props.iter_mut().find(|(k, _)| k == "lit") {
-        *value = "true".into();
+    if let Some((_, value)) = props.iter_mut().find(|(k, _)| *k == "extinguished") {
+        *value = "false";
+    } else if let Some((_, value)) = props.iter_mut().find(|(k, _)| *k == "lit") {
+        *value = "true";
     } else {
         return None;
     }
-
-    let props: Vec<(&str, &str)> = props
-        .iter()
-        .map(|(k, v)| (k.as_str(), v.as_str()))
-        .collect();
 
     let new_state_id = block.from_properties(&props).to_state_id(block);
 

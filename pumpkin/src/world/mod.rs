@@ -571,14 +571,14 @@ impl World {
             let mut level_time = self.level_time.lock().await;
             level_time.tick_time();
             if level_time.world_age % 100 == 0 {
-                log::debug!("should unload set true");
+                // log::debug!("should unload set true");
                 self.level.should_unload.store(true, Relaxed);
                 if level_time.world_age % 300 != 0 {
                     self.level.level_channel.notify();
                 }
             }
             if level_time.world_age % 300 == 0 {
-                log::debug!("should save set true");
+                // log::debug!("should save set true");
                 self.level.should_save.store(true, Relaxed);
                 self.level.level_channel.notify();
             }
@@ -1768,7 +1768,7 @@ impl World {
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
         let explosion = Explosion::new(power, position);
-        explosion.explode(self).await;
+        let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion
         } else {
@@ -1783,6 +1783,8 @@ impl World {
                 .client
                 .enqueue_packet(&CExplosion::new(
                     position,
+                    power,
+                    block_count as i32,
                     None,
                     VarInt(particle as i32),
                     sound.clone(),
@@ -2721,12 +2723,10 @@ impl World {
             let block = Block::from_state_id(id);
             if let Some(properties) = block.properties(id) {
                 for (name, value) in properties.to_props() {
-                    if name == *"waterlogged" {
+                    if name == "waterlogged" {
                         if value == true.to_string() {
                             let fluid = Fluid::FLOWING_WATER;
-
                             let state = fluid.states[0].clone();
-
                             return (fluid, state);
                         }
 

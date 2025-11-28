@@ -73,7 +73,7 @@ impl NodeBuilder for LeafNodeBuilder {
 
 pub struct NonLeafNodeBuilder {
     node_type: NodeType,
-    child_nodes: Vec<NonLeafNodeBuilder>,
+    child_nodes: Vec<Self>,
     leaf_nodes: Vec<LeafNodeBuilder>,
 }
 

@@ -150,13 +150,13 @@ impl FancyTrunkPlacer {
                     let original_props = &block.properties(trunk_provider.id).unwrap().to_props();
                     let axis = axis.to_value();
                     // Set the right Axis
-                    let props: Vec<(&str, &str)> = original_props
+                    let props: Vec<(&'static str, &'static str)> = original_props
                         .iter()
                         .map(|(key, value)| {
-                            if key == "axis" {
-                                (key.as_str(), axis)
+                            if *key == "axis" {
+                                (*key, axis)
                             } else {
-                                (key.as_str(), value.as_str())
+                                (*key, *value)
                             }
                         })
                         .collect();

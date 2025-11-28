@@ -154,7 +154,7 @@ impl ToTokens for PropertyStruct {
                     }
                 }
 
-                fn to_value(&self) -> &str {
+                fn to_value(&self) -> &'static str {
                     match self {
                         #(#to_values),*
                     }
@@ -200,26 +200,16 @@ impl ToTokens for BlockPropertyStruct {
             .map(|(_, id)| *id)
             .collect::<Vec<_>>();
 
-        let to_index_body = self
-            .data
-            .variant_mappings
-            .iter()
-            .rev()
-            .map(|entry| {
-                let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
-                match &entry.property_type {
-                    PropertyType::Bool => quote! {
-                        (!self.#field_name as u16, 2)
-                    },
-                    PropertyType::Enum { name } => {
-                        let enum_ident = Ident::new(name, Span::call_site());
-                        quote! {
-                            (self.#field_name.to_index(), #enum_ident::variant_count())
-                        }
-                    }
+        let to_index_logic = self.data.variant_mappings.iter().rev().map(|entry| {
+            let field = Ident::new_raw(&entry.original_name, Span::call_site());
+            match &entry.property_type {
+                PropertyType::Bool => quote! { (!self.#field as u16, 2) },
+                PropertyType::Enum { name } => {
+                    let ty = Ident::new(name, Span::call_site());
+                    quote! { (self.#field.to_index(), #ty::variant_count()) }
                 }
-            })
-            .collect::<Vec<_>>();
+            }
+        });
 
         let from_index_body = self
             .data
@@ -250,15 +240,15 @@ impl ToTokens for BlockPropertyStruct {
             })
             .collect::<Vec<_>>();
 
-        let to_props_values = self.data.variant_mappings.iter().map(|entry| {
-            let key = &entry.original_name;
-            let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
+        let to_props_entries = self.data.variant_mappings.iter().map(|entry| {
+            let key_str = &entry.original_name;
+            let field = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! {
-                    (#key.to_string(), self.#field_name.to_string()),
+                    (#key_str, if self.#field { "true" } else { "false" })
                 },
-                PropertyType::Enum { name: _ } => quote! {
-                    (#key.to_string(), self.#field_name.to_value().to_string()),
+                PropertyType::Enum { .. } => quote! {
+                    (#key_str, self.#field.to_value())
                 },
             }
         });
@@ -290,12 +280,10 @@ impl ToTokens for BlockPropertyStruct {
             }
 
             impl BlockProperties for #name {
-                fn to_index(&self) -> u16 {
-                    let (index, _) = [#(#to_index_body),*]
-                    .iter()
-                    .fold((0, 1), |(current_index, multiplier), &(value, count)| {
-                      (current_index + value * multiplier, multiplier * count)
-                    });
+               fn to_index(&self) -> u16 {
+                    let (index, _) = [#(#to_index_logic),*]
+                        .iter()
+                        .fold((0, 1), |(curr, mul), &(val, count)| (curr + val * mul, mul * count));
                     index
                 }
 
@@ -337,9 +325,10 @@ impl ToTokens for BlockPropertyStruct {
                     Self::from_state_id(block.default_state.id, block)
                 }
 
-                fn to_props(&self) -> Box<[(String, String)]> {
-                   [#(#to_props_values)*].into()
+               fn to_props(&self) -> Vec<(&'static str, &'static str)> {
+                   vec![ #(#to_props_entries),* ]
                 }
+
                 fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
                     if ![#(#block_ids),*].contains(&block.id) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
@@ -939,7 +928,7 @@ pub(crate) fn build() -> TokenStream {
             fn default(block: &Block) -> Self where Self: Sized;
 
             // Convert properties to a `Vec` of `(name, value)`
-            fn to_props(&self) -> Box<[(String, String)]>;
+            fn to_props(&self) -> Vec<(&'static str, &'static str)>;
 
             // Convert properties to a block state, and add them onto the default state.
             fn from_props(props: &[(&str, &str)], block: &Block) -> Self where Self: Sized;
@@ -949,7 +938,7 @@ pub(crate) fn build() -> TokenStream {
             fn variant_count() -> u16;
             fn to_index(&self) -> u16;
             fn from_index(index: u16) -> Self;
-            fn to_value(&self) -> &str;
+            fn to_value(&self) -> &'static str;
             fn from_value(value: &str) -> Self;
         }
 

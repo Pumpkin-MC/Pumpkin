@@ -95,7 +95,7 @@ pub trait FlowingFluid {
             && properties
                 .to_props()
                 .iter()
-                .any(|(key, value)| key == "waterlogged" && value == "true")
+                .any(|(key, value)| *key == "waterlogged" && *value == "true")
         {
             return Some(state_id);
         }

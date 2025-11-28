@@ -137,7 +137,7 @@ pub struct PluginManager {
     handlers: Arc<RwLock<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
     // Self-reference for sharing with contexts
-    self_ref: RwLock<Option<Arc<PluginManager>>>,
+    self_ref: RwLock<Option<Arc<Self>>>,
     services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
     // Plugin state tracking
     plugin_states: RwLock<HashMap<String, PluginState>>,

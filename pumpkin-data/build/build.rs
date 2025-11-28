@@ -48,12 +48,13 @@ mod world_event;
 pub const OUT_DIR: &str = "src/generated";
 
 pub fn main() {
-    let path = Path::new(OUT_DIR);
-    if !path.exists() {
-        let _ = fs::create_dir(OUT_DIR);
+    if let Err(e) = fs::create_dir_all(OUT_DIR) {
+        eprintln!("Failed to create output directory {}: {}", OUT_DIR, e);
     }
-    #[allow(clippy::type_complexity)]
-    let build_functions: Vec<(fn() -> TokenStream, &str)> = vec![
+
+    type BuilderFn = fn() -> TokenStream;
+
+    let build_functions: Vec<(BuilderFn, &str)> = vec![
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),
@@ -97,22 +98,21 @@ pub fn main() {
     ];
 
     build_functions.par_iter().for_each(|(build_fn, file)| {
-        let formatted_code = format_code(&build_fn().to_string());
-
-        write_generated_file(&formatted_code, file);
+        let raw_code = build_fn().to_string();
+        let final_code = format_code(&raw_code);
+        write_generated_file(&final_code.unwrap_or(raw_code), file);
     });
 }
 
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
-    let mut variants = TokenStream::new();
-
-    for item in array.iter() {
+    let variants = array.iter().map(|item| {
         let name = format_ident!("{}", item.to_pascal_case());
-        variants.extend([quote! {
-            #name,
-        }]);
+        quote! { #name, }
+    });
+
+    quote! {
+        #(#variants)*
     }
-    variants
 }
 
 pub fn write_generated_file(new_code: &str, out_file: &str) {
@@ -122,39 +122,38 @@ pub fn write_generated_file(new_code: &str, out_file: &str) {
         && let Ok(existing_code) = fs::read_to_string(&path)
         && existing_code == new_code
     {
-        return; // No changes, so we skip writing.
+        return;
     }
 
     fs::write(&path, new_code)
         .unwrap_or_else(|_| panic!("Failed to write to file: {}", path.display()));
 }
 
-pub fn format_code(unformatted_code: &str) -> String {
-    let mut child = Command::new("rustfmt")
+pub struct RustFmtError;
+
+pub fn format_code(unformatted_code: &str) -> Result<String, RustFmtError> {
+    let child_result = Command::new("rustfmt")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("Failed to spawn rustfmt process.");
+        .stderr(Stdio::null())
+        .spawn();
 
-    child
-        .stdin
-        .take()
-        .expect("Failed to take rustfmt stdin")
-        .write_all(unformatted_code.as_bytes())
-        .expect("Failed to write to rustfmt stdin.");
+    let mut child = match child_result {
+        Ok(c) => c,
+        Err(_) => return Err(RustFmtError),
+    };
 
-    let output = child
-        .wait_with_output()
-        .expect("Failed to wait for rustfmt process.");
+    // Write the code to rustfmt's stdin
+    if let Some(mut stdin) = child.stdin.take()
+        && stdin.write_all(unformatted_code.as_bytes()).is_err()
+    {
+        return Err(RustFmtError);
+    }
 
-    if output.status.success() {
-        String::from_utf8(output.stdout).expect("rustfmt output was not valid UTF-8.")
-    } else {
-        panic!(
-            "rustfmt failed with status: {}\n--- stderr ---\n{}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr)
-        );
+    match child.wait_with_output() {
+        Ok(output) if output.status.success() => {
+            String::from_utf8(output.stdout).map_err(|_| RustFmtError)
+        }
+        _ => Err(RustFmtError),
     }
 }

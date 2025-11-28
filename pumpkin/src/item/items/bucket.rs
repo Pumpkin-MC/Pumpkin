@@ -84,10 +84,10 @@ fn set_waterlogged(block: &Block, state: u16, waterlogged: bool) -> u16 {
     let props: Vec<(&str, &str)> = original_props
         .iter()
         .map(|(key, value)| {
-            if key == "waterlogged" {
+            if *key == "waterlogged" {
                 ("waterlogged", waterlogged.as_str())
             } else {
-                (key.as_str(), value.as_str())
+                (*key, *value)
             }
         })
         .collect();
