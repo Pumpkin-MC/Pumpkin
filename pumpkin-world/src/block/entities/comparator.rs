@@ -63,4 +63,8 @@ impl BlockEntity for ComparatorBlockEntity {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn as_block_entity(&self) -> &dyn BlockEntity {
+        self
+    }
 }
