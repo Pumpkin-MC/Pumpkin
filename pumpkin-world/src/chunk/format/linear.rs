@@ -179,7 +179,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
 
     async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        log::trace!("Writing tmp file to disk: {:?}", temp_path);
+        log::trace!("Writing tmp file to disk: {}", temp_path.display());
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -236,7 +236,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, &path).await?;
 
-        log::trace!("Wrote file to Disk: {:?}", path);
+        log::trace!("Wrote file to Disk: {}", path.display());
         Ok(())
     }
 

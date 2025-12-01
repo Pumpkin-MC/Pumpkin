@@ -23,6 +23,6 @@ serde_json5 = "0.2.1"
 heck = "0.5"
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = "2.0"
+syn.workspace = true
 
 rayon.workspace = true

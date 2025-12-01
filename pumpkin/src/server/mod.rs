@@ -142,7 +142,7 @@ impl Server {
         // So TODO
         let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
 
-        let world_name = world_path.to_str().unwrap();
+        let player_data_path = world_path.join("playerdata");
 
         let level_info = level_info.unwrap_or_else(|err| {
             log::warn!("Failed to get level_info, using default instead: {err}");
@@ -173,7 +173,7 @@ impl Server {
                 gamemode: BASIC_CONFIG.default_gamemode,
             }),
             player_data_storage: ServerPlayerData::new(
-                format!("{world_name}/playerdata"),
+                player_data_path,
                 Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
             white_list: AtomicBool::new(BASIC_CONFIG.white_list),
@@ -209,7 +209,7 @@ impl Server {
         );
         log::info!("Loading End: {seed}");
         let end = World::load(
-            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
+            Dimension::End.into_level(world_path, block_registry.clone(), seed),
             level_info,
             VanillaDimensionType::TheEnd,
             block_registry,

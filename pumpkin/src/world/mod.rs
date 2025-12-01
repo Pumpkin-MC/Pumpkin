@@ -562,52 +562,17 @@ impl World {
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         let start = tokio::time::Instant::now();
+
         self.flush_block_updates().await;
         // tick block entities
         self.flush_synced_block_events().await;
 
-        // world ticks
-        {
-            let mut level_time = self.level_time.lock().await;
-            level_time.tick_time();
-            if level_time.world_age % 100 == 0 {
-                // log::debug!("should unload set true");
-                self.level.should_unload.store(true, Relaxed);
-                if level_time.world_age % 300 != 0 {
-                    self.level.level_channel.notify();
-                }
-            }
-            if level_time.world_age % 300 == 0 {
-                // log::debug!("should save set true");
-                self.level.should_save.store(true, Relaxed);
-                self.level.level_channel.notify();
-            }
-            let mut weather = self.weather.lock().await;
-            weather.tick_weather(self).await;
-
-            if self.should_skip_night().await {
-                let time = level_time.time_of_day + 24000;
-                level_time.set_time(time - time % 24000);
-                level_time.send_time(self).await;
-
-                for player in self.players.read().await.values() {
-                    player.wake_up().await;
-                }
-
-                if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
-                    weather.reset_weather_cycle(self).await;
-                    drop(weather);
-                }
-            } else if level_time.world_age % 20 == 0 {
-                level_time.send_time(self).await;
-                drop(level_time);
-            }
-        }
+        self.tick_environment().await;
 
         let chunk_start = tokio::time::Instant::now();
         // log::debug!("Ticking chunks");
         self.tick_chunks().await;
-        let elapsed = chunk_start.elapsed();
+        let chunk_elapsed = chunk_start.elapsed();
 
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
 
@@ -642,12 +607,13 @@ impl World {
 
         self.level.chunk_loading.lock().unwrap().send_change();
 
-        log::debug!(
-            "Ticking world took {:?}, loaded chunks: {}, chunk tick took {:?}",
-            start.elapsed(),
-            self.level.loaded_chunk_count(),
-            elapsed
-        );
+        if start.elapsed().as_millis() > 50 {
+            log::warn!(
+                "Slow Tick: Total {:?} | Chunks {:?}",
+                start.elapsed(),
+                chunk_elapsed,
+            );
+        }
     }
 
     pub async fn flush_block_updates(&self) {
@@ -677,6 +643,42 @@ impl World {
                 self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section.clone()))
                     .await;
             }
+        }
+    }
+
+    async fn tick_environment(&self) {
+        let mut level_time = self.level_time.lock().await;
+        level_time.tick_time();
+
+        // Auto-save logic
+        if level_time.world_age % 100 == 0 {
+            self.level.should_unload.store(true, Relaxed);
+            if level_time.world_age % 300 != 0 {
+                self.level.level_channel.notify();
+            }
+        }
+        if level_time.world_age % 300 == 0 {
+            self.level.should_save.store(true, Relaxed);
+            self.level.level_channel.notify();
+        }
+
+        let mut weather = self.weather.lock().await;
+        weather.tick_weather(self).await;
+
+        if self.should_skip_night().await {
+            let time = level_time.time_of_day + 24000;
+            level_time.set_time(time - time % 24000);
+            level_time.send_time(self).await;
+
+            for player in self.players.read().await.values() {
+                player.wake_up().await;
+            }
+
+            if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
+                weather.reset_weather_cycle(self).await;
+            }
+        } else if level_time.world_age % 20 == 0 {
+            level_time.send_time(self).await;
         }
     }
 

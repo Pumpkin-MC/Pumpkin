@@ -9,8 +9,6 @@ serde.workspace = true
 log.workspace = true
 uuid.workspace = true
 
-#TODO Toml format is simple: make our own parser!
-#This crate has 19 dependencies
 toml = "0.9"
 
 [features]

@@ -354,7 +354,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     }
 
     async fn write_indices(&self, path: &Path, indices: &[usize]) -> Result<(), std::io::Error> {
-        log::trace!("Writing in place: {path:?}");
+        log::trace!("Writing in place: {}", path.display());
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -500,7 +500,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, path).await?;
 
-        log::trace!("Wrote file to Disk: {path:?}");
+        log::trace!("Wrote file to Disk: {}", path.display());
         Ok(())
     }
 }
@@ -542,7 +542,10 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         let mut write_action = self.write_action.lock().await;
         match &*write_action {
             WriteAction::Pass => {
-                log::debug!("Skipping write for {path:?} as there were no dirty chunks");
+                log::debug!(
+                    "Skipping write for {}, as there were no dirty chunks",
+                    path.display()
+                );
                 Ok(())
             }
             WriteAction::All => self.write_all(&path).await,

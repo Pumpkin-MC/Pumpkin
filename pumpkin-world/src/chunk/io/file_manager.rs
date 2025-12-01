@@ -83,7 +83,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
     }
 
     async fn read_from_disk(&self) -> Result<S, ChunkReadingError> {
-        trace!("Opening file from Disk: {:?}", self.path);
+        trace!("Opening file from Disk: {}", self.path.display());
         let file = tokio::fs::OpenOptions::new()
             .read(true)
             .write(false)
@@ -114,7 +114,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
             Err(err) => return Err(err),
         };
 
-        trace!("Successfully read file from Disk: {:?}", self.path);
+        trace!("Successfully read file from Disk: {}", self.path.display());
         Ok(value)
     }
 }
@@ -279,7 +279,7 @@ where
             .into_iter()
             .map(async |(file_name, chunk_locks)| {
                 let path = P::file_path(folder, &file_name);
-                log::trace!("Updating data for file {path:?}");
+                log::trace!("Updating data for file {}", path.display());
 
                 let chunk_serializer = match self.get_serializer(&path).await {
                     Ok(file) => Ok(file),
@@ -317,7 +317,7 @@ where
                 });
                 // Run all update tasks concurrently and propagate any error
                 futures::future::try_join_all(update_tasks).await?;
-                log::trace!("Updated data for file {path:?}");
+                log::trace!("Updated data for file {}", path.display());
 
                 let is_watched = self
                     .watchers
@@ -331,7 +331,7 @@ where
                     // to avoid other threads to write/modify the data, but allow other threads to read it
                     let serializer = chunk_serializer.read().await;
 
-                    log::debug!("Writing file for {path:?}");
+                    log::debug!("Writing file for {}", path.display());
                     serializer
                         .write(path.clone())
                         .await
@@ -360,9 +360,9 @@ where
 
                         if can_remove {
                             locks.remove(&path);
-                            log::trace!("Removed lockfile cache {path:?}");
+                            log::trace!("Removed lockfile cache {}", path.display());
                         } else {
-                            log::trace!("Wanted to remove lockfile cache {path:?} but someone still holds a reference to it!");
+                            log::trace!("Wanted to remove lockfile cache {} but someone still holds a reference to it!", path.display());
                         }
                     }
                 }

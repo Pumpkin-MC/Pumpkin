@@ -12,4 +12,4 @@ proc-macro-error2.workspace = true
 heck = "0.5"
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = "2.0"
+syn.workspace = true

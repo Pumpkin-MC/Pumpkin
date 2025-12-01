@@ -30,7 +30,17 @@ pumpkin-macros = { path = "../pumpkin-macros" }
 log.workspace = true
 crossbeam.workspace = true
 uuid.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = [
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "sync",
+    "io-std",
+    "signal",
+    "fs",
+    "io-util",
+    "time",
+] }
 rayon.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true

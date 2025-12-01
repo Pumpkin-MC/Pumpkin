@@ -10,18 +10,21 @@ pub(crate) fn build() -> TokenStream {
     let events: BTreeMap<String, u16> =
         serde_json::from_str(&fs::read_to_string("../assets/world_event.json").unwrap())
             .expect("Failed to parse world_event.json");
-    let mut variants = TokenStream::new();
+    let variants: Vec<TokenStream> = events
+        .into_iter()
+        .map(|(event_name, id)| {
+            let name = format_ident!("{}", event_name.to_pascal_case());
 
-    for (event, id) in events.iter() {
-        let name = format_ident!("{}", event.to_pascal_case());
-        variants.extend([quote! {
-            #name = #id,
-        }]);
-    }
+            quote! {
+                #name = #id,
+            }
+        })
+        .collect();
+
     quote! {
         #[repr(u16)]
         pub enum WorldEvent {
-            #variants
+            #(#variants)*
         }
     }
 }

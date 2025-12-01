@@ -189,7 +189,7 @@ impl Default for BasicConfiguration {
 
 impl BasicConfiguration {
     pub fn get_world_path(&self) -> PathBuf {
-        format!("./{}", self.default_level_name).parse().unwrap()
+        PathBuf::from(&self.default_level_name)
     }
 }
 
@@ -222,7 +222,7 @@ trait LoadConfiguration {
             if changed {
                 println!(
                     "{} changed because values were missing. The missing values were filled with default values.",
-                    path.file_name().unwrap().to_str().unwrap()
+                    path.file_name().unwrap().display()
                 );
                 if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
                     warn!(
