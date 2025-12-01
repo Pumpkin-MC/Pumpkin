@@ -18,6 +18,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Block::MINECRAFT_WOODEN_SHELVES;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::{Taggable, get_tag_values};
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
@@ -27,6 +28,8 @@ use pumpkin_world::inventory::Inventory;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
+use std::collections::LinkedList;
+use std::ops::Deref;
 use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:wooden_shelves")]
@@ -48,7 +51,11 @@ impl BlockBehaviour for Shelf {
             && let Some(block_entity) = block_entity_any.as_any().downcast_ref::<ShelfBlockEntity>()
         {
             if state.powered {
-                todo!("Do the full hotbar swap")
+                return if swap_all(args.world, args.position, &args.player.inventory).await {
+                    BlockActionResult::Success
+                } else {
+                    BlockActionResult::Consume
+                };
             } else {
                 if let Some(slot) = Self::get_slot_for_hit(args.hit, state.facing) {
                     let swapped = swap_single_stack(
@@ -56,7 +63,8 @@ impl BlockBehaviour for Shelf {
                         &args.player,
                         block_entity,
                         slot as usize,
-                    );
+                    )
+                    .await;
                     if swapped {
                         args.world
                             .play_block_sound(
@@ -162,7 +170,7 @@ impl BlockBehaviour for Shelf {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let state = args.world.get_block_state(args.position).await;
-        let mut props = AcaciaShelfLikeProperties::from_state_id(state.id, args.block);
+        let props = AcaciaShelfLikeProperties::from_state_id(state.id, args.block);
         if props.waterlogged {
             args.world
                 .schedule_fluid_tick(
@@ -457,26 +465,53 @@ async fn properties_if_shelf(
     None
 }
 
-fn swap_single_stack(
+async fn swap_single_stack(
     item_stack: &ItemStack,
     player: &Player,
     block_entity: &ShelfBlockEntity,
     hit_slot: usize,
 ) -> bool {
-    let item = block_on(block_entity.remove_stack(hit_slot));
-    block_on(block_entity.set_stack(hit_slot, item_stack.clone()));
+    let item = block_entity.remove_stack(hit_slot).await;
+    block_entity.set_stack(hit_slot, item_stack.clone()).await;
     let item2 = if player.is_creative() && item.is_empty() {
         item_stack.clone()
     } else {
         item.clone()
     };
     // TODO race condition which I don't understand crashes because can't lock in slots.rs get_cloned_stack() line 54
-    // block_on(
-    //     player
-    //         .inventory
-    //         .set_stack(player.inventory.get_selected_slot() as usize, item2),
-    // );
+    let slot = player.inventory.get_selected_slot();
+    player.inventory.set_stack(slot as usize, item2).await;
     player.inventory.mark_dirty();
     block_entity.mark_dirty();
     !item.is_empty()
+}
+
+async fn swap_all(world: &Arc<World>, pos: &BlockPos, inventory: &Arc<PlayerInventory>) -> bool {
+    let list = get_shelf_positions(world, pos).await;
+    if list.is_empty() {
+        return false;
+    }
+    let mut swapped = false;
+    for p in list.iter() {
+        if let Some(entity) = world.get_block_entity(p).await
+            && let Some(shelf_entity) = entity.as_any().downcast_ref::<ShelfBlockEntity>()
+        {
+            for i in shelf_entity.items.iter() {
+                // TODO swap and fix problem with player inv
+            }
+        }
+    }
+    swapped
+}
+
+async fn get_shelf_positions(world: &Arc<World>, pos: &BlockPos) -> LinkedList<BlockPos> {
+    let state = AcaciaShelfLikeProperties::from_state_id(
+        world.get_block_state_id(pos).await,
+        world.get_block(pos).await,
+    );
+    if state.side_chain == SideChain::Unconnected {
+        return LinkedList::new();
+    }
+    let list: LinkedList<BlockPos> = LinkedList::new();
+    list
 }
