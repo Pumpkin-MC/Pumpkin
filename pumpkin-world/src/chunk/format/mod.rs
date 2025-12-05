@@ -380,23 +380,21 @@ impl LightContainer {
     pub const ARRAY_SIZE: usize = Self::DIM * Self::DIM * Self::DIM / 2;
 
     pub fn new_empty(default: u8) -> Self {
-        if default > 15 {
-            panic!("Default value must be between 0 and 15");
-        }
+        assert!(default <= 15, "Default value must be between 0 and 15");
         Self::Empty(default)
     }
 
     pub fn new(data: Box<[u8]>) -> Self {
-        if data.len() != Self::ARRAY_SIZE {
-            panic!("Data length must be {}", Self::ARRAY_SIZE);
-        }
+        assert!(
+            data.len() == Self::ARRAY_SIZE,
+            "Data length must be {}",
+            Self::ARRAY_SIZE
+        );
         Self::Full(data)
     }
 
     pub fn new_filled(default: u8) -> Self {
-        if default > 15 {
-            panic!("Default value must be between 0 and 15");
-        }
+        assert!(default <= 15, "Default value must be between 0 and 15");
         let value = default << 4 | default;
         Self::Full([value; Self::ARRAY_SIZE].into())
     }

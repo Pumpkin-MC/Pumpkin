@@ -34,7 +34,6 @@ use crate::{
 };
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use border::Worldborder;
-use bytes::BufMut;
 use crossbeam::queue::SegQueue;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;

@@ -806,7 +806,7 @@ impl Chunk {
                     .map(|_| LightContainer::new_filled(15))
                     .collect(),
                 block_light: (0..sections.sections.len())
-                    .map(|_| LightContainer::new_empty(15))
+                    .map(|_| LightContainer::new_empty(0))
                     .collect(),
             },
             section: sections,
