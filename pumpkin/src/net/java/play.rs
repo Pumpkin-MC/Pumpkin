@@ -15,7 +15,6 @@ use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
 use crate::entity::EntityBase;
 use crate::entity::player::{ChatMode, ChatSession, Player};
-use crate::entity::r#type::from_type;
 use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
@@ -27,14 +26,13 @@ use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
-use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, FoodImpl};
-use pumpkin_data::entity::{EntityType, entity_from_egg};
+use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_inventory::screen_handler::ScreenHandler;
+use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
@@ -60,7 +58,6 @@ use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -547,7 +544,7 @@ impl JavaClient {
                 server.spawn_task(async move {
                     server_clone.command_dispatcher.read().await
                         .handle_command(
-                            &mut CommandSender::Player(player_clone),
+                            &CommandSender::Player(player_clone),
                             &server_clone,
                             &command_clone,
                         )
@@ -1026,7 +1023,7 @@ impl JavaClient {
                     player.gameprofile.name,
                     self.id,
                 );
-                player.send_client_information().await;
+                player.send_client_information();
             }
         } else {
             self.kick(TextComponent::text("Invalid hand or chat type"))
@@ -1460,14 +1457,6 @@ impl JavaClient {
                 .await?;
         }
 
-        // Check if the item is a spawn egg
-        let item_id = stack.item.id;
-        if let Some(entity) = entity_from_egg(item_id) {
-            self.spawn_entity_from_egg(player, entity, position, face)
-                .await;
-            should_try_decrement = true;
-        }
-
         if should_try_decrement {
             // TODO: Config
             // Decrease block count
@@ -1613,7 +1602,7 @@ impl JavaClient {
                 None,
             )
         };
-        let held = item_in_hand.lock().await;
+        let mut held = item_in_hand.lock().await;
         if held.get_data_component::<ConsumableImpl>().is_some() {
             // If its food we want to make sure we can actually consume it
             if let Some(food) = held.get_data_component::<FoodImpl>() {
@@ -1631,6 +1620,23 @@ impl JavaClient {
                     .living_entity
                     .set_active_hand(hand, held.clone())
                     .await;
+            }
+        }
+        if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
+            // If it can be equipped we want to make sure we can actually equip it
+            player
+                .enqueue_equipment_change(equippable.slot, &held)
+                .await;
+
+            let binding = inventory.entity_equipment.lock().await.get(equippable.slot);
+            let mut equip_item = binding.lock().await;
+            if equip_item.is_empty() {
+                *equip_item = held.clone();
+                held.decrement_unless_creative(player.gamemode.load(), 1);
+            } else {
+                let binding = held.clone();
+                *held = equip_item.clone();
+                *equip_item = binding;
             }
         }
 
@@ -1673,6 +1679,38 @@ impl JavaClient {
 
         if valid_slot && is_legal {
             let mut player_screen_handler = player.player_screen_handler.lock().await;
+
+            let is_armor_equipped = player_screen_handler
+                .get_slot(packet.slot as usize)
+                .await
+                .get_stack()
+                .await
+                .lock()
+                .await
+                .are_equal(&item_stack);
+            if !is_armor_equipped {
+                if (5..9).contains(&packet.slot) {
+                    player
+                        .enqueue_equipment_change(
+                            &match packet.slot {
+                                5 => EquipmentSlot::HEAD,
+                                6 => EquipmentSlot::CHEST,
+                                7 => EquipmentSlot::LEGS,
+                                8 => EquipmentSlot::FEET,
+                                _ => unreachable!(),
+                            },
+                            &item_stack,
+                        )
+                        .await;
+                } else if (36..45).contains(&packet.slot) {
+                    let slot = packet.slot - 36;
+                    if player.inventory().get_selected_slot() == slot as u8 {
+                        let equipment = &[(EquipmentSlot::MAIN_HAND, item_stack.clone())];
+                        player.living_entity.send_equipment_changes(equipment).await;
+                    }
+                }
+            }
+
             player_screen_handler
                 .get_slot(packet.slot as usize)
                 .await
@@ -1749,36 +1787,6 @@ impl JavaClient {
             packet.key,
             packet.payload.as_ref().map(|p| p.len())
         );
-    }
-
-    async fn spawn_entity_from_egg(
-        &self,
-        player: &Player,
-        entity_type: &'static EntityType,
-        location: BlockPos,
-        face: BlockDirection,
-    ) {
-        let world_pos = BlockPos(location.0 + face.to_offset());
-        // Align the position like Vanilla does
-        let pos = Vector3::new(
-            f64::from(world_pos.0.x) + 0.5,
-            f64::from(world_pos.0.y),
-            f64::from(world_pos.0.z) + 0.5,
-        );
-        // Create rotation like Vanilla
-        let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
-
-        let world = player.world();
-        // Create a new mob and UUID based on the spawn egg id
-        let mob = from_type(entity_type, pos, world, Uuid::new_v4()).await;
-
-        // Set the rotation
-        mob.get_entity().set_rotation(yaw, 0.0);
-
-        // Broadcast the new mob to all players
-        world.spawn_entity(mob).await;
-
-        // TODO: send/configure additional commands/data based on the type of entity (horse, slime, etc)
     }
 
     const WORLD_LOWEST_Y: i8 = -64;

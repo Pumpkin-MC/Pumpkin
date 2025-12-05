@@ -1,10 +1,10 @@
-use async_trait::async_trait;
 use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
+    pin::Pin,
     sync::Arc,
 };
 use thiserror::Error;
@@ -16,26 +16,31 @@ pub mod loader;
 use crate::{PERMISSION_MANAGER, server::Server};
 pub use api::*;
 
+type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
 /// A trait for handling events dynamically.
 ///
 /// This trait allows for handling events of any type that implements the `Event` trait.
-#[async_trait]
 pub trait DynEventHandler: Send + Sync {
     /// Asynchronously handles a dynamic event.
     ///
     /// # Arguments
     /// - `event`: A reference to the event to handle.
-    async fn handle_dyn(&self, _server: &Arc<Server>, event: &(dyn Event + Send + Sync));
+    fn handle_dyn<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        event: &'a (dyn Payload + Send + Sync),
+    ) -> BoxFuture<'a, ()>;
 
     /// Asynchronously handles a blocking dynamic event.
     ///
     /// # Arguments
     /// - `event`: A mutable reference to the event to handle.
-    async fn handle_blocking_dyn(
-        &self,
-        _server: &Arc<Server>,
-        _event: &mut (dyn Event + Send + Sync),
-    );
+    fn handle_blocking_dyn<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        _event: &'a mut (dyn Payload + Send + Sync),
+    ) -> BoxFuture<'a, ()>;
 
     /// Checks if the event handler is blocking.
     ///
@@ -53,19 +58,22 @@ pub trait DynEventHandler: Send + Sync {
 /// A trait for handling specific events.
 ///
 /// This trait allows for handling events of a specific type that implements the `Event` trait.
-#[async_trait]
-pub trait EventHandler<E: Event>: Send + Sync {
+pub trait EventHandler<E: Payload>: Send + Sync {
     /// Asynchronously handles an event of type `E`.
     ///
     /// # Arguments
     /// - `event`: A reference to the event to handle.
-    async fn handle(&self, _server: &Arc<Server>, _event: &E) {}
+    fn handle(&self, _server: &Arc<Server>, _event: &E) -> BoxFuture<'_, ()> {
+        Box::pin(async {})
+    }
 
     /// Asynchronously handles a blocking event of type `E`.
     ///
     /// # Arguments
     /// - `event`: A mutable reference to the event to handle.
-    async fn handle_blocking(&self, _server: &Arc<Server>, _event: &mut E) {}
+    fn handle_blocking(&self, _server: &Arc<Server>, _event: &mut E) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
 }
 
 /// A struct representing a typed event handler.
@@ -73,7 +81,7 @@ pub trait EventHandler<E: Event>: Send + Sync {
 /// This struct holds a reference to an event handler, its priority, and whether it is blocking.
 struct TypedEventHandler<E, H>
 where
-    E: Event + Send + Sync + 'static,
+    E: Payload + Send + Sync + 'static,
     H: EventHandler<E> + Send + Sync,
 {
     handler: Arc<H>,
@@ -82,35 +90,37 @@ where
     _phantom: std::marker::PhantomData<E>,
 }
 
-#[async_trait]
 impl<E, H> DynEventHandler for TypedEventHandler<E, H>
 where
-    E: Event + Send + Sync + 'static,
+    E: Payload + Send + Sync + 'static,
     H: EventHandler<E> + Send + Sync,
 {
     /// Asynchronously handles a blocking dynamic event.
-    async fn handle_blocking_dyn(
-        &self,
-        server: &Arc<Server>,
-        event: &mut (dyn Event + Send + Sync),
-    ) {
-        if E::get_name_static() == event.get_name() {
-            // Safely cast the event to the correct type and handle it.
-            let event = unsafe {
-                &mut *std::ptr::from_mut::<dyn std::any::Any>(event.as_any_mut()).cast::<E>()
-            };
-            self.handler.handle_blocking(server, event).await;
-        }
+    fn handle_blocking_dyn<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a mut (dyn Payload + Send + Sync),
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(typed_event) = <dyn Payload>::downcast_mut(event) {
+                // The handler.handle_blocking call now returns a Future, which we await.
+                self.handler.handle_blocking(server, typed_event).await;
+            }
+        })
     }
 
     /// Asynchronously handles a dynamic event.
-    async fn handle_dyn(&self, server: &Arc<Server>, event: &(dyn Event + Send + Sync)) {
-        if E::get_name_static() == event.get_name() {
-            // Safely cast the event to the correct type and handle it.
-            let event =
-                unsafe { &*std::ptr::from_ref::<dyn std::any::Any>(event.as_any()).cast::<E>() };
-            self.handler.handle(server, event).await;
-        }
+    fn handle_dyn<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a (dyn Payload + Send + Sync),
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(typed_event) = <dyn Payload>::downcast_ref(event) {
+                // The handler.handle call now returns a Future, which we await.
+                self.handler.handle(server, typed_event).await;
+            }
+        })
     }
 
     /// Checks if the handler is blocking.
@@ -144,8 +154,8 @@ pub struct PluginManager {
     handlers: Arc<RwLock<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
     // Self-reference for sharing with contexts
-    self_ref: RwLock<Option<Arc<PluginManager>>>,
-    services: Arc<RwLock<HashMap<String, Arc<dyn Any + Send + Sync>>>>,
+    self_ref: RwLock<Option<Arc<Self>>>,
+    services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
     // Plugin state tracking
     plugin_states: RwLock<HashMap<String, PluginState>>,
     // Notification for plugin state changes
@@ -584,7 +594,7 @@ impl PluginManager {
     /// Register an event handler
     pub async fn register<E, H>(&self, handler: Arc<H>, priority: EventPriority, blocking: bool)
     where
-        E: Event + Send + Sync + 'static,
+        E: Payload + Send + Sync + 'static,
         H: EventHandler<E> + 'static,
     {
         let mut handlers = self.handlers.write().await;
@@ -602,7 +612,7 @@ impl PluginManager {
     }
 
     /// Fire an event to all registered handlers
-    pub async fn fire<E: Event + Send + Sync + 'static>(&self, mut event: E) -> E {
+    pub async fn fire<E: Payload + Send + Sync + 'static>(&self, mut event: E) -> E {
         if let Some(server) = self.server.read().await.as_ref() {
             let handlers = self.handlers.read().await;
             if let Some(handlers) = handlers.get(&E::get_name_static()) {

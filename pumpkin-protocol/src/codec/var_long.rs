@@ -27,27 +27,15 @@ impl VarLong {
     /// The maximum number of bytes a `VarLong` can occupy.
     const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
-    /// Returns the exact number of bytes this VarLong will write when
-    /// [`Encode::encode`] is called, assuming no error occurs.
-    pub fn written_size(&self) -> usize {
-        match self.0 {
-            0 => 1,
-            n => (31 - n.leading_zeros() as usize) / 7 + 1,
-        }
-    }
-
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
-        let mut x = self.0;
-        loop {
-            let byte = (x & 0x7F) as u8;
-            x >>= 7;
-            if x == 0 {
-                write.write_u8(byte)?;
-                break;
-            }
-            write.write_u8(byte | 0x80)?;
+        let mut val = self.0 as u64;
+
+        while val > 0x7F {
+            write.write_u8((val as u8) | 0x80)?;
+            val >>= 7;
         }
 
+        write.write_u8(val as u8)?;
         Ok(())
     }
 
@@ -56,8 +44,8 @@ impl VarLong {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
-            val |= (i64::from(byte) & 0b01111111) << (i * 7);
-            if byte & 0b10000000 == 0 {
+            val |= (i64::from(byte) & 0x7F) << (i * 7);
+            if byte & 0x80 == 0 {
                 return Ok(VarLong(val));
             }
         }
@@ -158,15 +146,14 @@ impl<'de> Deserialize<'de> for VarLong {
 
 impl PacketWrite for VarLong {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        let mut value = (self.0 << 1) ^ (self.0 >> 63);
-        loop {
-            let b: u8 = value as u8 & 127;
-            value >>= 7;
-            writer.write_all(&if value == 0 { [b] } else { [b | 128] })?;
-            if value == 0 {
-                break;
-            }
+        let mut val = ((self.0 << 1) ^ (self.0 >> 63)) as u64;
+
+        while val > 0x7F {
+            ((val as u8 & 0x7F) | 0x80).write(writer)?;
+            val >>= 7;
         }
+
+        (val as u8).write(writer)?;
         Ok(())
     }
 }

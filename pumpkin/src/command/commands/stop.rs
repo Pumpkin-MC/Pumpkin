@@ -1,10 +1,9 @@
-use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
 use crate::command::args::ConsumedArgs;
 use crate::command::tree::CommandTree;
-use crate::command::{CommandError, CommandExecutor, CommandSender};
+use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::stop_server;
 
 const NAMES: [&str; 1] = ["stop"];
@@ -13,21 +12,23 @@ const DESCRIPTION: &str = "Stop the server.";
 
 struct Executor;
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        _args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        sender
-            .send_message(
-                TextComponent::translate("commands.stop.stopping", []).color_named(NamedColor::Red),
-            )
-            .await;
-        stop_server();
-        Ok(())
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        _args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            sender
+                .send_message(
+                    TextComponent::translate("commands.stop.stopping", [])
+                        .color_named(NamedColor::Red),
+                )
+                .await;
+            stop_server();
+            Ok(())
+        })
     }
 }
 

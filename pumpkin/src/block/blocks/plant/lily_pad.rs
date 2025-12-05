@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -7,45 +6,50 @@ use pumpkin_world::{
     world::{BlockAccessor, BlockFlags},
 };
 
-use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
+use crate::block::{BlockFuture, GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
 
 use crate::block::{BlockBehaviour, CanPlaceAtArgs, OnEntityCollisionArgs};
 
 #[pumpkin_block("minecraft:lily_pad")]
 pub struct LilyPadBlock;
 
-#[async_trait]
 impl BlockBehaviour for LilyPadBlock {
-    async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        // Proberbly not the best solution, but works
-        if args
-            .entity
-            .get_entity()
-            .entity_type
-            .resource_name
-            .ends_with("_boat")
-        {
-            args.world
-                .break_block(args.position, None, BlockFlags::empty())
-                .await;
-        }
+    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // Proberbly not the best solution, but works
+            if args
+                .entity
+                .get_entity()
+                .entity_type
+                .resource_name
+                .ends_with("_boat")
+            {
+                args.world
+                    .break_block(args.position, None, BlockFlags::empty())
+                    .await;
+            }
+        })
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
+        })
     }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        <Self as PlantBlockBase>::get_state_for_neighbor_update(
-            self,
-            args.world,
-            args.position,
-            args.state_id,
-        )
-        .await
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            <Self as PlantBlockBase>::get_state_for_neighbor_update(
+                self,
+                args.world,
+                args.position,
+                args.state_id,
+            )
+            .await
+        })
     }
 }
 

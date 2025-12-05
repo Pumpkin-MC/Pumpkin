@@ -1030,8 +1030,65 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "command_block_minecart": {
+  "copper_golem": {
     "id": 27,
+    "max_health": 12.0,
+    "attackable": true,
+    "mob": true,
+    "limit_per_chunk": 4,
+    "summonable": true,
+    "saveable": true,
+    "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
+    "dimension": [
+      0.49,
+      0.98
+    ],
+    "eye_height": 0.8125,
+    "loot_table": {
+      "type": "minecraft:entity",
+      "random_sequence": "minecraft:entities/copper_golem",
+      "pools": [
+        {
+          "rolls": 1.0,
+          "bonus_rolls": 0.0,
+          "entries": [
+            {
+              "functions": [
+                {
+                  "count": {
+                    "min": 1.0,
+                    "max": 3.0,
+                    "type": "minecraft:uniform"
+                  },
+                  "add": false,
+                  "function": "minecraft:set_count"
+                },
+                {
+                  "enchantment": "minecraft:looting",
+                  "count": {
+                    "min": 0.0,
+                    "max": 1.0,
+                    "type": "minecraft:uniform"
+                  },
+                  "function": "minecraft:enchanted_count_increase"
+                }
+              ],
+              "name": "minecraft:copper_ingot",
+              "type": "minecraft:item"
+            }
+          ]
+        }
+      ]
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "command_block_minecart": {
+    "id": 28,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -1051,7 +1108,7 @@
     }
   },
   "cow": {
-    "id": 28,
+    "id": 29,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -1174,7 +1231,7 @@
     }
   },
   "creaking": {
-    "id": 29,
+    "id": 30,
     "max_health": 1.0,
     "attackable": true,
     "mob": true,
@@ -1199,7 +1256,7 @@
     }
   },
   "creeper": {
-    "id": 30,
+    "id": 31,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -1276,26 +1333,6 @@
     }
   },
   "dark_oak_boat": {
-    "id": 31,
-    "attackable": true,
-    "mob": false,
-    "limit_per_chunk": 0,
-    "summonable": true,
-    "saveable": true,
-    "fire_immune": false,
-    "category": "MISC",
-    "can_spawn_far_from_player": true,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625,
-    "spawn_restriction": {
-      "location": "UNRESTRICTED",
-      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
-    }
-  },
-  "dark_oak_chest_boat": {
     "id": 32,
     "attackable": true,
     "mob": false,
@@ -1315,8 +1352,28 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "dolphin": {
+  "dark_oak_chest_boat": {
     "id": 33,
+    "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
+    "summonable": true,
+    "saveable": true,
+    "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "dolphin": {
+    "id": 34,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -1409,7 +1466,7 @@
     }
   },
   "donkey": {
-    "id": 34,
+    "id": 35,
     "max_health": 53.0,
     "attackable": true,
     "mob": true,
@@ -1466,7 +1523,7 @@
     }
   },
   "dragon_fireball": {
-    "id": 35,
+    "id": 36,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -1486,7 +1543,7 @@
     }
   },
   "drowned": {
-    "id": 36,
+    "id": 37,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -1568,7 +1625,7 @@
     }
   },
   "egg": {
-    "id": 37,
+    "id": 38,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -1588,7 +1645,7 @@
     }
   },
   "elder_guardian": {
-    "id": 38,
+    "id": 39,
     "max_health": 80.0,
     "attackable": true,
     "mob": true,
@@ -1814,7 +1871,7 @@
     }
   },
   "enderman": {
-    "id": 39,
+    "id": 40,
     "max_health": 40.0,
     "attackable": true,
     "mob": true,
@@ -1871,7 +1928,7 @@
     }
   },
   "endermite": {
-    "id": 40,
+    "id": 41,
     "max_health": 8.0,
     "attackable": true,
     "mob": true,
@@ -1896,7 +1953,7 @@
     }
   },
   "ender_dragon": {
-    "id": 41,
+    "id": 42,
     "max_health": 200.0,
     "attackable": true,
     "mob": true,
@@ -1921,7 +1978,7 @@
     }
   },
   "ender_pearl": {
-    "id": 42,
+    "id": 43,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -1941,7 +1998,7 @@
     }
   },
   "end_crystal": {
-    "id": 43,
+    "id": 44,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -1961,7 +2018,7 @@
     }
   },
   "evoker": {
-    "id": 44,
+    "id": 45,
     "max_health": 24.0,
     "attackable": true,
     "mob": true,
@@ -2033,7 +2090,7 @@
     }
   },
   "evoker_fangs": {
-    "id": 45,
+    "id": 46,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -2053,7 +2110,7 @@
     }
   },
   "experience_bottle": {
-    "id": 46,
+    "id": 47,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -2073,7 +2130,7 @@
     }
   },
   "experience_orb": {
-    "id": 47,
+    "id": 48,
     "attackable": false,
     "mob": false,
     "limit_per_chunk": 0,
@@ -2093,7 +2150,7 @@
     }
   },
   "eye_of_ender": {
-    "id": 48,
+    "id": 49,
     "attackable": false,
     "mob": false,
     "limit_per_chunk": 0,
@@ -2113,7 +2170,7 @@
     }
   },
   "falling_block": {
-    "id": 49,
+    "id": 50,
     "attackable": false,
     "mob": false,
     "limit_per_chunk": 0,
@@ -2133,7 +2190,7 @@
     }
   },
   "fireball": {
-    "id": 50,
+    "id": 51,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -2153,7 +2210,7 @@
     }
   },
   "firework_rocket": {
-    "id": 51,
+    "id": 52,
     "attackable": false,
     "mob": false,
     "limit_per_chunk": 0,
@@ -2173,7 +2230,7 @@
     }
   },
   "fox": {
-    "id": 52,
+    "id": 53,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -2198,7 +2255,7 @@
     }
   },
   "frog": {
-    "id": 53,
+    "id": 54,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -2223,7 +2280,7 @@
     }
   },
   "furnace_minecart": {
-    "id": 54,
+    "id": 55,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -2243,7 +2300,7 @@
     }
   },
   "ghast": {
-    "id": 55,
+    "id": 56,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -2366,7 +2423,7 @@
     }
   },
   "happy_ghast": {
-    "id": 56,
+    "id": 57,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -2391,7 +2448,7 @@
     }
   },
   "giant": {
-    "id": 57,
+    "id": 58,
     "max_health": 100.0,
     "attackable": true,
     "mob": true,
@@ -2416,7 +2473,7 @@
     }
   },
   "glow_item_frame": {
-    "id": 58,
+    "id": 59,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -2436,7 +2493,7 @@
     }
   },
   "glow_squid": {
-    "id": 59,
+    "id": 60,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -2493,7 +2550,7 @@
     }
   },
   "goat": {
-    "id": 60,
+    "id": 61,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -2518,7 +2575,7 @@
     }
   },
   "guardian": {
-    "id": 61,
+    "id": 62,
     "max_health": 30.0,
     "attackable": true,
     "mob": true,
@@ -2715,7 +2772,7 @@
     }
   },
   "hoglin": {
-    "id": 62,
+    "id": 63,
     "max_health": 40.0,
     "attackable": true,
     "mob": true,
@@ -2838,7 +2895,7 @@
     }
   },
   "hopper_minecart": {
-    "id": 63,
+    "id": 64,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -2858,7 +2915,7 @@
     }
   },
   "horse": {
-    "id": 64,
+    "id": 65,
     "max_health": 53.0,
     "attackable": true,
     "mob": true,
@@ -2915,7 +2972,7 @@
     }
   },
   "husk": {
-    "id": 65,
+    "id": 66,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -3043,7 +3100,7 @@
     }
   },
   "illusioner": {
-    "id": 66,
+    "id": 67,
     "max_health": 32.0,
     "attackable": true,
     "mob": true,
@@ -3068,7 +3125,7 @@
     }
   },
   "interaction": {
-    "id": 67,
+    "id": 68,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3088,7 +3145,7 @@
     }
   },
   "iron_golem": {
-    "id": 68,
+    "id": 69,
     "max_health": 100.0,
     "attackable": true,
     "mob": true,
@@ -3157,7 +3214,7 @@
     }
   },
   "item": {
-    "id": 69,
+    "id": 70,
     "attackable": false,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3177,7 +3234,7 @@
     }
   },
   "item_display": {
-    "id": 70,
+    "id": 71,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3197,7 +3254,7 @@
     }
   },
   "item_frame": {
-    "id": 71,
+    "id": 72,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3217,26 +3274,6 @@
     }
   },
   "jungle_boat": {
-    "id": 72,
-    "attackable": true,
-    "mob": false,
-    "limit_per_chunk": 0,
-    "summonable": true,
-    "saveable": true,
-    "fire_immune": false,
-    "category": "MISC",
-    "can_spawn_far_from_player": true,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625,
-    "spawn_restriction": {
-      "location": "UNRESTRICTED",
-      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
-    }
-  },
-  "jungle_chest_boat": {
     "id": 73,
     "attackable": true,
     "mob": false,
@@ -3256,8 +3293,28 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "leash_knot": {
+  "jungle_chest_boat": {
     "id": 74,
+    "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
+    "summonable": true,
+    "saveable": true,
+    "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "leash_knot": {
+    "id": 75,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3277,7 +3334,7 @@
     }
   },
   "lightning_bolt": {
-    "id": 75,
+    "id": 76,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3297,7 +3354,7 @@
     }
   },
   "llama": {
-    "id": 76,
+    "id": 77,
     "max_health": 53.0,
     "attackable": true,
     "mob": true,
@@ -3354,7 +3411,7 @@
     }
   },
   "llama_spit": {
-    "id": 77,
+    "id": 78,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3374,7 +3431,7 @@
     }
   },
   "magma_cube": {
-    "id": 78,
+    "id": 79,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -3528,26 +3585,6 @@
     }
   },
   "mangrove_boat": {
-    "id": 79,
-    "attackable": true,
-    "mob": false,
-    "limit_per_chunk": 0,
-    "summonable": true,
-    "saveable": true,
-    "fire_immune": false,
-    "category": "MISC",
-    "can_spawn_far_from_player": true,
-    "dimension": [
-      1.375,
-      0.5625
-    ],
-    "eye_height": 0.5625,
-    "spawn_restriction": {
-      "location": "UNRESTRICTED",
-      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
-    }
-  },
-  "mangrove_chest_boat": {
     "id": 80,
     "attackable": true,
     "mob": false,
@@ -3567,8 +3604,53 @@
       "heightmap": "MOTION_BLOCKING_NO_LEAVES"
     }
   },
-  "marker": {
+  "mangrove_chest_boat": {
     "id": 81,
+    "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
+    "summonable": true,
+    "saveable": true,
+    "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
+    "dimension": [
+      1.375,
+      0.5625
+    ],
+    "eye_height": 0.5625,
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "mannequin": {
+    "id": 82,
+    "max_health": 20.0,
+    "attackable": true,
+    "mob": false,
+    "limit_per_chunk": 0,
+    "summonable": true,
+    "saveable": true,
+    "fire_immune": false,
+    "category": "MISC",
+    "can_spawn_far_from_player": true,
+    "dimension": [
+      0.6,
+      1.8
+    ],
+    "eye_height": 1.62,
+    "loot_table": {
+      "type": "minecraft:entity",
+      "random_sequence": "minecraft:entities/mannequin"
+    },
+    "spawn_restriction": {
+      "location": "UNRESTRICTED",
+      "heightmap": "MOTION_BLOCKING_NO_LEAVES"
+    }
+  },
+  "marker": {
+    "id": 83,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3588,7 +3670,7 @@
     }
   },
   "minecart": {
-    "id": 82,
+    "id": 84,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3608,7 +3690,7 @@
     }
   },
   "mooshroom": {
-    "id": 83,
+    "id": 85,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -3731,7 +3813,7 @@
     }
   },
   "mule": {
-    "id": 84,
+    "id": 86,
     "max_health": 53.0,
     "attackable": true,
     "mob": true,
@@ -3788,7 +3870,7 @@
     }
   },
   "oak_boat": {
-    "id": 85,
+    "id": 87,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3808,7 +3890,7 @@
     }
   },
   "oak_chest_boat": {
-    "id": 86,
+    "id": 88,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3828,7 +3910,7 @@
     }
   },
   "ocelot": {
-    "id": 87,
+    "id": 89,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -3853,7 +3935,7 @@
     }
   },
   "ominous_item_spawner": {
-    "id": 88,
+    "id": 90,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3873,7 +3955,7 @@
     }
   },
   "painting": {
-    "id": 89,
+    "id": 91,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3893,7 +3975,7 @@
     }
   },
   "pale_oak_boat": {
-    "id": 90,
+    "id": 92,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3913,7 +3995,7 @@
     }
   },
   "pale_oak_chest_boat": {
-    "id": 91,
+    "id": 93,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -3933,7 +4015,7 @@
     }
   },
   "panda": {
-    "id": 92,
+    "id": 94,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -3977,7 +4059,7 @@
     }
   },
   "parrot": {
-    "id": 93,
+    "id": 95,
     "max_health": 6.0,
     "attackable": true,
     "mob": true,
@@ -4034,7 +4116,7 @@
     }
   },
   "phantom": {
-    "id": 94,
+    "id": 96,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -4096,7 +4178,7 @@
     }
   },
   "pig": {
-    "id": 95,
+    "id": 97,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -4189,7 +4271,7 @@
     }
   },
   "piglin": {
-    "id": 96,
+    "id": 98,
     "max_health": 16.0,
     "attackable": true,
     "mob": true,
@@ -4214,7 +4296,7 @@
     }
   },
   "piglin_brute": {
-    "id": 97,
+    "id": 99,
     "max_health": 50.0,
     "attackable": true,
     "mob": true,
@@ -4239,7 +4321,7 @@
     }
   },
   "pillager": {
-    "id": 98,
+    "id": 100,
     "max_health": 24.0,
     "attackable": true,
     "mob": true,
@@ -4303,7 +4385,7 @@
     }
   },
   "polar_bear": {
-    "id": 99,
+    "id": 101,
     "max_health": 30.0,
     "attackable": true,
     "mob": true,
@@ -4457,7 +4539,7 @@
     }
   },
   "splash_potion": {
-    "id": 100,
+    "id": 102,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -4477,7 +4559,7 @@
     }
   },
   "lingering_potion": {
-    "id": 101,
+    "id": 103,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -4497,7 +4579,7 @@
     }
   },
   "pufferfish": {
-    "id": 102,
+    "id": 104,
     "max_health": 3.0,
     "attackable": true,
     "mob": true,
@@ -4557,7 +4639,7 @@
     }
   },
   "rabbit": {
-    "id": 103,
+    "id": 105,
     "max_health": 3.0,
     "attackable": true,
     "mob": true,
@@ -4701,7 +4783,7 @@
     }
   },
   "ravager": {
-    "id": 104,
+    "id": 106,
     "max_health": 100.0,
     "attackable": true,
     "mob": true,
@@ -4745,7 +4827,7 @@
     }
   },
   "salmon": {
-    "id": 105,
+    "id": 107,
     "max_health": 3.0,
     "attackable": true,
     "mob": true,
@@ -4836,7 +4918,7 @@
     }
   },
   "sheep": {
-    "id": 106,
+    "id": 108,
     "max_health": 8.0,
     "attackable": true,
     "mob": true,
@@ -5244,7 +5326,7 @@
     }
   },
   "shulker": {
-    "id": 107,
+    "id": 109,
     "max_health": 30.0,
     "attackable": true,
     "mob": true,
@@ -5293,7 +5375,7 @@
     }
   },
   "shulker_bullet": {
-    "id": 108,
+    "id": 110,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -5313,7 +5395,7 @@
     }
   },
   "silverfish": {
-    "id": 109,
+    "id": 111,
     "max_health": 8.0,
     "attackable": true,
     "mob": true,
@@ -5338,7 +5420,7 @@
     }
   },
   "skeleton": {
-    "id": 110,
+    "id": 112,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -5425,7 +5507,7 @@
     }
   },
   "skeleton_horse": {
-    "id": 111,
+    "id": 113,
     "max_health": 15.0,
     "attackable": true,
     "mob": true,
@@ -5482,7 +5564,7 @@
     }
   },
   "slime": {
-    "id": 112,
+    "id": 114,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -5585,7 +5667,7 @@
     }
   },
   "small_fireball": {
-    "id": 113,
+    "id": 115,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -5605,7 +5687,7 @@
     }
   },
   "sniffer": {
-    "id": 114,
+    "id": 116,
     "max_health": 14.0,
     "attackable": true,
     "mob": true,
@@ -5630,7 +5712,7 @@
     }
   },
   "snowball": {
-    "id": 115,
+    "id": 117,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -5650,7 +5732,7 @@
     }
   },
   "snow_golem": {
-    "id": 116,
+    "id": 118,
     "max_health": 4.0,
     "attackable": true,
     "mob": true,
@@ -5698,7 +5780,7 @@
     }
   },
   "spawner_minecart": {
-    "id": 117,
+    "id": 119,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -5718,7 +5800,7 @@
     }
   },
   "spectral_arrow": {
-    "id": 118,
+    "id": 120,
     "attackable": false,
     "mob": false,
     "limit_per_chunk": 0,
@@ -5738,7 +5820,7 @@
     }
   },
   "spider": {
-    "id": 119,
+    "id": 121,
     "max_health": 16.0,
     "attackable": true,
     "mob": true,
@@ -5830,7 +5912,7 @@
     }
   },
   "spruce_boat": {
-    "id": 120,
+    "id": 122,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -5850,7 +5932,7 @@
     }
   },
   "spruce_chest_boat": {
-    "id": 121,
+    "id": 123,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -5870,7 +5952,7 @@
     }
   },
   "squid": {
-    "id": 122,
+    "id": 124,
     "max_health": 10.0,
     "attackable": true,
     "mob": true,
@@ -5927,7 +6009,7 @@
     }
   },
   "stray": {
-    "id": 123,
+    "id": 125,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -6054,7 +6136,7 @@
     }
   },
   "strider": {
-    "id": 124,
+    "id": 126,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -6111,7 +6193,7 @@
     }
   },
   "tadpole": {
-    "id": 125,
+    "id": 127,
     "max_health": 6.0,
     "attackable": true,
     "mob": true,
@@ -6136,7 +6218,7 @@
     }
   },
   "text_display": {
-    "id": 126,
+    "id": 128,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -6156,7 +6238,7 @@
     }
   },
   "tnt": {
-    "id": 127,
+    "id": 129,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -6176,7 +6258,7 @@
     }
   },
   "tnt_minecart": {
-    "id": 128,
+    "id": 130,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -6196,7 +6278,7 @@
     }
   },
   "trader_llama": {
-    "id": 129,
+    "id": 131,
     "max_health": 53.0,
     "attackable": true,
     "mob": true,
@@ -6253,7 +6335,7 @@
     }
   },
   "trident": {
-    "id": 130,
+    "id": 132,
     "attackable": false,
     "mob": false,
     "limit_per_chunk": 0,
@@ -6273,7 +6355,7 @@
     }
   },
   "tropical_fish": {
-    "id": 131,
+    "id": 133,
     "max_health": 3.0,
     "attackable": true,
     "mob": true,
@@ -6333,7 +6415,7 @@
     }
   },
   "turtle": {
-    "id": 132,
+    "id": 134,
     "max_health": 30.0,
     "attackable": true,
     "mob": true,
@@ -6414,7 +6496,7 @@
     }
   },
   "vex": {
-    "id": 133,
+    "id": 135,
     "max_health": 14.0,
     "attackable": true,
     "mob": true,
@@ -6439,7 +6521,7 @@
     }
   },
   "villager": {
-    "id": 134,
+    "id": 136,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -6464,7 +6546,7 @@
     }
   },
   "vindicator": {
-    "id": 135,
+    "id": 137,
     "max_health": 24.0,
     "attackable": true,
     "mob": true,
@@ -6526,7 +6608,7 @@
     }
   },
   "wandering_trader": {
-    "id": 136,
+    "id": 138,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -6551,7 +6633,7 @@
     }
   },
   "warden": {
-    "id": 137,
+    "id": 139,
     "max_health": 500.0,
     "attackable": true,
     "mob": true,
@@ -6588,7 +6670,7 @@
     }
   },
   "wind_charge": {
-    "id": 138,
+    "id": 140,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -6608,7 +6690,7 @@
     }
   },
   "witch": {
-    "id": 139,
+    "id": 141,
     "max_health": 26.0,
     "attackable": true,
     "mob": true,
@@ -6820,7 +6902,7 @@
     }
   },
   "wither": {
-    "id": 140,
+    "id": 142,
     "max_health": 300.0,
     "attackable": true,
     "mob": true,
@@ -6845,7 +6927,7 @@
     }
   },
   "wither_skeleton": {
-    "id": 141,
+    "id": 143,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -6957,7 +7039,7 @@
     }
   },
   "wither_skull": {
-    "id": 142,
+    "id": 144,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,
@@ -6977,7 +7059,7 @@
     }
   },
   "wolf": {
-    "id": 143,
+    "id": 145,
     "max_health": 8.0,
     "attackable": true,
     "mob": true,
@@ -7002,7 +7084,7 @@
     }
   },
   "zoglin": {
-    "id": 144,
+    "id": 146,
     "max_health": 40.0,
     "attackable": true,
     "mob": true,
@@ -7059,7 +7141,7 @@
     }
   },
   "zombie": {
-    "id": 145,
+    "id": 147,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -7214,7 +7296,7 @@
     }
   },
   "zombie_horse": {
-    "id": 146,
+    "id": 148,
     "max_health": 15.0,
     "attackable": true,
     "mob": true,
@@ -7271,7 +7353,7 @@
     }
   },
   "zombie_villager": {
-    "id": 147,
+    "id": 149,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -7399,7 +7481,7 @@
     }
   },
   "zombified_piglin": {
-    "id": 148,
+    "id": 150,
     "max_health": 20.0,
     "attackable": true,
     "mob": true,
@@ -7511,7 +7593,7 @@
     }
   },
   "player": {
-    "id": 149,
+    "id": 151,
     "summonable": false,
     "saveable": false,
     "fire_immune": false,
@@ -7532,7 +7614,7 @@
     }
   },
   "fishing_bobber": {
-    "id": 150,
+    "id": 152,
     "attackable": true,
     "mob": false,
     "limit_per_chunk": 0,

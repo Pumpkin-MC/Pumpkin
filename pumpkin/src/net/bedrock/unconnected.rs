@@ -32,7 +32,7 @@ impl BedrockClient {
             edition: "MCPE",
             // TODO The default motd is to long to be displayed completely
             motd_line_1: "Pumpkin Server",
-            protocol_version: 819,
+            protocol_version: 827,
             version_name: CURRENT_BEDROCK_MC_VERSION,
             player_count,
             // A large number looks wreird on the client worlds window

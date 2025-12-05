@@ -1,68 +1,68 @@
-use super::{Control, Goal, GoalControl};
-use crate::entity::mob::Mob;
-use async_trait::async_trait;
-use crossbeam::atomic::AtomicCell;
+use std::f64::consts::TAU;
+
+use super::{Controls, Goal};
+use crate::entity::{ai::goal::GoalFuture, mob::Mob};
 use rand::Rng;
-use std::sync::atomic::AtomicI32;
-use std::sync::atomic::Ordering::Relaxed;
 
 #[allow(dead_code)]
 pub struct LookAroundGoal {
-    goal_control: GoalControl,
-    delta_x: AtomicCell<f64>,
-    delta_z: AtomicCell<f64>,
-    look_time: AtomicI32,
+    goal_control: Controls,
+    delta_x: f64,
+    delta_z: f64,
+    look_time: i32,
 }
 
 impl Default for LookAroundGoal {
     fn default() -> Self {
         Self {
-            goal_control: GoalControl::from_array(&[Control::Move, Control::Look]),
-            delta_x: AtomicCell::new(0.0),
-            delta_z: AtomicCell::new(0.0),
-            look_time: AtomicI32::new(0),
+            goal_control: Controls::MOVE | Controls::LOOK,
+            delta_x: 0.0,
+            delta_z: 0.0,
+            look_time: 0,
         }
     }
 }
 
-#[async_trait]
 impl Goal for LookAroundGoal {
-    async fn can_start(&self, mob: &dyn Mob) -> bool {
-        mob.get_random().random::<f32>() < 0.02
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { mob.get_random().random::<f32>() < 0.02 })
     }
 
-    async fn should_continue(&self, _mob: &dyn Mob) -> bool {
-        self.look_time.load(Relaxed) >= 0
+    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { self.look_time >= 0 })
     }
 
-    async fn start(&self, mob: &dyn Mob) {
-        let d = std::f64::consts::TAU * mob.get_random().random::<f64>();
-        self.delta_x.store(d.cos());
-        self.delta_z.store(d.sin());
-        let look_time = 20 + mob.get_random().random_range(0..20);
-        self.look_time.store(look_time, Relaxed);
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            let d = TAU * mob.get_random().random::<f64>();
+            self.delta_x = d.cos();
+            self.delta_z = d.sin();
+            let look_time = 20 + mob.get_random().random_range(0..20);
+            self.look_time = look_time;
+        })
     }
 
-    async fn stop(&self, _mob: &dyn Mob) {}
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            let mob_entity = mob.get_mob_entity();
+            self.look_time = (self.look_time - 1).max(0);
+            let mut look_control = mob_entity.look_control.lock().await;
 
-    async fn tick(&self, mob: &dyn Mob) {
-        let mob_entity = mob.get_mob_entity();
-        self.look_time.fetch_sub(1, Relaxed);
-        let look_control = mob_entity.look_control.lock().await;
-        let pos = mob_entity.living_entity.entity.pos.load();
-        look_control.look_at(
-            mob,
-            pos.x + self.delta_x.load(),
-            mob_entity.living_entity.entity.get_eye_y(),
-            pos.z + self.delta_z.load(),
-        );
+            let pos = mob_entity.living_entity.entity.pos.load();
+            look_control.look_at(
+                mob,
+                pos.x + self.delta_x,
+                mob_entity.living_entity.entity.get_eye_y(),
+                pos.z + self.delta_z,
+            );
+        })
     }
 
     fn should_run_every_tick(&self) -> bool {
         true
     }
 
-    fn get_goal_control(&self) -> &GoalControl {
-        &self.goal_control
+    fn controls(&self) -> Controls {
+        self.goal_control
     }
 }

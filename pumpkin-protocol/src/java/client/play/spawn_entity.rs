@@ -3,7 +3,7 @@ use pumpkin_macros::packet;
 use pumpkin_util::math::vector3::Vector3;
 use serde::Serialize;
 
-use crate::VarInt;
+use crate::{VarInt, codec::velocity::Velocity};
 
 #[derive(Serialize)]
 #[packet(PLAY_ADD_ENTITY)]
@@ -13,11 +13,11 @@ pub struct CSpawnEntity {
     pub entity_uuid: uuid::Uuid,
     pub r#type: VarInt,
     pub position: Vector3<f64>,
+    pub velocity: Velocity,
     pub pitch: u8,    // angle
     pub yaw: u8,      // angle
     pub head_yaw: u8, // angle
     pub data: VarInt,
-    pub velocity: Vector3<i16>,
 }
 
 impl CSpawnEntity {
@@ -39,14 +39,10 @@ impl CSpawnEntity {
             r#type,
             position,
             pitch: (pitch * 256.0 / 360.0).floor() as u8,
-            yaw: (yaw * 256.0 / 360.0).floor() as u8,
-            head_yaw: (head_yaw * 256.0 / 360.0).floor() as u8,
+            yaw: (yaw.rem_euclid(360.0) * 256.0 / 360.0).floor() as u8,
+            head_yaw: (head_yaw.rem_euclid(360.0) * 256.0 / 360.0).floor() as u8,
             data,
-            velocity: Vector3::new(
-                (velocity.x.clamp(-3.9, 3.9) * 8000.0) as i16,
-                (velocity.y.clamp(-3.9, 3.9) * 8000.0) as i16,
-                (velocity.z.clamp(-3.9, 3.9) * 8000.0) as i16,
-            ),
+            velocity: Velocity(velocity),
         }
     }
 }

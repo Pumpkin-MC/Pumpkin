@@ -1,16 +1,18 @@
 use std::{any::Any, sync::Arc};
 
-use async_trait::async_trait;
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::{inventory::Inventory, item::ItemStack};
 
 use crate::{
     player::player_inventory::PlayerInventory,
-    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour},
+    screen_handler::{
+        InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
+        ScreenHandlerFuture,
+    },
     slot::NormalSlot,
 };
 
-pub fn create_generic_9x3(
+pub async fn create_generic_9x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
@@ -23,9 +25,10 @@ pub fn create_generic_9x3(
         3,
         9,
     )
+    .await
 }
 
-pub fn create_generic_9x6(
+pub async fn create_generic_9x6(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
@@ -38,9 +41,10 @@ pub fn create_generic_9x6(
         6,
         9,
     )
+    .await
 }
 
-pub fn create_generic_3x3(
+pub async fn create_generic_3x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
@@ -53,9 +57,10 @@ pub fn create_generic_3x3(
         3,
         3,
     )
+    .await
 }
 
-pub fn create_hopper(
+pub async fn create_hopper(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
@@ -68,6 +73,7 @@ pub fn create_hopper(
         1,
         5,
     )
+    .await
 }
 
 pub struct GenericContainerScreenHandler {
@@ -78,7 +84,7 @@ pub struct GenericContainerScreenHandler {
 }
 
 impl GenericContainerScreenHandler {
-    fn new(
+    async fn new(
         screen_type: WindowType,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -94,7 +100,8 @@ impl GenericContainerScreenHandler {
         };
 
         // TODO: Add player entity as a parameter
-        inventory.on_open();
+        inventory.on_open().await;
+
         handler.add_inventory_slots();
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);
@@ -114,11 +121,12 @@ impl GenericContainerScreenHandler {
     }
 }
 
-#[async_trait]
 impl ScreenHandler for GenericContainerScreenHandler {
-    async fn on_closed(&mut self, player: &dyn InventoryPlayer) {
-        self.default_on_closed(player).await;
-        self.inventory.on_close();
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
+        Box::pin(async move {
+            self.default_on_closed(player).await;
+            self.inventory.on_close().await;
+        })
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -133,45 +141,58 @@ impl ScreenHandler for GenericContainerScreenHandler {
         &mut self.behaviour
     }
 
-    async fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
-        let mut stack_left = ItemStack::EMPTY.clone();
-        let slot = self.get_behaviour().slots[slot_index as usize].clone();
+    fn quick_move<'a>(
+        &'a mut self,
+        _player: &'a dyn InventoryPlayer,
+        slot_index: i32,
+    ) -> ItemStackFuture<'a> {
+        Box::pin(async move {
+            let mut stack_left = ItemStack::EMPTY.clone();
+            // Assuming bounds check passed for slot_index by caller or within quick_move spec
+            let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
-        if slot.has_stack().await {
-            let slot_stack = slot.get_stack().await;
-            stack_left = slot_stack.lock().await.clone();
+            if slot.has_stack().await {
+                let slot_stack_lock = slot.get_stack().await;
+                let slot_stack_guard = slot_stack_lock.lock().await;
+                stack_left = slot_stack_guard.clone();
+                // Release the guard before calling insert_item which needs its own lock
+                drop(slot_stack_guard);
 
-            if slot_index < (self.rows * 9) as i32 {
-                if !self
-                    .insert_item(
-                        &mut *slot_stack.lock().await,
-                        (self.rows * 9).into(),
-                        self.get_behaviour().slots.len() as i32,
-                        true,
-                    )
+                // Re-acquire lock for insert_item (which expects &mut ItemStack)
+                let mut slot_stack_mut = slot_stack_lock.lock().await;
+
+                if slot_index < (self.rows * 9) as i32 {
+                    // Move from inventory to player area (end)
+                    if !self
+                        .insert_item(
+                            &mut slot_stack_mut,
+                            (self.rows * 9).into(),
+                            self.get_behaviour().slots.len() as i32,
+                            true,
+                        )
+                        .await
+                    {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if !self
+                    .insert_item(&mut slot_stack_mut, 0, (self.rows * 9).into(), false)
                     .await
                 {
+                    // Move from player area to inventory (start)
                     return ItemStack::EMPTY.clone();
                 }
-            } else if !self
-                .insert_item(
-                    &mut *slot_stack.lock().await,
-                    0,
-                    (self.rows * 9).into(),
-                    false,
-                )
-                .await
-            {
-                return ItemStack::EMPTY.clone();
+
+                // Check the resulting state of the slot stack after insert_item
+                if slot_stack_mut.is_empty() {
+                    drop(slot_stack_mut); // Release lock
+                    slot.set_stack(ItemStack::EMPTY.clone()).await;
+                } else {
+                    drop(slot_stack_mut); // Release lock
+                    slot.mark_dirty().await;
+                }
             }
 
-            if stack_left.is_empty() {
-                slot.set_stack(ItemStack::EMPTY.clone()).await;
-            } else {
-                slot.mark_dirty().await;
-            }
-        }
-
-        return stack_left;
+            stack_left
+        })
     }
 }

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::BlockFuture;
 use crate::block::BlockIsReplacing;
 use crate::block::CanPlaceAtArgs;
 use crate::block::EmitsRedstonePowerArgs;
@@ -11,7 +12,6 @@ use crate::block::OnScheduledTickArgs;
 use crate::block::OnStateReplacedArgs;
 use crate::block::PlacedArgs;
 use crate::entity::EntityBase;
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::FacingExt;
@@ -44,219 +44,246 @@ impl BlockMetadata for RedstoneTorchBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for RedstoneTorchBlock {
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let world = args.world;
-        let block = args.block;
-        let location = args.position;
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let world = args.world;
+            let block = args.block;
+            let location = args.position;
 
-        if args.direction == BlockDirection::Down {
+            if args.direction == BlockDirection::Down {
+                let support_block = world.get_block_state(&location.down()).await;
+                if support_block.is_center_solid(BlockDirection::Up) {
+                    return block.default_state.id;
+                }
+            }
+            let mut directions = args.player.get_entity().get_entity_facing_order();
+
+            if args.replacing == BlockIsReplacing::None {
+                let face = args.direction.to_facing();
+                let mut i = 0;
+                while i < directions.len() && directions[i] != face {
+                    i += 1;
+                }
+
+                if i > 0 {
+                    directions.copy_within(0..i, 1);
+                    directions[0] = face;
+                }
+            } else if directions[0] == Facing::Down {
+                let support_block = world.get_block_state(&location.down()).await;
+                if support_block.is_center_solid(BlockDirection::Up) {
+                    return block.default_state.id;
+                }
+            }
+
+            for dir in directions {
+                if dir != Facing::Up
+                    && dir != Facing::Down
+                    && can_place_at(world, location, dir.to_block_direction()).await
+                {
+                    let mut torch_props = RWallTorchProps::default(&Block::REDSTONE_WALL_TORCH);
+                    torch_props.facing = dir
+                        .opposite()
+                        .to_block_direction()
+                        .to_horizontal_facing()
+                        .unwrap();
+                    return torch_props.to_state_id(&Block::REDSTONE_WALL_TORCH);
+                }
+            }
+
             let support_block = world.get_block_state(&location.down()).await;
             if support_block.is_center_solid(BlockDirection::Up) {
-                return block.default_state.id;
+                block.default_state.id
+            } else {
+                0
             }
-        }
-        let mut directions = args.player.get_entity().get_entity_facing_order();
-
-        if args.replacing == BlockIsReplacing::None {
-            let face = args.direction.to_facing();
-            let mut i = 0;
-            while i < directions.len() && directions[i] != face {
-                i += 1;
-            }
-
-            if i > 0 {
-                directions.copy_within(0..i, 1);
-                directions[0] = face;
-            }
-        } else if directions[0] == Facing::Down {
-            let support_block = world.get_block_state(&location.down()).await;
-            if support_block.is_center_solid(BlockDirection::Up) {
-                return block.default_state.id;
-            }
-        }
-
-        for dir in directions {
-            if dir != Facing::Up
-                && dir != Facing::Down
-                && can_place_at(world, location, dir.to_block_direction()).await
-            {
-                let mut torch_props = RWallTorchProps::default(&Block::REDSTONE_WALL_TORCH);
-                torch_props.facing = dir
-                    .opposite()
-                    .to_block_direction()
-                    .to_horizontal_facing()
-                    .unwrap();
-                return torch_props.to_state_id(&Block::REDSTONE_WALL_TORCH);
-            }
-        }
-
-        let support_block = world.get_block_state(&location.down()).await;
-        if support_block.is_center_solid(BlockDirection::Up) {
-            block.default_state.id
-        } else {
-            0
-        }
+        })
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let support_block = args
-            .block_accessor
-            .get_block_state(&args.position.down())
-            .await;
-        if support_block.is_center_solid(BlockDirection::Up) {
-            return true;
-        }
-        for dir in BlockDirection::horizontal() {
-            if can_place_at(args.block_accessor, args.position, dir).await {
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            let support_block = args
+                .block_accessor
+                .get_block_state(&args.position.down())
+                .await;
+            if support_block.is_center_solid(BlockDirection::Up) {
                 return true;
             }
-        }
-        false
+            for dir in BlockDirection::horizontal() {
+                if can_place_at(args.block_accessor, args.position, dir).await {
+                    return true;
+                }
+            }
+            false
+        })
     }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if args.block == &Block::REDSTONE_WALL_TORCH {
-            let props = RWallTorchProps::from_state_id(args.state_id, args.block);
-            if props.facing.to_block_direction().opposite() == args.direction
-                && !can_place_at(
-                    args.world,
-                    args.position,
-                    props.facing.to_block_direction().opposite(),
-                )
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if args.block == &Block::REDSTONE_WALL_TORCH {
+                let props = RWallTorchProps::from_state_id(args.state_id, args.block);
+                if props.facing.to_block_direction().opposite() == args.direction
+                    && !can_place_at(
+                        args.world,
+                        args.position,
+                        props.facing.to_block_direction().opposite(),
+                    )
+                    .await
+                {
+                    return 0;
+                }
+            } else if args.direction == BlockDirection::Down {
+                let support_block = args.world.get_block_state(&args.position.down()).await;
+                if !support_block.is_center_solid(BlockDirection::Up) {
+                    return 0;
+                }
+            }
+            args.state_id
+        })
+    }
+
+    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let state = args.world.get_block_state(args.position).await;
+
+            if args
+                .world
+                .is_block_tick_scheduled(args.position, args.block)
                 .await
             {
-                return 0;
+                return;
             }
-        } else if args.direction == BlockDirection::Down {
-            let support_block = args.world.get_block_state(&args.position.down()).await;
-            if !support_block.is_center_solid(BlockDirection::Up) {
-                return 0;
+
+            if args.block == &Block::REDSTONE_WALL_TORCH {
+                let props = RWallTorchProps::from_state_id(state.id, args.block);
+                if props.lit
+                    != should_be_lit(
+                        args.world,
+                        args.position,
+                        props.facing.to_block_direction().opposite(),
+                    )
+                    .await
+                {
+                    args.world
+                        .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
+                        .await;
+                }
+            } else if args.block == &Block::REDSTONE_TORCH {
+                let props = RTorchProps::from_state_id(state.id, args.block);
+                if props.lit != should_be_lit(args.world, args.position, BlockDirection::Down).await
+                {
+                    args.world
+                        .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
+                        .await;
+                }
             }
-        }
-        args.state_id
+        })
     }
 
-    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let state = args.world.get_block_state(args.position).await;
-
-        if args
-            .world
-            .is_block_tick_scheduled(args.position, args.block)
-            .await
-        {
-            return;
-        }
-
-        if args.block == &Block::REDSTONE_WALL_TORCH {
-            let props = RWallTorchProps::from_state_id(state.id, args.block);
-            if props.lit
-                != should_be_lit(
-                    args.world,
-                    args.position,
-                    props.facing.to_block_direction().opposite(),
-                )
-                .await
-            {
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-                    .await;
-            }
-        } else if args.block == &Block::REDSTONE_TORCH {
-            let props = RTorchProps::from_state_id(state.id, args.block);
-            if props.lit != should_be_lit(args.world, args.position, BlockDirection::Down).await {
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-                    .await;
-            }
-        }
+    fn emits_redstone_power<'a>(
+        &'a self,
+        _args: EmitsRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move { true })
     }
 
-    async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
-        true
-    }
-
-    async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        if args.block == &Block::REDSTONE_WALL_TORCH {
-            let props = RWallTorchProps::from_state_id(args.state.id, args.block);
-            if props.lit && args.direction != props.facing.to_block_direction() {
-                return 15;
-            }
-        } else if args.block == &Block::REDSTONE_TORCH {
-            let props = RTorchProps::from_state_id(args.state.id, args.block);
-            if props.lit && args.direction != BlockDirection::Up {
-                return 15;
-            }
-        }
-        0
-    }
-
-    async fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        if args.direction == BlockDirection::Down {
+    fn get_weak_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
             if args.block == &Block::REDSTONE_WALL_TORCH {
                 let props = RWallTorchProps::from_state_id(args.state.id, args.block);
-                if props.lit {
+                if props.lit && args.direction != props.facing.to_block_direction() {
                     return 15;
                 }
             } else if args.block == &Block::REDSTONE_TORCH {
                 let props = RTorchProps::from_state_id(args.state.id, args.block);
-                if props.lit {
+                if props.lit && args.direction != BlockDirection::Up {
                     return 15;
                 }
             }
-        }
-        0
+            0
+        })
     }
 
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state = args.world.get_block_state(args.position).await;
-        if args.block == &Block::REDSTONE_WALL_TORCH {
-            let mut props = RWallTorchProps::from_state_id(state.id, args.block);
-            let should_be_lit_now = should_be_lit(
-                args.world,
-                args.position,
-                props.facing.to_block_direction().opposite(),
-            )
-            .await;
-            if props.lit != should_be_lit_now {
-                props.lit = should_be_lit_now;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-                update_neighbors(args.world, args.position).await;
+    fn get_strong_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            if args.direction == BlockDirection::Down {
+                if args.block == &Block::REDSTONE_WALL_TORCH {
+                    let props = RWallTorchProps::from_state_id(args.state.id, args.block);
+                    if props.lit {
+                        return 15;
+                    }
+                } else if args.block == &Block::REDSTONE_TORCH {
+                    let props = RTorchProps::from_state_id(args.state.id, args.block);
+                    if props.lit {
+                        return 15;
+                    }
+                }
             }
-        } else if args.block == &Block::REDSTONE_TORCH {
-            let mut props = RTorchProps::from_state_id(state.id, args.block);
-            let should_be_lit_now =
-                should_be_lit(args.world, args.position, BlockDirection::Down).await;
-            if props.lit != should_be_lit_now {
-                props.lit = should_be_lit_now;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-                update_neighbors(args.world, args.position).await;
+            0
+        })
+    }
+
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let state = args.world.get_block_state(args.position).await;
+            if args.block == &Block::REDSTONE_WALL_TORCH {
+                let mut props = RWallTorchProps::from_state_id(state.id, args.block);
+                let should_be_lit_now = should_be_lit(
+                    args.world,
+                    args.position,
+                    props.facing.to_block_direction().opposite(),
+                )
+                .await;
+                if props.lit != should_be_lit_now {
+                    props.lit = should_be_lit_now;
+                    args.world
+                        .set_block_state(
+                            args.position,
+                            props.to_state_id(args.block),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                    update_neighbors(args.world, args.position).await;
+                }
+            } else if args.block == &Block::REDSTONE_TORCH {
+                let mut props = RTorchProps::from_state_id(state.id, args.block);
+                let should_be_lit_now =
+                    should_be_lit(args.world, args.position, BlockDirection::Down).await;
+                if props.lit != should_be_lit_now {
+                    props.lit = should_be_lit_now;
+                    args.world
+                        .set_block_state(
+                            args.position,
+                            props.to_state_id(args.block),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                    update_neighbors(args.world, args.position).await;
+                }
             }
-        }
+        })
     }
 
-    async fn placed(&self, args: PlacedArgs<'_>) {
-        update_neighbors(args.world, args.position).await;
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            update_neighbors(args.world, args.position).await;
+        })
     }
 
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        update_neighbors(args.world, args.position).await;
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            update_neighbors(args.world, args.position).await;
+        })
     }
 }
 

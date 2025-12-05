@@ -26,6 +26,12 @@ impl LootTableExt for LootTable {
 
         if let Some(pools) = self.pools {
             for pool in pools {
+                if let Some(conditions) = pool.conditions
+                    && !conditions.iter().all(|cond| cond.is_fulfilled(&params))
+                {
+                    return stacks;
+                }
+
                 // TODO
                 let rolls = pool
                     .rolls
@@ -171,7 +177,7 @@ impl LootConditionExt for LootCondition {
                 properties,
             } => {
                 if let Some(state) = &params.block_state {
-                    let block_actual_properties: Box<[(String, String)]> =
+                    let block_actual_properties =
                         match Block::properties(Block::from_state_id(state.id), state.id) {
                             Some(props_data) => props_data.to_props(), // Assuming to_props() returns HashMap<String, String>
                             None => {

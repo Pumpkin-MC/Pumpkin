@@ -1,11 +1,12 @@
-use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
-    CommandError, CommandExecutor, CommandSender,
+    CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{ConsumedArgs, FindArg, time::TimeArgumentConsumer},
-    tree::CommandTree,
-    tree::builder::{argument, literal},
+    tree::{
+        CommandTree,
+        builder::{argument, literal},
+    },
 };
 
 const NAMES: [&str; 1] = ["weather"];
@@ -22,53 +23,54 @@ enum WeatherMode {
     Thunder,
 }
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).unwrap_or(6000);
-        let world = {
-            let guard = server.worlds.read().await;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).unwrap_or(6000);
+            let world = {
+                let guard = server.worlds.read().await;
 
-            guard
-                .first()
-                .cloned()
-                .ok_or(CommandError::InvalidRequirement)?
-        };
-        let mut weather = world.weather.lock().await;
+                guard
+                    .first()
+                    .cloned()
+                    .ok_or(CommandError::InvalidRequirement)?
+            };
+            let mut weather = world.weather.lock().await;
 
-        match self.mode {
-            WeatherMode::Clear => {
-                weather
-                    .set_weather_parameters(&world, duration, 0, false, false)
-                    .await;
-                sender
-                    .send_message(TextComponent::translate("commands.weather.set.clear", []))
-                    .await;
+            match self.mode {
+                WeatherMode::Clear => {
+                    weather
+                        .set_weather_parameters(&world, duration, 0, false, false)
+                        .await;
+                    sender
+                        .send_message(TextComponent::translate("commands.weather.set.clear", []))
+                        .await;
+                }
+                WeatherMode::Rain => {
+                    weather
+                        .set_weather_parameters(&world, 0, duration, true, false)
+                        .await;
+                    sender
+                        .send_message(TextComponent::translate("commands.weather.set.rain", []))
+                        .await;
+                }
+                WeatherMode::Thunder => {
+                    weather
+                        .set_weather_parameters(&world, 0, duration, true, true)
+                        .await;
+                    sender
+                        .send_message(TextComponent::translate("commands.weather.set.thunder", []))
+                        .await;
+                }
             }
-            WeatherMode::Rain => {
-                weather
-                    .set_weather_parameters(&world, 0, duration, true, false)
-                    .await;
-                sender
-                    .send_message(TextComponent::translate("commands.weather.set.rain", []))
-                    .await;
-            }
-            WeatherMode::Thunder => {
-                weather
-                    .set_weather_parameters(&world, 0, duration, true, true)
-                    .await;
-                sender
-                    .send_message(TextComponent::translate("commands.weather.set.thunder", []))
-                    .await;
-            }
-        }
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 

@@ -1,7 +1,10 @@
+use crate::BlockStateId;
 use crate::block::entities::BlockEntity;
+use crate::chunk::format::LightContainer;
 use crate::tick::scheduler::ChunkTickScheduler;
 use palette::{BiomePalette, BlockPalette};
 use pumpkin_data::block_properties::blocks_movement;
+use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
 use pumpkin_data::tag::Taggable;
@@ -13,9 +16,6 @@ use serde::{Deserialize, Serialize};
 use std::ops::{BitAnd, BitOr};
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
-
-use crate::BlockStateId;
-use crate::chunk::format::LightContainer;
 
 pub mod format;
 pub mod io;
@@ -77,7 +77,7 @@ pub struct ChunkData {
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
     pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
     pub light_engine: ChunkLight,
-
+    pub status: ChunkStatus,
     pub dirty: bool,
 }
 
@@ -539,7 +539,7 @@ impl ChunkData {
 
             if !has_found[ChunkHeightmapType::MotionBlockingNoLeaves as usize]
                 && is_motion_blocking
-                && !block.is_tagged_with_by_tag(&MINECRAFT_LEAVES)
+                && !block.has_tag(&MINECRAFT_LEAVES)
             {
                 heightmaps.set(
                     ChunkHeightmapType::MotionBlockingNoLeaves,
@@ -563,15 +563,12 @@ impl ChunkData {
     }
 
     pub fn get_highest_non_empty_subchunk(&self) -> usize {
-        let idx = self
-            .section
-            .sections
-            .iter()
-            .rev()
-            .position(|sub_chunk| sub_chunk.block_states.non_air_block_count() != 0)
-            .map(|idx| (self.section.sections.len() - idx).saturating_sub(1));
-
-        idx.unwrap_or_default()
+        for (i, sub_chunk) in self.section.sections.iter().enumerate().rev() {
+            if sub_chunk.block_states.non_air_block_count() != 0 {
+                return i;
+            }
+        }
+        0
     }
 }
 

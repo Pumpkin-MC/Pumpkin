@@ -4,7 +4,7 @@ use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_protocol::{
     ConnectionState, KnownPack, Label, Link, LinkType,
     java::client::{
-        config::{CConfigAddResourcePack, CConfigServerLinks, CKnownPacks, CUpdateTags},
+        config::{CConfigAddResourcePack, CConfigServerLinks, CKnownPacks},
         login::{CLoginSuccess, CSetCompression},
     },
     java::server::login::{
@@ -343,19 +343,6 @@ impl JavaClient {
             self.send_packet_now(&CConfigServerLinks::new(&LINKS)).await;
         }
 
-        // Send tags.
-        // TODO: Is this the right place to send them?
-
-        self.send_packet_now(&CUpdateTags::new(&[
-            pumpkin_data::tag::RegistryKey::Block,
-            pumpkin_data::tag::RegistryKey::Fluid,
-            pumpkin_data::tag::RegistryKey::Enchantment,
-            pumpkin_data::tag::RegistryKey::WorldgenBiome,
-            pumpkin_data::tag::RegistryKey::Item,
-            pumpkin_data::tag::RegistryKey::EntityType,
-        ]))
-        .await;
-
         let resource_config = &advanced_config().resource_pack;
         if resource_config.enabled {
             let uuid = Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
@@ -384,7 +371,7 @@ impl JavaClient {
         self.send_packet_now(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
             id: "core",
-            version: "1.21.8",
+            version: "1.21.10",
         }]))
         .await;
     }

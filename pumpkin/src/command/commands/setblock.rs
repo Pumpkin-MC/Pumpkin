@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
 
@@ -7,7 +6,7 @@ use crate::command::args::position_block::BlockPosArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandError, CommandExecutor, CommandSender};
+use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
 
 const NAMES: [&str; 1] = ["setblock"];
 
@@ -30,57 +29,35 @@ enum Mode {
 
 struct Executor(Mode);
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
-        let block_state_id = block.default_state.id;
-        let pos = BlockPosArgumentConsumer::find_arg(args, ARG_BLOCK_POS)?;
-        let mode = self.0;
-        let world = match sender {
-            CommandSender::Console | CommandSender::Rcon(_) => {
-                let guard = server.worlds.read().await;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
+            let block_state_id = block.default_state.id;
+            let pos = BlockPosArgumentConsumer::find_arg(args, ARG_BLOCK_POS)?;
+            let mode = self.0;
+            let world = match sender {
+                CommandSender::Console | CommandSender::Rcon(_) => {
+                    let guard = server.worlds.read().await;
 
-                guard
-                    .first()
-                    .cloned()
-                    .ok_or(CommandError::InvalidRequirement)?
-            }
-            CommandSender::Player(player) => player.world().clone(),
-        };
-        let success = match mode {
-            Mode::Destroy => {
-                world
-                    .clone()
-                    .break_block(&pos, None, BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE)
-                    .await;
-                world
-                    .set_block_state(
-                        &pos,
-                        block_state_id,
-                        BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
-                true
-            }
-            Mode::Replace => {
-                world
-                    .set_block_state(
-                        &pos,
-                        block_state_id,
-                        BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
-                true
-            }
-            Mode::Keep => {
-                let old_state = world.get_block_state(&pos).await;
-                if old_state.is_air() {
+                    guard
+                        .first()
+                        .cloned()
+                        .ok_or(CommandError::InvalidRequirement)?
+                }
+                CommandSender::Player(player) => player.world().clone(),
+            };
+            let success = match mode {
+                Mode::Destroy => {
+                    world
+                        .clone()
+                        .break_block(&pos, None, BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE)
+                        .await;
                     world
                         .set_block_state(
                             &pos,
@@ -89,28 +66,51 @@ impl CommandExecutor for Executor {
                         )
                         .await;
                     true
-                } else {
-                    false
                 }
-            }
-        };
+                Mode::Replace => {
+                    world
+                        .set_block_state(
+                            &pos,
+                            block_state_id,
+                            BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                    true
+                }
+                Mode::Keep => {
+                    let old_state = world.get_block_state(&pos).await;
+                    if old_state.is_air() {
+                        world
+                            .set_block_state(
+                                &pos,
+                                block_state_id,
+                                BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                            )
+                            .await;
+                        true
+                    } else {
+                        false
+                    }
+                }
+            };
 
-        sender
-            .send_message(if success {
-                TextComponent::translate(
-                    "commands.setblock.success",
-                    [
-                        TextComponent::text(pos.0.x.to_string()),
-                        TextComponent::text(pos.0.y.to_string()),
-                        TextComponent::text(pos.0.z.to_string()),
-                    ],
-                )
-            } else {
-                TextComponent::translate("commands.setblock.failed", [])
-            })
-            .await;
+            sender
+                .send_message(if success {
+                    TextComponent::translate(
+                        "commands.setblock.success",
+                        [
+                            TextComponent::text(pos.0.x.to_string()),
+                            TextComponent::text(pos.0.y.to_string()),
+                            TextComponent::text(pos.0.z.to_string()),
+                        ],
+                    )
+                } else {
+                    TextComponent::translate("commands.setblock.failed", [])
+                })
+                .await;
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 

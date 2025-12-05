@@ -1,13 +1,13 @@
 use std::sync::atomic::Ordering;
 
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{block::entities::command_block::CommandBlockEntity, tick::TickPriority};
 
 use crate::{
     block::{
-        BlockBehaviour, BlockMetadata, CanPlaceAtArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
+        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, OnNeighborUpdateArgs,
+        OnScheduledTickArgs,
     },
     world::World,
 };
@@ -50,45 +50,49 @@ impl BlockMetadata for CommandBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for CommandBlock {
-    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await {
-            if block_entity.resource_location() != CommandBlockEntity::ID {
-                return;
-            }
-            let command_entity = block_entity
-                .as_any()
-                .downcast_ref::<CommandBlockEntity>()
-                .unwrap();
+    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(block_entity) = args.world.get_block_entity(args.position).await {
+                if block_entity.resource_location() != CommandBlockEntity::ID {
+                    return;
+                }
+                let command_entity = block_entity
+                    .as_any()
+                    .downcast_ref::<CommandBlockEntity>()
+                    .unwrap();
 
-            Self::update(
-                args.world,
-                args.block,
-                command_entity,
-                args.position,
-                block_receives_redstone_power(args.world, args.position).await,
-            )
-            .await;
-        }
+                Self::update(
+                    args.world,
+                    args.block,
+                    command_entity,
+                    args.position,
+                    block_receives_redstone_power(args.world, args.position).await,
+                )
+                .await;
+            }
+        })
     }
 
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.position).await
-            && block_entity.resource_location() != CommandBlockEntity::ID
-        {
-            return;
-        }
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+                && block_entity.resource_location() != CommandBlockEntity::ID
+            {}
+        })
+
         // TODO
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        if let Some(player) = args.player
-            && player.gamemode.load() == GameMode::Creative
-        {
-            return true;
-        }
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            if let Some(player) = args.player
+                && player.gamemode.load() == GameMode::Creative
+            {
+                return true;
+            }
 
-        false
+            false
+        })
     }
 }

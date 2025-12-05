@@ -2,7 +2,7 @@ use std::{net::IpAddr, str::FromStr};
 
 use crate::{
     command::{
-        CommandError, CommandExecutor, CommandSender,
+        CommandError, CommandExecutor, CommandResult, CommandSender,
         args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
@@ -13,7 +13,6 @@ use crate::{
     server::Server,
 };
 use CommandError::InvalidConsumption;
-use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["ban-ip"];
@@ -37,43 +36,45 @@ async fn parse_ip(target: &str, server: &Server) -> Option<IpAddr> {
 
 struct NoReasonExecutor;
 
-#[async_trait]
 impl CommandExecutor for NoReasonExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
+                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+            };
 
-        ban_ip(sender, server, target, None).await;
-        Ok(())
+            ban_ip(sender, server, target, None).await;
+            Ok(())
+        })
     }
 }
 
 struct ReasonExecutor;
 
-#[async_trait]
 impl CommandExecutor for ReasonExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
+                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+            };
 
-        let Some(Arg::Msg(reason)) = args.get(ARG_REASON) else {
-            return Err(InvalidConsumption(Some(ARG_REASON.into())));
-        };
+            let Some(Arg::Msg(reason)) = args.get(ARG_REASON) else {
+                return Err(InvalidConsumption(Some(ARG_REASON.into())));
+            };
 
-        ban_ip(sender, server, target, Some(reason.clone())).await;
-        Ok(())
+            ban_ip(sender, server, target, Some(reason.clone())).await;
+            Ok(())
+        })
     }
 }
 

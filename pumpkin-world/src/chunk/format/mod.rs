@@ -1,6 +1,5 @@
-use std::{collections::HashMap, io::Cursor, path::PathBuf};
+use std::{collections::HashMap, io::Cursor, path::PathBuf, pin::Pin};
 
-use async_trait::async_trait;
 use bytes::Bytes;
 use futures::future::join_all;
 use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
@@ -30,14 +29,6 @@ use crate::block::BlockStateCodec;
 pub mod anvil;
 pub mod linear;
 
-// I can't use an tag because it will break ChunkNBT, but status need to have a big S, so "Status"
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct ChunkStatusWrapper {
-    status: ChunkStatus,
-}
-
-#[async_trait]
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
     fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
@@ -45,8 +36,10 @@ impl SingleChunkDataSerializer for ChunkData {
     }
 
     #[inline]
-    async fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        self.internal_to_bytes().await
+    fn to_bytes(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
+        Box::pin(async move { self.internal_to_bytes().await })
     }
 
     #[inline]
@@ -79,15 +72,6 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        // TODO: Implement chunk stages?
-        if from_bytes::<ChunkStatusWrapper>(Cursor::new(chunk_data))
-            .map_err(ChunkParsingError::FailedReadStatus)?
-            .status
-            != ChunkStatus::Full
-        {
-            return Err(ChunkParsingError::ChunkNotGenerated);
-        }
-
         let chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
@@ -134,37 +118,31 @@ impl ChunkData {
         }
 
         let light_engine = ChunkLight {
-            block_light: (0..chunk_data.sections.len() + 2)
-                .map(|index| {
-                    chunk_data
-                        .sections
-                        .iter()
-                        .find(|section| {
-                            section.y as i32 == index as i32 + chunk_data.min_y_section - 1
-                        })
-                        .and_then(|section| section.block_light.clone())
+            block_light: chunk_data
+                .sections
+                .iter()
+                .map(|x| {
+                    x.block_light
+                        .clone()
                         .map(LightContainer::new)
                         .unwrap_or_default()
                 })
                 .collect(),
-            sky_light: (0..chunk_data.sections.len() + 2)
-                .map(|index| {
-                    chunk_data
-                        .sections
-                        .iter()
-                        .find(|section| {
-                            section.y as i32 == index as i32 + chunk_data.min_y_section - 1
-                        })
-                        .and_then(|section| section.sky_light.clone())
+            sky_light: chunk_data
+                .sections
+                .iter()
+                .map(|x| {
+                    x.sky_light
+                        .clone()
                         .map(LightContainer::new)
                         .unwrap_or_default()
                 })
                 .collect(),
         };
+
         let sub_chunks = chunk_data
             .sections
             .into_iter()
-            .filter(|section| section.y >= chunk_data.min_y_section as i8)
             .map(|section| SubChunk {
                 block_states: section
                     .block_states
@@ -198,34 +176,28 @@ impl ChunkData {
                 block_entities
             },
             light_engine,
+            status: chunk_data.status,
         })
     }
 
     async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        let sections: Vec<_> = (0..self.section.sections.len() + 2)
-            .map(|i| {
-                let has_blocks = i >= 1 && i - 1 < self.section.sections.len();
-                let section = has_blocks.then(|| &self.section.sections[i - 1]);
-
-                ChunkSectionNBT {
-                    y: (i as i8) - 1i8 + section_coords::block_to_section(self.section.min_y) as i8,
-                    block_states: section.map(|section| section.block_states.to_disk_nbt()),
-                    biomes: section.map(|section| section.biomes.to_disk_nbt()),
-                    block_light: match self.light_engine.block_light[i].clone() {
-                        LightContainer::Empty(_) => None,
-                        LightContainer::Full(data) => Some(data),
-                    },
-                    sky_light: match self.light_engine.sky_light[i].clone() {
-                        LightContainer::Empty(_) => None,
-                        LightContainer::Full(data) => Some(data),
-                    },
-                }
-            })
-            .filter(|nbt| {
-                nbt.block_states.is_some()
-                    || nbt.biomes.is_some()
-                    || nbt.block_light.is_some()
-                    || nbt.sky_light.is_some()
+        let sections: Vec<_> = self
+            .section
+            .sections
+            .iter()
+            .enumerate()
+            .map(|(i, section)| ChunkSectionNBT {
+                y: (i as i8) + section_coords::block_to_section(self.section.min_y) as i8,
+                block_states: Some(section.block_states.to_disk_nbt()),
+                biomes: Some(section.biomes.to_disk_nbt()),
+                block_light: match self.light_engine.block_light[i].clone() {
+                    LightContainer::Empty(_) => None,
+                    LightContainer::Full(data) => Some(data),
+                },
+                sky_light: match self.light_engine.sky_light[i].clone() {
+                    LightContainer::Empty(_) => None,
+                    LightContainer::Full(data) => Some(data),
+                },
             })
             .collect();
 
@@ -234,7 +206,7 @@ impl ChunkData {
             x_pos: self.position.x,
             z_pos: self.position.y,
             min_y_section: section_coords::block_to_section(self.section.min_y),
-            status: ChunkStatus::Full,
+            status: self.status,
             heightmaps: self.heightmap.clone(),
             sections,
             block_ticks: self.block_ticks.to_vec(),
@@ -275,7 +247,6 @@ impl Dirtiable for ChunkEntityData {
     }
 }
 
-#[async_trait]
 impl SingleChunkDataSerializer for ChunkEntityData {
     #[inline]
     fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
@@ -283,8 +254,10 @@ impl SingleChunkDataSerializer for ChunkEntityData {
     }
 
     #[inline]
-    async fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        self.internal_to_bytes()
+    fn to_bytes(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
+        Box::pin(async move { self.internal_to_bytes() })
     }
 
     #[inline]
@@ -314,21 +287,22 @@ impl ChunkEntityData {
         }
         let mut map = HashMap::new();
         for entity_nbt in chunk_entity_data.entities {
-            // TODO: This is wrong, we should use an int array, but our NBT lib for some reason does not work with int arrays and
-            // Just gives me a list when putting in a int array
-            let uuid = match entity_nbt.get_list("UUID") {
-                Some(uuid) => uuid,
+            let uuid = match entity_nbt.get_int_array("UUID") {
+                Some(uuid) => Uuid::from_u128(
+                    (uuid[0] as u128) << 96
+                        | (uuid[1] as u128) << 64
+                        | (uuid[2] as u128) << 32
+                        | (uuid[3] as u128),
+                ),
                 None => {
-                    log::warn!("TODO: use int arrays for UUID");
+                    println!(
+                        "Entity in chunk {},{} is missing UUID: {:?}",
+                        position.x, position.y, entity_nbt
+                    );
                     continue;
                 }
             };
-            let uuid = Uuid::from_u128(
-                (uuid.first().unwrap().extract_int().unwrap() as u128) << 96
-                    | (uuid.get(1).unwrap().extract_int().unwrap() as u128) << 64
-                    | (uuid.get(2).unwrap().extract_int().unwrap() as u128) << 32
-                    | (uuid.get(3).unwrap().extract_int().unwrap() as u128),
-            );
+
             map.insert(uuid, entity_nbt);
         }
 

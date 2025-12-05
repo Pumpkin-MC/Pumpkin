@@ -4,14 +4,11 @@ use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource::effect::EffectTypeArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
-use crate::command::dispatcher::CommandError;
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandSender};
+use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::entity::EntityBase;
-use crate::server::Server;
-use async_trait::async_trait;
 use pumpkin_data::potion::Effect;
 use pumpkin_util::text::color::{Color, NamedColor};
 
@@ -41,218 +38,223 @@ enum Amplifier {
 
 struct GiveExecutor(Time, Amplifier, bool);
 
-#[async_trait]
 impl CommandExecutor for GiveExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
-        let Some(Arg::Effect(effect)) = args.get(ARG_EFFECT) else {
-            return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
-        };
-
-        //duration is in tick, so * 20 (not for the infinite because -1*20 cause visual glitch)
-        let second = match self.0 {
-            Time::Base => 30 * 20,
-            Time::Specified => {
-                BoundedNumArgumentConsumer::new()
-                    .name("seconds")
-                    .min(1)
-                    .max(1_000_000)
-                    .find_arg_default_name(args)??
-                    * 20
-            }
-            Time::Infinite => -1,
-        };
-
-        let amplifier: i32 = match self.1 {
-            Amplifier::Base => 0,
-            Amplifier::Specified => BoundedNumArgumentConsumer::new()
-                .name("amplifier")
-                .min(0)
-                .max(255)
-                .find_arg_default_name(args)??,
-        };
-
-        let mut hide_particles = self.2;
-        //if false -> parameter is referred
-        if !hide_particles {
-            let Some(Arg::Bool(hide_particle)) = args.get(ARG_HIDE_PARTICLE) else {
-                return Err(InvalidConsumption(Some(ARG_HIDE_PARTICLE.into())));
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
+                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+            };
+            let Some(Arg::Effect(effect)) = args.get(ARG_EFFECT) else {
+                return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
             };
 
-            hide_particles = *hide_particle;
-        }
+            //duration is in tick, so * 20 (not for the infinite because -1*20 cause visual glitch)
+            let second = match self.0 {
+                Time::Base => 30 * 20,
+                Time::Specified => {
+                    BoundedNumArgumentConsumer::new()
+                        .name("seconds")
+                        .min(1)
+                        .max(1_000_000)
+                        .find_arg_default_name(args)??
+                        * 20
+                }
+                Time::Infinite => -1,
+            };
 
-        let mut failed = 0;
+            let amplifier: i32 = match self.1 {
+                Amplifier::Base => 0,
+                Amplifier::Specified => BoundedNumArgumentConsumer::new()
+                    .name("amplifier")
+                    .min(0)
+                    .max(255)
+                    .find_arg_default_name(args)??,
+            };
 
-        for target in targets {
-            if target.living_entity.has_effect(effect).await
-                && target
-                    .living_entity
-                    .get_effect(effect)
-                    .await
-                    .unwrap()
-                    .amplifier
-                    > amplifier as u8
-            {
-                failed += 1;
+            let mut hide_particles = self.2;
+            //if false -> parameter is referred
+            if !hide_particles {
+                let Some(Arg::Bool(hide_particle)) = args.get(ARG_HIDE_PARTICLE) else {
+                    return Err(InvalidConsumption(Some(ARG_HIDE_PARTICLE.into())));
+                };
+
+                hide_particles = *hide_particle;
+            }
+
+            let mut failed = 0;
+
+            for target in targets {
+                if target.living_entity.has_effect(effect).await
+                    && target
+                        .living_entity
+                        .get_effect(effect)
+                        .await
+                        .unwrap()
+                        .amplifier
+                        > amplifier as u8
+                {
+                    failed += 1;
+                } else {
+                    target
+                        .add_effect(Effect {
+                            effect_type: effect,
+                            duration: second,
+                            amplifier: amplifier as u8,
+                            ambient: false, //this is not a beacon effect
+                            show_particles: hide_particles,
+                            show_icon: true,
+                            blend: true, //Currently only used in the DARKNESS effect to apply extra void fog and adjust the gamma value for lighting.
+                        })
+                        .await;
+                }
+            }
+
+            let translation_name = TextComponent::translate(effect.translation_key.to_string(), []);
+
+            if failed == targets.len() {
+                sender
+                    .send_message(
+                        TextComponent::translate("commands.effect.give.failed", [])
+                            .color(Color::Named(NamedColor::Red)),
+                    )
+                    .await;
+            } else if targets.len() == 1 {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.effect.give.success.single",
+                        [translation_name, targets[0].get_display_name().await],
+                    ))
+                    .await;
             } else {
-                target
-                    .add_effect(Effect {
-                        effect_type: effect,
-                        duration: second,
-                        amplifier: amplifier as u8,
-                        ambient: false, //this is not a beacon effect
-                        show_particles: hide_particles,
-                        show_icon: true,
-                        blend: true, //Currently only used in the DARKNESS effect to apply extra void fog and adjust the gamma value for lighting.
-                    })
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.effect.give.success.multiple",
+                        [
+                            translation_name,
+                            TextComponent::text(targets.len().to_string()),
+                        ],
+                    ))
                     .await;
             }
-        }
 
-        let translation_name = TextComponent::translate(effect.translation_key.to_string(), []);
-
-        if failed == targets.len() {
-            sender
-                .send_message(
-                    TextComponent::translate("commands.effect.give.failed", [])
-                        .color(Color::Named(NamedColor::Red)),
-                )
-                .await;
-        } else if targets.len() == 1 {
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.effect.give.success.single",
-                    [translation_name, targets[0].get_display_name().await],
-                ))
-                .await;
-        } else {
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.effect.give.success.multiple",
-                    [
-                        translation_name,
-                        TextComponent::text(targets.len().to_string()),
-                    ],
-                ))
-                .await;
-        }
-
-        Ok(())
+            Ok(())
+        })
     }
 }
 
 struct ClearExecutor(bool); //the param -> true = delete every effect, false = only one
 
-#[async_trait]
 impl CommandExecutor for ClearExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
-
-        let effect;
-        //Only one effect
-        if self.0 {
-            let mut effect_number = 0;
-            for target in targets {
-                let effect_number_temp = target.remove_all_effect().await;
-                if effect_number_temp > effect_number {
-                    effect_number = effect_number_temp;
-                }
-            }
-
-            //if the player or everyplayer don't have any effect
-            if effect_number == 0 {
-                sender
-                    .send_message(
-                        TextComponent::translate("commands.effect.clear.everything.failed", [])
-                            .color(Color::Named(NamedColor::Red)),
-                    )
-                    .await;
-            }
-            //a player have at least 1 effect
-            else if targets.len() == 1 {
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.effect.clear.everything.success.single",
-                        [targets[0].get_display_name().await],
-                    ))
-                    .await;
-            } else {
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.effect.clear.everything.success.multiple",
-                        [TextComponent::text(targets.len().to_string())],
-                    ))
-                    .await;
-            }
-        } else {
-            let Some(Arg::Effect(effect_type)) = args.get(ARG_EFFECT) else {
-                return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
+                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
             };
 
-            effect = *effect_type;
-            let mut has_effect = vec![];
-
-            for target in targets {
-                if !target.living_entity.has_effect(effect).await {
-                    target.remove_effect(effect).await;
+            let effect;
+            //Only one effect
+            if self.0 {
+                let mut effect_number = 0;
+                for target in targets {
+                    let effect_number_temp = target.remove_all_effect().await;
+                    if effect_number_temp > effect_number {
+                        effect_number = effect_number_temp;
+                    }
                 }
-                has_effect.push(target.living_entity.has_effect(effect).await);
-            }
 
-            if has_effect.contains(&false) {
-                //contain false for 1 player == don't have
-                if targets.len() == 1 || !has_effect.contains(&true) {
+                //if the player or everyplayer don't have any effect
+                if effect_number == 0 {
                     sender
                         .send_message(
-                            TextComponent::translate("commands.effect.clear.specific.failed", [])
+                            TextComponent::translate("commands.effect.clear.everything.failed", [])
                                 .color(Color::Named(NamedColor::Red)),
                         )
                         .await;
                 }
-            } else {
-                //true for 1 player = have the effect
-                if targets.len() == 1 {
+                //a player have at least 1 effect
+                else if targets.len() == 1 {
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.effect.clear.specific.success.single",
-                            [
-                                TextComponent::translate(effect.translation_key, []),
-                                targets[0].get_display_name().await,
-                            ],
+                            "commands.effect.clear.everything.success.single",
+                            [targets[0].get_display_name().await],
+                        ))
+                        .await;
+                } else {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.effect.clear.everything.success.multiple",
+                            [TextComponent::text(targets.len().to_string())],
                         ))
                         .await;
                 }
-                //contain true for everyplayer = at least 1 player have the effect
-                else {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.effect.clear.specific.success.multiple",
-                            [
-                                TextComponent::translate(effect.translation_key, []),
-                                TextComponent::text(targets.len().to_string()),
-                            ],
-                        ))
-                        .await;
+            } else {
+                let Some(Arg::Effect(effect_type)) = args.get(ARG_EFFECT) else {
+                    return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
+                };
+
+                effect = *effect_type;
+                let mut has_effect = vec![];
+
+                for target in targets {
+                    if !target.living_entity.has_effect(effect).await {
+                        target.remove_effect(effect).await;
+                    }
+                    has_effect.push(target.living_entity.has_effect(effect).await);
+                }
+
+                if has_effect.contains(&false) {
+                    //contain false for 1 player == don't have
+                    if targets.len() == 1 || !has_effect.contains(&true) {
+                        sender
+                            .send_message(
+                                TextComponent::translate(
+                                    "commands.effect.clear.specific.failed",
+                                    [],
+                                )
+                                .color(Color::Named(NamedColor::Red)),
+                            )
+                            .await;
+                    }
+                } else {
+                    //true for 1 player = have the effect
+                    if targets.len() == 1 {
+                        sender
+                            .send_message(TextComponent::translate(
+                                "commands.effect.clear.specific.success.single",
+                                [
+                                    TextComponent::translate(effect.translation_key, []),
+                                    targets[0].get_display_name().await,
+                                ],
+                            ))
+                            .await;
+                    }
+                    //contain true for everyplayer = at least 1 player have the effect
+                    else {
+                        sender
+                            .send_message(TextComponent::translate(
+                                "commands.effect.clear.specific.success.multiple",
+                                [
+                                    TextComponent::translate(effect.translation_key, []),
+                                    TextComponent::text(targets.len().to_string()),
+                                ],
+                            ))
+                            .await;
+                    }
                 }
             }
-        }
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 

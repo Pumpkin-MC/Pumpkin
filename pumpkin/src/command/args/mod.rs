@@ -1,6 +1,6 @@
+use std::pin::Pin;
 use std::{collections::HashMap, hash::Hash, sync::Arc};
 
-use async_trait::async_trait;
 use bounded_num::{NotInBounds, Number};
 use pumpkin_data::Enchantment;
 use pumpkin_data::damage::DamageType;
@@ -51,24 +51,30 @@ pub mod textcomponent;
 pub mod time;
 
 /// see [`crate::commands::tree::builder::argument`]
-#[async_trait]
-pub trait ArgumentConsumer: Sync + GetClientSideArgParser {
-    async fn consume<'a>(
+pub type ConsumeResult<'a> = Pin<Box<dyn Future<Output = Option<Arg<'a>>> + Send + 'a>>;
+
+pub type SuggestResult<'a> =
+    Pin<Box<dyn Future<Output = Result<Option<Vec<CommandSuggestion>>, CommandError>> + Send + 'a>>;
+
+pub trait ArgumentConsumer: Sync + Send + GetClientSideArgParser {
+    fn consume<'a>(
         &'a self,
-        sender: &CommandSender,
+        sender: &'a CommandSender,
         server: &'a Server,
         args: &mut RawArgs<'a>,
-    ) -> Option<Arg>;
+    ) -> ConsumeResult<'a>;
 
     /// Used for tab completion (but only if argument suggestion type is "`minecraft:ask_server`"!).
     ///
     /// NOTE: This is called after this consumer's [`ArgumentConsumer::consume`] method returned None, so if args is used here, make sure [`ArgumentConsumer::consume`] never returns None after mutating args.
-    async fn suggest<'a>(
+    fn suggest<'a>(
         &'a self,
-        sender: &CommandSender,
-        server: &'a Server,
-        input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError>;
+        _sender: &CommandSender,
+        _server: &'a Server,
+        _input: &'a str,
+    ) -> SuggestResult<'a> {
+        Box::pin(async move { Ok(None) })
+    }
 }
 
 pub trait GetClientSideArgParser {

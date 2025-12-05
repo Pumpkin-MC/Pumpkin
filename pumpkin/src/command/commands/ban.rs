@@ -1,3 +1,4 @@
+use crate::command::CommandResult;
 use crate::entity::EntityBase;
 use crate::{
     command::{
@@ -13,7 +14,6 @@ use crate::{
     net::DisconnectReason,
 };
 use CommandError::InvalidConsumption;
-use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["ban"];
@@ -24,43 +24,45 @@ const ARG_REASON: &str = "reason";
 
 struct NoReasonExecutor;
 
-#[async_trait]
 impl CommandExecutor for NoReasonExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
+                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+            };
 
-        ban_player(sender, &targets[0], None).await;
-        Ok(())
+            ban_player(sender, &targets[0], None).await;
+            Ok(())
+        })
     }
 }
 
 struct ReasonExecutor;
 
-#[async_trait]
 impl CommandExecutor for ReasonExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
+                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+            };
 
-        let Some(Arg::Msg(reason)) = args.get(ARG_REASON) else {
-            return Err(InvalidConsumption(Some(ARG_REASON.into())));
-        };
+            let Some(Arg::Msg(reason)) = args.get(ARG_REASON) else {
+                return Err(InvalidConsumption(Some(ARG_REASON.into())));
+            };
 
-        ban_player(sender, &targets[0], Some(reason.clone())).await;
-        Ok(())
+            ban_player(sender, &targets[0], Some(reason.clone())).await;
+            Ok(())
+        })
     }
 }
 

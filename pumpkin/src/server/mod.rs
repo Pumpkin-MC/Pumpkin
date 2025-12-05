@@ -102,7 +102,7 @@ pub struct Server {
     world_info_writer: Arc<dyn WorldInfoWriter>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
-    _locker: Arc<AnvilLevelLocker>,
+    _locker: Arc<Option<AnvilLevelLocker>>,
 }
 
 impl Server {
@@ -138,11 +138,16 @@ impl Server {
                 fs::copy(dat_path, backup_path).unwrap();
             }
         }
-        // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
-        // So TODO
-        let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
-
-        let world_name = world_path.to_str().unwrap();
+        let locker = match AnvilLevelLocker::lock(&world_path) {
+            Ok(l) => Some(l),
+            Err(err) => {
+                log::warn!(
+                    "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
+                );
+                None
+            }
+        };
+        let player_data_path = world_path.join("playerdata");
 
         let level_info = level_info.unwrap_or_else(|err| {
             log::warn!("Failed to get level_info, using default instead: {err}");
@@ -173,7 +178,7 @@ impl Server {
                 gamemode: BASIC_CONFIG.default_gamemode,
             }),
             player_data_storage: ServerPlayerData::new(
-                format!("{world_name}/playerdata"),
+                player_data_path,
                 Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
             ),
             white_list: AtomicBool::new(BASIC_CONFIG.white_list),
@@ -209,7 +214,7 @@ impl Server {
         );
         log::info!("Loading End: {seed}");
         let end = World::load(
-            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
+            Dimension::End.into_level(world_path, block_registry.clone(), seed),
             level_info,
             VanillaDimensionType::TheEnd,
             block_registry,
@@ -219,6 +224,7 @@ impl Server {
             .worlds
             .try_write()
             .expect("Nothing should hold a lock of worlds before server startup") =
+            // vec![overworld.into()];
             vec![overworld.into(), nether.into(), end.into()];
         server
     }
@@ -322,7 +328,7 @@ impl Server {
         };
 
         let mut player = Player::new(
-            Arc::new(client),
+            client,
             profile,
             config.clone().unwrap_or_default(),
             world.clone(),
@@ -445,27 +451,26 @@ impl Server {
     /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
     pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: Option<bool>) {
         let mut level_info = self.level_info.write().await;
-        if force_update.unwrap_or_default() || !level_info.difficulty_locked {
-            level_info.difficulty = if BASIC_CONFIG.hardcore {
-                Difficulty::Hard
-            } else {
-                difficulty
-            };
-            // Minecraft server updates mob spawn options here
-            // but its not implemented in Pumpkin yet
-            // todo: update mob spawn options
-
-            for world in &*self.worlds.read().await {
-                world.level_info.write().await.difficulty = level_info.difficulty;
-            }
-
-            self.broadcast_packet_all(&CChangeDifficulty::new(
-                level_info.difficulty as u8,
-                level_info.difficulty_locked,
-            ))
-            .await;
-            drop(level_info);
+        if level_info.difficulty_locked && !force_update.unwrap_or_default() {
+            return;
         }
+
+        let difficulty = if BASIC_CONFIG.hardcore {
+            Difficulty::Hard
+        } else {
+            difficulty
+        };
+
+        level_info.difficulty = difficulty;
+        let locked = level_info.difficulty_locked;
+        drop(level_info);
+
+        for world in &*self.worlds.read().await {
+            world.level_info.write().await.difficulty = difficulty;
+        }
+
+        self.broadcast_packet_all(&CChangeDifficulty::new(difficulty as u8, locked))
+            .await;
     }
 
     /// Searches for a player by their username across all worlds.

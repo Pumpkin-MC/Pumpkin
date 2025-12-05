@@ -27,8 +27,8 @@ pub mod tripwire;
 pub mod tripwire_hook;
 pub mod turbo;
 
-// abstruct
-pub mod abstruct_redstone_gate;
+// abstract
+pub mod abstract_redstone_gate;
 pub mod dispenser;
 
 pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {

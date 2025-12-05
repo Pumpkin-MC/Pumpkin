@@ -1,4 +1,4 @@
-use std::{any::Any, fs, path::Path, path::PathBuf, sync::Arc};
+use std::{fs, path::Path, path::PathBuf, sync::Arc};
 
 use crate::command::client_suggestions;
 use pumpkin_util::{
@@ -13,7 +13,7 @@ use crate::{
     server::Server,
 };
 
-use super::{Event, EventPriority, PluginMetadata};
+use super::{EventPriority, Payload, PluginMetadata};
 
 /// The `Context` struct represents the context of a plugin, containing metadata,
 /// a server reference, and event handlers.
@@ -84,7 +84,7 @@ impl Context {
     ///
     /// This method allows you to associate a service instance with a given name,
     /// making it available for retrieval by plugins or other components.
-    /// The service must be wrapped in an `Arc` and implement `Any`, `Send`, and `Sync`.
+    /// The service must be wrapped in an `Arc` and implement `Payload`.
     ///
     /// # Arguments
     ///
@@ -96,7 +96,7 @@ impl Context {
     /// ```
     /// context.register_service("my_service".to_string(), Arc::new(MyService::new())).await;
     /// ```
-    pub async fn register_service<T: Any + Send + Sync>(&self, name: String, service: Arc<T>) {
+    pub async fn register_service<T: Payload + 'static>(&self, name: String, service: Arc<T>) {
         let mut services = self.plugin_manager.services.write().await;
         services.insert(name, service);
     }
@@ -104,8 +104,11 @@ impl Context {
     /// Retrieves a registered service by name and type.
     ///
     /// This method attempts to fetch a service previously registered under the given name,
-    /// and downcasts it to the requested type. Returns `Some(Arc<T>)` if the service exists
-    /// and the type matches, or `None` otherwise.
+    /// and downcasts it to the requested type using name-based type checking.
+    /// Returns `Some(Arc<T>)` if the service exists and the type matches, or `None` otherwise.
+    ///
+    /// This method is safe to use across compilation boundaries as it uses string-based
+    /// type identification instead of `TypeId`.
     ///
     /// # Arguments
     ///
@@ -122,9 +125,10 @@ impl Context {
     ///     // Use the service
     /// }
     /// ```
-    pub async fn get_service<T: Any + Send + Sync>(&self, name: &str) -> Option<Arc<T>> {
+    pub async fn get_service<T: Payload + 'static>(&self, name: &str) -> Option<Arc<T>> {
         let services = self.plugin_manager.services.read().await;
-        services.get(name)?.clone().downcast::<T>().ok()
+        let service = services.get(name)?.clone();
+        <dyn Payload>::downcast_arc::<T>(service)
     }
 
     /// Asynchronously registers a command with the server.
@@ -217,7 +221,7 @@ impl Context {
     ///
     /// # Constraints
     /// The handler must implement the `EventHandler<E>` trait.
-    pub async fn register_event<E: Event + 'static, H>(
+    pub async fn register_event<E: Payload + 'static, H>(
         &self,
         handler: Arc<H>,
         priority: EventPriority,

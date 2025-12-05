@@ -54,7 +54,7 @@ pub async fn send_c_commands_packet(player: &Arc<Player>, dispatcher: &CommandDi
 
 #[derive(Debug)]
 struct ProtoNodeBuilder<'a> {
-    child_nodes: Vec<ProtoNodeBuilder<'a>>,
+    child_nodes: Vec<Self>,
     node_type: ProtoNodeType<'a>,
 }
 

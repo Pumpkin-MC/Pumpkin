@@ -196,20 +196,20 @@ impl SpawnState {
         let mut local_mob_cap = LocalMobCapCalculator::new(world);
         let mut counter = MobCounts::default();
         for entity in entities.read().await.values() {
-            let entity_type = &entity.get_entity().entity_type;
-            #[allow(clippy::overly_complex_bool_expr)]
-            if entity_type.mob && false || entity_type.category == &MobCategory::MISC {
+            let entity = entity.get_entity();
+            let entity_type = entity.entity_type;
+            if !entity_type.mob || entity_type.category == &MobCategory::MISC {
                 // TODO (mob.isPersistenceRequired() || mob.requiresCustomPersistence())
                 continue;
             }
-            let entity_pos = &entity.get_entity().block_pos.load();
-            let biome = world.level.get_rough_biome(entity_pos).await;
+            let entity_pos = entity.block_pos.load();
+            let biome = world.level.get_rough_biome(&entity_pos).await;
             if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
-                potential.add_charge(entity_pos, cost.charge);
+                potential.add_charge(&entity_pos, cost.charge);
             }
             if entity_type.mob {
                 local_mob_cap
-                    .add_mob(&entity.get_entity().chunk_pos.load(), entity_type.category)
+                    .add_mob(&entity.chunk_pos.load(), entity_type.category)
                     .await;
             }
             counter.add(entity_type.category);
@@ -366,7 +366,7 @@ pub async fn spawn_category_for_position(
         let mut random_group_size = (rng().random::<f32>() * 4.).ceil() as i32;
         let mut inc = 0;
         #[allow(unused_variables)]
-        let mut group_size = 0;
+        let group_size = 0;
         'outer: while inc < random_group_size {
             new_x += rng().random_range(0..6) - rng().random_range(0..6);
             new_z += rng().random_range(0..6) - rng().random_range(0..6);
@@ -419,7 +419,7 @@ pub async fn spawn_category_for_position(
             // TODO isValidPositionForMob(level, mob, f)
             // TODO spawnGroupData = mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), EntitySpawnReason.NATURAL, spawnGroupData);
             spawn_cluster_size += 1;
-            group_size += 1;
+            //group_size += 1;
             world.spawn_entity(entity).await;
             spawn_state.after_spawn(entity_type, &new_pos, world).await;
             if spawn_cluster_size >= entity_type.limit_per_chunk {
@@ -474,7 +474,7 @@ pub async fn get_random_spawn_mob_at(
     // TODO Holder<Biome> holder = level.getBiome(pos);
     let biome = world.level.get_rough_biome(block_pos).await;
     if category == &MobCategory::WATER_AMBIENT
-        && biome.is_tagged_with_by_tag(&MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
+        && biome.has_tag(&MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
         && rng().random::<f32>() < 0.98f32
     {
         None
@@ -542,16 +542,10 @@ pub async fn is_spawn_position_ok(
     entity_type: &'static EntityType,
 ) -> bool {
     match entity_type.spawn_restriction.location {
-        SpawnLocation::InLava => world
-            .get_fluid(block_pos)
-            .await
-            .is_tagged_with_by_tag(&MINECRAFT_LAVA),
+        SpawnLocation::InLava => world.get_fluid(block_pos).await.has_tag(&MINECRAFT_LAVA),
         SpawnLocation::InWater => {
             // TODO !level.getBlockState(blockPos).isRedstoneConductor(level, blockPos)
-            world
-                .get_fluid(block_pos)
-                .await
-                .is_tagged_with_by_tag(&MINECRAFT_WATER)
+            world.get_fluid(block_pos).await.has_tag(&MINECRAFT_WATER)
         }
         SpawnLocation::OnGround => {
             let down = world.get_block_state(&block_pos.down()).await;
@@ -575,5 +569,5 @@ pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
         return false;
     }
     // TODO !entityType.isBlockDangerous(blockState);
-    !Block::from_state_id(state.id).is_tagged_with_by_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE)
+    !Block::from_state_id(state.id).has_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE)
 }

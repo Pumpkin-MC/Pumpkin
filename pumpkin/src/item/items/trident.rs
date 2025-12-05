@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_util::GameMode;
 
@@ -15,7 +14,6 @@ impl ItemMetadata for TridentItem {
     }
 }
 
-#[async_trait]
 impl ItemBehaviour for TridentItem {
     fn can_mine(&self, player: &Player) -> bool {
         player.gamemode.load() != GameMode::Creative

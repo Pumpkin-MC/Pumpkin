@@ -1,3 +1,4 @@
+pub mod armor_stand;
 pub mod axe;
 pub mod bucket;
 pub mod dye;
@@ -14,12 +15,17 @@ pub mod minecart;
 pub mod name_tag;
 pub mod shovel;
 pub mod snowball;
+pub mod spawn_egg;
 pub mod swords;
 pub mod trident;
+pub mod wind_charge;
 
+use crate::item::items::armor_stand::ArmorStandItem;
 use crate::item::items::end_crystal::EndCrystalItem;
 use crate::item::items::minecart::MinecartItem;
 use crate::item::items::name_tag::NameTagItem;
+use crate::item::items::spawn_egg::SpawnEggItem;
+use crate::item::items::wind_charge::WindChargeItem;
 
 use super::registry::ItemRegistry;
 use axe::AxeItem;
@@ -54,6 +60,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(EmptyBucketItem);
     manager.register(FilledBucketItem);
     manager.register(ShovelItem);
+    manager.register(SpawnEggItem);
     manager.register(AxeItem);
     manager.register(EndCrystalItem);
     manager.register(MinecartItem);
@@ -64,6 +71,8 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(DyeItem);
     manager.register(InkSacItem);
     manager.register(GlowingInkSacItem);
+    manager.register(ArmorStandItem);
+    manager.register(WindChargeItem);
 
     Arc::new(manager)
 }

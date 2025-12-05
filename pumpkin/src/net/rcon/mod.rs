@@ -131,7 +131,7 @@ impl RCONClient {
                             .read()
                             .await
                             .handle_command(
-                                &mut crate::command::CommandSender::Rcon(output_clone),
+                                &crate::command::CommandSender::Rcon(output_clone),
                                 &server_clone,
                                 &packet_body,
                             )

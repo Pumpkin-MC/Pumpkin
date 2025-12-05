@@ -1,9 +1,9 @@
 use crate::block::BlockBehaviour;
+use crate::block::BlockFuture;
 use crate::block::CanPlaceAtArgs;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use crate::block::OnScheduledTickArgs;
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_macros::pumpkin_block;
@@ -16,41 +16,48 @@ use pumpkin_world::world::BlockFlags;
 #[pumpkin_block("minecraft:dirt_path")]
 pub struct DirtPathBlock;
 
-#[async_trait]
 impl BlockBehaviour for DirtPathBlock {
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        // TODO: push up entities
-        args.world
-            .set_block_state(
-                args.position,
-                Block::DIRT.default_state.id,
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
-    }
-
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        if !can_place_at(args.world, args.position).await {
-            return Block::DIRT.default_state.id;
-        }
-
-        args.block.default_state.id
-    }
-
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if args.direction == BlockDirection::Up && !can_place_at(args.world, args.position).await {
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // TODO: push up entities
             args.world
-                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
+                .set_block_state(
+                    args.position,
+                    Block::DIRT.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                )
                 .await;
-        }
-        args.state_id
+        })
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.position).await
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if !can_place_at(args.world, args.position).await {
+                return Block::DIRT.default_state.id;
+            }
+
+            args.block.default_state.id
+        })
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if args.direction == BlockDirection::Up
+                && !can_place_at(args.world, args.position).await
+            {
+                args.world
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
+                    .await;
+            }
+            args.state_id
+        })
+    }
+
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
     }
 }
 

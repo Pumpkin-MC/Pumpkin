@@ -1,12 +1,10 @@
-use async_trait::async_trait;
 use pumpkin_data::world::SAY_COMMAND;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
-    CommandError, CommandExecutor, CommandSender,
+    CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{Arg, ConsumedArgs, message::MsgArgConsumer},
-    tree::CommandTree,
-    tree::builder::argument,
+    tree::{CommandTree, builder::argument},
 };
 use CommandError::InvalidConsumption;
 
@@ -18,27 +16,28 @@ const ARG_MESSAGE: &str = "message";
 
 struct Executor;
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
-            return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
+                return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
+            };
 
-        server
-            .broadcast_message(
-                &TextComponent::text(msg.clone()),
-                &TextComponent::text(format!("{sender}")),
-                SAY_COMMAND,
-                None,
-            )
-            .await;
-        Ok(())
+            server
+                .broadcast_message(
+                    &TextComponent::text(msg.clone()),
+                    &TextComponent::text(format!("{sender}")),
+                    SAY_COMMAND,
+                    None,
+                )
+                .await;
+            Ok(())
+        })
     }
 }
 

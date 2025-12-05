@@ -159,10 +159,7 @@ impl JavaClient {
     ///
     /// * `server`: A reference to the `Server` instance.
     pub async fn process_packets(self: &Arc<Self>, server: &Arc<Server>) {
-        loop {
-            let packet = self.get_packet().await;
-            let Some(packet) = packet else { break };
-
+        while let Some(packet) = self.get_packet().await {
             if let Err(error) = self.handle_packet(server, &packet).await {
                 let text = format!("Error while reading incoming packet {error}");
                 log::error!(

@@ -1,6 +1,6 @@
+use crate::block::BlockFuture;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
-use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::BlockProperties;
@@ -28,21 +28,24 @@ impl BlockMetadata for FenceBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for FenceBlock {
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut fence_props = FenceProperties::default(args.block);
-        fence_props.waterlogged = args.replacing.water_source();
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut fence_props = FenceProperties::default(args.block);
+            fence_props.waterlogged = args.replacing.water_source();
 
-        compute_fence_state(fence_props, args.world, args.block, args.position).await
+            compute_fence_state(fence_props, args.world, args.block, args.position).await
+        })
     }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let fence_props = FenceProperties::from_state_id(args.state_id, args.block);
-        compute_fence_state(fence_props, args.world, args.block, args.position).await
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let fence_props = FenceProperties::from_state_id(args.state_id, args.block);
+            compute_fence_state(fence_props, args.world, args.block, args.position).await
+        })
     }
 }
 
@@ -78,7 +81,7 @@ fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: Block
         return true;
     }
 
-    if to.is_tagged_with_by_tag(&tag::Block::C_FENCE_GATES) {
+    if to.has_tag(&tag::Block::C_FENCE_GATES) {
         let fence_gate_props = FenceGateProperties::from_state_id(to_state.id, to);
         if BlockDirection::from_cardinal_direction(fence_gate_props.facing).to_axis()
             == direction.rotate_clockwise().to_axis()
@@ -87,5 +90,5 @@ fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: Block
         }
     }
 
-    *from != Block::NETHER_BRICK_FENCE && to.is_tagged_with_by_tag(&tag::Block::C_FENCES_WOODEN)
+    *from != Block::NETHER_BRICK_FENCE && to.has_tag(&tag::Block::C_FENCES_WOODEN)
 }

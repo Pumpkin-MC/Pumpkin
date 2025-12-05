@@ -263,7 +263,6 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
                 // This should never panic
                 out[0] = out_to_use;
             } else {
-                // This is a stream cipher, so this value must be used
                 let out_block = GenericArray::from_mut_slice(&mut out);
                 cipher.encrypt_block_b2b_mut(block.into(), out_block);
             }

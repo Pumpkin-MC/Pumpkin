@@ -1,10 +1,9 @@
 use crate::command::CommandSender;
-use crate::command::args::{Arg, ArgumentConsumer, FindArg, GetClientSideArgParser};
+use crate::command::args::{Arg, ArgumentConsumer, ConsumeResult, FindArg, GetClientSideArgParser};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
 pub struct TextComponentArgConsumer;
@@ -19,36 +18,32 @@ impl GetClientSideArgParser for TextComponentArgConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for TextComponentArgConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
 
-        let text_component = parse_text_component(s);
-
-        let Some(text_component) = text_component else {
-            if s.starts_with('"') && s.ends_with('"') {
-                let s = s.replace('"', "");
-                return Some(Arg::TextComponent(TextComponent::text(s)));
-            }
-            return None;
+        let Some(s) = s_opt else {
+            return Box::pin(async move { None });
         };
 
-        Some(Arg::TextComponent(text_component))
-    }
+        let text_component_opt = parse_text_component(s);
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        let final_arg: Option<Arg<'a>> = text_component_opt.map_or_else(
+            || {
+                (s.starts_with('"') && s.ends_with('"')).then(|| {
+                    let s_owned = s.replace('"', "");
+                    Arg::TextComponent(TextComponent::text(s_owned))
+                })
+            },
+            |text_component| Some(Arg::TextComponent(text_component)),
+        );
+
+        Box::pin(async move { final_arg })
     }
 }
 

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::BlockProperties,
@@ -17,7 +16,7 @@ use rand::{Rng, rng};
 
 use crate::{
     block::{
-        BlockBehaviour, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+        BlockBehaviour, BlockFuture, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
         GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
         PlayerPlacedArgs,
     },
@@ -30,106 +29,130 @@ type TripwireHookProperties = pumpkin_data::block_properties::TripwireHookLikePr
 #[pumpkin_block("minecraft:tripwire_hook")]
 pub struct TripwireHookBlock;
 
-#[async_trait]
 impl BlockBehaviour for TripwireHookBlock {
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = TripwireHookProperties::default(args.block);
-        props.powered = false;
-        props.attached = false;
-        if Self::can_place_at(args.world, args.position, args.direction).await {
-            props.facing = args.direction.opposite().to_cardinal_direction();
-            return props.to_state_id(args.block);
-        }
-        args.block.default_state.id
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut props = TripwireHookProperties::default(args.block);
+            props.powered = false;
+            props.attached = false;
+            if Self::can_place_at(args.world, args.position, args.direction).await {
+                props.facing = args.direction.opposite().to_cardinal_direction();
+                return props.to_state_id(args.block);
+            }
+            args.block.default_state.id
+        })
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        Self::can_place_at(args.block_accessor, args.position, args.direction).await
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            Self::can_place_at(args.block_accessor, args.position, args.direction).await
+        })
     }
 
-    async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        Self::update(
-            args.world,
-            *args.position,
-            args.state_id,
-            false,
-            false,
-            -1,
-            None,
-        )
-        .await;
-    }
-
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if args.direction.to_horizontal_facing().is_some_and(|facing| {
-            let props = TripwireHookProperties::from_state_id(args.state_id, args.block);
-            facing.opposite() == props.facing
-        }) && !Self::can_place_at(args.world, args.position, args.direction).await
-        {
-            Block::AIR.default_state.id
-        } else {
-            args.state_id
-        }
-    }
-
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state_id = args.world.get_block_state_id(args.position).await;
-        Self::update(args.world, *args.position, state_id, false, true, -1, None).await;
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        if args.moved || Block::from_state_id(args.old_state_id) == args.block {
-            return;
-        }
-        let props = TripwireHookProperties::from_state_id(args.old_state_id, args.block);
-        if props.powered || props.attached {
+    fn player_placed<'a>(&'a self, args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
             Self::update(
                 args.world,
                 *args.position,
-                args.old_state_id,
-                true,
+                args.state_id,
+                false,
                 false,
                 -1,
                 None,
             )
             .await;
-        }
-        if props.powered {
-            args.world.update_neighbor(args.position, args.block).await;
-            args.world
-                .update_neighbor(
-                    &args.position.offset(props.facing.opposite().to_offset()),
-                    args.block,
+        })
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if args.direction.to_horizontal_facing().is_some_and(|facing| {
+                let props = TripwireHookProperties::from_state_id(args.state_id, args.block);
+                facing.opposite() == props.facing
+            }) && !Self::can_place_at(args.world, args.position, args.direction).await
+            {
+                Block::AIR.default_state.id
+            } else {
+                args.state_id
+            }
+        })
+    }
+
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let state_id = args.world.get_block_state_id(args.position).await;
+            Self::update(args.world, *args.position, state_id, false, true, -1, None).await;
+        })
+    }
+
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if args.moved || Block::from_state_id(args.old_state_id) == args.block {
+                return;
+            }
+            let props = TripwireHookProperties::from_state_id(args.old_state_id, args.block);
+            if props.powered || props.attached {
+                Self::update(
+                    args.world,
+                    *args.position,
+                    args.old_state_id,
+                    true,
+                    false,
+                    -1,
+                    None,
                 )
                 .await;
-        }
+            }
+            if props.powered {
+                args.world.update_neighbor(args.position, args.block).await;
+                args.world
+                    .update_neighbor(
+                        &args.position.offset(props.facing.opposite().to_offset()),
+                        args.block,
+                    )
+                    .await;
+            }
+        })
     }
 
     #[inline]
-    async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
-        true
+    fn emits_redstone_power<'a>(
+        &'a self,
+        _args: EmitsRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move { true })
     }
 
-    async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = TripwireHookProperties::from_state_id(args.state.id, args.block);
-        if props.powered { 15 } else { 0 }
+    fn get_weak_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            let props = TripwireHookProperties::from_state_id(args.state.id, args.block);
+            if props.powered { 15 } else { 0 }
+        })
     }
 
-    async fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = TripwireHookProperties::from_state_id(args.state.id, args.block);
-        if props.powered
-            && args
-                .direction
-                .to_horizontal_facing()
-                .is_some_and(|facing| props.facing == facing)
-        {
-            15
-        } else {
-            0
-        }
+    fn get_strong_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            let props = TripwireHookProperties::from_state_id(args.state.id, args.block);
+            if props.powered
+                && args
+                    .direction
+                    .to_horizontal_facing()
+                    .is_some_and(|facing| props.facing == facing)
+            {
+                15
+            } else {
+                0
+            }
+        })
     }
 }
 

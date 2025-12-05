@@ -64,7 +64,7 @@ pub struct CommandDispatcher {
 impl CommandDispatcher {
     pub async fn handle_command<'a>(
         &'a self,
-        sender: &mut CommandSender,
+        sender: &CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) {
@@ -242,7 +242,7 @@ impl CommandDispatcher {
     /// Execute a command using its corresponding [`CommandTree`].
     pub(crate) async fn dispatch<'a>(
         &'a self,
-        src: &mut CommandSender,
+        src: &CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) -> Result<(), CommandError> {
@@ -302,7 +302,7 @@ impl CommandDispatcher {
     }
 
     async fn try_is_fitting_path<'a>(
-        src: &mut CommandSender,
+        src: &'a CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,
@@ -357,7 +357,7 @@ impl CommandDispatcher {
     }
 
     async fn try_find_suggestions_on_path<'a>(
-        src: &CommandSender,
+        src: &'a CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,

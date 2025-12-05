@@ -1,12 +1,10 @@
-use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 
+use crate::command::CommandResult;
 use crate::command::args::{FindArg, time::TimeArgumentConsumer};
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{
-    CommandError, CommandExecutor, CommandSender, ConsumedArgs, tree::CommandTree,
-};
+use crate::command::{CommandExecutor, CommandSender, ConsumedArgs, tree::CommandTree};
 
 const NAMES: [&str; 1] = ["time"];
 const DESCRIPTION: &str = "Query the world time.";
@@ -46,107 +44,109 @@ enum QueryMode {
 
 struct QueryExecutor(QueryMode);
 
-#[async_trait]
 impl CommandExecutor for QueryExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let mode = self.0;
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.read().await;
-        let world = worlds
-            .first()
-            .expect("There should always be at least one world");
-        let level_time = world.level_time.lock().await;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        _args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let mode = self.0;
+            // TODO: Maybe ask player for world, or get the current world
+            let worlds = server.worlds.read().await;
+            let world = worlds
+                .first()
+                .expect("There should always be at least one world");
+            let level_time = world.level_time.lock().await;
 
-        let msg = match mode {
-            QueryMode::DayTime => {
-                let curr_time = level_time.query_daytime();
-                TextComponent::translate(
-                    "commands.time.query",
-                    [TextComponent::text(curr_time.to_string())],
-                )
-            }
-            QueryMode::GameTime => {
-                let curr_time = level_time.query_gametime();
-                TextComponent::translate(
-                    "commands.time.query",
-                    [TextComponent::text(curr_time.to_string())],
-                )
-            }
-            QueryMode::Day => {
-                let curr_time = level_time.query_day();
-                TextComponent::translate(
-                    "commands.time.query",
-                    [TextComponent::text(curr_time.to_string())],
-                )
-            }
-        };
+            let msg = match mode {
+                QueryMode::DayTime => {
+                    let curr_time = level_time.query_daytime();
+                    TextComponent::translate(
+                        "commands.time.query",
+                        [TextComponent::text(curr_time.to_string())],
+                    )
+                }
+                QueryMode::GameTime => {
+                    let curr_time = level_time.query_gametime();
+                    TextComponent::translate(
+                        "commands.time.query",
+                        [TextComponent::text(curr_time.to_string())],
+                    )
+                }
+                QueryMode::Day => {
+                    let curr_time = level_time.query_day();
+                    TextComponent::translate(
+                        "commands.time.query",
+                        [TextComponent::text(curr_time.to_string())],
+                    )
+                }
+            };
 
-        sender.send_message(msg).await;
-        Ok(())
+            sender.send_message(msg).await;
+            Ok(())
+        })
     }
 }
 
 struct ChangeExecutor(Mode);
 
-#[async_trait]
 impl CommandExecutor for ChangeExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let time_count = if let Mode::Set(Some(preset)) = &self.0 {
-            preset.to_ticks()
-        } else if let Ok(ticks) = TimeArgumentConsumer::find_arg(args, ARG_TIME) {
-            ticks
-        } else {
-            sender
-                .send_message(
-                    TextComponent::text("Invalid time specified.")
-                        .color(Color::Named(NamedColor::Red)),
-                )
-                .await;
-            return Ok(());
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let time_count = if let Mode::Set(Some(preset)) = &self.0 {
+                preset.to_ticks()
+            } else if let Ok(ticks) = TimeArgumentConsumer::find_arg(args, ARG_TIME) {
+                ticks
+            } else {
+                sender
+                    .send_message(
+                        TextComponent::text("Invalid time specified.")
+                            .color(Color::Named(NamedColor::Red)),
+                    )
+                    .await;
+                return Ok(());
+            };
 
-        let mode = self.0;
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.read().await;
-        let world = worlds
-            .first()
-            .expect("There should always be at least one world");
-        let mut level_time = world.level_time.lock().await;
+            let mode = self.0;
+            // TODO: Maybe ask player for world, or get the current world
+            let worlds = server.worlds.read().await;
+            let world = worlds
+                .first()
+                .expect("There should always be at least one world");
+            let mut level_time = world.level_time.lock().await;
 
-        let msg = match mode {
-            Mode::Add => {
-                // add
-                level_time.add_time(time_count.into());
-                level_time.send_time(world).await;
-                let curr_time = level_time.query_daytime();
-                TextComponent::translate(
-                    "commands.time.set",
-                    [TextComponent::text(curr_time.to_string())],
-                )
-            }
-            Mode::Set(_) => {
-                // set
-                level_time.set_time(time_count.into());
-                level_time.send_time(world).await;
-                TextComponent::translate(
-                    "commands.time.set",
-                    [TextComponent::text(time_count.to_string())],
-                )
-            }
-        };
+            let msg = match mode {
+                Mode::Add => {
+                    // add
+                    level_time.add_time(time_count.into());
+                    level_time.send_time(world).await;
+                    let curr_time = level_time.query_daytime();
+                    TextComponent::translate(
+                        "commands.time.set",
+                        [TextComponent::text(curr_time.to_string())],
+                    )
+                }
+                Mode::Set(_) => {
+                    // set
+                    level_time.set_time(time_count.into());
+                    level_time.send_time(world).await;
+                    TextComponent::translate(
+                        "commands.time.set",
+                        [TextComponent::text(time_count.to_string())],
+                    )
+                }
+            };
 
-        sender.send_message(msg).await;
-        Ok(())
+            sender.send_message(msg).await;
+            Ok(())
+        })
     }
 }
 

@@ -6,7 +6,7 @@ use quote::{ToTokens, quote};
 use serde::Deserialize;
 use syn::LitStr;
 
-/// These are required to be defined twice because serde can't deseralize into static context for obvious reasons.
+/// These are required to be defined twice because serde can't deserialize into static context for obvious reasons.
 #[derive(Deserialize, Clone, Debug)]
 pub struct LootTableStruct {
     r#type: LootTableTypeStruct,
@@ -44,6 +44,8 @@ pub struct LootPoolStruct {
     entries: Vec<LootPoolEntryStruct>,
     rolls: LootNumberProviderTypes, // TODO
     bonus_rolls: f32,
+    conditions: Option<Vec<LootConditionStruct>>,
+    functions: Option<Vec<LootFunctionStruct>>,
 }
 
 impl ToTokens for LootPoolStruct {
@@ -55,12 +57,28 @@ impl ToTokens for LootPoolStruct {
             .collect();
         let rolls = &self.rolls;
         let bonus_rolls = &self.bonus_rolls;
+        let conditions_tokens = match &self.conditions {
+            Some(conds) => {
+                let cond_tokens: Vec<_> = conds.iter().map(|c| c.to_token_stream()).collect();
+                quote! { Some(&[#(#cond_tokens),*]) }
+            }
+            None => quote! { None },
+        };
+        let functions_tokens = match &self.functions {
+            Some(fns) => {
+                let cond_tokens: Vec<_> = fns.iter().map(|c| c.to_token_stream()).collect();
+                quote! { Some(&[#(#cond_tokens),*]) }
+            }
+            None => quote! { None },
+        };
 
         tokens.extend(quote! {
             LootPool {
                 entries: &[#(#entries_tokens),*],
                 rolls: #rolls,
                 bonus_rolls: #bonus_rolls,
+                conditions: #conditions_tokens,
+                functions: #functions_tokens,
             }
         });
     }
