@@ -31,7 +31,10 @@ impl PlayerDataStorage {
         if !path.exists()
             && let Err(e) = create_dir_all(&path)
         {
-            log::error!("Failed to create player data directory at {path:?}: {e}");
+            log::error!(
+                "Failed to create player data directory at {}: {e}",
+                path.display()
+            );
         }
 
         Self {

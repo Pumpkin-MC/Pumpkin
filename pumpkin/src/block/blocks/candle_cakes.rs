@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use pumpkin_data::{
     Block,
     item::Item,
@@ -12,9 +11,8 @@ use pumpkin_world::{item::ItemStack, world::BlockFlags};
 
 use crate::{
     block::{
-        blocks::cake::CakeBlock,
+        BlockBehaviour, BlockFuture, NormalUseArgs, UseWithItemArgs, blocks::cake::CakeBlock,
         registry::BlockActionResult,
-        {BlockBehaviour, NormalUseArgs, UseWithItemArgs},
     },
     entity::player::Player,
     world::World,
@@ -100,19 +98,25 @@ impl CandleCakeBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for CandleCakeBlock {
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let item_id = args.item_stack.lock().await.item.id;
-        match item_id {
-            id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
-                BlockActionResult::Pass
-            } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
-            _ => BlockActionResult::PassToDefaultBlockAction,
-        }
+    fn use_with_item<'a>(
+        &'a self,
+        args: UseWithItemArgs<'a>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let item_id = args.item_stack.lock().await.item.id;
+            match item_id {
+                id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
+                    BlockActionResult::Pass
+                } // Item::FIRE_CHARGE | Item::FLINT_AND_STEEL
+                _ => BlockActionResult::PassToDefaultBlockAction,
+            }
+        })
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        Self::consume_and_drop_candle(args.block, args.player, args.position, args.world).await
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            Self::consume_and_drop_candle(args.block, args.player, args.position, args.world).await
+        })
     }
 }

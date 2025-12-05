@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::EnumVariants;
@@ -12,10 +11,12 @@ use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::BlockStateId;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use uuid::Uuid;
 
 use crate::block::BlockBehaviour;
+use crate::block::BlockFuture;
 use crate::block::NormalUseArgs;
 use crate::block::OnPlaceArgs;
 use crate::block::OnStateReplacedArgs;
@@ -40,118 +41,132 @@ pub struct SignBlock;
 //TODO: Add support for Wall Signs
 //TODO: Add support for Hanging Signs
 //TODO: add support for click commands
-#[async_trait]
 impl BlockBehaviour for SignBlock {
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> u16 {
-        let mut sign_props = SignProperties::default(args.block);
-        sign_props.waterlogged = args.replacing.water_source();
-        sign_props.rotation = args.player.get_entity().get_flipped_rotation_16();
-        sign_props.to_state_id(args.block)
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut sign_props = SignProperties::default(args.block);
+            sign_props.waterlogged = args.replacing.water_source();
+            sign_props.rotation = args.player.get_entity().get_flipped_rotation_16();
+            sign_props.to_state_id(args.block)
+        })
     }
 
-    async fn placed(&self, args: PlacedArgs<'_>) {
-        args.world
-            .add_block_entity(Arc::new(SignBlockEntity::empty(*args.position)))
-            .await;
-    }
-
-    async fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        match &args.player.client {
-            crate::net::ClientPlatform::Java(java) => {
-                java.send_sign_packet(*args.position, true).await;
-            }
-            crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
-        }
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        args.world.remove_block_entity(args.position).await;
-    }
-
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        let Some(block_entity) = args.world.get_block_entity(args.position).await else {
-            return BlockActionResult::Pass;
-        };
-        let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
-            return BlockActionResult::Pass;
-        };
-
-        if sign_entity.is_waxed.load(Ordering::Relaxed) {
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
             args.world
-                .play_block_sound(
-                    pumpkin_data::sound::Sound::BlockSignWaxedInteractFail,
-                    pumpkin_data::sound::SoundCategory::Blocks,
-                    *args.position,
-                )
+                .add_block_entity(Arc::new(SignBlockEntity::empty(*args.position)))
                 .await;
-            return BlockActionResult::SuccessServer;
-        }
-
-        let mut currently_editing = sign_entity.currently_editing_player.lock().await;
-        if !try_claim_sign(
-            &mut currently_editing,
-            &args.player.gameprofile.id,
-            args.world,
-            args.position,
-        )
-        .await
-        {
-            return BlockActionResult::Pass;
-        }
-
-        let is_facing_front_text =
-            is_facing_front_text(args.world, args.position, args.block, args.player).await;
-        match &args.player.client {
-            ClientPlatform::Java(java) => {
-                java.send_sign_packet(*args.position, is_facing_front_text)
-                    .await;
-            }
-            ClientPlatform::Bedrock(_bedrock) => todo!(),
-        }
-
-        BlockActionResult::SuccessServer
+        })
     }
 
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let Some(block_entity) = args.world.get_block_entity(args.position).await else {
-            return BlockActionResult::Pass;
-        };
-        let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
-            return BlockActionResult::Pass;
-        };
+    fn player_placed<'a>(&'a self, args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            match &args.player.client {
+                crate::net::ClientPlatform::Java(java) => {
+                    java.send_sign_packet(*args.position, true).await;
+                }
+                crate::net::ClientPlatform::Bedrock(_bedrock) => todo!(),
+            }
+        })
+    }
 
-        if sign_entity.is_waxed.load(Ordering::Relaxed) {
-            return BlockActionResult::PassToDefaultBlockAction;
-        }
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            args.world.remove_block_entity(args.position).await;
+        })
+    }
 
-        let mut currently_editing = sign_entity.currently_editing_player.lock().await;
-        if !try_claim_sign(
-            &mut currently_editing,
-            &args.player.gameprofile.id,
-            args.world,
-            args.position,
-        )
-        .await
-        {
-            // I don't think that makes sense, since it will also just return in normal_use, but vanilla does it like this
-            return BlockActionResult::PassToDefaultBlockAction;
-        }
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let Some(block_entity) = args.world.get_block_entity(args.position).await else {
+                return BlockActionResult::Pass;
+            };
+            let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
+                return BlockActionResult::Pass;
+            };
 
-        let text = if is_facing_front_text(args.world, args.position, args.block, args.player).await
-        {
-            &sign_entity.front_text
-        } else {
-            &sign_entity.back_text
-        };
+            if sign_entity.is_waxed.load(Ordering::Relaxed) {
+                args.world
+                    .play_block_sound(
+                        pumpkin_data::sound::Sound::BlockSignWaxedInteractFail,
+                        pumpkin_data::sound::SoundCategory::Blocks,
+                        *args.position,
+                    )
+                    .await;
+                return BlockActionResult::SuccessServer;
+            }
 
-        let mut item = args.item_stack.lock().await;
+            let mut currently_editing = sign_entity.currently_editing_player.lock().await;
+            if !try_claim_sign(
+                &mut currently_editing,
+                &args.player.gameprofile.id,
+                args.world,
+                args.position,
+            )
+            .await
+            {
+                return BlockActionResult::Pass;
+            }
 
-        let Some(pumpkin_item) = args.server.item_registry.get_pumpkin_item(item.item) else {
-            return BlockActionResult::PassToDefaultBlockAction;
-        };
+            let is_facing_front_text =
+                is_facing_front_text(args.world, args.position, args.block, args.player).await;
+            match &args.player.client {
+                ClientPlatform::Java(java) => {
+                    java.send_sign_packet(*args.position, is_facing_front_text)
+                        .await;
+                }
+                ClientPlatform::Bedrock(_bedrock) => todo!(),
+            }
 
-        let result =
-            if let Some(honeycomb_item) = pumpkin_item.as_any().downcast_ref::<HoneyCombItem>() {
+            BlockActionResult::SuccessServer
+        })
+    }
+
+    fn use_with_item<'a>(
+        &'a self,
+        args: UseWithItemArgs<'a>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let Some(block_entity) = args.world.get_block_entity(args.position).await else {
+                return BlockActionResult::Pass;
+            };
+            let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
+                return BlockActionResult::Pass;
+            };
+
+            if sign_entity.is_waxed.load(Ordering::Relaxed) {
+                return BlockActionResult::PassToDefaultBlockAction;
+            }
+
+            let mut currently_editing = sign_entity.currently_editing_player.lock().await;
+            if !try_claim_sign(
+                &mut currently_editing,
+                &args.player.gameprofile.id,
+                args.world,
+                args.position,
+            )
+            .await
+            {
+                // I don't think that makes sense, since it will also just return in normal_use, but vanilla does it like this
+                return BlockActionResult::PassToDefaultBlockAction;
+            }
+
+            let text =
+                if is_facing_front_text(args.world, args.position, args.block, args.player).await {
+                    &sign_entity.front_text
+                } else {
+                    &sign_entity.back_text
+                };
+
+            let mut item = args.item_stack.lock().await;
+
+            let Some(pumpkin_item) = args.server.item_registry.get_pumpkin_item(item.item) else {
+                return BlockActionResult::PassToDefaultBlockAction;
+            };
+
+            let result = if let Some(honeycomb_item) =
+                pumpkin_item.as_any().downcast_ref::<HoneyCombItem>()
+            {
                 honeycomb_item
                     .apply_to_sign(&args, &block_entity, sign_entity)
                     .await
@@ -171,14 +186,15 @@ impl BlockBehaviour for SignBlock {
                 BlockActionResult::PassToDefaultBlockAction
             };
 
-        if result == BlockActionResult::Success {
-            if !args.player.has_infinite_materials() {
-                item.decrement(1);
+            if result == BlockActionResult::Success {
+                if !args.player.has_infinite_materials() {
+                    item.decrement(1);
+                }
+                *currently_editing = None;
             }
-            *currently_editing = None;
-        }
 
-        result
+            result
+        })
     }
 }
 

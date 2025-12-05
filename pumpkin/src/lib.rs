@@ -489,7 +489,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
                     'after: {
                         let dispatcher = &server.command_dispatcher.read().await;
                         dispatcher
-                            .handle_command(&mut command::CommandSender::Console, &server, command.as_str())
+                            .handle_command(&command::CommandSender::Console, &server, command.as_str())
                             .await;
                     };
                 }}
@@ -522,7 +522,7 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
                             let dispatcher = server.command_dispatcher.read().await;
 
                             dispatcher
-                                .handle_command(&mut command::CommandSender::Console, &server, &line)
+                                .handle_command(&command::CommandSender::Console, &server, &line)
                                 .await;
                             rl.add_history_entry(line).unwrap();
                         }

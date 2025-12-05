@@ -4,10 +4,8 @@ use std::sync::{
 };
 
 use crate::entity::{
-    Entity, EntityBase, NBTStorage,
-    living::{LivingEntity, LivingEntityTrait},
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
 };
-use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
     damage::DamageType,
@@ -220,77 +218,74 @@ impl ArmorStandEntity {
     }
 }
 
-#[async_trait]
 impl NBTStorage for ArmorStandEntity {
-    async fn write_nbt(&self, nbt: &mut NbtCompound) {
-        let disabled_slots = self.disabled_slots.load(Ordering::Relaxed);
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            let disabled_slots = self.disabled_slots.load(Ordering::Relaxed);
 
-        nbt.put_bool("Invisible", self.is_invisible());
-        nbt.put_bool("Small", self.is_small());
-        nbt.put_bool("ShowArms", self.should_show_arms());
-        nbt.put_int("DisabledSlots", disabled_slots);
-        nbt.put_bool("NoBasePlate", !self.should_show_base_plate());
-        if self.is_marker() {
-            nbt.put_bool("Marker", true);
-        }
+            nbt.put_bool("Invisible", self.is_invisible());
+            nbt.put_bool("Small", self.is_small());
+            nbt.put_bool("ShowArms", self.should_show_arms());
+            nbt.put_int("DisabledSlots", disabled_slots);
+            nbt.put_bool("NoBasePlate", !self.should_show_base_plate());
+            if self.is_marker() {
+                nbt.put_bool("Marker", true);
+            }
 
-        nbt.put("Pose", self.pack_rotation());
+            nbt.put("Pose", self.pack_rotation());
+        })
     }
 
-    async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
-        let mut flags = 0u8;
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            let mut flags = 0u8;
 
-        if let Some(invisible) = nbt.get_bool("Invisible")
-            && invisible
-        {
-            self.get_entity().set_invisible(invisible).await;
-        }
+            if let Some(invisible) = nbt.get_bool("Invisible")
+                && invisible
+            {
+                self.get_entity().set_invisible(invisible).await;
+            }
 
-        if let Some(small) = nbt.get_bool("Small")
-            && small
-        {
-            flags |= ArmorStandFlags::Small as u8;
-        }
+            if let Some(small) = nbt.get_bool("Small")
+                && small
+            {
+                flags |= ArmorStandFlags::Small as u8;
+            }
 
-        if let Some(show_arms) = nbt.get_bool("ShowArms")
-            && show_arms
-        {
-            flags |= ArmorStandFlags::ShowArms as u8;
-        }
+            if let Some(show_arms) = nbt.get_bool("ShowArms")
+                && show_arms
+            {
+                flags |= ArmorStandFlags::ShowArms as u8;
+            }
 
-        if let Some(disabled_slots) = nbt.get_int("DisabledSlots") {
-            self.disabled_slots.store(disabled_slots, Ordering::Relaxed);
-        }
+            if let Some(disabled_slots) = nbt.get_int("DisabledSlots") {
+                self.disabled_slots.store(disabled_slots, Ordering::Relaxed);
+            }
 
-        if let Some(no_base_plate) = nbt.get_bool("NoBasePlate") {
-            if !no_base_plate {
+            if let Some(no_base_plate) = nbt.get_bool("NoBasePlate") {
+                if !no_base_plate {
+                    flags |= ArmorStandFlags::HideBasePlate as u8;
+                }
+            } else {
                 flags |= ArmorStandFlags::HideBasePlate as u8;
             }
-        } else {
-            flags |= ArmorStandFlags::HideBasePlate as u8;
-        }
 
-        if let Some(marker) = nbt.get_bool("Marker")
-            && marker
-        {
-            flags |= ArmorStandFlags::Marker as u8;
-        }
+            if let Some(marker) = nbt.get_bool("Marker")
+                && marker
+            {
+                flags |= ArmorStandFlags::Marker as u8;
+            }
 
-        self.armor_stand_flags.store(flags, Ordering::Relaxed);
+            self.armor_stand_flags.store(flags, Ordering::Relaxed);
 
-        if let Some(pose_tag) = nbt.get("Pose") {
-            let packed: PackedRotation = pose_tag.clone().into();
-            self.unpack_rotation(&packed);
-        }
+            if let Some(pose_tag) = nbt.get("Pose") {
+                let packed: PackedRotation = pose_tag.clone().into();
+                self.unpack_rotation(&packed);
+            }
+        })
     }
 }
 
-#[async_trait]
-impl LivingEntityTrait for ArmorStandEntity {
-    //async fn on_actually_hurt()
-}
-
-#[async_trait]
 impl EntityBase for ArmorStandEntity {
     fn get_entity(&self) -> &Entity {
         &self.living_entity.entity
@@ -304,59 +299,90 @@ impl EntityBase for ArmorStandEntity {
         self
     }
 
-    async fn damage_with_context(
-        &self,
+    fn damage_with_context<'a>(
+        &'a self,
         caller: Arc<dyn EntityBase>,
         _amount: f32,
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        let entity = self.get_entity();
-        if entity.is_removed() {
-            return false;
-        }
-
-        let world = &entity.world;
-
-        let mob_griefing_gamerule = {
-            let game_rules = &world.level_info.read().await.game_rules;
-            game_rules.mob_griefing
-        };
-
-        if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none()) {
-            return false;
-        }
-
-        // TODO: <DamageSource>.isIn(DamageTypeTags::BYPASSES_INVULNERABILITY)
-
-        if damage_type == DamageType::EXPLOSION {
-            // TODO: Implement Dropping Items that are in the Equipment Slots & entity.kill()
-            self.on_break(entity).await;
-            entity.kill(caller).await;
-            //entity.remove().await;
-            return false;
-        } // TODO: Implement <DamageSource>.isIn(DamageTypeTags::IGNITES_ARMOR_STANDS)
-
-        // TODO: Implement <DamageSource>.isIn(DamageTypeTags::BURNS_ARMOR_STANDS)
-
-        /* // TODO:
-        bl1: bool = <DamageSource>.isIn(DamageTypeTags.CAN_BREAK_ARMOR_STAND);
-        bl2: bool = <DamageSource>.isIn(DamageTypeTags.ALWAYS_KILLS_ARMOR_STANDS);
-
-        if !bl1 && !bl2 {
-            return false;
-        }
-        */
-
-        let Some(source) = source else { return false };
-
-        // TODO: source is not giving the real player or wrong stuff cause .is_creative() is false even tho the player is in creative.
-        if let Some(player) = source.get_player() {
-            if !player.abilities.lock().await.allow_modify_world {
+        source: Option<&'a dyn EntityBase>,
+        _cause: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            if entity.is_removed() {
                 return false;
-            } else if player.is_creative() {
+            }
+
+            let world = &entity.world;
+
+            let mob_griefing_gamerule = {
+                let game_rules = &world.level_info.read().await.game_rules;
+                game_rules.mob_griefing
+            };
+
+            if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none())
+            {
+                return false;
+            }
+
+            // TODO: <DamageSource>.isIn(DamageTypeTags::BYPASSES_INVULNERABILITY)
+
+            if damage_type == DamageType::EXPLOSION {
+                // TODO: Implement Dropping Items that are in the Equipment Slots & entity.kill()
+                self.on_break(entity).await;
+                entity.kill(caller).await;
+                //entity.remove().await;
+                return false;
+            } // TODO: Implement <DamageSource>.isIn(DamageTypeTags::IGNITES_ARMOR_STANDS)
+
+            // TODO: Implement <DamageSource>.isIn(DamageTypeTags::BURNS_ARMOR_STANDS)
+
+            /* // TODO:
+            bl1: bool = <DamageSource>.isIn(DamageTypeTags.CAN_BREAK_ARMOR_STAND);
+            bl2: bool = <DamageSource>.isIn(DamageTypeTags.ALWAYS_KILLS_ARMOR_STANDS);
+
+            if !bl1 && !bl2 {
+                return false;
+            }
+            */
+
+            let Some(source) = source else { return false };
+
+            // TODO: source is not giving the real player or wrong stuff cause .is_creative() is false even tho the player is in creative.
+            if let Some(player) = source.get_player() {
+                if !player.abilities.lock().await.allow_modify_world {
+                    return false;
+                } else if player.is_creative() {
+                    world
+                        .play_sound(
+                            Sound::EntityArmorStandBreak,
+                            SoundCategory::Neutral,
+                            &entity.block_pos.load().to_f64(),
+                        )
+                        .await;
+                    self.break_and_drop_items().await;
+                    entity.kill(caller).await;
+                    return true;
+                }
+            }
+
+            let time = world.level_time.lock().await.query_gametime();
+
+            if time - self.last_hit_time.load(Ordering::Relaxed) > 5 {
+                // && !bl2 {
+                world
+                    .send_entity_status(entity, EntityStatus::HitArmorStand)
+                    .await;
+                world
+                    .play_sound(
+                        Sound::EntityArmorStandHit,
+                        SoundCategory::Neutral,
+                        &entity.block_pos.load().to_f64(),
+                    )
+                    .await;
+                self.last_hit_time.store(time, Ordering::Relaxed);
+            } else {
                 world
                     .play_sound(
                         Sound::EntityArmorStandBreak,
@@ -366,38 +392,10 @@ impl EntityBase for ArmorStandEntity {
                     .await;
                 self.break_and_drop_items().await;
                 entity.kill(caller).await;
-                return true;
             }
-        }
 
-        let time = world.level_time.lock().await.query_gametime();
-
-        if time - self.last_hit_time.load(Ordering::Relaxed) > 5 {
-            // && !bl2 {
-            world
-                .send_entity_status(entity, EntityStatus::HitArmorStand)
-                .await;
-            world
-                .play_sound(
-                    Sound::EntityArmorStandHit,
-                    SoundCategory::Neutral,
-                    &entity.block_pos.load().to_f64(),
-                )
-                .await;
-            self.last_hit_time.store(time, Ordering::Relaxed);
-        } else {
-            world
-                .play_sound(
-                    Sound::EntityArmorStandBreak,
-                    SoundCategory::Neutral,
-                    &entity.block_pos.load().to_f64(),
-                )
-                .await;
-            self.break_and_drop_items().await;
-            entity.kill(caller).await;
-        }
-
-        true
+            true
+        })
     }
 }
 

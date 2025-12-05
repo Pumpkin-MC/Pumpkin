@@ -1,7 +1,6 @@
 use crate::block::blocks::fire::FireBlockBase;
 use crate::block::blocks::fire::fire::FireBlock;
 use crate::entity::player::Player;
-use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection};
@@ -17,7 +16,6 @@ impl Ignition {
         location: BlockPos,
         face: BlockDirection,
         block: &Block,
-        _server: &Server,
     ) where
         F: FnOnce(Arc<World>, BlockPos, u16) -> Fut,
         Fut: Future<Output = ()>,

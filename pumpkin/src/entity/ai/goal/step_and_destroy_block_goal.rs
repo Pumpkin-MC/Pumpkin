@@ -1,12 +1,12 @@
 use super::{Controls, Goal, to_goal_ticks};
-use crate::entity::ai::goal::ParentHandle;
 use crate::entity::ai::goal::move_to_target_pos_goal::{MoveToTargetPos, MoveToTargetPosGoal};
+use crate::entity::ai::goal::{GoalFuture, ParentHandle};
 use crate::entity::mob::Mob;
 use crate::world::World;
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use std::pin::Pin;
 use std::sync::Arc;
 
 const MAX_COOLDOWN: i32 = 20;
@@ -73,95 +73,110 @@ impl<S: Stepping, M: MoveToTargetPos> StepAndDestroyBlockGoal<S, M> {
     }
 }
 
-// Contains overridable functions
-#[async_trait]
-pub trait Stepping: Send + Sync {
-    async fn tick_stepping(&self, _world: Arc<World>, _block_pos: BlockPos) {}
+pub type SteppingFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 
-    async fn on_destroy_block(&self, _world: Arc<World>, _block_pos: BlockPos) {}
+pub trait Stepping: Send + Sync {
+    fn tick_stepping(&self, _world: Arc<World>, _block_pos: BlockPos) -> SteppingFuture<'_> {
+        Box::pin(async {})
+    }
+
+    fn on_destroy_block(&self, _world: Arc<World>, _block_pos: BlockPos) -> SteppingFuture<'_> {
+        Box::pin(async {})
+    }
 }
 
-#[async_trait]
-impl<S: Stepping, M: MoveToTargetPos> Goal for StepAndDestroyBlockGoal<S, M> {
-    async fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        let world = &mob.get_entity().world;
-        let level_info = world.level_info.read().await;
-        if !level_info.game_rules.mob_griefing {
-            false
-        } else if self.move_to_target_pos_goal.cooldown > 0 {
-            self.move_to_target_pos_goal.cooldown -= 1;
-            false
-        } else if self.move_to_target_pos_goal.find_target_pos(mob).await {
-            self.move_to_target_pos_goal.cooldown = to_goal_ticks(MAX_COOLDOWN);
-            true
-        } else {
-            self.move_to_target_pos_goal.cooldown = MoveToTargetPosGoal::<M>::get_interval(mob);
-            false
-        }
+impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
+    for StepAndDestroyBlockGoal<S, M>
+{
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async {
+            let world = &mob.get_entity().world;
+            let level_info = world.level_info.read().await;
+            if !level_info.game_rules.mob_griefing {
+                false
+            } else if self.move_to_target_pos_goal.cooldown > 0 {
+                self.move_to_target_pos_goal.cooldown -= 1;
+                false
+            } else if self.move_to_target_pos_goal.find_target_pos(mob).await {
+                self.move_to_target_pos_goal.cooldown = to_goal_ticks(MAX_COOLDOWN);
+                true
+            } else {
+                self.move_to_target_pos_goal.cooldown = MoveToTargetPosGoal::<M>::get_interval(mob);
+                false
+            }
+        })
     }
 
-    async fn should_continue(&self, mob: &dyn Mob) -> bool {
-        self.move_to_target_pos_goal.should_continue(mob).await
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { self.move_to_target_pos_goal.should_continue(mob).await })
     }
 
-    async fn start(&mut self, mob: &dyn Mob) {
-        self.move_to_target_pos_goal.start(mob).await;
-        self.counter = 0;
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            self.move_to_target_pos_goal.start(mob).await;
+            self.counter = 0;
+        })
     }
 
-    async fn stop(&mut self, mob: &dyn Mob) {
-        mob.get_mob_entity().living_entity.fall_distance.store(1.0);
+    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            // Assuming fall_distance is AtomicF32/f32
+            mob.get_mob_entity().living_entity.fall_distance.store(1.0);
+        })
     }
 
-    async fn tick(&mut self, mob: &dyn Mob) {
-        self.move_to_target_pos_goal.tick(mob).await;
-        let mob_entity = mob.get_mob_entity();
-        let world = &mob.get_entity().world;
-        let block_pos = mob.get_entity().block_pos.load();
-        let tweak_pos = self.tweak_to_proper_pos(block_pos, world.clone()).await;
-        // TODO: drop world?
-        if !self.move_to_target_pos_goal.reached || tweak_pos.is_none() {
-            return;
-        }
-        let tweak_pos = tweak_pos.unwrap();
-        let counter = self.counter;
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            self.move_to_target_pos_goal.tick(mob).await;
+            let mob_entity = mob.get_mob_entity();
+            let world = &mob.get_entity().world;
+            let block_pos = mob.get_entity().block_pos.load();
 
-        if counter > 0 {
-            let velocity = mob_entity.living_entity.entity.velocity.load();
-            mob_entity
-                .living_entity
-                .entity
-                .set_velocity(Vector3::new(velocity.x, 0.3, velocity.z))
-                .await;
-            // TODO: spawn particles
-        }
+            let tweak_pos = self.tweak_to_proper_pos(block_pos, world.clone()).await;
+            // TODO: drop world?
+            if !self.move_to_target_pos_goal.reached || tweak_pos.is_none() {
+                return;
+            }
+            let tweak_pos = tweak_pos.unwrap();
+            let counter = self.counter;
 
-        if counter % 2 == 0 {
-            let velocity = mob_entity.living_entity.entity.velocity.load();
-            mob_entity
-                .living_entity
-                .entity
-                .set_velocity(Vector3::new(velocity.x, -0.3, velocity.z))
-                .await;
-            if counter % 6 == 0 {
-                if let Some(stepping) = self.stepping.get() {
-                    stepping
-                        .tick_stepping(world.clone(), self.move_to_target_pos_goal.target_pos)
-                        .await;
-                } else {
-                    self.tick_stepping(world.clone(), self.move_to_target_pos_goal.target_pos)
-                        .await;
+            if counter > 0 {
+                let velocity = mob_entity.living_entity.entity.velocity.load();
+                mob_entity
+                    .living_entity
+                    .entity
+                    .set_velocity(Vector3::new(velocity.x, 0.3, velocity.z))
+                    .await;
+                // TODO: spawn particles
+            }
+
+            if counter % 2 == 0 {
+                let velocity = mob_entity.living_entity.entity.velocity.load();
+                mob_entity
+                    .living_entity
+                    .entity
+                    .set_velocity(Vector3::new(velocity.x, -0.3, velocity.z))
+                    .await;
+                if counter % 6 == 0 {
+                    if let Some(stepping) = self.stepping.get() {
+                        stepping
+                            .tick_stepping(world.clone(), self.move_to_target_pos_goal.target_pos)
+                            .await;
+                    } else {
+                        self.tick_stepping(world.clone(), self.move_to_target_pos_goal.target_pos)
+                            .await;
+                    }
                 }
             }
-        }
 
-        if counter > 60 {
-            // TODO: world.removeBlock HOW?
-            // TODO: spawn particles
-            self.on_destroy_block(world.clone(), tweak_pos).await;
-        }
+            if counter > 60 {
+                // TODO: world.removeBlock HOW?
+                // TODO: spawn particles
+                self.on_destroy_block(world.clone(), tweak_pos).await;
+            }
 
-        self.counter += 1;
+            self.counter += 1;
+        })
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -173,17 +188,33 @@ impl<S: Stepping, M: MoveToTargetPos> Goal for StepAndDestroyBlockGoal<S, M> {
     }
 }
 
-#[async_trait]
-impl<S: Stepping, M: MoveToTargetPos> MoveToTargetPos for StepAndDestroyBlockGoal<S, M> {
-    async fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool {
-        world.get_block(&block_pos).await.id == self.target_block.id
-            && world.get_block_state(&block_pos.up()).await.is_air()
-            && world
-                .get_block_state(&block_pos.up_height(2))
-                .await
-                .is_air()
+impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> MoveToTargetPos
+    for StepAndDestroyBlockGoal<S, M>
+{
+    fn is_target_pos<'a>(
+        &'a self,
+        world: Arc<World>,
+        block_pos: BlockPos,
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+        Box::pin(async move {
+            world.get_block(&block_pos).await.id == self.target_block.id
+                && world.get_block_state(&block_pos.up()).await.is_air()
+                && world
+                    .get_block_state(&block_pos.up_height(2))
+                    .await
+                    .is_air()
+        })
     }
 }
 
-#[async_trait]
-impl<S: Stepping, M: MoveToTargetPos> Stepping for StepAndDestroyBlockGoal<S, M> {}
+impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Stepping
+    for StepAndDestroyBlockGoal<S, M>
+{
+    fn tick_stepping(&self, _world: Arc<World>, _block_pos: BlockPos) -> SteppingFuture<'_> {
+        Box::pin(async {})
+    }
+
+    fn on_destroy_block(&self, _world: Arc<World>, _block_pos: BlockPos) -> SteppingFuture<'_> {
+        Box::pin(async {})
+    }
+}

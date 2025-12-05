@@ -1,8 +1,7 @@
-use async_trait::async_trait;
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 
 use crate::command::{
-    CommandError, CommandExecutor, CommandSender,
+    CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{
         ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
         position_3d::Position3DArgumentConsumer, resource::particle::ParticleArgumentConsumer,
@@ -22,63 +21,64 @@ const ARG_COUNT: &str = "count";
 
 struct Executor;
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let particle = ParticleArgumentConsumer::find_arg(args, ARG_NAME)?;
-        let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
-        let delta = Position3DArgumentConsumer::find_arg(args, ARG_DELTA);
-        let speed = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_SPEED);
-        let count = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_COUNT);
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let particle = ParticleArgumentConsumer::find_arg(args, ARG_NAME)?;
+            let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
+            let delta = Position3DArgumentConsumer::find_arg(args, ARG_DELTA);
+            let speed = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_SPEED);
+            let count = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_COUNT);
 
-        let delta = delta.unwrap_or(Vector3::new(0.0, 0.0, 0.0));
-        let delta: Vector3<f32> = Vector3::new(delta.x as f32, delta.y as f32, delta.z as f32);
-        let speed = speed.unwrap_or(Ok(0.0))?;
-        let count = count.unwrap_or(Ok(0))?;
-        let (world, pos) = match sender {
-            CommandSender::Console | CommandSender::Rcon(_) => {
-                let guard = server.worlds.read().await;
-                let world = guard
-                    .first()
-                    .cloned()
-                    .ok_or(CommandError::InvalidRequirement)?;
-                // default position for spawning a player, in this case for particle
-                let pos = {
-                    let info = &world.level_info.read().await;
-                    // default position for spawning a player, in this case for mob
-                    pos.unwrap_or(Vector3::new(
-                        f64::from(info.spawn_x) + 0.5,
-                        f64::from(info.spawn_y) + 1.0,
-                        f64::from(info.spawn_z) + 0.5,
-                    ))
-                };
+            let delta = delta.unwrap_or(Vector3::new(0.0, 0.0, 0.0));
+            let delta: Vector3<f32> = Vector3::new(delta.x as f32, delta.y as f32, delta.z as f32);
+            let speed = speed.unwrap_or(Ok(0.0))?;
+            let count = count.unwrap_or(Ok(0))?;
+            let (world, pos) = match sender {
+                CommandSender::Console | CommandSender::Rcon(_) => {
+                    let guard = server.worlds.read().await;
+                    let world = guard
+                        .first()
+                        .cloned()
+                        .ok_or(CommandError::InvalidRequirement)?;
+                    // default position for spawning a player, in this case for particle
+                    let pos = {
+                        let info = &world.level_info.read().await;
+                        // default position for spawning a player, in this case for mob
+                        pos.unwrap_or(Vector3::new(
+                            f64::from(info.spawn_x) + 0.5,
+                            f64::from(info.spawn_y) + 1.0,
+                            f64::from(info.spawn_z) + 0.5,
+                        ))
+                    };
 
-                (world, pos)
-            }
-            CommandSender::Player(player) => {
-                let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
+                    (world, pos)
+                }
+                CommandSender::Player(player) => {
+                    let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
 
-                (player.world().clone(), pos)
-            }
-        };
+                    (player.world().clone(), pos)
+                }
+            };
 
-        world
-            .spawn_particle(pos, delta, speed, count, *particle)
-            .await;
+            world
+                .spawn_particle(pos, delta, speed, count, *particle)
+                .await;
 
-        sender
-            .send_message(TextComponent::translate(
-                "commands.particle.success",
-                [TextComponent::text(format!("{particle:?}"))],
-            ))
-            .await;
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.particle.success",
+                    [TextComponent::text(format!("{particle:?}"))],
+                ))
+                .await;
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 

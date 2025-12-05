@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use pumpkin_data::tag;
 use pumpkin_util::GameMode;
 use pumpkin_world::block::entities::{
@@ -22,7 +21,6 @@ impl ItemMetadata for DyeItem {
     }
 }
 
-#[async_trait]
 impl ItemBehaviour for DyeItem {
     fn can_mine(&self, player: &Player) -> bool {
         player.gamemode.load() != GameMode::Creative

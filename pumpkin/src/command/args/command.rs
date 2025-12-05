@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use pumpkin_protocol::java::client::play::{
     ArgumentType, CommandSuggestion, StringProtoArgBehavior, SuggestionProviders,
 };
@@ -6,7 +5,7 @@ use pumpkin_protocol::java::client::play::{
 use crate::{
     command::{
         CommandSender,
-        args::SplitSingleWhitespaceIncludingEmptyParts,
+        args::{ConsumeResult, SplitSingleWhitespaceIncludingEmptyParts, SuggestResult},
         dispatcher::CommandError,
         tree::{CommandTree, RawArgs},
     },
@@ -27,40 +26,49 @@ impl GetClientSideArgParser for CommandTreeArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for CommandTreeArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
 
-        let dispatcher = server.command_dispatcher.read().await;
-        dispatcher
-            .get_tree(s)
-            .map_or_else(|_| None, |tree| Some(Arg::CommandTree(tree.clone())))
+        let Some(s) = s_opt else {
+            return Box::pin(async move { None });
+        };
+
+        Box::pin(async move {
+            let dispatcher = server.command_dispatcher.read().await;
+
+            dispatcher
+                .get_tree(s)
+                .ok()
+                .map(|tree| Arg::CommandTree(tree.clone()))
+        })
     }
 
-    async fn suggest<'a>(
+    fn suggest<'a>(
         &'a self,
         _sender: &CommandSender,
         server: &'a Server,
         input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        let Some(input) = input.split_single_whitespace_including_empty_parts().last() else {
-            return Ok(None);
-        };
+    ) -> SuggestResult<'a> {
+        Box::pin(async move {
+            let Some(input) = input.split_single_whitespace_including_empty_parts().last() else {
+                return Ok(None);
+            };
 
-        let dispatcher = server.command_dispatcher.read().await;
-        let suggestions = dispatcher
-            .commands
-            .keys()
-            .filter(|suggestion| suggestion.starts_with(input))
-            .map(|suggestion| CommandSuggestion::new(suggestion.clone(), None))
-            .collect();
-        Ok(Some(suggestions))
+            let dispatcher = server.command_dispatcher.read().await;
+            let suggestions = dispatcher
+                .commands
+                .keys()
+                .filter(|suggestion| suggestion.starts_with(input))
+                .map(|suggestion| CommandSuggestion::new(suggestion.clone(), None))
+                .collect();
+            Ok(Some(suggestions))
+        })
     }
 }
 

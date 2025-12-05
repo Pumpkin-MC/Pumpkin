@@ -1,8 +1,10 @@
-use proc_macro2::TokenStream;
+use heck::ToShoutySnakeCase;
+use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fs;
+use syn::LitInt;
 
 #[derive(Deserialize)]
 struct Attributes {
@@ -17,26 +19,28 @@ pub(crate) fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../assets/attributes.json").unwrap())
             .expect("Failed to parse attributes.json");
 
-    let mut consts = TokenStream::new();
+    let mut sorted_attributes: Vec<(String, Attributes)> = attributes.into_iter().collect();
+    sorted_attributes.sort_by_key(|(_, raw)| raw.id);
 
-    let mut data_component_vec = attributes.iter().collect::<Vec<_>>();
-    data_component_vec.sort_by_key(|(_, i)| i.id);
+    let mut constant_defs = Vec::new();
 
-    for (raw_name, raw_value) in &data_component_vec {
-        let pascal_case = format_ident!("{}", raw_name.to_uppercase());
+    for (raw_name, raw_value) in sorted_attributes {
+        let constant_ident = format_ident!("{}", raw_name.to_shouty_snake_case());
 
-        let id = raw_value.id;
-        let default_value = raw_value.default_value;
-        consts.extend(quote! {
-            pub const #pascal_case: Self = Self {
-                id: #id,
-                default_value: #default_value,
+        let id_lit = LitInt::new(&raw_value.id.to_string(), Span::call_site());
+        let default_value_lit = raw_value.default_value;
+
+        constant_defs.push(quote! {
+            pub const #constant_ident: Self = Self {
+                id: #id_lit,
+                default_value: #default_value_lit,
             };
         });
     }
 
     quote! {
         use std::hash::Hash;
+
         #[derive(Clone, Debug)]
         pub struct Attributes {
             pub id: u8,
@@ -54,7 +58,7 @@ pub(crate) fn build() -> TokenStream {
             }
         }
         impl Attributes {
-            #consts
+            #(#constant_defs)*
         }
     }
 }

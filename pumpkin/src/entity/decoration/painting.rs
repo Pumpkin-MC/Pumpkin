@@ -1,8 +1,9 @@
 use core::f32;
 use std::sync::{Arc, atomic::Ordering};
 
-use crate::entity::{Entity, EntityBase, NBTStorage, living::LivingEntity};
-use async_trait::async_trait;
+use crate::entity::{
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
+};
 use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
@@ -17,19 +18,21 @@ impl PaintingEntity {
     }
 }
 
-#[async_trait]
 impl NBTStorage for PaintingEntity {
-    async fn write_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put_byte("facing", self.entity.data.load(Ordering::Relaxed) as i8);
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            nbt.put_byte("facing", self.entity.data.load(Ordering::Relaxed) as i8);
+        })
     }
 
-    async fn read_nbt_non_mut(&self, _nbt: &NbtCompound) {
-        // TODO
-        self.entity.data.store(3, Ordering::Relaxed);
+    fn read_nbt_non_mut<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            // TODO
+            self.entity.data.store(3, Ordering::Relaxed);
+        })
     }
 }
 
-#[async_trait]
 impl EntityBase for PaintingEntity {
     fn get_entity(&self) -> &Entity {
         &self.entity
@@ -39,18 +42,20 @@ impl EntityBase for PaintingEntity {
         None
     }
 
-    async fn damage_with_context(
-        &self,
+    fn damage_with_context<'a>(
+        &'a self,
         _caller: Arc<dyn EntityBase>,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        // TODO
-        self.entity.remove().await;
-        true
+        _source: Option<&'a dyn EntityBase>,
+        _cause: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async {
+            // TODO
+            self.entity.remove().await;
+            true
+        })
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {

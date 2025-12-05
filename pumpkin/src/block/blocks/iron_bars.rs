@@ -1,6 +1,6 @@
+use crate::block::BlockFuture;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
-use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
@@ -17,21 +17,24 @@ use crate::world::World;
 #[pumpkin_block("minecraft:iron_bars")]
 pub struct IronBarsBlock;
 
-#[async_trait]
 impl BlockBehaviour for IronBarsBlock {
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut bars_props = IronBarsProperties::default(args.block);
-        bars_props.waterlogged = args.replacing.water_source();
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut bars_props = IronBarsProperties::default(args.block);
+            bars_props.waterlogged = args.replacing.water_source();
 
-        compute_bars_state(bars_props, args.world, args.block, args.position).await
+            compute_bars_state(bars_props, args.world, args.block, args.position).await
+        })
     }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let bars_props = IronBarsProperties::from_state_id(args.state_id, args.block);
-        compute_bars_state(bars_props, args.world, args.block, args.position).await
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let bars_props = IronBarsProperties::from_state_id(args.state_id, args.block);
+            compute_bars_state(bars_props, args.world, args.block, args.position).await
+        })
     }
 }
 

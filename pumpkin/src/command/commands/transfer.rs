@@ -1,18 +1,16 @@
-use async_trait::async_trait;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::CTransfer;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 
+use crate::command::CommandResult;
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::simple::SimpleArgConsumer;
 use crate::command::args::{Arg, FindArgDefaultName};
 use crate::command::dispatcher::CommandError::{InvalidConsumption, InvalidRequirement};
 use crate::command::tree::builder::{argument, argument_default_name, require};
-use crate::command::{
-    CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
-};
+use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
 
 const NAMES: [&str; 1] = ["transfer"];
 
@@ -31,89 +29,91 @@ fn port_consumer() -> BoundedNumArgumentConsumer<i32> {
 
 struct TargetSelfExecutor;
 
-#[async_trait]
 impl CommandExecutor for TargetSelfExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {
-            return Err(InvalidConsumption(Some(ARG_HOSTNAME.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {
+                return Err(InvalidConsumption(Some(ARG_HOSTNAME.into())));
+            };
 
-        let port = match port_consumer().find_arg_default_name(args) {
-            Err(_) => 25565,
-            Ok(Ok(count)) => count,
-            Ok(Err(_)) => {
-                sender
-                    .send_message(
-                        TextComponent::text("Port must be between 1 and 65535.")
-                            .color(Color::Named(NamedColor::Red)),
-                    )
+            let port = match port_consumer().find_arg_default_name(args) {
+                Err(_) => 25565,
+                Ok(Ok(count)) => count,
+                Ok(Err(_)) => {
+                    sender
+                        .send_message(
+                            TextComponent::text("Port must be between 1 and 65535.")
+                                .color(Color::Named(NamedColor::Red)),
+                        )
+                        .await;
+                    return Ok(());
+                }
+            };
+
+            if let CommandSender::Player(player) = sender {
+                let name = &player.gameprofile.name;
+                log::info!("[{name}: Transferring {name} to {hostname}:{port}]");
+                player
+                    .client
+                    .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
                     .await;
-                return Ok(());
+                Ok(())
+            } else {
+                Err(InvalidRequirement)
             }
-        };
-
-        if let CommandSender::Player(player) = sender {
-            let name = &player.gameprofile.name;
-            log::info!("[{name}: Transferring {name} to {hostname}:{port}]");
-            player
-                .client
-                .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
-                .await;
-            Ok(())
-        } else {
-            Err(InvalidRequirement)
-        }
+        })
     }
 }
 
 struct TargetPlayerExecutor;
 
-#[async_trait]
 impl CommandExecutor for TargetPlayerExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {
-            return Err(InvalidConsumption(Some(ARG_HOSTNAME.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Simple(hostname)) = args.get(ARG_HOSTNAME) else {
+                return Err(InvalidConsumption(Some(ARG_HOSTNAME.into())));
+            };
 
-        let port = match port_consumer().find_arg_default_name(args) {
-            Err(_) => 25565,
-            Ok(Ok(count)) => count,
-            Ok(Err(_)) => {
-                sender
-                    .send_message(
-                        TextComponent::text("Port must be between 1 and 65535.")
-                            .color(Color::Named(NamedColor::Red)),
-                    )
+            let port = match port_consumer().find_arg_default_name(args) {
+                Err(_) => 25565,
+                Ok(Ok(count)) => count,
+                Ok(Err(_)) => {
+                    sender
+                        .send_message(
+                            TextComponent::text("Port must be between 1 and 65535.")
+                                .color(Color::Named(NamedColor::Red)),
+                        )
+                        .await;
+                    return Ok(());
+                }
+            };
+
+            let Some(Arg::Players(players)) = args.get(ARG_PLAYERS) else {
+                return Err(InvalidConsumption(Some(ARG_PLAYERS.into())));
+            };
+
+            for p in players {
+                p.client
+                    .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
                     .await;
-                return Ok(());
+                log::info!(
+                    "[{sender}: Transferring {} to {hostname}:{port}]",
+                    p.gameprofile.name
+                );
             }
-        };
 
-        let Some(Arg::Players(players)) = args.get(ARG_PLAYERS) else {
-            return Err(InvalidConsumption(Some(ARG_PLAYERS.into())));
-        };
-
-        for p in players {
-            p.client
-                .enqueue_packet(&CTransfer::new(hostname, VarInt(port)))
-                .await;
-            log::info!(
-                "[{sender}: Transferring {} to {hostname}:{port}]",
-                p.gameprofile.name
-            );
-        }
-
-        Ok(())
+            Ok(())
+        })
     }
 }
 

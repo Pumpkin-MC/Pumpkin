@@ -1,9 +1,8 @@
 pub mod context;
 pub mod events;
 
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
-use async_trait::async_trait;
 pub use context::*;
 pub use events::*;
 
@@ -24,12 +23,12 @@ pub struct PluginMetadata<'s> {
     pub description: &'s str,
 }
 
+type PluginFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
 /// Trait representing a plugin with asynchronous lifecycle methods.
 ///
 /// This trait defines the required methods for a plugin, including hooks for when
-/// the plugin is loaded and unloaded. It is marked with `async_trait` to allow
-/// for asynchronous implementations.
-#[async_trait]
+/// the plugin is loaded and unloaded.
 pub trait Plugin: Send + Sync + 'static {
     /// Asynchronous method called when the plugin is loaded.
     ///
@@ -40,8 +39,8 @@ pub trait Plugin: Send + Sync + 'static {
     ///
     /// # Returns
     /// - `Ok(())` on success, or `Err(String)` on failure.
-    async fn on_load(&mut self, _server: Arc<Context>) -> Result<(), String> {
-        Ok(())
+    fn on_load(&mut self, _server: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
+        Box::pin(async move { Ok(()) })
     }
 
     /// Asynchronous method called when the plugin is unloaded.
@@ -53,7 +52,7 @@ pub trait Plugin: Send + Sync + 'static {
     ///
     /// # Returns
     /// - `Ok(())` on success, or `Err(String)` on failure.
-    async fn on_unload(&mut self, _server: Arc<Context>) -> Result<(), String> {
-        Ok(())
+    fn on_unload(&mut self, _server: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
+        Box::pin(async move { Ok(()) })
     }
 }

@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use itertools::Itertools;
@@ -10,6 +9,7 @@ use std::{
     io::{Read, SeekFrom, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
+    pin::Pin,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{
@@ -354,7 +354,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
     }
 
     async fn write_indices(&self, path: &Path, indices: &[usize]) -> Result<(), std::io::Error> {
-        log::trace!("Writing in place: {path:?}");
+        log::trace!("Writing in place: {}", path.display());
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -500,7 +500,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, path).await?;
 
-        log::trace!("Wrote file to Disk: {path:?}");
+        log::trace!("Wrote file to Disk: {}", path.display());
         Ok(())
     }
 }
@@ -517,14 +517,14 @@ impl<S: SingleChunkDataSerializer> Default for AnvilChunkFile<S> {
     }
 }
 
-#[async_trait]
 pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable {
-    async fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError>;
+    fn to_bytes(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>>;
     fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
     fn position(&self) -> &Vector2<i32>;
 }
 
-#[async_trait]
 impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
     type Data = S;
     type WriteBackend = PathBuf;
@@ -542,7 +542,10 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         let mut write_action = self.write_action.lock().await;
         match &*write_action {
             WriteAction::Pass => {
-                log::debug!("Skipping write for {path:?} as there were no dirty chunks");
+                log::debug!(
+                    "Skipping write for {}, as there were no dirty chunks",
+                    path.display()
+                );
                 Ok(())
             }
             WriteAction::All => self.write_all(&path).await,
@@ -822,7 +825,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 /*
 #[cfg(test)]
 mod tests {
-    use async_trait::async_trait;
+
     use pumpkin_config::{AdvancedConfiguration, advanced_config, override_config_for_testing};
     use pumpkin_data::BlockDirection;
     use pumpkin_util::math::position::BlockPos;
@@ -844,7 +847,6 @@ mod tests {
 
     struct BlockRegistry;
 
-    #[async_trait]
     impl BlockRegistryExt for BlockRegistry {
         fn can_place_at(
             &self,

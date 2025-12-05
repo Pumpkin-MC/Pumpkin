@@ -15,12 +15,14 @@ num-traits = "0.2"
 colored = "3.0"
 md5 = "0.8"
 quote = "1.0"
-syn = "2.0"
+syn.workspace = true
 proc-macro2 = "1.0"
 enum_dispatch = "0.3.13"
 
 uuid.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = [
+    "sync",
+] }
 base64 = "0.22.1"
 p384 = { version = "0.13.1", features = ["ecdsa"] }
 thiserror.workspace = true

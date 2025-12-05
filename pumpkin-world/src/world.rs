@@ -1,8 +1,8 @@
+use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::block::entities::BlockEntity;
 use crate::{BlockStateId, inventory::Inventory};
-use async_trait::async_trait;
 use bitflags::bitflags;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -40,59 +40,81 @@ impl std::fmt::Display for GetBlockError {
     }
 }
 
-#[async_trait]
+pub type WorldFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
 pub trait SimpleWorld: BlockAccessor + Send + Sync {
-    async fn set_block_state(
+    fn set_block_state<'a>(
         self: Arc<Self>,
-        position: &BlockPos,
+        position: &'a BlockPos,
         block_state_id: BlockStateId,
         flags: BlockFlags,
-    ) -> BlockStateId;
+    ) -> WorldFuture<'a, BlockStateId>;
 
-    async fn update_neighbor(
+    fn update_neighbor<'a>(
         self: Arc<Self>,
-        neighbor_block_pos: &BlockPos,
-        source_block: &pumpkin_data::Block,
-    );
+        neighbor_block_pos: &'a BlockPos,
+        source_block: &'a pumpkin_data::Block,
+    ) -> WorldFuture<'a, ()>;
 
-    async fn update_neighbors(
+    fn update_neighbors<'a>(
         self: Arc<Self>,
-        block_pos: &BlockPos,
+        block_pos: &'a BlockPos,
         except: Option<BlockDirection>,
-    );
+    ) -> WorldFuture<'a, ()>;
 
-    async fn is_space_empty(&self, bounding_box: BoundingBox) -> bool;
+    fn is_space_empty<'a>(&'a self, bounding_box: BoundingBox) -> WorldFuture<'a, bool>;
 
-    async fn spawn_from_type(
+    fn spawn_from_type(
         self: Arc<Self>,
         entity_type: &'static EntityType,
         position: Vector3<f64>,
-    );
+    ) -> WorldFuture<'static, ()>;
 
-    async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8);
+    fn add_synced_block_event<'a>(
+        &'a self,
+        pos: BlockPos,
+        r#type: u8,
+        data: u8,
+    ) -> WorldFuture<'a, ()>;
 
-    async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32);
+    fn sync_world_event<'a>(
+        &'a self,
+        world_event: WorldEvent,
+        position: BlockPos,
+        data: i32,
+    ) -> WorldFuture<'a, ()>;
 
-    async fn remove_block_entity(&self, block_pos: &BlockPos);
-    async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>>;
-    async fn get_world_age(&self) -> i64;
+    fn remove_block_entity<'a>(&'a self, block_pos: &'a BlockPos) -> WorldFuture<'a, ()>;
 
-    async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>);
-    async fn play_sound_fine(
-        &self,
+    fn get_block_entity<'a>(
+        &'a self,
+        block_pos: &'a BlockPos,
+    ) -> WorldFuture<'a, Option<Arc<dyn BlockEntity>>>;
+
+    fn get_world_age<'a>(&'a self) -> WorldFuture<'a, i64>;
+
+    fn play_sound<'a>(
+        &'a self,
         sound: Sound,
         category: SoundCategory,
-        position: &Vector3<f64>,
+        position: &'a Vector3<f64>,
+    ) -> WorldFuture<'a, ()>;
+
+    fn play_sound_fine<'a>(
+        &'a self,
+        sound: Sound,
+        category: SoundCategory,
+        position: &'a Vector3<f64>,
         volume: f32,
         pitch: f32,
-    );
+    ) -> WorldFuture<'a, ()>;
 
     /* ItemScatterer */
-    async fn scatter_inventory(
+    fn scatter_inventory<'a>(
         self: Arc<Self>,
-        position: &BlockPos,
-        inventory: &Arc<dyn Inventory>,
-    );
+        position: &'a BlockPos,
+        inventory: &'a Arc<dyn Inventory>,
+    ) -> WorldFuture<'a, ()>;
 }
 
 pub trait BlockRegistryExt: Send + Sync {
@@ -105,14 +127,19 @@ pub trait BlockRegistryExt: Send + Sync {
     ) -> bool;
 }
 
-#[async_trait]
 pub trait BlockAccessor: Send + Sync {
-    async fn get_block(&self, position: &BlockPos) -> &'static Block;
+    fn get_block<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = &'static Block> + Send + 'a>>;
 
-    async fn get_block_state(&self, position: &BlockPos) -> &'static BlockState;
+    fn get_block_state<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = &'static BlockState> + Send + 'a>>;
 
-    async fn get_block_and_state(
-        &self,
-        position: &BlockPos,
-    ) -> (&'static Block, &'static BlockState);
+    fn get_block_and_state<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = (&'static Block, &'static BlockState)> + Send + 'a>>;
 }

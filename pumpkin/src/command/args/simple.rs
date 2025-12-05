@@ -1,9 +1,11 @@
-use async_trait::async_trait;
 use pumpkin_protocol::java::client::play::{
-    ArgumentType, CommandSuggestion, StringProtoArgBehavior, SuggestionProviders,
+    ArgumentType, StringProtoArgBehavior, SuggestionProviders,
 };
 
-use crate::{command::dispatcher::CommandError, server::Server};
+use crate::{
+    command::{args::ConsumeResult, dispatcher::CommandError},
+    server::Server,
+};
 
 use super::{
     super::{
@@ -27,24 +29,16 @@ impl GetClientSideArgParser for SimpleArgConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for SimpleArgConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        Some(Arg::Simple(args.pop()?))
-    }
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        Box::pin(async move { s_opt.map(Arg::Simple) })
     }
 }
 

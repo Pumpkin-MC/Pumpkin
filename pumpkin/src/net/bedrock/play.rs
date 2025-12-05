@@ -225,7 +225,7 @@ impl BedrockClient {
                     let dispatcher = server_clone.command_dispatcher.read().await;
                     dispatcher
                         .handle_command(
-                            &mut CommandSender::Player(player_clone),
+                            &CommandSender::Player(player_clone),
                             &server_clone,
                             &command_clone,
                         )

@@ -1,10 +1,9 @@
 use crate::command::CommandSender;
-use crate::command::args::{Arg, ArgumentConsumer, FindArg, GetClientSideArgParser};
+use crate::command::args::{Arg, ArgumentConsumer, ConsumeResult, FindArg, GetClientSideArgParser};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 
 pub struct BoolArgConsumer;
 
@@ -18,30 +17,25 @@ impl GetClientSideArgParser for BoolArgConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for BoolArgConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
 
-        match s {
-            "false" => Some(Arg::Bool(false)),
-            "true" => Some(Arg::Bool(true)),
-            _ => None,
-        }
-    }
+        let result: Option<Arg<'a>> = s_opt.map_or_else(
+            || None,
+            |s| match s {
+                "false" => Some(Arg::Bool(false)),
+                "true" => Some(Arg::Bool(true)),
+                _ => None,
+            },
+        );
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        Box::pin(async move { result })
     }
 }
 

@@ -10,7 +10,6 @@ pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-config = { path = "../pumpkin-config" }
 pumpkin-data = { path = "../pumpkin-data" }
 
-async-trait.workspace = true
 futures.workspace = true
 
 bytes.workspace = true
@@ -39,7 +38,6 @@ ruzstd = "0.8.2"
 
 itertools = "0.14.0"
 enum_dispatch = "0.3"
-derive-getters = "0.5.0"
 
 thread_local = "1.1.9"
 lru = "0.16.2"
@@ -52,7 +50,7 @@ slotmap = "1.0"
 crossfire = "2.1.7"
 
 [dev-dependencies]
-criterion = { version = "0.7", default-features = false, features = ["html_reports", "async_tokio"] }
+criterion = { version = "0.8", default-features = false, features = ["html_reports", "async_tokio"] }
 temp-dir = "0.1.16"
 # Print log info inside tests when needed
 env_logger = "0.11.8"

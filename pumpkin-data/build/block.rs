@@ -86,54 +86,39 @@ pub struct PropertyStruct {
 
 impl ToTokens for PropertyStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        if self.values == vec!["true".to_string(), "false".to_string()] {
-            // For boolean properties, we'll use Rust's built-in bool type
+        if self.values[0] == "true" && self.values[1] == "false" {
             return;
         }
 
         let name = Ident::new(&self.name, Span::call_site());
+        let count = self.values.len();
+        let variant_count = count as u16;
 
-        let variant_count = self.values.clone().len() as u16;
-        let values_index = (0..self.values.clone().len() as u16).collect::<Vec<_>>();
+        let is_number_values = !self.values.is_empty()
+            && self.values.iter().all(|v| v.starts_with('L'))
+            && self.values.iter().any(|v| v == "L1");
 
-        let ident_values = self
-            .values
-            .iter()
-            .map(|value| Ident::new(&(value).to_upper_camel_case(), Span::call_site()));
+        let mut variants = Vec::with_capacity(count);
+        let mut literals = Vec::with_capacity(count);
+        let mut indices = Vec::with_capacity(count);
 
-        let values_2 = ident_values.clone();
-        let values_3 = ident_values.clone();
+        for (i, raw_value) in self.values.iter().enumerate() {
+            let ident = Ident::new(&raw_value.to_upper_camel_case(), Span::call_site());
 
-        let is_number_values =
-            self.values.iter().all(|v| v.starts_with("L")) && self.values.iter().any(|v| v == "L1");
-
-        let from_values = self.values.iter().map(|value| {
-            let ident = Ident::new(&(value).to_upper_camel_case(), Span::call_site());
-            let value = if is_number_values {
-                value.strip_prefix("L").unwrap()
+            let literal_str = if is_number_values {
+                raw_value.strip_prefix('L').unwrap_or(raw_value)
             } else {
-                value
+                raw_value.as_str()
             };
-            quote! {
-                #value => Self::#ident
-            }
-        });
-        let to_values = self.values.iter().map(|value| {
-            let ident = Ident::new(&(value).to_upper_camel_case(), Span::call_site());
-            let value = if is_number_values {
-                value.strip_prefix("L").unwrap()
-            } else {
-                value
-            };
-            quote! {
-                Self::#ident => #value
-            }
-        });
 
+            variants.push(ident);
+            literals.push(literal_str);
+            indices.push(i as u16);
+        }
         tokens.extend(quote! {
             #[derive(Clone, Copy, Debug, Eq, PartialEq)]
             pub enum #name {
-                #(#ident_values),*
+                #(#variants),*
             }
 
             impl EnumVariants for #name {
@@ -143,30 +128,29 @@ impl ToTokens for PropertyStruct {
 
                 fn to_index(&self) -> u16 {
                     match self {
-                        #(Self::#values_2 => #values_index),*
+                        #(Self::#variants => #indices),*
                     }
                 }
 
                 fn from_index(index: u16) -> Self {
                     match index {
-                        #(#values_index => Self::#values_3,)*
+                        #(#indices => Self::#variants,)*
                         _ => panic!("Invalid index: {index}"),
                     }
                 }
 
                 fn to_value(&self) -> &'static str {
                     match self {
-                        #(#to_values),*
+                        #(Self::#variants => #literals),*
                     }
                 }
 
                 fn from_value(value: &str) -> Self {
                     match value {
-                        #(#from_values),*,
+                        #(#literals => Self::#variants),*,
                         _ => panic!("Invalid value: {value}"),
                     }
                 }
-
             }
         });
     }
@@ -449,7 +433,7 @@ impl BlockState {
                 let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
                 quote! { #opacity }
             }
-            None => quote! { u8::MAX },
+            None => quote! { 0 },
         };
         let block_entity_type = match self.block_entity_type {
             Some(block_entity_type) => {

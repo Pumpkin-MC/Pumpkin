@@ -1,9 +1,8 @@
 use crate::block::{
-    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs,
+    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    OnPlaceArgs, OnScheduledTickArgs,
 };
 use crate::world::World;
-use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
@@ -24,42 +23,48 @@ impl BlockMetadata for LanternBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for LanternBlock {
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = pumpkin_data::block_properties::LanternLikeProperties::default(args.block);
-        props.r#waterlogged = args.replacing.water_source();
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut props =
+                pumpkin_data::block_properties::LanternLikeProperties::default(args.block);
+            props.r#waterlogged = args.replacing.water_source();
 
-        let block_up_state = args.world.get_block_state(&args.position.up()).await;
-        if block_up_state.is_center_solid(BlockDirection::Down) {
-            props.r#hanging = true;
-        }
+            let block_up_state = args.world.get_block_state(&args.position.up()).await;
+            if block_up_state.is_center_solid(BlockDirection::Down) {
+                props.r#hanging = true;
+            }
 
-        props.to_state_id(args.block)
+            props.to_state_id(args.block)
+        })
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.world.unwrap(), args.position).await
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move { can_place_at(args.world.unwrap(), args.position).await })
     }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if !can_place_at(args.world, args.position).await {
-            args.world
-                .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                .await;
-        }
-        args.state_id
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if !can_place_at(args.world, args.position).await {
+                args.world
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
+                    .await;
+            }
+            args.state_id
+        })
     }
 
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world, args.position).await {
-            args.world
-                .break_block(args.position, None, BlockFlags::empty())
-                .await;
-        }
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if !can_place_at(args.world, args.position).await {
+                args.world
+                    .break_block(args.position, None, BlockFlags::empty())
+                    .await;
+            }
+        })
     }
 }
 

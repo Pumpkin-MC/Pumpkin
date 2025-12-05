@@ -1,14 +1,13 @@
-use std::{any::Any, sync::Arc};
+use std::{any::Any, pin::Pin, sync::Arc};
 
-use async_trait::async_trait;
 use pumpkin_data::fuels::is_fuel;
 use pumpkin_world::{block::entities::BlockEntity, inventory::Inventory, item::ItemStack};
 
 use crate::{
     player::player_inventory::PlayerInventory,
     screen_handler::{
-        InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerListener,
-        ScreenProperty,
+        InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
+        ScreenHandlerFuture, ScreenHandlerListener, ScreenProperty,
     },
 };
 
@@ -36,19 +35,20 @@ impl FurnaceScreenHandler {
         };
 
         struct FurnaceScreenListener;
-        #[async_trait]
         impl ScreenHandlerListener for FurnaceScreenListener {
-            async fn on_property_update(
-                &self,
-                screen_handler: &ScreenHandlerBehaviour,
+            fn on_property_update<'a>(
+                &'a self,
+                screen_handler: &'a ScreenHandlerBehaviour,
                 property: u8,
                 value: i32,
-            ) {
-                if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
-                    sync_handler
-                        .update_property(screen_handler, property as i32, value)
-                        .await;
-                }
+            ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+                Box::pin(async move {
+                    if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
+                        sync_handler
+                            .update_property(screen_handler, property as i32, value)
+                            .await;
+                    }
+                })
             }
         }
 
@@ -84,11 +84,12 @@ impl FurnaceScreenHandler {
     }
 }
 
-#[async_trait]
 impl ScreenHandler for FurnaceScreenHandler {
-    async fn on_closed(&mut self, player: &dyn InventoryPlayer) {
-        self.default_on_closed(player).await;
-        //TODO: self.inventory.on_closed(player).await;
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
+        Box::pin(async move {
+            self.default_on_closed(player).await;
+            // TODO: self.inventory.on_closed(player).await;
+        })
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -103,40 +104,55 @@ impl ScreenHandler for FurnaceScreenHandler {
         &mut self.behaviour
     }
 
-    async fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
-        const FUEL_SLOT: i32 = 1;
+    fn quick_move<'a>(
+        &'a mut self,
+        _player: &'a dyn InventoryPlayer,
+        slot_index: i32,
+    ) -> ItemStackFuture<'a> {
+        Box::pin(async move {
+            const FUEL_SLOT: i32 = 1; // Note: Slots 0, 1, 2 are Furnace slots.
 
-        let mut stack_left = ItemStack::EMPTY.clone();
-        let slot = self.get_behaviour().slots[slot_index as usize].clone();
+            let mut stack_left = ItemStack::EMPTY.clone();
 
-        if !slot.has_stack().await {
-            return stack_left;
-        }
+            let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
-        let slot_stack = slot.get_stack().await;
-        let mut stack = slot_stack.lock().await;
-        stack_left = stack.clone();
+            if !slot.has_stack().await {
+                return stack_left;
+            }
 
-        let success = if slot_index < 3 {
-            self.insert_item(&mut stack, 3, self.get_behaviour().slots.len() as i32, true)
-                .await
-        } else if is_fuel(stack.item.id) {
-            self.insert_item(&mut stack, FUEL_SLOT, 3, false).await
-        } else {
-            self.insert_item(&mut stack, 0, 3, false).await
-        };
+            let slot_stack_lock = slot.get_stack().await;
 
-        if !success {
-            return ItemStack::EMPTY.clone();
-        }
+            // Acquire the lock to read/clone the stack
+            let mut stack = slot_stack_lock.lock().await;
+            stack_left = stack.clone();
 
-        if stack.is_empty() {
-            drop(stack);
-            slot.set_stack(ItemStack::EMPTY.clone()).await;
-        } else {
-            slot.mark_dirty().await;
-        }
+            let success = if slot_index < 3 {
+                // If clicked slot is one of the Furnace slots (0, 1, 2):
+                // Try to move to player inventory (slots 3 onwards, starting from the end)
+                self.insert_item(&mut stack, 3, self.get_behaviour().slots.len() as i32, true)
+                    .await
+            } else if is_fuel(stack.item.id) {
+                // If clicked slot is in the player inventory (3+) and contains fuel:
+                // Try to move to the Furnace's Fuel slot (slot 1)
+                self.insert_item(&mut stack, FUEL_SLOT, 3, false).await
+            } else {
+                // If clicked slot is in the player inventory (3+) and NOT fuel (must be a smeltable item):
+                // Try to move to the Furnace's Input/Smelting slot (slot 0)
+                self.insert_item(&mut stack, 0, 3, false).await
+            };
 
-        stack_left
+            if !success {
+                return ItemStack::EMPTY.clone();
+            }
+
+            if stack.is_empty() {
+                drop(stack); // Release lock before awaiting
+                slot.set_stack(ItemStack::EMPTY.clone()).await;
+            } else {
+                slot.mark_dirty().await;
+            }
+
+            stack_left
+        })
     }
 }

@@ -11,6 +11,7 @@ use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
 use crate::dimension::Dimension;
 use std::default::Default;
+use std::pin::Pin;
 
 use crate::generation::height_limit::HeightLimitView;
 
@@ -19,7 +20,6 @@ use crate::generation::settings::{GenerationSettings, gen_settings_from_dimensio
 use crate::level::{Level, SyncChunk};
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
-use async_trait::async_trait;
 use crossbeam::channel::{Receiver, Sender};
 use dashmap::DashMap;
 use itertools::Itertools;
@@ -806,7 +806,7 @@ impl Chunk {
                     .map(|_| LightContainer::new_filled(15))
                     .collect(),
                 block_light: (0..sections.sections.len())
-                    .map(|_| LightContainer::new_empty(15))
+                    .map(|_| LightContainer::new_empty(0))
                     .collect(),
             },
             section: sections,
@@ -849,22 +849,29 @@ impl HeightLimitView for Cache {
     }
 }
 
-#[async_trait]
 impl BlockAccessor for Cache {
-    async fn get_block(&self, position: &BlockPos) -> &'static Block {
-        GenerationCache::get_block_state(self, &position.0).to_block()
+    fn get_block<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = &'static Block> + Send + 'a>> {
+        Box::pin(async move { GenerationCache::get_block_state(self, &position.0).to_block() })
     }
 
-    async fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
-        GenerationCache::get_block_state(self, &position.0).to_state()
+    fn get_block_state<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = &'static BlockState> + Send + 'a>> {
+        Box::pin(async move { GenerationCache::get_block_state(self, &position.0).to_state() })
     }
 
-    async fn get_block_and_state(
-        &self,
-        position: &BlockPos,
-    ) -> (&'static Block, &'static BlockState) {
-        let id = GenerationCache::get_block_state(self, &position.0);
-        (id.to_block(), id.to_state())
+    fn get_block_and_state<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = (&'static Block, &'static BlockState)> + Send + 'a>> {
+        Box::pin(async move {
+            let id = GenerationCache::get_block_state(self, &position.0);
+            (id.to_block(), id.to_state())
+        })
     }
 }
 

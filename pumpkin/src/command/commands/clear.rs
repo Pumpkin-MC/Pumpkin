@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::item::ItemStack;
@@ -9,7 +8,7 @@ use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, require};
-use crate::command::{CommandError, CommandExecutor, CommandSender};
+use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use CommandError::InvalidConsumption;
@@ -71,57 +70,59 @@ async fn clear_command_text_output(item_count: u64, targets: &[Arc<Player>]) -> 
 
 struct Executor;
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
+                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+            };
 
-        let mut item_count = 0;
-        for target in targets {
-            item_count += clear_player(target).await;
-        }
+            let mut item_count = 0;
+            for target in targets {
+                item_count += clear_player(target).await;
+            }
 
-        let msg = clear_command_text_output(item_count, targets).await;
+            let msg = clear_command_text_output(item_count, targets).await;
 
-        sender.send_message(msg).await;
+            sender.send_message(msg).await;
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 
 struct SelfExecutor;
 
-#[async_trait]
 impl CommandExecutor for SelfExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        _args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let target = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        _args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let target = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
 
-        let item_count = clear_player(&target).await;
+            let item_count = clear_player(&target).await;
 
-        let hold_target = [target];
-        let msg = clear_command_text_output(item_count, &hold_target).await;
+            let hold_target = [target];
+            let msg = clear_command_text_output(item_count, &hold_target).await;
 
-        sender.send_message(msg).await;
+            sender.send_message(msg).await;
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 
-#[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
+// #[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(argument(ARG_TARGET, PlayersArgumentConsumer).execute(Executor))
-        .then(require(|sender| sender.is_player()).execute(SelfExecutor))
+        .then(require(super::super::CommandSender::is_player).execute(SelfExecutor))
 }

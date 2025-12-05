@@ -1,6 +1,6 @@
 use std::collections::HashMap;
+use std::pin::Pin;
 
-use async_trait::async_trait;
 use pumpkin_data::tag;
 use pumpkin_data::{
     Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Taggable,
@@ -988,22 +988,29 @@ impl ProtoChunk {
     }
 }
 
-#[async_trait]
 impl BlockAccessor for ProtoChunk {
-    async fn get_block(&self, position: &BlockPos) -> &'static pumpkin_data::Block {
-        self.get_block_state(&position.0).to_block()
+    fn get_block<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = &'static Block> + Send + 'a>> {
+        Box::pin(async move { self.get_block_state(&position.0).to_block() })
     }
 
-    async fn get_block_state(&self, position: &BlockPos) -> &'static pumpkin_data::BlockState {
-        self.get_block_state(&position.0).to_state()
+    fn get_block_state<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = &'static BlockState> + Send + 'a>> {
+        Box::pin(async move { self.get_block_state(&position.0).to_state() })
     }
 
-    async fn get_block_and_state(
-        &self,
-        position: &BlockPos,
-    ) -> (&'static Block, &'static BlockState) {
-        let id = self.get_block_state(&position.0);
-        BlockState::from_id_with_block(id.0)
+    fn get_block_and_state<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = (&'static Block, &'static BlockState)> + Send + 'a>> {
+        Box::pin(async move {
+            let id = self.get_block_state(&position.0);
+            BlockState::from_id_with_block(id.0)
+        })
     }
 }
 

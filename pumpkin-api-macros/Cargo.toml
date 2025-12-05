@@ -7,7 +7,7 @@ edition.workspace = true
 proc-macro = true
 
 [dependencies]
-syn = "2.0"
+syn .workspace = true
 quote = "1.0"
 proc-macro2 = "1.0"
 proc-macro-error2.workspace = true
