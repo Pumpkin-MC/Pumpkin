@@ -1,13 +1,11 @@
 use crate::command::{
-    CommandError, CommandExecutor, CommandSender,
+    CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{
         Arg, ConsumedArgs, FindArg, players::PlayersArgumentConsumer,
         textcomponent::TextComponentArgConsumer,
     },
-    tree::CommandTree,
-    tree::builder::argument,
+    tree::{CommandTree, builder::argument},
 };
-use async_trait::async_trait;
 
 const NAMES: [&str; 1] = ["tellraw"];
 
@@ -19,23 +17,24 @@ const ARG_MESSAGE: &str = "message";
 
 struct TellRawExecutor;
 
-#[async_trait]
 impl CommandExecutor for TellRawExecutor {
-    async fn execute<'a>(
-        &self,
-        _sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
-            return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        _sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
+                return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
+            };
 
-        let text = TextComponentArgConsumer::find_arg(args, ARG_MESSAGE)?;
-        for target in targets {
-            target.send_system_message(&text).await;
-        }
-        Ok(())
+            let text = TextComponentArgConsumer::find_arg(args, ARG_MESSAGE)?;
+            for target in targets {
+                target.send_system_message(&text).await;
+            }
+            Ok(())
+        })
     }
 }
 

@@ -10,22 +10,24 @@ pub(crate) fn build() -> TokenStream {
     let chunk_status: Vec<String> =
         serde_json::from_str(&fs::read_to_string("../assets/chunk_status.json").unwrap())
             .expect("Failed to parse chunk_status.json");
-    let mut variants = TokenStream::new();
+    let variants: Vec<TokenStream> = chunk_status
+        .into_iter()
+        .map(|status| {
+            let full_name = format!("minecraft:{}", status);
+            let name = format_ident!("{}", status.to_pascal_case());
 
-    for status in chunk_status.iter() {
-        let full_name = format!("minecraft:{status}");
-        let name = format_ident!("{}", status.to_pascal_case());
-        variants.extend([quote! {
-            #[serde(rename = #full_name)]
-            #name,
-        }]);
-    }
+            quote! {
+                #[serde(rename = #full_name)]
+                #name,
+            }
+        })
+        .collect();
     quote! {
         use serde::{Deserialize, Serialize};
 
         #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
         pub enum ChunkStatus {
-            #variants
+            #(#variants)*
         }
     }
 }

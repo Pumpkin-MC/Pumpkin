@@ -1,30 +1,36 @@
 use crate::plugin::api::{Plugin, PluginMetadata};
-use async_trait::async_trait;
-use std::{any::Any, path::Path};
+use std::{any::Any, path::Path, pin::Pin};
 use thiserror::Error;
 
 pub mod native;
 
-/// Common trait for all plugin loaders
-#[async_trait]
+pub type PluginLoadFuture<'a> = Pin<
+    Box<
+        dyn Future<
+                Output = Result<
+                    (
+                        Box<dyn Plugin>,
+                        PluginMetadata<'static>,
+                        Box<dyn Any + Send + Sync>,
+                    ),
+                    LoaderError,
+                >,
+            > + Send
+            + 'a,
+    >,
+>;
+
+pub type PluginUnloadFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<(), LoaderError>> + Send + 'a>>;
+
 pub trait PluginLoader: Send + Sync {
     /// Load a plugin from the specified path
-    async fn load(
-        &self,
-        path: &Path,
-    ) -> Result<
-        (
-            Box<dyn Plugin>,
-            PluginMetadata<'static>,
-            Box<dyn Any + Send + Sync>,
-        ),
-        LoaderError,
-    >;
+    fn load<'a>(&'a self, path: &'a Path) -> PluginLoadFuture<'a>;
 
     /// Check if this loader can handle the given file
     fn can_load(&self, path: &Path) -> bool;
 
-    async fn unload(&self, data: Box<dyn Any + Send + Sync>) -> Result<(), LoaderError>;
+    fn unload(&self, data: Box<dyn Any + Send + Sync>) -> PluginUnloadFuture<'_>;
 
     /// Checks if the plugin can be safely unloaded.
     fn can_unload(&self) -> bool;

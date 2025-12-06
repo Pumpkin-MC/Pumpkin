@@ -10,12 +10,20 @@ pumpkin-util = { path = "../pumpkin-util" }
 pumpkin-config = { path = "../pumpkin-config" }
 pumpkin-data = { path = "../pumpkin-data" }
 
-async-trait.workspace = true
 futures.workspace = true
 
 bytes.workspace = true
 
-tokio.workspace = true
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "sync",
+    "io-std",
+    "signal",
+    "fs",
+    "io-util",
+    "time",
+] }
 rayon.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
@@ -39,20 +47,19 @@ ruzstd = "0.8.2"
 
 itertools = "0.14.0"
 enum_dispatch = "0.3"
-derive-getters = "0.5.0"
 
 thread_local = "1.1.9"
 lru = "0.16.2"
 
 tokio-util = { version = "0.7.17", features = ["rt"] }
-rand = "0.9.2"
+rand = "=0.10.0-rc.5"
 num_cpus = "1.17.0"
-slotmap = "1.0.7"
-intrusive-collections = "0.9.7"
 rustc-hash = "2.1.1"
+slotmap = "1.1"
+crossfire = "2.1.8"
 
 [dev-dependencies]
-criterion = { version = "0.7", default-features = false, features = ["html_reports", "async_tokio"] }
+criterion = { version = "0.8", default-features = false, features = ["html_reports", "async_tokio"] }
 temp-dir = "0.1.16"
 # Print log info inside tests when needed
 env_logger = "0.11.8"
@@ -60,7 +67,6 @@ env_logger = "0.11.8"
 pumpkin-config = { path = "../pumpkin-config", features = ["test_helper"] }
 # Deserialize NaN and Inf
 serde_json5 = "0.2.1"
-iai = "0.1"
 
 [[bench]]
 name = "chunk"

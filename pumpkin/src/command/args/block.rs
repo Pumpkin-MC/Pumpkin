@@ -1,9 +1,9 @@
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
+use crate::command::args::ConsumeResult;
 use crate::{command::dispatcher::CommandError, server::Server};
 
 use super::{
@@ -26,25 +26,18 @@ impl GetClientSideArgParser for BlockArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for BlockArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
         args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
-        Some(Arg::Block(s))
-    }
-
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+    ) -> ConsumeResult<'a> {
+        let block = args.pop();
+        match block {
+            Some(s) => Box::pin(async move { Some(Arg::Block(s)) }),
+            None => Box::pin(async move { None }),
+        }
     }
 }
 
@@ -101,25 +94,18 @@ impl GetClientSideArgParser for BlockPredicateArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for BlockPredicateArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
         args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
-        Some(Arg::BlockPredicate(s))
-    }
-
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+    ) -> ConsumeResult<'a> {
+        let block = args.pop();
+        match block {
+            Some(s) => Box::pin(async move { Some(Arg::BlockPredicate(s)) }),
+            None => Box::pin(async move { None }),
+        }
     }
 }
 

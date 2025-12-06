@@ -1,17 +1,15 @@
-use async_trait::async_trait;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::text::TextComponent;
 use rand::{Rng, rng};
 
 use crate::command::{
-    CommandError, CommandExecutor, CommandSender,
+    CommandExecutor, CommandResult, CommandSender,
     args::{
         Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
         players::PlayersArgumentConsumer, position_3d::Position3DArgumentConsumer,
         sound::SoundArgumentConsumer, sound_category::SoundCategoryArgumentConsumer,
     },
-    tree::CommandTree,
-    tree::builder::argument,
+    tree::{CommandTree, builder::argument},
 };
 use crate::entity::EntityBase;
 
@@ -60,109 +58,112 @@ fn min_volume_consumer() -> BoundedNumArgumentConsumer<f32> {
 
 struct Executor;
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        // Get required sound argument
-        let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND)?;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            // Get required sound argument
+            let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND)?;
 
-        // Get optional sound category, defaults to Master
-        let source = args
-            .get(ARG_SOURCE)
-            .map_or(SoundCategory::Master, |arg| match arg {
-                Arg::SoundCategory(category) => *category,
-                _ => SoundCategory::Master,
-            });
+            // Get optional sound category, defaults to Master
+            let source = args
+                .get(ARG_SOURCE)
+                .map_or(SoundCategory::Master, |arg| match arg {
+                    Arg::SoundCategory(category) => *category,
+                    _ => SoundCategory::Master,
+                });
 
-        // Get target players, defaults to sender if not specified
-        let targets = if let Ok(players) = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS) {
-            players
-        } else if let Some(player) = sender.as_player() {
-            &[player]
-        } else {
-            return Ok(());
-        };
+            // Get target players, defaults to sender if not specified
+            let targets = if let Ok(players) = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)
+            {
+                players
+            } else if let Some(player) = sender.as_player() {
+                &[player]
+            } else {
+                return Ok(());
+            };
 
-        // Get optional position, defaults to target's position
-        let position = Position3DArgumentConsumer::find_arg(args, ARG_POS).ok();
+            // Get optional position, defaults to target's position
+            let position = Position3DArgumentConsumer::find_arg(args, ARG_POS).ok();
 
-        // Get optional volume parameter
-        let volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_VOLUME) {
-            Ok(Ok(v)) => v,
-            _ => 1.0, // Default volume
-        };
+            // Get optional volume parameter
+            let volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_VOLUME) {
+                Ok(Ok(v)) => v,
+                _ => 1.0, // Default volume
+            };
 
-        // Get optional pitch parameter
-        let pitch = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_PITCH) {
-            Ok(Ok(p)) => p.max(0.5), // Values below 0.5 are clamped
-            _ => 1.0,                // Default pitch
-        };
+            // Get optional pitch parameter
+            let pitch = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_PITCH) {
+                Ok(Ok(p)) => p.max(0.5), // Values below 0.5 are clamped
+                _ => 1.0,                // Default pitch
+            };
 
-        // Get optional minimum volume (currently unused in implementation)
-        let min_volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_MIN_VOLUME) {
-            Ok(Ok(v)) => v,
-            _ => 0.0, // Default minimum volume
-        };
+            // Get optional minimum volume (currently unused in implementation)
+            let min_volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_MIN_VOLUME)
+            {
+                Ok(Ok(v)) => v,
+                _ => 0.0, // Default minimum volume
+            };
 
-        // Use same random seed for all targets to ensure sound synchronization
-        let seed = rng().random::<f64>();
+            // Use same random seed for all targets to ensure sound synchronization
+            let seed = rng().random::<f64>();
 
-        // Track how many players actually received the sound
-        let mut players_who_heard = 0;
+            // Track how many players actually received the sound
+            let mut players_who_heard = 0;
 
-        // Play sound for each target player
-        for target in targets {
-            let pos = position.unwrap_or(target.living_entity.entity.pos.load());
+            // Play sound for each target player
+            for target in targets {
+                let pos = position.unwrap_or(target.living_entity.entity.pos.load());
 
-            // Check if player can hear the sound based on volume and distance
-            let player_pos = target.living_entity.entity.pos.load();
-            let distance = player_pos.squared_distance_to_vec(pos);
-            let max_distance: f64 = (16.0 * volume).into(); // 16 blocks is base distance at volume 1.0
+                // Check if player can hear the sound based on volume and distance
+                let player_pos = target.living_entity.entity.pos.load();
+                let distance = player_pos.squared_distance_to_vec(pos);
+                let max_distance: f64 = (16.0 * volume).into(); // 16 blocks is base distance at volume 1.0
 
-            if distance <= max_distance || min_volume > 0.0 {
-                target
-                    .play_sound(sound as u16, source, &pos, volume, pitch, seed)
-                    .await;
-                players_who_heard += 1;
+                if distance <= max_distance || min_volume > 0.0 {
+                    target
+                        .play_sound(sound as u16, source, &pos, volume, pitch, seed)
+                        .await;
+                    players_who_heard += 1;
+                }
             }
-        }
 
-        // Send appropriate message based on results
-        if players_who_heard == 0 {
-            sender
-                .send_message(TextComponent::translate("commands.playsound.failed", []))
-                .await;
-        } else {
-            let sound_name = sound.to_name();
-            if players_who_heard == 1 {
+            // Send appropriate message based on results
+            if players_who_heard == 0 {
                 sender
-                    .send_message(TextComponent::translate(
-                        "commands.playsound.success.single",
-                        [
-                            TextComponent::text(sound_name),
-                            targets[0].get_display_name().await,
-                        ],
-                    ))
+                    .send_message(TextComponent::translate("commands.playsound.failed", []))
                     .await;
             } else {
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.playsound.success.multiple",
-                        [
-                            TextComponent::text(sound_name),
-                            TextComponent::text(players_who_heard.to_string()),
-                        ],
-                    ))
-                    .await;
+                let sound_name = sound.to_name();
+                if players_who_heard == 1 {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.playsound.success.single",
+                            [
+                                TextComponent::text(sound_name),
+                                targets[0].get_display_name().await,
+                            ],
+                        ))
+                        .await;
+                } else {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.playsound.success.multiple",
+                            [
+                                TextComponent::text(sound_name),
+                                TextComponent::text(players_who_heard.to_string()),
+                            ],
+                        ))
+                        .await;
+                }
             }
-        }
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 

@@ -1,6 +1,5 @@
 use std::sync::{Arc, atomic::Ordering};
 
-use async_trait::async_trait;
 use pumpkin_data::item::Item;
 use pumpkin_world::block::entities::{BlockEntity, sign::Text};
 
@@ -17,7 +16,6 @@ impl ItemMetadata for InkSacItem {
     }
 }
 
-#[async_trait]
 impl ItemBehaviour for InkSacItem {
     fn as_any(&self) -> &dyn std::any::Any {
         self

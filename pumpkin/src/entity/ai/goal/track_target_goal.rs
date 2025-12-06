@@ -1,9 +1,9 @@
 use super::{Controls, Goal, to_goal_ticks};
+use crate::entity::ai::goal::GoalFuture;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::{EntityBase, mob::MobEntity};
-use async_trait::async_trait;
 use rand::Rng;
 use std::sync::Arc;
 
@@ -99,38 +99,47 @@ impl TrackTargetGoal {
     }
 }
 
-#[async_trait]
 impl Goal for TrackTargetGoal {
-    async fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        false
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async {
+            let mob = mob.get_mob_entity();
+            let mob_target = mob.target.lock().await;
+
+            // We need to decide which target to use for the check
+            let target = if mob_target.is_some() {
+                (*mob_target).clone()
+            } else {
+                self.target.clone()
+            };
+
+            // Drop the guard immediately after access to release the lock
+            drop(mob_target);
+
+            if target.is_none() {
+                return false;
+            } // TODO: continue when scoreboard team are implemented
+            true
+        })
     }
 
-    async fn should_continue(&self, mob: &dyn Mob) -> bool {
-        let mob = mob.get_mob_entity();
-        let mob_target = mob.target.lock().await;
-        let target = if mob_target.is_some() {
-            mob_target.clone()
-        } else {
-            self.target.clone()
-        };
-        drop(mob_target);
-
-        if target.is_none() {
-            return false;
-        } // TODO: continue when scoreboard team are implemented
-        true
+    fn start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            self.can_navigate_flag = 0;
+            self.check_can_navigate_cooldown = 0;
+            self.time_without_visibility = 0;
+            // No await needed here
+        })
     }
 
-    async fn start(&mut self, _mob: &dyn Mob) {
-        self.can_navigate_flag = 0;
-        self.check_can_navigate_cooldown = 0;
-        self.time_without_visibility = 0;
-    }
+    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            let mob = mob.get_mob_entity();
 
-    async fn stop(&mut self, mob: &dyn Mob) {
-        let mob = mob.get_mob_entity();
-        *mob.target.lock().await = None;
-        self.target = None;
+            let mut mob_target = mob.target.lock().await;
+            *mob_target = None;
+
+            self.target = None;
+        })
     }
 
     fn controls(&self) -> Controls {

@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::{HeightMap, include_json_static};
 use serde::Deserialize;
@@ -378,7 +377,6 @@ pub struct BlockFilterPlacementModifier {
     predicate: BlockPredicate,
 }
 
-#[async_trait]
 impl ConditionalPlacementModifier for BlockFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
@@ -399,7 +397,6 @@ pub struct SurfaceThresholdFilterPlacementModifier {
     max_inclusive: Option<i32>,
 }
 
-#[async_trait]
 impl ConditionalPlacementModifier for SurfaceThresholdFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
@@ -421,7 +418,6 @@ pub struct RarityFilterPlacementModifier {
     chance: u32,
 }
 
-#[async_trait]
 impl ConditionalPlacementModifier for RarityFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
@@ -465,7 +461,6 @@ pub struct SurfaceWaterDepthFilterPlacementModifier {
     max_water_depth: i32,
 }
 
-#[async_trait]
 impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
@@ -484,7 +479,6 @@ impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
 #[derive(Deserialize)]
 pub struct BiomePlacementModifier;
 
-#[async_trait]
 impl ConditionalPlacementModifier for BiomePlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
@@ -563,7 +557,6 @@ pub trait CountPlacementModifierBase {
     fn get_count(&self, random: &mut RandomGenerator, pos: BlockPos) -> i32;
 }
 
-#[async_trait]
 pub trait ConditionalPlacementModifier {
     fn get_positions<T: GenerationCache>(
         &self,

@@ -213,7 +213,7 @@ impl Level {
 
         // let mut tracker = level_ref.thread_tracker.lock().unwrap();
         // Entity Chunks
-        for thread_id in 0..num_threads {
+        for thread_id in 0..(num_threads / 2).max(1) {
             let level_clone = level_ref.clone();
             let pending_clone = pending_entity_generations.clone();
             let rx = gen_entity_request_rx.clone();
@@ -221,35 +221,37 @@ impl Level {
             let builder =
                 thread::Builder::new().name(format!("Entity Chunk Generation Thread {thread_id}"));
             // tracker.push( TODO
-            builder.spawn(move || {
-                while let Ok(pos) = rx.recv() {
-                    if level_clone.is_shutting_down.load(Ordering::Relaxed) {
-                        break;
-                    }
+            builder
+                .spawn(move || {
+                    while let Ok(pos) = rx.recv() {
+                        if level_clone.is_shutting_down.load(Ordering::Relaxed) {
+                            break;
+                        }
 
-                    log::debug!(
-                        "Generating entity chunk {pos:?}, worker thread {thread_id:?}, queue length {}",
-                        rx.len()
-                    );
+                        // log::debug!(
+                        //     "Generating entity chunk {pos:?}, worker thread {thread_id:?}, queue length {}",
+                        //     rx.len()
+                        // );
 
-                    let chunk = ChunkEntityData {
-                        chunk_position: pos,
-                        data: HashMap::new(),
-                        dirty: true,
-                    };
-                    let arc_chunk = Arc::new(RwLock::new(chunk));
+                        let chunk = ChunkEntityData {
+                            chunk_position: pos,
+                            data: HashMap::new(),
+                            dirty: true,
+                        };
+                        let arc_chunk = Arc::new(RwLock::new(chunk));
 
-                    level_clone
-                        .loaded_entity_chunks
-                        .insert(pos, arc_chunk.clone());
+                        level_clone
+                            .loaded_entity_chunks
+                            .insert(pos, arc_chunk.clone());
 
-                    if let Some(waiters) = pending_clone.remove(&pos) {
-                        for tx in waiters.1 {
-                            let _ = tx.send(arc_chunk.clone());
+                        if let Some(waiters) = pending_clone.remove(&pos) {
+                            for tx in waiters.1 {
+                                let _ = tx.send(arc_chunk.clone());
+                            }
                         }
                     }
-                }
-            }).unwrap();
+                })
+                .unwrap();
             // );
         }
         // drop(tracker);
@@ -490,7 +492,7 @@ impl Level {
             block_entities: Vec::new(),
         };
 
-        let mut rng = SmallRng::from_os_rng();
+        let mut rng = SmallRng::from_rng(&mut rand::rng());
         let chunks = self
             .loaded_chunks
             .iter()

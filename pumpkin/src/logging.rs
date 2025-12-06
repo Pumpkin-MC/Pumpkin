@@ -4,8 +4,12 @@ use rustyline_async::Readline;
 use simplelog::{CombinedLogger, Config, SharedLogger, WriteLogger};
 use std::fmt::format;
 use std::fs::File;
-use std::io::BufWriter;
-use std::path::Path;
+use std::io::{self, BufWriter};
+use std::path::PathBuf;
+use time::{Duration, OffsetDateTime, UtcOffset};
+
+const LOG_DIR: &str = "logs";
+const MAX_ATTEMPTS: u32 = 100;
 
 /// A wrapper for our logger to hold the terminal input while no input is expected in order to
 /// properly flush logs to the output while they happen instead of batched
@@ -34,65 +38,85 @@ impl GzipRollingLogger {
         filename: String,
     ) -> Result<Box<Self>, Box<dyn std::error::Error>> {
         let now = time::OffsetDateTime::now_utc();
-        std::fs::create_dir_all("logs")?;
+        std::fs::create_dir_all(LOG_DIR)?;
+
+        let latest_path = PathBuf::from(LOG_DIR).join(&filename);
 
         // If latest.log exists, we will gzip it
-        if Path::new(&format!("logs/{filename}")).exists() {
-            let new_filename = Self::new_filename(false);
-            let mut file = File::open(format!("logs/{filename}"))?;
+        if latest_path.exists() {
+            eprintln!(
+                "Found existing log file at '{}', gzipping it now...",
+                latest_path.display()
+            );
+
+            let new_gz_path = Self::new_filename(true)?;
+
+            let mut file = File::open(&latest_path)?;
+
             let mut encoder = GzEncoder::new(
-                BufWriter::new(File::create(&new_filename)?),
+                BufWriter::new(File::create(&new_gz_path)?),
                 flate2::Compression::best(),
             );
-            std::io::copy(&mut file, &mut encoder)?;
+
+            io::copy(&mut file, &mut encoder)?;
             encoder.finish()?;
+
+            std::fs::remove_file(&latest_path)?;
         }
+
+        let new_logger = WriteLogger::new(log_level, config.clone(), File::create(&latest_path)?);
 
         Ok(Box::new(Self {
             log_level,
             data: std::sync::Mutex::new(GzipRollingLoggerData {
                 current_day_of_month: now.day(),
                 last_rotate_time: now,
-                latest_filename: filename.clone(),
-                latest_logger: *WriteLogger::new(
-                    log_level,
-                    config.clone(),
-                    File::create(format!("logs/{filename}")).unwrap(),
-                ),
+                latest_filename: filename,
+                latest_logger: *new_logger,
             }),
             config,
         }))
     }
 
-    pub fn new_filename(yesterday: bool) -> String {
-        let mut now = time::OffsetDateTime::now_utc()
-            .to_offset(time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC));
-        if yesterday {
-            now -= time::Duration::days(1)
-        }
-        let base_filename = format!("{}-{:02}-{:02}", now.year(), now.month() as u8, now.day());
+    pub fn new_filename(yesterday: bool) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
+        let mut now = OffsetDateTime::now_utc().to_offset(local_offset);
 
-        let mut id = 1;
-        loop {
-            let filename = format!("logs/{base_filename}-{id}.log.gz");
-            if !Path::new(&filename).exists() {
-                return filename;
-            }
-            id += 1;
+        if yesterday {
+            now -= Duration::days(1);
         }
+
+        let date_format = format!("{}-{:02}-{:02}", now.year(), now.month() as u8, now.day());
+
+        let log_path = PathBuf::from(LOG_DIR);
+
+        for id in 1..=MAX_ATTEMPTS {
+            let filename = log_path.join(format!("{}-{}.log.gz", date_format, id));
+
+            if !filename.exists() {
+                return Ok(filename);
+            }
+        }
+
+        Err(format!(
+            "Failed to find a unique log filename for date {} after {} attempts.",
+            date_format, MAX_ATTEMPTS
+        )
+        .into())
     }
 
     fn rotate_log(&self) -> Result<(), Box<dyn std::error::Error>> {
         let now = time::OffsetDateTime::now_utc();
         let mut data = self.data.lock().unwrap();
 
-        let new_filename = Self::new_filename(true);
-        let mut file = File::open(format!("logs/{}", data.latest_filename))?;
+        let new_gz_path = Self::new_filename(true)?;
+        let latest_path = PathBuf::from(LOG_DIR).join(&data.latest_filename);
+        let mut file = File::open(&latest_path)?;
         let mut encoder = GzEncoder::new(
-            BufWriter::new(File::create(format!("logs/{new_filename}"))?),
+            BufWriter::new(File::create(&new_gz_path)?),
             flate2::Compression::best(),
         );
-        std::io::copy(&mut file, &mut encoder)?;
+        io::copy(&mut file, &mut encoder)?;
         encoder.finish()?;
 
         data.current_day_of_month = now.day();
@@ -100,7 +124,7 @@ impl GzipRollingLogger {
         data.latest_logger = *WriteLogger::new(
             self.log_level,
             self.config.clone(),
-            File::create(format!("logs/{}", data.latest_filename)).unwrap(),
+            File::create(&latest_path)?,
         );
         Ok(())
     }
@@ -108,21 +132,19 @@ impl GzipRollingLogger {
 
 fn remove_ansi_color_code(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
-    let mut in_escape_sequence = false;
+    let mut it = s.chars();
 
-    for c in s.chars() {
-        if in_escape_sequence {
-            if c.is_ascii_alphabetic() {
-                // This broadly covers 'm', 'J', 'H', etc.
-                in_escape_sequence = false;
+    while let Some(c) = it.next() {
+        if c == '\x1b' {
+            for c_seq in it.by_ref() {
+                if c_seq.is_ascii_alphabetic() {
+                    break;
+                }
             }
-        } else if c == '\x1B' {
-            in_escape_sequence = true;
         } else {
             result.push(c);
         }
     }
-
     result
 }
 

@@ -366,7 +366,7 @@ pub async fn spawn_category_for_position(
         let mut random_group_size = (rng().random::<f32>() * 4.).ceil() as i32;
         let mut inc = 0;
         #[allow(unused_variables)]
-        let mut group_size = 0;
+        let group_size = 0;
         'outer: while inc < random_group_size {
             new_x += rng().random_range(0..6) - rng().random_range(0..6);
             new_z += rng().random_range(0..6) - rng().random_range(0..6);
@@ -419,7 +419,7 @@ pub async fn spawn_category_for_position(
             // TODO isValidPositionForMob(level, mob, f)
             // TODO spawnGroupData = mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), EntitySpawnReason.NATURAL, spawnGroupData);
             spawn_cluster_size += 1;
-            group_size += 1;
+            //group_size += 1;
             world.spawn_entity(entity).await;
             spawn_state.after_spawn(entity_type, &new_pos, world).await;
             if spawn_cluster_size >= entity_type.limit_per_chunk {

@@ -2,16 +2,12 @@ use std::sync::Arc;
 
 use crate::{
     block::{
-        registry::BlockActionResult,
-        {
-            BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs,
-            UseWithItemArgs,
-        },
+        BlockBehaviour, BlockFuture, GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs,
+        UseWithItemArgs, registry::BlockActionResult,
     },
     entity::{Entity, item::ItemEntity},
     world::World,
 };
-use async_trait::async_trait;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, ComposterLikeProperties, EnumVariants, Integer0To8},
@@ -29,54 +25,79 @@ use uuid::Uuid;
 #[pumpkin_block("minecraft:composter")]
 pub struct ComposterBlock;
 
-#[async_trait]
 impl BlockBehaviour for ComposterBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        let state_id = args.world.get_block_state_id(args.position).await;
-        let props = ComposterLikeProperties::from_state_id(state_id, args.block);
-        if props.get_level() == 8 {
-            self.clear_composter(args.world, args.position, state_id, args.block)
-                .await;
-        }
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let state_id = args.world.get_block_state_id(args.position).await;
+            let props = ComposterLikeProperties::from_state_id(state_id, args.block);
+            if props.get_level() == 8 {
+                self.clear_composter(args.world, args.position, state_id, args.block)
+                    .await;
+            }
 
-        BlockActionResult::Pass
+            BlockActionResult::Pass
+        })
     }
 
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let state_id = args.world.get_block_state_id(args.position).await;
-        let props = ComposterLikeProperties::from_state_id(state_id, args.block);
-        let level = props.get_level();
-        if level == 8 {
-            self.clear_composter(args.world, args.position, state_id, args.block)
+    fn use_with_item<'a>(
+        &'a self,
+        args: UseWithItemArgs<'a>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let state_id = args.world.get_block_state_id(args.position).await;
+            let props = ComposterLikeProperties::from_state_id(state_id, args.block);
+            let level = props.get_level();
+            if level == 8 {
+                self.clear_composter(args.world, args.position, state_id, args.block)
+                    .await;
+            }
+            if level < 7
+                && let Some(chance) =
+                    get_composter_increase_chance_from_item_id(args.item_stack.lock().await.item.id)
+                && (level == 0 || rand::rng().random_bool(f64::from(chance)))
+            {
+                self.update_level_composter(
+                    args.world,
+                    args.position,
+                    state_id,
+                    args.block,
+                    level + 1,
+                )
                 .await;
-        }
-        if level < 7
-            && let Some(chance) =
-                get_composter_increase_chance_from_item_id(args.item_stack.lock().await.item.id)
-            && (level == 0 || rand::rng().random_bool(f64::from(chance)))
-        {
-            self.update_level_composter(args.world, args.position, state_id, args.block, level + 1)
-                .await;
-            args.world
-                .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
-                .await;
-        }
-        BlockActionResult::Consume
+                args.world
+                    .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
+                    .await;
+            }
+            BlockActionResult::Consume
+        })
     }
 
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state_id = args.world.get_block_state_id(args.position).await;
-        let props = ComposterLikeProperties::from_state_id(state_id, args.block);
-        let level = props.get_level();
-        if level == 7 {
-            self.update_level_composter(args.world, args.position, state_id, args.block, level + 1)
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let state_id = args.world.get_block_state_id(args.position).await;
+            let props = ComposterLikeProperties::from_state_id(state_id, args.block);
+            let level = props.get_level();
+            if level == 7 {
+                self.update_level_composter(
+                    args.world,
+                    args.position,
+                    state_id,
+                    args.block,
+                    level + 1,
+                )
                 .await;
-        }
+            }
+        })
     }
 
-    async fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        let props = ComposterLikeProperties::from_state_id(args.state.id, args.block);
-        Some(props.get_level())
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move {
+            let props = ComposterLikeProperties::from_state_id(args.state.id, args.block);
+            Some(props.get_level())
+        })
     }
 }
 

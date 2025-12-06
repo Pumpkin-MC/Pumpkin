@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::Axis;
@@ -20,6 +19,7 @@ use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 use crate::block::BlockBehaviour;
+use crate::block::BlockFuture;
 use crate::block::CanPlaceAtArgs;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::NormalUseArgs;
@@ -163,125 +163,136 @@ async fn get_hinge(
 #[pumpkin_block_from_tag("minecraft:doors")]
 pub struct DoorBlock;
 
-#[async_trait]
 impl BlockBehaviour for DoorBlock {
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let powered = block_receives_redstone_power(args.world, args.position).await
-            || block_receives_redstone_power(args.world, &args.position.up()).await;
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let powered = block_receives_redstone_power(args.world, args.position).await
+                || block_receives_redstone_power(args.world, &args.position.up()).await;
 
-        let direction = args.player.living_entity.entity.get_horizontal_facing();
-        let hinge = get_hinge(args.world, args.position, args.use_item_on, direction).await;
+            let direction = args.player.living_entity.entity.get_horizontal_facing();
+            let hinge = get_hinge(args.world, args.position, args.use_item_on, direction).await;
 
-        let mut door_props = DoorProperties::default(args.block);
-        door_props.half = DoubleBlockHalf::Lower;
-        door_props.facing = direction;
-        door_props.hinge = hinge;
-        door_props.powered = powered;
-        door_props.open = powered;
+            let mut door_props = DoorProperties::default(args.block);
+            door_props.half = DoubleBlockHalf::Lower;
+            door_props.facing = direction;
+            door_props.hinge = hinge;
+            door_props.powered = powered;
+            door_props.open = powered;
 
-        door_props.to_state_id(args.block)
+            door_props.to_state_id(args.block)
+        })
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.position).await
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
     }
 
-    async fn placed(&self, args: PlacedArgs<'_>) {
-        let mut door_props = DoorProperties::from_state_id(args.state_id, args.block);
-        door_props.half = DoubleBlockHalf::Upper;
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let mut door_props = DoorProperties::from_state_id(args.state_id, args.block);
+            door_props.half = DoubleBlockHalf::Upper;
 
-        args.world
-            .set_block_state(
-                &args.position.offset(BlockDirection::Up.to_offset()),
-                door_props.to_state_id(args.block),
-                BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
-            )
-            .await;
+            args.world
+                .set_block_state(
+                    &args.position.offset(BlockDirection::Up.to_offset()),
+                    door_props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                )
+                .await;
+        })
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if !can_open_door(args.block) {
-            return BlockActionResult::Pass;
-        }
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            if !can_open_door(args.block) {
+                return BlockActionResult::Pass;
+            }
 
-        toggle_door(args.player, args.world, args.position).await;
+            toggle_door(args.player, args.world, args.position).await;
 
-        BlockActionResult::Success
+            BlockActionResult::Success
+        })
     }
 
-    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let block_state = args.world.get_block_state(args.position).await;
-        let mut door_props = DoorProperties::from_state_id(block_state.id, args.block);
+    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let block_state = args.world.get_block_state(args.position).await;
+            let mut door_props = DoorProperties::from_state_id(block_state.id, args.block);
 
-        let other_half = match door_props.half {
-            DoubleBlockHalf::Upper => BlockDirection::Down,
-            DoubleBlockHalf::Lower => BlockDirection::Up,
-        };
-        let other_pos = args.position.offset(other_half.to_offset());
-        let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_pos).await;
+            let other_half = match door_props.half {
+                DoubleBlockHalf::Upper => BlockDirection::Down,
+                DoubleBlockHalf::Lower => BlockDirection::Up,
+            };
+            let other_pos = args.position.offset(other_half.to_offset());
+            let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_pos).await;
 
-        let powered = block_receives_redstone_power(args.world, args.position).await
-            || block_receives_redstone_power(args.world, &other_pos).await;
+            let powered = block_receives_redstone_power(args.world, args.position).await
+                || block_receives_redstone_power(args.world, &other_pos).await;
 
-        if args.block.id == other_block.id && powered != door_props.powered {
-            let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
-            door_props.powered = !door_props.powered;
-            other_door_props.powered = door_props.powered;
+            if args.block.id == other_block.id && powered != door_props.powered {
+                let mut other_door_props =
+                    DoorProperties::from_state_id(other_state_id, other_block);
+                door_props.powered = !door_props.powered;
+                other_door_props.powered = door_props.powered;
 
-            if powered != door_props.open {
-                door_props.open = door_props.powered;
-                other_door_props.open = other_door_props.powered;
+                if powered != door_props.open {
+                    door_props.open = door_props.powered;
+                    other_door_props.open = other_door_props.powered;
+
+                    args.world
+                        .play_block_sound(
+                            get_sound(args.block, powered),
+                            SoundCategory::Blocks,
+                            *args.position,
+                        )
+                        .await;
+                }
 
                 args.world
-                    .play_block_sound(
-                        get_sound(args.block, powered),
-                        SoundCategory::Blocks,
-                        *args.position,
+                    .set_block_state(
+                        args.position,
+                        door_props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_LISTENERS,
+                    )
+                    .await;
+                args.world
+                    .set_block_state(
+                        &other_pos,
+                        other_door_props.to_state_id(other_block),
+                        BlockFlags::NOTIFY_LISTENERS,
                     )
                     .await;
             }
-
-            args.world
-                .set_block_state(
-                    args.position,
-                    door_props.to_state_id(args.block),
-                    BlockFlags::NOTIFY_LISTENERS,
-                )
-                .await;
-            args.world
-                .set_block_state(
-                    &other_pos,
-                    other_door_props.to_state_id(other_block),
-                    BlockFlags::NOTIFY_LISTENERS,
-                )
-                .await;
-        }
+        })
     }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let lv = DoorProperties::from_state_id(args.state_id, args.block).half;
-        if args.direction.to_axis() != Axis::Y
-            || (lv == DoubleBlockHalf::Lower) != (args.direction == BlockDirection::Up)
-        {
-            if lv == DoubleBlockHalf::Lower
-                && args.direction == BlockDirection::Down
-                && !can_place_at(args.world, args.position).await
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let lv = DoorProperties::from_state_id(args.state_id, args.block).half;
+            if args.direction.to_axis() != Axis::Y
+                || (lv == DoubleBlockHalf::Lower) != (args.direction == BlockDirection::Up)
             {
+                if lv == DoubleBlockHalf::Lower
+                    && args.direction == BlockDirection::Down
+                    && !can_place_at(args.world, args.position).await
+                {
+                    return 0;
+                }
+            } else if Block::from_state_id(args.neighbor_state_id).id == args.block.id
+                && DoorProperties::from_state_id(args.neighbor_state_id, args.block).half != lv
+            {
+                let mut new_state =
+                    DoorProperties::from_state_id(args.neighbor_state_id, args.block);
+                new_state.half = lv;
+                return new_state.to_state_id(args.block);
+            } else {
                 return 0;
             }
-        } else if Block::from_state_id(args.neighbor_state_id).id == args.block.id
-            && DoorProperties::from_state_id(args.neighbor_state_id, args.block).half != lv
-        {
-            let mut new_state = DoorProperties::from_state_id(args.neighbor_state_id, args.block);
-            new_state.half = lv;
-            return new_state.to_state_id(args.block);
-        } else {
-            return 0;
-        }
-        args.state_id
+            args.state_id
+        })
     }
 }
 

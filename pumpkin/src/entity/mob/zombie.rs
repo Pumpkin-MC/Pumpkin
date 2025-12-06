@@ -1,20 +1,22 @@
 use super::{Mob, MobEntity};
 use crate::entity::ai::goal::look_around_goal::LookAroundGoal;
 use crate::entity::ai::goal::move_to_target_pos_goal::MoveToTargetPos;
-use crate::entity::ai::goal::step_and_destroy_block_goal::{StepAndDestroyBlockGoal, Stepping};
+use crate::entity::ai::goal::step_and_destroy_block_goal::{
+    StepAndDestroyBlockGoal, Stepping, SteppingFuture,
+};
 use crate::entity::ai::goal::zombie_attack_goal::ZombieAttackGoal;
-use crate::entity::ai::goal::{Controls, Goal, ParentHandle};
+use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{active_target_goal::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
 use crate::world::World;
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
 use rand::{Rng, rng};
+use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
 pub struct Zombie {
@@ -87,26 +89,31 @@ impl DestroyEggGoal {
     }
 }
 
-#[async_trait]
 impl Goal for DestroyEggGoal {
-    async fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        self.step_and_destroy_block_goal.can_start(mob).await
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { self.step_and_destroy_block_goal.can_start(mob).await })
     }
 
-    async fn should_continue(&self, mob: &dyn Mob) -> bool {
-        self.step_and_destroy_block_goal.should_continue(mob).await
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { self.step_and_destroy_block_goal.should_continue(mob).await })
     }
 
-    async fn start(&mut self, mob: &dyn Mob) {
-        self.step_and_destroy_block_goal.start(mob).await;
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            self.step_and_destroy_block_goal.start(mob).await;
+        })
     }
 
-    async fn stop(&mut self, mob: &dyn Mob) {
-        self.step_and_destroy_block_goal.stop(mob).await;
+    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            self.step_and_destroy_block_goal.stop(mob).await;
+        })
     }
 
-    async fn tick(&mut self, mob: &dyn Mob) {
-        self.step_and_destroy_block_goal.tick(mob).await;
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            self.step_and_destroy_block_goal.tick(mob).await;
+        })
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -118,41 +125,57 @@ impl Goal for DestroyEggGoal {
     }
 }
 
-#[async_trait]
 impl Stepping for DestroyEggGoal {
-    async fn tick_stepping(&self, world: Arc<World>, block_pos: BlockPos) {
-        let random = rng().random::<f32>();
-        world
-            .play_sound_raw(
-                Sound::EntityZombieDestroyEgg as u16,
-                SoundCategory::Hostile,
-                &block_pos.0.to_f64(),
-                0.7,
-                0.9 + random * 0.2,
-            )
-            .await;
+    fn tick_stepping(&self, world: Arc<World>, block_pos: BlockPos) -> SteppingFuture<'_> {
+        Box::pin(async move {
+            let random = rng().random::<f32>();
+
+            // NOTE: block_pos.0.to_f64() is assumed to be the correct way to get Vector3<f64>
+            let pos_f64 = (block_pos.0).to_f64();
+
+            world
+                .play_sound_raw(
+                    Sound::EntityZombieDestroyEgg as u16,
+                    SoundCategory::Hostile,
+                    &pos_f64,
+                    0.7,
+                    0.9 + random * 0.2,
+                )
+                .await;
+        })
     }
 
-    async fn on_destroy_block(&self, world: Arc<World>, block_pos: BlockPos) {
-        let random = rng().random::<f32>();
-        world
-            .play_sound_raw(
-                Sound::EntityTurtleEggBreak as u16,
-                SoundCategory::Blocks,
-                &block_pos.0.to_f64(),
-                0.7,
-                0.9 + random * 0.2,
-            )
-            .await;
+    fn on_destroy_block(&self, world: Arc<World>, block_pos: BlockPos) -> SteppingFuture<'_> {
+        Box::pin(async move {
+            let random = rng().random::<f32>();
+
+            // NOTE: block_pos.0.to_f64() is assumed to be the correct way to get Vector3<f64>
+            let pos_f64 = (block_pos.0).to_f64();
+
+            world
+                .play_sound_raw(
+                    Sound::EntityTurtleEggBreak as u16,
+                    SoundCategory::Blocks,
+                    &pos_f64,
+                    0.7,
+                    0.9 + random * 0.2,
+                )
+                .await;
+        })
     }
 }
 
-#[async_trait]
 impl MoveToTargetPos for DestroyEggGoal {
-    async fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool {
-        self.step_and_destroy_block_goal
-            .is_target_pos(world, block_pos)
-            .await
+    fn is_target_pos<'a>(
+        &'a self,
+        world: Arc<World>,
+        block_pos: BlockPos,
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+        Box::pin(async move {
+            self.step_and_destroy_block_goal
+                .is_target_pos(world, block_pos)
+                .await
+        })
     }
 
     fn get_desired_distance_to_target(&self) -> f64 {

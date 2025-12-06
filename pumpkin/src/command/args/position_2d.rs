@@ -1,9 +1,9 @@
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::command::CommandSender;
+use crate::command::args::ConsumeResult;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
@@ -27,28 +27,25 @@ impl GetClientSideArgParser for Position2DArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for Position2DArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        src: &CommandSender,
+        sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let pos = MaybeRelativePosition2D::try_new(args.pop()?, args.pop()?)?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let x_str_opt = args.pop();
+        let z_str_opt = args.pop();
 
-        let vec2 = pos.try_to_absolute(src.position())?;
+        let (Some(x_str), Some(z_str)) = (x_str_opt, z_str_opt) else {
+            return Box::pin(async move { None });
+        };
 
-        Some(Arg::Pos2D(vec2))
-    }
+        let result: Option<Arg<'a>> = MaybeRelativePosition2D::try_new(x_str, z_str)
+            .and_then(|pos| pos.try_to_absolute(sender.position()))
+            .map(Arg::Pos2D);
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        Box::pin(async move { result })
     }
 }
 

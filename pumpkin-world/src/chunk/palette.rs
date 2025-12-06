@@ -266,6 +266,13 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             }
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Homogeneous(value) => *value == V::default(),
+            Self::Heterogeneous(_) => false,
+        }
+    }
 }
 
 impl<V: Default + Hash + Eq + Copy, const DIM: usize> Default for PalettedContainer<V, DIM> {
@@ -527,9 +534,12 @@ impl BlockPalette {
 
         BlockStateCodec {
             name: block,
-            properties: block
-                .properties(registry_id)
-                .map(|p| p.to_props().into_iter().collect()),
+            properties: block.properties(registry_id).map(|p| {
+                p.to_props()
+                    .into_iter()
+                    .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                    .collect()
+            }),
         }
     }
 }

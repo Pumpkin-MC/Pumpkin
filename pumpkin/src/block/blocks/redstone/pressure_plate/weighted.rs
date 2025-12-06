@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, EnumVariants, Integer0To15},
@@ -8,7 +7,7 @@ use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::{
-        BlockBehaviour, BlockMetadata, CanPlaceAtArgs, EmitsRedstonePowerArgs,
+        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, EmitsRedstonePowerArgs,
         GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
         OnStateReplacedArgs,
     },
@@ -37,46 +36,65 @@ impl BlockMetadata for WeightedPressurePlateBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for WeightedPressurePlateBlock {
-    async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        self.on_entity_collision_pp(args).await;
+    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            self.on_entity_collision_pp(args).await;
+        })
     }
 
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        self.on_scheduled_tick_pp(args).await;
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            self.on_scheduled_tick_pp(args).await;
+        })
     }
 
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        self.on_state_replaced_pp(args).await;
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            self.on_state_replaced_pp(args).await;
+        })
     }
 
-    async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        self.get_redstone_output(args.block, args.state.id)
+    fn get_weak_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move { self.get_redstone_output(args.block, args.state.id) })
     }
 
-    async fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        if args.direction == BlockDirection::Up {
-            return self.get_redstone_output(args.block, args.state.id);
-        }
-        0
+    fn get_strong_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            if args.direction == BlockDirection::Up {
+                return self.get_redstone_output(args.block, args.state.id);
+            }
+            0
+        })
     }
 
-    async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
-        true
+    fn emits_redstone_power<'a>(
+        &'a self,
+        _args: EmitsRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move { true })
     }
 
-    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        if !Self::can_pressure_plate_place_at(args.world, args.position).await {
-            args.world
-                .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
-                .await;
-            return;
-        }
+    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if !Self::can_pressure_plate_place_at(args.world, args.position).await {
+                args.world
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
+                    .await;
+            }
+        })
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        Self::can_pressure_plate_place_at(args.world.unwrap(), args.position).await
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            Self::can_pressure_plate_place_at(args.world.unwrap(), args.position).await
+        })
     }
 }
 

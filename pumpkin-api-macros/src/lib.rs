@@ -68,7 +68,6 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         #input_struct
 
-        #[async_trait::async_trait]
         impl pumpkin::plugin::Plugin for #struct_ident {
             #(#methods)*
         }

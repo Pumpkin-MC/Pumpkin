@@ -1,10 +1,9 @@
-use async_trait::async_trait;
 use pumpkin_util::text::{TextComponent, color::NamedColor, hover::HoverEvent};
 
 use crate::{
     PLUGIN_MANAGER,
     command::{
-        CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
+        CommandExecutor, CommandResult, CommandSender, args::ConsumedArgs, tree::CommandTree,
     },
 };
 
@@ -14,44 +13,45 @@ const DESCRIPTION: &str = "List all available plugins.";
 
 struct Executor;
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        _args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let plugins = PLUGIN_MANAGER.active_plugins().await;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        _args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let plugins = PLUGIN_MANAGER.active_plugins().await;
 
-        let message_text = if plugins.is_empty() {
-            "There are no loaded plugins.".to_string()
-        } else if plugins.len() == 1 {
-            "There is 1 plugin loaded:\n".to_string()
-        } else {
-            format!("There are {} plugins loaded:\n", plugins.len())
-        };
-        let mut message = TextComponent::text(message_text);
-
-        for (i, metadata) in plugins.clone().into_iter().enumerate() {
-            let fmt = if i == plugins.len() - 1 {
-                metadata.name.to_string()
+            let message_text = if plugins.is_empty() {
+                "There are no loaded plugins.".to_string()
+            } else if plugins.len() == 1 {
+                "There is 1 plugin loaded:\n".to_string()
             } else {
-                format!("{}, ", metadata.name)
+                format!("There are {} plugins loaded:\n", plugins.len())
             };
-            let hover_text = format!(
-                "Version: {}\nAuthors: {}\nDescription: {}",
-                metadata.version, metadata.authors, metadata.description
-            );
-            let component = TextComponent::text(fmt)
-                .color_named(NamedColor::Green)
-                .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
-            message = message.add_child(component);
-        }
+            let mut message = TextComponent::text(message_text);
 
-        sender.send_message(message).await;
+            for (i, metadata) in plugins.clone().into_iter().enumerate() {
+                let fmt = if i == plugins.len() - 1 {
+                    metadata.name.to_string()
+                } else {
+                    format!("{}, ", metadata.name)
+                };
+                let hover_text = format!(
+                    "Version: {}\nAuthors: {}\nDescription: {}",
+                    metadata.version, metadata.authors, metadata.description
+                );
+                let component = TextComponent::text(fmt)
+                    .color_named(NamedColor::Green)
+                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
+                message = message.add_child(component);
+            }
 
-        Ok(())
+            sender.send_message(message).await;
+
+            Ok(())
+        })
     }
 }
 

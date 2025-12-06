@@ -5,9 +5,8 @@ use crate::command::args::position_block::BlockPosArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandError, CommandExecutor, CommandSender};
+use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
 
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -50,94 +49,69 @@ fn not_in_filter(filter: &BlockPredicate, old_block: &Block) -> bool {
 }
 
 #[expect(clippy::too_many_lines)]
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
-        let block_state_id = block.default_state.id;
-        let from = BlockPosArgumentConsumer::find_arg(args, ARG_FROM)?;
-        let to = BlockPosArgumentConsumer::find_arg(args, ARG_TO)?;
-        let option_filter = BlockPredicateArgumentConsumer::find_arg(args, ARG_FILTER)?;
-        let mode = self.0;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
+            let block_state_id = block.default_state.id;
+            let from = BlockPosArgumentConsumer::find_arg(args, ARG_FROM)?;
+            let to = BlockPosArgumentConsumer::find_arg(args, ARG_TO)?;
+            let option_filter = BlockPredicateArgumentConsumer::find_arg(args, ARG_FILTER)?;
+            let mode = self.0;
 
-        let start_x = from.0.x.min(to.0.x);
-        let start_y = from.0.y.min(to.0.y);
-        let start_z = from.0.z.min(to.0.z);
+            let start_x = from.0.x.min(to.0.x);
+            let start_y = from.0.y.min(to.0.y);
+            let start_z = from.0.z.min(to.0.z);
 
-        let end_x = from.0.x.max(to.0.x);
-        let end_y = from.0.y.max(to.0.y);
-        let end_z = from.0.z.max(to.0.z);
-        // TODO: check isInWorldBounds and throw argument.pos.outofbounds
+            let end_x = from.0.x.max(to.0.x);
+            let end_y = from.0.y.max(to.0.y);
+            let end_z = from.0.z.max(to.0.z);
+            // TODO: check isInWorldBounds and throw argument.pos.outofbounds
 
-        let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
-        let mut placed_blocks = 0;
-        let mut to_update = Vec::new();
-        match mode {
-            Mode::Destroy => {
-                for x in start_x..=end_x {
-                    for y in start_y..=end_y {
-                        for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3::new(x, y, z));
-                            if let Some(filter) = &option_filter
-                                && not_in_filter(filter, world.get_block(&block_position).await)
-                            {
-                                continue;
+            let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
+            let mut placed_blocks = 0;
+            let mut to_update = Vec::new();
+            match mode {
+                Mode::Destroy => {
+                    for x in start_x..=end_x {
+                        for y in start_y..=end_y {
+                            for z in start_z..=end_z {
+                                let block_position = BlockPos(Vector3::new(x, y, z));
+                                if let Some(filter) = &option_filter
+                                    && not_in_filter(filter, world.get_block(&block_position).await)
+                                {
+                                    continue;
+                                }
+                                world
+                                    .break_block(
+                                        &block_position,
+                                        None,
+                                        BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE,
+                                    )
+                                    .await;
+                                world
+                                    .set_block_state(
+                                        &block_position,
+                                        block_state_id,
+                                        BlockFlags::FORCE_STATE,
+                                    )
+                                    .await;
+                                placed_blocks += 1;
+                                to_update.push(block_position);
                             }
-                            world
-                                .break_block(
-                                    &block_position,
-                                    None,
-                                    BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE,
-                                )
-                                .await;
-                            world
-                                .set_block_state(
-                                    &block_position,
-                                    block_state_id,
-                                    BlockFlags::FORCE_STATE,
-                                )
-                                .await;
-                            placed_blocks += 1;
-                            to_update.push(block_position);
                         }
                     }
                 }
-            }
-            Mode::Replace => {
-                for x in start_x..=end_x {
-                    for y in start_y..=end_y {
-                        for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3::new(x, y, z));
-                            if let Some(filter) = &option_filter
-                                && not_in_filter(filter, world.get_block(&block_position).await)
-                            {
-                                continue;
-                            }
-                            world
-                                .set_block_state(
-                                    &block_position,
-                                    block_state_id,
-                                    BlockFlags::FORCE_STATE,
-                                )
-                                .await;
-                            placed_blocks += 1;
-                            to_update.push(block_position);
-                        }
-                    }
-                }
-            }
-            Mode::Keep => {
-                for x in start_x..=end_x {
-                    for y in start_y..=end_y {
-                        for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3::new(x, y, z));
-                            let old_state = world.get_block_state(&block_position).await;
-                            if old_state.is_air() {
+                Mode::Replace => {
+                    for x in start_x..=end_x {
+                        for y in start_y..=end_y {
+                            for z in start_z..=end_z {
+                                let block_position = BlockPos(Vector3::new(x, y, z));
                                 if let Some(filter) = &option_filter
                                     && not_in_filter(filter, world.get_block(&block_position).await)
                                 {
@@ -156,24 +130,93 @@ impl CommandExecutor for Executor {
                         }
                     }
                 }
-            }
-            Mode::Hollow => {
-                for x in start_x..=end_x {
-                    for y in start_y..=end_y {
-                        for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3::new(x, y, z));
-                            let is_edge = x == start_x
-                                || x == end_x
-                                || y == start_y
-                                || y == end_y
-                                || z == start_z
-                                || z == end_z;
-                            if let Some(filter) = &option_filter
-                                && not_in_filter(filter, world.get_block(&block_position).await)
-                            {
-                                continue;
+                Mode::Keep => {
+                    for x in start_x..=end_x {
+                        for y in start_y..=end_y {
+                            for z in start_z..=end_z {
+                                let block_position = BlockPos(Vector3::new(x, y, z));
+                                let old_state = world.get_block_state(&block_position).await;
+                                if old_state.is_air() {
+                                    if let Some(filter) = &option_filter
+                                        && not_in_filter(
+                                            filter,
+                                            world.get_block(&block_position).await,
+                                        )
+                                    {
+                                        continue;
+                                    }
+                                    world
+                                        .set_block_state(
+                                            &block_position,
+                                            block_state_id,
+                                            BlockFlags::FORCE_STATE,
+                                        )
+                                        .await;
+                                    placed_blocks += 1;
+                                    to_update.push(block_position);
+                                }
                             }
-                            if is_edge {
+                        }
+                    }
+                }
+                Mode::Hollow => {
+                    for x in start_x..=end_x {
+                        for y in start_y..=end_y {
+                            for z in start_z..=end_z {
+                                let block_position = BlockPos(Vector3::new(x, y, z));
+                                let is_edge = x == start_x
+                                    || x == end_x
+                                    || y == start_y
+                                    || y == end_y
+                                    || z == start_z
+                                    || z == end_z;
+                                if let Some(filter) = &option_filter
+                                    && not_in_filter(filter, world.get_block(&block_position).await)
+                                {
+                                    continue;
+                                }
+                                if is_edge {
+                                    world
+                                        .set_block_state(
+                                            &block_position,
+                                            block_state_id,
+                                            BlockFlags::FORCE_STATE,
+                                        )
+                                        .await;
+                                } else {
+                                    world
+                                        .set_block_state(
+                                            &block_position,
+                                            0,
+                                            BlockFlags::FORCE_STATE,
+                                        )
+                                        .await;
+                                }
+                                placed_blocks += 1;
+                                to_update.push(block_position);
+                            }
+                        }
+                    }
+                }
+                Mode::Outline => {
+                    for x in start_x..=end_x {
+                        for y in start_y..=end_y {
+                            for z in start_z..=end_z {
+                                let block_position = BlockPos(Vector3::new(x, y, z));
+                                let is_edge = x == start_x
+                                    || x == end_x
+                                    || y == start_y
+                                    || y == end_y
+                                    || z == start_z
+                                    || z == end_z;
+                                if !is_edge {
+                                    continue;
+                                }
+                                if let Some(filter) = &option_filter
+                                    && not_in_filter(filter, world.get_block(&block_position).await)
+                                {
+                                    continue;
+                                }
                                 world
                                     .set_block_state(
                                         &block_position,
@@ -181,85 +224,49 @@ impl CommandExecutor for Executor {
                                         BlockFlags::FORCE_STATE,
                                     )
                                     .await;
-                            } else {
+                                placed_blocks += 1;
+                                to_update.push(block_position);
+                            }
+                        }
+                    }
+                }
+                Mode::Strict => {
+                    for x in start_x..=end_x {
+                        for y in start_y..=end_y {
+                            for z in start_z..=end_z {
+                                let block_position = BlockPos(Vector3::new(x, y, z));
+                                if let Some(filter) = &option_filter
+                                    && not_in_filter(filter, world.get_block(&block_position).await)
+                                {
+                                    continue;
+                                }
                                 world
-                                    .set_block_state(&block_position, 0, BlockFlags::FORCE_STATE)
+                                    .set_block_state(
+                                        &block_position,
+                                        block_state_id,
+                                        BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                                    )
                                     .await;
+                                placed_blocks += 1;
                             }
-                            placed_blocks += 1;
-                            to_update.push(block_position);
                         }
                     }
                 }
             }
-            Mode::Outline => {
-                for x in start_x..=end_x {
-                    for y in start_y..=end_y {
-                        for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3::new(x, y, z));
-                            let is_edge = x == start_x
-                                || x == end_x
-                                || y == start_y
-                                || y == end_y
-                                || z == start_z
-                                || z == end_z;
-                            if !is_edge {
-                                continue;
-                            }
-                            if let Some(filter) = &option_filter
-                                && not_in_filter(filter, world.get_block(&block_position).await)
-                            {
-                                continue;
-                            }
-                            world
-                                .set_block_state(
-                                    &block_position,
-                                    block_state_id,
-                                    BlockFlags::FORCE_STATE,
-                                )
-                                .await;
-                            placed_blocks += 1;
-                            to_update.push(block_position);
-                        }
-                    }
-                }
+
+            for i in to_update {
+                world.update_neighbors(&i, None).await;
             }
-            Mode::Strict => {
-                for x in start_x..=end_x {
-                    for y in start_y..=end_y {
-                        for z in start_z..=end_z {
-                            let block_position = BlockPos(Vector3::new(x, y, z));
-                            if let Some(filter) = &option_filter
-                                && not_in_filter(filter, world.get_block(&block_position).await)
-                            {
-                                continue;
-                            }
-                            world
-                                .set_block_state(
-                                    &block_position,
-                                    block_state_id,
-                                    BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
-                                )
-                                .await;
-                            placed_blocks += 1;
-                        }
-                    }
-                }
-            }
-        }
 
-        for i in to_update {
-            world.update_neighbors(&i, None).await;
-        }
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.fill.success",
+                    [TextComponent::text(placed_blocks.to_string())],
+                ))
+                .await;
 
-        sender
-            .send_message(TextComponent::translate(
-                "commands.fill.success",
-                [TextComponent::text(placed_blocks.to_string())],
-            ))
-            .await;
-
-        Ok(())
+            Ok(())
+        })
     }
 }
 

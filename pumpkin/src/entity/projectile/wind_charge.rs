@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use pumpkin_util::math::vector3::Vector3;
 use std::{
     f64,
@@ -10,8 +9,8 @@ use std::{
 
 use crate::{
     entity::{
-        Entity, EntityBase, NBTStorage, living::LivingEntity, projectile::ThrownItemEntity,
-        projectile_deflection::ProjectileDeflectionType,
+        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity,
+        projectile::ThrownItemEntity, projectile_deflection::ProjectileDeflectionType,
     },
     server::Server,
 };
@@ -96,14 +95,19 @@ impl WindChargeEntity {
 
 impl NBTStorage for WindChargeEntity {}
 
-#[async_trait]
 impl EntityBase for WindChargeEntity {
-    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
-        if self.get_deflect_cooldown() > 0 {
-            self.set_deflect_cooldown(self.get_deflect_cooldown() - 1);
-        }
+    fn tick<'a>(
+        &'a self,
+        caller: Arc<dyn EntityBase>,
+        server: &'a Server,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if self.get_deflect_cooldown() > 0 {
+                self.set_deflect_cooldown(self.get_deflect_cooldown() - 1);
+            }
 
-        self.thrown_item_entity.tick(caller, server).await;
+            self.thrown_item_entity.tick(caller, server).await;
+        })
     }
 
     fn get_entity(&self) -> &Entity {

@@ -1,9 +1,8 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs};
+use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs};
 use crate::entity::player::Player;
 use crate::world::World;
-use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{BlockHalf, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -69,71 +68,76 @@ fn get_sound(block: &Block, open: bool) -> Sound {
 #[pumpkin_block_from_tag("minecraft:trapdoors")]
 pub struct TrapDoorBlock;
 
-#[async_trait]
 impl BlockBehaviour for TrapDoorBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if !can_open_trapdoor(args.block) {
-            return BlockActionResult::Pass;
-        }
-
-        toggle_trapdoor(args.player, args.world, args.position).await;
-
-        BlockActionResult::Success
-    }
-
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut trapdoor_props = TrapDoorProperties::default(args.block);
-        trapdoor_props.waterlogged = args.replacing.water_source();
-
-        let powered = block_receives_redstone_power(args.world, args.position).await;
-        let direction = args
-            .player
-            .living_entity
-            .entity
-            .get_horizontal_facing()
-            .opposite();
-
-        trapdoor_props.facing = direction;
-        trapdoor_props.half = match args.direction {
-            BlockDirection::Up => BlockHalf::Top,
-            BlockDirection::Down => BlockHalf::Bottom,
-            _ => match args.use_item_on.cursor_pos.y {
-                0.0...0.5 => BlockHalf::Bottom,
-                _ => BlockHalf::Top,
-            },
-        };
-        trapdoor_props.powered = powered;
-        trapdoor_props.open = powered;
-
-        trapdoor_props.to_state_id(args.block)
-    }
-
-    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let block_state = args.world.get_block_state(args.position).await;
-        let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id, args.block);
-        let powered = block_receives_redstone_power(args.world, args.position).await;
-        if powered != trapdoor_props.powered {
-            trapdoor_props.powered = !trapdoor_props.powered;
-
-            if powered != trapdoor_props.open {
-                trapdoor_props.open = trapdoor_props.powered;
-
-                args.world
-                    .play_block_sound(
-                        get_sound(args.block, powered),
-                        SoundCategory::Blocks,
-                        *args.position,
-                    )
-                    .await;
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            if !can_open_trapdoor(args.block) {
+                return BlockActionResult::Pass;
             }
-        }
 
-        args.world
-            .set_block_state(
-                args.position,
-                trapdoor_props.to_state_id(args.block),
-                BlockFlags::NOTIFY_LISTENERS,
-            )
-            .await;
+            toggle_trapdoor(args.player, args.world, args.position).await;
+
+            BlockActionResult::Success
+        })
+    }
+
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut trapdoor_props = TrapDoorProperties::default(args.block);
+            trapdoor_props.waterlogged = args.replacing.water_source();
+
+            let powered = block_receives_redstone_power(args.world, args.position).await;
+            let direction = args
+                .player
+                .living_entity
+                .entity
+                .get_horizontal_facing()
+                .opposite();
+
+            trapdoor_props.facing = direction;
+            trapdoor_props.half = match args.direction {
+                BlockDirection::Up => BlockHalf::Top,
+                BlockDirection::Down => BlockHalf::Bottom,
+                _ => match args.use_item_on.cursor_pos.y {
+                    0.0..0.5 => BlockHalf::Bottom,
+                    _ => BlockHalf::Top,
+                },
+            };
+            trapdoor_props.powered = powered;
+            trapdoor_props.open = powered;
+
+            trapdoor_props.to_state_id(args.block)
+        })
+    }
+
+    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let block_state = args.world.get_block_state(args.position).await;
+            let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state.id, args.block);
+            let powered = block_receives_redstone_power(args.world, args.position).await;
+            if powered != trapdoor_props.powered {
+                trapdoor_props.powered = !trapdoor_props.powered;
+
+                if powered != trapdoor_props.open {
+                    trapdoor_props.open = trapdoor_props.powered;
+
+                    args.world
+                        .play_block_sound(
+                            get_sound(args.block, powered),
+                            SoundCategory::Blocks,
+                            *args.position,
+                        )
+                        .await;
+                }
+            }
+
+            args.world
+                .set_block_state(
+                    args.position,
+                    trapdoor_props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_LISTENERS,
+                )
+                .await;
+        })
     }
 }

@@ -1,11 +1,10 @@
 use crate::{
     block::{
-        BlockBehaviour, BlockMetadata, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
-        PlacedArgs,
+        BlockBehaviour, BlockFuture, BlockMetadata, GetStateForNeighborUpdateArgs,
+        OnScheduledTickArgs, PlacedArgs,
     },
     entity::falling::FallingEntity,
 };
-use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockState,
     tag::{self, Taggable},
@@ -33,30 +32,36 @@ impl BlockMetadata for FallingBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for FallingBlock {
-    async fn placed(&self, args: PlacedArgs<'_>) {
-        // TODO: make delay configurable
-        args.world
-            .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-            .await;
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // TODO: make delay configurable
+            args.world
+                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
+                .await;
+        })
     }
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        // TODO: make delay configurable
-        args.world
-            .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-            .await;
-        args.state_id
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            // TODO: make delay configurable
+            args.world
+                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
+                .await;
+            args.state_id
+        })
     }
 
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let (block, state) = args.world.get_block_and_state(&args.position.down()).await;
-        if !Self::can_fall_through(state, block) || args.position.0.y < args.world.min_y {
-            return;
-        }
-        FallingEntity::replace_spawn(args.world, *args.position, args.block.default_state.id).await;
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let (block, state) = args.world.get_block_and_state(&args.position.down()).await;
+            if !Self::can_fall_through(state, block) || args.position.0.y < args.world.min_y {
+                return;
+            }
+            FallingEntity::replace_spawn(args.world, *args.position, args.block.default_state.id)
+                .await;
+        })
     }
 }

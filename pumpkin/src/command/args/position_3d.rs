@@ -1,8 +1,8 @@
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::command::CommandSender;
+use crate::command::args::ConsumeResult;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
@@ -24,28 +24,26 @@ impl GetClientSideArgParser for Position3DArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for Position3DArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        src: &CommandSender,
+        sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let pos = MaybeRelativePosition3D::try_new(args.pop()?, args.pop()?, args.pop()?)?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let x_str_opt = args.pop();
+        let y_str_opt = args.pop();
+        let z_str_opt = args.pop();
 
-        let vec3 = pos.try_to_absolute(src.position())?;
+        let (Some(x_str), Some(y_str), Some(z_str)) = (x_str_opt, y_str_opt, z_str_opt) else {
+            return Box::pin(async move { None });
+        };
 
-        Some(Arg::Pos3D(vec3))
-    }
+        let result: Option<Arg<'a>> = MaybeRelativePosition3D::try_new(x_str, y_str, z_str)
+            .and_then(|pos| pos.try_to_absolute(sender.position()))
+            .map(Arg::Pos3D);
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        Box::pin(async move { result })
     }
 }
 

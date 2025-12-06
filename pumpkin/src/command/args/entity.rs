@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use crate::command::CommandSender;
+use crate::command::args::ConsumeResult;
 use crate::command::args::entities::TargetSelector;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::entity::EntityBase;
 use crate::server::Server;
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 
 use super::super::args::ArgumentConsumer;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
@@ -32,41 +32,38 @@ impl GetClientSideArgParser for EntityArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for EntityArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        src: &CommandSender,
+        sender: &'a CommandSender,
         server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
+
+        let Some(s) = s_opt else {
+            return Box::pin(async move { None });
+        };
 
         let entity_selector = match s.parse::<TargetSelector>() {
             Ok(selector) => selector,
             Err(e) => {
                 log::debug!("Failed to parse target selector '{s}': {e}");
-                return None;
+                return Box::pin(async move { None });
             }
         };
+
         if entity_selector.get_limit() > 1 {
             log::debug!("Target selector '{s}' has limit > 1, expected single entity");
-            return None;
+            return Box::pin(async move { None });
         }
-        // todo: command context
-        let entities = server.select_entities(&entity_selector, Some(src)).await;
 
-        // Take first
-        entities.into_iter().next().map(Arg::Entity)
-    }
+        Box::pin(async move {
+            // todo: command context
+            let entities = server.select_entities(&entity_selector, Some(sender)).await;
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+            entities.into_iter().next().map(Arg::Entity)
+        })
     }
 }
 

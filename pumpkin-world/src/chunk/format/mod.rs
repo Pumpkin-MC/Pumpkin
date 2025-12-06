@@ -1,6 +1,5 @@
-use std::{collections::HashMap, io::Cursor, path::PathBuf};
+use std::{collections::HashMap, io::Cursor, path::PathBuf, pin::Pin};
 
-use async_trait::async_trait;
 use bytes::Bytes;
 use futures::future::join_all;
 use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
@@ -30,7 +29,6 @@ use crate::block::BlockStateCodec;
 pub mod anvil;
 pub mod linear;
 
-#[async_trait]
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
     fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
@@ -38,8 +36,10 @@ impl SingleChunkDataSerializer for ChunkData {
     }
 
     #[inline]
-    async fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        self.internal_to_bytes().await
+    fn to_bytes(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
+        Box::pin(async move { self.internal_to_bytes().await })
     }
 
     #[inline]
@@ -247,7 +247,6 @@ impl Dirtiable for ChunkEntityData {
     }
 }
 
-#[async_trait]
 impl SingleChunkDataSerializer for ChunkEntityData {
     #[inline]
     fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
@@ -255,8 +254,10 @@ impl SingleChunkDataSerializer for ChunkEntityData {
     }
 
     #[inline]
-    async fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        self.internal_to_bytes()
+    fn to_bytes(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
+        Box::pin(async move { self.internal_to_bytes() })
     }
 
     #[inline]
@@ -286,21 +287,22 @@ impl ChunkEntityData {
         }
         let mut map = HashMap::new();
         for entity_nbt in chunk_entity_data.entities {
-            // TODO: This is wrong, we should use an int array, but our NBT lib for some reason does not work with int arrays and
-            // Just gives me a list when putting in a int array
-            let uuid = match entity_nbt.get_list("UUID") {
-                Some(uuid) => uuid,
+            let uuid = match entity_nbt.get_int_array("UUID") {
+                Some(uuid) => Uuid::from_u128(
+                    (uuid[0] as u128) << 96
+                        | (uuid[1] as u128) << 64
+                        | (uuid[2] as u128) << 32
+                        | (uuid[3] as u128),
+                ),
                 None => {
-                    log::warn!("TODO: use int arrays for UUID");
+                    println!(
+                        "Entity in chunk {},{} is missing UUID: {:?}",
+                        position.x, position.y, entity_nbt
+                    );
                     continue;
                 }
             };
-            let uuid = Uuid::from_u128(
-                (uuid.first().unwrap().extract_int().unwrap() as u128) << 96
-                    | (uuid.get(1).unwrap().extract_int().unwrap() as u128) << 64
-                    | (uuid.get(2).unwrap().extract_int().unwrap() as u128) << 32
-                    | (uuid.get(3).unwrap().extract_int().unwrap() as u128),
-            );
+
             map.insert(uuid, entity_nbt);
         }
 
@@ -378,23 +380,21 @@ impl LightContainer {
     pub const ARRAY_SIZE: usize = Self::DIM * Self::DIM * Self::DIM / 2;
 
     pub fn new_empty(default: u8) -> Self {
-        if default > 15 {
-            panic!("Default value must be between 0 and 15");
-        }
+        assert!(default <= 15, "Default value must be between 0 and 15");
         Self::Empty(default)
     }
 
     pub fn new(data: Box<[u8]>) -> Self {
-        if data.len() != Self::ARRAY_SIZE {
-            panic!("Data length must be {}", Self::ARRAY_SIZE);
-        }
+        assert!(
+            data.len() == Self::ARRAY_SIZE,
+            "Data length must be {}",
+            Self::ARRAY_SIZE
+        );
         Self::Full(data)
     }
 
     pub fn new_filled(default: u8) -> Self {
-        if default > 15 {
-            panic!("Default value must be between 0 and 15");
-        }
+        assert!(default <= 15, "Default value must be between 0 and 15");
         let value = default << 4 | default;
         Self::Full([value; Self::ARRAY_SIZE].into())
     }

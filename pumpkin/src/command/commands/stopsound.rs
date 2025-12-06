@@ -1,13 +1,11 @@
 use crate::command::{
-    CommandExecutor, CommandSender,
+    CommandExecutor, CommandResult, CommandSender,
     args::{
         ConsumedArgs, FindArg, players::PlayersArgumentConsumer, sound::SoundArgumentConsumer,
         sound_category::SoundCategoryArgumentConsumer,
     },
-    dispatcher::CommandError,
     tree::{CommandTree, builder::argument},
 };
-use async_trait::async_trait;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 
@@ -20,54 +18,55 @@ const ARG_SOUND: &str = "sound";
 
 pub struct Executor;
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-        let category = SoundCategoryArgumentConsumer::find_arg(args, ARG_SOURCE);
-        let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND);
+            let category = SoundCategoryArgumentConsumer::find_arg(args, ARG_SOURCE);
+            let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND);
 
-        for target in targets {
-            target
-                .stop_sound(
-                    sound
-                        .as_ref()
-                        .cloned()
-                        .map(|s| ResourceLocation::vanilla(s.to_name()))
-                        .ok(),
-                    category.as_ref().map(|s| **s).ok(),
-                )
-                .await;
-        }
-        let text = match (category, sound) {
-            (Ok(c), Ok(s)) => TextComponent::translate(
-                "commands.stopsound.success.source.sound",
-                [
-                    TextComponent::text(s.to_name()),
-                    TextComponent::text(c.to_name()),
-                ],
-            ),
-            (Ok(c), Err(_)) => TextComponent::translate(
-                "commands.stopsound.success.source.any",
-                [TextComponent::text(c.to_name())],
-            ),
-            (Err(_), Ok(s)) => TextComponent::translate(
-                "commands.stopsound.success.sourceless.sound",
-                [TextComponent::text(s.to_name())],
-            ),
-            (Err(_), Err(_)) => {
-                TextComponent::translate("commands.stopsound.success.sourceless.any", [])
+            for target in targets {
+                target
+                    .stop_sound(
+                        sound
+                            .as_ref()
+                            .cloned()
+                            .map(|s| ResourceLocation::vanilla(s.to_name()))
+                            .ok(),
+                        category.as_ref().map(|s| **s).ok(),
+                    )
+                    .await;
             }
-        };
-        sender.send_message(text).await;
+            let text = match (category, sound) {
+                (Ok(c), Ok(s)) => TextComponent::translate(
+                    "commands.stopsound.success.source.sound",
+                    [
+                        TextComponent::text(s.to_name()),
+                        TextComponent::text(c.to_name()),
+                    ],
+                ),
+                (Ok(c), Err(_)) => TextComponent::translate(
+                    "commands.stopsound.success.source.any",
+                    [TextComponent::text(c.to_name())],
+                ),
+                (Err(_), Ok(s)) => TextComponent::translate(
+                    "commands.stopsound.success.sourceless.sound",
+                    [TextComponent::text(s.to_name())],
+                ),
+                (Err(_), Err(_)) => {
+                    TextComponent::translate("commands.stopsound.success.sourceless.any", [])
+                }
+            };
+            sender.send_message(text).await;
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 

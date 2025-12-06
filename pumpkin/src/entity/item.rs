@@ -7,7 +7,6 @@ use std::sync::{
     },
 };
 
-use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_protocol::{
@@ -18,7 +17,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
-use crate::server::Server;
+use crate::{entity::EntityBaseFuture, server::Server};
 
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
@@ -194,132 +193,137 @@ impl ItemEntity {
 
 impl NBTStorage for ItemEntity {}
 
-#[async_trait]
 impl EntityBase for ItemEntity {
-    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
-        let entity = &self.entity;
-        entity.tick(caller.clone(), server).await;
-        {
-            let mut delay = self.pickup_delay.lock().await;
-            *delay = delay.saturating_sub(1);
-        };
-
-        let original_velo = entity.velocity.load();
-
-        let mut velo = original_velo;
-
-        if entity.touching_water.load(Ordering::SeqCst) && entity.water_height.load() > 0.1 {
-            velo.x *= 0.99;
-
-            velo.z *= 0.99;
-
-            if velo.y < 0.06 {
-                velo.y += 5.0e-4;
-            }
-        } else if entity.touching_lava.load(Ordering::SeqCst) && entity.lava_height.load() > 0.1 {
-            velo.x *= 0.95;
-
-            velo.z *= 0.95;
-
-            if velo.y < 0.06 {
-                velo.y += 5.0e-4;
-            }
-        } else {
-            velo.y -= self.get_gravity();
-        }
-
-        entity.velocity.store(velo);
-
-        let pos = entity.pos.load();
-
-        let bounding_box = entity.bounding_box.load();
-
-        let no_clip = !self
-            .entity
-            .world
-            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
-            .await;
-
-        entity.no_clip.store(no_clip, Ordering::Relaxed);
-
-        if no_clip {
-            entity
-                .push_out_of_blocks(Vector3::new(
-                    pos.x,
-                    f64::midpoint(bounding_box.min.y, bounding_box.max.y),
-                    pos.z,
-                ))
-                .await;
-        }
-
-        let mut velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
-
-        let mut tick_move =
-            !entity.on_ground.load(Ordering::SeqCst) || velo.horizontal_length_squared() > 1.0e-5;
-
-        if !tick_move {
-            let Ok(item_age) = i32::try_from(self.item_age.load(Ordering::Relaxed)) else {
-                entity.remove().await;
-
-                return;
+    fn tick<'a>(
+        &'a self,
+        caller: Arc<dyn EntityBase>,
+        server: &'a Server,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = &self.entity;
+            entity.tick(caller.clone(), server).await;
+            {
+                let mut delay = self.pickup_delay.lock().await;
+                *delay = delay.saturating_sub(1);
             };
 
-            tick_move = (item_age + entity.entity_id) % 4 == 0;
-        }
+            let original_velo = entity.velocity.load();
 
-        if tick_move {
-            entity.move_entity(caller.clone(), velo).await;
+            let mut velo = original_velo;
 
-            entity.tick_block_collisions(&caller, server).await;
+            if entity.touching_water.load(Ordering::SeqCst) && entity.water_height.load() > 0.1 {
+                velo.x *= 0.99;
 
-            let mut friction = 0.98;
+                velo.z *= 0.99;
 
-            let on_ground = entity.on_ground.load(Ordering::SeqCst);
+                if velo.y < 0.06 {
+                    velo.y += 5.0e-4;
+                }
+            } else if entity.touching_lava.load(Ordering::SeqCst) && entity.lava_height.load() > 0.1
+            {
+                velo.x *= 0.95;
 
-            if on_ground {
-                let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).await.1;
+                velo.z *= 0.95;
 
-                friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
-            }
-
-            velo = velo.multiply(friction, 0.98, friction);
-
-            if on_ground && velo.y < 0.0 {
-                velo = velo.multiply(1.0, -0.5, 1.0);
+                if velo.y < 0.06 {
+                    velo.y += 5.0e-4;
+                }
+            } else {
+                velo.y -= self.get_gravity();
             }
 
             entity.velocity.store(velo);
-        }
 
-        if !self.never_despawn.load(Ordering::Relaxed) {
-            let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
+            let pos = entity.pos.load();
 
-            if age >= 6000 {
-                entity.remove().await;
+            let bounding_box = entity.bounding_box.load();
 
-                return;
+            let no_clip = !self
+                .entity
+                .world
+                .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
+                .await;
+
+            entity.no_clip.store(no_clip, Ordering::Relaxed);
+
+            if no_clip {
+                entity
+                    .push_out_of_blocks(Vector3::new(
+                        pos.x,
+                        f64::midpoint(bounding_box.min.y, bounding_box.max.y),
+                        pos.z,
+                    ))
+                    .await;
             }
 
-            let n = if entity
-                .last_pos
-                .load()
-                .sub(&entity.pos.load())
-                .length_squared()
-                == 0.0
-            {
-                40
-            } else {
-                2
-            };
+            let mut velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
 
-            if age.is_multiple_of(n) && self.can_merge().await {
-                self.try_merge().await;
+            let mut tick_move = !entity.on_ground.load(Ordering::SeqCst)
+                || velo.horizontal_length_squared() > 1.0e-5;
+
+            if !tick_move {
+                let Ok(item_age) = i32::try_from(self.item_age.load(Ordering::Relaxed)) else {
+                    entity.remove().await;
+
+                    return;
+                };
+
+                tick_move = (item_age + entity.entity_id) % 4 == 0;
             }
-        }
 
-        entity.update_fluid_state(&caller).await;
+            if tick_move {
+                entity.move_entity(caller.clone(), velo).await;
 
-        let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
+                entity.tick_block_collisions(&caller, server).await;
+
+                let mut friction = 0.98;
+
+                let on_ground = entity.on_ground.load(Ordering::SeqCst);
+
+                if on_ground {
+                    let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).await.1;
+
+                    friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
+                }
+
+                velo = velo.multiply(friction, 0.98, friction);
+
+                if on_ground && velo.y < 0.0 {
+                    velo = velo.multiply(1.0, -0.5, 1.0);
+                }
+
+                entity.velocity.store(velo);
+            }
+
+            if !self.never_despawn.load(Ordering::Relaxed) {
+                let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
+
+                if age >= 6000 {
+                    entity.remove().await;
+
+                    return;
+                }
+
+                let n = if entity
+                    .last_pos
+                    .load()
+                    .sub(&entity.pos.load())
+                    .length_squared()
+                    == 0.0
+                {
+                    40
+                } else {
+                    2
+                };
+
+                if age.is_multiple_of(n) && self.can_merge().await {
+                    self.try_merge().await;
+                }
+            }
+
+            entity.update_fluid_state(&caller).await;
+
+            let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
 
 
             || entity.touching_water.load(Ordering::SeqCst)
@@ -333,87 +337,94 @@ impl EntityBase for ItemEntity {
 
             || entity.velocity.load() != original_velo;
 
-        if velocity_dirty {
-            entity.send_pos_rot().await;
+            if velocity_dirty {
+                entity.send_pos_rot().await;
 
-            entity.send_velocity().await;
-        }
+                entity.send_velocity().await;
+            }
+        })
     }
 
-    async fn init_data_tracker(&self) {
-        self.entity
-            .send_meta_data(&[Metadata::new(
-                8,
-                MetaDataType::ItemStack,
-                &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
-            )])
-            .await;
+    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {
+            self.entity
+                .send_meta_data(&[Metadata::new(
+                    8,
+                    MetaDataType::ItemStack,
+                    &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+                )])
+                .await;
+        })
     }
 
-    async fn damage_with_context(
-        &self,
+    fn damage_with_context<'a>(
+        &'a self,
         _caller: Arc<dyn EntityBase>,
         amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        //TODO: invulnerability, e.g. ancient debris
-        self.health.store(self.health.load() - amount);
-        if self.health.load() <= 0.0 {
-            self.entity.remove().await;
-        }
-        true
+        _source: Option<&'a dyn EntityBase>,
+        _cause: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            //TODO: invulnerability, e.g. ancient debris
+            self.health.store(self.health.load() - amount);
+            if self.health.load() <= 0.0 {
+                self.entity.remove().await;
+            }
+            true
+        })
     }
 
-    async fn damage(
+    fn damage(
         &self,
         _caller: Arc<dyn EntityBase>,
         _amount: f32,
         _damage_type: DamageType,
-    ) -> bool {
-        false
+    ) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async { false })
     }
 
-    async fn on_player_collision(&self, player: &Arc<Player>) {
-        let can_pickup = {
-            let delay = self.pickup_delay.lock().await;
-            *delay == 0
-        };
+    fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async {
+            let can_pickup = {
+                let delay = self.pickup_delay.lock().await;
+                *delay == 0
+            };
 
-        if can_pickup
-            && player.living_entity.health.load() > 0.0
-            && (player
-                .inventory
-                .insert_stack_anywhere(&mut *self.item_stack.lock().await)
-                .await
-                || player.is_creative())
-        {
-            player
-                .client
-                .enqueue_packet(&CTakeItemEntity::new(
-                    self.entity.entity_id.into(),
-                    player.entity_id().into(),
-                    self.item_stack.lock().await.item_count.into(),
-                ))
-                .await;
-            player
-                .current_screen_handler
-                .lock()
-                .await
-                .lock()
-                .await
-                .send_content_updates()
-                .await;
+            if can_pickup
+                && player.living_entity.health.load() > 0.0
+                && (player
+                    .inventory
+                    .insert_stack_anywhere(&mut *self.item_stack.lock().await)
+                    .await
+                    || player.is_creative())
+            {
+                player
+                    .client
+                    .enqueue_packet(&CTakeItemEntity::new(
+                        self.entity.entity_id.into(),
+                        player.entity_id().into(),
+                        self.item_stack.lock().await.item_count.into(),
+                    ))
+                    .await;
+                player
+                    .current_screen_handler
+                    .lock()
+                    .await
+                    .lock()
+                    .await
+                    .send_content_updates()
+                    .await;
 
-            if self.item_stack.lock().await.is_empty() {
-                self.entity.remove().await;
-            } else {
-                // Update entity
-                self.init_data_tracker().await;
+                if self.item_stack.lock().await.is_empty() {
+                    self.entity.remove().await;
+                } else {
+                    // Update entity
+                    self.init_data_tracker().await;
+                }
             }
-        }
+        })
     }
 
     fn get_entity(&self) -> &Entity {

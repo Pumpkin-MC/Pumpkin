@@ -1,11 +1,15 @@
 use std::str::FromStr;
 
-use async_trait::async_trait;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::Difficulty;
 
 use crate::{
-    command::{CommandSender, dispatcher::CommandError, tree::RawArgs},
+    command::{
+        CommandSender,
+        args::{ConsumeResult, SuggestResult},
+        dispatcher::CommandError,
+        tree::RawArgs,
+    },
     server::Server,
 };
 
@@ -25,32 +29,35 @@ impl GetClientSideArgParser for DifficultyArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for DifficultyArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a>(
         &'a self,
         _sender: &CommandSender,
         _server: &'a Server,
         args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
 
-        Difficulty::from_str(s)
-            .map_or_else(|_| None, |difficulty| Some(Arg::Difficulty(difficulty)))
+        let result: Option<Arg<'a>> =
+            s_opt.and_then(|s| Difficulty::from_str(s).map(Arg::Difficulty).ok());
+
+        Box::pin(async move { result })
     }
 
-    async fn suggest<'a>(
+    fn suggest<'a>(
         &'a self,
         _sender: &CommandSender,
         _server: &'a Server,
         _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        let difficulties = ["easy", "normal", "hard", "peaceful"];
-        let suggestions: Vec<CommandSuggestion> = difficulties
-            .iter()
-            .map(|difficulty| CommandSuggestion::new((*difficulty).to_string(), None))
-            .collect();
-        Ok(Some(suggestions))
+    ) -> SuggestResult<'a> {
+        Box::pin(async move {
+            let difficulties = ["easy", "normal", "hard", "peaceful"];
+            let suggestions: Vec<CommandSuggestion> = difficulties
+                .iter()
+                .map(|difficulty| CommandSuggestion::new((*difficulty).to_string(), None))
+                .collect();
+            Ok(Some(suggestions))
+        })
     }
 }
 

@@ -6,16 +6,13 @@ use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource_location::ResourceLocationArgumentConsumer;
 
 use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
-use crate::command::dispatcher::CommandError;
 
 use crate::command::args::textcomponent::TextComponentArgConsumer;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name, literal};
-use crate::command::{CommandExecutor, CommandSender};
-use crate::server::Server;
+use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::world::bossbar::Bossbar;
 use crate::world::custom_bossbar::BossbarUpdateError;
-use async_trait::async_trait;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
@@ -55,361 +52,276 @@ enum CommandValueSet {
 
 struct AddExecuter;
 
-#[async_trait]
 impl CommandExecutor for AddExecuter {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let mut namespace = non_autocomplete_consumer()
-            .find_arg_default_name(args)?
-            .to_string();
-        if !namespace.contains(':') {
-            namespace = format!("minecraft:{namespace}");
-        }
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let mut namespace = non_autocomplete_consumer()
+                .find_arg_default_name(args)?
+                .to_string();
+            if !namespace.contains(':') {
+                namespace = format!("minecraft:{namespace}");
+            }
 
-        let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
+            let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
 
-        if server.bossbars.lock().await.has_bossbar(&namespace) {
-            send_error_message(
-                sender,
-                TextComponent::translate(
-                    "commands.bossbar.create.failed",
-                    [TextComponent::text(namespace.clone())],
-                ),
-            )
-            .await;
-            return Ok(());
-        }
+            if server.bossbars.lock().await.has_bossbar(&namespace) {
+                send_error_message(
+                    sender,
+                    TextComponent::translate(
+                        "commands.bossbar.create.failed",
+                        [TextComponent::text(namespace.clone())],
+                    ),
+                )
+                .await;
+                return Ok(());
+            }
 
-        let bossbar = Bossbar::new(text_component);
-        server
-            .bossbars
-            .lock()
-            .await
-            .create_bossbar(namespace.clone(), bossbar.clone());
+            let bossbar = Bossbar::new(text_component);
+            server
+                .bossbars
+                .lock()
+                .await
+                .create_bossbar(namespace.clone(), bossbar.clone());
 
-        sender
-            .send_message(TextComponent::translate(
-                "commands.bossbar.create.success",
-                [bossbar_prefix(bossbar.title.clone(), namespace.clone())],
-            ))
-            .await;
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.bossbar.create.success",
+                    [bossbar_prefix(bossbar.title.clone(), namespace.clone())],
+                ))
+                .await;
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 
 struct GetExecuter(CommandValueGet);
 
-#[async_trait]
 impl CommandExecutor for GetExecuter {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let namespace = autocomplete_consumer()
-            .find_arg_default_name(args)?
-            .to_string();
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let namespace = autocomplete_consumer()
+                .find_arg_default_name(args)?
+                .to_string();
 
-        let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
-            handle_bossbar_error(
-                sender,
-                BossbarUpdateError::InvalidResourceLocation(namespace.clone()),
-            )
-            .await;
-            return Ok(());
-        };
+            let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
+                handle_bossbar_error(
+                    sender,
+                    BossbarUpdateError::InvalidResourceLocation(namespace.clone()),
+                )
+                .await;
+                return Ok(());
+            };
 
-        match self.0 {
-            CommandValueGet::Max => {
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.bossbar.get.max",
-                        [
-                            bossbar_prefix(bossbar.bossbar_data.title.clone(), namespace.clone()),
-                            TextComponent::text(bossbar.max.to_string()),
-                        ],
-                    ))
-                    .await;
-                return Ok(());
+            match self.0 {
+                CommandValueGet::Max => {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.bossbar.get.max",
+                            [
+                                bossbar_prefix(
+                                    bossbar.bossbar_data.title.clone(),
+                                    namespace.clone(),
+                                ),
+                                TextComponent::text(bossbar.max.to_string()),
+                            ],
+                        ))
+                        .await;
+                    return Ok(());
+                }
+                CommandValueGet::Players => {}
+                CommandValueGet::Value => {
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.bossbar.get.value",
+                            [
+                                bossbar_prefix(
+                                    bossbar.bossbar_data.title.clone(),
+                                    namespace.clone(),
+                                ),
+                                TextComponent::text(bossbar.value.to_string()),
+                            ],
+                        ))
+                        .await;
+                    return Ok(());
+                }
+                CommandValueGet::Visible => {
+                    let state = if bossbar.visible {
+                        "commands.bossbar.get.visible.visible"
+                    } else {
+                        "commands.bossbar.get.visible.hidden"
+                    };
+                    sender
+                        .send_message(TextComponent::translate(
+                            state,
+                            [bossbar_prefix(
+                                bossbar.bossbar_data.title.clone(),
+                                namespace.clone(),
+                            )],
+                        ))
+                        .await;
+                    return Ok(());
+                }
             }
-            CommandValueGet::Players => {}
-            CommandValueGet::Value => {
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.bossbar.get.value",
-                        [
-                            bossbar_prefix(bossbar.bossbar_data.title.clone(), namespace.clone()),
-                            TextComponent::text(bossbar.value.to_string()),
-                        ],
-                    ))
-                    .await;
-                return Ok(());
-            }
-            CommandValueGet::Visible => {
-                let state = if bossbar.visible {
-                    "commands.bossbar.get.visible.visible"
-                } else {
-                    "commands.bossbar.get.visible.hidden"
-                };
-                sender
-                    .send_message(TextComponent::translate(
-                        state,
-                        [bossbar_prefix(
-                            bossbar.bossbar_data.title.clone(),
-                            namespace.clone(),
-                        )],
-                    ))
-                    .await;
-                return Ok(());
-            }
-        }
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 
 struct ListExecuter;
 
-#[async_trait]
 impl CommandExecutor for ListExecuter {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &Server,
-        _args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let bossbars = server.bossbars.lock().await.get_all_bossbars();
-        let Some(bossbars) = bossbars else {
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.bossbar.list.bars.none",
-                    [],
-                ))
-                .await;
-            return Ok(());
-        };
-        if bossbars.is_empty() {
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.bossbar.list.bars.none",
-                    [],
-                ))
-                .await;
-            return Ok(());
-        }
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        _args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let bossbars = server.bossbars.lock().await.get_all_bossbars();
+            let Some(bossbars) = bossbars else {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.bossbar.list.bars.none",
+                        [],
+                    ))
+                    .await;
+                return Ok(());
+            };
+            if bossbars.is_empty() {
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.bossbar.list.bars.none",
+                        [],
+                    ))
+                    .await;
+                return Ok(());
+            }
 
-        let mut bossbars_text = TextComponent::text("");
-        for (i, bossbar) in bossbars.iter().enumerate() {
-            if i == 0 {
-                bossbars_text = bossbars_text.add_child(bossbar_prefix(
-                    bossbar.bossbar_data.title.clone(),
-                    bossbar.namespace.clone(),
-                ));
-            } else {
-                bossbars_text =
-                    bossbars_text.add_child(TextComponent::text(", ").add_child(bossbar_prefix(
+            let mut bossbars_text = TextComponent::text("");
+            for (i, bossbar) in bossbars.iter().enumerate() {
+                if i == 0 {
+                    bossbars_text = bossbars_text.add_child(bossbar_prefix(
                         bossbar.bossbar_data.title.clone(),
                         bossbar.namespace.clone(),
-                    )));
+                    ));
+                } else {
+                    bossbars_text = bossbars_text.add_child(TextComponent::text(", ").add_child(
+                        bossbar_prefix(
+                            bossbar.bossbar_data.title.clone(),
+                            bossbar.namespace.clone(),
+                        ),
+                    ));
+                }
             }
-        }
 
-        sender
-            .send_message(TextComponent::translate(
-                "commands.bossbar.list.bars.some",
-                [
-                    TextComponent::text(bossbars.len().to_string()),
-                    bossbars_text,
-                ],
-            ))
-            .await;
-        Ok(())
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.bossbar.list.bars.some",
+                    [
+                        TextComponent::text(bossbars.len().to_string()),
+                        bossbars_text,
+                    ],
+                ))
+                .await;
+            Ok(())
+        })
     }
 }
 
 struct RemoveExecuter;
 
-#[async_trait]
 impl CommandExecutor for RemoveExecuter {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let namespace = autocomplete_consumer()
-            .find_arg_default_name(args)?
-            .to_string();
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let namespace = autocomplete_consumer()
+                .find_arg_default_name(args)?
+                .to_string();
 
-        let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
-            handle_bossbar_error(
-                sender,
-                BossbarUpdateError::InvalidResourceLocation(namespace),
-            )
-            .await;
-            return Ok(());
-        };
-
-        sender
-            .send_message(TextComponent::translate(
-                "commands.bossbar.remove.success",
-                [bossbar_prefix(
-                    bossbar.bossbar_data.title.clone(),
-                    namespace.clone(),
-                )],
-            ))
-            .await;
-
-        match server
-            .bossbars
-            .lock()
-            .await
-            .remove_bossbar(server, namespace.clone())
-            .await
-        {
-            Ok(()) => {}
-            Err(err) => {
-                handle_bossbar_error(sender, err).await;
+            let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
+                handle_bossbar_error(
+                    sender,
+                    BossbarUpdateError::InvalidResourceLocation(namespace),
+                )
+                .await;
                 return Ok(());
-            }
-        }
+            };
 
-        Ok(())
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.bossbar.remove.success",
+                    [bossbar_prefix(
+                        bossbar.bossbar_data.title.clone(),
+                        namespace.clone(),
+                    )],
+                ))
+                .await;
+
+            match server
+                .bossbars
+                .lock()
+                .await
+                .remove_bossbar(server, namespace.clone())
+                .await
+            {
+                Ok(()) => {}
+                Err(err) => {
+                    handle_bossbar_error(sender, err).await;
+                    return Ok(());
+                }
+            }
+
+            Ok(())
+        })
     }
 }
 
 struct SetExecuter(CommandValueSet);
 
-#[async_trait]
 impl CommandExecutor for SetExecuter {
     #[expect(clippy::too_many_lines)]
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let namespace = autocomplete_consumer().find_arg_default_name(args)?;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let namespace = autocomplete_consumer().find_arg_default_name(args)?;
 
-        let Some(bossbar) = server.bossbars.lock().await.get_bossbar(namespace) else {
-            handle_bossbar_error(
-                sender,
-                BossbarUpdateError::InvalidResourceLocation(namespace.to_string()),
-            )
-            .await;
-            return Ok(());
-        };
+            let Some(bossbar) = server.bossbars.lock().await.get_bossbar(namespace) else {
+                handle_bossbar_error(
+                    sender,
+                    BossbarUpdateError::InvalidResourceLocation(namespace.to_string()),
+                )
+                .await;
+                return Ok(());
+            };
 
-        match self.0 {
-            CommandValueSet::Color => {
-                let color = BossbarColorArgumentConsumer.find_arg_default_name(args)?;
-                match server
-                    .bossbars
-                    .lock()
-                    .await
-                    .update_color(server, namespace.to_string(), color.clone())
-                    .await
-                {
-                    Ok(()) => {}
-                    Err(err) => {
-                        handle_bossbar_error(sender, err).await;
-                        return Ok(());
-                    }
-                }
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.bossbar.set.color.success",
-                        [bossbar_prefix(
-                            bossbar.bossbar_data.title.clone(),
-                            namespace.to_string(),
-                        )],
-                    ))
-                    .await;
-                Ok(())
-            }
-            CommandValueSet::Max => {
-                let Ok(max_value) = max_value_consumer().find_arg_default_name(args)? else {
-                    send_error_message(
-                        sender,
-                        TextComponent::translate(
-                            "parsing.int.invalid",
-                            [TextComponent::text(i32::MAX.to_string())],
-                        ),
-                    )
-                    .await;
-                    return Ok(());
-                };
-
-                match server
-                    .bossbars
-                    .lock()
-                    .await
-                    .update_health(
-                        server,
-                        namespace.to_string(),
-                        max_value as u32,
-                        bossbar.value,
-                    )
-                    .await
-                {
-                    Ok(()) => {}
-                    Err(err) => {
-                        handle_bossbar_error(sender, err).await;
-                        return Ok(());
-                    }
-                }
-
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.bossbar.set.max.success",
-                        [
-                            bossbar_prefix(
-                                bossbar.bossbar_data.title.clone(),
-                                namespace.to_string(),
-                            ),
-                            TextComponent::text(max_value.to_string()),
-                        ],
-                    ))
-                    .await;
-                Ok(())
-            }
-            CommandValueSet::Name => {
-                let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
-                match server
-                    .bossbars
-                    .lock()
-                    .await
-                    .update_name(server, namespace, text_component.clone())
-                    .await
-                {
-                    Ok(()) => {}
-                    Err(err) => {
-                        handle_bossbar_error(sender, err).await;
-                        return Ok(());
-                    }
-                }
-
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.bossbar.set.name.success",
-                        [bossbar_prefix(text_component, namespace.to_string())],
-                    ))
-                    .await;
-                Ok(())
-            }
-            CommandValueSet::Players(has_players) => {
-                if !has_players {
+            match self.0 {
+                CommandValueSet::Color => {
+                    let color = BossbarColorArgumentConsumer.find_arg_default_name(args)?;
                     match server
                         .bossbars
                         .lock()
                         .await
-                        .update_players(server, namespace.to_string(), vec![])
+                        .update_color(server, namespace.to_string(), color.clone())
                         .await
                     {
                         Ok(()) => {}
@@ -420,158 +332,255 @@ impl CommandExecutor for SetExecuter {
                     }
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.bossbar.set.players.success.none",
+                            "commands.bossbar.set.color.success",
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
                                 namespace.to_string(),
                             )],
                         ))
                         .await;
-                    return Ok(());
+                    Ok(())
                 }
+                CommandValueSet::Max => {
+                    let Ok(max_value) = max_value_consumer().find_arg_default_name(args)? else {
+                        send_error_message(
+                            sender,
+                            TextComponent::translate(
+                                "parsing.int.invalid",
+                                [TextComponent::text(i32::MAX.to_string())],
+                            ),
+                        )
+                        .await;
+                        return Ok(());
+                    };
 
-                //TODO: Confirm that this is the vanilla way
-                let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-                let players: Vec<Uuid> =
-                    targets.iter().map(|player| player.gameprofile.id).collect();
-                let count = players.len();
+                    match server
+                        .bossbars
+                        .lock()
+                        .await
+                        .update_health(
+                            server,
+                            namespace.to_string(),
+                            max_value as u32,
+                            bossbar.value,
+                        )
+                        .await
+                    {
+                        Ok(()) => {}
+                        Err(err) => {
+                            handle_bossbar_error(sender, err).await;
+                            return Ok(());
+                        }
+                    }
 
-                match server
-                    .bossbars
-                    .lock()
-                    .await
-                    .update_players(server, namespace.to_string(), players)
-                    .await
-                {
-                    Ok(()) => {}
-                    Err(err) => {
-                        handle_bossbar_error(sender, err).await;
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.bossbar.set.max.success",
+                            [
+                                bossbar_prefix(
+                                    bossbar.bossbar_data.title.clone(),
+                                    namespace.to_string(),
+                                ),
+                                TextComponent::text(max_value.to_string()),
+                            ],
+                        ))
+                        .await;
+                    Ok(())
+                }
+                CommandValueSet::Name => {
+                    let text_component = TextComponentArgConsumer::find_arg(args, ARG_NAME)?;
+                    match server
+                        .bossbars
+                        .lock()
+                        .await
+                        .update_name(server, namespace, text_component.clone())
+                        .await
+                    {
+                        Ok(()) => {}
+                        Err(err) => {
+                            handle_bossbar_error(sender, err).await;
+                            return Ok(());
+                        }
+                    }
+
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.bossbar.set.name.success",
+                            [bossbar_prefix(text_component, namespace.to_string())],
+                        ))
+                        .await;
+                    Ok(())
+                }
+                CommandValueSet::Players(has_players) => {
+                    if !has_players {
+                        match server
+                            .bossbars
+                            .lock()
+                            .await
+                            .update_players(server, namespace.to_string(), vec![])
+                            .await
+                        {
+                            Ok(()) => {}
+                            Err(err) => {
+                                handle_bossbar_error(sender, err).await;
+                                return Ok(());
+                            }
+                        }
+                        sender
+                            .send_message(TextComponent::translate(
+                                "commands.bossbar.set.players.success.none",
+                                [bossbar_prefix(
+                                    bossbar.bossbar_data.title.clone(),
+                                    namespace.to_string(),
+                                )],
+                            ))
+                            .await;
                         return Ok(());
                     }
+
+                    //TODO: Confirm that this is the vanilla way
+                    let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
+                    let players: Vec<Uuid> =
+                        targets.iter().map(|player| player.gameprofile.id).collect();
+                    let count = players.len();
+
+                    match server
+                        .bossbars
+                        .lock()
+                        .await
+                        .update_players(server, namespace.to_string(), players)
+                        .await
+                    {
+                        Ok(()) => {}
+                        Err(err) => {
+                            handle_bossbar_error(sender, err).await;
+                            return Ok(());
+                        }
+                    }
+
+                    let player_names: Vec<String> = targets
+                        .iter()
+                        .map(|player| player.gameprofile.name.clone())
+                        .collect();
+
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.bossbar.set.players.success.some",
+                            [
+                                bossbar_prefix(
+                                    bossbar.bossbar_data.title.clone(),
+                                    namespace.to_string(),
+                                ),
+                                TextComponent::text(count.to_string()),
+                                TextComponent::text(player_names.join(", ").clone()),
+                            ],
+                        ))
+                        .await;
+                    Ok(())
                 }
-
-                let player_names: Vec<String> = targets
-                    .iter()
-                    .map(|player| player.gameprofile.name.clone())
-                    .collect();
-
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.bossbar.set.players.success.some",
-                        [
-                            bossbar_prefix(
+                CommandValueSet::Style => {
+                    let style = BossbarStyleArgumentConsumer.find_arg_default_name(args)?;
+                    match server
+                        .bossbars
+                        .lock()
+                        .await
+                        .update_division(server, namespace.to_string(), style.clone())
+                        .await
+                    {
+                        Ok(()) => {}
+                        Err(err) => {
+                            handle_bossbar_error(sender, err).await;
+                            return Ok(());
+                        }
+                    }
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.bossbar.set.style.success",
+                            [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
                                 namespace.to_string(),
+                            )],
+                        ))
+                        .await;
+                    Ok(())
+                }
+                CommandValueSet::Value => {
+                    let Ok(value) = value_consumer().find_arg_default_name(args)? else {
+                        send_error_message(
+                            sender,
+                            TextComponent::translate(
+                                "parsing.int.invalid",
+                                [TextComponent::text(i32::MAX.to_string())],
                             ),
-                            TextComponent::text(count.to_string()),
-                            TextComponent::text(player_names.join(", ").clone()),
-                        ],
-                    ))
-                    .await;
-                Ok(())
-            }
-            CommandValueSet::Style => {
-                let style = BossbarStyleArgumentConsumer.find_arg_default_name(args)?;
-                match server
-                    .bossbars
-                    .lock()
-                    .await
-                    .update_division(server, namespace.to_string(), style.clone())
-                    .await
-                {
-                    Ok(()) => {}
-                    Err(err) => {
-                        handle_bossbar_error(sender, err).await;
+                        )
+                        .await;
                         return Ok(());
-                    }
-                }
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.bossbar.set.style.success",
-                        [bossbar_prefix(
-                            bossbar.bossbar_data.title.clone(),
-                            namespace.to_string(),
-                        )],
-                    ))
-                    .await;
-                Ok(())
-            }
-            CommandValueSet::Value => {
-                let Ok(value) = value_consumer().find_arg_default_name(args)? else {
-                    send_error_message(
-                        sender,
-                        TextComponent::translate(
-                            "parsing.int.invalid",
-                            [TextComponent::text(i32::MAX.to_string())],
-                        ),
-                    )
-                    .await;
-                    return Ok(());
-                };
+                    };
 
-                match server
-                    .bossbars
-                    .lock()
-                    .await
-                    .update_health(server, namespace.to_string(), bossbar.max, value as u32)
-                    .await
-                {
-                    Ok(()) => {}
-                    Err(err) => {
-                        handle_bossbar_error(sender, err).await;
-                        return Ok(());
+                    match server
+                        .bossbars
+                        .lock()
+                        .await
+                        .update_health(server, namespace.to_string(), bossbar.max, value as u32)
+                        .await
+                    {
+                        Ok(()) => {}
+                        Err(err) => {
+                            handle_bossbar_error(sender, err).await;
+                            return Ok(());
+                        }
                     }
-                }
 
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.bossbar.set.value.success",
-                        [
-                            bossbar_prefix(
+                    sender
+                        .send_message(TextComponent::translate(
+                            "commands.bossbar.set.value.success",
+                            [
+                                bossbar_prefix(
+                                    bossbar.bossbar_data.title.clone(),
+                                    namespace.to_string(),
+                                ),
+                                TextComponent::text(value.to_string()),
+                            ],
+                        ))
+                        .await;
+                    Ok(())
+                }
+                CommandValueSet::Visible => {
+                    let visibility = BoolArgConsumer::find_arg(args, ARG_VISIBLE)?;
+
+                    match server
+                        .bossbars
+                        .lock()
+                        .await
+                        .update_visibility(server, namespace.to_string(), visibility)
+                        .await
+                    {
+                        Ok(()) => {}
+                        Err(err) => {
+                            handle_bossbar_error(sender, err).await;
+                            return Ok(());
+                        }
+                    }
+
+                    let state = if visibility {
+                        "commands.bossbar.set.visible.success.visible"
+                    } else {
+                        "commands.bossbar.set.visible.success.hidden"
+                    };
+
+                    sender
+                        .send_message(TextComponent::translate(
+                            state,
+                            [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
                                 namespace.to_string(),
-                            ),
-                            TextComponent::text(value.to_string()),
-                        ],
-                    ))
-                    .await;
-                Ok(())
-            }
-            CommandValueSet::Visible => {
-                let visibility = BoolArgConsumer::find_arg(args, ARG_VISIBLE)?;
-
-                match server
-                    .bossbars
-                    .lock()
-                    .await
-                    .update_visibility(server, namespace.to_string(), visibility)
-                    .await
-                {
-                    Ok(()) => {}
-                    Err(err) => {
-                        handle_bossbar_error(sender, err).await;
-                        return Ok(());
-                    }
+                            )],
+                        ))
+                        .await;
+                    Ok(())
                 }
-
-                let state = if visibility {
-                    "commands.bossbar.set.visible.success.visible"
-                } else {
-                    "commands.bossbar.set.visible.success.hidden"
-                };
-
-                sender
-                    .send_message(TextComponent::translate(
-                        state,
-                        [bossbar_prefix(
-                            bossbar.bossbar_data.title.clone(),
-                            namespace.to_string(),
-                        )],
-                    ))
-                    .await;
-                Ok(())
             }
-        }
+        })
     }
 }
 

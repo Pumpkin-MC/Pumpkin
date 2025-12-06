@@ -66,7 +66,7 @@ pub struct BedrockClient {
     pub player: Mutex<Option<Arc<Player>>>,
     /// All Bedrock clients
     /// This list is used to remove the client if the connection gets closed
-    pub be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
+    pub be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
 
     tasks: TaskTracker,
     outgoing_packet_queue_send: Sender<Bytes>,

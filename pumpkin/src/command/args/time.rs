@@ -1,9 +1,11 @@
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 
 use crate::command::{
     CommandSender,
-    args::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser},
+    args::{
+        Arg, ArgumentConsumer, ConsumeResult, DefaultNameArgConsumer, FindArg,
+        GetClientSideArgParser,
+    },
     dispatcher::CommandError,
     tree::RawArgs,
 };
@@ -21,47 +23,39 @@ impl GetClientSideArgParser for TimeArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for TimeArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
 
-        // Parse number and unit
-        let (num_str, unit) = s
-            .find(|c: char| c.is_alphabetic())
-            .map_or((s, "t"), |pos| (&s[..pos], &s[pos..]));
+        let result: Option<Arg<'a>> = s_opt.and_then(|s| {
+            let (num_str, unit) = s
+                .find(|c: char| c.is_alphabetic())
+                .map_or((s, "t"), |pos| (&s[..pos], &s[pos..]));
 
-        let number = num_str.parse::<f32>().ok()?;
-        if number < 0.0 {
-            return None;
-        }
+            let number = num_str.parse::<f32>().ok()?; // Replaces .ok()?
 
-        // Convert to ticks based on unit
-        let ticks = match unit {
-            "d" => number * 24000.0,
-            "s" => number * 20.0,
-            "t" => number,
-            _ => return None,
-        };
+            if number < 0.0 {
+                return None;
+            }
 
-        // Round to nearest integer
-        let ticks = ticks.round() as i32;
+            let ticks = match unit {
+                "d" => number * 24000.0,
+                "s" => number * 20.0,
+                "t" => number,
+                _ => return None,
+            };
 
-        Some(Arg::Time(ticks))
-    }
+            let ticks = ticks.round() as i32;
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+            Some(Arg::Time(ticks))
+        });
+
+        Box::pin(async move { result })
     }
 }
 

@@ -1,6 +1,8 @@
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::{
+    pin::Pin,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
-use async_trait::async_trait;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
@@ -39,7 +41,6 @@ impl CommandBlockEntity {
     }
 }
 
-#[async_trait]
 impl BlockEntity for CommandBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID

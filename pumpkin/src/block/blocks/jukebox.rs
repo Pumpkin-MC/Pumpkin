@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BrokenArgs, UseWithItemArgs};
+use crate::block::{BlockBehaviour, BlockFuture, BrokenArgs, UseWithItemArgs};
 use crate::world::World;
-use async_trait::async_trait;
 use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
@@ -45,56 +44,62 @@ impl JukeboxBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for JukeboxBlock {
-    async fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let world = &args.player.living_entity.entity.world;
+    fn use_with_item<'a>(
+        &'a self,
+        args: UseWithItemArgs<'a>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let world = &args.player.living_entity.entity.world;
 
-        // if the jukebox already has a record, stop playing
-        if self.has_record(args.block, args.position, world).await {
-            self.stop_music(args.block, args.position, world).await;
-            return BlockActionResult::Success;
-        }
+            // if the jukebox already has a record, stop playing
+            if self.has_record(args.block, args.position, world).await {
+                self.stop_music(args.block, args.position, world).await;
+                return BlockActionResult::Success;
+            }
 
-        let jukebox_playable = args
-            .item_stack
-            .lock()
-            .await
-            .get_data_component::<JukeboxPlayableImpl>()
-            .map(|i| i.song);
+            let jukebox_playable = args
+                .item_stack
+                .lock()
+                .await
+                .get_data_component::<JukeboxPlayableImpl>()
+                .map(|i| i.song);
 
-        let Some(jukebox_playable) = jukebox_playable else {
-            return BlockActionResult::Pass;
-        };
+            let Some(jukebox_playable) = jukebox_playable else {
+                return BlockActionResult::Pass;
+            };
 
-        let Some(song) = jukebox_playable.split(':').nth(1) else {
-            return BlockActionResult::Pass;
-        };
+            let Some(song) = jukebox_playable.split(':').nth(1) else {
+                return BlockActionResult::Pass;
+            };
 
-        let Some(jukebox_song) = SYNCED_REGISTRIES.get_jukebox_song_index(song) else {
-            log::error!("Jukebox playable song not registered!");
-            return BlockActionResult::Pass;
-        };
+            let Some(jukebox_song) = SYNCED_REGISTRIES.get_jukebox_song_index(song) else {
+                log::error!("Jukebox playable song not registered!");
+                return BlockActionResult::Pass;
+            };
 
-        // TODO: Update block nbt
+            // TODO: Update block nbt
 
-        self.set_record(true, args.block, args.position, world)
-            .await;
-        world
-            .sync_world_event(
-                WorldEvent::JukeboxStartsPlaying,
-                *args.position,
-                jukebox_song as i32,
-            )
-            .await;
+            self.set_record(true, args.block, args.position, world)
+                .await;
+            world
+                .sync_world_event(
+                    WorldEvent::JukeboxStartsPlaying,
+                    *args.position,
+                    jukebox_song as i32,
+                )
+                .await;
 
-        BlockActionResult::Success
+            BlockActionResult::Success
+        })
     }
 
-    async fn broken(&self, args: BrokenArgs<'_>) {
-        // For now just stop the music at this position
-        args.world
-            .sync_world_event(WorldEvent::JukeboxStopsPlaying, *args.position, 0)
-            .await;
+    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // For now just stop the music at this position
+            args.world
+                .sync_world_event(WorldEvent::JukeboxStopsPlaying, *args.position, 0)
+                .await;
+        })
     }
 }

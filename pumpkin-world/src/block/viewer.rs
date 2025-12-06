@@ -1,9 +1,11 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicU16, Ordering},
+use std::{
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicU16, Ordering},
+    },
 };
 
-use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::{block::entities::BlockEntity, world::SimpleWorld};
@@ -70,16 +72,32 @@ impl ViewerCountTracker {
     }
 }
 
-#[async_trait]
-pub trait ViewerCountListener {
-    async fn on_container_open(&self, _world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {}
-    async fn on_container_close(&self, _world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {}
-    async fn on_viewer_count_update(
-        &self,
-        _world: &Arc<dyn SimpleWorld>,
-        _position: &BlockPos,
+pub type ViewerFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+pub trait ViewerCountListener: Send + Sync {
+    fn on_container_open<'a>(
+        &'a self,
+        _world: &'a Arc<dyn SimpleWorld>,
+        _position: &'a BlockPos,
+    ) -> ViewerFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn on_container_close<'a>(
+        &'a self,
+        _world: &'a Arc<dyn SimpleWorld>,
+        _position: &'a BlockPos,
+    ) -> ViewerFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn on_viewer_count_update<'a>(
+        &'a self,
+        _world: &'a Arc<dyn SimpleWorld>,
+        _position: &'a BlockPos,
         _old: u16,
         _new: u16,
-    ) {
+    ) -> ViewerFuture<'a, ()> {
+        Box::pin(async {})
     }
 }

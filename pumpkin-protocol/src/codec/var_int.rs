@@ -38,15 +38,15 @@ impl VarInt {
     }
 
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
-        let mut val = self.0;
-        loop {
-            let b: u8 = val as u8 & 0x7F;
+        // Must cast to u32 to prevent infinite loops on negative i32s
+        let mut val = self.0 as u32;
+
+        while val > 0x7F {
+            write.write_u8((val as u8) | 0x80)?;
             val >>= 7;
-            write.write_u8(if val == 0 { b } else { b | 0x80 })?;
-            if val == 0 {
-                break;
-            }
         }
+
+        write.write_u8(val as u8)?;
         Ok(())
     }
 
@@ -201,17 +201,14 @@ impl<'de> Deserialize<'de> for VarInt {
 
 impl PacketWrite for VarInt {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        let mut val = (self.0 << 1) ^ (self.0 >> 31);
-        loop {
-            let b: u8 = val as u8 & 0b01111111;
+        let mut val = ((self.0 << 1) ^ (self.0 >> 31)) as u32;
+
+        while val > 0x7F {
+            ((val as u8 & 0x7F) | 0x80).write(writer)?;
             val >>= 7;
-            if val == 0 {
-                b.write(writer)?;
-                break;
-            } else {
-                (b | 0b10000000).write(writer)?;
-            };
         }
+
+        (val as u8).write(writer)?;
         Ok(())
     }
 }

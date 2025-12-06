@@ -546,7 +546,7 @@ impl JavaClient {
                 server.spawn_task(async move {
                     server_clone.command_dispatcher.read().await
                         .handle_command(
-                            &mut CommandSender::Player(player_clone),
+                            &CommandSender::Player(player_clone),
                             &server_clone,
                             &command_clone,
                         )

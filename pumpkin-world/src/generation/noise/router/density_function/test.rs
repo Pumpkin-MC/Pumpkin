@@ -125,7 +125,7 @@ macro_rules! sample_surface_router_function {
 // TODO: Test all dimensions/noise routers
 
 #[test]
-// This test verifys that the generated functions after seed initialization but before chunk
+// This test verifies that the generated functions after seed initialization but before chunk
 // initialization matches the respected Java values.
 //
 // This is equivalent to a Java `NoiseRouter` after being passed into `NoiseConfig` but before being

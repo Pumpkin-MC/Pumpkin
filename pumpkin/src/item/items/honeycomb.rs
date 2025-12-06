@@ -1,3 +1,4 @@
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -6,7 +7,6 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
-use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::OakDoorLikeProperties;
@@ -28,54 +28,54 @@ impl ItemMetadata for HoneyCombItem {
     }
 }
 
-#[async_trait]
 impl ItemBehaviour for HoneyCombItem {
-    async fn use_on_block(
-        &self,
-        _item: &mut ItemStack,
-        player: &Player,
+    fn use_on_block<'a>(
+        &'a self,
+        _item: &'a mut ItemStack,
+        player: &'a Player,
         location: BlockPos,
         _face: BlockDirection,
-        block: &Block,
-        _server: &Server,
-    ) {
-        let world = player.world();
+        block: &'a Block,
+        _server: &'a Server,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let world = player.world();
 
-        // First we try to strip the block. by getting his equivalent and applying it the axis.
-        let replacement_block = get_waxed_equivalent(block);
-        // If there is a strip equivalent.
-        if let Some(replacement_block) = replacement_block {
-            // get block state of the old log.
-            // get the log properties
-            // create new properties for the new log.
-            let new_block = &Block::from_id(replacement_block);
-
-            let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS)
-                && block.has_tag(&tag::Block::MINECRAFT_DOORS)
-            {
+            // First we try to strip the block. by getting his equivalent and applying it the axis.
+            let replacement_block = get_waxed_equivalent(block);
+            // If there is a strip equivalent.
+            if let Some(replacement_block) = replacement_block {
                 // get block state of the old log.
-                let door_information = world.get_block_state_id(&location).await;
                 // get the log properties
-                let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
                 // create new properties for the new log.
-                let mut new_door_properties = OakDoorLikeProperties::default(new_block);
-                // Set old axis to the new log.
-                new_door_properties.facing = door_props.facing;
-                new_door_properties.open = door_props.open;
-                new_door_properties.half = door_props.half;
-                new_door_properties.hinge = door_props.hinge;
-                new_door_properties.powered = door_props.powered;
-                new_door_properties.to_state_id(new_block)
-            } else {
-                new_block.default_state.id
-            };
+                let new_block = &Block::from_id(replacement_block);
 
-            // TODO Implements trapdoors
-            world
-                .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
-                .await;
-            return;
-        }
+                let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS)
+                    && block.has_tag(&tag::Block::MINECRAFT_DOORS)
+                {
+                    // get block state of the old log.
+                    let door_information = world.get_block_state_id(&location).await;
+                    // get the log properties
+                    let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
+                    // create new properties for the new log.
+                    let mut new_door_properties = OakDoorLikeProperties::default(new_block);
+                    // Set old axis to the new log.
+                    new_door_properties.facing = door_props.facing;
+                    new_door_properties.open = door_props.open;
+                    new_door_properties.half = door_props.half;
+                    new_door_properties.hinge = door_props.hinge;
+                    new_door_properties.powered = door_props.powered;
+                    new_door_properties.to_state_id(new_block)
+                } else {
+                    new_block.default_state.id
+                };
+
+                // TODO Implements trapdoors
+                world
+                    .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
+                    .await;
+            }
+        })
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

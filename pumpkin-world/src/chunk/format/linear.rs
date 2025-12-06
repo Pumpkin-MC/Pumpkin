@@ -6,7 +6,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
-use async_trait::async_trait;
 use bytes::{Buf, BufMut, Bytes};
 use log::error;
 use pumpkin_util::math::vector2::Vector2;
@@ -163,7 +162,6 @@ impl<S: SingleChunkDataSerializer> Default for LinearFile<S> {
     }
 }
 
-#[async_trait]
 impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
     type Data = S;
     type WriteBackend = PathBuf;
@@ -179,7 +177,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
 
     async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        log::trace!("Writing tmp file to disk: {:?}", temp_path);
+        log::trace!("Writing tmp file to disk: {}", temp_path.display());
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -236,7 +234,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, &path).await?;
 
-        log::trace!("Wrote file to Disk: {:?}", path);
+        log::trace!("Wrote file to Disk: {}", path.display());
         Ok(())
     }
 
@@ -372,7 +370,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
 /*
 #[cfg(test)]
 mod tests {
-    use async_trait::async_trait;
+
     use core::panic;
     use pumpkin_data::BlockDirection;
     use pumpkin_util::math::position::BlockPos;
@@ -394,7 +392,6 @@ mod tests {
 
     struct BlockRegistry;
 
-    #[async_trait]
     impl BlockRegistryExt for BlockRegistry {
         fn can_place_at(
             &self,
