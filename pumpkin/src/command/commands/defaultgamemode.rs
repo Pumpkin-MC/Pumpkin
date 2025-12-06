@@ -4,7 +4,6 @@ use crate::command::args::{Arg, GetCloned};
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::builder::argument;
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_util::GameMode;
 use pumpkin_util::text::TextComponent;
 
@@ -32,7 +31,7 @@ impl CommandExecutor for DefaultGamemodeExecutor {
                 return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
             };
 
-            if BASIC_CONFIG.force_gamemode {
+            if server.basic_config.force_gamemode {
                 for player in server.get_all_players().await {
                     player.set_gamemode(gamemode).await;
                 }

@@ -1,13 +1,12 @@
 use std::sync::{Arc, atomic::Ordering};
 
-use pumpkin_data::Block;
-use pumpkin_util::{GameMode, math::position::BlockPos};
-use pumpkin_world::{block::entities::command_block::CommandBlockEntity, tick::TickPriority};
+use pumpkin_data::{Block, block_properties::{BlockProperties, CommandBlockLikeProperties}};
+use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
+use pumpkin_world::{BlockStateId, block::entities::command_block::CommandBlockEntity, tick::TickPriority};
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, OnNeighborUpdateArgs,
-        OnScheduledTickArgs,
+        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs, registry::BlockActionResult
     },
     world::World,
 };
@@ -53,21 +52,25 @@ impl BlockMetadata for CommandBlock {
 }
 
 impl BlockBehaviour for CommandBlock {
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props = CommandBlockLikeProperties::default(args.block);
-        props.facing = args.player.living_entity.entity.get_facing().opposite();
-        props.to_state_id(args.block)
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut props = CommandBlockLikeProperties::default(args.block);
+            props.facing = args.player.living_entity.entity.get_facing().opposite();
+            props.to_state_id(args.block)
+        })
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if args.player.permission_lvl.load() < PermissionLvl::Two {
-            return BlockActionResult::Pass;
-        }
-        let Some(block_entity) = args.world.get_block_entity(args.position).await else {
-            return BlockActionResult::Pass;
-        };
-        args.world.update_block_entity(&block_entity).await;
-        BlockActionResult::SuccessServer
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            if args.player.permission_lvl.load() < PermissionLvl::Two {
+                return BlockActionResult::Pass;
+            }
+            let Some(block_entity) = args.world.get_block_entity(args.position).await else {
+                return BlockActionResult::Pass;
+            };
+            args.world.update_block_entity(&block_entity).await;
+            BlockActionResult::SuccessServer
+        })
     }
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
@@ -93,50 +96,52 @@ impl BlockBehaviour for CommandBlock {
         })
     }
 
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let Some(block_entity) = args.world.get_block_entity(args.position).await else {
-            return;
-        };
-        if block_entity.resource_location() != CommandBlockEntity::ID {
-            return;
-        }
-
-        let command_entity: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
-
-        let Some(server) = args.world.server.upgrade() else {
-            return;
-        };
-
-        let _props = CommandBlockLikeProperties::from_state_id(
-            args.world.get_block_state_id(args.position).await,
-            args.block,
-        );
-
-        server
-            .command_dispatcher
-            .read()
-            .await
-            .handle_command(
-                &mut crate::command::CommandSender::CommandBlock(
-                    block_entity.clone(),
-                    args.world.clone(),
-                ),
-                &server,
-                &command_entity.command.lock().await,
-            )
-            .await;
-
-        let block = args.world.get_block(args.position).await;
-        if block == &Block::REPEATING_COMMAND_BLOCK {
-            if !command_entity.auto.load(Ordering::SeqCst)
-                && !command_entity.powered.load(Ordering::SeqCst)
-            {
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let Some(block_entity) = args.world.get_block_entity(args.position).await else {
+                return;
+            };
+            if block_entity.resource_location() != CommandBlockEntity::ID {
                 return;
             }
-            args.world
-                .schedule_block_tick(block, *args.position, 1, TickPriority::Normal)
+
+            let command_entity: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
+
+            let Some(server) = args.world.server.upgrade() else {
+                return;
+            };
+
+            let _props = CommandBlockLikeProperties::from_state_id(
+                args.world.get_block_state_id(args.position).await,
+                args.block,
+            );
+
+            server
+                .command_dispatcher
+                .read()
+                .await
+                .handle_command(
+                    &mut crate::command::CommandSender::CommandBlock(
+                        block_entity.clone(),
+                        args.world.clone(),
+                    ),
+                    &server,
+                    &command_entity.command.lock().await,
+                )
                 .await;
-        }
+
+            let block = args.world.get_block(args.position).await;
+            if block == &Block::REPEATING_COMMAND_BLOCK {
+                if !command_entity.auto.load(Ordering::SeqCst)
+                    && !command_entity.powered.load(Ordering::SeqCst)
+                {
+                    return;
+                }
+                args.world
+                    .schedule_block_tick(block, *args.position, 1, TickPriority::Normal)
+                    .await;
+            }
+        })
     }
 
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
@@ -151,8 +156,10 @@ impl BlockBehaviour for CommandBlock {
         })
     }
 
-    async fn placed(&self, args: PlacedArgs<'_>) {
-        let entity = CommandBlockEntity::new(*args.position);
-        args.world.add_block_entity(Arc::new(entity)).await;
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = CommandBlockEntity::new(*args.position);
+            args.world.add_block_entity(Arc::new(entity)).await;
+        })
     }
 }

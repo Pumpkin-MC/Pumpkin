@@ -1,6 +1,6 @@
 use std::{
     pin::Pin,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, Ordering, AtomicU32},
 };
 
 use pumpkin_nbt::compound::NbtCompound;
@@ -74,18 +74,20 @@ impl BlockEntity for CommandBlockEntity {
         }
     }
 
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        nbt.put_bool("auto", self.auto.load(Ordering::SeqCst));
-        nbt.put_string("Command", self.command.lock().await.to_string());
-        nbt.put_bool("conditionMet", self.condition_met.load(Ordering::SeqCst));
-        nbt.put_string("LastOutput", self.last_output.lock().await.to_string());
-        nbt.put_bool("powered", self.powered.load(Ordering::SeqCst));
-        nbt.put_bool("TrackOutput", self.track_output.load(Ordering::SeqCst));
-        nbt.put_bool("UpdateLastExecution", false);
-        nbt.put_int(
-            "SuccessCount",
-            self.success_count.load(Ordering::SeqCst).cast_signed(),
-        );
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            nbt.put_bool("auto", self.auto.load(Ordering::SeqCst));
+            nbt.put_string("Command", self.command.lock().await.to_string());
+            nbt.put_bool("conditionMet", self.condition_met.load(Ordering::SeqCst));
+            nbt.put_string("LastOutput", self.last_output.lock().await.to_string());
+            nbt.put_bool("powered", self.powered.load(Ordering::SeqCst));
+            nbt.put_bool("TrackOutput", self.track_output.load(Ordering::SeqCst));
+            nbt.put_bool("UpdateLastExecution", false);
+            nbt.put_int(
+                "SuccessCount",
+                self.success_count.load(Ordering::SeqCst).cast_signed(),
+            );
+        })
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {

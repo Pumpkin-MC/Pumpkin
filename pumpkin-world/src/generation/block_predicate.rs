@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockDirection, BlockState, tag::Taggable};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
@@ -17,7 +18,7 @@ pub enum BlockPredicate {
     #[serde(rename = "minecraft:matching_block_tag")]
     MatchingBlockTag(MatchingBlockTagPredicate),
     #[serde(rename = "minecraft:matching_fluids")]
-    MatchingFluids(EmptyTODOStruct),
+    MatchingFluids(MatchingFluidsBlockPredicate),
     #[serde(rename = "minecraft:has_sturdy_face")]
     HasSturdyFace(HasSturdyFacePredicate),
     #[serde(rename = "minecraft:solid")]
@@ -51,7 +52,7 @@ impl BlockPredicate {
         match self {
             BlockPredicate::MatchingBlocks(predicate) => predicate.test(chunk, pos),
             BlockPredicate::MatchingBlockTag(predicate) => predicate.test(chunk, pos),
-            BlockPredicate::MatchingFluids(_predicate) => false,
+            BlockPredicate::MatchingFluids(predicate) => predicate.test(chunk, pos),
             BlockPredicate::HasSturdyFace(predicate) => predicate.test(chunk, pos),
             BlockPredicate::Solid(predicate) => predicate.test(chunk, pos),
             BlockPredicate::Replaceable(predicate) => predicate.test(chunk, pos),
@@ -97,6 +98,28 @@ impl InsideWorldBoundsBlockPredicate {
     pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
         let pos = pos.offset(self.offset);
         !chunk.out_of_height(pos.0.y as i16)
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MatchingFluidsBlockPredicate {
+    #[serde(flatten)]
+    offset: OffsetBlocksBlockPredicate,
+    fluids: MatchingBlocksWrapper,
+}
+
+impl MatchingFluidsBlockPredicate {
+    pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
+        let (fluid, _) = self.offset.get_fluid_and_fluid_state(chunk, pos);
+        match &self.fluids {
+            MatchingBlocksWrapper::Single(single_block) => {
+                single_block.strip_prefix("minecraft:").unwrap() == fluid.name
+            }
+            MatchingBlocksWrapper::Multiple(blocks) => blocks
+                .iter()
+                .map(|s| s.strip_prefix("minecraft:").unwrap())
+                .contains(fluid.name),
+        }
     }
 }
 
@@ -250,6 +273,16 @@ impl OffsetBlocksBlockPredicate {
         let pos = self.get(pos);
         GenerationCache::get_block_state(chunk, &pos.0).to_block()
     }
+
+    pub fn get_fluid_and_fluid_state<T: GenerationCache>(
+        &self,
+        chunk: &T,
+        pos: &BlockPos,
+    ) -> (Fluid, FluidState) {
+        let pos = self.get(pos);
+        GenerationCache::get_fluid_and_fluid_state(chunk, &pos.0)
+    }
+
     pub fn get_state<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> &'static BlockState {
         let pos = self.get(pos);
         GenerationCache::get_block_state(chunk, &pos.0).to_state()

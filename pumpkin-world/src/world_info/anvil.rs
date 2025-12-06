@@ -152,7 +152,7 @@ mod test {
     use flate2::read::GzDecoder;
     use pumpkin_data::game_rules::GameRuleRegistry;
     use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};
-    use pumpkin_util::Difficulty;
+    use pumpkin_util::{Difficulty, world_seed::Seed};
     use temp_dir::TempDir;
 
     use crate::{
@@ -166,8 +166,7 @@ mod test {
     fn test_preserve_level_dat_seed() {
         let seed = 1337;
 
-        let mut data = LevelData::default();
-        data.world_gen_settings.seed = seed;
+        let data = LevelData::default(Seed(1337));
 
         let temp_dir = TempDir::new().unwrap();
 
@@ -259,10 +258,7 @@ mod test {
                 water_source_conversion: true,
                 ..Default::default()
             },
-            world_gen_settings: WorldGenSettings {
-                seed: 1,
-                ..Default::default()
-            },
+            world_gen_settings: WorldGenSettings::new(Seed(1)),
             last_played: 1733847709327,
             level_name: "New World".to_string(),
             spawn_x: 160,

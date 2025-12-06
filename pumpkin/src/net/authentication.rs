@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use base64::{Engine, engine::general_purpose};
-use pumpkin_config::{advanced_config, networking::auth::TextureConfig};
+use pumpkin_config::{AuthenticationConfig, networking::auth::TextureConfig};
 use pumpkin_protocol::Property;
 use rsa::RsaPublicKey;
 use rsa::pkcs8::DecodePublicKey;
@@ -65,15 +65,10 @@ pub fn authenticate(
     username: &str,
     server_hash: &str,
     ip: &IpAddr,
+    auth_config: &AuthenticationConfig,
 ) -> Result<GameProfile, AuthError> {
-    let address = if advanced_config()
-        .networking
-        .authentication
-        .prevent_proxy_connections
-    {
-        let auth_url = advanced_config()
-            .networking
-            .authentication
+    let address = if auth_config.prevent_proxy_connections {
+        let auth_url = auth_config
             .prevent_proxy_connection_auth_url
             .as_deref()
             .unwrap_or(MOJANG_PREVENT_PROXY_AUTHENTICATION_URL);
@@ -83,9 +78,7 @@ pub fn authenticate(
             .replace("{server_hash}", server_hash)
             .replace("{ip}", &ip.to_string())
     } else {
-        let auth_url = advanced_config()
-            .networking
-            .authentication
+        let auth_url = auth_config
             .url
             .as_deref()
             .unwrap_or(MOJANG_AUTHENTICATION_URL);
@@ -147,10 +140,10 @@ pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), Tex
     Ok(())
 }
 
-pub fn fetch_mojang_public_keys() -> Result<Vec<RsaPublicKey>, AuthError> {
-    let services_url = advanced_config()
-        .networking
-        .authentication
+pub fn fetch_mojang_public_keys(
+    auth_config: &AuthenticationConfig,
+) -> Result<Vec<RsaPublicKey>, AuthError> {
+    let services_url = auth_config
         .services_url
         .as_deref()
         .unwrap_or(MOJANG_SERVICES_URL);

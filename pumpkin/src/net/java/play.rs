@@ -24,10 +24,7 @@ use crate::plugin::player::player_interact_event::{InteractAction, PlayerInterac
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
-use pumpkin_data::block_properties::{
-    BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
-};
+use pumpkin_data::block_properties::{BlockProperties, CommandBlockLikeProperties, WaterLikeProperties};
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -553,7 +550,7 @@ impl JavaClient {
                         .await;
                 });
 
-                if advanced_config().commands.log_console {
+                if server.advanced_config.commands.log_console {
                     log::info!(
                         "Player ({}): executed command /{}",
                         player.gameprofile.name,
@@ -811,10 +808,18 @@ impl JavaClient {
         }}
     }
 
-    pub async fn handle_chat_message(&self, player: &Arc<Player>, chat_message: SChatMessage) {
+    pub async fn handle_chat_message(
+        &self,
+        server: &Server,
+        player: &Arc<Player>,
+        chat_message: SChatMessage,
+    ) {
         let gameprofile = &player.gameprofile;
 
-        if let Err(err) = self.validate_chat_message(player, &chat_message).await {
+        if let Err(err) = self
+            .validate_chat_message(server, player, &chat_message)
+            .await
+        {
             log::log!(
                 err.severity(),
                 "{} (uuid {}) {}",
@@ -836,9 +841,9 @@ impl JavaClient {
             'after: {
                 log::info!("<chat> {}: {}", gameprofile.name, event.message);
 
-                let config = advanced_config();
+                let config = &server.advanced_config;
 
-                let message = match seasonal_events::modify_chat_message(&event.message) {
+                let message = match seasonal_events::modify_chat_message(&event.message, config) {
                     Some(m) => m,
                     None => event.message.clone(),
                 };
@@ -851,7 +856,7 @@ impl JavaClient {
 
                 let entity = &player.living_entity.entity;
                 let world = &entity.world;
-                if BASIC_CONFIG.allow_chat_reports {
+                if server.basic_config.allow_chat_reports {
                     world.broadcast_secure_player_chat(player, &chat_message, decorated_message).await;
                 } else {
                     let je_packet = CSystemChatMessage::new(
@@ -871,6 +876,7 @@ impl JavaClient {
     /// Runs all vanilla checks for a valid chat message
     pub async fn validate_chat_message(
         &self,
+        server: &Server,
         player: &Arc<Player>,
         chat_message: &SChatMessage,
     ) -> Result<(), ChatError> {
@@ -887,7 +893,7 @@ impl JavaClient {
             return Err(ChatError::IllegalCharacters);
         }
         // These checks are only run in secure chat mode
-        if BASIC_CONFIG.allow_chat_reports {
+        if server.basic_config.allow_chat_reports {
             // Check for unsigned chat
             if let Some(signature) = &chat_message.signature {
                 if signature.len() != 256 {
@@ -933,7 +939,7 @@ impl JavaClient {
         session: SPlayerSession,
     ) {
         // Keep the chat session default if we don't want reports
-        if !BASIC_CONFIG.allow_chat_reports {
+        if !server.basic_config.allow_chat_reports {
             return;
         }
 
@@ -1153,7 +1159,7 @@ impl JavaClient {
 
         match action {
             ActionType::Attack => {
-                let config = &advanced_config().pvp;
+                let config = &server.advanced_config.pvp;
                 // TODO: do validation and stuff
                 if !config.enabled {
                     return;

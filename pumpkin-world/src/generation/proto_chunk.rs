@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
+use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::tag;
 use pumpkin_data::{
     Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Taggable,
@@ -48,6 +49,7 @@ use crate::{
 pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk;
     fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState;
+    fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState);
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState);
     fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32;
     fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i32;

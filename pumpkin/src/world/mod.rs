@@ -2722,7 +2722,7 @@ impl World {
                         .to_props()
                         .into_iter()
                         .find(|p| p.0 == "waterlogged")
-                        .map(|(_, value)| value == true.to_string())
+                        .map(|(_, value)| value == "true")
                 })
                 .unwrap_or(false)
             {
@@ -2867,7 +2867,7 @@ impl World {
                     .into_iter()
                     .find(|p| p.0 == "waterlogged")
                     .map(|(_, value)| {
-                        if value == true.to_string() {
+                        if value == "true" {
                             &Fluid::FLOWING_WATER
                         } else {
                             &Fluid::EMPTY
@@ -2898,7 +2898,7 @@ impl World {
                             .into_iter()
                             .find(|p| p.0 == "waterlogged")
                             .map(|(_, value)| {
-                                if value == true.to_string() {
+                                if value == "true" {
                                     &Fluid::FLOWING_WATER
                                 } else {
                                     &Fluid::EMPTY
@@ -2918,7 +2918,7 @@ impl World {
             if let Some(properties) = block.properties(id) {
                 for (name, value) in properties.to_props() {
                     if name == "waterlogged" {
-                        if value == true.to_string() {
+                        if value == "true" {
                             let fluid = Fluid::FLOWING_WATER;
                             let state = fluid.states[0].clone();
                             return (fluid, state);
@@ -2930,7 +2930,6 @@ impl World {
             }
 
             let fluid = Fluid::EMPTY;
-
             let state = fluid.states[0].clone();
 
             return (fluid, state);

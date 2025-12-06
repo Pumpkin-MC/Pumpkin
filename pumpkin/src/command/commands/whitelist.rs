@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 
-use pumpkin_config::{BASIC_CONFIG, whitelist::WhitelistEntry};
+use pumpkin_config::whitelist::WhitelistEntry;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandResult;
@@ -29,7 +29,7 @@ const ARG_TARGETS: &str = "targets";
 
 async fn kick_non_whitelisted_players(server: &Server) {
     let whitelist = WHITELIST_CONFIG.read().await;
-    if BASIC_CONFIG.enforce_whitelist && server.white_list.load(Ordering::Relaxed) {
+    if server.basic_config.enforce_whitelist && server.white_list.load(Ordering::Relaxed) {
         for player in server.get_all_players().await {
             if whitelist.is_whitelisted(&player.gameprofile) {
                 continue;

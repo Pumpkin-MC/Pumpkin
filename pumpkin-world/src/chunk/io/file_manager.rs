@@ -43,6 +43,8 @@ pub struct ChunkFileManager<S: ChunkSerializer<WriteBackend = PathBuf>> {
     // - Allow for ease of usage (able to return the serializer from a function)
     file_locks: RwLock<BTreeMap<PathBuf, ChunkSerializerLazyLoader<S>>>,
     watchers: RwLock<BTreeMap<PathBuf, usize>>,
+
+    chunk_config: S::ChunkConfig,
 }
 
 pub(crate) trait PathFromLevelFolder {
@@ -121,11 +123,12 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
     }
 }
 
-impl<S: ChunkSerializer<WriteBackend = PathBuf>> Default for ChunkFileManager<S> {
-    fn default() -> Self {
+impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
+    pub fn new(chunk_config: S::ChunkConfig) -> Self {
         Self {
             file_locks: RwLock::new(BTreeMap::new()),
             watchers: RwLock::new(BTreeMap::new()),
+            chunk_config,
         }
     }
 }
@@ -155,6 +158,7 @@ impl<P, S> FileIO for ChunkFileManager<S>
 where
     P: PathFromLevelFolder + Send + Sync + Sized + Dirtiable + 'static,
     S: ChunkSerializer<Data = P, WriteBackend = PathBuf>,
+    S::ChunkConfig: Send + Sync,
 {
     type Data = Arc<RwLock<S::Data>>;
 
@@ -338,7 +342,7 @@ where
 
                             // We only need to update the chunk if it is dirty
                             if chunk_is_dirty {
-                                chunk_serializer.write().await.update_chunk(&*chunk).await?;
+                                chunk_serializer.write().await.update_chunk(&*chunk, &self.chunk_config).await?;
                             }
                             Ok::<(), ChunkWritingError>(())
                         }

@@ -27,6 +27,7 @@ use log::{debug, error};
 use num_traits::abs;
 use pumpkin_data::biome::Biome;
 
+use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
@@ -878,6 +879,37 @@ impl GenerationCache for Cache {
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk {
         let mid = ((self.size * self.size) >> 1) as usize;
         self.chunks[mid].get_proto_chunk_mut()
+    }
+
+    fn get_fluid_and_fluid_state(&self, pos: &Vector3<i32>) -> (Fluid, FluidState) {
+        let id = GenerationCache::get_block_state(self, pos).0;
+
+        let Some(fluid) = Fluid::from_state_id(id) else {
+            let block = Block::from_state_id(id);
+            if let Some(properties) = block.properties(id) {
+                for (name, value) in properties.to_props() {
+                    if name == "waterlogged" {
+                        if value == "true" {
+                            let fluid = Fluid::FLOWING_WATER;
+                            let state = fluid.states[0].clone();
+                            return (fluid, state);
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            let fluid = Fluid::EMPTY;
+            let state = fluid.states[0].clone();
+
+            return (fluid, state);
+        };
+
+        //let state = fluid.get_state(id);
+        let state = fluid.states[0].clone();
+
+        (fluid.clone(), state)
     }
 
     fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState {

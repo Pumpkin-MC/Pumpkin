@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_util::text::TextComponent;
 
 use crate::{
@@ -25,18 +24,16 @@ impl CommandExecutor for Executor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let players: Vec<Arc<Player>> = server.get_all_players().await;
-
             sender
                 .send_message(TextComponent::translate(
                     "commands.list.players",
                     [
                         TextComponent::text(players.len().to_string()),
-                        TextComponent::text(BASIC_CONFIG.max_players.to_string()),
+                        TextComponent::text(server.basic_config.max_players.to_string()),
                         TextComponent::text(get_player_names(players)),
                     ],
                 ))
                 .await;
-
             Ok(())
         })
     }

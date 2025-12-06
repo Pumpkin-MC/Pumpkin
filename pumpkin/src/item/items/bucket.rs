@@ -73,7 +73,7 @@ fn waterlogged_check(block: &Block, state: u16) -> Option<bool> {
             .to_props()
             .into_iter()
             .find(|p| p.0 == "waterlogged")
-            .map(|(_, value)| value == true.to_string())
+            .map(|(_, value)| value == "true")
     })
 }
 
@@ -131,7 +131,7 @@ impl ItemBehaviour for EmptyBucketItem {
                         .to_props()
                         .into_iter()
                         .find(|p| p.0 == "waterlogged")
-                        .map(|(_, value)| value == true.to_string())
+                        .map(|(_, value)| value == "true")
                 })
                 .unwrap_or(false)
             {

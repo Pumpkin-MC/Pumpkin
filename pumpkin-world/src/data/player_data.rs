@@ -1,4 +1,3 @@
-use pumpkin_config::advanced_config;
 use pumpkin_nbt::compound::NbtCompound;
 use std::fs::{File, create_dir_all};
 use std::io;
@@ -26,7 +25,7 @@ pub enum PlayerDataError {
 
 impl PlayerDataStorage {
     /// Creates a new `PlayerDataStorage` with the specified data path and cache expiration time.
-    pub fn new(data_path: impl Into<PathBuf>) -> Self {
+    pub fn new(data_path: impl Into<PathBuf>, enabled: bool) -> Self {
         let path = data_path.into();
         if !path.exists()
             && let Err(e) = create_dir_all(&path)
@@ -39,7 +38,7 @@ impl PlayerDataStorage {
 
         Self {
             data_path: path,
-            save_enabled: advanced_config().player_data.save_player_data,
+            save_enabled: enabled,
         }
     }
 

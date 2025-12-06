@@ -1,7 +1,8 @@
-use pumpkin_util::{
+use crate::{
     math::java_string_hash,
     random::{RandomImpl, get_seed, legacy_rand::LegacyRand},
 };
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Clone, Copy)]
 pub struct Seed(pub u64);
@@ -19,5 +20,24 @@ impl From<&str> for Seed {
         };
 
         Seed(value.unwrap_or_else(|| LegacyRand::from_seed(get_seed()).next_i64() as u64))
+    }
+}
+
+impl Serialize for Seed {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&(self.0 as i64).to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for Seed {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        Ok(Self::from(raw.as_str()))
     }
 }

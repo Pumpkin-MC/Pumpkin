@@ -10,7 +10,7 @@ use crate::{
     data::{SaveJSONConfiguration, op_data::OPERATOR_CONFIG},
 };
 use CommandError::InvalidConsumption;
-use pumpkin_config::{BASIC_CONFIG, op::Op};
+use pumpkin_config::op::Op;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["op"];
@@ -34,7 +34,8 @@ impl CommandExecutor for Executor {
             };
 
             for player in targets {
-                let new_level = BASIC_CONFIG
+                let new_level = server
+                    .basic_config
                     .op_permission_level
                     .min(sender.permission_lvl());
 

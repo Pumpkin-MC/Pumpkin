@@ -1,7 +1,7 @@
 use crate::entity::player::Player;
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
-use pumpkin_config::{BASIC_CONFIG, BasicConfiguration};
+use pumpkin_config::BasicConfiguration;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::{
     Players, StatusResponse, Version,
@@ -62,8 +62,8 @@ impl<'a> CachedBranding {
 
 impl CachedStatus {
     #[must_use]
-    pub fn new() -> Self {
-        let status_response = Self::build_response(&BASIC_CONFIG);
+    pub fn new(config: &BasicConfiguration) -> Self {
+        let status_response = Self::build_response(config);
         let status_response_json = serde_json::to_string(&status_response)
             .expect("Failed to parse status response into JSON");
 
@@ -164,6 +164,6 @@ impl CachedStatus {
 
 impl Default for CachedStatus {
     fn default() -> Self {
-        Self::new()
+        Self::new(&BasicConfiguration::default())
     }
 }

@@ -543,7 +543,7 @@ impl BedrockClient {
                     .await;
             }
             SText::PACKET_ID => {
-                self.handle_chat_message(player, SText::read(reader).unwrap())
+                self.handle_chat_message(server, player, SText::read(reader).unwrap())
                     .await;
             }
             SCommandRequest::PACKET_ID => {

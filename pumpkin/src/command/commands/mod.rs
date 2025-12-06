@@ -1,3 +1,4 @@
+use pumpkin_config::BasicConfiguration;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionDefault, PermissionRegistry},
@@ -59,7 +60,7 @@ mod worldborder;
 mod profile;
 
 #[must_use]
-pub async fn default_dispatcher() -> CommandDispatcher {
+pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDispatcher {
     let mut dispatcher = CommandDispatcher::default();
 
     register_permissions().await;
@@ -79,7 +80,10 @@ pub async fn default_dispatcher() -> CommandDispatcher {
     dispatcher.register(effect::init_command_tree(), "minecraft:command.effect");
     dispatcher.register(teleport::init_command_tree(), "minecraft:command.teleport");
     dispatcher.register(time::init_command_tree(), "minecraft:command.time");
-    dispatcher.register(tick::init_command_tree(), "minecraft:command.tick");
+    dispatcher.register(
+        tick::init_command_tree(basic_config.tps),
+        "minecraft:command.tick",
+    );
     dispatcher.register(give::init_command_tree(), "minecraft:command.give");
     dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");

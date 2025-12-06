@@ -2,7 +2,7 @@ use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use itertools::Itertools;
 use lz4_java_wrc::Context;
-use pumpkin_config::advanced_config;
+use pumpkin_config::chunk::AnvilChunkConfig;
 use pumpkin_util::math::vector2::Vector2;
 use std::{
     collections::HashSet,
@@ -316,6 +316,7 @@ impl AnvilChunkData {
     async fn from_chunk<S>(
         chunk: &S,
         compression: Option<Compression>,
+        chunk_config: &AnvilChunkConfig,
     ) -> Result<Self, ChunkWritingError>
     where
         S: SingleChunkDataSerializer,
@@ -325,12 +326,11 @@ impl AnvilChunkData {
             .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
-        let compression = compression
-            .unwrap_or_else(|| advanced_config().chunk.compression.algorithm.clone().into());
+        let compression = compression.unwrap_or_else(|| chunk_config.compression.algorithm.into());
 
         // We need to buffer here anyway so there's no use in making an impl Write for this
         let compressed_data = compression
-            .compress_data(&raw_bytes, advanced_config().chunk.compression.level)
+            .compress_data(&raw_bytes, chunk_config.compression.level)
             .map_err(ChunkWritingError::Compression)?;
 
         Ok(AnvilChunkData {
@@ -529,6 +529,8 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
     type Data = S;
     type WriteBackend = PathBuf;
 
+    type ChunkConfig = AnvilChunkConfig;
+
     fn should_write(&self, is_watched: bool) -> bool {
         !is_watched
     }
@@ -621,7 +623,11 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         Ok(chunk_file)
     }
 
-    async fn update_chunk(&mut self, chunk: &Self::Data) -> Result<(), ChunkWritingError> {
+    async fn update_chunk(
+        &mut self,
+        chunk: &Self::Data,
+        chunk_config: &Self::ChunkConfig,
+    ) -> Result<(), ChunkWritingError> {
         let epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -632,10 +638,11 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         let compression_type = self.chunks_data[index]
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
-        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type).await?;
+        let new_chunk_data =
+            AnvilChunkData::from_chunk(chunk, compression_type, chunk_config).await?;
 
         let mut write_action = self.write_action.lock().await;
-        if !advanced_config().chunk.write_in_place {
+        if !chunk_config.write_in_place {
             *write_action = WriteAction::All;
         }
 

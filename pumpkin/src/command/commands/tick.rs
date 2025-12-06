@@ -1,4 +1,3 @@
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -305,14 +304,12 @@ impl CommandExecutor for TickExecutor {
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
+pub fn init_command_tree(default_tps: f32) -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(literal("query").execute(TickExecutor(SubCommand::Query)))
         .then(
             literal("rate")
-                .then(
-                    literal("20").execute(TickExecutor(SubCommand::RateLiteral(BASIC_CONFIG.tps))),
-                )
+                .then(literal("20").execute(TickExecutor(SubCommand::RateLiteral(default_tps))))
                 .then(argument("rate", rate_consumer()).execute(TickExecutor(SubCommand::Rate))),
         )
         .then(literal("freeze").execute(TickExecutor(SubCommand::Freeze(true))))
