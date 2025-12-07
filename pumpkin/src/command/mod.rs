@@ -38,7 +38,7 @@ impl fmt::Display for CommandSender {
                 Self::Console => "Server",
                 Self::Rcon(_) => "Rcon",
                 Self::Player(p) => &p.gameprofile.name,
-                Self::CommandBlock(..) => "Command block",
+                Self::CommandBlock(..) => "@",
             }
         )
     }
