@@ -1,13 +1,12 @@
 use std::{
     pin::Pin,
-    sync::atomic::{AtomicBool, Ordering, AtomicU32},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
 use tokio::sync::Mutex;
-use tokio::task::block_in_place;
 
 use super::BlockEntity;
 
@@ -61,6 +60,7 @@ impl BlockEntity for CommandBlockEntity {
         let track_output = AtomicBool::new(nbt.get_bool("TrackOutput").unwrap_or(false));
         let success_count =
             AtomicU32::new(nbt.get_int("SuccessCount").unwrap_or(0).cast_unsigned());
+
         Self {
             position,
             condition_met,
@@ -74,7 +74,10 @@ impl BlockEntity for CommandBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    fn write_nbt<'a>(
+        &'a self,
+        nbt: &'a mut NbtCompound,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             nbt.put_bool("auto", self.auto.load(Ordering::SeqCst));
             nbt.put_string("Command", self.command.lock().await.to_string());
@@ -92,20 +95,10 @@ impl BlockEntity for CommandBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        nbt.put_bool("auto", self.auto.load(Ordering::SeqCst));
-        nbt.put_bool("conditionMet", self.condition_met.load(Ordering::SeqCst));
-        nbt.put_bool("TrackOutput", self.track_output.load(Ordering::SeqCst));
-        nbt.put_bool("UpdateLastExecution", false);
-        nbt.put_bool("powered", self.powered.load(Ordering::SeqCst));
-        nbt.put_int(
-            "SuccessCount",
-            self.success_count.load(Ordering::SeqCst).cast_signed(),
-        );
-        block_in_place(|| {
-            nbt.put_string("Command", self.command.blocking_lock().to_string());
-            nbt.put_string("LastOutput", self.last_output.blocking_lock().to_string());
-            Some(nbt)
-        })
+        futures::executor::block_on(async {
+            self.write_nbt(&mut nbt).await;
+        });
+        Some(nbt)
     }
 
     fn is_dirty(&self) -> bool {

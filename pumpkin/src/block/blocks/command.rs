@@ -1,12 +1,19 @@
 use std::sync::{Arc, atomic::Ordering};
 
-use pumpkin_data::{Block, block_properties::{BlockProperties, CommandBlockLikeProperties}};
+use pumpkin_data::{
+    Block,
+    block_properties::{BlockProperties, CommandBlockLikeProperties},
+};
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
-use pumpkin_world::{BlockStateId, block::entities::command_block::CommandBlockEntity, tick::TickPriority};
+use pumpkin_world::{
+    BlockStateId, block::entities::command_block::CommandBlockEntity, tick::TickPriority,
+};
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs, registry::BlockActionResult
+        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, NormalUseArgs,
+        OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
+        registry::BlockActionResult,
     },
     world::World,
 };
@@ -121,7 +128,7 @@ impl BlockBehaviour for CommandBlock {
                 .read()
                 .await
                 .handle_command(
-                    &mut crate::command::CommandSender::CommandBlock(
+                    &crate::command::CommandSender::CommandBlock(
                         block_entity.clone(),
                         args.world.clone(),
                     ),
