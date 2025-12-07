@@ -687,7 +687,7 @@ impl JavaClient {
                     .into(),
                 auto: (command.flags & 0x4 != 0).into(),
                 dirty: old_command_block.dirty.load(Ordering::SeqCst).into(),
-                command: Mutex::new(command.command),
+                command: Mutex::new(command.command.clone()),
                 last_output: old_command_block.last_output.lock().await.clone().into(),
                 track_output: (command.flags & 0x1 != 0).into(),
                 success_count: old_command_block
@@ -698,6 +698,13 @@ impl JavaClient {
             player
                 .world()
                 .add_block_entity(Arc::new(command_block))
+                .await;
+
+            player
+                .send_system_message(&TextComponent::text(format!(
+                    "Command set: {}",
+                    command.command
+                )))
                 .await;
 
             if command.flags & 0x4 != 0 {
