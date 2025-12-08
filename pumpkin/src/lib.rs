@@ -42,10 +42,6 @@ pub mod plugin;
 pub mod server;
 pub mod world;
 
-#[cfg(feature = "dhat-heap")]
-pub static HEAP_PROFILER: LazyLock<Mutex<Option<dhat::Profiler>>> =
-    LazyLock::new(|| Mutex::new(None));
-
 pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
     LazyLock::new(|| Arc::new(PluginManager::new()));
 

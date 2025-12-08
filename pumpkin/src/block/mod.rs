@@ -52,7 +52,7 @@ pub trait BlockBehaviour: Send + Sync {
     }
 
     fn on_entity_collision<'a>(&'a self, _args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn should_drop_items_on_explosion(&self) -> bool {
@@ -60,7 +60,7 @@ pub trait BlockBehaviour: Send + Sync {
     }
 
     fn explode<'a>(&'a self, _args: ExplodeArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     /// Handles the block event, which is an event specific to a block with an integer ID and data.
@@ -79,7 +79,7 @@ pub trait BlockBehaviour: Send + Sync {
     }
 
     fn random_tick<'a>(&'a self, _args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn can_place_at<'a>(&'a self, _args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
@@ -92,24 +92,24 @@ pub trait BlockBehaviour: Send + Sync {
 
     /// onBlockAdded in source code
     fn placed<'a>(&'a self, _args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn player_placed<'a>(&'a self, _args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn broken<'a>(&'a self, _args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn on_neighbor_update<'a>(&'a self, _args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     /// Called if a block state is replaced or it replaces another state
     fn prepare<'a>(&'a self, _args: PrepareArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -120,11 +120,11 @@ pub trait BlockBehaviour: Send + Sync {
     }
 
     fn on_scheduled_tick<'a>(&'a self, _args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn on_state_replaced<'a>(&'a self, _args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     // --- Redstone/Comparator Methods ---

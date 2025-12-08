@@ -52,7 +52,7 @@ pub trait DynEventHandler: Send + Sync {
     ///
     /// # Returns
     /// The priority of the event handler.
-    fn get_priority(&self) -> EventPriority;
+    fn get_priority(&self) -> &EventPriority;
 }
 
 /// A trait for handling specific events.
@@ -72,7 +72,7 @@ pub trait EventHandler<E: Payload>: Send + Sync {
     /// # Arguments
     /// - `event`: A mutable reference to the event to handle.
     fn handle_blocking(&self, _server: &Arc<Server>, _event: &mut E) -> BoxFuture<'_, ()> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 }
 
@@ -129,8 +129,8 @@ where
     }
 
     /// Retrieves the priority of the handler.
-    fn get_priority(&self) -> EventPriority {
-        self.priority.clone()
+    fn get_priority(&self) -> &EventPriority {
+        &self.priority
     }
 }
 

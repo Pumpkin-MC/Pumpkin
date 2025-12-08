@@ -210,7 +210,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
             let section_z = section_coords::block_to_section(start_block_z);
             AquiferSampler::Aquifer(WorldAquiferSampler::new(
                 Vector2::new(section_x, section_z),
-                random_config.aquifer_random_deriver.clone(),
+                &random_config.aquifer_random_deriver,
                 generation_shape.min_y,
                 generation_shape.height,
                 level_sampler,

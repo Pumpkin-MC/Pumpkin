@@ -53,7 +53,7 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
-use pumpkin::{LOGGER_IMPL, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
 
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::{
@@ -73,13 +73,6 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
-
-#[cfg(feature = "dhat-heap")]
-#[global_allocator]
-static ALLOC: dhat::Alloc = dhat::Alloc;
-
-#[cfg(feature = "dhat-heap")]
-use pumpkin::HEAP_PROFILER;
 
 pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
     LazyLock::new(|| Arc::new(PluginManager::new()));
@@ -102,13 +95,6 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 async fn main() {
     #[cfg(feature = "console-subscriber")]
     console_subscriber::init();
-    #[cfg(feature = "dhat-heap")]
-    {
-        let profiler = dhat::Profiler::new_heap();
-        let mut static_loc = HEAP_PROFILER.lock().await;
-        *static_loc = Some(profiler);
-    };
-
     let time = Instant::now();
 
     let exec_dir = std::env::current_dir().unwrap();
@@ -123,10 +109,6 @@ async fn main() {
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        if let Some((wrapper, _)) = LOGGER_IMPL.wait() {
-            // Drop readline to reset terminal state
-            let _ = wrapper.take_readline();
-        }
         default_panic(info);
         // TODO: Gracefully exit?
         // We need to abide by the panic rules here.

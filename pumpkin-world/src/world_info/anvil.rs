@@ -112,9 +112,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
             .expect("Time went backwards");
         let mut level_data = info.clone();
         level_data.last_played = since_the_epoch.as_millis() as i64;
-        let level = LevelDat {
-            data: level_data.clone(),
-        };
+        let level = LevelDat { data: level_data };
 
         // open file
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);

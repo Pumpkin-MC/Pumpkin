@@ -24,7 +24,6 @@ tokio = { workspace = true, features = [
     "io-util",
     "time",
 ] }
-rayon.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
 serde.workspace = true

@@ -78,7 +78,7 @@ impl BlockEntity for CommandBlockEntity {
         &'a self,
         nbt: &'a mut NbtCompound,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
+        Box::pin(async {
             nbt.put_bool("auto", self.auto.load(Ordering::SeqCst));
             nbt.put_string("Command", self.command.lock().await.to_string());
             nbt.put_bool("conditionMet", self.condition_met.load(Ordering::SeqCst));

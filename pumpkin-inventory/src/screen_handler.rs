@@ -1025,7 +1025,7 @@ pub trait ScreenHandlerListener: Send + Sync {
         _slot: u8,
         _stack: ItemStack,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
     fn on_property_update<'a>(
         &'a self,
@@ -1033,7 +1033,7 @@ pub trait ScreenHandlerListener: Send + Sync {
         _property: u8,
         _value: i32,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 }
 

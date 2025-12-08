@@ -52,7 +52,7 @@ pub trait BlockEntity: Send + Sync {
         &'a self,
         _world: Arc<dyn SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;

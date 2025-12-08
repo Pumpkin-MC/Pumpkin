@@ -106,7 +106,11 @@ impl DualNoiseBlockStateProvider {
                 &BlockPos(pos.0.add(&Vector3::new(i * 54545, 0, i * 34234))),
                 &sampler,
             );
-            list.push(self.base.get_state_by_value(&self.base.states, value));
+            list.push(
+                self.base
+                    .get_state_by_value(&self.base.states, value)
+                    .clone(),
+            );
         }
         let value = self.base.base.get_noise(pos);
         self.base.get_state_by_value(&list, value).get_state()
@@ -184,9 +188,13 @@ impl NoiseBlockStateProvider {
         self.get_state_by_value(&self.states, value).get_state()
     }
 
-    fn get_state_by_value(&self, states: &[BlockStateCodec], value: f64) -> BlockStateCodec {
+    fn get_state_by_value<'a>(
+        &self,
+        states: &'a [BlockStateCodec],
+        value: f64,
+    ) -> &'a BlockStateCodec {
         let val = ((1.0 + value) / 2.0).clamp(0.0, 0.9999);
-        states[(val * states.len() as f64) as usize].clone()
+        &states[(val * states.len() as f64) as usize]
     }
 }
 

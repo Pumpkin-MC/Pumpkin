@@ -109,7 +109,7 @@ pub trait ChunkSerializer: Send + Sync + Default {
     /// Serialize the data to bytes.
     fn write(
         &self,
-        backend: Self::WriteBackend,
+        backend: &Self::WriteBackend,
     ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 
     /// Create a new instance from bytes

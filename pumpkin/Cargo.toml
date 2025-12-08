@@ -41,7 +41,6 @@ tokio = { workspace = true, features = [
     "io-util",
     "time",
 ] }
-rayon.workspace = true
 thiserror.workspace = true
 futures.workspace = true
 
@@ -60,12 +59,13 @@ rustyline-async = "0.4.7"
 
 # encryption
 rsa = { version = "=0.10.0-rc.10", features = ["sha1"] }
-rsa-der = "0.3"
+pkcs8 = "=0.11.0-rc.8"
 
 # authentication
 ureq = { version = "3.1.4", features = [
     "json",
 ] }
+
 
 sha1 = "=0.11.0-rc.3"
 
@@ -79,7 +79,7 @@ base64 = "0.22.1"
 simplelog = { version = "0.12.2", features = ["ansi_term"] }
 
 # Remove time in favor of chrono?
-time = "0.3"
+time = { version = "0.3", features = ["parsing", "macros"] }
 
 # plugins
 libloading = "0.9"
@@ -88,18 +88,12 @@ rustc-hash = "2.1.1"
 # Task handling
 tokio-util = { version = "0.7.17", features = ["rt"] }
 
-# Memory profiling
-dhat = { version = "0.3.3", optional = true }
-
-flate2 = "1.1.7"
-console-subscriber = { version = "0.5.0", optional = true }
+flate2 = "1.1.5"
+console-subscriber = { version = "0.5.0", default-features= false, optional = true }
 signature = "2.2.0"
 [dev-dependencies]
 tempfile.workspace = true
 
 [features]
-#https://nnethercote.github.io/dh_view/dh_view.html
-#https://valgrind.org/docs/manual/dh-manual.html
-dhat-heap = ["dep:dhat"]
 console-subscriber = ["dep:console-subscriber"]
 tokio_taskdump = ["pumpkin-world/tokio_taskdump"]

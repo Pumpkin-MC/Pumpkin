@@ -178,7 +178,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         format!("./r.{region_x}.{region_z}.linear")
     }
 
-    async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
+    async fn write(&self, path: &PathBuf) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
         log::trace!("Writing tmp file to disk: {}", temp_path.display());
 
@@ -358,7 +358,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
             let linear_chunk_data = &self.chunks_data[index];
 
             let result = if let Some(data) = linear_chunk_data {
-                match S::from_bytes(data.clone(), chunk) {
+                match S::from_bytes(data, chunk) {
                     Ok(chunk) => LoadedData::Loaded(chunk),
                     Err(err) => LoadedData::Error((chunk, err)),
                 }

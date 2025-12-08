@@ -307,9 +307,9 @@ impl AnvilChunkData {
                 .decompress_data(&self.compressed_data)
                 .map_err(ChunkReadingError::Compression)?;
 
-            S::from_bytes(decompress_bytes.into(), pos)
+            S::from_bytes(&decompress_bytes.into(), pos)
         } else {
-            S::from_bytes(self.compressed_data.clone(), pos)
+            S::from_bytes(&self.compressed_data, pos)
         }
     }
 
@@ -521,7 +521,7 @@ pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable {
     fn to_bytes(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>>;
-    fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
+    fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
     fn position(&self) -> &Vector2<i32>;
 }
 
@@ -540,7 +540,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         format!("./r.{region_x}.{region_z}.mca")
     }
 
-    async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
+    async fn write(&self, path: &PathBuf) -> Result<(), std::io::Error> {
         let mut write_action = self.write_action.lock().await;
         match &*write_action {
             WriteAction::Pass => {
@@ -550,9 +550,9 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                 );
                 Ok(())
             }
-            WriteAction::All => self.write_all(&path).await,
+            WriteAction::All => self.write_all(path).await,
             WriteAction::Parts(parts) => {
-                self.write_indices(&path, Vec::from_iter(parts.iter().cloned()).as_slice())
+                self.write_indices(path, Vec::from_iter(parts.iter().cloned()).as_slice())
                     .await
             }
         }?;

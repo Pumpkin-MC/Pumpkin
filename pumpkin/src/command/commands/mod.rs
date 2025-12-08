@@ -56,9 +56,6 @@ mod weather;
 mod whitelist;
 mod worldborder;
 
-#[cfg(feature = "dhat-heap")]
-mod profile;
-
 #[must_use]
 pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDispatcher {
     let mut dispatcher = CommandDispatcher::default();
@@ -143,9 +140,6 @@ pub async fn default_dispatcher(basic_config: &BasicConfiguration) -> CommandDis
     dispatcher.register(transfer::init_command_tree(), "minecraft:command.transfer");
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
-
-    #[cfg(feature = "dhat-heap")]
-    dispatcher.register(profile::init_command_tree(), "pumpkin:command.profile");
 
     dispatcher
 }
@@ -507,15 +501,6 @@ fn register_level_4_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.stop",
             "Stops the server",
-            PermissionDefault::Op(PermissionLvl::Four),
-        ))
-        .unwrap();
-
-    #[cfg(feature = "dhat-heap")]
-    registry
-        .register_permission(Permission::new(
-            "pumpkin:command.profile",
-            "Controls heap profiling",
             PermissionDefault::Op(PermissionLvl::Four),
         ))
         .unwrap();

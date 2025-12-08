@@ -271,7 +271,7 @@ impl SignBlockEntity {
                 Text::default()
             },
             back_text: if !is_front {
-                Text::new(messages.clone())
+                Text::new(messages)
             } else {
                 Text::default()
             },

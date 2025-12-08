@@ -284,7 +284,7 @@ impl ToTokens for ItemComponents {
                 .clone()
                 .map(|list| {
                     let vec: Vec<_> = list
-                        .get_values()
+                        .into_vec()
                         .iter()
                         .map(|reg| {
                             match reg {

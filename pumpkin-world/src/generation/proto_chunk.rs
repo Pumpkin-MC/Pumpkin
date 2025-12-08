@@ -82,11 +82,11 @@ impl StandardChunkFluidLevelSampler {
 }
 
 impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
-    fn get_fluid_level(&self, _x: i32, y: i32, _z: i32) -> FluidLevel {
+    fn get_fluid_level(&self, _x: i32, y: i32, _z: i32) -> &FluidLevel {
         if y < self.bottom_y {
-            self.bottom_fluid.clone()
+            &self.bottom_fluid
         } else {
-            self.top_fluid.clone()
+            &self.top_fluid
         }
     }
 }

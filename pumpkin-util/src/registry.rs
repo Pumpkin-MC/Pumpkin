@@ -45,11 +45,10 @@ pub enum RegistryEntryList {
 }
 
 impl RegistryEntryList {
-    #[allow(dead_code)]
-    pub fn get_values(&self) -> Vec<TagType> {
+    pub fn into_vec(self) -> Vec<TagType> {
         match self {
-            RegistryEntryList::Single(s) => vec![s.clone()],
-            RegistryEntryList::Many(s) => s.clone(),
+            RegistryEntryList::Single(s) => vec![s],
+            RegistryEntryList::Many(s) => s,
         }
     }
 }

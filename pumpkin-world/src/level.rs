@@ -842,7 +842,7 @@ impl Level {
             .await;
         let mut chunk = chunk.write().await;
         chunk.block_ticks.schedule_tick(
-            ScheduledTick {
+            &ScheduledTick {
                 delay,
                 position: block_pos,
                 priority,
@@ -865,7 +865,7 @@ impl Level {
             .await;
         let mut chunk = chunk.write().await;
         chunk.fluid_ticks.schedule_tick(
-            ScheduledTick {
+            &ScheduledTick {
                 delay,
                 position: block_pos,
                 priority,

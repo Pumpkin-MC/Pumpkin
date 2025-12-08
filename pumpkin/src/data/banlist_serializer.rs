@@ -67,9 +67,8 @@ impl BannedIpEntry {
 }
 
 mod format {
-    use simplelog::FormatItem;
 
-    const DATE_FORMAT: &[FormatItem<'static>] = time::macros::format_description!(
+    const DATE_FORMAT: &[time::format_description::FormatItem<'static>] = time::macros::format_description!(
         "[year]-[month]-[day] [hour]:[minute]:[second][offset_hour sign:mandatory]:[offset_minute]"
     );
 

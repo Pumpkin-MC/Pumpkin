@@ -36,7 +36,7 @@ impl BlockEntity for EndPortalBlockEntity {
         &'a self,
         _nbt: &'a mut NbtCompound,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -365,7 +365,7 @@ where
 
                         log::debug!("Writing file for {}", path.display());
                         serializer
-                            .write(path.clone())
+                            .write(&path)
                             .await
                             .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
 

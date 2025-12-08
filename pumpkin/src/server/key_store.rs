@@ -1,6 +1,7 @@
 use num_bigint::BigInt;
+use pkcs8::EncodePublicKey;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
-use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, traits::PublicKeyParts as _};
+use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
 use sha1::Sha1;
 use sha2::Digest;
 
@@ -17,11 +18,15 @@ impl KeyStore {
         log::debug!("Creating encryption keys...");
         let private_key = Self::generate_private_key();
 
-        let public_key_der = rsa_der::public_key_to_der(
-            &private_key.n().to_be_bytes(),
-            &private_key.e().to_be_bytes(),
-        )
-        .into_boxed_slice();
+        let public_key = private_key.to_public_key();
+
+        let public_key_der = public_key
+            .to_public_key_der()
+            .expect("Failed to encode public key to SPKI DER")
+            .as_bytes()
+            .to_vec()
+            .into_boxed_slice();
+
         Self {
             private_key,
             public_key_der,

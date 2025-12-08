@@ -19,7 +19,6 @@ use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;
-use simplelog::FormatItem;
 use tokio::task::JoinHandle;
 
 use thiserror::Error;
@@ -180,7 +179,7 @@ pub async fn can_not_join(
     address: &SocketAddr,
     server: &Server,
 ) -> Option<TextComponent> {
-    const FORMAT_DESCRIPTION: &[FormatItem<'_>] = time::macros::format_description!(
+    const FORMAT_DESCRIPTION: &[time::format_description::FormatItem<'static>] = time::macros::format_description!(
         "[year]-[month]-[day] at [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
     );
 

@@ -38,7 +38,7 @@ pub trait Slot: Send + Sync + Debug {
         _stack: ItemStack,
         _stack_prev: ItemStack,
     ) -> BoxFuture<'_, ()> {
-        Box::pin(async move {}) // Default implementation
+        Box::pin(async {}) // Default implementation
     }
 
     /// Callback for when an item is taken from the slot.
@@ -57,7 +57,7 @@ pub trait Slot: Send + Sync + Debug {
 
     // Used for plugins
     fn on_click(&self, _player: &dyn InventoryPlayer) -> BoxFuture<'_, ()> {
-        Box::pin(async move {}) // Default implementation
+        Box::pin(async {}) // Default implementation
     }
 
     fn can_insert<'a>(&'a self, _stack: &'a ItemStack) -> BoxFuture<'a, bool> {

@@ -25,7 +25,7 @@ pub trait ItemBehaviour: Send + Sync {
         _item: &'a Item,
         _player: &'a Player,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn use_on_block<'a>(
@@ -37,7 +37,7 @@ pub trait ItemBehaviour: Send + Sync {
         _block: &'a Block,
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn use_on_entity<'a>(
@@ -46,7 +46,7 @@ pub trait ItemBehaviour: Send + Sync {
         _player: &'a Player,
         _entity: Arc<dyn EntityBase>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {})
+        Box::pin(async {})
     }
 
     fn can_mine(&self, _player: &Player) -> bool {

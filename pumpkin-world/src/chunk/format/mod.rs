@@ -31,8 +31,8 @@ pub mod linear;
 
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
-    fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
-        Self::internal_from_bytes(&bytes, pos).map_err(ChunkReadingError::ParsingError)
+    fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
+        Self::internal_from_bytes(bytes, pos).map_err(ChunkReadingError::ParsingError)
     }
 
     #[inline]
@@ -116,46 +116,49 @@ impl ChunkData {
                 position.x, position.y, chunk_data.x_pos, chunk_data.z_pos,
             )));
         }
-
-        let light_engine = ChunkLight {
-            block_light: chunk_data
-                .sections
-                .iter()
-                .map(|x| {
-                    x.block_light
-                        .clone()
-                        .map(LightContainer::new)
-                        .unwrap_or_default()
-                })
-                .collect(),
-            sky_light: chunk_data
-                .sections
-                .iter()
-                .map(|x| {
-                    x.sky_light
-                        .clone()
-                        .map(LightContainer::new)
-                        .unwrap_or_default()
-                })
-                .collect(),
-        };
-
-        let sub_chunks = chunk_data
+        let (block_lights, sky_lights, sub_chunks) = chunk_data
             .sections
             .into_iter()
-            .map(|section| SubChunk {
-                block_states: section
-                    .block_states
-                    .map(BlockPalette::from_disk_nbt)
-                    .unwrap_or_default(),
-                biomes: section
-                    .biomes
-                    .map(BiomePalette::from_disk_nbt)
-                    .unwrap_or_default(),
+            .map(|section| {
+                let block_light = section
+                    .block_light
+                    .map(LightContainer::new)
+                    .unwrap_or_default();
+                let sky_light = section
+                    .sky_light
+                    .map(LightContainer::new)
+                    .unwrap_or_default();
+
+                let sub_chunk = SubChunk {
+                    block_states: section
+                        .block_states
+                        .map(BlockPalette::from_disk_nbt)
+                        .unwrap_or_default(),
+                    biomes: section
+                        .biomes
+                        .map(BiomePalette::from_disk_nbt)
+                        .unwrap_or_default(),
+                };
+
+                (block_light, sky_light, sub_chunk)
             })
-            .collect();
+            .fold(
+                (Vec::new(), Vec::new(), Vec::new()),
+                |(mut bl, mut sl, mut sc), (block_l, sky_l, sub_c)| {
+                    bl.push(block_l);
+                    sl.push(sky_l);
+                    sc.push(sub_c);
+                    (bl, sl, sc)
+                },
+            );
+
+        // 2. Assemble the final structs using the collected vectors.
+        let light_engine = ChunkLight {
+            block_light: block_lights.into_boxed_slice(),
+            sky_light: sky_lights.into_boxed_slice(),
+        };
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
-        let section = ChunkSections::new(sub_chunks, min_y);
+        let section = ChunkSections::new(sub_chunks.into_boxed_slice(), min_y);
 
         Ok(ChunkData {
             section,
@@ -249,8 +252,8 @@ impl Dirtiable for ChunkEntityData {
 
 impl SingleChunkDataSerializer for ChunkEntityData {
     #[inline]
-    fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
-        Self::internal_from_bytes(&bytes, pos).map_err(ChunkReadingError::ParsingError)
+    fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
+        Self::internal_from_bytes(bytes, pos).map_err(ChunkReadingError::ParsingError)
     }
 
     #[inline]
