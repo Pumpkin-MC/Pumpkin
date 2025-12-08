@@ -2,11 +2,16 @@ use std::sync::{Arc, atomic::Ordering};
 
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, CommandBlockLikeProperties},
+    block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
 };
-use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
+use pumpkin_util::{
+    GameMode, PermissionLvl,
+    math::{position::BlockPos, vector3::Vector3},
+};
 use pumpkin_world::{
-    BlockStateId, block::entities::command_block::CommandBlockEntity, tick::TickPriority,
+    BlockStateId,
+    block::entities::{BlockEntity, command_block::CommandBlockEntity},
+    tick::TickPriority,
 };
 
 use crate::{
@@ -15,6 +20,7 @@ use crate::{
         OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
         registry::BlockActionResult,
     },
+    server::Server,
     world::World,
 };
 
@@ -25,6 +31,37 @@ use super::redstone::block_receives_redstone_power;
 pub struct CommandBlock;
 
 impl CommandBlock {
+    async fn get_relative_facing(
+        world: &World,
+        pos: &BlockPos,
+        dir: Facing,
+    ) -> Option<(BlockPos, CommandBlockLikeProperties)> {
+        let offset = match dir {
+            Facing::North => Vector3::new(0, 0, -1),
+            Facing::South => Vector3::new(0, 0, 1),
+            Facing::East => Vector3::new(1, 0, 0),
+            Facing::West => Vector3::new(-1, 0, 0),
+            Facing::Up => Vector3::new(0, 1, 0),
+            Facing::Down => Vector3::new(0, -1, 0),
+        };
+        let target_pos = pos.offset(offset);
+        let block = world.get_block(&target_pos).await;
+
+        let allowed_blocks = [
+            Block::COMMAND_BLOCK.name,
+            Block::CHAIN_COMMAND_BLOCK.name,
+            Block::REPEATING_COMMAND_BLOCK.name,
+        ];
+        if !allowed_blocks.contains(&block.name) {
+            return None;
+        }
+
+        let state_id = world.get_block_state_id(&target_pos).await;
+        let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+
+        Some((target_pos, props))
+    }
+
     pub async fn update(
         world: &World,
         block: &Block,
@@ -32,15 +69,66 @@ impl CommandBlock {
         pos: &BlockPos,
         powered: bool,
     ) {
-        if command_block.powered.load(Ordering::Relaxed) == powered {
+        let is_auto = command_block.auto.load(Ordering::Relaxed);
+        if command_block.powered.load(Ordering::Relaxed) == powered && !is_auto {
             return;
         }
         command_block.powered.store(powered, Ordering::Relaxed);
-        if powered {
+
+        if !powered && !is_auto {
+            return;
+        }
+
+        let state_id = world.get_block_state_id(pos).await;
+        let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+
+        if !props.conditional {
+            world
+                .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
+                .await;
+            return;
+        }
+
+        let Some(behind) =
+            CommandBlock::get_relative_facing(world, pos, props.facing.opposite()).await
+        else {
+            return;
+        };
+        let Some(behind_entity) = world.get_block_entity(&behind.0).await else {
+            log::warn!(
+                "Command Block exists at {} with no matching block entity!",
+                behind.0
+            );
+            return;
+        };
+        let behind_entity: &CommandBlockEntity = behind_entity
+            .as_any()
+            .downcast_ref()
+            .expect("behind should always be a command block");
+
+        if behind_entity.success_count.load(Ordering::Relaxed) > 0 {
             world
                 .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
                 .await;
         }
+    }
+
+    pub async fn execute(
+        server: Arc<Server>,
+        world: Arc<World>,
+        block_entity: Arc<dyn BlockEntity>,
+        command: &str,
+    ) {
+        server
+            .command_dispatcher
+            .read()
+            .await
+            .handle_command(
+                &crate::command::CommandSender::CommandBlock(block_entity, world),
+                &server,
+                command,
+            )
+            .await;
     }
 }
 
@@ -118,24 +206,18 @@ impl BlockBehaviour for CommandBlock {
                 return;
             };
 
-            let _props = CommandBlockLikeProperties::from_state_id(
+            let props = CommandBlockLikeProperties::from_state_id(
                 args.world.get_block_state_id(args.position).await,
                 args.block,
             );
 
-            server
-                .command_dispatcher
-                .read()
-                .await
-                .handle_command(
-                    &crate::command::CommandSender::CommandBlock(
-                        block_entity.clone(),
-                        args.world.clone(),
-                    ),
-                    &server,
-                    &command_entity.command.lock().await,
-                )
-                .await;
+            Self::execute(
+                server,
+                args.world.clone(),
+                block_entity.clone(),
+                &command_entity.command.lock().await,
+            )
+            .await;
 
             let block = args.world.get_block(args.position).await;
             if block == &Block::REPEATING_COMMAND_BLOCK {

@@ -68,7 +68,10 @@ impl CommandDispatcher {
         server: &'a Server,
         cmd: &'a str,
     ) {
-        if let Err(e) = self.dispatch(sender, server, cmd).await {
+        let result = self.dispatch(sender, server, cmd).await;
+        sender.set_success_count(result.is_ok() as u32);
+
+        if let Err(e) = result {
             let text = e.into_component(cmd);
             sender
                 .send_message(text.color_named(pumpkin_util::text::color::NamedColor::Red))

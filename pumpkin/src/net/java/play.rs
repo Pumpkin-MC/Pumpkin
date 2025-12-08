@@ -5,7 +5,7 @@ use rsa::signature::Verifier;
 use sha1::Sha1;
 use std::num::NonZeroU8;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
@@ -690,10 +690,7 @@ impl JavaClient {
                 command: Mutex::new(command.command.clone()),
                 last_output: old_command_block.last_output.lock().await.clone().into(),
                 track_output: (command.flags & 0x1 != 0).into(),
-                success_count: old_command_block
-                    .success_count
-                    .load(Ordering::SeqCst)
-                    .into(),
+                success_count: AtomicU32::new(0),
             };
             player
                 .world()
