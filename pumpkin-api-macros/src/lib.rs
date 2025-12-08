@@ -14,14 +14,16 @@ pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(item as ItemFn);
     let fn_name = &input_fn.sig.ident;
     let fn_inputs = &input_fn.sig.inputs;
-    let fn_output = &input_fn.sig.output;
     let fn_body = &input_fn.block;
 
     let method = quote! {
-        #[allow(unused_mut)]
-        async fn #fn_name(#fn_inputs) #fn_output {
-            crate::GLOBAL_RUNTIME.block_on(async move {
-                #fn_body
+        fn #fn_name(#fn_inputs) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<(), String>> + Send>
+        > {
+            Box::pin(async move {
+                crate::GLOBAL_RUNTIME.block_on(async move {
+                    #fn_body
+                })
             })
         }
     }
