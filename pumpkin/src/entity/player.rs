@@ -86,6 +86,7 @@ use crate::server::Server;
 use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
 
+use super::breath::BreathManager;
 use super::combat::{self, AttackType, player_attack_sound};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
@@ -335,7 +336,7 @@ pub struct Player {
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
     /// Manages the player's breath level for underwater breathing.
-    pub breath_manager: super::breath::BreathManager,
+    pub breath_manager: BreathManager,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
     /// The item currently being held by the player.
@@ -440,7 +441,7 @@ impl Player {
             awaiting_teleport: Mutex::new(None),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
-            breath_manager: super::breath::BreathManager::default(),
+            breath_manager: BreathManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
             open_container: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
