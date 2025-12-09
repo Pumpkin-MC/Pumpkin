@@ -4,18 +4,8 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;
 use std::sync::Arc;
 
-/// 管理玩家的呼吸值系统
-///
-/// 这个结构体负责处理玩家在水下的呼吸机制，包括：
-/// - 呼吸值的减少和恢复
-/// - 溺水伤害的计算
-/// - 与水下呼吸效果的交互
 pub struct BreathManager {
-    /// 当前呼吸值 (0-300，即15秒 * 20 ticks)
-    /// 300 = 15秒的呼吸时间，每秒消耗20点
     pub breath: AtomicCell<i32>,
-    /// 呼吸值耗尽后的伤害计时器，用于控制伤害间隔
-    pub damage_timer: AtomicCell<u32>,
 }
 
 impl Default for BreathManager {
@@ -25,12 +15,11 @@ impl Default for BreathManager {
 }
 
 impl BreathManager {
-    /// 创建一个新的呼吸管理器，带有指定的初始呼吸值
+    /// 创建一个新的呼吸管理器，带有指定的初始氧气值
     #[must_use]
     pub fn new(initial_breath: i32) -> Self {
         Self {
-            breath: AtomicCell::new(initial_breath.clamp(0, 300)),
-            damage_timer: AtomicCell::new(0),
+            breath: AtomicCell::new(initial_breath.clamp(-20, 300)),
         }
     }
 
@@ -39,104 +28,106 @@ impl BreathManager {
     /// # 参数
     /// * `player` - 需要更新呼吸状态的玩家
     pub async fn tick(&self, player: &Arc<Player>) {
-        log::debug!(
-            "用户 {} 呼吸值{} 伤害计数 {}",
-            player.get_name().get_text(),
-            self.breath.load(),
-            self.damage_timer.load(),
-        );
-        // 检查是否在水下
-        if !player.living_entity.is_in_water().await {
-            // 不在水下时恢复呼吸值
-            let current_breath = self.breath.load();
-            if current_breath < 300 {
-                self.breath.store((current_breath + 1).min(300));
-                // 可选：发送呼吸值更新给客户端
-                player.send_breath().await;
-            }
-            self.damage_timer.store(0);
-            return;
-        }
+        let mut breath = self.breath.load();
 
-        // 检查是否有水下呼吸效果（如药水效果）
-        if player
+        // 判断是否可以呼吸（空气中 OR 有保护效果）
+        let is_in_water = player.living_entity.is_in_water().await;
+
+        let has_water_breathing = player
             .living_entity
             .has_effect(&pumpkin_data::effect::StatusEffect::WATER_BREATHING)
-            .await
-        {
-            // 有水下呼吸效果时不减少呼吸值
-            return;
-        }
+            .await;
 
-        // 检查是否有潮涌能量效果（也提供水下呼吸）
-        if player
+        let has_conduit_power = player
             .living_entity
             .has_effect(&pumpkin_data::effect::StatusEffect::CONDUIT_POWER)
-            .await
-        {
-            // 潮涌能量效果提供水下呼吸
+            .await;
+
+        let can_breathe = !is_in_water || has_water_breathing || has_conduit_power;
+
+        // --------------------------------------------------
+        // 1. 可以呼吸 → 氧气先重置到0, 随后恢复到 300
+        // --------------------------------------------------
+        if can_breathe {
+            if breath < 300 {
+                breath = (breath.max(0) + 1).min(300);
+                self.breath.store(breath);
+                log::debug!("用户 {} 的呼吸值更新为 {}", player.gameprofile.name, breath);
+                player.send_breath().await;
+            }
             return;
         }
 
-        // 在水下且没有水下呼吸效果
-        let current_breath = self.breath.load();
+        // --------------------------------------------------
+        // 2. 不能呼吸 → 氧气值下降
+        // --------------------------------------------------
+        breath -= 1;
+        self.breath.store(breath);
+        log::debug!("用户 {} 的呼吸值更新为 {}", player.gameprofile.name, breath);
 
-        if current_breath > -20 {
-            // 减少呼吸值
-            self.breath.store(current_breath - 1);
+        // 可选：每秒更新一次客户端
+        if breath % 20 == 0 {
+            player.send_breath().await;
+        }
 
-            // 当呼吸值较低时发送更新给客户端（可选优化）
-            if current_breath % 10 == 0 {
-                // 每秒更新一次
-                player.send_breath().await;
-            }
-        } else {
-            // 呼吸值为0，开始造成伤害
-            self.damage_timer.fetch_add(1);
+        // --------------------------------------------------
+        // 3. 氧气值到达 -20 → 触发一次伤害 → 氧气值重置为 0
+        // --------------------------------------------------
+        if breath == -20 {
+            // 伤害类型（空气呼吸 → 溺水）
+            let damage_type = DamageType::DROWN;
 
-            // 每20 ticks（1秒）造成一次溺水伤害
-            if self.damage_timer.load() >= 20 {
-                // 造成溺水伤害
-                let damage_dealt = player.damage(player.clone(), 1.0, DamageType::DROWN).await;
+            player.damage(player.clone(), 2.0, damage_type).await;
 
-                self.damage_timer.store(0);
-            }
+            // 按 Wiki 设回 0
+            self.breath.store(0);
+
+            // 通知客户端
+            player.send_breath().await;
         }
     }
 
-    /// 重置呼吸值到最大值
+    /// 重置氧气值到最大值
     /// 通常在玩家死亡或使用特定物品时调用
     pub fn reset_breath(&self) {
         self.breath.store(300);
-        self.damage_timer.store(0);
     }
 
-    /// 设置呼吸值到指定值
+    /// 设置氧气值到指定值
     ///
     /// # 参数
-    /// * `breath` - 新的呼吸值，会被限制在0-300范围内
+    /// * `breath` - 新的氧气值，会被限制在-20到300范围内
     pub fn set_breath(&self, breath: i32) {
-        self.breath.store(breath.clamp(0, 300));
-        self.damage_timer.store(0);
+        self.breath.store(breath.clamp(-20, 300));
     }
 
-    /// 获取当前呼吸值
+    /// 获取当前氧气值
     pub fn get_breath(&self) -> i32 {
         self.breath.load()
     }
 
-    /// 增加呼吸值
+    /// 增加氧气值
     ///
     /// # 参数
-    /// * `amount` - 要增加的呼吸值
+    /// * `amount` - 要增加的氧气值
     pub fn add_breath(&self, amount: i32) {
         let current = self.breath.load();
-        self.breath.store((current + amount).clamp(0, 300));
+        self.breath.store((current + amount).clamp(-20, 300));
     }
 
-    /// 检查玩家是否正在溺水（呼吸值为0且在水下）
+    /// 检查玩家是否正在溺水（氧气值为0且在水下且处于扣血计时）
     pub async fn is_drowning(&self, player: &Player) -> bool {
+        self.breath.load() == 0 && player.living_entity.is_in_water().await
+    }
+
+    /// 检查玩家是否处于危险状态（氧气值<=0且在水下）
+    pub async fn is_in_danger(&self, player: &Player) -> bool {
         self.breath.load() <= 0 && player.living_entity.is_in_water().await
+    }
+
+    /// 检查玩家是否处于扣血计时阶段（氧气值为0且在水下）
+    pub async fn is_in_damage_phase(&self, player: &Player) -> bool {
+        self.breath.load() == 0 && player.living_entity.is_in_water().await
     }
 }
 
@@ -146,7 +137,7 @@ impl NBTStorage for BreathManager {
         Box::pin(async {
             let breath = self.breath.load();
             log::debug!(
-                "用户 {} 的呼吸值更新为 {}",
+                "用户 {} 的氧气值更新为 {}",
                 nbt.get_string("name").unwrap_or("未知"),
                 breath,
             );
@@ -163,7 +154,7 @@ impl NBTStorage for BreathManager {
             let breath = nbt
                 .get_int("air")
                 .unwrap_or_else(|| nbt.get_int("Air").unwrap_or(300));
-            self.breath.store(breath.clamp(0, 300));
+            self.breath.store(breath.clamp(-20, 300));
         })
     }
 }
@@ -189,8 +180,11 @@ mod tests {
         let manager = BreathManager::new(500); // 超过最大值
         assert_eq!(manager.get_breath(), 300);
 
-        let manager = BreathManager::new(-10); // 负值
-        assert_eq!(manager.get_breath(), 0);
+        let manager = BreathManager::new(-10); // 负值在范围内
+        assert_eq!(manager.get_breath(), -10);
+
+        let manager = BreathManager::new(-30); // 超过最小值
+        assert_eq!(manager.get_breath(), -20);
     }
 
     #[test]
@@ -202,8 +196,11 @@ mod tests {
         manager.set_breath(500); // 超过最大值
         assert_eq!(manager.get_breath(), 300);
 
-        manager.set_breath(-10); // 负值
-        assert_eq!(manager.get_breath(), 0);
+        manager.set_breath(-10); // 负值在范围内
+        assert_eq!(manager.get_breath(), -10);
+
+        manager.set_breath(-30); // 超过最小值
+        assert_eq!(manager.get_breath(), -20);
     }
 
     #[test]
@@ -218,11 +215,16 @@ mod tests {
 
         manager.add_breath(100);
         assert_eq!(manager.get_breath(), 300); // 达到最大值
+
+        // 测试负值范围
+        manager.set_breath(-10);
+        manager.add_breath(-15);
+        assert_eq!(manager.get_breath(), -20); // 会被限制到-20
     }
 
     #[test]
     fn test_reset_breath() {
-        let manager = BreathManager::new(100);
+        let manager = BreathManager::new(-10);
         manager.reset_breath();
         assert_eq!(manager.get_breath(), 300);
     }
