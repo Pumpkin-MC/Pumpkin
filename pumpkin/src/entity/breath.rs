@@ -89,7 +89,7 @@ impl BreathManager {
 
     /// 重置氧气值到最大值
     /// 通常在玩家死亡或使用特定物品时调用
-    pub fn reset_breath(&self) {
+    pub fn restart(&self) {
         self.breath.store(300);
     }
 
@@ -225,7 +225,7 @@ mod tests {
     #[test]
     fn test_reset_breath() {
         let manager = BreathManager::new(-10);
-        manager.reset_breath();
+        manager.restart();
         assert_eq!(manager.get_breath(), 300);
     }
 }

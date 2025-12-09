@@ -1839,6 +1839,7 @@ impl World {
         player.send_permission_lvl_update().await;
 
         player.hunger_manager.restart();
+        player.breath_manager.restart();
 
         let info = &self.level_info.read().await;
         if !info.game_rules.keep_inventory {
