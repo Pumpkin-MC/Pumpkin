@@ -52,6 +52,7 @@ use std::sync::{
 use tokio::sync::Mutex;
 
 pub mod ai;
+pub mod breath;
 pub mod decoration;
 pub mod effect;
 pub mod experience_orb;
