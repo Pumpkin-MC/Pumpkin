@@ -2,6 +2,7 @@ use crate::entity::{EntityBase, NBTStorage, NBTStorageInit, NbtFuture, player::P
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::GameMode;
 use std::sync::Arc;
 
 pub struct BreathManager {
@@ -28,16 +29,22 @@ impl BreathManager {
     /// # 参数
     /// * `player` - 需要更新呼吸状态的玩家
     pub async fn tick(&self, player: &Arc<Player>) {
+        // 在创造模式或生存模式无需更新
+        let player_gamemode = player.gamemode.load();
+        if player_gamemode == GameMode::Creative || player_gamemode == GameMode::Survival {
+            return;
+        }
+
         let mut breath = self.breath.load();
 
-        // 判断是否可以呼吸（空气中 OR 有保护效果）
+        // 是否在水中
         let is_in_water = player.living_entity.is_in_water().await;
-
+        // 是否有水呼吸效果
         let has_water_breathing = player
             .living_entity
             .has_effect(&pumpkin_data::effect::StatusEffect::WATER_BREATHING)
             .await;
-
+        // 是否有水路连接效果
         let has_conduit_power = player
             .living_entity
             .has_effect(&pumpkin_data::effect::StatusEffect::CONDUIT_POWER)
