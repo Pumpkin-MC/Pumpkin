@@ -704,7 +704,7 @@ impl JavaClient {
                 )))
                 .await;
 
-            if command.flags & 0x4 != 0 {
+            if command.flags & 0x4 != 0 && block_type != Block::CHAIN_COMMAND_BLOCK {
                 player
                     .world()
                     .schedule_block_tick(
