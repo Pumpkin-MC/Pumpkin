@@ -1086,6 +1086,35 @@ impl Player {
         )
     }
 
+    // 检查头部是否在水中
+    pub async fn is_head_in_water(&self) -> bool {
+        // 拿到眼睛所在的精确坐标
+        let eye_block = self.eye_position();
+        // 添加修正值 (0.62 的高度在 0.625 的水深内不应该窒息)
+        let eye_height = eye_block.y.fract() + 0.031f64;
+        // 向下取整拿到眼睛所在的块坐标
+        let eye_block_pos = BlockPos(Vector3 {
+            x: eye_block.x.floor() as i32,
+            y: eye_block.y.floor() as i32,
+            z: eye_block.z.floor() as i32,
+        });
+
+        // 读取头部所在的块的液体高度
+        let fluid_height = self
+            .living_entity
+            .entity
+            .world
+            .get_fluid_height(&eye_block_pos)
+            .await;
+
+        if fluid_height == 0.0 {
+            return false;
+        }
+
+        // 如果眼睛局部高度小于流体高度，则眼睛在水内
+        eye_height < f64::from(fluid_height)
+    }
+
     pub fn rotation(&self) -> (f32, f32) {
         (
             self.living_entity.entity.yaw.load(),

@@ -25,9 +25,6 @@ impl BreathManager {
     }
 
     /// 每个游戏tick调用的更新逻辑
-    ///
-    /// # 参数
-    /// * `player` - 需要更新呼吸状态的玩家
     pub async fn tick(&self, player: &Arc<Player>) {
         // 在创造模式或生存模式无需更新
         let player_gamemode = player.gamemode.load();
@@ -38,7 +35,8 @@ impl BreathManager {
         let mut breath = self.breath.load();
 
         // 是否在水中
-        let is_in_water = player.living_entity.is_in_water().await;
+        let is_in_water = player.is_head_in_water().await;
+
         // 是否有水呼吸效果
         let has_water_breathing = player
             .living_entity
@@ -52,9 +50,7 @@ impl BreathManager {
 
         let can_breathe = !is_in_water || has_water_breathing || has_conduit_power;
 
-        // --------------------------------------------------
         // 1. 可以呼吸 → 氧气先重置到0, 随后恢复到 300
-        // --------------------------------------------------
         if can_breathe {
             if breath < 300 {
                 breath = (breath.max(0) + 1).min(300);
@@ -65,26 +61,20 @@ impl BreathManager {
             return;
         }
 
-        // --------------------------------------------------
-        // 2. 不能呼吸 → 氧气值下降
-        // --------------------------------------------------
+        // 不能呼吸
         breath -= 1;
         self.breath.store(breath);
         log::debug!("用户 {} 的呼吸值更新为 {}", player.gameprofile.name, breath);
 
-        // 可选：每秒更新一次客户端
-        if breath % 20 == 0 {
+        // 每 5tick 更新一次客户端
+        if breath % 5 == 0 {
             player.send_breath().await;
         }
 
-        // --------------------------------------------------
         // 3. 氧气值到达 -20 → 触发一次伤害 → 氧气值重置为 0
-        // --------------------------------------------------
         if breath == -20 {
             // 伤害类型（空气呼吸 → 溺水）
-            let damage_type = DamageType::DROWN;
-
-            player.damage(player.clone(), 2.0, damage_type).await;
+            player.damage(player.clone(), 2.0, DamageType::DROWN).await;
 
             // 按 Wiki 设回 0
             self.breath.store(0);
