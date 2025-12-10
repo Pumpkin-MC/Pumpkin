@@ -1087,12 +1087,16 @@ impl Player {
     }
 
     // 检查头部是否在水中
+    // Check if the head is in water
     pub async fn is_head_in_water(&self) -> bool {
         // 拿到眼睛所在的精确坐标
+        // Get the precise coordinates of the eyes
         let eye_block = self.eye_position();
         // 添加修正值 (0.62 的高度在 0.625 的水深内不应该窒息)
+        // Add correction value (height of 0.62 should not suffocate in water depth of 0.625)
         let eye_height = eye_block.y.fract() + 0.031f64;
         // 向下取整拿到眼睛所在的块坐标
+        // Round down to get the block coordinates where the eyes are located
         let eye_block_pos = BlockPos(Vector3 {
             x: eye_block.x.floor() as i32,
             y: eye_block.y.floor() as i32,
@@ -1100,6 +1104,7 @@ impl Player {
         });
 
         // 读取头部所在的块的液体高度
+        // Read the fluid height of the block where the head is located
         let fluid_height = self
             .living_entity
             .entity
@@ -1112,6 +1117,7 @@ impl Player {
         }
 
         // 如果眼睛局部高度小于流体高度，则眼睛在水内
+        // If the local eye height is less than the fluid height, then the eyes are in water
         eye_height < f64::from(fluid_height)
     }
 
@@ -1449,6 +1455,7 @@ impl Player {
     }
 
     /// 发送呼吸值更新给客户端
+    /// Sends breath value update to client
     pub async fn send_breath(&self) {
         use pumpkin_protocol::java::client::play::{MetaDataType, Metadata};
         use pumpkin_world::entity::entity_data_flags::DATA_AIR_SUPPLY_ID;
