@@ -352,6 +352,23 @@ impl World {
         }
     }
 
+    pub async fn get_fluid_height(&self, pos: &BlockPos) -> f32 {
+        let state = self.get_block_state(pos).await;
+
+        // 非水直接返回 0
+        if state.id < 86 || state.id > 101 {
+            return 0.0;
+        }
+
+        // 0–15
+        let level = state.id - 86;
+
+        // 原版公式: (8 - level) / 8
+        let height = (8.0 - f32::from(level)) / 8.0;
+
+        // 保险值，正常不会超过 1.0
+        height.clamp(0.0, 1.0)
+    }
     /// Broadcasts a packet to all connected players within the world.
     /// Please avoid this as we want to replace it with `broadcast_editioned`
     ///
