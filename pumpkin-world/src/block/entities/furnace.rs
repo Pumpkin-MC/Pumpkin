@@ -26,7 +26,6 @@ use crate::{
 
 use super::{BlockEntity, PropertyDelegate};
 
-#[derive(Debug)]
 pub struct FurnaceBlockEntity {
     pub position: BlockPos,
     pub dirty: AtomicBool,

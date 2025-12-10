@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64};
 use tokio::sync::Mutex;
 
-#[derive(Debug)]
 pub struct HopperBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],

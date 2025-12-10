@@ -12,7 +12,6 @@ pub enum FurnaceSlotType {
     Side = 2,
 }
 
-#[derive(Debug)]
 pub struct FurnaceSlot {
     pub inventory: Arc<dyn Inventory>,
     pub slot_type: FurnaceSlotType,

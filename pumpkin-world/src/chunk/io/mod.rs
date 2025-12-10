@@ -125,7 +125,7 @@ pub trait ChunkSerializer: Send + Sync + Default {
     /// Get the chunks data from the serializer
     fn get_chunks(
         &self,
-        chunks: &[Vector2<i32>],
+        chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) -> impl Future<Output = ()> + Send;
 }

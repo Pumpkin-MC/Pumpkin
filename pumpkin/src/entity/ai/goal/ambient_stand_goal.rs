@@ -3,7 +3,6 @@ use crate::entity::{ai::goal::GoalFuture, mob::Mob};
 use rand::Rng;
 
 #[allow(dead_code)]
-#[derive(Default)]
 pub struct AmbientStandGoal {
     goal_control: Controls,
     cooldown: i32,

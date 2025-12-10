@@ -6,9 +6,10 @@ use pumpkin_data::tag;
 use pumpkin_data::{
     Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Taggable,
 };
+use pumpkin_util::math::block_box::BlockBox;
 use pumpkin_util::{
     HeightMap,
-    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
+    math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
 };
 
@@ -51,13 +52,13 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState;
     fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState);
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState);
-    fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32;
-    fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i32;
-    fn get_top_y(&self, heightmap: &HeightMap, pos: &Vector2<i32>) -> i32;
-    fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32;
-    fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i32;
+    fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32;
+    fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32;
+    fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32;
+    fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32;
+    fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32;
     fn is_air(&self, local_pos: &Vector3<i32>) -> bool;
-    fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> &'static Biome;
+    fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome;
 }
 
 const AIR_BLOCK: Block = Block::AIR;
@@ -119,7 +120,8 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 ///
 #[derive(Debug, Clone)]
 pub struct ProtoChunk {
-    pub chunk_pos: Vector2<i32>,
+    pub x: i32,
+    pub z: i32,
     pub default_block: &'static BlockState,
     biome_mixer_seed: i64,
     // These are local positions
@@ -149,8 +151,8 @@ pub struct TerrainCache {
 impl TerrainCache {
     pub fn from_random(random_config: &GlobalRandomConfig) -> Self {
         let random = &random_config.base_random_deriver;
-        let mut noise_builder = DoublePerlinNoiseBuilder::new(random_config);
-        let terrain_builder = SurfaceTerrainBuilder::new(&mut noise_builder, random);
+        let noise_builder = DoublePerlinNoiseBuilder::new(random_config);
+        let terrain_builder = SurfaceTerrainBuilder::new(&noise_builder, random);
         let surface_noise = noise_builder.get_noise_sampler_for_id("surface");
         let secondary_noise = noise_builder.get_noise_sampler_for_id("surface_secondary");
         Self {
@@ -163,7 +165,8 @@ impl TerrainCache {
 
 impl ProtoChunk {
     pub fn new(
-        chunk_pos: Vector2<i32>,
+        x: i32,
+        z: i32,
         settings: &GenerationSettings,
         default_block: &'static BlockState,
         biome_mixer_seed: i64,
@@ -173,7 +176,8 @@ impl ProtoChunk {
 
         let default_heightmap = vec![i16::MIN; CHUNK_AREA].into_boxed_slice();
         Self {
-            chunk_pos,
+            x,
+            z,
             default_block,
             flat_block_map: vec![0; CHUNK_AREA * height as usize].into_boxed_slice(),
             flat_biome_map: vec![
@@ -202,7 +206,8 @@ impl ProtoChunk {
         biome_mixer_seed: i64,
     ) -> Self {
         let mut proto_chunk = ProtoChunk::new(
-            chunk_data.position,
+            chunk_data.x,
+            chunk_data.z,
             settings,
             default_block,
             biome_mixer_seed,
@@ -232,12 +237,11 @@ impl ProtoChunk {
                         let biome = Biome::from_id(biome_id).unwrap();
 
                         let relative_y_block = (section_y as i32 * 16) + (y as i32 * 4);
-                        let local_biome_pos = Vector3::new(
+                        let index = proto_chunk.local_biome_pos_to_biome_index(
                             x as i32,
                             biome_coords::from_block(relative_y_block),
                             z as i32,
                         );
-                        let index = proto_chunk.local_biome_pos_to_biome_index(&local_biome_pos);
                         proto_chunk.flat_biome_map[index] = biome;
                     }
                 }
@@ -289,87 +293,84 @@ impl ProtoChunk {
         self.bottom_y
     }
 
-    fn maybe_update_surface_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = pos.x & 15;
-        let local_z = pos.z & 15;
+    fn maybe_update_surface_height_map(&mut self, local_x: i32, y: i32, local_z: i32) {
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_surface_height_map[index];
 
-        if pos.y > current_height as i32 {
-            self.flat_surface_height_map[index] = pos.y as _;
+        if y > current_height as i32 {
+            self.flat_surface_height_map[index] = y as _;
         }
     }
 
-    fn maybe_update_ocean_floor_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = pos.x & 15;
-        let local_z = pos.z & 15;
+    fn maybe_update_ocean_floor_height_map(&mut self, local_x: i32, y: i32, local_z: i32) {
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_ocean_floor_height_map[index];
 
-        if pos.y > current_height as i32 {
-            self.flat_ocean_floor_height_map[index] = pos.y as _;
+        if y > current_height as i32 {
+            self.flat_ocean_floor_height_map[index] = y as _;
         }
     }
 
-    fn maybe_update_motion_blocking_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = pos.x & 15;
-        let local_z = pos.z & 15;
+    fn maybe_update_motion_blocking_height_map(&mut self, local_x: i32, y: i32, local_z: i32) {
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_motion_blocking_height_map[index];
 
-        if pos.y > current_height as i32 {
-            self.flat_motion_blocking_height_map[index] = pos.y as _;
+        if y > current_height as i32 {
+            self.flat_motion_blocking_height_map[index] = y as _;
         }
     }
 
-    fn maybe_update_motion_blocking_no_leaves_height_map(&mut self, pos: &Vector3<i32>) {
-        let local_x = pos.x & 15;
-        let local_z = pos.z & 15;
+    fn maybe_update_motion_blocking_no_leaves_height_map(
+        &mut self,
+        local_x: i32,
+        y: i32,
+        local_z: i32,
+    ) {
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         let current_height = self.flat_motion_blocking_no_leaves_height_map[index];
 
-        if pos.y > current_height as i32 {
-            self.flat_motion_blocking_no_leaves_height_map[index] = pos.y as _;
+        if y > current_height as i32 {
+            self.flat_motion_blocking_no_leaves_height_map[index] = y as _;
         }
     }
 
-    pub fn get_top_y(&self, heightmap: &HeightMap, pos: &Vector2<i32>) -> i32 {
+    pub fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
-            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(pos),
-            HeightMap::WorldSurface => self.top_block_height_exclusive(pos),
-            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(pos),
-            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(pos),
-            HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(pos),
+            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
+            HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
+            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(x, z),
+            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(x, z),
+            HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(x, z),
             HeightMap::MotionBlockingNoLeaves => {
-                self.top_motion_blocking_block_no_leaves_height_exclusive(pos)
+                self.top_motion_blocking_block_no_leaves_height_exclusive(x, z)
             }
         }
     }
 
-    pub fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let local_x = pos.x & 15;
-        let local_z = pos.y & 15;
+    pub fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let local_x = x & 15;
+        let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_surface_height_map[index] as i32 + 1
     }
 
-    pub fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let local_x = pos.x & 15;
-        let local_z = pos.y & 15;
+    pub fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let local_x = x & 15;
+        let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_ocean_floor_height_map[index] as i32 + 1
     }
 
-    pub fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let local_x = pos.x & 15;
-        let local_z = pos.y & 15;
+    pub fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let local_x = x & 15;
+        let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_motion_blocking_height_map[index] as i32 + 1
     }
 
-    pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let local_x = pos.x & 15;
-        let local_z = pos.y & 15;
+    pub fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let local_x = x & 15;
+        let local_z = z & 15;
         let index = Self::local_position_to_height_map_index(local_x, local_z);
         self.flat_motion_blocking_no_leaves_height_map[index] as i32 + 1
     }
@@ -380,40 +381,39 @@ impl ProtoChunk {
     }
 
     #[inline]
-    fn local_pos_to_block_index(&self, local_pos: &Vector3<i32>) -> usize {
+    fn local_pos_to_block_index(&self, x: i32, y: i32, z: i32) -> usize {
         #[cfg(debug_assertions)]
         {
-            assert!(local_pos.x >= 0 && local_pos.x <= 15);
-            assert!(local_pos.y < self.height() as i32);
-            assert!(local_pos.y >= 0);
-            assert!(local_pos.z >= 0 && local_pos.z <= 15);
+            assert!((0..=15).contains(&x));
+            assert!(y < self.height() as i32);
+            assert!(y >= 0);
+            assert!((0..=15).contains(&z));
         }
-        self.height() as usize * CHUNK_DIM as usize * local_pos.x as usize
-            + CHUNK_DIM as usize * local_pos.y as usize
-            + local_pos.z as usize
+        self.height() as usize * CHUNK_DIM as usize * x as usize
+            + CHUNK_DIM as usize * y as usize
+            + z as usize
     }
 
     #[inline]
-    fn local_biome_pos_to_biome_index(&self, local_biome_pos: &Vector3<i32>) -> usize {
+    fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
         #[cfg(debug_assertions)]
         {
-            assert!(local_biome_pos.x >= 0 && local_biome_pos.x <= 3);
+            assert!((0..=3).contains(&x));
             assert!(
-                local_biome_pos.y < biome_coords::from_chunk(self.height() as i32)
-                    && local_biome_pos.y >= 0,
+                y < biome_coords::from_chunk(self.height() as i32) && y >= 0,
                 "{} - {} vs {}",
                 0,
                 biome_coords::from_chunk(self.height() as i32),
-                local_biome_pos.y
+                y
             );
-            assert!(local_biome_pos.z >= 0 && local_biome_pos.z <= 3);
+            assert!((0..=3).contains(&z));
         }
 
         biome_coords::from_block(self.height() as usize)
             * biome_coords::from_block(CHUNK_DIM as usize)
-            * local_biome_pos.x as usize
-            + biome_coords::from_block(CHUNK_DIM as usize) * local_biome_pos.y as usize
-            + local_biome_pos.z as usize
+            * x as usize
+            + biome_coords::from_block(CHUNK_DIM as usize) * y as usize
+            + z as usize
     }
 
     #[inline]
@@ -423,76 +423,70 @@ impl ProtoChunk {
     }
 
     #[inline]
-    pub fn get_block_state_raw(&self, local_pos: &Vector3<i32>) -> u16 {
-        let index = self.local_pos_to_block_index(local_pos);
+    pub fn get_block_state_raw(&self, x: i32, y: i32, z: i32) -> u16 {
+        let index = self.local_pos_to_block_index(x, y, z);
         self.flat_block_map[index]
     }
 
     #[inline]
     pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> RawBlockState {
-        let local_pos = Vector3::new(
-            local_pos.x & 15,
-            local_pos.y - self.bottom_y() as i32,
-            local_pos.z & 15,
-        );
-        if local_pos.y < 0 || local_pos.y >= self.height() as i32 {
+        let local_y = local_pos.y - self.bottom_y() as i32;
+        if local_y < 0 || local_y >= self.height() as i32 {
             return RawBlockState(Block::VOID_AIR.default_state.id);
         }
-        RawBlockState(self.get_block_state_raw(&local_pos))
+        RawBlockState(self.get_block_state_raw(local_pos.x & 15, local_y, local_pos.z & 15))
     }
 
     pub fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {
-        let local_pos = Vector3::new(pos.x & 15, pos.y - self.bottom_y() as i32, pos.z & 15);
-        if local_pos.y < 0 || local_pos.y >= self.height() as i32 {
+        let local_x = pos.x & 15;
+        let local_y = pos.y - self.bottom_y() as i32;
+        let local_z = pos.z & 15;
+
+        if local_y < 0 || local_y >= self.height() as i32 {
             return;
         }
         if !block_state.is_air() {
-            self.maybe_update_surface_height_map(pos);
-        }
-
-        if blocks_movement(block_state) {
-            self.maybe_update_ocean_floor_height_map(pos);
-        }
-
-        if blocks_movement(block_state) || block_state.is_liquid() {
-            self.maybe_update_motion_blocking_height_map(pos);
+            self.maybe_update_surface_height_map(local_x, pos.y, local_z);
             let block = Block::from_state_id(block_state.id);
-            if !block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
-                {
-                    self.maybe_update_motion_blocking_no_leaves_height_map(pos);
+
+            let blocks_movement = blocks_movement(block_state, block);
+            if blocks_movement {
+                self.maybe_update_ocean_floor_height_map(local_x, pos.y, local_z);
+            } else if blocks_movement || block_state.is_liquid() {
+                self.maybe_update_motion_blocking_height_map(local_x, pos.y, local_z);
+                if !block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
+                    {
+                        self.maybe_update_motion_blocking_no_leaves_height_map(
+                            local_x, pos.y, local_z,
+                        );
+                    }
                 }
             }
         }
 
-        let index = self.local_pos_to_block_index(&local_pos);
+        let index = self.local_pos_to_block_index(local_x, local_y, local_z);
         self.flat_block_map[index] = block_state.id;
     }
 
     #[inline]
-    pub fn get_biome(&self, global_biome_pos: &Vector3<i32>) -> &'static Biome {
-        let local_pos = Vector3::new(
-            global_biome_pos.x & biome_coords::from_block(15),
-            global_biome_pos.y - biome_coords::from_block(self.bottom_y() as i32),
-            global_biome_pos.z & biome_coords::from_block(15),
+    pub fn get_biome(&self, x: i32, y: i32, z: i32) -> &'static Biome {
+        let index = self.local_biome_pos_to_biome_index(
+            x & biome_coords::from_block(15),
+            y - biome_coords::from_block(self.bottom_y() as i32),
+            z & biome_coords::from_block(15),
         );
-        let index = self.local_biome_pos_to_biome_index(&local_pos);
         self.flat_biome_map[index]
     }
 
     pub fn step_to_biomes(&mut self, dimension: Dimension, noise_router: &ProtoNoiseRouters) {
         debug_assert_eq!(self.stage, StagedChunkEnum::Empty);
-        let chunk_pos = self.chunk_pos;
-        let start_x = start_block_x(&chunk_pos);
-        let start_z = start_block_z(&chunk_pos);
-        let biome_pos = Vector2::new(
-            biome_coords::from_block(start_x),
-            biome_coords::from_block(start_z),
-        );
+        let start_x = start_block_x(self.x);
+        let start_z = start_block_z(self.z);
         let horizontal_biome_end = biome_coords::from_block(16);
         let multi_noise_config =
             super::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(
-                biome_pos.x,
-                biome_pos.y,
+                biome_coords::from_block(start_x),
+                biome_coords::from_block(start_z),
                 horizontal_biome_end as usize,
             );
         let mut multi_noise_sampler =
@@ -509,16 +503,15 @@ impl ProtoChunk {
     ) {
         debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
 
-        let chunk_pos = self.chunk_pos;
         let generation_shape = &settings.shape;
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
-        let start_x = start_block_x(&chunk_pos);
-        let start_z = start_block_z(&chunk_pos);
+        let start_x = start_block_x(self.x);
+        let start_z = start_block_z(self.z);
 
-        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+        let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(settings.sea_level, settings.default_fluid.name),
             FluidLevel::new(-54, &Block::LAVA),
-        )));
+        ));
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &noise_router.noise,
@@ -531,16 +524,13 @@ impl ProtoChunk {
             settings.aquifers_enabled,
             settings.ore_veins_enabled,
         );
-        let biome_pos = Vector2::new(
-            biome_coords::from_block(start_x),
-            biome_coords::from_block(start_z),
-        );
+
         let horizontal_biome_end = biome_coords::from_block(
             horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
         );
         let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-            biome_pos.x,
-            biome_pos.y,
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
             horizontal_biome_end as usize,
             generation_shape.min_y as i32,
             generation_shape.max_y() as i32,
@@ -564,22 +554,17 @@ impl ProtoChunk {
     ) {
         debug_assert_eq!(self.stage, StagedChunkEnum::Noise);
         // Build surface
-        let chunk_pos = self.chunk_pos;
-        let start_x = start_block_x(&chunk_pos);
-        let start_z = start_block_z(&chunk_pos);
+        let start_x = start_block_x(self.x);
+        let start_z = start_block_z(self.z);
         let generation_shape = &settings.shape;
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
-        let biome_pos = Vector2::new(
-            biome_coords::from_block(start_x),
-            biome_coords::from_block(start_z),
-        );
         let horizontal_biome_end = biome_coords::from_block(
             horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
         );
         let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-            biome_pos.x,
-            biome_pos.y,
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
             horizontal_biome_end as usize,
             generation_shape.min_y as i32,
             generation_shape.max_y() as i32,
@@ -608,8 +593,8 @@ impl ProtoChunk {
         let bottom_section = section_coords::block_to_section(min_y) as i32;
         let top_section = section_coords::block_to_section(min_y as i32 + self.height() as i32 - 1);
 
-        let start_block_x = chunk_pos::start_block_x(&self.chunk_pos);
-        let start_block_z = chunk_pos::start_block_z(&self.chunk_pos);
+        let start_block_x = start_block_x(self.x);
+        let start_block_z = start_block_z(self.z);
 
         let start_biome_x = biome_coords::from_block(start_block_x);
         let start_biome_z = biome_coords::from_block(start_block_z);
@@ -622,26 +607,30 @@ impl ProtoChunk {
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
-                        let biome_pos =
-                            Vector3::new(start_biome_x + x, start_biome_y + y, start_biome_z + z);
                         let biome = if dimension == Dimension::End {
-                            TheEndBiomeSupplier::biome(&biome_pos, multi_noise_sampler, dimension)
+                            TheEndBiomeSupplier::biome(
+                                start_biome_x + x,
+                                start_biome_y + y,
+                                start_biome_z + z,
+                                multi_noise_sampler,
+                                dimension,
+                            )
                         } else {
                             MultiNoiseBiomeSupplier::biome(
-                                &biome_pos,
+                                start_biome_x + x,
+                                start_biome_y + y,
+                                start_biome_z + z,
                                 multi_noise_sampler,
                                 dimension,
                             )
                         };
                         //dbg!("Populating biome: {:?} -> {:?}", biome_pos, biome);
 
-                        let local_biome_pos = Vector3 {
+                        let index = self.local_biome_pos_to_biome_index(
                             x,
-                            // Make the y start from 0
-                            y: start_biome_y + y - biome_coords::from_block(min_y as i32),
+                            start_biome_y + y - biome_coords::from_block(min_y as i32),
                             z,
-                        };
-                        let index = self.local_biome_pos_to_biome_index(&local_biome_pos);
+                        );
 
                         self.flat_biome_map[index] = biome;
                     }
@@ -721,12 +710,12 @@ impl ProtoChunk {
 
                                 let block_state = noise_sampler
                                     .sample_block_state(
-                                        Vector3::new(
-                                            sample_start_x,
-                                            sample_start_y,
-                                            sample_start_z,
-                                        ),
-                                        Vector3::new(cell_offset_x, cell_offset_y, cell_offset_z),
+                                        sample_start_x,
+                                        sample_start_y,
+                                        sample_start_z,
+                                        cell_offset_x,
+                                        cell_offset_y,
+                                        cell_offset_z,
                                         surface_height_estimate_sampler,
                                     )
                                     .unwrap_or(self.default_block);
@@ -743,16 +732,18 @@ impl ProtoChunk {
         }
     }
 
-    pub fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> &'static Biome {
+    pub fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
         // TODO: See if we can cache this value
         let seed_biome_pos = biome::get_biome_blend(
             self.bottom_y(),
             self.height(),
             self.biome_mixer_seed,
-            global_block_pos,
+            x,
+            y,
+            z,
         );
 
-        self.get_biome(&seed_biome_pos)
+        self.get_biome(seed_biome_pos.x, seed_biome_pos.y, seed_biome_pos.z)
     }
 
     /// Constructs the terrain surface, although "surface" is a misnomer as it also places underground blocks like bedrock and deepslate.
@@ -766,8 +757,8 @@ impl ProtoChunk {
         terrain_cache: &TerrainCache,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) {
-        let start_x = chunk_pos::start_block_x(&self.chunk_pos);
-        let start_z = chunk_pos::start_block_z(&self.chunk_pos);
+        let start_x = chunk_pos::start_block_x(self.x);
+        let start_z = chunk_pos::start_block_z(self.z);
         let min_y = self.bottom_y();
 
         let random = &random_config.base_random_deriver;
@@ -787,8 +778,7 @@ impl ProtoChunk {
                 let x = start_x + local_x;
                 let z = start_z + local_z;
 
-                let mut top_block =
-                    self.top_block_height_exclusive(&Vector2::new(local_x, local_z));
+                let mut top_block = self.top_block_height_exclusive(local_x, local_z);
 
                 let biome_y = if settings.legacy_random_source {
                     0
@@ -796,14 +786,14 @@ impl ProtoChunk {
                     top_block
                 };
 
-                let this_biome = self.get_biome_for_terrain_gen(&Vector3::new(x, biome_y, z));
+                let this_biome = self.get_biome_for_terrain_gen(x, biome_y, z);
                 if this_biome == &Biome::ERODED_BADLANDS {
                     terrain_cache
                         .terrain_builder
                         .place_badlands_pillar(self, x, z, top_block);
 
                     // Get the top block again if we placed a pillar!
-                    top_block = self.top_block_height_exclusive(&Vector2::new(local_x, local_z));
+                    top_block = self.top_block_height_exclusive(local_x, local_z);
                 }
 
                 context.init_horizontal(x, z);
@@ -857,7 +847,11 @@ impl ProtoChunk {
                     // panic!("Blending with biome {:?} at: {:?}", biome, biome_pos);
 
                     if state.id == self.default_block.id {
-                        context.biome = self.get_biome_for_terrain_gen(&context.block_pos);
+                        context.biome = self.get_biome_for_terrain_gen(
+                            context.block_pos_x,
+                            context.block_pos_y,
+                            context.block_pos_z,
+                        );
                         let new_state = settings.surface_rule.try_apply(
                             self,
                             &mut context,
@@ -904,20 +898,20 @@ impl ProtoChunk {
     ) {
         let chunk = cache.get_center_chunk_mut();
         debug_assert_eq!(chunk.stage, StagedChunkEnum::Surface);
-        let chunk_pos = chunk.chunk_pos;
         let min_y = chunk.bottom_y();
         let height = chunk.height();
 
         let bottom_section = section_coords::block_to_section(min_y) as i32;
         let block_pos = BlockPos(Vector3::new(
-            section_coords::section_to_block(chunk_pos.x),
+            section_coords::section_to_block(chunk.x),
             bottom_section,
-            section_coords::section_to_block(chunk_pos.y),
+            section_coords::section_to_block(chunk.z),
         ));
 
         let population_seed =
             Xoroshiro::get_population_seed(random_config.seed, block_pos.0.x, block_pos.0.z);
 
+        let _chunk_box = chunk.get_block_box_for_chunk();
         for (_structure, (pos, stype)) in chunk.structure_starts.clone() {
             dbg!("generating structure");
             stype.generate(pos.clone(), chunk);
@@ -951,7 +945,7 @@ impl ProtoChunk {
             // for structure in &set.structures {
             //     let start = self.structure_starts.get(STRUCTURES.get(name).unwrap());
             // }
-            if !set.placement.should_generate(calculator, self.chunk_pos) {
+            if !set.placement.should_generate(calculator, self.x, self.z) {
                 continue; // ??
             }
 
@@ -973,6 +967,14 @@ impl ProtoChunk {
         }
     }
 
+    fn get_block_box_for_chunk(&self) -> BlockBox {
+        let x = start_block_x(self.x);
+        let z = start_block_z(self.z);
+        let bottom = self.bottom_y() as i32 + 1;
+        let top = self.top_y() as i32;
+        BlockBox::new(x, bottom, z, x + 15, top, z + 15)
+    }
+
     fn start_cell_x(&self, horizontal_cell_block_count: u8) -> i32 {
         self.start_block_x() / horizontal_cell_block_count as i32
     }
@@ -982,11 +984,11 @@ impl ProtoChunk {
     }
 
     fn start_block_x(&self) -> i32 {
-        start_block_x(&self.chunk_pos)
+        start_block_x(self.x)
     }
 
     fn start_block_z(&self) -> i32 {
-        start_block_z(&self.chunk_pos)
+        start_block_z(self.z)
     }
 }
 

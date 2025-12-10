@@ -4,7 +4,7 @@ use pumpkin_data::{
     block_properties::{BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties},
 };
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos, vector2::Vector2},
+    math::{int_provider::IntProvider, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
@@ -29,7 +29,7 @@ impl SeaPickleFeature {
         for _ in 0..count {
             let x = random.next_bounded_i32(8) - random.next_bounded_i32(8);
             let z = random.next_bounded_i32(8) - random.next_bounded_i32(8);
-            let y = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x + x, pos.0.z + z));
+            let y = chunk.ocean_floor_height_exclusive(pos.0.x + x, pos.0.z + z);
             if GenerationCache::get_block_state(chunk, &pos.0).to_block() != &Block::WATER {
                 continue;
             }

@@ -39,7 +39,7 @@ impl ArgumentConsumer for MsgArgConsumer {
 
         let mut msg = match first_word_opt {
             Some(word) => word.to_string(),
-            None => return Box::pin(async move { None }),
+            None => return Box::pin(async { None }),
         };
 
         while let Some(word) = args.pop() {

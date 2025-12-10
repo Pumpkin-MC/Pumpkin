@@ -779,8 +779,7 @@ impl Chunk {
                         let absolute_y =
                             biome_coords::from_block(generation_settings.shape.min_y as i32)
                                 + y as i32;
-                        let biome =
-                            proto_chunk.get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
+                        let biome = proto_chunk.get_biome(x as i32, absolute_y, z as i32);
                         section.biomes.set(x, relative_y, z, biome.id);
                     }
                 }
@@ -793,8 +792,7 @@ impl Chunk {
             if let Some(section) = sections.sections.get_mut(section_index) {
                 for z in 0..BlockPalette::SIZE {
                     for x in 0..BlockPalette::SIZE {
-                        let block = proto_chunk
-                            .get_block_state_raw(&Vector3::new(x as i32, y as i32, z as i32));
+                        let block = proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32);
                         section.block_states.set(x, relative_y, z, block);
                     }
                 }
@@ -811,7 +809,8 @@ impl Chunk {
             },
             section: sections,
             heightmap: Default::default(),
-            position: proto_chunk.chunk_pos,
+            x: proto_chunk.x,
+            z: proto_chunk.z,
             dirty: true,
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),
@@ -971,22 +970,22 @@ impl GenerationCache for Cache {
         }
     }
 
-    fn get_top_y(&self, heightmap: &HeightMap, pos: &Vector2<i32>) -> i32 {
+    fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
-            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(pos),
-            HeightMap::WorldSurface => self.top_block_height_exclusive(pos),
-            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(pos),
-            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(pos),
-            HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(pos),
+            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
+            HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
+            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(x, z),
+            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(x, z),
+            HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(x, z),
             HeightMap::MotionBlockingNoLeaves => {
-                self.top_motion_blocking_block_no_leaves_height_exclusive(pos)
+                self.top_motion_blocking_block_no_leaves_height_exclusive(x, z)
             }
         }
     }
 
-    fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let dx = (pos.x >> 4) - self.x;
-        let dy = (pos.y >> 4) - self.y;
+    fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.y;
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
@@ -994,18 +993,18 @@ impl GenerationCache for Cache {
                 let chunk = data.blocking_read();
                 chunk.heightmap.get_height(
                     ChunkHeightmapType::MotionBlocking,
-                    pos.x,
-                    pos.y,
+                    x,
+                    z,
                     chunk.section.min_y,
                 )
             }
-            Chunk::Proto(data) => data.top_motion_blocking_block_height_exclusive(pos),
+            Chunk::Proto(data) => data.top_motion_blocking_block_height_exclusive(x, z),
         }
     }
 
-    fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let dx = (pos.x >> 4) - self.x;
-        let dy = (pos.y >> 4) - self.y;
+    fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.y;
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
@@ -1013,18 +1012,18 @@ impl GenerationCache for Cache {
                 let chunk = data.blocking_read();
                 chunk.heightmap.get_height(
                     ChunkHeightmapType::MotionBlockingNoLeaves,
-                    pos.x,
-                    pos.y,
+                    x,
+                    z,
                     chunk.section.min_y,
                 )
             }
-            Chunk::Proto(data) => data.top_motion_blocking_block_no_leaves_height_exclusive(pos),
+            Chunk::Proto(data) => data.top_motion_blocking_block_no_leaves_height_exclusive(x, z),
         }
     }
 
-    fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let dx = (pos.x >> 4) - self.x;
-        let dy = (pos.y >> 4) - self.y;
+    fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.y;
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
@@ -1032,31 +1031,31 @@ impl GenerationCache for Cache {
                 let chunk = data.blocking_read();
                 chunk.heightmap.get_height(
                     ChunkHeightmapType::WorldSurface,
-                    pos.x,
-                    pos.y,
+                    x,
+                    z,
                     chunk.section.min_y,
                 ) // can we return this?
             }
-            Chunk::Proto(data) => data.top_block_height_exclusive(pos),
+            Chunk::Proto(data) => data.top_block_height_exclusive(x, z),
         }
     }
 
-    fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let dx = (pos.x >> 4) - self.x;
-        let dy = (pos.y >> 4) - self.y;
+    fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.y;
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(_data) => {
                 0 // todo missing
             }
-            Chunk::Proto(data) => data.ocean_floor_height_exclusive(pos),
+            Chunk::Proto(data) => data.ocean_floor_height_exclusive(x, z),
         }
     }
 
-    fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> &'static Biome {
-        let dx = (global_block_pos.x >> 4) - self.x;
-        let dy = (global_block_pos.z >> 4) - self.y;
+    fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.y;
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
@@ -1065,16 +1064,12 @@ impl GenerationCache for Cache {
                 Biome::from_id(
                     data.blocking_read()
                         .section
-                        .get_rough_biome_absolute_y(
-                            (global_block_pos.x & 15) as usize,
-                            global_block_pos.y,
-                            (global_block_pos.z & 15) as usize,
-                        )
+                        .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
                         .unwrap_or(0),
                 )
                 .unwrap()
             }
-            Chunk::Proto(data) => data.get_biome_for_terrain_gen(global_block_pos),
+            Chunk::Proto(data) => data.get_biome_for_terrain_gen(x, y, z),
         }
     }
 
@@ -1616,7 +1611,8 @@ impl GenerationSchedule {
                 .send((
                     pos,
                     RecvChunk::IO(Proto(Box::new(ProtoChunk::new(
-                        pos,
+                        pos.x,
+                        pos.y,
                         generation_setting,
                         level.world_gen.default_block,
                         biome_mixer_seed,

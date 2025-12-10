@@ -2198,7 +2198,7 @@ impl NBTStorage for PlayerInventory {
                             equipment_compound.put_component("head", item_compound);
                         }
                         _ => {
-                            warn!("Invalid equipment slot for a player {slot:?}");
+                            warn!("Invalid equipment slot for a player");
                         }
                     }
                 }

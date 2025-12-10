@@ -20,7 +20,7 @@ use super::anvil::CHUNK_COUNT;
 /// used as a header and footer described in https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98
 const SIGNATURE: [u8; 8] = u64::to_be_bytes(0xc3ff13183cca9d9a);
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Copy, Clone)]
 struct LinearChunkHeader {
     size: u32,
     timestamp: u32,
@@ -139,8 +139,8 @@ impl LinearFileHeader {
 }
 
 impl<S: SingleChunkDataSerializer> LinearFile<S> {
-    const fn get_chunk_index(at: &Vector2<i32>) -> usize {
-        AnvilChunkFile::<S>::get_chunk_index(at)
+    const fn get_chunk_index(x: i32, z: i32) -> usize {
+        AnvilChunkFile::<S>::get_chunk_index(x, z)
     }
 
     fn check_signature(bytes: &[u8]) -> Result<(), ChunkReadingError> {
@@ -327,7 +327,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         chunk: &Self::Data,
         _chunk_config: &Self::ChunkConfig,
     ) -> Result<(), ChunkWritingError> {
-        let index = LinearFile::<S>::get_chunk_index(chunk.position());
+        let index = LinearFile::<S>::get_chunk_index(chunk.position().0, chunk.position().1);
         let chunk_raw: Bytes = chunk
             .to_bytes()
             .await
@@ -348,13 +348,13 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
 
     async fn get_chunks(
         &self,
-        chunks: &[Vector2<i32>],
+        chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
-        for chunk in chunks.iter().cloned() {
-            let index = LinearFile::<S>::get_chunk_index(&chunk);
+        for chunk in chunks.into_iter() {
+            let index = LinearFile::<S>::get_chunk_index(chunk.x, chunk.y);
             let linear_chunk_data = &self.chunks_data[index];
 
             let result = if let Some(data) = linear_chunk_data {

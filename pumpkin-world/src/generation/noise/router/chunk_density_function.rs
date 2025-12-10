@@ -6,7 +6,7 @@ use super::{
     density_function::{IndexToNoisePos, NoiseFunctionComponentRange, NoisePos},
 };
 use enum_dispatch::enum_dispatch;
-use pumpkin_util::math::{lerp, lerp3, vector2::Vector2};
+use pumpkin_util::math::{lerp, lerp3};
 
 use crate::generation::{biome_coords, positions::chunk_pos};
 
@@ -486,7 +486,7 @@ impl MutableChunkNoiseFunctionComponentImpl for Cache2D {
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
-        let packed_column = chunk_pos::packed(&Vector2::new(pos.x(), pos.z()));
+        let packed_column = chunk_pos::packed(pos.x() as u64, pos.z() as u64);
         if packed_column == self.last_sample_column {
             self.last_sample_result
         } else {

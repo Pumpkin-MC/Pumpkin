@@ -9,7 +9,6 @@ use crate::entity::player::Player;
 use crate::server::Server;
 const NANOSECONDS_PER_SECOND: i64 = 1_000_000_000;
 
-#[derive(Debug)]
 pub struct ServerTickRateManager {
     tickrate: AtomicCell<f32>,
     nanoseconds_per_tick: AtomicI64,

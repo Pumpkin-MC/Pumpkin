@@ -10,7 +10,7 @@ use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEnt
 /// 3d array indexed by y,z,x
 type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
     cube: Box<AbstractCube<V, DIM>>,
     palette: Vec<V>,
@@ -59,7 +59,7 @@ impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
 
 /// A paletted container is a cube of registry ids. It uses a custom compression scheme based on how
 /// may distinct registry ids are in the cube.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum PalettedContainer<V: Hash + Eq + Copy + Default, const DIM: usize> {
     Homogeneous(V),
     Heterogeneous(Box<HeterogeneousPaletteData<V, DIM>>),

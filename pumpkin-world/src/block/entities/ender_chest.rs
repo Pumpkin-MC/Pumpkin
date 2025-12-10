@@ -12,7 +12,6 @@ use crate::world::SimpleWorld;
 
 use super::BlockEntity;
 
-#[derive(Debug)]
 pub struct EnderChestBlockEntity {
     pub position: BlockPos,
 

@@ -15,7 +15,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use tokio::sync::Mutex;
 
-#[derive(Debug)]
 pub struct PlayerInventory {
     pub main_inventory: [Arc<Mutex<ItemStack>>; Self::MAIN_SIZE],
     pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,

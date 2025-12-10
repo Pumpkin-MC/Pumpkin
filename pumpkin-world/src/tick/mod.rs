@@ -52,7 +52,7 @@ impl From<i32> for TickPriority {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ScheduledTick<T> {
     pub delay: u8,
     pub priority: TickPriority,
@@ -60,7 +60,7 @@ pub struct ScheduledTick<T> {
     pub value: T,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct OrderedTick<T> {
     pub priority: TickPriority,
     pub sub_tick_order: u64,

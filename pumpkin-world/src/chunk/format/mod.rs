@@ -43,8 +43,8 @@ impl SingleChunkDataSerializer for ChunkData {
     }
 
     #[inline]
-    fn position(&self) -> &Vector2<i32> {
-        &self.position
+    fn position(&self) -> (i32, i32) {
+        (self.x, self.z)
     }
 }
 
@@ -163,7 +163,8 @@ impl ChunkData {
         Ok(ChunkData {
             section,
             heightmap: chunk_data.heightmaps,
-            position,
+            x: position.x,
+            z: position.y,
             // This chunk is read from disk, so it has not been modified
             dirty: false,
             block_ticks: ChunkTickScheduler::from_vec(&chunk_data.block_ticks),
@@ -206,8 +207,8 @@ impl ChunkData {
 
         let nbt = ChunkNbt {
             data_version: WORLD_DATA_VERSION,
-            x_pos: self.position.x,
-            z_pos: self.position.y,
+            x_pos: self.x,
+            z_pos: self.z,
             min_y_section: section_coords::block_to_section(self.section.min_y),
             status: self.status,
             heightmaps: self.heightmap.clone(),
@@ -264,8 +265,8 @@ impl SingleChunkDataSerializer for ChunkEntityData {
     }
 
     #[inline]
-    fn position(&self) -> &Vector2<i32> {
-        &self.chunk_position
+    fn position(&self) -> (i32, i32) {
+        (self.x, self.z)
     }
 }
 
@@ -310,7 +311,8 @@ impl ChunkEntityData {
         }
 
         Ok(ChunkEntityData {
-            chunk_position: position,
+            x: position.x,
+            z: position.y,
             data: map,
             dirty: false,
         })
@@ -319,7 +321,7 @@ impl ChunkEntityData {
     fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
         let nbt = EntityNbt {
             data_version: WORLD_DATA_VERSION,
-            position: [self.chunk_position.x, self.chunk_position.y],
+            position: [self.x, self.z],
             entities: self.data.values().cloned().collect(),
         };
 
@@ -330,7 +332,7 @@ impl ChunkEntityData {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 struct ChunkSectionNBT {
     #[serde(skip_serializing_if = "Option::is_none")]
     block_states: Option<ChunkSectionBlockStates>,
@@ -362,7 +364,7 @@ pub struct PaletteBiomeEntry {
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ChunkSectionBlockStates {
     #[serde(
         serialize_with = "nbt_long_array",
@@ -444,7 +446,7 @@ impl Default for LightContainer {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ChunkNbt {
     data_version: i32,

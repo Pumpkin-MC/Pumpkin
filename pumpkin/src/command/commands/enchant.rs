@@ -46,7 +46,7 @@ impl CommandExecutor for Executor {
                         ),
                     };
 
-                    return Err(CommandError::CommandFailed(Box::new(err_msg)));
+                    return Err(CommandError::CommandFailed(err_msg));
                 }
             };
 
@@ -58,7 +58,7 @@ impl CommandExecutor for Executor {
                         TextComponent::text(enchantment.max_level.to_string()),
                     ],
                 );
-                return Err(CommandError::CommandFailed(Box::new(msg)));
+                return Err(CommandError::CommandFailed(msg));
             }
 
             let only_one = targets.len() == 1;
@@ -88,7 +88,7 @@ impl CommandExecutor for Executor {
                             "commands.enchant.failed.itemless",
                             [targets[0].get_display_name().await],
                         );
-                        return Err(CommandError::CommandFailed(Box::new(msg)));
+                        return Err(CommandError::CommandFailed(msg));
                     }
                     continue;
                 }
@@ -98,7 +98,7 @@ impl CommandExecutor for Executor {
                             "commands.enchant.failed.incompatible",
                             [item.item.translated_name()],
                         );
-                        return Err(CommandError::CommandFailed(Box::new(msg)));
+                        return Err(CommandError::CommandFailed(msg));
                     }
                     continue;
                 }
@@ -111,7 +111,7 @@ impl CommandExecutor for Executor {
                             "commands.enchant.failed.incompatible",
                             [item.item.translated_name()],
                         );
-                        return Err(CommandError::CommandFailed(Box::new(msg)));
+                        return Err(CommandError::CommandFailed(msg));
                     }
                 } else {
                     item.enchant(enchantment, level);
@@ -120,7 +120,7 @@ impl CommandExecutor for Executor {
             }
             if success == 0 {
                 let msg = TextComponent::translate("commands.enchant.failed", []);
-                return Err(CommandError::CommandFailed(Box::new(msg)));
+                return Err(CommandError::CommandFailed(msg));
             }
             if only_one {
                 let msg = TextComponent::translate(

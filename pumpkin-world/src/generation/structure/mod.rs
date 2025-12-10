@@ -48,7 +48,11 @@ impl StructureType {
             StructureType::NetherFortress(generator) => generator.get_structure_position(chunk),
         };
         if let Some(structure) = STRUCTURES.get(name) {
-            let current_biome = chunk.get_biome(&position.position.0);
+            let current_biome = chunk.get_biome(
+                position.position.0.x,
+                position.position.0.y,
+                position.position.0.z,
+            );
             if Biome::get_tag_values(&structure.biomes)
                 .unwrap()
                 .contains(&current_biome.registry_id)

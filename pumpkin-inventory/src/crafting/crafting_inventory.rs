@@ -8,7 +8,7 @@ use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
 
 use super::recipes::RecipeInputInventory;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CraftingInventory {
     pub width: u8,
     pub height: u8,

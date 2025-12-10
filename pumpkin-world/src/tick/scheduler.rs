@@ -4,7 +4,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::tick::{MAX_TICK_DELAY, OrderedTick, ScheduledTick};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ChunkTickScheduler<T> {
     tick_queue: [Vec<OrderedTick<T>>; MAX_TICK_DELAY],
     queued_ticks: HashSet<(BlockPos, T)>,

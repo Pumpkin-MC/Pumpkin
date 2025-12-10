@@ -6,7 +6,6 @@ use crate::plugin::loader::{PluginLoadFuture, PluginUnloadFuture};
 
 use super::{LoaderError, Path, Plugin, PluginLoader, PluginMetadata};
 
-#[derive(Debug)]
 pub struct NativePluginLoader;
 
 impl PluginLoader for NativePluginLoader {

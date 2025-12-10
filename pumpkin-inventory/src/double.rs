@@ -6,7 +6,6 @@ use pumpkin_world::{
 };
 use tokio::sync::Mutex;
 
-#[derive(Debug)]
 pub struct DoubleInventory {
     first: Arc<dyn Inventory>,
     second: Arc<dyn Inventory>,

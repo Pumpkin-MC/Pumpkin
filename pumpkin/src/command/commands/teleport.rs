@@ -66,8 +66,9 @@ impl CommandExecutor for EntitiesToEntityExecutor {
             let destination = EntityArgumentConsumer::find_arg(args, ARG_DESTINATION)?;
             let pos = destination.get_entity().pos.load();
             if !World::is_valid(pos) {
-                return Err(CommandError::CommandFailed(Box::new(
-                    TextComponent::translate("argument.pos.outofbounds", []),
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "argument.pos.outofbounds",
+                    [],
                 )));
             }
             for target in targets {
@@ -100,8 +101,9 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
             if !World::is_valid(pos) {
-                return Err(CommandError::CommandFailed(Box::new(
-                    TextComponent::translate("argument.pos.outofbounds", []),
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "argument.pos.outofbounds",
+                    [],
                 )));
             }
             let facing_pos = Position3DArgumentConsumer::find_arg(args, ARG_FACING_LOCATION)?;
@@ -141,8 +143,9 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
             if !World::is_valid(pos) {
-                return Err(CommandError::CommandFailed(Box::new(
-                    TextComponent::translate("argument.pos.outofbounds", []),
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "argument.pos.outofbounds",
+                    [],
                 )));
             }
             let facing_entity = EntityArgumentConsumer::find_arg(args, ARG_FACING_ENTITY)?;
@@ -180,8 +183,9 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
             if !World::is_valid(pos) {
-                return Err(CommandError::CommandFailed(Box::new(
-                    TextComponent::translate("argument.pos.outofbounds", []),
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "argument.pos.outofbounds",
+                    [],
                 )));
             }
             let (yaw, pitch) = RotationArgumentConsumer::find_arg(args, ARG_ROTATION)?;
@@ -214,8 +218,9 @@ impl CommandExecutor for EntitiesToPosExecutor {
 
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_LOCATION)?;
             if !World::is_valid(pos) {
-                return Err(CommandError::CommandFailed(Box::new(
-                    TextComponent::translate("argument.pos.outofbounds", []),
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "argument.pos.outofbounds",
+                    [],
                 )));
             }
             // todo command context
@@ -259,8 +264,9 @@ impl CommandExecutor for SelfToEntityExecutor {
                     let yaw = player.living_entity.entity.yaw.load();
                     let pitch = player.living_entity.entity.pitch.load();
                     if !World::is_valid(pos) {
-                        return Err(CommandError::CommandFailed(Box::new(
-                            TextComponent::translate("argument.pos.outofbounds", []),
+                        return Err(CommandError::CommandFailed(TextComponent::translate(
+                            "argument.pos.outofbounds",
+                            [],
                         )));
                     }
                     player
@@ -295,8 +301,9 @@ impl CommandExecutor for SelfToPosExecutor {
                     let yaw = player.living_entity.entity.yaw.load();
                     let pitch = player.living_entity.entity.pitch.load();
                     if !World::is_valid(pos) {
-                        return Err(CommandError::CommandFailed(Box::new(
-                            TextComponent::translate("argument.pos.outofbounds", []),
+                        return Err(CommandError::CommandFailed(TextComponent::translate(
+                            "argument.pos.outofbounds",
+                            [],
                         )));
                     }
                     player

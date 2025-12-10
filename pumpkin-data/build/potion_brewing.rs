@@ -3,14 +3,14 @@ use quote::{format_ident, quote};
 use serde::Deserialize;
 use std::fs;
 
-#[derive(Deserialize, Clone, Hash, Eq, PartialEq)]
+#[derive(Deserialize)]
 struct PotionBrewing {
-    potion_types: Vec<Vec<String>>,
+    //potion_types: Vec<Vec<String>>,
     potion_recipes: Vec<Recipes>,
     item_recipes: Vec<Recipes>,
 }
 
-#[derive(Deserialize, Clone, Hash, Eq, PartialEq)]
+#[derive(Deserialize)]
 pub struct Recipes {
     from: String,
     ingredient: Vec<String>,

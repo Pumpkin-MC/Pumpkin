@@ -22,8 +22,8 @@ pub struct CLevelChunk<'a> {
 
 impl<'a> PacketWrite for CLevelChunk<'a> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarInt(self.chunk.position.x).write(writer)?;
-        VarInt(self.chunk.position.y).write(writer)?;
+        VarInt(self.chunk.x).write(writer)?;
+        VarInt(self.chunk.z).write(writer)?;
 
         VarInt(self.dimension).write(writer)?;
         let sub_chunk_count = self.chunk.section.sections.len() as u32;

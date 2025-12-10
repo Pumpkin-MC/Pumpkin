@@ -20,7 +20,7 @@ use std::borrow::Cow;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-pub trait DataComponentImpl: Send + Sync + Debug {
+pub trait DataComponentImpl: Send + Sync {
     fn write_data(&self) -> NbtTag {
         todo!()
     }
@@ -148,9 +148,9 @@ impl DataComponentImpl for DamageImpl {
     }
     default_impl!(Damage);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub struct UnbreakableImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub struct CustomNameImpl {
     // TODO make TextComponent const
     pub name: &'static str,
@@ -158,7 +158,7 @@ pub struct CustomNameImpl {
 impl DataComponentImpl for CustomNameImpl {
     default_impl!(CustomName);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub struct ItemNameImpl {
     // TODO make TextComponent const
     pub name: &'static str,
@@ -166,13 +166,13 @@ pub struct ItemNameImpl {
 impl DataComponentImpl for ItemNameImpl {
     default_impl!(ItemName);
 }
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub struct ItemModelImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub struct LoreImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub struct RarityImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub struct EnchantmentsImpl {
     pub enchantment: Cow<'static, [(&'static Enchantment, i32)]>,
 }
@@ -331,13 +331,13 @@ pub struct UseCooldownImpl;
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct DamageResistantImpl;
 
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub enum IDSet {
     Tag(&'static Tag),
     Blocks(Cow<'static, [&'static Block]>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct ToolRule {
     pub blocks: IDSet,
     pub speed: Option<f32>,
@@ -355,7 +355,7 @@ impl Hash for ToolRule {
         self.correct_for_drops.hash(state);
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct ToolImpl {
     pub rules: Cow<'static, [ToolRule]>,
     pub default_mining_speed: f32,
@@ -384,7 +384,7 @@ pub enum EquipmentType {
     Saddle,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct EquipmentSlotData {
     pub slot_type: EquipmentType,
     pub entity_id: i32,
@@ -393,7 +393,7 @@ pub struct EquipmentSlotData {
     pub name: Cow<'static, str>,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 #[repr(i8)]
 pub enum EquipmentSlot {
     MainHand(EquipmentSlotData),
@@ -529,7 +529,7 @@ impl EquipmentSlot {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum EntityTypeOrTag {
     Tag(&'static Tag),
     Single(&'static EntityType),
@@ -552,7 +552,7 @@ impl Hash for EntityTypeOrTag {
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct EnchantableImpl;
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub struct EquippableImpl {
     pub slot: &'static EquipmentSlot,
     pub equip_sound: &'static str,

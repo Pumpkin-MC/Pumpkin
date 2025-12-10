@@ -41,7 +41,7 @@ impl BlockBehaviour for SoulFireBlock {
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            FireBlockBase::broken(args.world.clone(), *args.position).await;
+            FireBlockBase::broken(args.world, *args.position).await;
         })
     }
 }

@@ -43,7 +43,7 @@ impl FireBlock {
                     .to_props()
                     .into_iter()
                     .find(|p| p.0 == "waterlogged")
-                    .map(|(_, v)| v == true.to_string())
+                    .map(|(_, v)| v == "true")
             })
             .unwrap_or(false)
         {
@@ -415,7 +415,7 @@ impl BlockBehaviour for FireBlock {
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            FireBlockBase::broken(args.world.clone(), *args.position).await;
+            FireBlockBase::broken(args.world, *args.position).await;
         })
     }
 }

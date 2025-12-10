@@ -54,8 +54,8 @@ impl<'a> FindArg<'a> for SoundArgumentConsumer {
             Some(Arg::Block(name)) => {
                 Sound::from_name(name.strip_prefix("minecraft:").unwrap_or(name)).map_or_else(
                     || {
-                        Err(CommandError::CommandFailed(Box::new(TextComponent::text(
-                            format!("Sound {name} does not exist."),
+                        Err(CommandError::CommandFailed(TextComponent::text(format!(
+                            "Sound {name} does not exist."
                         ))))
                     },
                     Result::Ok,

@@ -57,7 +57,7 @@ impl OreFeature {
 
         for _ in n..=(n + q) {
             for _ in p..=(p + q) {
-                if o > chunk.ocean_floor_height_exclusive(&pos.0.to_vec2_i32()) {
+                if o > chunk.ocean_floor_height_exclusive(pos.0.x, pos.0.z) {
                     continue;
                 }
                 return self.generate_vein_part(chunk, random, d, e, h, j, l, m, n, o, p, q, r);

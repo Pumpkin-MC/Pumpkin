@@ -134,7 +134,7 @@ impl UDPNetworkDecoder {
             err => PacketDecodeError::MalformedLength(err.to_string()),
         })?;
 
-        let packet_len = packet_len.0 as u64;
+        let packet_len = packet_len.0 as usize;
 
         let var_header = VarUInt::decode(&mut reader)?;
 
@@ -157,7 +157,7 @@ impl UDPNetworkDecoder {
         let gamepacket_id = (header & 0x3FF) as u16; // 0x3FF is 10 bits set to 1
 
         let payload = reader
-            .read_boxed_slice(packet_len as usize - var_header.written_size())
+            .read_boxed_slice(packet_len - var_header.written_size())
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
         Ok(RawPacket {

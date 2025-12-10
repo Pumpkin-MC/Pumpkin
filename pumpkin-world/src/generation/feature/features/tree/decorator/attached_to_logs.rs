@@ -20,8 +20,7 @@ impl AttachedToLogsTreeDecorator {
         &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
-        _root_positions: Vec<BlockPos>,
-        log_positions: Vec<BlockPos>,
+        log_positions: &[BlockPos],
     ) {
         // TODO: shuffle
         for pos in log_positions {

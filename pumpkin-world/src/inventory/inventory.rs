@@ -4,7 +4,6 @@ use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use std::any::Any;
 use std::pin::Pin;
 use std::{
-    fmt::Debug,
     hash::{Hash, Hasher},
     sync::Arc,
 };
@@ -12,7 +11,7 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 
 pub type InventoryFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-pub trait Inventory: Send + Sync + Debug + Clearable {
+pub trait Inventory: Send + Sync + Clearable {
     fn size(&self) -> usize;
 
     // --- Asynchronous Methods (Using BlockFuture) ---

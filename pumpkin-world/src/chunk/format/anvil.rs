@@ -40,9 +40,6 @@ const SECTOR_BYTES: usize = 4096;
 // 1.21.10
 pub const WORLD_DATA_VERSION: i32 = 4556;
 
-#[derive(Clone, Default)]
-pub struct AnvilChunkFormat;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Compression {
@@ -72,7 +69,6 @@ impl<R: Read> Read for CompressionRead<R> {
     }
 }
 
-#[derive(Default, Clone)]
 pub struct AnvilChunkData {
     compression: Option<Compression>,
     // Length is always the length of this + compression byte (1) so we dont need to save a length
@@ -346,9 +342,9 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         (at.x >> SUBREGION_BITS, at.y >> SUBREGION_BITS)
     }
 
-    pub const fn get_chunk_index(pos: &Vector2<i32>) -> usize {
-        let local_x = pos.x & SUBREGION_AND;
-        let local_z = pos.y & SUBREGION_AND;
+    pub const fn get_chunk_index(x: i32, z: i32) -> usize {
+        let local_x = x & SUBREGION_AND;
+        let local_z = z & SUBREGION_AND;
         let index = (local_z << SUBREGION_BITS) + local_x;
         index as usize
     }
@@ -522,7 +518,7 @@ pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable {
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>>;
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
-    fn position(&self) -> &Vector2<i32>;
+    fn position(&self) -> (i32, i32);
 }
 
 impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
@@ -633,7 +629,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
             .unwrap()
             .as_secs() as u32;
 
-        let index = AnvilChunkFile::<S>::get_chunk_index(chunk.position());
+        let index = AnvilChunkFile::<S>::get_chunk_index(chunk.position().0, chunk.position().1);
         // Default to the compression type read from the file
         let compression_type = self.chunks_data[index]
             .as_ref()
@@ -801,13 +797,13 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
     async fn get_chunks(
         &self,
-        chunks: &[Vector2<i32>],
+        chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
-        for chunk in chunks.iter().cloned() {
-            let index = AnvilChunkFile::<S>::get_chunk_index(&chunk);
+        for chunk in chunks.into_iter() {
+            let index = AnvilChunkFile::<S>::get_chunk_index(chunk.x, chunk.y);
             let is_ok = match &self.chunks_data[index] {
                 None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
                 Some(chunk_metadata) => {

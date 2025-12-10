@@ -7,7 +7,6 @@ use pumpkin_world::{
 };
 use tokio::sync::Mutex;
 
-#[derive(Debug)]
 pub struct EnderChestInventory {
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub tracker: Mutex<Option<Arc<ViewerCountTracker>>>,

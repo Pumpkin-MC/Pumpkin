@@ -1,5 +1,6 @@
 use num_traits::{Float, One, PrimInt, Zero};
 
+pub mod block_box;
 pub mod boundingbox;
 pub mod euler_angle;
 pub mod experience;
@@ -70,13 +71,7 @@ pub const fn floor_log2(value: u32) -> u8 {
 }
 
 pub const fn smallest_encompassing_power_of_two(value: u32) -> u32 {
-    let mut i = value - 1;
-    i |= i >> 1;
-    i |= i >> 2;
-    i |= i >> 4;
-    i |= i >> 8;
-    i |= i >> 16;
-    i + 1
+    value.next_power_of_two()
 }
 
 #[inline]

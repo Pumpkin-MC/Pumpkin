@@ -5,13 +5,13 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 struct Potion {
     id: u8,
     effects: Vec<Effect>,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 pub struct Effect {
     effect_type: String,
     duration: i32,
@@ -80,14 +80,13 @@ pub(crate) fn build() -> TokenStream {
         use std::hash::Hash;
         use crate::effect::StatusEffect;
 
-        #[derive(Debug)]
         pub struct Potion {
             pub id: u8,
             pub name: &'static str,
             pub effects: &'static [Effect],
         }
 
-        #[derive(Debug, Clone)]
+        #[derive(Clone)]
         pub struct Effect {
             pub effect_type: &'static StatusEffect,
             pub duration: i32,

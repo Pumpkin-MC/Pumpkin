@@ -102,9 +102,9 @@ async fn setworldspawn(
     yaw: f32,
 ) -> Result<(), CommandError> {
     let Some(world) = sender.world() else {
-        return Err(CommandError::CommandFailed(Box::new(TextComponent::text(
+        return Err(CommandError::CommandFailed(TextComponent::text(
             "Failed to get world.",
-        ))));
+        )));
     };
 
     match world.dimension_type {

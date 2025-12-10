@@ -22,7 +22,6 @@ pub(super) fn set_curr_visitor_seq_list_id(tag: Option<u8>) {
     });
 }
 
-#[derive(Debug)]
 pub struct NbtReadHelper<R: Read + Seek> {
     reader: R,
 }
@@ -76,7 +75,6 @@ impl<R: Read + Seek> NbtReadHelper<R> {
     }
 }
 
-#[derive(Debug)]
 pub struct Deserializer<R: Read + Seek> {
     input: NbtReadHelper<R>,
     tag_to_deserialize_stack: Option<u8>,

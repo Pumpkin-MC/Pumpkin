@@ -373,10 +373,6 @@ pub async fn spawn_category_for_position(
             new_pos = BlockPos::new(new_x, new_pos.0.y, new_z);
             let new_pos_center = new_pos.to_centered_f64();
             let player_distance = get_nearest_player(&new_pos_center, world).await;
-            if player_distance == f64::MAX {
-                // debug!("player_distance infinity");
-                return;
-            }
             if !is_right_distance_to_player_and_spawn_point(
                 &new_pos,
                 player_distance,

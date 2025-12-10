@@ -16,7 +16,7 @@ RUN --mount=type=cache,sharing=private,target=/pumpkin/target \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
     cargo build --release && cp target/release/pumpkin ./pumpkin.release
 
-FROM alpine:3.22
+FROM alpine:3.23
 
 COPY --from=builder /pumpkin/pumpkin.release /bin/pumpkin
 

@@ -817,7 +817,7 @@ impl Server {
                 } else if target_selector.get_limit() == 1 {
                     // If the limit is 1, we just return a random entity
                     return if let Some(entity) = iter.choose(&mut rand::rng()) {
-                        vec![entity.clone()]
+                        vec![entity]
                     } else {
                         vec![]
                     };

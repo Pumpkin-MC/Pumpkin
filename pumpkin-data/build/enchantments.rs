@@ -140,7 +140,6 @@ pub(crate) fn build() -> TokenStream {
         use std::hash::{Hash, Hasher};
         use std::slice::Iter;
 
-        #[derive(Debug)]
         pub struct Enchantment {
             pub id: u8,
             pub name: &'static str,

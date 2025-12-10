@@ -81,9 +81,8 @@ impl CustomBossbars {
         );
     }
 
-    pub fn replace_bossbar(&mut self, resource_location: &str, bossbar_data: CustomBossbar) {
-        self.custom_bossbars
-            .insert(resource_location.to_string(), bossbar_data);
+    pub fn replace_bossbar(&mut self, resource_location: String, bossbar_data: CustomBossbar) {
+        self.custom_bossbars.insert(resource_location, bossbar_data);
     }
 
     #[must_use]

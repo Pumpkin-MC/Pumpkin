@@ -57,9 +57,9 @@ pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale:
     }
 }
 
-pub fn get_translation<P: Into<String>>(key: P, locale: Locale) -> String {
+pub fn get_translation(key: &str, locale: Locale) -> String {
     let translations = TRANSLATIONS.lock().unwrap();
-    let key = key.into().to_lowercase();
+    let key = key.to_lowercase();
     match translations[locale as usize].get(&key) {
         Some(translation) => translation.clone(),
         None => match translations[Locale::EnUs as usize].get(&key) {
@@ -96,7 +96,7 @@ pub fn reorder_substitutions(
         .iter()
         .map(|_| TextComponentBase {
             content: TextContent::Text { text: "".into() },
-            style: Style::default(),
+            style: Box::new(Style::default()),
             extra: vec![],
         })
         .collect();
@@ -138,7 +138,7 @@ pub fn translation_to_pretty<P: Into<Cow<'static, str>>>(
     locale: Locale,
     with: Vec<TextComponentBase>,
 ) -> String {
-    let mut translation = get_translation(namespaced_key.into(), locale);
+    let mut translation = get_translation(&namespaced_key.into(), locale);
     if with.is_empty() || !translation.contains('%') {
         return translation;
     }
@@ -162,7 +162,7 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     locale: Locale,
     with: Vec<TextComponentBase>,
 ) -> String {
-    let mut translation = get_translation(namespaced_key.into(), locale);
+    let mut translation = get_translation(&namespaced_key.into(), locale);
     if with.is_empty() || !translation.contains('%') {
         return translation;
     }

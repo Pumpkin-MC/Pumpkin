@@ -599,7 +599,7 @@ pub(crate) fn build() -> TokenStream {
         use crate::tag::{Taggable, RegistryKey};
         use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone)]
         pub struct PartialFluidState {
             pub height: f32,
             pub level: i16,
@@ -611,7 +611,7 @@ pub(crate) fn build() -> TokenStream {
             pub falling: bool,
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone)]
         pub struct FluidState {
             pub height: f32,
             pub level: i16,
@@ -623,13 +623,13 @@ pub(crate) fn build() -> TokenStream {
             pub falling: bool,
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone)]
         pub struct FluidStateRef {
             pub id: u16,
             pub state_idx: u16,
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone)]
         pub struct Fluid {
             pub id: u16,
             pub name: &'static str,

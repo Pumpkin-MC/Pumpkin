@@ -22,8 +22,8 @@ impl PlaceOnGroundTreeDecorator {
         &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
-        root_positions: Vec<BlockPos>,
-        log_positions: Vec<BlockPos>,
+        root_positions: &[BlockPos],
+        log_positions: &[BlockPos],
     ) {
         let list = TreeDecorator::get_leaf_litter_positions(root_positions, log_positions);
 

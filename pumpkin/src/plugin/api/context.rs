@@ -94,11 +94,15 @@ impl Context {
     /// # Example
     ///
     /// ```
-    /// context.register_service("my_service".to_string(), Arc::new(MyService::new())).await;
+    /// context.register_service("my_service", Arc::new(MyService::new())).await;
     /// ```
-    pub async fn register_service<T: Payload + 'static>(&self, name: String, service: Arc<T>) {
+    pub async fn register_service<N: Into<String>, T: Payload + 'static>(
+        &self,
+        name: N,
+        service: Arc<T>,
+    ) {
         let mut services = self.plugin_manager.services.write().await;
-        services.insert(name, service);
+        services.insert(name.into(), service);
     }
 
     /// Retrieves a registered service by name and type.
@@ -136,21 +140,23 @@ impl Context {
     /// # Arguments
     /// - `tree`: The command tree to register.
     /// - `permission`: The permission level required to execute the command.
-    pub async fn register_command(
+    pub async fn register_command<P: Into<String>>(
         &self,
         tree: crate::command::tree::CommandTree,
-        permission_node: &str,
+        permission: P,
     ) {
         let plugin_name = self.metadata.name;
-        let full_permission_node = if permission_node.contains(':') {
-            permission_node.to_string()
+        let permission = permission.into();
+
+        let full_permission_node = if permission.contains(':') {
+            permission
         } else {
-            format!("{plugin_name}:{permission_node}")
+            format!("{plugin_name}:{permission}")
         };
 
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.register(tree, full_permission_node.as_str());
+            dispatcher_lock.register(tree, full_permission_node);
         };
 
         for world in self.server.worlds.read().await.iter() {

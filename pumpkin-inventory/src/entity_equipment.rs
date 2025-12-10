@@ -5,7 +5,7 @@ use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
 // EntityEquipment.java
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct EntityEquipment {
     pub equipment: HashMap<EquipmentSlot, Arc<Mutex<ItemStack>>>,
 }

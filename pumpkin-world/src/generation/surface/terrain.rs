@@ -27,10 +27,7 @@ pub struct SurfaceTerrainBuilder {
 }
 
 impl SurfaceTerrainBuilder {
-    pub fn new(
-        noise_builder: &mut DoublePerlinNoiseBuilder,
-        random_deriver: &RandomDeriver,
-    ) -> Self {
+    pub fn new(noise_builder: &DoublePerlinNoiseBuilder, random_deriver: &RandomDeriver) -> Self {
         Self {
             terracotta_bands: Self::create_terracotta_bands(
                 random_deriver.split_string("minecraft:clay_bands"),
@@ -217,8 +214,9 @@ impl SurfaceTerrainBuilder {
             let mut block_threshold = scaled_threshold.min(scaled_roof_noise);
 
             // TODO: Cache this
-            let pos = Vector3::new(x, sea_level, z);
-            let temperature = biome.weather.compute_temperature(&pos, sea_level);
+            let temperature = biome
+                .weather
+                .compute_temperature(x as f64, sea_level, z as f64, sea_level);
             if temperature > 0.1f32 {
                 block_threshold -= 2.0;
             }
@@ -258,13 +256,13 @@ impl SurfaceTerrainBuilder {
         }
     }
 
-    pub fn get_terracotta_block(&self, pos: &Vector3<i32>) -> &'static BlockState {
+    pub fn get_terracotta_block(&self, x: i32, y: i32, z: i32) -> &'static BlockState {
         let offset = (self
             .terracotta_bands_offset_noise
-            .sample(pos.x as f64, 0.0, pos.z as f64)
+            .sample(x as f64, 0.0, z as f64)
             * 4.0)
             .round() as i32;
-        let offset = pos.y + offset;
+        let offset = y + offset;
         self.terracotta_bands[((offset as u64 + self.terracotta_bands.len() as u64)
             % self.terracotta_bands.len() as u64) as usize]
             .to_state()

@@ -53,8 +53,8 @@ impl TreeDecorator {
         &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
-        root_positions: Vec<BlockPos>,
-        log_positions: Vec<BlockPos>,
+        root_positions: &[BlockPos],
+        log_positions: &[BlockPos],
     ) {
         match self {
             TreeDecorator::TrunkVine(decorator) => decorator.generate(chunk, random, log_positions),
@@ -69,25 +69,25 @@ impl TreeDecorator {
             }
             TreeDecorator::AttachedToLeaves(_decorator) => {}
             TreeDecorator::AttachedToLogs(decorator) => {
-                decorator.generate(chunk, random, root_positions, log_positions)
+                decorator.generate(chunk, random, log_positions)
             }
         }
     }
 
     pub(super) fn get_leaf_litter_positions(
-        root_positions: Vec<BlockPos>,
-        log_positions: Vec<BlockPos>,
+        root_positions: &[BlockPos],
+        log_positions: &[BlockPos],
     ) -> Vec<BlockPos> {
         let mut list = Vec::new();
         if root_positions.is_empty() {
-            list.extend_from_slice(&log_positions);
+            list.extend_from_slice(log_positions);
         } else if !log_positions.is_empty()
             && root_positions.first().unwrap().0.y == log_positions.first().unwrap().0.y
         {
-            list.extend_from_slice(&log_positions);
-            list.extend_from_slice(&root_positions);
+            list.extend_from_slice(log_positions);
+            list.extend_from_slice(root_positions);
         } else {
-            list.extend_from_slice(&root_positions);
+            list.extend_from_slice(root_positions);
         }
 
         list

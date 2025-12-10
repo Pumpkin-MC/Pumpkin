@@ -2,10 +2,7 @@ use std::sync::LazyLock;
 
 use serde::Deserialize;
 
-use crate::{
-    math::vector3::Vector3, noise::simplex::OctaveSimplexNoiseSampler,
-    random::legacy_rand::LegacyRand,
-};
+use crate::{noise::simplex::OctaveSimplexNoiseSampler, random::legacy_rand::LegacyRand};
 
 pub static TEMPERATURE_NOISE: LazyLock<OctaveSimplexNoiseSampler> = LazyLock::new(|| {
     let mut rand = LegacyRand::from_seed(1234);
@@ -30,20 +27,17 @@ pub enum TemperatureModifier {
 }
 
 impl TemperatureModifier {
-    pub fn convert_temperature(&self, pos: &Vector3<i32>, temperature: f32) -> f32 {
+    pub fn convert_temperature(&self, x: f64, z: f64, temperature: f32) -> f32 {
         match self {
             TemperatureModifier::None => temperature,
             TemperatureModifier::Frozen => {
                 let frozen_ocean_sample =
-                    FROZEN_OCEAN_NOISE.sample(pos.x as f64 * 0.05, pos.z as f64 * 0.05, false)
-                        * 7.0;
-                let foliage_sample =
-                    FOLIAGE_NOISE.sample(pos.x as f64 * 0.2, pos.z as f64 * 0.2, false);
+                    FROZEN_OCEAN_NOISE.sample(x * 0.05, z * 0.05, false) * 7.0;
+                let foliage_sample = FOLIAGE_NOISE.sample(x * 0.2, z * 0.2, false);
 
                 let threshold = frozen_ocean_sample + foliage_sample;
                 if threshold < 0.3 {
-                    let foliage_sample =
-                        FOLIAGE_NOISE.sample(pos.x as f64 * 0.09, pos.z as f64 * 0.09, false);
+                    let foliage_sample = FOLIAGE_NOISE.sample(x * 0.09, z * 0.09, false);
                     if foliage_sample < 0.8 {
                         return 0.2f32;
                     }
@@ -81,19 +75,18 @@ impl Weather {
     }
 
     /// This is an expensive function and should be cached
-    pub fn compute_temperature(&self, pos: &Vector3<i32>, sea_level: i32) -> f32 {
-        let modified_temperature = self
-            .temperature_modifier
-            .convert_temperature(pos, self.temperature);
+    pub fn compute_temperature(&self, x: f64, y: i32, z: f64, sea_level: i32) -> f32 {
+        let modified_temperature =
+            self.temperature_modifier
+                .convert_temperature(x, z, self.temperature);
         let offset_sea_level = sea_level + 17;
 
-        if pos.y > offset_sea_level {
+        if y > offset_sea_level {
             let temperature_noise =
-                (TEMPERATURE_NOISE.sample(pos.x as f64 / 8.0, pos.z as f64 / 8.0, false) * 8.0)
-                    as f32;
+                (TEMPERATURE_NOISE.sample(x / 8.0, z / 8.0, false) * 8.0) as f32;
 
             modified_temperature
-                - (temperature_noise + pos.y as f32 - offset_sea_level as f32) * 0.05f32 / 40.0f32
+                - (temperature_noise + y as f32 - offset_sea_level as f32) * 0.05f32 / 40.0f32
         } else {
             modified_temperature
         }

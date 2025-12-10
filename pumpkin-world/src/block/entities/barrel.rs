@@ -29,7 +29,6 @@ use crate::{
 
 use super::BlockEntity;
 
-#[derive(Debug)]
 pub struct BarrelBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],

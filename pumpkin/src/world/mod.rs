@@ -219,7 +219,7 @@ impl World {
             level_info,
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
-            scoreboard: Mutex::new(Scoreboard::new()),
+            scoreboard: Mutex::new(Scoreboard::default()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 30_000_000.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
             dimension_type,
@@ -594,6 +594,7 @@ impl World {
         // Entity ticks
         for entity in entities_to_tick {
             entity.get_entity().age.fetch_add(1, Relaxed);
+
             entity.tick(entity.clone(), server).await;
             for player in self.players.read().await.values() {
                 if player
@@ -767,7 +768,6 @@ impl World {
             );
 
         // log::debug!("spawning list size {}", spawn_list.len());
-        log::trace!("spawning counter {:?}", spawn_state.mob_category_counts);
 
         spawning_chunks.shuffle(&mut rng());
 
@@ -1935,7 +1935,9 @@ impl World {
                 let Some((chunk, _first_load)) = recv_result else {
                     break;
                 };
-                let position = chunk.read().await.chunk_position;
+                let tmp_chunk = chunk.read().await;
+                let position = Vector2::new(tmp_chunk.x, tmp_chunk.z);
+                drop(tmp_chunk);
 
                 let chunk = if level.is_chunk_watched(&position) {
                     chunk

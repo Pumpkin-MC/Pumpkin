@@ -273,7 +273,7 @@ where
                     // This minimizes the time we block other operations
                     let reader = async move {
                         let serializer = chunk_serializer.read().await;
-                        serializer.get_chunks(&chunks, send).await;
+                        serializer.get_chunks(chunks, send).await;
                     };
 
                     join!(intermediary, reader);

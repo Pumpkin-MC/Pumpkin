@@ -84,7 +84,7 @@ pub(crate) fn build() -> TokenStream {
     let mut match_arms_tags_all = Vec::new();
     let mut tag_identifiers = Vec::new();
 
-    for (key, tag_map) in &tags {
+    for (key, tag_map) in tags.into_iter() {
         let key_pascal = format_ident!("{}", key.to_pascal_case());
         let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
 
@@ -93,7 +93,7 @@ pub(crate) fn build() -> TokenStream {
 
         // Collect all unique tags
         for (tag_name, values) in tag_map {
-            tag_values.push((tag_name.clone(), values.clone()));
+            tag_values.push((tag_name, values));
         }
 
         tag_values.sort();
@@ -103,7 +103,7 @@ pub(crate) fn build() -> TokenStream {
             .iter()
             .map(|(tag_name, values)| {
                 let tag_values_array = values.iter().map(|v| quote! { #v }).collect::<Vec<_>>();
-                let tag_id_array = match key {
+                let tag_id_array = match &key {
                     t if t == "worldgen/biome" => values.iter().map(|v| {
                         let id = biomes.get(v).unwrap().id as u16;
                         quote! { #id }
@@ -128,7 +128,7 @@ pub(crate) fn build() -> TokenStream {
                         let id = entities.get(v).unwrap().id;
                         quote! { #id }
                     }).collect::<Vec<_>>(),
-                    &_ => Vec::new(),
+                    _ => Vec::new(),
                 };
                 let mapped_name = format_ident!("{}", tag_name.replace(":", "_").replace("/", "_").to_uppercase());
                 quote! {

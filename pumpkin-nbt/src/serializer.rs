@@ -11,7 +11,6 @@ use crate::{
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug)]
 pub struct WriteAdaptor<W: Write> {
     writer: W,
 }

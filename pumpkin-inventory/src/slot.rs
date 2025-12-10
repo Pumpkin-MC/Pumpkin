@@ -1,6 +1,4 @@
-#![warn(unused)]
 use std::{
-    fmt::Debug,
     pin::Pin,
     sync::{
         Arc,
@@ -21,7 +19,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 // Slot.java
 // This is a trait due to crafting slots being a thing
-pub trait Slot: Send + Sync + Debug {
+pub trait Slot: Send + Sync {
     fn get_inventory(&self) -> Arc<dyn Inventory>;
 
     fn get_index(&self) -> usize;
@@ -257,7 +255,6 @@ pub trait Slot: Send + Sync + Debug {
     }
 }
 
-#[derive(Debug)]
 /// Just called Slot in Vanilla
 pub struct NormalSlot {
     pub inventory: Arc<dyn Inventory>,
@@ -295,7 +292,6 @@ impl Slot for NormalSlot {
 }
 
 // ArmorSlot.java
-#[derive(Debug)]
 pub struct ArmorSlot {
     pub inventory: Arc<dyn Inventory>,
     pub index: usize,

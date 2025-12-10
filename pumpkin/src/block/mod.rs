@@ -376,12 +376,12 @@ pub async fn calc_block_breaking(
         return 0.0;
     }
     let i = if player.can_harvest(state, block).await {
-        30
+        30.0
     } else {
-        100
+        100.0
     };
 
-    player.get_mining_speed(block).await / hardness / i as f32
+    player.get_mining_speed(block).await / hardness / i
 }
 
 #[derive(PartialEq)]

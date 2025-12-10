@@ -10,7 +10,7 @@ pub use state::RawBlockState;
 
 use crate::BlockStateId;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct BlockStateCodec {
     /// Block name

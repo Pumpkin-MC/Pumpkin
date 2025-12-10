@@ -24,7 +24,6 @@ use crate::{
 
 use super::BlockEntity;
 
-#[derive(Debug)]
 pub struct ShulkerBoxBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],

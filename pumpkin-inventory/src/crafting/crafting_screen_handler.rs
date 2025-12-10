@@ -26,7 +26,6 @@ use tokio::sync::Mutex;
 /// Note: This implementation is different from the original Minecraft code.
 /// Particularly, it does not have a 'result' inventory, we directly store it in the slot.
 /// This slot should be never modified outside. any modifications to it make change in its input.
-#[derive(Debug)]
 pub struct ResultSlot {
     pub inventory: Arc<dyn RecipeInputInventory>,
     pub id: AtomicU8,

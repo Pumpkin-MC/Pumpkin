@@ -22,7 +22,6 @@ use crate::{
     world::{BlockFlags, SimpleWorld},
 };
 
-#[derive(Debug)]
 pub struct ChiseledBookshelfBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],

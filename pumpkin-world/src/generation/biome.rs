@@ -7,12 +7,14 @@ pub fn get_biome_blend(
     bottom_y: i8,
     height: u16,
     seed: i64,
-    global_block_pos: &Vector3<i32>,
+    x: i32,
+    y: i32,
+    z: i32,
 ) -> Vector3<i32> {
     // This is the "left" side of the biome boundary
-    let offset_x = global_block_pos.x - 2;
-    let offset_y = global_block_pos.y - 2;
-    let offset_z = global_block_pos.z - 2;
+    let offset_x = x - 2;
+    let offset_y = y - 2;
+    let offset_z = z - 2;
     let biome_x = biome_coords::from_block(offset_x);
     let biome_y = biome_coords::from_block(offset_y);
     let biome_z = biome_coords::from_block(offset_z);
@@ -174,7 +176,7 @@ mod test {
 
     #[test]
     fn test_biome_blend() {
-        let biome_pos = get_biome_blend(-64, 384, 1234567890, &Vector3::new(123, 123, 123));
+        let biome_pos = get_biome_blend(-64, 384, 1234567890, 123, 123, 123);
         assert_eq!(biome_pos, Vector3::new(31, 30, 30));
     }
 
@@ -191,7 +193,7 @@ mod test {
 
         let seed = hash_seed((-777i64) as u64);
         for (i, (x, y, z, result_x, result_y, result_z)) in data.into_iter().enumerate() {
-            let result = get_biome_blend(i8::MIN, u16::MAX, seed, &Vector3::new(x, y, z));
+            let result = get_biome_blend(i8::MIN, u16::MAX, seed, x, y, z);
             let expected = Vector3::new(result_x, result_y, result_z);
             assert_eq!(
                 result, expected,

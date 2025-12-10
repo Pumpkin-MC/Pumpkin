@@ -1,15 +1,16 @@
 use pumpkin_data::BlockState;
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{block_box::BlockBox, position::BlockPos, vector3::Vector3};
 
 use crate::ProtoChunk;
 
 pub mod buried_treasure;
 pub mod nether_fortress;
+pub mod swamp_hut;
 
 pub trait StructureGenerator {
     fn get_structure_position(&self, chunk: &ProtoChunk) -> StructurePosition;
 
-    fn generate(&self, position: BlockPos, chunk: &mut crate::ProtoChunk);
+    fn generate(&self, position: BlockBox, chunk: &mut crate::ProtoChunk);
 }
 
 #[expect(clippy::too_many_arguments)]
@@ -72,5 +73,5 @@ pub struct StructurePosition {
 
 #[derive(Default, Clone, Debug)]
 pub struct StructurePiecesCollector {
-    pub pieces_positions: Vec<BlockPos>,
+    pub pieces_positions: Vec<BlockBox>,
 }
