@@ -31,7 +31,7 @@ impl BreathManager {
     pub async fn tick(&self, player: &Arc<Player>) {
         // 在创造模式或生存模式无需更新
         let player_gamemode = player.gamemode.load();
-        if player_gamemode == GameMode::Creative || player_gamemode == GameMode::Survival {
+        if player_gamemode == GameMode::Creative || player_gamemode == GameMode::Spectator {
             return;
         }
 
