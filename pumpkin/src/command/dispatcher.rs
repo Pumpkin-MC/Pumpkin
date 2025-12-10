@@ -69,7 +69,7 @@ impl CommandDispatcher {
         cmd: &'a str,
     ) {
         let result = self.dispatch(sender, server, cmd).await;
-        sender.set_success_count(result.is_ok() as u32);
+        sender.set_success_count(u32::from(result.is_ok()));
 
         if let Err(e) = result {
             let text = e.into_component(cmd);
