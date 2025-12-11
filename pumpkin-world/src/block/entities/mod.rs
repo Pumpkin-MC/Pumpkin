@@ -13,6 +13,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
+use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
@@ -76,9 +77,12 @@ pub trait BlockEntity: Send + Sync {
             })
             .unwrap() as u32
     }
+
+    /// Obtain NBT data for sending to the client in [ChunkData](crate::chunk::ChunkData)
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         None
     }
+
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
     }
@@ -143,6 +147,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             ChiseledBookshelfBlockEntity,
         >(nbt)),
         FurnaceBlockEntity::ID => Arc::new(block_entity_from_generic::<FurnaceBlockEntity>(nbt)),
+        CommandBlockEntity::ID => Arc::new(block_entity_from_generic::<CommandBlockEntity>(nbt)),
         _ => return None,
     })
 }
