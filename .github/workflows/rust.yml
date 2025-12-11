@@ -23,6 +23,7 @@ jobs:
       - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
+
   clippy:
     name: Run lints
     runs-on: ubuntu-latest
@@ -36,12 +37,13 @@ jobs:
       - run: rustup component add clippy rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features
+
   build_and_test:
     name: Build project and test
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest,  ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
         toolchain:
           - stable
     steps:
@@ -50,17 +52,17 @@ jobs:
       - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --verbose
+
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest,  ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
         toolchain:
           - stable
     steps:
       - uses: actions/checkout@v6
-
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
@@ -78,6 +80,30 @@ jobs:
           compression-level: 9
           path: dist/pumpkin-*
 
+  # ── 新增：完全静态链接的 musl 构建 ───────────────────────────────
+  build_release_static:
+    name: Build static binary (musl)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64-unknown-linux-musl]
+        toolchain: [stable]
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target ${{ matrix.target }}
+      - name: Prepare static artifact
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/pumpkin dist/pumpkin-x86_64-linux-musl
+      - name: Upload static binary
+        uses: actions/upload-artifact@v5
+        with:
+          name: pumpkin-x86_64-linux-musl
+          path: dist/pumpkin-x86_64-linux-musl
+
   clippy_release:
     name: Run lints in release mode
     runs-on: ubuntu-latest
@@ -91,20 +117,23 @@ jobs:
       - run: rustup component add clippy rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --release --all-targets --all-features
+
   draft_release:
     permissions:
       contents: write
-    needs: [build_release]
+    needs: [build_release, build_release_static]   # ← 依赖静态构建
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v6
-      - name: Download prebuilt binary artifacts
+
+      - name: Download all binary artifacts
         uses: actions/download-artifact@v6
         with:
           pattern: "**/pumpkin-*"
           path: dist/
           merge-multiple: true
+
       - name: Generate release notes
         run: |
           tree dist/
@@ -118,7 +147,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag --force nightly && git push --force origin tag nightly
 
-      - name: Draft a nightly github release
+      - name: Draft a nightly GitHub release
         uses: softprops/action-gh-release@v2
         with:
           prerelease: true
