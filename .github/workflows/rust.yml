@@ -91,6 +91,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - name: Install musl-tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
       - run: rustup target add ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --target ${{ matrix.target }}
