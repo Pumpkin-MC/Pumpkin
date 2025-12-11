@@ -50,10 +50,16 @@ impl CommandSender {
             Self::Console => log::info!("{}", text.to_pretty_console()),
             Self::Player(c) => c.send_system_message(&text).await,
             Self::Rcon(s) => s.lock().await.push(text.to_pretty_console()),
-            Self::CommandBlock(..) => {
-                // todo
-                // using text.to_pretty_console() or text.get_text() was
-                // causing crashes for me.
+            Self::CommandBlock(block_entity, _) => {
+                let command_entity: &CommandBlockEntity =
+                    block_entity.as_any().downcast_ref().unwrap();
+                let mut last_output = command_entity.last_output.lock().await;
+
+                let now = time::OffsetDateTime::now_local().unwrap();
+                let format = time::macros::format_description!("[hour]:[minute]:[second]");
+                let timestamp = now.format(&format).unwrap();
+
+                *last_output = format!("[{}] {}", timestamp, text.get_text());
             }
         }
     }

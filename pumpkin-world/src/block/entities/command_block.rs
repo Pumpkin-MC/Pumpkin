@@ -25,16 +25,16 @@ pub struct CommandBlockEntity {
 
 impl CommandBlockEntity {
     pub const ID: &'static str = "minecraft:command_block";
-    pub fn new(position: BlockPos) -> Self {
+    pub fn new(position: BlockPos, track_output: bool, is_chain: bool) -> Self {
         Self {
             position,
             powered: AtomicBool::new(false),
             condition_met: AtomicBool::new(false),
-            auto: AtomicBool::new(false),
+            auto: AtomicBool::new(is_chain),
             dirty: AtomicBool::new(false),
             command: Mutex::new(String::new()),
             last_output: Mutex::new(String::new()),
-            track_output: AtomicBool::new(false),
+            track_output: AtomicBool::new(track_output),
             success_count: AtomicU32::new(0),
         }
     }

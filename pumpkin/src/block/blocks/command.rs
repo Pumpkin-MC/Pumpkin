@@ -144,10 +144,16 @@ impl CommandBlock {
         block_entity: Arc<dyn BlockEntity>,
         command: &str,
     ) {
+        let command_entity: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
         if command.is_empty() {
-            let command_entity: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
             command_entity.success_count.store(0, Ordering::Release);
         } else {
+            if command == "Searge" && command_entity.track_output.load(Ordering::Relaxed) {
+                let mut last_output = command_entity.last_output.lock().await;
+                *last_output = "#itzlipofutzli".to_string();
+                return;
+            }
+
             server
                 .command_dispatcher
                 .read()
@@ -327,12 +333,16 @@ impl BlockBehaviour for CommandBlock {
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let entity = CommandBlockEntity::new(*args.position);
+            let send_command_feedback = {
+                let game_rules = &args.world.level_info.read().await.game_rules;
+                game_rules.send_command_feedback
+            };
 
-            if args.block.id == Block::CHAIN_COMMAND_BLOCK.id {
-                entity.auto.store(true, Ordering::Relaxed);
-            }
-
+            let entity = CommandBlockEntity::new(
+                *args.position,
+                send_command_feedback,
+                args.block.id == Block::CHAIN_COMMAND_BLOCK.id,
+            );
             args.world.add_block_entity(Arc::new(entity)).await;
         })
     }
