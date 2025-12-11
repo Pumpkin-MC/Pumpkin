@@ -80,7 +80,6 @@ jobs:
           compression-level: 9
           path: dist/pumpkin-*
 
-  # ── 新增：完全静态链接的 musl 构建 ───────────────────────────────
   build_release_static:
     name: Build static binary (musl)
     runs-on: ubuntu-latest
