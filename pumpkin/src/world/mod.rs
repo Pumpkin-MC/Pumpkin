@@ -104,6 +104,7 @@ use pumpkin_util::{
     math::{position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
+use pumpkin_world::block::bubble_column::BubbleColumn;
 use pumpkin_world::chunk::palette::BlockPalette;
 use pumpkin_world::world::{GetBlockError, WorldFuture};
 use pumpkin_world::{
@@ -2544,6 +2545,22 @@ impl World {
         block_state_id: BlockStateId,
         flags: BlockFlags,
     ) -> BlockStateId {
+        let replaced = self
+            .set_block_state_internal(position, block_state_id, flags)
+            .await;
+        if replaced != block_state_id {
+            self.handle_bubble_column_change(position, block_state_id, replaced)
+                .await;
+        }
+        replaced
+    }
+
+    async fn set_block_state_internal(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        block_state_id: BlockStateId,
+        flags: BlockFlags,
+    ) -> BlockStateId {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let chunk = self.level.get_chunk(chunk_coordinate).await;
         let Ok(mut chunk) =
@@ -2671,6 +2688,97 @@ impl World {
         self.perform_block_light_updates().await;
 
         replaced_block_state_id
+    }
+
+    async fn handle_bubble_column_change(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        new_state_id: BlockStateId,
+        old_state_id: BlockStateId,
+    ) {
+        if new_state_id == old_state_id {
+            return;
+        }
+
+        let new_block = Block::from_state_id(new_state_id);
+        let old_block = Block::from_state_id(old_state_id);
+
+        if let Some(drag) = BubbleColumn::drag_for_base(new_block) {
+            self.rebuild_bubble_column_from_base(position, drag).await;
+        } else if BubbleColumn::drag_for_base(old_block).is_some() {
+            self.clear_bubble_column_above(position).await;
+        }
+
+        if new_block == &Block::WATER {
+            self.try_start_bubble_column_from_water(position).await;
+        }
+    }
+
+    async fn try_start_bubble_column_from_water(self: &Arc<Self>, position: &BlockPos) {
+        let state_id = self.get_block_state_id(position).await;
+        if !BubbleColumn::is_source_water_state(state_id) {
+            return;
+        }
+
+        let below = position.down();
+        let below_state_id = self.get_block_state_id(&below).await;
+        let below_block = Block::from_state_id(below_state_id);
+
+        if let Some(drag) = BubbleColumn::drag_for_base(below_block) {
+            self.propagate_bubble_column(*position, drag).await;
+            return;
+        }
+
+        if below_block == &Block::BUBBLE_COLUMN {
+            if let Some(drag) = BubbleColumn::drag_from_state(below_state_id) {
+                self.propagate_bubble_column(*position, drag).await;
+            }
+        }
+    }
+
+    async fn rebuild_bubble_column_from_base(self: &Arc<Self>, base: &BlockPos, drag: bool) {
+        let start = base.up();
+        self.propagate_bubble_column(start, drag).await;
+    }
+
+    async fn clear_bubble_column_above(self: &Arc<Self>, base: &BlockPos) {
+        let mut cursor = base.up();
+        let water_state = BubbleColumn::water_source_state_id();
+        loop {
+            let state_id = self.get_block_state_id(&cursor).await;
+            if Block::from_state_id(state_id) != &Block::BUBBLE_COLUMN {
+                break;
+            }
+
+            self.set_block_state_internal(&cursor, water_state, BlockFlags::NOTIFY_ALL)
+                .await;
+            cursor = cursor.up();
+        }
+    }
+
+    async fn propagate_bubble_column(self: &Arc<Self>, mut current: BlockPos, drag: bool) {
+        let state_id = BubbleColumn::state_id(drag);
+        loop {
+            let block_state_id = self.get_block_state_id(&current).await;
+            let block = Block::from_state_id(block_state_id);
+
+            if block == &Block::BUBBLE_COLUMN {
+                if BubbleColumn::drag_from_state(block_state_id) != Some(drag) {
+                    self.set_block_state_internal(&current, state_id, BlockFlags::NOTIFY_ALL)
+                        .await;
+                }
+            } else if block == &Block::WATER {
+                if !BubbleColumn::is_source_water_state(block_state_id) {
+                    break;
+                }
+                self.set_block_state_internal(&current, state_id, BlockFlags::NOTIFY_ALL)
+                    .await;
+            } else {
+                break;
+            }
+
+            current = current.up();
+        }
     }
 
     pub async fn schedule_block_tick(
