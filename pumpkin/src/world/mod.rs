@@ -2729,10 +2729,10 @@ impl World {
             return;
         }
 
-        if below_block == &Block::BUBBLE_COLUMN {
-            if let Some(drag) = BubbleColumn::drag_from_state(below_state_id) {
-                self.propagate_bubble_column(*position, drag).await;
-            }
+        if below_block == &Block::BUBBLE_COLUMN
+            && let Some(drag) = BubbleColumn::drag_from_state(below_state_id)
+        {
+            self.propagate_bubble_column(*position, drag).await;
         }
     }
 
