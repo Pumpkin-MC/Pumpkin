@@ -109,7 +109,7 @@ impl BreathManager {
     ///
     /// # 参数
     /// * `breath` - 新的氧气值，会被限制在-20到300范围内
-    /// Sets oxygen value to specified value
+    ///   Sets oxygen value to specified value
     ///
     /// # Parameters
     /// * `breath` - New oxygen value, will be clamped between -20 and 300
@@ -127,7 +127,7 @@ impl BreathManager {
     ///
     /// # 参数
     /// * `amount` - 要增加的氧气值
-    /// Adds oxygen value
+    ///   Adds oxygen value
     ///
     /// # Parameters
     /// * `amount` - Amount of oxygen to add
