@@ -2,7 +2,10 @@ use std::any::Any;
 
 use libloading::Library;
 
-use crate::plugin::loader::{PluginLoadFuture, PluginUnloadFuture};
+use crate::plugin::{
+    PLUGIN_API_VERSION,
+    loader::{PluginLoadFuture, PluginUnloadFuture},
+};
 
 use super::{LoaderError, Path, Plugin, PluginLoader, PluginMetadata};
 
@@ -15,6 +18,21 @@ impl PluginLoader for NativePluginLoader {
 
             let library = unsafe { Library::new(&path) }
                 .map_err(|e| LoaderError::LibraryLoad(e.to_string()))?;
+
+            // Ensure this plugin was built against a compatible Pumpkin plugin API version
+            let plugin_api_version = unsafe {
+                match library.get::<*const u32>(b"PUMPKIN_API_VERSION") {
+                    Ok(symbol) => **symbol,
+                    Err(_) => return Err(LoaderError::ApiVersionMissing),
+                }
+            };
+
+            if plugin_api_version != PLUGIN_API_VERSION {
+                return Err(LoaderError::ApiVersionMismatch {
+                    plugin_version: plugin_api_version,
+                    server_version: PLUGIN_API_VERSION,
+                });
+            }
 
             // 2. Extract Metadata (METADATA)
             let metadata = unsafe {

@@ -66,6 +66,9 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
             description: env!("CARGO_PKG_DESCRIPTION"),
         };
 
+        #[unsafe(no_mangle)]
+        pub static PUMPKIN_API_VERSION: u32 = pumpkin::plugin::PLUGIN_API_VERSION;
+
         #input_struct
 
         impl pumpkin::plugin::Plugin for #struct_ident {

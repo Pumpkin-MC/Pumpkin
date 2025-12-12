@@ -18,6 +18,10 @@ pub use api::*;
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+/// Bump this whenever the public plugin API or any event layout changes in a way
+/// that makes old binary plugins incompatible.
+pub const PLUGIN_API_VERSION: u32 = 2;
+
 /// A trait for handling events dynamically.
 ///
 /// This trait allows for handling events of any type that implements the `Event` trait.
