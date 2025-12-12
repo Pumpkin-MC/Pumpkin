@@ -57,11 +57,11 @@ impl BubbleColumn {
     /// Returns true if the provided state ID represents a still source water block.
     #[must_use]
     pub fn is_source_water_state(state_id: BlockStateId) -> bool {
-        if let Some(fluid) = Fluid::from_state_id(state_id) {
-            if fluid == &Fluid::FLOWING_WATER {
-                let props = FlowingFluidProperties::from_state_id(state_id, &Fluid::FLOWING_WATER);
-                return props.level == Level::L8 && props.falling == Falling::False;
-            }
+        if let Some(fluid) = Fluid::from_state_id(state_id)
+            && fluid == &Fluid::FLOWING_WATER
+        {
+            let props = FlowingFluidProperties::from_state_id(state_id, &Fluid::FLOWING_WATER);
+            return props.level == Level::L8 && props.falling == Falling::False;
         }
         false
     }
