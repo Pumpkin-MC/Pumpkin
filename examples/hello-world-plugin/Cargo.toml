@@ -1,0 +1,23 @@
+[package]
+name = "hello-world-plugin"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# This is the base crate with most high-level type definitions
+pumpkin = { path = "../../pumpkin" }
+# Other utilities used by Pumpkin (e.g. TextComponent, Vectors...)
+pumpkin-util = { path = "../../pumpkin-util" }
+# Macros for easier plugin development
+pumpkin-api-macros = { path = "../../pumpkin-api-macros" }
+
+# A rust asynchronous runtime
+tokio = "1.48"
+# Logging
+log = "0.4"
+
+[profile.release]
+lto = true

@@ -11,6 +11,7 @@ members = [
     "pumpkin-world",
     "pumpkin/",
     "pumpkin-data",
+    "examples/*",
 ]
 
 [workspace.package]
