@@ -2,11 +2,13 @@ use proc_macro::TokenStream;
 use proc_macro_error2::{abort, proc_macro_error};
 use proc_macro2::Ident;
 use quote::quote;
+use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use syn::{ImplItem, ItemFn, ItemImpl, ItemStruct, parse_macro_input, parse_quote};
 
-static PLUGIN_METHODS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+static PLUGIN_METHODS: LazyLock<Mutex<HashMap<String, String>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[proc_macro_error]
 #[proc_macro_attribute]
@@ -17,17 +19,25 @@ pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_output = &input_fn.sig.output;
     let fn_body = &input_fn.block;
 
+    let output_type = match fn_output {
+        syn::ReturnType::Default => quote! { () },
+        syn::ReturnType::Type(_, ty) => quote! { #ty },
+    };
+
     let method = quote! {
         #[allow(unused_mut)]
-        async fn #fn_name(#fn_inputs) #fn_output {
-            crate::GLOBAL_RUNTIME.block_on(async move {
+        fn #fn_name(#fn_inputs) -> PluginFuture<'_, #output_type> {
+            Box::pin(async move {
                 #fn_body
             })
         }
     }
     .to_string();
 
-    PLUGIN_METHODS.lock().unwrap().push(method);
+    PLUGIN_METHODS
+        .lock()
+        .unwrap()
+        .insert(fn_name.to_string(), method);
 
     TokenStream::new()
 }
@@ -42,7 +52,7 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let methods = PLUGIN_METHODS.lock().unwrap();
 
     let methods: Vec<proc_macro2::TokenStream> = methods
-        .iter()
+        .values()
         .map(|s| {
             s.parse::<proc_macro2::TokenStream>().unwrap_or_else(|e| {
                 abort!(
@@ -55,6 +65,8 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Combine the original struct definition with the impl block and plugin() function
     let expanded = quote! {
+        use pumpkin::plugin::PluginFuture;
+
         pub static GLOBAL_RUNTIME: std::sync::LazyLock<std::sync::Arc<tokio::runtime::Runtime>> =
             std::sync::LazyLock::new(|| std::sync::Arc::new(tokio::runtime::Runtime::new().unwrap()));
 

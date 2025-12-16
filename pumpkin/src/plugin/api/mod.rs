@@ -23,7 +23,8 @@ pub struct PluginMetadata<'s> {
     pub description: &'s str,
 }
 
-type PluginFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+/// This type represents a future for the plugin.
+pub type PluginFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Trait representing a plugin with asynchronous lifecycle methods.
 ///
