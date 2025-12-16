@@ -13,7 +13,7 @@ use tokio::sync::{Notify, RwLock};
 pub mod api;
 pub mod loader;
 
-use crate::{PERMISSION_MANAGER, server::Server};
+use crate::{LOGGER_IMPL, PERMISSION_MANAGER, server::Server};
 pub use api::*;
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -347,6 +347,7 @@ impl PluginManager {
                     Arc::clone(&self.handlers),
                     Arc::clone(&self_ref),
                     Arc::clone(&PERMISSION_MANAGER),
+                    Arc::clone(&LOGGER_IMPL),
                 ));
 
                 // Create the plugin structure first

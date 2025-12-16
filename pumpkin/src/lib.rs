@@ -54,7 +54,8 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
-pub static LOGGER_IMPL: OnceLock<Option<(ReadlineLogWrapper, LevelFilter)>> = OnceLock::new();
+pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<Option<(ReadlineLogWrapper, LevelFilter)>>>> =
+    LazyLock::new(|| Arc::new(OnceLock::new()));
 
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     use simplelog::{ConfigBuilder, SharedLogger, SimpleLogger, WriteLogger};
@@ -139,16 +140,6 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     if LOGGER_IMPL.set(logger).is_err() {
         panic!("Failed to set logger. already initialized");
     }
-}
-
-#[macro_export]
-macro_rules! init_log {
-    () => {
-        if let Some((logger_impl, level)) = pumpkin::LOGGER_IMPL.wait() {
-            log::set_logger(logger_impl).unwrap();
-            log::set_max_level(*level);
-        }
-    };
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);

@@ -41,11 +41,12 @@
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
 
+use log::LevelFilter;
 use plugin::PluginManager;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use std::{
     io::{self},
-    sync::{Arc, LazyLock},
+    sync::{Arc, LazyLock, OnceLock},
 };
 #[cfg(not(unix))]
 use tokio::signal::ctrl_c;
@@ -53,7 +54,7 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
-use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::{
@@ -61,6 +62,8 @@ use pumpkin_util::{
     text::{TextComponent, color::NamedColor},
 };
 use std::time::Instant;
+
+use crate::logging::ReadlineLogWrapper;
 // Setup some tokens to allow us to identify which event is for which socket.
 
 pub mod block;
@@ -69,6 +72,7 @@ pub mod data;
 pub mod entity;
 pub mod error;
 pub mod item;
+pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
@@ -85,6 +89,9 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
         PERMISSION_REGISTRY.clone(),
     )))
 });
+
+pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<Option<(ReadlineLogWrapper, LevelFilter)>>>> =
+    LazyLock::new(|| Arc::new(OnceLock::new()));
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -105,7 +112,10 @@ async fn main() {
 
     pumpkin::init_logger(&advanced_config);
 
-    init_log!();
+    if let Some((logger_impl, level)) = pumpkin::LOGGER_IMPL.wait() {
+        log::set_logger(logger_impl).unwrap();
+        log::set_max_level(*level);
+    }
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
