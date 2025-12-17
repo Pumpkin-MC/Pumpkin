@@ -41,7 +41,6 @@
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
 
-use log::LevelFilter;
 use plugin::PluginManager;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use std::{
@@ -54,7 +53,7 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
-use pumpkin::{PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
+use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::{
@@ -63,7 +62,6 @@ use pumpkin_util::{
 };
 use std::time::Instant;
 
-use crate::logging::ReadlineLogWrapper;
 // Setup some tokens to allow us to identify which event is for which socket.
 
 pub mod block;
@@ -90,7 +88,7 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
-pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<Option<(ReadlineLogWrapper, LevelFilter)>>>> =
+pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");

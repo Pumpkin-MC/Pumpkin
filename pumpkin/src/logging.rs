@@ -1,3 +1,6 @@
+#![allow(clippy::print_stderr)]
+#![allow(clippy::print_stdout)]
+
 use flate2::write::GzEncoder;
 use log::{LevelFilter, Log, Record};
 use rustyline_async::Readline;
@@ -91,7 +94,7 @@ impl GzipRollingLogger {
         let log_path = PathBuf::from(LOG_DIR);
 
         for id in 1..=MAX_ATTEMPTS {
-            let filename = log_path.join(format!("{}-{}.log.gz", date_format, id));
+            let filename = log_path.join(format!("{date_format}-{id}.log.gz"));
 
             if !filename.exists() {
                 return Ok(filename);
@@ -99,8 +102,7 @@ impl GzipRollingLogger {
         }
 
         Err(format!(
-            "Failed to find a unique log filename for date {} after {} attempts.",
-            date_format, MAX_ATTEMPTS
+            "Failed to find a unique log filename for date {date_format} after {MAX_ATTEMPTS} attempts.",
         )
         .into())
     }
@@ -203,6 +205,7 @@ impl SharedLogger for GzipRollingLogger {
 }
 
 impl ReadlineLogWrapper {
+    #[must_use]
     pub fn new(
         log: Box<dyn SharedLogger + 'static>,
         file_logger: Option<Box<dyn SharedLogger + 'static>>,
@@ -216,11 +219,9 @@ impl ReadlineLogWrapper {
     }
 
     pub fn take_readline(&self) -> Option<Readline> {
-        if let Ok(mut result) = self.readline.lock() {
-            result.take()
-        } else {
-            None
-        }
+        self.readline
+            .lock()
+            .map_or_else(|_| None, |mut result| result.take())
     }
 
     // This isn't really dead code, just for some reason rust thinks that it might be.

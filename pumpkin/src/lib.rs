@@ -54,7 +54,8 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
-pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<Option<(ReadlineLogWrapper, LevelFilter)>>>> =
+pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter)>;
+pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {

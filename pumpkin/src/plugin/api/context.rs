@@ -4,8 +4,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use crate::{command::client_suggestions, logging::ReadlineLogWrapper};
-use log::LevelFilter;
+use crate::{LoggerOption, command::client_suggestions};
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
@@ -33,7 +32,7 @@ pub struct Context {
     pub handlers: Arc<RwLock<HandlerMap>>,
     pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<RwLock<PermissionManager>>,
-    pub logger: Arc<OnceLock<Option<(ReadlineLogWrapper, LevelFilter)>>>,
+    pub logger: Arc<OnceLock<LoggerOption>>,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -52,7 +51,7 @@ impl Context {
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
         permission_manager: Arc<RwLock<PermissionManager>>,
-        logger: Arc<OnceLock<Option<(ReadlineLogWrapper, LevelFilter)>>>,
+        logger: Arc<OnceLock<LoggerOption>>,
     ) -> Self {
         Self {
             metadata,
