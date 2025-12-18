@@ -27,8 +27,10 @@ pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let method = quote! {
         #[allow(unused_mut)]
         fn #fn_name(#fn_inputs) -> PluginFuture<'_, #output_type> {
-            Box::pin(async move {
-                #fn_body
+            crate::GLOBAL_RUNTIME.block_on(async move {
+                Box::pin(async move {
+                    #fn_body
+                })
             })
         }
     }
