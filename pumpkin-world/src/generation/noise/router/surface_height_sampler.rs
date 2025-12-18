@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use pumpkin_data::noise_router::WrapperType;
-use pumpkin_util::math::vector2::Vector2;
 
 use crate::generation::{biome_coords, positions::chunk_pos};
 
@@ -68,7 +67,7 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
         let biome_aligned_x = biome_coords::to_block(biome_coords::from_block(block_x));
         let biome_aligned_z = biome_coords::to_block(biome_coords::from_block(block_z));
 
-        let packed_column = chunk_pos::packed(&Vector2::new(biome_aligned_x, biome_aligned_z));
+        let packed_column = chunk_pos::packed(biome_aligned_x as u64, biome_aligned_z as u64);
         if let Some(estimate) = self.cache.get(&packed_column) {
             *estimate
         } else {
@@ -125,13 +124,13 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
                     let max_value = component_stack[wrapper.input_index].max();
 
                     match wrapper.wrapper_type {
-                        WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(Box::new(
+                        WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(
                             ChunkSpecificNoiseFunctionComponent::Cache2D(Cache2D::new(
                                 wrapper.input_index,
                                 min_value,
                                 max_value,
                             )),
-                        )),
+                        ),
                         WrapperType::CacheFlat => {
                             let mut flat_cache = FlatCache::new(
                                 wrapper.input_index,
@@ -181,9 +180,9 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
                                 }
                             }
 
-                            ChunkNoiseFunctionComponent::Chunk(Box::new(
+                            ChunkNoiseFunctionComponent::Chunk(
                                 ChunkSpecificNoiseFunctionComponent::FlatCache(flat_cache),
-                            ))
+                            )
                         }
                         // Java passes thru if the noise pos is not the chunk itself, which it is
                         // never for the Height estimator

@@ -33,8 +33,8 @@ pub struct VeryBiasedToBottomHeightProvider {
 
 impl VeryBiasedToBottomHeightProvider {
     pub fn get(&self, random: &mut RandomGenerator, min_y: i8, height: u16) -> i32 {
-        let min = self.min_inclusive.get_y(min_y, height) as i32;
-        let max = self.max_inclusive.get_y(min_y, height) as i32;
+        let min = self.min_inclusive.get_y(min_y as i16, height);
+        let max = self.max_inclusive.get_y(min_y as i16, height);
         let inner = self.inner.unwrap_or(1) as i32;
 
         let min_rnd = random.next_inbetween_i32(min + inner, max);
@@ -52,8 +52,8 @@ pub struct UniformHeightProvider {
 
 impl UniformHeightProvider {
     pub fn get(&self, random: &mut RandomGenerator, min_y: i8, height: u16) -> i32 {
-        let min = self.min_inclusive.get_y(min_y, height) as i32;
-        let max = self.max_inclusive.get_y(min_y, height) as i32;
+        let min = self.min_inclusive.get_y(min_y as i16, height);
+        let max = self.max_inclusive.get_y(min_y as i16, height);
 
         random.next_inbetween_i32(min, max)
     }
@@ -69,21 +69,21 @@ pub struct TrapezoidHeightProvider {
 impl TrapezoidHeightProvider {
     pub fn get(&self, random: &mut RandomGenerator, min_y: i8, height: u16) -> i32 {
         let plateau = self.plateau.unwrap_or(0);
-        let i = self.min_inclusive.get_y(min_y, height);
-        let j = self.max_inclusive.get_y(min_y, height);
+        let i = self.min_inclusive.get_y(min_y as i16, height);
+        let j = self.max_inclusive.get_y(min_y as i16, height);
 
         if i > j {
             log::warn!("Empty height range");
-            return i as i32;
+            return i;
         }
 
         let k = j - i;
-        if plateau >= k as i32 {
-            return random.next_inbetween_i32(i as i32, j as i32);
+        if plateau >= k {
+            return random.next_inbetween_i32(i, j);
         }
 
-        let l = (k as i32 - plateau) / 2;
-        let m = k as i32 - l;
-        i as i32 + random.next_inbetween_i32(0, m) + random.next_inbetween_i32(0, l)
+        let l = (k - plateau) / 2;
+        let m = k - l;
+        i + random.next_inbetween_i32(0, m) + random.next_inbetween_i32(0, l)
     }
 }

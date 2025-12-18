@@ -17,7 +17,7 @@ pub enum MaterialRule {
     #[serde(rename = "minecraft:sequence")]
     Sequence(SequenceMaterialRule),
     #[serde(rename = "minecraft:condition")]
-    Condition(Box<ConditionMaterialRule>),
+    Condition(ConditionMaterialRule),
 }
 
 impl MaterialRule {
@@ -45,11 +45,11 @@ pub struct BadLandsMaterialRule;
 
 impl BadLandsMaterialRule {
     pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<&'static BlockState> {
-        Some(
-            context
-                .terrain_builder
-                .get_terracotta_block(&context.block_pos),
-        )
+        Some(context.terrain_builder.get_terracotta_block(
+            context.block_pos_x,
+            context.block_pos_y,
+            context.block_pos_z,
+        ))
     }
 }
 

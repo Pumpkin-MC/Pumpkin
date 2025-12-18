@@ -181,9 +181,9 @@ impl ShiftedNoise {
 }
 
 pub struct InterpolatedNoiseSampler {
-    lower_noise: Box<OctavePerlinNoiseSampler>,
-    upper_noise: Box<OctavePerlinNoiseSampler>,
-    noise: Box<OctavePerlinNoiseSampler>,
+    lower_noise: OctavePerlinNoiseSampler,
+    upper_noise: OctavePerlinNoiseSampler,
+    noise: OctavePerlinNoiseSampler,
     data: &'static InterpolatedNoiseSamplerData,
     fractions: [f64; 16],
     max_value: f64,
@@ -197,24 +197,9 @@ impl InterpolatedNoiseSampler {
         let little_start = -7;
         let little_amplitudes = [1.0; 8];
 
-        let lower_noise = Box::new(OctavePerlinNoiseSampler::new(
-            random,
-            big_start,
-            &big_amplitudes,
-            true,
-        ));
-        let upper_noise = Box::new(OctavePerlinNoiseSampler::new(
-            random,
-            big_start,
-            &big_amplitudes,
-            true,
-        ));
-        let noise = Box::new(OctavePerlinNoiseSampler::new(
-            random,
-            little_start,
-            &little_amplitudes,
-            true,
-        ));
+        let lower_noise = OctavePerlinNoiseSampler::new(random, big_start, &big_amplitudes, true);
+        let upper_noise = OctavePerlinNoiseSampler::new(random, big_start, &big_amplitudes, true);
+        let noise = OctavePerlinNoiseSampler::new(random, little_start, &little_amplitudes, true);
 
         let max_value = lower_noise.get_total_amplitude(data.scaled_y_scale + 2.0);
 

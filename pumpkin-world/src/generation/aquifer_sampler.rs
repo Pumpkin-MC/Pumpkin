@@ -1,7 +1,7 @@
 use enum_dispatch::enum_dispatch;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{
-    math::{clamped_map, floor_div, vector2::Vector2, vector3::Vector3},
+    math::{clamped_map, floor_div, vector3::Vector3},
     random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
 
@@ -45,7 +45,7 @@ impl FluidLevel {
 #[enum_dispatch(FluidLevelSamplerImpl)]
 pub enum FluidLevelSampler {
     Static(StaticFluidLevelSampler),
-    Chunk(Box<StandardChunkFluidLevelSampler>),
+    Chunk(StandardChunkFluidLevelSampler),
 }
 
 impl FluidLevelSamplerImpl for FluidLevelSampler {
@@ -106,7 +106,7 @@ macro_rules! local_y {
 pub struct WorldAquiferSampler {
     fluid_level_sampler: FluidLevelSampler,
     start_x: i32,
-    start_y: i8,
+    start_y: i32,
     start_z: i32,
     size_y: usize,
     size_z: usize,
@@ -115,40 +115,40 @@ pub struct WorldAquiferSampler {
 }
 
 impl WorldAquiferSampler {
-    const CHUNK_POS_OFFSETS: [Vector2<i8>; 13] = [
-        Vector2::new(0, 0),
-        Vector2::new(-2, -1),
-        Vector2::new(-1, -1),
-        Vector2::new(0, -1),
-        Vector2::new(1, -1),
-        Vector2::new(-3, 0),
-        Vector2::new(-2, 0),
-        Vector2::new(-1, 0),
-        Vector2::new(1, 0),
-        Vector2::new(-2, 1),
-        Vector2::new(-1, 1),
-        Vector2::new(0, 1),
-        Vector2::new(1, 1),
+    const CHUNK_POS_OFFSETS: [(i8, i8); 13] = [
+        (0, 0),
+        (-2, -1),
+        (-1, -1),
+        (0, -1),
+        (1, -1),
+        (-3, 0),
+        (-2, 0),
+        (-1, 0),
+        (1, 0),
+        (-2, 1),
+        (-1, 1),
+        (0, 1),
+        (1, 1),
     ];
 
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        chunk_pos: Vector2<i32>,
+        chunk_x: i32,
+        chunk_z: i32,
         random_deriver: &RandomDeriver,
         minimum_y: i8,
         height: u16,
         fluid_level: FluidLevelSampler,
     ) -> Self {
-        let start_x = local_xz!(chunk_pos::start_block_x(&chunk_pos)) - 1;
-        let end_x = local_xz!(chunk_pos::end_block_x(&chunk_pos)) + 1;
+        let start_x = local_xz!(chunk_pos::start_block_x(chunk_x)) - 1;
+        let end_x = local_xz!(chunk_pos::end_block_x(chunk_x)) + 1;
         let size_x = (end_x - start_x) as usize + 1;
 
         let start_y = local_y!(minimum_y) - 1;
         let end_y = local_y!(minimum_y as i32 + height as i32) + 1;
         let size_y = (end_y - start_y as i32) as usize + 1;
 
-        let start_z = local_xz!(chunk_pos::start_block_z(&chunk_pos)) - 1;
-        let end_z = local_xz!(chunk_pos::end_block_z(&chunk_pos)) + 1;
+        let start_z = local_xz!(chunk_pos::start_block_z(chunk_z)) - 1;
+        let end_z = local_xz!(chunk_pos::end_block_z(chunk_z)) + 1;
         let size_z = (end_z - start_z) as usize + 1;
 
         let cache_size = size_x * size_y * size_z;
@@ -178,7 +178,7 @@ impl WorldAquiferSampler {
         Self {
             fluid_level_sampler: fluid_level,
             start_x,
-            start_y,
+            start_y: start_y as i32,
             start_z,
             size_y,
             size_z,
@@ -189,7 +189,7 @@ impl WorldAquiferSampler {
 
     fn packed_position_index(&self, x: i32, y: i32, z: i32) -> usize {
         let local_x = (x - self.start_x) as usize;
-        let local_y = (y - self.start_y as i32) as usize;
+        let local_y = (y - self.start_y) as usize;
         let local_z = (z - self.start_z) as usize;
 
         packed_position_index!(local_x, local_y, local_z, self.size_y, self.size_z)
@@ -288,10 +288,8 @@ impl WorldAquiferSampler {
         let local_z = local_xz!(z);
 
         let index = self.packed_position_index(local_x, local_y, local_z);
-        let entry = self
-            .levels
-            .get_mut(index)
-            .expect("Index calculated by packed_position_index is out of bounds for self.levels");
+        let entry = &mut self.levels[index];
+
         let fluid_level = &self.fluid_level_sampler;
         entry.get_or_insert_with(|| {
             Self::get_fluid_level(
@@ -321,13 +319,13 @@ impl WorldAquiferSampler {
         let mut bl = false;
         let mut min_surface_estimate = i32::MAX;
 
-        for offset in Self::CHUNK_POS_OFFSETS {
-            let x = block_x + section_coords::section_to_block(offset.x as i32);
-            let z = block_z + section_coords::section_to_block(offset.y as i32);
+        for (offset_x, offset_z) in Self::CHUNK_POS_OFFSETS {
+            let x = block_x + section_coords::section_to_block(offset_x as i32);
+            let z = block_z + section_coords::section_to_block(offset_z as i32);
 
             let n = height_estimator.estimate_height(x, z);
             let o = n + 8;
-            let bl2 = offset.x == 0 && offset.y == 0;
+            let bl2 = offset_x == 0 && offset_z == 0;
 
             if bl2 && k > o {
                 return fluid_level.clone();
@@ -691,7 +689,6 @@ mod random_positions_and_hypot {
     use std::{mem, sync::LazyLock};
 
     use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
-    use pumpkin_util::math::vector2::Vector2;
 
     use crate::{
         block::RawBlockState,
@@ -738,18 +735,20 @@ mod random_positions_and_hypot {
             .get(&GeneratorSetting::Overworld)
             .unwrap();
         let shape = &surface_config.shape;
-        let chunk_pos = Vector2::new(7, 4);
-        let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+        let chunk_x = 7;
+        let chunk_z = 4;
+
+        let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(63, &WATER_BLOCK),
             FluidLevel::new(-54, &LAVA_BLOCK),
-        )));
+        ));
         const CHUNK_WIDTH: usize = 16;
         let noise = ChunkNoiseGenerator::new(
             &base_router.noise,
             &RANDOM_CONFIG,
             CHUNK_WIDTH / shape.horizontal_cell_block_count() as usize,
-            chunk_pos::start_block_x(&chunk_pos),
-            chunk_pos::start_block_z(&chunk_pos),
+            chunk_pos::start_block_x(chunk_x),
+            chunk_pos::start_block_z(chunk_z),
             shape,
             sampler,
             true,
@@ -771,7 +770,7 @@ mod random_positions_and_hypot {
             BlockStateSampler::Aquifer(aquifer) => aquifer,
             _ => unreachable!(),
         };
-        let aquifer = match *sampler {
+        let aquifer = match sampler {
             AquiferSampler::Aquifer(aquifer) => aquifer,
             _ => unreachable!(),
         };
@@ -783,8 +782,8 @@ mod random_positions_and_hypot {
         );
 
         let surface_height_estimator_options = SurfaceHeightSamplerBuilderOptions::new(
-            chunk_pos.x,
-            chunk_pos.y,
+            chunk_x,
+            chunk_z,
             horizontal_biome_end,
             shape.min_y as i32,
             shape.max_y() as i32,

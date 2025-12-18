@@ -17,9 +17,8 @@ pub struct NetherFortressGenerator;
 
 impl StructureGenerator for NetherFortressGenerator {
     fn get_structure_position(&self, chunk: &ProtoChunk) -> StructurePosition {
-        let chunk_pos = chunk.chunk_pos;
-        let start_x = chunk_pos::start_block_x(&chunk_pos);
-        let start_z = chunk_pos::start_block_z(&chunk_pos);
+        let start_x = chunk_pos::start_block_x(chunk.x);
+        let start_z = chunk_pos::start_block_z(chunk.z);
         let generator = StructurePiecesCollector {
             pieces_positions: vec![], // TODO
         };

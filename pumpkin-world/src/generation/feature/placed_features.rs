@@ -9,7 +9,6 @@ use std::sync::LazyLock;
 use pumpkin_util::biome::FOLIAGE_NOISE;
 use pumpkin_util::math::int_provider::IntProvider;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 
@@ -28,7 +27,7 @@ pub static PLACED_FEATURES: LazyLock<HashMap<String, PlacedFeature>> = LazyLock:
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum PlacedFeatureWrapper {
-    Direct(Box<PlacedFeature>),
+    Direct(PlacedFeature),
     Named(String),
 }
 
@@ -325,7 +324,7 @@ impl CountOnEveryLayerPlacementModifier {
             for _j in 0..self.count.get(random) {
                 let x = random.next_bounded_i32(16) + pos.0.x;
                 let z = random.next_bounded_i32(16) + pos.0.z;
-                let y = chunk.top_motion_blocking_block_height_exclusive(&Vector2::new(x, z));
+                let y = chunk.top_motion_blocking_block_height_exclusive(x, z);
 
                 let n = Self::find_pos(chunk, x, y, z, i);
 
@@ -406,7 +405,7 @@ impl ConditionalPlacementModifier for SurfaceThresholdFilterPlacementModifier {
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let y = chunk.get_top_y(&self.heightmap, &pos.0.to_vec2_i32());
+        let y = chunk.get_top_y(&self.heightmap, pos.0.x, pos.0.z);
         let min = y.saturating_add(self.min_inclusive.unwrap_or(i32::MIN));
         let max = y.saturating_add(self.max_inclusive.unwrap_or(i32::MAX));
         min <= pos.0.y && pos.0.y <= max
@@ -470,8 +469,8 @@ impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let world_top = chunk.top_block_height_exclusive(&Vector2::new(pos.0.x, pos.0.z));
-        let ocean = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x, pos.0.z));
+        let world_top = chunk.top_block_height_exclusive(pos.0.x, pos.0.z);
+        let ocean = chunk.ocean_floor_height_exclusive(pos.0.x, pos.0.z);
         world_top - ocean <= self.max_water_depth
     }
 }
@@ -490,7 +489,7 @@ impl ConditionalPlacementModifier for BiomePlacementModifier {
     ) -> bool {
         // we check if the current feature can be applied to the biome at the pos
         let name = format!("minecraft:{this_feature}");
-        let biome = chunk.get_biome_for_terrain_gen(&pos.0);
+        let biome = chunk.get_biome_for_terrain_gen(pos.0.x, pos.0.y, pos.0.z);
 
         for feature in biome.features {
             if feature.contains(&name.deref()) {
@@ -536,7 +535,7 @@ impl HeightmapPlacementModifier {
     ) -> Box<dyn Iterator<Item = BlockPos>> {
         let x = pos.0.x;
         let z = pos.0.z;
-        let top = chunk.get_top_y(&self.heightmap, &Vector2::new(x, z));
+        let top = chunk.get_top_y(&self.heightmap, x, z);
         if top > min_y as i32 {
             return Box::new(iter::once(BlockPos(Vector3::new(x, top, z))));
         }

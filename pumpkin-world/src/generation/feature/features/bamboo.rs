@@ -5,7 +5,7 @@ use pumpkin_data::{
     tag::Taggable,
 };
 use pumpkin_util::{
-    math::{position::BlockPos, vector2::Vector2},
+    math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
@@ -38,11 +38,8 @@ impl BambooFeature {
                     let rnd = random.next_bounded_i32(4) + 1;
                     for x in pos.0.x - rnd..pos.0.x + rnd {
                         for z in pos.0.z - rnd..pos.0.z + rnd {
-                            let block_below = BlockPos::new(
-                                x,
-                                chunk.top_block_height_exclusive(&Vector2::new(x, z)) - 1,
-                                z,
-                            );
+                            let block_below =
+                                BlockPos::new(x, chunk.top_block_height_exclusive(x, z) - 1, z);
                             let block = GenerationCache::get_block_state(chunk, &block_below.0);
                             if !block.to_block().has_tag(&tag::Block::MINECRAFT_DIRT) {
                                 continue;

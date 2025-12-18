@@ -68,7 +68,7 @@ impl<'a> DoublePerlinNoiseBuilder<'a> {
         }
     }
 
-    pub fn get_noise_sampler_for_id(&mut self, id: &str) -> DoublePerlinNoiseSampler {
+    pub fn get_noise_sampler_for_id(&self, id: &str) -> DoublePerlinNoiseSampler {
         let parameters = DoublePerlinNoiseParameters::id_to_parameters(id)
             .unwrap_or_else(|| panic!("Unknown noise id: {id}"));
 
@@ -140,7 +140,7 @@ impl ProtoNoiseRouters {
         base_stack: &[BaseNoiseFunctionComponent],
         random_config: &GlobalRandomConfig,
     ) -> Box<[ProtoNoiseFunctionComponent]> {
-        let mut perlin_noise_builder = DoublePerlinNoiseBuilder::new(random_config);
+        let perlin_noise_builder = DoublePerlinNoiseBuilder::new(random_config);
 
         // Contiguous memory for our function components
         let mut stack = Vec::<ProtoNoiseFunctionComponent>::with_capacity(base_stack.len());

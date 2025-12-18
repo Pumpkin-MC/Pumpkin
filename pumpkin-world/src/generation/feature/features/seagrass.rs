@@ -4,7 +4,7 @@ use pumpkin_data::{
     block_properties::{BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties},
 };
 use pumpkin_util::{
-    math::{position::BlockPos, vector2::Vector2},
+    math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
@@ -26,7 +26,7 @@ impl SeagrassFeature {
     ) -> bool {
         let x = random.next_bounded_i32(8) - random.next_bounded_i32(8);
         let z = random.next_bounded_i32(8) - random.next_bounded_i32(8);
-        let y = chunk.ocean_floor_height_exclusive(&Vector2::new(pos.0.x + x, pos.0.z + z));
+        let y = chunk.ocean_floor_height_exclusive(pos.0.x + x, pos.0.z + z);
         let top_pos = BlockPos::new(pos.0.x + x, y, pos.0.z + z);
         if GenerationCache::get_block_state(chunk, &top_pos.0).to_block() == &Block::WATER {
             let tall = random.next_f64() < self.probability as f64;

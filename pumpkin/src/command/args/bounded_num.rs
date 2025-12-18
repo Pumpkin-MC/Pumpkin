@@ -90,22 +90,18 @@ pub enum NotInBounds {
 impl From<NotInBounds> for CommandError {
     fn from(value: NotInBounds) -> Self {
         match value {
-            NotInBounds::LowerBound(val, min) => {
-                Self::CommandFailed(Box::new(TextComponent::text(format!(
-                    "{} must not be less than {}, found {}",
-                    val.qualifier(),
-                    min,
-                    val
-                ))))
-            }
-            NotInBounds::UpperBound(val, max) => {
-                Self::CommandFailed(Box::new(TextComponent::text(format!(
-                    "{} must not be more than {}, found {}",
-                    val.qualifier(),
-                    max,
-                    val
-                ))))
-            }
+            NotInBounds::LowerBound(val, min) => Self::CommandFailed(TextComponent::text(format!(
+                "{} must not be less than {}, found {}",
+                val.qualifier(),
+                min,
+                val
+            ))),
+            NotInBounds::UpperBound(val, max) => Self::CommandFailed(TextComponent::text(format!(
+                "{} must not be more than {}, found {}",
+                val.qualifier(),
+                max,
+                val
+            ))),
         }
     }
 }

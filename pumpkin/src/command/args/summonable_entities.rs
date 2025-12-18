@@ -54,9 +54,9 @@ impl<'a> FindArg<'a> for SummonableEntitiesArgumentConsumer {
             Some(Arg::Block(name)) => {
                 EntityType::from_name(name.strip_prefix("minecraft:").unwrap_or(name)).map_or_else(
                     || {
-                        Err(CommandError::CommandFailed(Box::new(TextComponent::text(
+                        Err(CommandError::CommandFailed(TextComponent::text(
                             "Can't find Entity",
-                        ))))
+                        )))
                     },
                     Result::Ok,
                 )

@@ -56,18 +56,14 @@ impl<'a> FindArg<'a> for ItemArgumentConsumer {
                     .map_or_else(
                         || {
                             if name.starts_with("minecraft:") {
-                                Err(CommandError::CommandFailed(Box::new(
-                                    TextComponent::translate(
-                                        "argument.item.id.invalid",
-                                        [TextComponent::text((*name).to_string())],
-                                    ),
+                                Err(CommandError::CommandFailed(TextComponent::translate(
+                                    "argument.item.id.invalid",
+                                    [TextComponent::text((*name).to_string())],
                                 )))
                             } else {
-                                Err(CommandError::CommandFailed(Box::new(
-                                    TextComponent::translate(
-                                        "argument.item.id.invalid",
-                                        [TextComponent::text("minecraft:".to_string() + *name)],
-                                    ),
+                                Err(CommandError::CommandFailed(TextComponent::translate(
+                                    "argument.item.id.invalid",
+                                    [TextComponent::text("minecraft:".to_string() + *name)],
                                 )))
                             }
                         },

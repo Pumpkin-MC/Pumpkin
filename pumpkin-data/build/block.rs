@@ -886,9 +886,8 @@ pub(crate) fn build() -> TokenStream {
             matches!(state_id, #random_tick_state_ids)
         }
 
-        pub fn blocks_movement(block_state: &BlockState) -> bool {
+        pub fn blocks_movement(block_state: &BlockState, block: &Block) -> bool {
             if block_state.is_solid() {
-                let block = Block::from_state_id(block_state.id);
                 return block != &Block::COBWEB && block != &Block::BAMBOO_SAPLING;
             }
             false

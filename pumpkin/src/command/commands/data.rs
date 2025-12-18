@@ -225,7 +225,7 @@ async fn display_data(
     let mut nbt = NbtCompound::new();
     storage.write_nbt(&mut nbt).await;
     let display = snbt_colorful_display(&NbtTag::Compound(nbt), 0)
-        .map_err(|string| CommandError::CommandFailed(Box::new(TextComponent::text(string))))?;
+        .map_err(|string| CommandError::CommandFailed(TextComponent::text(string)))?;
     Ok(TextComponent::translate(
         "commands.data.entity.query",
         [target_name, display],

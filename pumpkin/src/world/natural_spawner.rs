@@ -374,10 +374,7 @@ pub async fn spawn_category_for_position(
             new_z += rng().random_range(0..6) - rng().random_range(0..6);
             new_pos = BlockPos::new(new_x, new_pos.0.y, new_z);
             let new_pos_center = new_pos.to_centered_f64();
-            let Some(player_distance) = get_nearest_player(&new_pos_center, world).await else {
-                // debug!("player_distance infinity");
-                return;
-            };
+            let player_distance = get_nearest_player(&new_pos_center, world).await;
             if !is_right_distance_to_player_and_spawn_point(
                 &new_pos,
                 player_distance,
@@ -433,15 +430,15 @@ pub async fn spawn_category_for_position(
     }
 }
 
-pub async fn get_nearest_player(pos: &Vector3<f64>, world: &Arc<World>) -> Option<f64> {
-    let mut dst = None;
+pub async fn get_nearest_player(pos: &Vector3<f64>, world: &Arc<World>) -> f64 {
+    let mut dst = f64::MAX;
     for (_uuid, player) in world.players.read().await.iter() {
         if player.gamemode.load() == GameMode::Spectator {
             continue;
         }
         let cur_dst = player.position().squared_distance_to_vec(*pos);
-        if dst.is_none_or(|x| cur_dst < x) {
-            dst = Some(cur_dst);
+        if cur_dst < dst {
+            dst = cur_dst;
         }
     }
     dst

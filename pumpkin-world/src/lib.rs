@@ -67,23 +67,18 @@ pub fn bench_create_and_populate_noise(
     };
 
     let biome_mixer_seed = hash_seed(random_config.seed);
-    let mut chunk = ProtoChunk::new(
-        Vector2::new(0, 0),
-        settings,
-        default_block,
-        biome_mixer_seed,
-    );
+    let mut chunk = ProtoChunk::new(0, 0, settings, default_block, biome_mixer_seed);
 
     // Create noise sampler and other required components
     let generation_shape = &settings.shape;
     let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
-    let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+    let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
         FluidLevel::new(settings.sea_level, settings.default_fluid.name),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
-    )));
+    ));
 
-    let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
-    let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
+    let start_x = chunk_pos::start_block_x(0);
+    let start_z = chunk_pos::start_block_z(0);
 
     let mut noise_sampler = ChunkNoiseGenerator::new(
         &base_router.noise,
@@ -133,18 +128,13 @@ pub fn bench_create_and_populate_biome(
     use crate::generation::{biome_coords, positions::chunk_pos};
 
     let biome_mixer_seed = hash_seed(random_config.seed);
-    let mut chunk = ProtoChunk::new(
-        Vector2::new(0, 0),
-        settings,
-        default_block,
-        biome_mixer_seed,
-    );
+    let mut chunk = ProtoChunk::new(0, 0, settings, default_block, biome_mixer_seed);
 
     // Create multi-noise sampler
     let generation_shape = &settings.shape;
     let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
-    let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
-    let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
+    let start_x = chunk_pos::start_block_x(0);
+    let start_z = chunk_pos::start_block_z(0);
     let biome_pos = Vector2::new(
         biome_coords::from_block(start_x),
         biome_coords::from_block(start_z),
@@ -186,18 +176,13 @@ pub fn bench_create_and_populate_noise_with_surface(
     };
 
     let biome_mixer_seed = hash_seed(random_config.seed);
-    let mut chunk = ProtoChunk::new(
-        Vector2::new(0, 0),
-        settings,
-        default_block,
-        biome_mixer_seed,
-    );
+    let mut chunk = ProtoChunk::new(0, 0, settings, default_block, biome_mixer_seed);
 
     // Create all required components
     let generation_shape = &settings.shape;
     let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
-    let start_x = chunk_pos::start_block_x(&Vector2::new(0, 0));
-    let start_z = chunk_pos::start_block_z(&Vector2::new(0, 0));
+    let start_x = chunk_pos::start_block_x(0);
+    let start_z = chunk_pos::start_block_z(0);
 
     // Multi-noise sampler for biomes
     let biome_pos = Vector2::new(
@@ -216,10 +201,10 @@ pub fn bench_create_and_populate_noise_with_surface(
         MultiNoiseSampler::generate(&base_router.multi_noise, &multi_noise_config);
 
     // Noise sampler
-    let sampler = FluidLevelSampler::Chunk(Box::new(StandardChunkFluidLevelSampler::new(
+    let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
         FluidLevel::new(settings.sea_level, settings.default_fluid.name),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
-    )));
+    ));
 
     let mut noise_sampler = ChunkNoiseGenerator::new(
         &base_router.noise,

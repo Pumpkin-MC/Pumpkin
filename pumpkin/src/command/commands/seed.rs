@@ -27,9 +27,9 @@ impl CommandExecutor for Executor {
                 _ => match server.worlds.read().await.first() {
                     Some(world) => world.level.seed.0,
                     None => {
-                        return Err(CommandError::CommandFailed(Box::new(TextComponent::text(
+                        return Err(CommandError::CommandFailed(TextComponent::text(
                             "Unable to get Seed",
-                        ))));
+                        )));
                     }
                 },
             };

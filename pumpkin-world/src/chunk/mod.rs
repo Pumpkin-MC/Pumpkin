@@ -11,7 +11,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
-use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_util::math::position::BlockPos;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{BitAnd, BitOr};
@@ -72,7 +72,8 @@ pub struct ChunkData<T: BlockEntityCollection> {
     pub section: ChunkSections,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
-    pub position: Vector2<i32>,
+    pub x: i32,
+    pub z: i32,
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
     pub block_entities: T,
@@ -83,7 +84,10 @@ pub struct ChunkData<T: BlockEntityCollection> {
 
 #[derive(Clone)]
 pub struct ChunkEntityData {
-    pub chunk_position: Vector2<i32>,
+    /// Chunk X
+    pub x: i32,
+    /// Chunk Z
+    pub z: i32,
     pub data: HashMap<uuid::Uuid, NbtCompound>,
 
     pub dirty: bool,
@@ -528,7 +532,7 @@ impl<T: BlockEntityCollection> ChunkData<T> {
                 has_found[ChunkHeightmapType::WorldSurface as usize] = true;
             }
 
-            let is_motion_blocking = blocks_movement(block_state)
+            let is_motion_blocking = blocks_movement(block_state, block)
                 || Fluid::from_registry_key(block.registry_key())
                     .is_some_and(|fluid| !fluid.states.is_empty());
 

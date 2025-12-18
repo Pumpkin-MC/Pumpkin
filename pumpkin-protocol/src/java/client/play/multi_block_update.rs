@@ -43,7 +43,7 @@ impl Serialize for CMultiBlockUpdate {
         ))?;
 
         for (position, state_id) in &self.positions_to_state_ids {
-            let long = ((*state_id as u64) << 12) | (*position as u64);
+            let long = (*state_id as u64) << 12 | (*position as u64);
             let var_long = VarLong::from(long as i64);
             tuple.serialize_element(&var_long)?;
         }

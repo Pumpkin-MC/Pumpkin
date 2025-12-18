@@ -237,7 +237,8 @@ impl<T: BlockEntityCollection> Level<T> {
                         // );
 
                         let chunk = ChunkEntityData {
-                            chunk_position: pos,
+                            x: pos.x,
+                            z: pos.y,
                             data: HashMap::new(),
                             dirty: true,
                         };
@@ -507,8 +508,8 @@ impl<T: BlockEntityCollection> Level<T> {
 
             let chunk = chunk.downgrade();
 
-            let chunk_x_base = chunk.position.x * 16;
-            let chunk_z_base = chunk.position.y * 16;
+            let chunk_x_base = chunk.x * 16;
+            let chunk_z_base = chunk.z * 16;
 
             let mut section_blocks = Vec::new();
             for i in 0..chunk.section.sections.len() {
@@ -664,7 +665,9 @@ impl<T: BlockEntityCollection> Level<T> {
                     while let Some(data) = rx.recv().await {
                         match data {
                             LoadedData::Loaded(chunk) => {
-                                let pos = chunk.read().await.chunk_position;
+                                let tmp_chunk = chunk.read().await;
+                                let pos = Vector2::new(tmp_chunk.x, tmp_chunk.z);
+                                drop(tmp_chunk);
                                 level.loaded_entity_chunks.insert(pos, chunk.clone());
                                 let _ = sender.send((chunk, false));
                             }

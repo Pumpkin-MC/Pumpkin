@@ -1944,7 +1944,9 @@ impl World {
                 let Some((chunk, _first_load)) = recv_result else {
                     break;
                 };
-                let position = chunk.read().await.chunk_position;
+                let tmp_chunk = chunk.read().await;
+                let position = Vector2::new(tmp_chunk.x, tmp_chunk.z);
+                drop(tmp_chunk);
 
                 let chunk = if level.is_chunk_watched(&position) {
                     chunk
