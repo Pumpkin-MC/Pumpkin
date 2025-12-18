@@ -16,7 +16,7 @@ pub mod loader;
 use crate::{LOGGER_IMPL, PERMISSION_MANAGER, server::Server};
 pub use api::*;
 
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// A trait for handling events dynamically.
 ///
@@ -71,7 +71,11 @@ pub trait EventHandler<E: Payload>: Send + Sync {
     ///
     /// # Arguments
     /// - `event`: A mutable reference to the event to handle.
-    fn handle_blocking(&self, _server: &Arc<Server>, _event: &mut E) -> BoxFuture<'_, ()> {
+    fn handle_blocking<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        _event: &'a mut E,
+    ) -> BoxFuture<'a, ()> {
         Box::pin(async {})
     }
 }
