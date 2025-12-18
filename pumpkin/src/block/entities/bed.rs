@@ -39,6 +39,7 @@ impl BlockEntity for BedBlockEntity {
 
 impl BedBlockEntity {
     pub const ID: &'static str = "minecraft:bed";
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self { position }
     }

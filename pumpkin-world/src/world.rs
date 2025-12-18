@@ -1,7 +1,7 @@
+use std::any::Any;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::block::entities::BlockEntity;
 use crate::{BlockStateId, inventory::Inventory};
 use bitflags::bitflags;
 use pumpkin_data::entity::EntityType;
@@ -86,11 +86,6 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
 
     fn remove_block_entity<'a>(&'a self, block_pos: &'a BlockPos) -> WorldFuture<'a, ()>;
 
-    fn get_block_entity<'a>(
-        &'a self,
-        block_pos: &'a BlockPos,
-    ) -> WorldFuture<'a, Option<Arc<dyn BlockEntity>>>;
-
     fn get_world_age<'a>(&'a self) -> WorldFuture<'a, i64>;
 
     fn play_sound<'a>(
@@ -115,6 +110,8 @@ pub trait SimpleWorld: BlockAccessor + Send + Sync {
         position: &'a BlockPos,
         inventory: &'a Arc<dyn Inventory>,
     ) -> WorldFuture<'a, ()>;
+
+    fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
 
 pub trait BlockRegistryExt: Send + Sync {

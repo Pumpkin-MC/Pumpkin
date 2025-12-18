@@ -1,4 +1,4 @@
-use crate::world::World;
+use crate::{block::entities::BlockEntityStorage, world::World};
 use pumpkin_macros::{Event, cancellable};
 use pumpkin_world::chunk::ChunkData;
 use std::sync::Arc;
@@ -14,5 +14,5 @@ pub struct ChunkSend {
     pub world: Arc<World>,
 
     /// The chunk data being sent, wrapped in a read-write lock for safe concurrent access.
-    pub chunk: Arc<RwLock<ChunkData>>,
+    pub chunk: Arc<RwLock<ChunkData<BlockEntityStorage>>>,
 }

@@ -1,26 +1,32 @@
+use std::any::Any;
+use std::collections::HashMap;
 use std::pin::Pin;
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 use barrel::BarrelBlockEntity;
 use bed::BedBlockEntity;
 use chest::ChestBlockEntity;
+use chiseled_bookshelf::ChiseledBookshelfBlockEntity;
 use comparator::ComparatorBlockEntity;
+use dropper::DropperBlockEntity;
 use end_portal::EndPortalBlockEntity;
+use ender_chest::EnderChestBlockEntity;
 use furnace::FurnaceBlockEntity;
+use hopper::HopperBlockEntity;
+use mob_spawner::MobSpawnerBlockEntity;
 use piston::PistonBlockEntity;
-use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
-use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::position::BlockPos;
+use shulker_box::ShulkerBoxBlockEntity;
 use sign::SignBlockEntity;
 
-use crate::block::entities::ender_chest::EnderChestBlockEntity;
-use crate::block::entities::hopper::HopperBlockEntity;
-use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
-use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
-use crate::{
-    BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
-    block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
-};
+use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
+use pumpkin_inventory::screen_handler::PropertyDelegate;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
+use pumpkin_world::block::entity::{BlockEntityCollection, BoxedFuture};
+use pumpkin_world::inventory::Inventory;
+
+use crate::world::World;
 
 pub mod barrel;
 pub mod bed;
@@ -47,10 +53,7 @@ pub trait BlockEntity: Send + Sync {
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized;
-    fn tick<'a>(
-        &'a self,
-        _world: Arc<dyn SimpleWorld>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    fn tick<'a>(&'a self, _world: Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {})
     }
     fn resource_location(&self) -> &'static str;
@@ -72,7 +75,7 @@ pub trait BlockEntity: Send + Sync {
         pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
             .iter()
             .position(|block_entity_name| {
-                *block_entity_name == self.resource_location().split(":").last().unwrap()
+                *block_entity_name == self.resource_location().split(':').next_back().unwrap()
             })
             .unwrap() as u32
     }
@@ -85,7 +88,7 @@ pub trait BlockEntity: Send + Sync {
     fn set_block_state(&mut self, _block_state: BlockStateId) {}
     fn on_block_replaced<'a>(
         self: Arc<Self>,
-        world: Arc<dyn SimpleWorld>,
+        world: Arc<World>,
         position: BlockPos,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
     where
@@ -108,6 +111,84 @@ pub trait BlockEntity: Send + Sync {
     }
 }
 
+#[derive(Default)]
+pub struct BlockEntityStorage {
+    entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
+}
+
+impl BlockEntityStorage {
+    pub async fn tick(&self, world: Arc<World>) {
+        for block_entity in self.entities.values() {
+            block_entity.tick(world.clone()).await;
+        }
+    }
+
+    #[must_use]
+    pub fn get(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
+        self.entities.get(block_pos).cloned()
+    }
+
+    pub fn insert(
+        &mut self,
+        block_pos: BlockPos,
+        block_entity: Arc<dyn BlockEntity>,
+    ) -> Option<Arc<dyn BlockEntity>> {
+        self.entities.insert(block_pos, block_entity)
+    }
+
+    pub fn remove(&mut self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
+        self.entities.remove(block_pos)
+    }
+}
+
+pub struct BlockEntityData(Arc<dyn BlockEntity>);
+
+impl pumpkin_world::block::entity::BlockEntityData for BlockEntityData {
+    fn get_position(&self) -> BlockPos {
+        self.0.get_position()
+    }
+    fn get_id(&self) -> u32 {
+        self.0.get_id()
+    }
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        self.0.chunk_data_nbt()
+    }
+}
+
+impl BlockEntityCollection for BlockEntityStorage {
+    type BlockEntity = BlockEntityData;
+    fn from_nbt_entries(nbt_entries: &[NbtCompound]) -> Self {
+        let mut entities = HashMap::new();
+        for nbt in nbt_entries {
+            let block_entity = block_entity_from_nbt(nbt);
+            if let Some(block_entity) = block_entity {
+                entities.insert(block_entity.get_position(), block_entity);
+            }
+        }
+        Self { entities }
+    }
+    fn to_nbt_entries(&self) -> BoxedFuture<'_, Vec<NbtCompound>> {
+        Box::pin(async move {
+            futures::future::join_all(self.entities.values().map(|block_entity| async move {
+                let mut nbt = NbtCompound::new();
+                block_entity.write_internal(&mut nbt).await;
+                nbt
+            }))
+            .await
+        })
+    }
+    fn len(&self) -> usize {
+        self.entities.len()
+    }
+    fn get_all(&self) -> Vec<Self::BlockEntity> {
+        self.entities
+            .values()
+            .map(|be| BlockEntityData(be.clone()))
+            .collect()
+    }
+}
+
+#[must_use]
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
     let x = nbt.get_int("x").unwrap();
     let y = nbt.get_int("y").unwrap();
@@ -115,6 +196,7 @@ pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
     T::from_nbt(nbt, BlockPos::new(x, y, z))
 }
 
+#[must_use]
 pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> {
     Some(match nbt.get_string("id").unwrap() {
         ChestBlockEntity::ID => Arc::new(block_entity_from_generic::<ChestBlockEntity>(nbt)),
@@ -147,12 +229,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
     })
 }
 
+#[must_use]
 pub fn has_block_block_entity(block: &Block) -> bool {
     BLOCK_ENTITY_TYPES.contains(&block.name)
-}
-
-pub trait PropertyDelegate: Sync + Send {
-    fn get_property(&self, _index: i32) -> i32;
-    fn set_property(&self, _index: i32, _value: i32);
-    fn get_properties_size(&self) -> i32;
 }

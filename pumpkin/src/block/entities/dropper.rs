@@ -1,8 +1,7 @@
-use crate::block::entities::BlockEntity;
-use crate::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
-use crate::item::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
+use pumpkin_world::item::ItemStack;
 use rand::{Rng, rng};
 use std::any::Any;
 use std::array::from_fn;
@@ -10,6 +9,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{Mutex, MutexGuard};
+
+use crate::block::entities::BlockEntity;
 
 pub struct DropperBlockEntity {
     pub position: BlockPos,
@@ -69,6 +70,7 @@ impl DropperBlockEntity {
     pub const INVENTORY_SIZE: usize = 9;
     pub const ID: &'static str = "minecraft:dropper";
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -100,7 +102,7 @@ impl Inventory for DropperBlockEntity {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -145,7 +147,7 @@ impl Inventory for DropperBlockEntity {
 impl Clearable for DropperBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })

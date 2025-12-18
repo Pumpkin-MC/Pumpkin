@@ -13,6 +13,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 pub mod blocks;
+pub mod entities;
 pub mod fluid;
 pub mod registry;
 

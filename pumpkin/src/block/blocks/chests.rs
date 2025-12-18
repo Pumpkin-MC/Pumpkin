@@ -16,12 +16,12 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::BlockEntity;
-use pumpkin_world::block::entities::chest::ChestBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
 
+use crate::block::entities::BlockEntity;
+use crate::block::entities::chest::ChestBlockEntity;
 use crate::block::{
     BlockFuture, BlockMetadata, BrokenArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs,
     PlacedArgs,

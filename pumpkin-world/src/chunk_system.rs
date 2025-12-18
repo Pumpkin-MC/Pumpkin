@@ -7,6 +7,7 @@ TODO
 */
 
 use crate::block::RawBlockState;
+use crate::block::entity::BlockEntityCollection;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
 use crate::dimension::Dimension;
@@ -724,7 +725,10 @@ impl LevelChannel {
         swap(&mut ret, &mut *lock);
         ret
     }
-    pub fn wait_and_get(&self, level: &Arc<Level>) -> (Option<LevelChange>, Option<Vec<ChunkPos>>) {
+    pub fn wait_and_get<T: BlockEntityCollection>(
+        &self,
+        level: &Arc<Level<T>>,
+    ) -> (Option<LevelChange>, Option<Vec<ChunkPos>>) {
         let mut lock = self.value.lock().unwrap();
         while lock.0.is_none()
             && lock.1.is_none()
@@ -745,12 +749,12 @@ impl LevelChannel {
     }
 }
 
-pub enum Chunk {
-    Level(SyncChunk),
+pub enum Chunk<T: BlockEntityCollection> {
+    Level(SyncChunk<T>),
     Proto(Box<ProtoChunk>),
 }
 
-impl Chunk {
+impl<T: BlockEntityCollection> Chunk<T> {
     fn get_stage_id(&self) -> u8 {
         match self {
             Chunk::Proto(data) => data.stage_id(),
@@ -824,14 +828,14 @@ impl Chunk {
     }
 }
 
-struct Cache {
+struct Cache<T: BlockEntityCollection> {
     x: i32,
     y: i32,
     size: i32,
-    pub chunks: Vec<Chunk>,
+    pub chunks: Vec<Chunk<T>>,
 }
 
-impl HeightLimitView for Cache {
+impl<T: BlockEntityCollection> HeightLimitView for Cache<T> {
     fn height(&self) -> u16 {
         let mid = ((self.size * self.size) >> 1) as usize;
         match &self.chunks[mid] {
@@ -849,7 +853,7 @@ impl HeightLimitView for Cache {
     }
 }
 
-impl BlockAccessor for Cache {
+impl<T: BlockEntityCollection> BlockAccessor for Cache<T> {
     fn get_block<'a>(
         &'a self,
         position: &'a BlockPos,
@@ -875,7 +879,7 @@ impl BlockAccessor for Cache {
     }
 }
 
-impl GenerationCache for Cache {
+impl<T: BlockEntityCollection> GenerationCache for Cache<T> {
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk {
         let mid = ((self.size * self.size) >> 1) as usize;
         self.chunks[mid].get_proto_chunk_mut()
@@ -1085,8 +1089,8 @@ impl GenerationCache for Cache {
     }
 }
 
-impl Cache {
-    fn new(x: i32, y: i32, size: i32) -> Cache {
+impl<T: BlockEntityCollection> Cache<T> {
+    fn new(x: i32, y: i32, size: i32) -> Cache<T> {
         Cache {
             x,
             y,
@@ -1135,38 +1139,39 @@ impl Cache {
     }
 }
 
-enum RecvChunk {
-    IO(Chunk),
-    Generation(Cache),
+enum RecvChunk<T: BlockEntityCollection> {
+    IO(Chunk<T>),
+    Generation(Cache<T>),
 }
 
-pub struct ChunkListener {
-    single: Mutex<Vec<(ChunkPos, oneshot::Sender<SyncChunk>)>>,
-    global: Mutex<Vec<Sender<(ChunkPos, SyncChunk)>>>,
+#[allow(clippy::type_complexity)]
+pub struct ChunkListener<T: BlockEntityCollection> {
+    single: Mutex<Vec<(ChunkPos, oneshot::Sender<SyncChunk<T>>)>>,
+    global: Mutex<Vec<Sender<(ChunkPos, SyncChunk<T>)>>>,
 }
-impl Default for ChunkListener {
+impl<T: BlockEntityCollection> Default for ChunkListener<T> {
     fn default() -> Self {
         Self::new()
     }
 }
-impl ChunkListener {
+impl<T: BlockEntityCollection> ChunkListener<T> {
     pub fn new() -> Self {
         Self {
             single: Mutex::new(Vec::new()),
             global: Mutex::new(Vec::new()),
         }
     }
-    pub fn add_single_chunk_listener(&self, pos: ChunkPos) -> oneshot::Receiver<SyncChunk> {
+    pub fn add_single_chunk_listener(&self, pos: ChunkPos) -> oneshot::Receiver<SyncChunk<T>> {
         let (tx, rx) = oneshot::channel();
         self.single.lock().unwrap().push((pos, tx));
         rx
     }
-    pub fn add_global_chunk_listener(&self) -> Receiver<(ChunkPos, SyncChunk)> {
+    pub fn add_global_chunk_listener(&self) -> Receiver<(ChunkPos, SyncChunk<T>)> {
         let (tx, rx) = crossbeam::channel::unbounded();
         self.global.lock().unwrap().push(tx);
         rx
     }
-    fn process_new_chunk(&self, pos: ChunkPos, chunk: &SyncChunk) {
+    fn process_new_chunk(&self, pos: ChunkPos, chunk: &SyncChunk<T>) {
         {
             let mut single = self.single.lock().unwrap();
             let mut i = 0;
@@ -1211,17 +1216,17 @@ impl ChunkListener {
     }
 }
 
-struct ChunkHolder {
+struct ChunkHolder<T: BlockEntityCollection> {
     pub target_stage: StagedChunkEnum,
     pub current_stage: StagedChunkEnum,
-    pub chunk: Option<Chunk>,
+    pub chunk: Option<Chunk<T>>,
     pub occupied: NodeKey,
     pub occupied_by: EdgeKey,
     pub public: bool,
     pub tasks: [NodeKey; 7],
 }
 
-impl Default for ChunkHolder {
+impl<T: BlockEntityCollection> Default for ChunkHolder<T> {
     fn default() -> Self {
         Self {
             target_stage: StagedChunkEnum::None,
@@ -1311,7 +1316,7 @@ impl Ord for TaskHeapNode {
     }
 }
 
-pub struct GenerationSchedule {
+pub struct GenerationSchedule<T: BlockEntityCollection> {
     queue: BinaryHeap<TaskHeapNode>,
     graph: DAG,
 
@@ -1319,26 +1324,26 @@ pub struct GenerationSchedule {
     last_high_priority: Vec<ChunkPos>,
     send_level: Arc<LevelChannel>,
 
-    public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
-    chunk_map: HashMap<ChunkPos, ChunkHolder>,
+    public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk<T>>>,
+    chunk_map: HashMap<ChunkPos, ChunkHolder<T>>,
     unload_chunks: HashSetType<ChunkPos>,
 
     io_lock: IOLock,
     running_task_count: u16,
-    recv_chunk: crossfire::MRx<(ChunkPos, RecvChunk)>,
+    recv_chunk: crossfire::MRx<(ChunkPos, RecvChunk<T>)>,
     io_read: crossfire::MTx<ChunkPos>,
-    io_write: crossfire::Tx<Vec<(ChunkPos, Chunk)>>,
-    generate: crossfire::MTx<(ChunkPos, Cache, StagedChunkEnum)>,
-    listener: Arc<ChunkListener>,
+    io_write: crossfire::Tx<Vec<(ChunkPos, Chunk<T>)>>,
+    generate: crossfire::MTx<(ChunkPos, Cache<T>, StagedChunkEnum)>,
+    listener: Arc<ChunkListener<T>>,
 }
 
-impl GenerationSchedule {
+impl<T: BlockEntityCollection> GenerationSchedule<T> {
     pub fn create(
         oi_read_thread_count: usize,
         gen_thread_count: usize,
-        level: Arc<Level>,
+        level: Arc<Level<T>>,
         level_channel: Arc<LevelChannel>,
-        listener: Arc<ChunkListener>,
+        listener: Arc<ChunkListener<T>>,
         thread_tracker: &mut Vec<JoinHandle<()>>,
     ) {
         let tracker = &level.chunk_system_tasks;
@@ -1561,8 +1566,8 @@ impl GenerationSchedule {
 
     async fn io_read_work(
         recv: crossfire::MAsyncRx<ChunkPos>,
-        send: crossfire::MTx<(ChunkPos, RecvChunk)>,
-        level: Arc<Level>,
+        send: crossfire::MTx<(ChunkPos, RecvChunk<T>)>,
+        level: Arc<Level<T>>,
         lock: IOLock,
     ) {
         log::info!("io read thread start");
@@ -1630,7 +1635,11 @@ impl GenerationSchedule {
         log::info!("io read thread stop");
     }
 
-    async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
+    async fn io_write_work(
+        recv: AsyncRx<Vec<(ChunkPos, Chunk<T>)>>,
+        level: Arc<Level<T>>,
+        lock: IOLock,
+    ) {
         log::info!("io write thread start",);
         let generation_setting = gen_settings_from_dimension(&level.world_gen.dimension);
         while let Ok(data) = recv.recv().await {
@@ -1678,9 +1687,9 @@ impl GenerationSchedule {
     }
 
     fn generation_work(
-        recv: crossfire::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
-        send: crossfire::MTx<(ChunkPos, RecvChunk)>,
-        level: Arc<Level>,
+        recv: crossfire::MRx<(ChunkPos, Cache<T>, StagedChunkEnum)>,
+        send: crossfire::MTx<(ChunkPos, RecvChunk<T>)>,
+        level: Arc<Level<T>>,
     ) {
         log::info!(
             "generation thread start id: {:?} name: {}",
@@ -1819,7 +1828,7 @@ impl GenerationSchedule {
         }
     }
 
-    fn receive_chunk(&mut self, pos: ChunkPos, data: RecvChunk) {
+    fn receive_chunk(&mut self, pos: ChunkPos, data: RecvChunk<T>) {
         match data {
             RecvChunk::IO(chunk) => {
                 // debug!("receive io chunk pos {pos:?}");
@@ -1914,7 +1923,7 @@ impl GenerationSchedule {
         self.running_task_count -= 1;
     }
 
-    fn work(mut self, level: Arc<Level>) {
+    fn work(mut self, level: Arc<Level<T>>) {
         log::info!(
             "schedule thread start id: {:?} name: {}",
             thread::current().id(),

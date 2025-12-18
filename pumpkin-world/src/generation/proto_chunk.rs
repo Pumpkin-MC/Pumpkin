@@ -28,6 +28,7 @@ use super::{
     settings::GenerationSettings,
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
+use crate::block::entity::BlockEntityCollection;
 use crate::chunk::{ChunkData, ChunkHeightmapType};
 use crate::chunk_system::StagedChunkEnum;
 use crate::generation::aquifer_sampler::FluidLevelSampler;
@@ -196,8 +197,8 @@ impl ProtoChunk {
         }
     }
 
-    pub fn from_chunk_data(
-        chunk_data: &ChunkData,
+    pub fn from_chunk_data<T: BlockEntityCollection>(
+        chunk_data: &ChunkData<T>,
         settings: &GenerationSettings,
         default_block: &'static BlockState,
         biome_mixer_seed: i64,

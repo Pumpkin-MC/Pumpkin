@@ -8,16 +8,14 @@ use pumpkin_data::{
     block_state::PistonBehavior,
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    block::entities::{has_block_block_entity, piston::PistonBlockEntity},
-    world::BlockFlags,
-};
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs,
-        OnSyncedBlockEventArgs, PlacedArgs, blocks::redstone::is_emitting_redstone_power,
+        OnSyncedBlockEventArgs, PlacedArgs,
+        blocks::redstone::is_emitting_redstone_power,
+        entities::{has_block_block_entity, piston::PistonBlockEntity},
     },
     world::World,
 };

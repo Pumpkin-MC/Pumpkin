@@ -354,7 +354,7 @@ mod test {
                 },
             },
             compounds: vec![test1, test2],
-            list_string: vec!["".to_string(), "abcbcbcbbc".to_string()],
+            list_string: vec![String::new(), "abcbcbcbbc".to_string()],
             empty: vec![],
         };
 
@@ -392,7 +392,7 @@ mod test {
                 },
             },
             compounds: vec![test1, test2],
-            list_string: vec!["".to_string(), "abcbcbcbbc".to_string()],
+            list_string: vec![String::new(), "abcbcbcbbc".to_string()],
             empty: vec![],
         };
 

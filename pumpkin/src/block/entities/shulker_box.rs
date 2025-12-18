@@ -1,35 +1,28 @@
-use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, FacingExt};
+use pumpkin_inventory::viewer_count_tracker::{
+    ViewerCountListener, ViewerCountTracker, ViewerFuture,
+};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomImpl, get_seed};
+use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
+use pumpkin_world::item::ItemStack;
+use pumpkin_world::world::SimpleWorld;
 use std::any::Any;
 use std::pin::Pin;
+use std::sync::atomic::Ordering;
 use std::{
     array::from_fn,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, atomic::AtomicBool},
 };
 use tokio::sync::Mutex;
 
-use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerFuture};
-use crate::inventory::InventoryFuture;
-use crate::world::{BlockFlags, SimpleWorld};
-use crate::{
-    inventory::{
-        split_stack, {Clearable, Inventory},
-    },
-    item::ItemStack,
-};
+use crate::world::World;
 
 use super::BlockEntity;
 
-pub struct BarrelBlockEntity {
+pub struct ShulkerBoxBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub dirty: AtomicBool,
@@ -38,7 +31,7 @@ pub struct BarrelBlockEntity {
     viewers: ViewerCountTracker,
 }
 
-impl BlockEntity for BarrelBlockEntity {
+impl BlockEntity for ShulkerBoxBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
@@ -51,16 +44,16 @@ impl BlockEntity for BarrelBlockEntity {
     where
         Self: Sized,
     {
-        let barrel = Self {
+        let shulker_box = Self {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         };
 
-        barrel.read_data(nbt, &barrel.items);
+        shulker_box.read_data(nbt, &shulker_box.items);
 
-        barrel
+        shulker_box
     }
 
     fn write_nbt<'a>(
@@ -74,14 +67,24 @@ impl BlockEntity for BarrelBlockEntity {
         //self.clear().await;
     }
 
-    fn tick<'a>(
-        &'a self,
-        world: Arc<dyn SimpleWorld>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    fn tick<'a>(&'a self, world: Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.viewers
-                .update_viewer_count::<BarrelBlockEntity>(self, world, &self.position)
+                .update_viewer_count::<Self>(self, world, &self.position)
                 .await;
+        })
+    }
+
+    fn on_block_replaced<'a>(
+        self: Arc<Self>,
+        _world: Arc<World>,
+        _position: BlockPos,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
+    where
+        Self: 'a,
+    {
+        Box::pin(async move {
+            // Do nothing
         })
     }
 
@@ -90,42 +93,60 @@ impl BlockEntity for BarrelBlockEntity {
     }
 
     fn is_dirty(&self) -> bool {
-        self.dirty.load(Ordering::Relaxed)
+        self.dirty.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
 
-impl ViewerCountListener for BarrelBlockEntity {
+impl ViewerCountListener for ShulkerBoxBlockEntity {
     fn on_container_open<'a>(
         &'a self,
         world: &'a Arc<dyn SimpleWorld>,
-        _position: &'a BlockPos,
+        position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockBarrelOpen).await;
-            self.set_open(world, true).await;
+            self.play_sound(world, position, Sound::BlockShulkerBoxOpen)
+                .await;
+            // TODO: this.world.emitGameEvent(player, GameEvent.CONTAINER_OPEN, this.pos);
         })
     }
 
     fn on_container_close<'a>(
         &'a self,
         world: &'a Arc<dyn SimpleWorld>,
-        _position: &'a BlockPos,
+        position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockBarrelClose).await;
-            self.set_open(world, false).await;
+            self.play_sound(world, position, Sound::BlockShulkerBoxClose)
+                .await;
+            // TODO: this.world.emitGameEvent(player, GameEvent.CONTAINER_CLOSE, this.pos);
+        })
+    }
+
+    fn on_viewer_count_update<'a>(
+        &'a self,
+        world: &'a Arc<dyn SimpleWorld>,
+        position: &'a BlockPos,
+        _old: u16,
+        new: u16,
+    ) -> ViewerFuture<'a, ()> {
+        Box::pin(async move {
+            world
+                .add_synced_block_event(*position, Self::OPEN_ANIMATION_EVENT_TYPE, new as u8)
+                .await;
         })
     }
 }
 
-impl BarrelBlockEntity {
+impl ShulkerBoxBlockEntity {
     pub const INVENTORY_SIZE: usize = 27;
-    pub const ID: &'static str = "minecraft:barrel";
+    pub const OPEN_ANIMATION_EVENT_TYPE: u8 = 1;
+    pub const ID: &'static str = "minecraft:shulker_box"; // TODO support multi IDs
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -135,38 +156,14 @@ impl BarrelBlockEntity {
         }
     }
 
-    async fn set_open(&self, world: &Arc<dyn SimpleWorld>, open: bool) {
-        let state = world.get_block_state(&self.position).await;
-        let mut properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
-
-        properties.open = open;
-
-        world
-            .clone()
-            .set_block_state(
-                &self.position,
-                properties.to_state_id(&Block::BARREL),
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
-    }
-
-    async fn play_sound(&self, world: &Arc<dyn SimpleWorld>, sound: Sound) {
+    async fn play_sound(&self, world: &Arc<dyn SimpleWorld>, position: &BlockPos, sound: Sound) {
         let mut rng = Xoroshiro::from_seed(get_seed());
 
-        let state = world.get_block_state(&self.position).await;
-        let properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
-        let direction = properties.facing.to_block_direction().to_offset();
-        let position = Vector3::new(
-            self.position.0.x as f64 + 0.5 + direction.x as f64 / 2.0,
-            self.position.0.y as f64 + 0.5 + direction.y as f64 / 2.0,
-            self.position.0.z as f64 + 0.5 + direction.z as f64 / 2.0,
-        );
         world
             .play_sound_fine(
                 sound,
                 SoundCategory::Blocks,
-                &position,
+                &position.to_centered_f64(),
                 0.5,
                 rng.next_f32() * 0.1 + 0.9,
             )
@@ -174,14 +171,14 @@ impl BarrelBlockEntity {
     }
 }
 
-impl Inventory for BarrelBlockEntity {
+impl Inventory for ShulkerBoxBlockEntity {
     fn size(&self) -> usize {
         self.items.len()
     }
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -235,10 +232,10 @@ impl Inventory for BarrelBlockEntity {
     }
 }
 
-impl Clearable for BarrelBlockEntity {
+impl Clearable for ShulkerBoxBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })

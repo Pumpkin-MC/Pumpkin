@@ -7,8 +7,7 @@ use std::{
 };
 
 use pumpkin_util::math::position::BlockPos;
-
-use crate::{block::entities::BlockEntity, world::SimpleWorld};
+use pumpkin_world::world::SimpleWorld;
 
 #[derive(Debug)]
 pub struct ViewerCountTracker {
@@ -44,7 +43,7 @@ impl ViewerCountTracker {
         world: Arc<dyn SimpleWorld>,
         position: &BlockPos,
     ) where
-        T: BlockEntity + ViewerCountListener + 'static,
+        T: ViewerCountListener,
     {
         let current = self.current.load(Ordering::Relaxed);
         let old = self.old.swap(current, Ordering::Relaxed);

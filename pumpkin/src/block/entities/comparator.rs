@@ -15,6 +15,7 @@ pub struct ComparatorBlockEntity {
 
 impl ComparatorBlockEntity {
     pub const ID: &'static str = "minecraft:comparator";
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -52,7 +53,7 @@ impl BlockEntity for ComparatorBlockEntity {
         Box::pin(async move {
             nbt.put_int(
                 OUTPUT_SIGNAL,
-                self.output_signal.load(Ordering::Relaxed) as i32,
+                i32::from(self.output_signal.load(Ordering::Relaxed)),
             );
         })
     }
@@ -61,7 +62,7 @@ impl BlockEntity for ComparatorBlockEntity {
         let mut nbt = NbtCompound::new();
         nbt.put_int(
             OUTPUT_SIGNAL,
-            self.output_signal.load(Ordering::Relaxed) as i32,
+            i32::from(self.output_signal.load(Ordering::Relaxed)),
         );
         Some(nbt)
     }

@@ -7,12 +7,13 @@ use std::{
 };
 
 use super::BlockEntity;
-use num_derive::FromPrimitive;
+// use num_derive::FromPrimitive;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
 
-#[derive(Clone, Default, FromPrimitive)]
+// #[derive(Clone, Default, FromPrimitive)]
+#[derive(Clone, Default)]
 #[repr(i8)]
 pub enum DyeColor {
     White = 0,
@@ -60,23 +61,23 @@ impl From<DyeColor> for String {
 impl From<&str> for DyeColor {
     fn from(s: &str) -> Self {
         match s {
-            "white" => DyeColor::White,
-            "orange" => DyeColor::Orange,
-            "magenta" => DyeColor::Magenta,
-            "light_blue" => DyeColor::LightBlue,
-            "yellow" => DyeColor::Yellow,
-            "lime" => DyeColor::Lime,
-            "pink" => DyeColor::Pink,
-            "gray" => DyeColor::Gray,
-            "light_gray" => DyeColor::LightGray,
-            "cyan" => DyeColor::Cyan,
-            "purple" => DyeColor::Purple,
-            "blue" => DyeColor::Blue,
-            "brown" => DyeColor::Brown,
-            "green" => DyeColor::Green,
-            "red" => DyeColor::Red,
-            "black" => DyeColor::Black,
-            _ => DyeColor::default(),
+            "white" => Self::White,
+            "orange" => Self::Orange,
+            "magenta" => Self::Magenta,
+            "light_blue" => Self::LightBlue,
+            "yellow" => Self::Yellow,
+            "lime" => Self::Lime,
+            "pink" => Self::Pink,
+            "gray" => Self::Gray,
+            "light_gray" => Self::LightGray,
+            "cyan" => Self::Cyan,
+            "purple" => Self::Purple,
+            "blue" => Self::Blue,
+            "brown" => Self::Brown,
+            "green" => Self::Green,
+            "red" => Self::Red,
+            "black" => Self::Black,
+            _ => Self::default(),
         }
     }
 }
@@ -84,30 +85,30 @@ impl From<&str> for DyeColor {
 impl From<i8> for DyeColor {
     fn from(s: i8) -> Self {
         match s {
-            0 => DyeColor::White,
-            1 => DyeColor::Orange,
-            2 => DyeColor::Magenta,
-            3 => DyeColor::LightBlue,
-            4 => DyeColor::Yellow,
-            5 => DyeColor::Lime,
-            6 => DyeColor::Pink,
-            7 => DyeColor::Gray,
-            8 => DyeColor::LightGray,
-            9 => DyeColor::Cyan,
-            10 => DyeColor::Purple,
-            11 => DyeColor::Blue,
-            12 => DyeColor::Brown,
-            13 => DyeColor::Green,
-            14 => DyeColor::Red,
-            15 => DyeColor::Black,
-            _ => DyeColor::default(),
+            0 => Self::White,
+            1 => Self::Orange,
+            2 => Self::Magenta,
+            3 => Self::LightBlue,
+            4 => Self::Yellow,
+            5 => Self::Lime,
+            6 => Self::Pink,
+            7 => Self::Gray,
+            8 => Self::LightGray,
+            9 => Self::Cyan,
+            10 => Self::Purple,
+            11 => Self::Blue,
+            12 => Self::Brown,
+            13 => Self::Green,
+            14 => Self::Red,
+            15 => Self::Black,
+            _ => Self::default(),
         }
     }
 }
 
 impl From<DyeColor> for NbtTag {
     fn from(value: DyeColor) -> Self {
-        NbtTag::Byte(value as i8)
+        Self::Byte(value as i8)
     }
 }
 
@@ -140,7 +141,7 @@ impl Default for Text {
         Self {
             has_glowing_text: AtomicBool::new(false),
             color: AtomicI8::new(DyeColor::default() as i8),
-            messages: Default::default(),
+            messages: Arc::default(),
         }
     }
 }
@@ -160,10 +161,10 @@ impl From<Text> for NbtTag {
                 .lock()
                 .unwrap()
                 .iter()
-                .map(|s| NbtTag::String(s.clone()))
+                .map(|s| Self::String(s.clone()))
                 .collect(),
         );
-        NbtTag::Compound(nbt)
+        Self::Compound(nbt)
     }
 }
 
@@ -176,17 +177,17 @@ impl From<NbtTag> for Text {
             .get_list("messages")
             .unwrap()
             .iter()
-            .filter_map(|tag| tag.extract_string().map(|s| s.to_string()))
+            .filter_map(|tag| tag.extract_string().map(std::string::ToString::to_string))
             .collect();
         Self {
             has_glowing_text: AtomicBool::new(has_glowing_text),
             color: AtomicI8::new(DyeColor::from(color) as i8),
             messages: Arc::new(std::sync::Mutex::new([
                 // its important that we use unwrap_or since otherwise we may crash on older versions
-                messages.first().unwrap_or(&"".to_string()).clone(),
-                messages.get(1).unwrap_or(&"".to_string()).clone(),
-                messages.get(2).unwrap_or(&"".to_string()).clone(),
-                messages.get(3).unwrap_or(&"".to_string()).clone(),
+                messages.first().unwrap_or(&String::new()).clone(),
+                messages.get(1).unwrap_or(&String::new()).clone(),
+                messages.get(2).unwrap_or(&String::new()).clone(),
+                messages.get(3).unwrap_or(&String::new()).clone(),
             ])),
         }
     }
@@ -261,6 +262,8 @@ impl BlockEntity for SignBlockEntity {
 
 impl SignBlockEntity {
     pub const ID: &'static str = "minecraft:sign";
+
+    #[must_use]
     pub fn new(position: BlockPos, is_front: bool, messages: [String; 4]) -> Self {
         Self {
             position,
@@ -270,14 +273,16 @@ impl SignBlockEntity {
             } else {
                 Text::default()
             },
-            back_text: if !is_front {
-                Text::new(messages)
-            } else {
+            back_text: if is_front {
                 Text::default()
+            } else {
+                Text::new(messages)
             },
             currently_editing_player: Arc::new(Mutex::new(None)),
         }
     }
+
+    #[must_use]
     pub fn empty(position: BlockPos) -> Self {
         Self {
             position,

@@ -3,6 +3,9 @@ use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
+use pumpkin_world::item::ItemStack;
+use pumpkin_world::world::{BlockFlags, SimpleWorld};
 use std::any::Any;
 use std::pin::Pin;
 use std::{
@@ -14,13 +17,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-use crate::inventory::InventoryFuture;
-use crate::{
-    block::entities::BlockEntity,
-    inventory::{Clearable, Inventory, split_stack},
-    item::ItemStack,
-    world::{BlockFlags, SimpleWorld},
-};
+use crate::block::entities::BlockEntity;
 
 pub struct ChiseledBookshelfBlockEntity {
     pub position: BlockPos,
@@ -88,6 +85,7 @@ impl ChiseledBookshelfBlockEntity {
     pub const INVENTORY_SIZE: usize = 6;
     pub const ID: &'static str = "minecraft:chiseled_bookshelf";
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -136,7 +134,7 @@ impl Inventory for ChiseledBookshelfBlockEntity {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -181,7 +179,7 @@ impl Inventory for ChiseledBookshelfBlockEntity {
 impl Clearable for ChiseledBookshelfBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })

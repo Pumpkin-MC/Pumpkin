@@ -13,19 +13,22 @@ use pumpkin_data::{
     block_properties::{BlockProperties, ChestLikeProperties, ChestType},
     sound::{Sound, SoundCategory},
 };
+use pumpkin_inventory::viewer_count_tracker::{
+    ViewerCountListener, ViewerCountTracker, ViewerFuture,
+};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
-use tokio::sync::Mutex;
-
-use crate::{
-    block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerFuture},
+use pumpkin_world::{
     inventory::{Clearable, Inventory, InventoryFuture, split_stack},
     item::ItemStack,
     world::SimpleWorld,
 };
+use tokio::sync::Mutex;
+
+use crate::world::World;
 
 use super::BlockEntity;
 
@@ -74,13 +77,10 @@ impl BlockEntity for ChestBlockEntity {
         //self.clear().await;
     }
 
-    fn tick<'a>(
-        &'a self,
-        world: Arc<dyn SimpleWorld>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    fn tick<'a>(&'a self, world: Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.viewers
-                .update_viewer_count::<ChestBlockEntity>(self, world, &self.position)
+                .update_viewer_count::<Self>(self, world, &self.position)
                 .await;
         })
     }
@@ -129,7 +129,7 @@ impl ViewerCountListener for ChestBlockEntity {
         Box::pin(async move {
             world
                 .add_synced_block_event(*position, Self::LID_ANIMATION_EVENT_TYPE, new as u8)
-                .await
+                .await;
         })
     }
 }
@@ -138,6 +138,7 @@ impl ChestBlockEntity {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:chest";
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -155,16 +156,16 @@ impl ChestBlockEntity {
         let position = match properties.r#type {
             ChestType::Left => return,
             ChestType::Single => Vector3::new(
-                self.position.0.x as f64 + 0.5,
-                self.position.0.y as f64 + 0.5,
-                self.position.0.z as f64 + 0.5,
+                f64::from(self.position.0.x) + 0.5,
+                f64::from(self.position.0.y) + 0.5,
+                f64::from(self.position.0.z) + 0.5,
             ),
             ChestType::Right => {
                 let direction = properties.facing.to_block_direction().to_offset();
                 Vector3::new(
-                    self.position.0.x as f64 + 0.5 + direction.x as f64 * 0.5,
-                    self.position.0.y as f64 + 0.5,
-                    self.position.0.z as f64 + 0.5 + direction.z as f64 * 0.5,
+                    f64::from(self.position.0.x) + 0.5 + f64::from(direction.x) * 0.5,
+                    f64::from(self.position.0.y) + 0.5,
+                    f64::from(self.position.0.z) + 0.5 + f64::from(direction.z) * 0.5,
                 )
             }
         };
@@ -188,7 +189,7 @@ impl Inventory for ChestBlockEntity {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -245,7 +246,7 @@ impl Inventory for ChestBlockEntity {
 impl Clearable for ChestBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })

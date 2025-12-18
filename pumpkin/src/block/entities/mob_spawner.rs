@@ -14,8 +14,9 @@ use pumpkin_util::math::{
     position::BlockPos,
     vector3::Vector3,
 };
+use pumpkin_world::world::SimpleWorld;
 
-use crate::{block::entities::BlockEntity, world::SimpleWorld};
+use crate::{block::entities::BlockEntity, world::World};
 
 pub struct MobSpawnerBlockEntity {
     pub position: BlockPos,
@@ -35,6 +36,7 @@ impl MobSpawnerBlockEntity {
     pub const DEFAULT_SPAWN_COUNT: i32 = 4;
     pub const DEFAULT_SPAWN_RANGE: i32 = 4;
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -49,7 +51,7 @@ impl MobSpawnerBlockEntity {
 }
 
 impl MobSpawnerBlockEntity {
-    async fn update_spawns(&self, world: &Arc<dyn SimpleWorld>) {
+    async fn update_spawns(&self, world: &Arc<World>) {
         let min_delay = self.min_delay;
         let max_delay = self.max_delay;
 
@@ -61,7 +63,7 @@ impl MobSpawnerBlockEntity {
             },
             Ordering::Relaxed,
         );
-        world.add_synced_block_event(self.position, 1, 0).await
+        world.add_synced_block_event(self.position, 1, 0).await;
     }
 
     pub fn set_entity_type(&self, entity_type: &'static EntityType) {
@@ -78,10 +80,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
         self.position
     }
 
-    fn tick<'a>(
-        &'a self,
-        world: Arc<dyn SimpleWorld>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    fn tick<'a>(&'a self, world: Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             if let Some(entity_type) = &self.entity_type.load() {
                 if self.delay.load(Ordering::Relaxed) == -1 {
@@ -96,12 +95,14 @@ impl BlockEntity for MobSpawnerBlockEntity {
                     let pos = self.position.0;
 
                     let spawn_pos = Vector3::new(
-                        pos.x as f64
-                            + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
+                        f64::from(pos.x)
+                            + (rand::random::<f64>() + rand::random::<f64>())
+                                * f64::from(spawn_range)
                             + 0.5,
-                        (pos.y + rand::random_range(0..3) - 1) as f64,
-                        pos.z as f64
-                            + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
+                        f64::from(pos.y + rand::random_range(0..3) - 1),
+                        f64::from(pos.z)
+                            + (rand::random::<f64>() + rand::random::<f64>())
+                                * f64::from(spawn_range)
                             + 0.5,
                     );
                     // TODO: we should use getSpawnBox, but this is only modified for slimes and magma slimes
@@ -136,7 +137,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
     where
         Self: Sized,
     {
-        let delay = nbt.get_short("Delay").unwrap_or(Self::DEFAULT_DELAY as i16) as i32;
+        let delay = i32::from(nbt.get_short("Delay").unwrap_or(Self::DEFAULT_DELAY as i16));
         let min_delay = nbt
             .get_int("MinSpawnDelay")
             .unwrap_or(Self::DEFAULT_MIN_SPAWN_DELAY);

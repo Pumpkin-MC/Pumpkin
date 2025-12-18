@@ -1,9 +1,8 @@
 use std::sync::{Arc, atomic::AtomicU8};
 
 use pumpkin_data::{fuels::is_fuel, item::Item};
+use pumpkin_inventory::{screen_handler::BoxFuture, slot::Slot};
 use pumpkin_world::inventory::Inventory;
-
-use crate::slot::{BoxFuture, Slot};
 
 #[derive(Debug, Clone, Copy)]
 pub enum FurnaceSlotType {

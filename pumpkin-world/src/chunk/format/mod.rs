@@ -1,13 +1,12 @@
 use std::{collections::HashMap, io::Cursor, path::PathBuf, pin::Pin};
 
 use bytes::Bytes;
-use futures::future::join_all;
 use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
 use uuid::Uuid;
 
 use crate::{
-    block::entities::block_entity_from_nbt,
+    block::entity::BlockEntityCollection,
     chunk::{
         ChunkEntityData, ChunkReadingError, ChunkSerializingError,
         format::anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
@@ -29,7 +28,7 @@ use crate::block::BlockStateCodec;
 pub mod anvil;
 pub mod linear;
 
-impl SingleChunkDataSerializer for ChunkData {
+impl<T: BlockEntityCollection> SingleChunkDataSerializer for ChunkData<T> {
     #[inline]
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
         Self::internal_from_bytes(bytes, pos).map_err(ChunkReadingError::ParsingError)
@@ -48,14 +47,14 @@ impl SingleChunkDataSerializer for ChunkData {
     }
 }
 
-impl PathFromLevelFolder for ChunkData {
+impl<T: BlockEntityCollection> PathFromLevelFolder for ChunkData<T> {
     #[inline]
     fn file_path(folder: &LevelFolder, file_name: &str) -> PathBuf {
         folder.region_folder.join(file_name)
     }
 }
 
-impl Dirtiable for ChunkData {
+impl<T: BlockEntityCollection> Dirtiable for ChunkData<T> {
     #[inline]
     fn mark_dirty(&mut self, flag: bool) {
         self.dirty = flag;
@@ -67,7 +66,7 @@ impl Dirtiable for ChunkData {
     }
 }
 
-impl ChunkData {
+impl<T: BlockEntityCollection> ChunkData<T> {
     pub fn internal_from_bytes(
         chunk_data: &[u8],
         position: Vector2<i32>,
@@ -168,16 +167,7 @@ impl ChunkData {
             dirty: false,
             block_ticks: ChunkTickScheduler::from_vec(&chunk_data.block_ticks),
             fluid_ticks: ChunkTickScheduler::from_vec(&chunk_data.fluid_ticks),
-            block_entities: {
-                let mut block_entities = HashMap::new();
-                for nbt in chunk_data.block_entities {
-                    let block_entity = block_entity_from_nbt(&nbt);
-                    if let Some(block_entity) = block_entity {
-                        block_entities.insert(block_entity.get_position(), block_entity);
-                    }
-                }
-                block_entities
-            },
+            block_entities: T::from_nbt_entries(&chunk_data.block_entities),
             light_engine,
             status: chunk_data.status,
         })
@@ -214,12 +204,7 @@ impl ChunkData {
             sections,
             block_ticks: self.block_ticks.to_vec(),
             fluid_ticks: self.fluid_ticks.to_vec(),
-            block_entities: join_all(self.block_entities.values().map(|block_entity| async move {
-                let mut nbt = NbtCompound::new();
-                block_entity.write_internal(&mut nbt).await;
-                nbt
-            }))
-            .await,
+            block_entities: T::to_nbt_entries(&self.block_entities).await,
             // we have not implemented light engine
             light_correct: false,
         };

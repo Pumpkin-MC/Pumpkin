@@ -10,6 +10,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 use crate::block::BlockHitResult;
+use crate::block::entities::command_block::CommandBlockEntity;
+use crate::block::entities::sign::SignBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
@@ -52,8 +54,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
-use pumpkin_world::block::entities::command_block::CommandBlockEntity;
-use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;

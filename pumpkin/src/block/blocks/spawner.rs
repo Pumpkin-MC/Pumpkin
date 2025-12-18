@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::block::entities::mob_spawner::MobSpawnerBlockEntity;
 
-use crate::block::{BlockBehaviour, BlockFuture, PlacedArgs};
+use crate::block::{
+    BlockBehaviour, BlockFuture, PlacedArgs, entities::mob_spawner::MobSpawnerBlockEntity,
+};
 
 #[pumpkin_block("minecraft:spawner")]
 pub struct SpawnerBlock;

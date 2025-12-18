@@ -1,8 +1,3 @@
-use crate::BlockStateId;
-use crate::block::entities::BlockEntity;
-use crate::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
-use crate::item::ItemStack;
-use crate::world::SimpleWorld;
 use pumpkin_data::block_properties::{BlockProperties, HopperFacing, HopperLikeProperties};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -10,12 +5,19 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::BlockStateId;
+use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
+use pumpkin_world::item::ItemStack;
+use pumpkin_world::world::SimpleWorld;
 use std::any::Any;
 use std::array::from_fn;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64};
 use tokio::sync::Mutex;
+
+use crate::block::entities::BlockEntity;
+use crate::world::World;
 
 pub struct HopperBlockEntity {
     pub position: BlockPos,
@@ -26,6 +28,7 @@ pub struct HopperBlockEntity {
     pub ticked_game_time: AtomicI64,
 }
 
+#[must_use]
 pub fn to_offset(facing: &HopperFacing) -> Vector3<i32> {
     match facing {
         HopperFacing::Down => (0, -1, 0),
@@ -74,10 +77,7 @@ impl BlockEntity for HopperBlockEntity {
         hopper
     }
 
-    fn tick<'a>(
-        &'a self,
-        world: Arc<dyn SimpleWorld>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    fn tick<'a>(&'a self, world: Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.ticked_game_time.store(
                 world.get_world_age().await,
@@ -129,6 +129,7 @@ impl HopperBlockEntity {
     pub const INVENTORY_SIZE: usize = 5;
     pub const ID: &'static str = "minecraft:hopper";
 
+    #[must_use]
     pub fn new(position: BlockPos, facing: HopperFacing) -> Self {
         Self {
             position,
@@ -139,20 +140,16 @@ impl HopperBlockEntity {
             ticked_game_time: AtomicI64::new(0),
         }
     }
-    async fn try_move_items(&self, state: &HopperLikeProperties, world: &Arc<dyn SimpleWorld>) {
+    async fn try_move_items(&self, state: &HopperLikeProperties, world: &Arc<World>) {
         if self
             .cooldown_time
             .load(std::sync::atomic::Ordering::Relaxed)
             <= 0
             && state.enabled
         {
-            let mut success = false;
-            if !self.is_empty().await {
-                success = self.eject_items(world).await;
-            }
-            if !self.inventory_full().await {
-                success |= self.suck_in_items(world).await;
-            }
+            let success = (!self.is_empty().await && self.eject_items(world).await)
+                || (!self.inventory_full().await && self.suck_in_items(world).await);
+
             if success {
                 self.cooldown_time
                     .store(8, std::sync::atomic::Ordering::Relaxed);
@@ -171,7 +168,7 @@ impl HopperBlockEntity {
         true
     }
 
-    async fn suck_in_items(&self, world: &Arc<dyn SimpleWorld>) -> bool {
+    async fn suck_in_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
         let pos_up = &self.position.up();
         if let Some(entity) = world.get_block_entity(pos_up).await
@@ -201,7 +198,7 @@ impl HopperBlockEntity {
         false
     }
 
-    async fn eject_items(&self, world: &Arc<dyn SimpleWorld>) -> bool {
+    async fn eject_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
 
         if let Some(entity) = world
@@ -254,14 +251,13 @@ impl HopperBlockEntity {
                 }
                 if success {
                     if to_empty
-                        && let Some(hopper) = to.as_any().downcast_ref::<HopperBlockEntity>()
+                        && let Some(hopper) = to.as_any().downcast_ref::<Self>()
                         && hopper
                             .cooldown_time
                             .load(std::sync::atomic::Ordering::Relaxed)
                             <= 8
                     {
-                        if let Some(from_hopper) = from.as_any().downcast_ref::<HopperBlockEntity>()
-                        {
+                        if let Some(from_hopper) = from.as_any().downcast_ref::<Self>() {
                             if from_hopper
                                 .cooldown_time
                                 .load(std::sync::atomic::Ordering::Relaxed)
@@ -299,7 +295,7 @@ impl Inventory for HopperBlockEntity {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -344,7 +340,7 @@ impl Inventory for HopperBlockEntity {
 impl Clearable for HopperBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })

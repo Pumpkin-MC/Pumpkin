@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
-    registry::BlockActionResult,
+    entities::ender_chest::EnderChestBlockEntity, registry::BlockActionResult,
 };
 use pumpkin_data::block_properties::{BlockProperties, LadderLikeProperties};
 use pumpkin_inventory::{
@@ -12,9 +12,7 @@ use pumpkin_inventory::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{
-    BlockStateId, block::entities::ender_chest::EnderChestBlockEntity, inventory::Inventory,
-};
+use pumpkin_world::{BlockStateId, inventory::Inventory};
 use tokio::sync::Mutex;
 
 struct EnderChestScreenFactory(Arc<dyn Inventory>);

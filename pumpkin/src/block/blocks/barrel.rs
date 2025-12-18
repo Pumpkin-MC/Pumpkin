@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::entities::barrel::BarrelBlockEntity;
 use crate::block::{BlockFuture, OnPlaceArgs, PlacedArgs};
 use crate::block::{
     registry::BlockActionResult,
@@ -15,7 +16,6 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::barrel::BarrelBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 

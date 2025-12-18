@@ -1,3 +1,6 @@
+pub mod furnace_screen_handler;
+pub mod furnace_slot;
+
 use std::{
     array::from_fn,
     pin::Pin,
@@ -14,17 +17,19 @@ use pumpkin_data::{
     recipe_remainder::get_recipe_remainder_id,
     recipes::{CookingRecipe, CookingRecipeType, RECIPES_COOKING},
 };
+use pumpkin_inventory::screen_handler::PropertyDelegate;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use tokio::sync::Mutex;
-
-use crate::{
+use pumpkin_world::{
     inventory::{Clearable, Inventory, InventoryFuture, split_stack},
     item::ItemStack,
-    world::{BlockFlags, SimpleWorld},
+    world::BlockFlags,
 };
+use tokio::sync::Mutex;
 
-use super::{BlockEntity, PropertyDelegate};
+use crate::world::World;
+
+use super::BlockEntity;
 
 pub struct FurnaceBlockEntity {
     pub position: BlockPos,
@@ -44,6 +49,7 @@ impl FurnaceBlockEntity {
         self.lit_time_remaining.load(Ordering::Relaxed) > 0
     }
 
+    #[must_use]
     pub fn get_furnace_cooking_recipe(item: &Item) -> Option<&CookingRecipe> {
         if let Some(recipe_type) = RECIPES_COOKING.iter().find(|recipe| match recipe {
             CookingRecipeType::Smelting(smelting_recipe) => {
@@ -69,10 +75,7 @@ impl FurnaceBlockEntity {
         recipe: Option<&CookingRecipe>,
         max_count: u8,
     ) -> bool {
-        let recipe = match recipe {
-            Some(cooking_recipe) => cooking_recipe,
-            None => return false,
-        };
+        let Some(recipe) = recipe else { return false };
 
         let top_item_stack = self.items[0].lock().await;
         let is_top_items_empty = top_item_stack.is_empty();
@@ -102,11 +105,10 @@ impl FurnaceBlockEntity {
         if let Some(recipe) = recipe {
             if can_accept_output {
                 let mut side_items = self.items[2].lock().await;
-                let output_item = match Item::from_registry_key(
-                    recipe.result.id.strip_prefix("minecraft:").unwrap(),
-                ) {
-                    Some(item) => item,
-                    None => return false,
+                let Some(output_item) =
+                    Item::from_registry_key(recipe.result.id.strip_prefix("minecraft:").unwrap())
+                else {
+                    return false;
                 };
                 let output_item_stack = ItemStack::new(recipe.result.count, output_item);
 
@@ -136,9 +138,9 @@ impl FurnaceBlockEntity {
         false
     }
 
-    pub async fn get_cook_progress(&self) -> f32 {
-        let current = self.cooking_time_spent.load(Ordering::Relaxed) as i32;
-        let total = self.cooking_total_time.load(Ordering::Relaxed) as i32;
+    pub fn get_cook_progress(&self) -> f32 {
+        let current = i32::from(self.cooking_time_spent.load(Ordering::Relaxed));
+        let total = i32::from(self.cooking_total_time.load(Ordering::Relaxed));
 
         if total != 0 && current != 0 {
             (current as f32 / total as f32).clamp(0.0, 1.0)
@@ -147,9 +149,9 @@ impl FurnaceBlockEntity {
         }
     }
 
-    pub async fn get_fuel_progress(&self) -> f32 {
-        let remaining = self.lit_time_remaining.load(Ordering::Relaxed) as i32;
-        let total = self.lit_total_time.load(Ordering::Relaxed) as i32;
+    pub fn get_fuel_progress(&self) -> f32 {
+        let remaining = i32::from(self.lit_time_remaining.load(Ordering::Relaxed));
+        let total = i32::from(self.lit_total_time.load(Ordering::Relaxed));
         let adjusted_total = if total == 0 { 200 } else { total };
 
         (remaining as f32 / adjusted_total as f32).clamp(0.0, 1.0)
@@ -157,10 +159,7 @@ impl FurnaceBlockEntity {
 }
 
 impl BlockEntity for FurnaceBlockEntity {
-    fn tick<'a>(
-        &'a self,
-        world: Arc<dyn SimpleWorld>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    fn tick<'a>(&'a self, world: Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let is_burning = self.is_burning();
             let mut is_dirty = false;
@@ -242,25 +241,14 @@ impl BlockEntity for FurnaceBlockEntity {
                 let mut props =
                     FurnaceLikeProperties::from_state_id(furnace_block_state.id, furnace_block);
 
-                if self.is_burning() {
-                    props.lit = true;
-                    world
-                        .set_block_state(
-                            &self.position,
-                            props.to_state_id(furnace_block),
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                } else {
-                    props.lit = false;
-                    world
-                        .set_block_state(
-                            &self.position,
-                            props.to_state_id(furnace_block),
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                }
+                props.lit = self.is_burning();
+                world
+                    .set_block_state(
+                        &self.position,
+                        props.to_state_id(furnace_block),
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
             }
 
             if is_dirty {
@@ -360,6 +348,7 @@ impl FurnaceBlockEntity {
     pub const INVENTORY_SIZE: usize = 3;
     pub const ID: &'static str = "minecraft:furnace";
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -380,7 +369,7 @@ impl Inventory for FurnaceBlockEntity {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 if !slot.lock().await.is_empty() {
                     return false;
                 }
@@ -443,7 +432,7 @@ impl Inventory for FurnaceBlockEntity {
 impl Clearable for FurnaceBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in self.items.iter() {
+            for slot in &self.items {
                 *slot.lock().await = ItemStack::EMPTY.clone();
             }
         })
@@ -460,7 +449,7 @@ impl PropertyDelegate for FurnaceBlockEntity {
             _ => 0,
         };
 
-        value as i32
+        i32::from(value)
     }
 
     fn set_property(&self, index: i32, value: i32) {

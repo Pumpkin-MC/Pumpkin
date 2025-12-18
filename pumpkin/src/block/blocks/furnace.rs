@@ -2,21 +2,20 @@ use std::sync::Arc;
 
 use pumpkin_data::block_properties::{BlockProperties, FurnaceLikeProperties};
 use pumpkin_inventory::{
-    furnace::furnace_screen_handler::FurnaceScreenHandler,
     player::player_inventory::PlayerInventory,
     screen_handler::{BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{
-    BlockStateId,
-    block::entities::{BlockEntity, furnace::FurnaceBlockEntity},
-    inventory::Inventory,
-};
+use pumpkin_world::{BlockStateId, inventory::Inventory};
 use tokio::sync::Mutex;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, BrokenArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
+    entities::{
+        BlockEntity,
+        furnace::{FurnaceBlockEntity, furnace_screen_handler::FurnaceScreenHandler},
+    },
     registry::BlockActionResult,
 };
 

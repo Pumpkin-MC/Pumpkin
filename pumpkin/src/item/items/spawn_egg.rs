@@ -1,5 +1,6 @@
 use std::pin::Pin;
 
+use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::entity::player::Player;
 use crate::entity::r#type::from_type;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -9,7 +10,6 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
-use pumpkin_world::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use pumpkin_world::item::ItemStack;
 use uuid::Uuid;
 

@@ -9,17 +9,15 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
-use pumpkin_world::{
-    BlockStateId, block::entities::comparator::ComparatorBlockEntity, tick::TickPriority,
-    world::BlockFlags,
-};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, EmitsRedstonePowerArgs,
         GetComparatorOutputArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
         NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-        PlacedArgs, PlayerPlacedArgs, registry::BlockActionResult,
+        PlacedArgs, PlayerPlacedArgs, entities::comparator::ComparatorBlockEntity,
+        registry::BlockActionResult,
     },
     world::World,
 };

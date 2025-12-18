@@ -1,5 +1,5 @@
 use crate::BlockStateId;
-use crate::block::entities::BlockEntity;
+use crate::block::entity::BlockEntityCollection;
 use crate::chunk::format::LightContainer;
 use crate::tick::scheduler::ChunkTickScheduler;
 use palette::{BiomePalette, BlockPalette};
@@ -13,8 +13,8 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::ops::{BitAnd, BitOr};
-use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 
 pub mod format;
@@ -68,14 +68,14 @@ pub enum CompressionError {
 }
 
 // Clone here cause we want to clone a snapshot of the chunk so we don't block writing for too long
-pub struct ChunkData {
+pub struct ChunkData<T: BlockEntityCollection> {
     pub section: ChunkSections,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
     pub position: Vector2<i32>,
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
-    pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
+    pub block_entities: T,
     pub light_engine: ChunkLight,
     pub status: ChunkStatus,
     pub dirty: bool,
@@ -443,7 +443,7 @@ impl ChunkSections {
     }
 }
 
-impl ChunkData {
+impl<T: BlockEntityCollection> ChunkData<T> {
     /// Gets the given block in the chunk
     #[inline]
     pub fn get_relative_block(

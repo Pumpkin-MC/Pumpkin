@@ -5,14 +5,15 @@ use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::packet;
 use pumpkin_nbt::END_ID;
 use pumpkin_util::math::position::get_local_cord;
+use pumpkin_world::block::entity::{BlockEntityCollection, BlockEntityData};
 use pumpkin_world::chunk::format::LightContainer;
 use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
 use std::io::Write;
 
 #[packet(PLAY_LEVEL_CHUNK_WITH_LIGHT)]
-pub struct CChunkData<'a>(pub &'a ChunkData);
+pub struct CChunkData<'a, T: BlockEntityCollection>(pub &'a ChunkData<T>);
 
-impl ClientPacket for CChunkData<'_> {
+impl<T: BlockEntityCollection> ClientPacket for CChunkData<'_, T> {
     fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         let mut write = write;
 
@@ -109,7 +110,7 @@ impl ClientPacket for CChunkData<'_> {
         }
 
         write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
-        for block_entity in self.0.block_entities.values() {
+        for block_entity in self.0.block_entities.get_all() {
             let pos = block_entity.get_position();
             let local_xz = ((get_local_cord(pos.0.x) & 0xF) << 4) | (get_local_cord(pos.0.z) & 0xF);
 

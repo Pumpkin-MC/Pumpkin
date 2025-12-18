@@ -20,17 +20,20 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::text::TextComponent;
+use pumpkin_world::inventory::{ComparableInventory, Inventory};
 use pumpkin_world::item::ItemStack;
-use pumpkin_world::{
-    block::entities::PropertyDelegate,
-    inventory::{ComparableInventory, Inventory},
-};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
 use std::{cmp::max, pin::Pin};
 use tokio::sync::Mutex;
 
 const SLOT_INDEX_OUTSIDE: i32 = -999;
+
+pub trait PropertyDelegate: Sync + Send {
+    fn get_property(&self, _index: i32) -> i32;
+    fn set_property(&self, _index: i32, _value: i32);
+    fn get_properties_size(&self) -> i32;
+}
 
 pub struct ScreenProperty {
     old_value: i32,

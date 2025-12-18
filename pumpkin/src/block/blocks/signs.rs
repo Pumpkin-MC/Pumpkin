@@ -12,7 +12,6 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::sign::SignBlockEntity;
 use uuid::Uuid;
 
 use crate::block::BlockBehaviour;
@@ -23,6 +22,7 @@ use crate::block::OnStateReplacedArgs;
 use crate::block::PlacedArgs;
 use crate::block::PlayerPlacedArgs;
 use crate::block::UseWithItemArgs;
+use crate::block::entities::sign::SignBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;

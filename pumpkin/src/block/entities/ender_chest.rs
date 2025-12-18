@@ -1,14 +1,17 @@
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_inventory::viewer_count_tracker::{
+    ViewerCountListener, ViewerCountTracker, ViewerFuture,
+};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomImpl, get_seed};
+use pumpkin_world::world::SimpleWorld;
 use std::any::Any;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerFuture};
-use crate::world::SimpleWorld;
+use crate::world::World;
 
 use super::BlockEntity;
 
@@ -45,13 +48,10 @@ impl BlockEntity for EnderChestBlockEntity {
         Box::pin(async {})
     }
 
-    fn tick<'a>(
-        &'a self,
-        world: Arc<dyn SimpleWorld>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    fn tick<'a>(&'a self, world: Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.viewers
-                .update_viewer_count::<EnderChestBlockEntity>(self, world, &self.position)
+                .update_viewer_count::<Self>(self, world, &self.position)
                 .await;
         })
     }
@@ -68,7 +68,8 @@ impl ViewerCountListener for EnderChestBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockEnderChestOpen).await;
+            let world = Arc::downcast::<World>(world.clone().as_any()).unwrap();
+            self.play_sound(&world, Sound::BlockEnderChestOpen).await;
         })
     }
 
@@ -78,7 +79,8 @@ impl ViewerCountListener for EnderChestBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockEnderChestClose).await;
+            let world = Arc::downcast::<World>(world.clone().as_any()).unwrap();
+            self.play_sound(&world, Sound::BlockEnderChestClose).await;
         })
     }
 
@@ -92,7 +94,7 @@ impl ViewerCountListener for EnderChestBlockEntity {
         Box::pin(async move {
             world
                 .add_synced_block_event(*position, Self::LID_ANIMATION_EVENT_TYPE, new as u8)
-                .await
+                .await;
         })
     }
 }
@@ -101,6 +103,7 @@ impl EnderChestBlockEntity {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:ender_chest";
 
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
@@ -108,11 +111,12 @@ impl EnderChestBlockEntity {
         }
     }
 
+    #[must_use]
     pub fn get_tracker(&self) -> Arc<ViewerCountTracker> {
         self.viewers.clone()
     }
 
-    async fn play_sound(&self, world: &Arc<dyn SimpleWorld>, sound: Sound) {
+    async fn play_sound(&self, world: &Arc<World>, sound: Sound) {
         let mut rng = Xoroshiro::from_seed(get_seed());
 
         world

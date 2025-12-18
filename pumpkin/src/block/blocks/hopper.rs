@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::block::blocks::redstone::block_receives_redstone_power;
+use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::{BlockFuture, OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs};
 use crate::block::{
     registry::BlockActionResult,
@@ -19,7 +20,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::hopper::HopperBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;

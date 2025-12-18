@@ -1,17 +1,37 @@
 use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::fuels::is_fuel;
-use pumpkin_world::{block::entities::BlockEntity, inventory::Inventory, item::ItemStack};
-
-use crate::{
+use pumpkin_inventory::{
     player::player_inventory::PlayerInventory,
     screen_handler::{
         InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
         ScreenHandlerFuture, ScreenHandlerListener, ScreenProperty,
     },
 };
+use pumpkin_world::{inventory::Inventory, item::ItemStack};
+
+use crate::block::entities::BlockEntity;
 
 use super::furnace_slot::{FurnaceSlot, FurnaceSlotType};
+
+struct FurnaceScreenListener;
+
+impl ScreenHandlerListener for FurnaceScreenListener {
+    fn on_property_update<'a>(
+        &'a self,
+        screen_handler: &'a ScreenHandlerBehaviour,
+        property: u8,
+        value: i32,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
+                sync_handler
+                    .update_property(screen_handler, i32::from(property), value)
+                    .await;
+            }
+        })
+    }
+}
 
 pub struct FurnaceScreenHandler {
     pub inventory: Arc<dyn Inventory>,
@@ -33,24 +53,6 @@ impl FurnaceScreenHandler {
                 Some(pumpkin_data::screen::WindowType::Furnace),
             ),
         };
-
-        struct FurnaceScreenListener;
-        impl ScreenHandlerListener for FurnaceScreenListener {
-            fn on_property_update<'a>(
-                &'a self,
-                screen_handler: &'a ScreenHandlerBehaviour,
-                property: u8,
-                value: i32,
-            ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-                Box::pin(async move {
-                    if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
-                        sync_handler
-                            .update_property(screen_handler, property as i32, value)
-                            .await;
-                    }
-                })
-            }
-        }
 
         // 0: Fire icon (fuel left) counting from fuel burn time down to 0 (in-game ticks)
         // 1: Maximum fuel burn time fuel burn time or 0 (in-game ticks)

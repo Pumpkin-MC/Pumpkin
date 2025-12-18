@@ -4,8 +4,9 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::world::{BlockFlags, SimpleWorld};
 
-use crate::world::{BlockFlags, SimpleWorld};
+use crate::world::World;
 
 use super::BlockEntity;
 
@@ -58,10 +59,7 @@ impl BlockEntity for PistonBlockEntity {
         self.position
     }
 
-    fn tick<'a>(
-        &'a self,
-        world: Arc<dyn SimpleWorld>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    fn tick<'a>(&'a self, world: Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let current_progress = self.current_progress.load();
             self.last_progress.store(current_progress);

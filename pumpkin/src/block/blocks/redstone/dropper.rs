@@ -1,4 +1,6 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
+use crate::block::entities::dropper::DropperBlockEntity;
+use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
@@ -20,8 +22,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::dropper::DropperBlockEntity;
-use pumpkin_world::block::entities::hopper::HopperBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;

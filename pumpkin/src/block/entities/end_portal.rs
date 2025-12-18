@@ -11,6 +11,7 @@ pub struct EndPortalBlockEntity {
 
 impl EndPortalBlockEntity {
     pub const ID: &'static str = "minecraft:end_portal";
+    #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self { position }
     }

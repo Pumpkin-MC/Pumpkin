@@ -4,9 +4,9 @@ use crate::block::BlockBehaviour;
 use crate::block::BlockFuture;
 use crate::block::OnEntityCollisionArgs;
 use crate::block::PlacedArgs;
+use crate::block::entities::end_portal::EndPortalBlockEntity;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::VanillaDimensionType;
-use pumpkin_world::block::entities::end_portal::EndPortalBlockEntity;
 
 #[pumpkin_block("minecraft:end_portal")]
 pub struct EndPortalBlock;

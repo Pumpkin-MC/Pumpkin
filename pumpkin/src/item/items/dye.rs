@@ -2,13 +2,16 @@ use std::sync::Arc;
 
 use pumpkin_data::tag;
 use pumpkin_util::GameMode;
-use pumpkin_world::block::entities::{
-    BlockEntity,
-    sign::{DyeColor, Text},
-};
 
 use crate::{
-    block::{UseWithItemArgs, registry::BlockActionResult},
+    block::{
+        UseWithItemArgs,
+        entities::{
+            BlockEntity,
+            sign::{DyeColor, Text},
+        },
+        registry::BlockActionResult,
+    },
     entity::player::Player,
     item::{ItemBehaviour, ItemMetadata},
 };

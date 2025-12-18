@@ -1,10 +1,13 @@
 use std::sync::{Arc, atomic::Ordering};
 
 use pumpkin_data::item::Item;
-use pumpkin_world::block::entities::{BlockEntity, sign::Text};
 
 use crate::{
-    block::{UseWithItemArgs, registry::BlockActionResult},
+    block::{
+        UseWithItemArgs,
+        entities::{BlockEntity, sign::Text},
+        registry::BlockActionResult,
+    },
     item::{ItemBehaviour, ItemMetadata},
 };
 

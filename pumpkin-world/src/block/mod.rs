@@ -1,6 +1,5 @@
-pub mod entities;
+pub mod entity;
 pub mod state;
-pub mod viewer;
 
 use std::collections::HashMap;
 

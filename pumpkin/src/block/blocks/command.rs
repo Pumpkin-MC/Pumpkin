@@ -2,12 +2,12 @@ use std::sync::atomic::Ordering;
 
 use pumpkin_data::Block;
 use pumpkin_util::{GameMode, math::position::BlockPos};
-use pumpkin_world::{block::entities::command_block::CommandBlockEntity, tick::TickPriority};
+use pumpkin_world::tick::TickPriority;
 
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, OnNeighborUpdateArgs,
-        OnScheduledTickArgs,
+        OnScheduledTickArgs, entities::command_block::CommandBlockEntity,
     },
     world::World,
 };

@@ -1,7 +1,10 @@
 use std::io::{Error, Write};
 
 use pumpkin_macros::packet;
-use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
+use pumpkin_world::{
+    block::entity::BlockEntityCollection,
+    chunk::{ChunkData, palette::NetworkPalette},
+};
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
@@ -10,17 +13,17 @@ use crate::{
 const VERSION: u8 = 9;
 
 #[packet(58)]
-pub struct CLevelChunk<'a> {
+pub struct CLevelChunk<'a, T: BlockEntityCollection> {
     // https://mojang.github.io/bedrock-protocol-docs/html/LevelChunkPacket.html
     pub dimension: i32,
     pub cache_enabled: bool,
 
     // https://gist.github.com/Tomcc/a96af509e275b1af483b25c543cfbf37
     // https://github.com/Mojang/bedrock-protocol-docs/blob/main/additional_docs/SubChunk%20Request%20System%20v1.18.10.md
-    pub chunk: &'a ChunkData,
+    pub chunk: &'a ChunkData<T>,
 }
 
-impl<'a> PacketWrite for CLevelChunk<'a> {
+impl<'a, T: BlockEntityCollection> PacketWrite for CLevelChunk<'a, T> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarInt(self.chunk.position.x).write(writer)?;
         VarInt(self.chunk.position.y).write(writer)?;

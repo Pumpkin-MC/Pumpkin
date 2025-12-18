@@ -70,9 +70,10 @@ use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::entity::entity_data_flags::SLEEPING_POS_ID;
 use pumpkin_world::item::ItemStack;
-use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
+use pumpkin_world::level::SyncEntityChunk;
 
 use crate::block::blocks::bed::BedBlock;
+use crate::block::entities::BlockEntityStorage;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
 use crate::data::op_data::OPERATOR_CONFIG;
@@ -98,6 +99,9 @@ const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 pub const DATA_VERSION: i32 = 4556; // 1.21.10
+
+type Level = pumpkin_world::level::Level<BlockEntityStorage>;
+type SyncChunk = pumpkin_world::level::SyncChunk<BlockEntityStorage>;
 
 enum BatchState {
     Initial,
@@ -272,7 +276,8 @@ impl ChunkManager {
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
         let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick);
-        let mut chunks = Vec::<Arc<RwLock<ChunkData>>>::with_capacity(chunk_size);
+        let mut chunks =
+            Vec::<Arc<RwLock<ChunkData<BlockEntityStorage>>>>::with_capacity(chunk_size);
         while chunk_size > 0 {
             chunks.push(self.chunk_queue.pop().unwrap().2);
             chunk_size -= 1;

@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use pumpkin_config::world::LevelConfig;
 use serde::Deserialize;
 
-use crate::{level::Level, world::BlockRegistryExt};
+use crate::{block::entity::BlockEntityCollection, level::Level, world::BlockRegistryExt};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -14,13 +14,13 @@ pub enum Dimension {
 }
 
 impl Dimension {
-    pub fn into_level(
+    pub fn into_level<T: BlockEntityCollection>(
         &self,
         level_config: &LevelConfig,
         mut base_directory: PathBuf,
         block_registry: Arc<dyn BlockRegistryExt>,
         seed: i64,
-    ) -> Arc<Level> {
+    ) -> Arc<Level<T>> {
         match self {
             Dimension::Overworld => {}
             Dimension::Nether => base_directory.push("DIM-1"),

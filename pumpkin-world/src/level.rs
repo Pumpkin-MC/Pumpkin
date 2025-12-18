@@ -1,8 +1,9 @@
+use crate::block::entity::BlockEntityCollection;
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
 use crate::generation::generator::VanillaGenerator;
 use crate::{
     BlockStateId,
-    block::{RawBlockState, entities::BlockEntity},
+    block::RawBlockState,
     chunk::{
         ChunkData, ChunkEntityData, ChunkReadingError,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
@@ -47,7 +48,7 @@ use tokio::{
 };
 use tokio_util::task::TaskTracker;
 
-pub type SyncChunk = Arc<RwLock<ChunkData>>;
+pub type SyncChunk<T> = Arc<RwLock<ChunkData<T>>>;
 pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
 
 /// The `Level` module provides functionality for working with chunks within or outside a Minecraft world.
@@ -59,7 +60,7 @@ pub type SyncEntityChunk = Arc<RwLock<ChunkEntityData>>;
 /// - **Chunk Generation:** Generates new chunks on-demand using a specified `WorldGenerator`.
 ///
 /// For more details on world generation, refer to the `WorldGenerator` module.
-pub struct Level {
+pub struct Level<T: BlockEntityCollection> {
     pub seed: Seed,
     pub block_registry: Arc<dyn BlockRegistryExt>,
     pub level_folder: LevelFolder,
@@ -69,13 +70,13 @@ pub struct Level {
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
-    pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk<T>>>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
     pub chunk_loading: Mutex<ChunkLoading>,
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
+    pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk<T>>>,
     entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
 
     pub world_gen: Arc<VanillaGenerator>,
@@ -96,14 +97,13 @@ pub struct Level {
 
     pub level_channel: Arc<LevelChannel>,
     pub thread_tracker: Mutex<Vec<thread::JoinHandle<()>>>,
-    pub chunk_listener: Arc<ChunkListener>,
+    pub chunk_listener: Arc<ChunkListener<T>>,
 }
 
 pub struct TickData {
     pub block_ticks: Vec<OrderedTick<&'static Block>>,
     pub fluid_ticks: Vec<OrderedTick<&'static Fluid>>,
     pub random_ticks: Vec<ScheduledTick<()>>,
-    pub block_entities: Vec<Arc<dyn BlockEntity>>,
 }
 
 #[derive(Clone)]
@@ -126,7 +126,7 @@ pub async fn dump() {
     // }
 }
 
-impl Level {
+impl<T: BlockEntityCollection> Level<T> {
     pub fn from_root_folder(
         level_config: &LevelConfig,
         root_folder: PathBuf,
@@ -153,12 +153,12 @@ impl Level {
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
-        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
-            ChunkConfig::Linear(chunk_config) => Arc::new(
-                ChunkFileManager::<LinearFile<ChunkData>>::new(chunk_config.clone()),
-            ),
+        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk<T>>> = match &level_config.chunk {
+            ChunkConfig::Linear(chunk_config) => Arc::new(ChunkFileManager::<
+                LinearFile<ChunkData<T>>,
+            >::new(chunk_config.clone())),
             ChunkConfig::Anvil(chunk_config) => Arc::new(ChunkFileManager::<
-                AnvilChunkFile<ChunkData>,
+                AnvilChunkFile<ChunkData<T>>,
             >::new(chunk_config.clone())),
         };
         let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
@@ -492,7 +492,6 @@ impl Level {
             block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
             random_ticks: Vec::with_capacity(self.loaded_chunks.len() * 3 * 16 * 16),
-            block_entities: Vec::new(),
         };
 
         let mut rng = SmallRng::from_rng(&mut rand::rng());
@@ -550,10 +549,6 @@ impl Level {
                     }
                 }
             }
-
-            ticks
-                .block_entities
-                .extend(chunk.block_entities.values().cloned());
         }
 
         ticks.block_ticks.sort_unstable();
@@ -592,7 +587,7 @@ impl Level {
         }
     }
 
-    pub async fn get_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
+    pub async fn get_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk<T> {
         // Already loaded?
         if let Some(chunk) = self.loaded_chunks.get(&pos) {
             chunk.clone()
@@ -783,7 +778,7 @@ impl Level {
         replaced_block_state_id
     }
 
-    pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk)>) {
+    pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk<T>)>) {
         if chunks_to_write.is_empty() {
             return;
         }
@@ -817,7 +812,7 @@ impl Level {
         }
     }
 
-    pub fn try_get_chunk(&self, coordinates: &Vector2<i32>) -> Option<Arc<RwLock<ChunkData>>> {
+    pub fn try_get_chunk(&self, coordinates: &Vector2<i32>) -> Option<Arc<RwLock<ChunkData<T>>>> {
         self.loaded_chunks
             .get(coordinates)
             .map(|x| x.value().clone())

@@ -1,3 +1,4 @@
+use crate::block::entities::BlockEntityStorage;
 use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
 use crate::world::World;
@@ -14,6 +15,7 @@ use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::block::entity::BlockEntityCollection;
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use rand::seq::IndexedRandom;
 use rand::{Rng, rng};
@@ -312,7 +314,7 @@ pub fn get_filtered_spawning_categories(
 pub async fn spawn_for_chunk(
     world: &Arc<World>,
     chunk_pos: &Vector2<i32>,
-    chunk: &Arc<RwLock<ChunkData>>,
+    chunk: &Arc<RwLock<ChunkData<BlockEntityStorage>>>,
     spawn_state: &mut SpawnState,
     spawn_list: &Vec<&'static MobCategory>,
 ) {
@@ -331,10 +333,10 @@ pub async fn spawn_for_chunk(
         }
     }
 }
-pub async fn get_random_pos_within(
+pub async fn get_random_pos_within<T: BlockEntityCollection>(
     min_y: i32,
     chunk_pos: &Vector2<i32>,
-    chunk: &Arc<RwLock<ChunkData>>,
+    chunk: &Arc<RwLock<ChunkData<T>>>,
 ) -> BlockPos {
     let x = (chunk_pos.x << 4) + rng().random_range(0..16);
     let z = (chunk_pos.y << 4) + rng().random_range(0..16);
@@ -372,11 +374,10 @@ pub async fn spawn_category_for_position(
             new_z += rng().random_range(0..6) - rng().random_range(0..6);
             new_pos = BlockPos::new(new_x, new_pos.0.y, new_z);
             let new_pos_center = new_pos.to_centered_f64();
-            let player_distance = get_nearest_player(&new_pos_center, world).await;
-            if player_distance == f64::MAX {
+            let Some(player_distance) = get_nearest_player(&new_pos_center, world).await else {
                 // debug!("player_distance infinity");
                 return;
-            }
+            };
             if !is_right_distance_to_player_and_spawn_point(
                 &new_pos,
                 player_distance,
@@ -432,15 +433,15 @@ pub async fn spawn_category_for_position(
     }
 }
 
-pub async fn get_nearest_player(pos: &Vector3<f64>, world: &Arc<World>) -> f64 {
-    let mut dst = f64::MAX;
+pub async fn get_nearest_player(pos: &Vector3<f64>, world: &Arc<World>) -> Option<f64> {
+    let mut dst = None;
     for (_uuid, player) in world.players.read().await.iter() {
         if player.gamemode.load() == GameMode::Spectator {
             continue;
         }
         let cur_dst = player.position().squared_distance_to_vec(*pos);
-        if cur_dst < dst {
-            dst = cur_dst;
+        if dst.is_none_or(|x| cur_dst < x) {
+            dst = Some(cur_dst);
         }
     }
     dst

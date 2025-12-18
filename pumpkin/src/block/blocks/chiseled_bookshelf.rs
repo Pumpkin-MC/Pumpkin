@@ -3,7 +3,8 @@ use std::sync::{Arc, atomic::Ordering};
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs,
-        OnPlaceArgs, PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
+        OnPlaceArgs, PlacedArgs, UseWithItemArgs,
+        entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity, registry::BlockActionResult,
     },
     entity::{EntityBase, player::Player},
     world::World,
@@ -18,10 +19,7 @@ use pumpkin_data::{
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
-use pumpkin_world::{
-    BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
-    inventory::Inventory, item::ItemStack,
-};
+use pumpkin_world::{BlockStateId, inventory::Inventory, item::ItemStack};
 use tokio::sync::Mutex;
 
 #[pumpkin_block("minecraft:chiseled_bookshelf")]

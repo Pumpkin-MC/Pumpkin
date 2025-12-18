@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::num::NonZeroU32;
 use std::pin::Pin;
 use std::sync::Weak;
@@ -14,6 +15,7 @@ pub mod loot;
 pub mod portal;
 pub mod time;
 
+use crate::block::entities::{BlockEntity, BlockEntityStorage};
 use crate::world::loot::LootContextParameters;
 use crate::{
     PLUGIN_MANAGER,
@@ -105,14 +107,13 @@ use pumpkin_util::{
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::chunk::palette::BlockPalette;
+use pumpkin_world::tick::TickPriority;
+use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::{GetBlockError, WorldFuture};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, GENERATION_SETTINGS, GeneratorSetting, biome,
-    block::entities::BlockEntity, chunk::io::Dirtiable, inventory::Inventory, item::ItemStack,
-    world::SimpleWorld,
+    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack,
 };
-use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
-use pumpkin_world::{level::Level, tick::TickPriority};
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{Rng, rng};
@@ -136,6 +137,9 @@ use uuid::Uuid;
 use weather::Weather;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
+
+type ChunkData = pumpkin_world::chunk::ChunkData<BlockEntityStorage>;
+type Level = pumpkin_world::level::Level<BlockEntityStorage>;
 
 impl PumpkinError for GetBlockError {
     fn is_kick(&self) -> bool {
@@ -787,9 +791,14 @@ impl World {
                 .unwrap_or(Duration::new(0, 0))
         );
 
-        for block_entity in tick_data.block_entities {
-            let world: Arc<dyn SimpleWorld> = self.clone();
-            block_entity.tick(world).await;
+        for chunk in self.level.loaded_chunks.iter() {
+            chunk
+                .value()
+                .read()
+                .await
+                .block_entities
+                .tick(self.clone())
+                .await;
         }
     }
 
@@ -2578,7 +2587,7 @@ impl World {
             && old_block.default_state.block_entity_type != u16::MAX
             && let Some(entity) = self.get_block_entity(position).await
         {
-            let world: Arc<dyn SimpleWorld> = self.clone();
+            let world = self.clone();
             entity.on_block_replaced(world, *position).await;
             self.remove_block_entity(position).await;
         }
@@ -3073,7 +3082,7 @@ impl World {
             .await;
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
-        chunk.block_entities.get(block_pos).cloned()
+        chunk.block_entities.get(block_pos)
     }
 
     pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
@@ -3400,13 +3409,6 @@ impl pumpkin_world::world::SimpleWorld for World {
         })
     }
 
-    fn get_block_entity<'a>(
-        &'a self,
-        block_pos: &'a BlockPos,
-    ) -> WorldFuture<'a, Option<Arc<dyn BlockEntity>>> {
-        Box::pin(async move { self.get_block_entity(block_pos).await })
-    }
-
     fn get_world_age(&self) -> WorldFuture<'_, i64> {
         Box::pin(async move {
             // Note: MutexGuard must be released before returning the future's result.
@@ -3448,6 +3450,10 @@ impl pumpkin_world::world::SimpleWorld for World {
         Box::pin(async move {
             Self::scatter_inventory(&self, position, inventory).await;
         })
+    }
+
+    fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
+        self as Arc<dyn Any + Send + Sync>
     }
 }
 
