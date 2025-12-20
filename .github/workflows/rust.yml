@@ -74,7 +74,7 @@ jobs:
           if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
           cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}$EXT"
       - name: Export executable
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: pumpkin-${{ runner.arch }}-${{ runner.os }}
           compression-level: 9
@@ -127,9 +127,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v6
-
-      - name: Download all binary artifacts
-        uses: actions/download-artifact@v6
+      - name: Download prebuilt binary artifacts
+        uses: actions/download-artifact@v7
         with:
           pattern: "**/pumpkin-*"
           path: dist/
