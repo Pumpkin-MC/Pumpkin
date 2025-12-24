@@ -5,14 +5,13 @@ edition.workspace = true
 rust-version = "1.87"
 
 [dependencies]
-pumpkin-protocol = { path = "../pumpkin-protocol" }
-pumpkin-data = { path = "../pumpkin-data" }
+pumpkin-protocol.workspace = true
+pumpkin-data.workspace = true
 
-pumpkin-world = { path = "../pumpkin-world" }
-pumpkin-util = { path = "../pumpkin-util" }
+pumpkin-world.workspace = true
+pumpkin-util.workspace = true
 
 log.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
-crossbeam-utils = "0.8.21"
-
+crossbeam-utils.workspace = true

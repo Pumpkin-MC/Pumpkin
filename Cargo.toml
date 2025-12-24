@@ -49,3 +49,64 @@ serde_json = "1.0"
 
 tempfile = { version = "3.24.0", default-features = false }
 proc-macro-error2 = "2"
+aes = "0.8"
+async-compression = "0.4.36"
+base64 = "0.22.1"
+bitflags = "2.10.0"
+cesu8 = "1.1"
+cfb8 = "0.8"
+colored = "3.0"
+console-subscriber = { version = "0.5.0", default-features = false }
+crc-fast = "1.9.0"
+criterion = { version = "0.8", default-features = false }
+crossbeam-utils = "0.8.21"
+crossfire = "2.1.8"
+dashmap = "6.1"
+ecdsa = "0.16.9"
+enum_dispatch = "0.3.13"
+env_logger = "0.11.8"
+flate2 = "1.1.5"
+heck = "0.5"
+hmac = "=0.13.0-rc.3"
+indexmap = "2.12"
+itertools = "0.14.0"
+libloading = "0.9"
+lru = "0.16.2"
+lz4-java-wrc = "0.2.0"
+md5 = "0.8"
+num-bigint = "0.4"
+num-derive = "0.4"
+num-traits = "0.2"
+num_cpus = "1.17.0"
+p384 = "0.13.1"
+phf = "0.13.1"
+pkcs8 = "=0.11.0-rc.8"
+proc-macro2 = "1.0"
+pumpkin-config = { path = "pumpkin-config" }
+pumpkin-data = { path = "pumpkin-data" }
+pumpkin-inventory = { path = "pumpkin-inventory" }
+pumpkin-macros = { path = "pumpkin-macros" }
+pumpkin-nbt = { path = "pumpkin-nbt" }
+pumpkin-protocol = { path = "pumpkin-protocol" }
+pumpkin-registry = { path = "pumpkin-registry" }
+pumpkin-util = { path = "pumpkin-util" }
+pumpkin-world = { path = "pumpkin-world" }
+quote = "1.0"
+rand = "=0.10.0-rc.5"
+rsa = "=0.10.0-rc.10"
+rustc-hash = "2.1.1"
+rustyline-async = "0.4.7"
+ruzstd = "0.8.2"
+serde_json5 = "0.2.1"
+sha1 = "=0.11.0-rc.3"
+sha2 = "=0.11.0-rc.3"
+signature = "2.2.0"
+simplelog = "0.12.2"
+slotmap = "1.1"
+take_mut = "0.2.2"
+temp-dir = "0.1.16"
+thread_local = "1.1.9"
+time = "0.3"
+tokio-util = "0.7.17"
+toml = "0.9"
+ureq = "3.1.4"

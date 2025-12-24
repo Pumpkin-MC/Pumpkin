@@ -8,8 +8,8 @@ serde.workspace = true
 thiserror.workspace = true
 bytes.workspace = true
 
-cesu8 = "1.1"
-flate2 = "1.1"
+cesu8.workspace = true
+flate2.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
