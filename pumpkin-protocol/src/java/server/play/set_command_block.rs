@@ -11,6 +11,11 @@ pub struct SSetCommandBlock {
     pub pos: BlockPos,
     pub command: String,
     pub mode: VarInt,
+
+    /// Operation mode flags
+    /// - 0x01: Track output
+    /// - 0x02: Is conditional
+    /// - 0x04: Automatic
     pub flags: i8,
 }
 
