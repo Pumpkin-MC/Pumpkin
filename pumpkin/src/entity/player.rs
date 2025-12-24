@@ -86,6 +86,7 @@ use crate::server::Server;
 use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
 
+use super::breath::BreathManager;
 use super::combat::{self, AttackType, player_attack_sound};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
@@ -334,6 +335,8 @@ pub struct Player {
     pub sleeping_since: AtomicCell<Option<u8>>,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
+    /// Manages the player's breath level for underwater breathing.
+    pub breath_manager: BreathManager,
     /// The ID of the currently open container (if any).
     pub open_container: AtomicCell<Option<u64>>,
     /// The item currently being held by the player.
@@ -438,6 +441,7 @@ impl Player {
             awaiting_teleport: Mutex::new(None),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
+            breath_manager: BreathManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
             open_container: AtomicCell::new(None),
             tick_counter: AtomicI32::new(0),
@@ -962,6 +966,7 @@ impl Player {
 
         self.living_entity.tick(self.clone(), server).await;
         self.hunger_manager.tick(self).await;
+        self.breath_manager.tick(self).await;
 
         // experience handling
         self.tick_experience().await;
@@ -1079,6 +1084,41 @@ impl Player {
             self.living_entity.entity.pos.load().y + eye_height,
             self.living_entity.entity.pos.load().z,
         )
+    }
+
+    // 检查头部是否在水中
+    // Check if the head is in water
+    pub async fn is_head_in_water(&self) -> bool {
+        // 拿到眼睛所在的精确坐标
+        // Get the precise coordinates of the eyes
+        let eye_block = self.eye_position();
+        // 添加修正值 (0.62 的高度在 0.625 的水深内不应该窒息)
+        // Add correction value (height of 0.62 should not suffocate in water depth of 0.625)
+        let eye_height = eye_block.y.fract() + 0.031f64;
+        // 向下取整拿到眼睛所在的块坐标
+        // Round down to get the block coordinates where the eyes are located
+        let eye_block_pos = BlockPos(Vector3 {
+            x: eye_block.x.floor() as i32,
+            y: eye_block.y.floor() as i32,
+            z: eye_block.z.floor() as i32,
+        });
+
+        // 读取头部所在的块的液体高度
+        // Read the fluid height of the block where the head is located
+        let fluid_height = self
+            .living_entity
+            .entity
+            .world
+            .get_fluid_height(&eye_block_pos)
+            .await;
+
+        if fluid_height == 0.0 {
+            return false;
+        }
+
+        // 如果眼睛局部高度小于流体高度，则眼睛在水内
+        // If the local eye height is less than the fluid height, then the eyes are in water
+        eye_height < f64::from(fluid_height)
     }
 
     pub fn rotation(&self) -> (f32, f32) {
@@ -1411,6 +1451,23 @@ impl Player {
                 self.hunger_manager.level.load().into(),
                 self.hunger_manager.saturation.load(),
             ))
+            .await;
+    }
+
+    /// 发送呼吸值更新给客户端
+    /// Sends breath value update to client
+    pub async fn send_breath(&self) {
+        use pumpkin_protocol::java::client::play::{MetaDataType, Metadata};
+        use pumpkin_world::entity::entity_data_flags::DATA_AIR_SUPPLY_ID;
+
+        let breath = self.breath_manager.get_breath();
+        self.living_entity
+            .entity
+            .send_meta_data(&[Metadata::new(
+                DATA_AIR_SUPPLY_ID,
+                MetaDataType::Integer,
+                VarInt(breath),
+            )])
             .await;
     }
 
@@ -2109,6 +2166,9 @@ impl NBTStorage for Player {
             // Store food level, saturation, exhaustion, and tick timer
             self.hunger_manager.write_nbt(nbt).await;
 
+            // Store breath level (air)
+            self.breath_manager.write_nbt(nbt).await;
+
             nbt.put_string(
                 "Dimension",
                 self.world().dimension_type.resource_location().to_string(),
@@ -2140,6 +2200,9 @@ impl NBTStorage for Player {
 
             // Load food level, saturation, exhaustion, and tick timer
             self.hunger_manager.read_nbt(nbt).await;
+
+            // Load breath level (air)
+            self.breath_manager.read_nbt(nbt).await;
 
             // Load from total XP
             let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
