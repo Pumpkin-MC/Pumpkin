@@ -1,0 +1,11 @@
+{
+    "display": {
+        "title": "Minecraft",
+        "description": "The beginning of your story"
+    },
+    "criteria": {
+        "crafting_table": {
+            "trigger": "minecraft:inventory_changed"
+        }
+    }
+}
