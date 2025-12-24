@@ -37,6 +37,7 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_world::block::bubble_column::BubbleColumn;
 use pumpkin_world::entity::entity_data_flags::DATA_POSE;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -1039,6 +1040,32 @@ impl Entity {
         self.touching_lava.store(in_lava, Ordering::SeqCst);
     }
 
+    async fn apply_bubble_column_motion(&self, caller: &Arc<dyn EntityBase>) {
+        let block_pos = self.block_pos.load();
+        let block = self.world.get_block(&block_pos).await;
+
+        if block != &Block::BUBBLE_COLUMN {
+            return;
+        }
+
+        let state_id = self.world.get_block_state_id(&block_pos).await;
+        let Some(drag) = BubbleColumn::drag_from_state(state_id) else {
+            return;
+        };
+
+        let mut velocity = self.velocity.load();
+        if drag {
+            velocity.y = (velocity.y - 0.3).max(-1.9);
+        } else {
+            velocity.y = (velocity.y + 0.3).min(1.8);
+            if let Some(living) = caller.get_living_entity() {
+                living.fall_distance.store(0.0);
+            }
+        }
+
+        self.velocity.store(velocity);
+    }
+
     fn push_by_fluid(&self, speed: f64, mut push: Vector3<f64>, n: usize) {
         if push.length_squared() != 0.0 {
             if n > 0 {
@@ -1872,6 +1899,7 @@ impl EntityBase for Entity {
         Box::pin(async move {
             self.tick_portal(&caller).await;
             self.update_fluid_state(&caller).await;
+            self.apply_bubble_column_motion(&caller).await;
             self.check_out_of_world(caller.clone()).await;
             let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
             if fire_ticks > 0 {

@@ -1,3 +1,4 @@
+pub mod bubble_column;
 pub mod entities;
 pub mod state;
 pub mod viewer;
