@@ -1,10 +1,11 @@
-use async_trait::async_trait;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 
-use crate::block::{BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
+use crate::block::{
+    BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+};
 
 use super::FireBlockBase;
 
@@ -18,24 +19,29 @@ impl SoulFireBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for SoulFireBlock {
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if !Self::is_soul_base(args.world.get_block(&args.position.down()).await) {
-            return Block::AIR.default_state.id;
-        }
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if !Self::is_soul_base(args.world.get_block(&args.position.down()).await) {
+                return Block::AIR.default_state.id;
+            }
 
-        args.state_id
+            args.state_id
+        })
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        Self::is_soul_base(args.block_accessor.get_block(&args.position.down()).await)
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            Self::is_soul_base(args.block_accessor.get_block(&args.position.down()).await)
+        })
     }
 
-    async fn broken(&self, args: BrokenArgs<'_>) {
-        FireBlockBase::broken(args.world.clone(), *args.position).await;
+    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            FireBlockBase::broken(args.world, *args.position).await;
+        })
     }
 }

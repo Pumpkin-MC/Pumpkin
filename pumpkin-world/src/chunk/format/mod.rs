@@ -1,6 +1,5 @@
-use std::{collections::HashMap, io::Cursor, path::PathBuf};
+use std::{collections::HashMap, io::Cursor, path::PathBuf, pin::Pin};
 
-use async_trait::async_trait;
 use bytes::Bytes;
 use futures::future::join_all;
 use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
@@ -30,21 +29,22 @@ use crate::block::BlockStateCodec;
 pub mod anvil;
 pub mod linear;
 
-#[async_trait]
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
-    fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
-        Self::internal_from_bytes(&bytes, pos).map_err(ChunkReadingError::ParsingError)
+    fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
+        Self::internal_from_bytes(bytes, pos).map_err(ChunkReadingError::ParsingError)
     }
 
     #[inline]
-    async fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        self.internal_to_bytes().await
+    fn to_bytes(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
+        Box::pin(async move { self.internal_to_bytes().await })
     }
 
     #[inline]
-    fn position(&self) -> &Vector2<i32> {
-        &self.position
+    fn position(&self) -> (i32, i32) {
+        (self.x, self.z)
     }
 }
 
@@ -116,51 +116,55 @@ impl ChunkData {
                 position.x, position.y, chunk_data.x_pos, chunk_data.z_pos,
             )));
         }
-
-        let light_engine = ChunkLight {
-            block_light: chunk_data
-                .sections
-                .iter()
-                .map(|x| {
-                    x.block_light
-                        .clone()
-                        .map(LightContainer::new)
-                        .unwrap_or_default()
-                })
-                .collect(),
-            sky_light: chunk_data
-                .sections
-                .iter()
-                .map(|x| {
-                    x.sky_light
-                        .clone()
-                        .map(LightContainer::new)
-                        .unwrap_or_default()
-                })
-                .collect(),
-        };
-
-        let sub_chunks = chunk_data
+        let (block_lights, sky_lights, sub_chunks) = chunk_data
             .sections
             .into_iter()
-            .map(|section| SubChunk {
-                block_states: section
-                    .block_states
-                    .map(BlockPalette::from_disk_nbt)
-                    .unwrap_or_default(),
-                biomes: section
-                    .biomes
-                    .map(BiomePalette::from_disk_nbt)
-                    .unwrap_or_default(),
+            .map(|section| {
+                let block_light = section
+                    .block_light
+                    .map(LightContainer::new)
+                    .unwrap_or_default();
+                let sky_light = section
+                    .sky_light
+                    .map(LightContainer::new)
+                    .unwrap_or_default();
+
+                let sub_chunk = SubChunk {
+                    block_states: section
+                        .block_states
+                        .map(BlockPalette::from_disk_nbt)
+                        .unwrap_or_default(),
+                    biomes: section
+                        .biomes
+                        .map(BiomePalette::from_disk_nbt)
+                        .unwrap_or_default(),
+                };
+
+                (block_light, sky_light, sub_chunk)
             })
-            .collect();
+            .fold(
+                (Vec::new(), Vec::new(), Vec::new()),
+                |(mut bl, mut sl, mut sc), (block_l, sky_l, sub_c)| {
+                    bl.push(block_l);
+                    sl.push(sky_l);
+                    sc.push(sub_c);
+                    (bl, sl, sc)
+                },
+            );
+
+        // 2. Assemble the final structs using the collected vectors.
+        let light_engine = ChunkLight {
+            block_light: block_lights.into_boxed_slice(),
+            sky_light: sky_lights.into_boxed_slice(),
+        };
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
-        let section = ChunkSections::new(sub_chunks, min_y);
+        let section = ChunkSections::new(sub_chunks.into_boxed_slice(), min_y);
 
         Ok(ChunkData {
             section,
             heightmap: chunk_data.heightmaps,
-            position,
+            x: position.x,
+            z: position.y,
             // This chunk is read from disk, so it has not been modified
             dirty: false,
             block_ticks: ChunkTickScheduler::from_vec(&chunk_data.block_ticks),
@@ -203,8 +207,8 @@ impl ChunkData {
 
         let nbt = ChunkNbt {
             data_version: WORLD_DATA_VERSION,
-            x_pos: self.position.x,
-            z_pos: self.position.y,
+            x_pos: self.x,
+            z_pos: self.z,
             min_y_section: section_coords::block_to_section(self.section.min_y),
             status: self.status,
             heightmaps: self.heightmap.clone(),
@@ -247,21 +251,22 @@ impl Dirtiable for ChunkEntityData {
     }
 }
 
-#[async_trait]
 impl SingleChunkDataSerializer for ChunkEntityData {
     #[inline]
-    fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
-        Self::internal_from_bytes(&bytes, pos).map_err(ChunkReadingError::ParsingError)
+    fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
+        Self::internal_from_bytes(bytes, pos).map_err(ChunkReadingError::ParsingError)
     }
 
     #[inline]
-    async fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        self.internal_to_bytes()
+    fn to_bytes(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
+        Box::pin(async move { self.internal_to_bytes() })
     }
 
     #[inline]
-    fn position(&self) -> &Vector2<i32> {
-        &self.chunk_position
+    fn position(&self) -> (i32, i32) {
+        (self.x, self.z)
     }
 }
 
@@ -286,26 +291,28 @@ impl ChunkEntityData {
         }
         let mut map = HashMap::new();
         for entity_nbt in chunk_entity_data.entities {
-            // TODO: This is wrong, we should use an int array, but our NBT lib for some reason does not work with int arrays and
-            // Just gives me a list when putting in a int array
-            let uuid = match entity_nbt.get_list("UUID") {
-                Some(uuid) => uuid,
+            let uuid = match entity_nbt.get_int_array("UUID") {
+                Some(uuid) => Uuid::from_u128(
+                    (uuid[0] as u128) << 96
+                        | (uuid[1] as u128) << 64
+                        | (uuid[2] as u128) << 32
+                        | (uuid[3] as u128),
+                ),
                 None => {
-                    log::warn!("TODO: use int arrays for UUID");
+                    println!(
+                        "Entity in chunk {},{} is missing UUID: {:?}",
+                        position.x, position.y, entity_nbt
+                    );
                     continue;
                 }
             };
-            let uuid = Uuid::from_u128(
-                (uuid.first().unwrap().extract_int().unwrap() as u128) << 96
-                    | (uuid.get(1).unwrap().extract_int().unwrap() as u128) << 64
-                    | (uuid.get(2).unwrap().extract_int().unwrap() as u128) << 32
-                    | (uuid.get(3).unwrap().extract_int().unwrap() as u128),
-            );
+
             map.insert(uuid, entity_nbt);
         }
 
         Ok(ChunkEntityData {
-            chunk_position: position,
+            x: position.x,
+            z: position.y,
             data: map,
             dirty: false,
         })
@@ -314,7 +321,7 @@ impl ChunkEntityData {
     fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
         let nbt = EntityNbt {
             data_version: WORLD_DATA_VERSION,
-            position: [self.chunk_position.x, self.chunk_position.y],
+            position: [self.x, self.z],
             entities: self.data.values().cloned().collect(),
         };
 
@@ -325,7 +332,7 @@ impl ChunkEntityData {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 struct ChunkSectionNBT {
     #[serde(skip_serializing_if = "Option::is_none")]
     block_states: Option<ChunkSectionBlockStates>,
@@ -357,7 +364,7 @@ pub struct PaletteBiomeEntry {
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ChunkSectionBlockStates {
     #[serde(
         serialize_with = "nbt_long_array",
@@ -378,23 +385,21 @@ impl LightContainer {
     pub const ARRAY_SIZE: usize = Self::DIM * Self::DIM * Self::DIM / 2;
 
     pub fn new_empty(default: u8) -> Self {
-        if default > 15 {
-            panic!("Default value must be between 0 and 15");
-        }
+        assert!(default <= 15, "Default value must be between 0 and 15");
         Self::Empty(default)
     }
 
     pub fn new(data: Box<[u8]>) -> Self {
-        if data.len() != Self::ARRAY_SIZE {
-            panic!("Data length must be {}", Self::ARRAY_SIZE);
-        }
+        assert!(
+            data.len() == Self::ARRAY_SIZE,
+            "Data length must be {}",
+            Self::ARRAY_SIZE
+        );
         Self::Full(data)
     }
 
     pub fn new_filled(default: u8) -> Self {
-        if default > 15 {
-            panic!("Default value must be between 0 and 15");
-        }
+        assert!(default <= 15, "Default value must be between 0 and 15");
         let value = default << 4 | default;
         Self::Full([value; Self::ARRAY_SIZE].into())
     }
@@ -441,7 +446,7 @@ impl Default for LightContainer {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ChunkNbt {
     data_version: i32,

@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -6,10 +7,11 @@ use super::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
 use crate::crafting::crafting_inventory::CraftingInventory;
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{
-    InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerListener,
+    InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFuture,
+    ScreenHandlerListener,
 };
-use crate::slot::{NormalSlot, Slot};
-use async_trait::async_trait;
+use crate::slot::{BoxFuture, NormalSlot, Slot};
+
 use crossbeam_utils::atomic::AtomicCell;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING, RecipeResultStruct};
 use pumpkin_data::screen::WindowType;
@@ -24,7 +26,6 @@ use tokio::sync::Mutex;
 /// Note: This implementation is different from the original Minecraft code.
 /// Particularly, it does not have a 'result' inventory, we directly store it in the slot.
 /// This slot should be never modified outside. any modifications to it make change in its input.
-#[derive(Debug)]
 pub struct ResultSlot {
     pub inventory: Arc<dyn RecipeInputInventory>,
     pub id: AtomicU8,
@@ -322,7 +323,6 @@ impl ResultSlot {
     }
 }
 
-#[async_trait]
 impl Slot for ResultSlot {
     fn get_inventory(&self) -> Arc<dyn Inventory> {
         self.inventory.clone()
@@ -336,118 +336,146 @@ impl Slot for ResultSlot {
         self.id.store(id as u8, Ordering::Relaxed);
     }
 
-    async fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {
-        // refill the result slot with the recipe result
-        self.refill_output().await;
+    fn on_quick_move_crafted(
+        &self,
+        _stack: ItemStack,
+        _stack_prev: ItemStack,
+    ) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            // refill the result slot with the recipe result
+            self.refill_output().await;
+        })
     }
 
-    async fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
-        for i in 0..self.inventory.size() {
-            let slot = self.inventory.get_stack(i).await;
-            let mut stack = slot.lock().await;
-            if !stack.is_empty() {
-                //TODO: Handle remaining items.
-                stack.item_count -= 1;
+    fn on_take_item<'a>(
+        &'a self,
+        player: &'a dyn InventoryPlayer,
+        stack: &'a ItemStack,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            for i in 0..self.inventory.size() {
+                let slot = self.inventory.get_stack(i).await;
+                let mut stack = slot.lock().await;
+                if !stack.is_empty() {
+                    //TODO: Handle remaining items.
+                    stack.item_count -= 1;
+                }
             }
-        }
-        self.stat_crafted(stack.item_count, player);
-        self.mark_dirty().await;
+            self.stat_crafted(stack.item_count, player);
+            self.mark_dirty().await;
+        })
     }
 
-    async fn can_insert(&self, _stack: &ItemStack) -> bool {
-        false
+    fn can_insert(&self, _stack: &ItemStack) -> BoxFuture<'_, bool> {
+        Box::pin(async move { false })
     }
 
-    async fn get_stack(&self) -> Arc<Mutex<ItemStack>> {
-        self.result.clone()
+    fn get_stack(&self) -> BoxFuture<'_, Arc<Mutex<ItemStack>>> {
+        Box::pin(async move { self.result.clone() })
     }
 
-    async fn get_cloned_stack(&self) -> ItemStack {
-        self.result.lock().await.clone()
+    fn get_cloned_stack(&self) -> BoxFuture<'_, ItemStack> {
+        Box::pin(async move { self.result.lock().await.clone() })
     }
 
-    async fn has_stack(&self) -> bool {
-        !self.result.lock().await.is_empty()
+    fn has_stack(&self) -> BoxFuture<'_, bool> {
+        Box::pin(async move { !self.result.lock().await.is_empty() })
     }
 
-    async fn set_stack(&self, _stack: ItemStack) {
-        self.refill_output().await;
+    fn set_stack(&self, _stack: ItemStack) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.refill_output().await;
+        })
     }
 
-    async fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) {
-        self.refill_output().await;
+    fn set_stack_prev(&self, _stack: ItemStack, _previous_stack: ItemStack) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.refill_output().await;
+        })
     }
 
-    async fn mark_dirty(&self) {
-        self.inventory.mark_dirty();
+    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.inventory.mark_dirty();
+        })
     }
 
-    async fn get_max_item_count(&self) -> u8 {
-        let mut count = u8::MAX;
-        for i in 0..self.inventory.size() {
-            let slot = self.inventory.get_stack(i).await;
-            let slot = slot.lock().await;
-            if !slot.is_empty() {
-                count = count.min(slot.item_count);
+    fn get_max_item_count(&self) -> BoxFuture<'_, u8> {
+        Box::pin(async move {
+            let mut count = u8::MAX;
+            for i in 0..self.inventory.size() {
+                let slot = self.inventory.get_stack(i).await;
+                let slot = slot.lock().await;
+                if !slot.is_empty() {
+                    count = count.min(slot.item_count);
+                }
             }
-        }
-        count
+            count
+        })
     }
 
-    async fn take_stack(&self, _amount: u8) -> ItemStack {
-        if self.has_stack().await {
-            let stack = self.result.lock().await;
-            // Vanilla: net.minecraft.world.inventory.ResultContainer#removeItem
-            // Regardless of the amount, we always return the full stack
-            stack.clone()
-        } else {
-            ItemStack::EMPTY.clone()
-        }
+    fn take_stack(&self, _amount: u8) -> BoxFuture<'_, ItemStack> {
+        Box::pin(async move {
+            if self.has_stack().await {
+                let stack = self.result.lock().await;
+                // Vanilla: net.minecraft.world.inventory.ResultContainer#removeItem
+                // Regardless of the amount, we always return the full stack
+                stack.clone()
+            } else {
+                ItemStack::EMPTY.clone()
+            }
+        })
     }
 }
 
-#[async_trait]
 impl ScreenHandlerListener for ResultSlot {
-    async fn on_slot_update(
-        &self,
-        screen_handler: &ScreenHandlerBehaviour,
+    fn on_slot_update<'a>(
+        &'a self,
+        screen_handler: &'a ScreenHandlerBehaviour,
         slot: u8,
         _stack: ItemStack,
-    ) {
-        if (0..=(self.inventory.get_width() * self.inventory.get_height()))
-            .contains(&(slot as usize))
-        {
-            let result = self.refill_output().await;
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            if (0..=(self.inventory.get_width() * self.inventory.get_height()))
+                .contains(&(slot as usize))
+            {
+                let result = self.refill_output().await;
 
-            let next_revision = screen_handler.next_revision();
-            if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
-                sync_handler
-                    .update_slot(screen_handler, 0, &result, next_revision)
-                    .await;
+                let next_revision = screen_handler.next_revision();
+                if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
+                    sync_handler
+                        .update_slot(screen_handler, 0, &result, next_revision)
+                        .await;
+                }
             }
-        }
+        })
     }
 }
 
 // AbstractCraftingScreenHandler.java
-#[async_trait]
 pub trait CraftingScreenHandler<I: RecipeInputInventory>:
     RecipeFinderScreenHandler + ScreenHandler
 {
-    async fn add_recipe_slots(&mut self, crafing_inventory: Arc<dyn RecipeInputInventory>) {
-        let result_slot = Arc::new(ResultSlot::new(crafing_inventory.clone()));
-        self.add_slot(result_slot.clone());
+    fn add_recipe_slots<'a>(
+        &'a mut self,
+        crafing_inventory: Arc<dyn RecipeInputInventory>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let result_slot = Arc::new(ResultSlot::new(crafing_inventory.clone()));
+            self.add_slot(result_slot.clone());
 
-        let width = crafing_inventory.get_width();
-        let height = crafing_inventory.get_height();
-        for i in 0..width {
-            for j in 0..height {
-                let input_slot = NormalSlot::new(crafing_inventory.clone(), j + i * width);
-                self.add_slot(Arc::new(input_slot));
+            let width = crafing_inventory.get_width();
+            let height = crafing_inventory.get_height();
+            for i in 0..width {
+                for j in 0..height {
+                    // Assuming j + i * width is the correct slot index calculation
+                    let input_slot = NormalSlot::new(crafing_inventory.clone(), j + i * width);
+                    self.add_slot(Arc::new(input_slot));
+                }
             }
-        }
 
-        self.add_listener(result_slot).await;
+            self.add_listener(result_slot).await;
+        })
     }
 }
 
@@ -481,13 +509,14 @@ impl CraftingTableScreenHandler {
 
 impl RecipeFinderScreenHandler for CraftingTableScreenHandler {}
 
-#[async_trait]
 impl ScreenHandler for CraftingTableScreenHandler {
-    async fn on_closed(&mut self, player: &dyn InventoryPlayer) {
-        self.default_on_closed(player).await;
-        //TODO: this.craftingResultInventory.clear();
-        self.drop_inventory(player, self.crafting_inventory.clone())
-            .await;
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
+        Box::pin(async move {
+            self.default_on_closed(player).await;
+            //TODO: this.craftingResultInventory.clear();
+            self.drop_inventory(player, self.crafting_inventory.clone())
+                .await;
+        })
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -502,77 +531,83 @@ impl ScreenHandler for CraftingTableScreenHandler {
         &mut self.behaviour
     }
 
-    async fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
-        let slot = self.get_behaviour().slots[slot_index as usize].clone();
+    fn quick_move<'a>(
+        &'a mut self,
+        player: &'a dyn InventoryPlayer,
+        slot_index: i32,
+    ) -> ItemStackFuture<'a> {
+        Box::pin(async move {
+            let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
-        if slot.has_stack().await {
-            let slot_stack = slot.get_stack().await;
-            let mut slot_stack = slot_stack.lock().await;
-            let stack_prev = slot_stack.clone();
+            if slot.has_stack().await {
+                let slot_stack = slot.get_stack().await;
+                let mut slot_stack = slot_stack.lock().await;
+                let stack_prev = slot_stack.clone();
 
-            if slot_index == 0 {
-                // From crafting result slot - move to player inventory (slots 10-46)
-                if !self.insert_item(&mut slot_stack, 10, 46, true).await {
-                    return ItemStack::EMPTY.clone();
-                }
-            } else if (1..=9).contains(&slot_index) {
-                // From crafting input slots - try to move to player inventory (slots 10-46)
-                if !self.insert_item(&mut slot_stack, 10, 46, false).await {
-                    return ItemStack::EMPTY.clone();
-                }
-            } else if (10..46).contains(&slot_index) {
-                // From player inventory - try to move to crafting input slots first (1-9)
-                if !self.insert_item(&mut slot_stack, 1, 10, false).await {
-                    // If that fails, try moving within player inventory
-                    if slot_index < 37 {
-                        // From main inventory to hotbar
-                        if !self.insert_item(&mut slot_stack, 37, 46, false).await {
-                            return ItemStack::EMPTY.clone();
-                        }
-                    } else {
-                        // From hotbar to main inventory
-                        if !self.insert_item(&mut slot_stack, 10, 37, false).await {
-                            return ItemStack::EMPTY.clone();
+                if slot_index == 0 {
+                    // From crafting result slot - move to player inventory (slots 10-46)
+                    if !self.insert_item(&mut slot_stack, 10, 46, true).await {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if (1..=9).contains(&slot_index) {
+                    // From crafting input slots - try to move to player inventory (slots 10-46)
+                    if !self.insert_item(&mut slot_stack, 10, 46, false).await {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if (10..46).contains(&slot_index) {
+                    // From player inventory - try to move to crafting input slots first (1-9)
+                    if !self.insert_item(&mut slot_stack, 1, 10, false).await {
+                        // If that fails, try moving within player inventory
+                        if slot_index < 37 {
+                            // From main inventory to hotbar
+                            if !self.insert_item(&mut slot_stack, 37, 46, false).await {
+                                return ItemStack::EMPTY.clone();
+                            }
+                        } else {
+                            // From hotbar to main inventory
+                            if !self.insert_item(&mut slot_stack, 10, 37, false).await {
+                                return ItemStack::EMPTY.clone();
+                            }
                         }
                     }
+                } else {
+                    // Any other slot - try to move to player inventory
+                    if !self.insert_item(&mut slot_stack, 10, 46, false).await {
+                        return ItemStack::EMPTY.clone();
+                    }
                 }
-            } else {
-                // Any other slot - try to move to player inventory
-                if !self.insert_item(&mut slot_stack, 10, 46, false).await {
+
+                let stack = slot_stack.clone();
+                drop(slot_stack); // release the lock before calling other methods
+
+                if stack.is_empty() {
+                    slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone())
+                        .await;
+                } else {
+                    slot.mark_dirty().await;
+                }
+
+                if stack.item_count == stack_prev.item_count {
+                    // Nothing changed
                     return ItemStack::EMPTY.clone();
                 }
-            }
 
-            let stack = slot_stack.clone();
-            drop(slot_stack); // release the lock before calling other methods
+                slot.on_take_item(player, &stack).await;
 
-            if stack.is_empty() {
-                slot.set_stack_prev(ItemStack::EMPTY.clone(), stack_prev.clone())
-                    .await;
-            } else {
-                slot.mark_dirty().await;
-            }
-
-            if stack.item_count == stack_prev.item_count {
-                // Nothing changed
-                return ItemStack::EMPTY.clone();
-            }
-
-            slot.on_take_item(player, &stack).await;
-
-            if slot_index == 0 {
-                slot.on_quick_move_crafted(stack.clone(), stack_prev.clone())
-                    .await;
-                // For crafting result slot, drop any remaining items
-                if !stack.is_empty() {
-                    player.drop_item(stack, false).await;
+                if slot_index == 0 {
+                    slot.on_quick_move_crafted(stack.clone(), stack_prev.clone())
+                        .await;
+                    // For crafting result slot, drop any remaining items
+                    if !stack.is_empty() {
+                        player.drop_item(stack, false).await;
+                    }
                 }
+
+                return stack_prev;
             }
 
-            return stack_prev;
-        }
-
-        ItemStack::EMPTY.clone()
+            ItemStack::EMPTY.clone()
+        })
     }
 }
 

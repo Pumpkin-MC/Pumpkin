@@ -6,7 +6,6 @@ use pumpkin_util::{
         int_provider::IntProvider,
         pool::{Pool, Weighted},
         position::BlockPos,
-        vector3::Vector3,
     },
     random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand},
 };
@@ -81,7 +80,7 @@ pub struct DualNoiseBlockStateProvider {
     base: NoiseBlockStateProvider,
     variety: [u32; 2],
     slow_noise: DoublePerlinNoiseParametersCodec,
-    slow_scale: f32,
+    slow_scale: f64,
 }
 
 impl DualNoiseBlockStateProvider {
@@ -92,7 +91,8 @@ impl DualNoiseBlockStateProvider {
             &noise,
             false,
         );
-        let slow_noise = self.get_slow_noise(&pos, &sampler);
+        let slow_noise =
+            self.get_slow_noise(pos.0.x as f64, pos.0.y as f64, pos.0.z as f64, &sampler);
         let mapped = clamped_map(
             slow_noise,
             -1.0,
@@ -102,21 +102,22 @@ impl DualNoiseBlockStateProvider {
         ) as i32;
         let mut list = Vec::with_capacity(mapped as usize);
         for i in 0..mapped {
-            let value = self.get_slow_noise(
-                &BlockPos(pos.0.add(&Vector3::new(i * 54545, 0, i * 34234))),
-                &sampler,
+            let value = self.get_slow_noise(i as f64 * 54545.0, 0.0, i as f64 * 34234.0, &sampler);
+            list.push(
+                self.base
+                    .get_state_by_value(&self.base.states, value)
+                    .clone(),
             );
-            list.push(self.base.get_state_by_value(&self.base.states, value));
         }
         let value = self.base.base.get_noise(pos);
         self.base.get_state_by_value(&list, value).get_state()
     }
 
-    fn get_slow_noise(&self, pos: &BlockPos, sampler: &DoublePerlinNoiseSampler) -> f64 {
+    fn get_slow_noise(&self, x: f64, y: f64, z: f64, sampler: &DoublePerlinNoiseSampler) -> f64 {
         sampler.sample(
-            pos.0.x as f64 * self.slow_scale as f64,
-            pos.0.y as f64 * self.slow_scale as f64,
-            pos.0.z as f64 * self.slow_scale as f64,
+            x * self.slow_scale,
+            y * self.slow_scale,
+            z * self.slow_scale,
         )
     }
 }
@@ -184,9 +185,13 @@ impl NoiseBlockStateProvider {
         self.get_state_by_value(&self.states, value).get_state()
     }
 
-    fn get_state_by_value(&self, states: &[BlockStateCodec], value: f64) -> BlockStateCodec {
+    fn get_state_by_value<'a>(
+        &self,
+        states: &'a [BlockStateCodec],
+        value: f64,
+    ) -> &'a BlockStateCodec {
         let val = ((1.0 + value) / 2.0).clamp(0.0, 0.9999);
-        states[(val * states.len() as f64) as usize].clone()
+        &states[(val * states.len() as f64) as usize]
     }
 }
 

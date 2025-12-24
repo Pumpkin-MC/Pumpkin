@@ -2,12 +2,12 @@ pub mod items;
 pub mod registry;
 
 use std::any::Any;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
@@ -19,27 +19,34 @@ pub trait ItemMetadata {
     fn ids() -> Box<[u16]>;
 }
 
-#[async_trait]
 pub trait ItemBehaviour: Send + Sync {
-    async fn normal_use(&self, _block: &Item, _player: &Player) {}
-
-    async fn use_on_block(
-        &self,
-        _item: &mut ItemStack,
-        _player: &Player,
-        _location: BlockPos,
-        _face: BlockDirection,
-        _block: &Block,
-        _server: &Server,
-    ) {
+    fn normal_use<'a>(
+        &'a self,
+        _item: &'a Item,
+        _player: &'a Player,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async {})
     }
 
-    async fn use_on_entity(
-        &self,
-        _item: &mut ItemStack,
-        _player: &Player,
+    fn use_on_block<'a>(
+        &'a self,
+        _item: &'a mut ItemStack,
+        _player: &'a Player,
+        _location: BlockPos,
+        _face: BlockDirection,
+        _block: &'a Block,
+        _server: &'a Server,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async {})
+    }
+
+    fn use_on_entity<'a>(
+        &'a self,
+        _item: &'a mut ItemStack,
+        _player: &'a Player,
         _entity: Arc<dyn EntityBase>,
-    ) {
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async {})
     }
 
     fn can_mine(&self, _player: &Player) -> bool {

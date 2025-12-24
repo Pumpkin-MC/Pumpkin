@@ -2,11 +2,11 @@ use core::f64;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion};
+use pumpkin_protocol::java::client::play::ArgumentType;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandSender;
+use crate::command::args::ConsumeResult;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
@@ -21,47 +21,44 @@ pub struct BoundedNumArgumentConsumer<T: ToFromNumber> {
     name: Option<&'static str>,
 }
 
-#[async_trait]
 impl<T: ToFromNumber> ArgumentConsumer for BoundedNumArgumentConsumer<T>
 where
     Self: GetClientSideArgParser,
 {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _src: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let x = args.pop()?.parse::<T>().ok()?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        // 1. Perform the synchronous mutable operation (pop) outside the Future.
+        let s_opt: Option<&'a str> = args.pop();
 
-        if let Some(max) = self.max_inclusive
-            && x > max
-        {
-            return Some(Arg::Num(Err(NotInBounds::UpperBound(
-                x.to_number(),
-                max.to_number(),
-            ))));
-        }
+        // 2. Process the entire argument and check bounds synchronously.
+        let result: Option<Arg<'a>> = s_opt
+            // Replace args.pop()?.parse::<T>().ok()?
+            .and_then(|s| s.parse::<T>().ok())
+            .map(|x| {
+                // Check Upper Bound (max_inclusive)
+                if let Some(max) = self.max_inclusive
+                    && x > max
+                {
+                    return Arg::Num(Err(NotInBounds::UpperBound(x.to_number(), max.to_number())));
+                }
 
-        if let Some(min) = self.min_inclusive
-            && x < min
-        {
-            return Some(Arg::Num(Err(NotInBounds::LowerBound(
-                x.to_number(),
-                min.to_number(),
-            ))));
-        }
+                // Check Lower Bound (min_inclusive)
+                if let Some(min) = self.min_inclusive
+                    && x < min
+                {
+                    return Arg::Num(Err(NotInBounds::LowerBound(x.to_number(), min.to_number())));
+                }
 
-        Some(Arg::Num(Ok(x.to_number())))
-    }
+                // Success case
+                Arg::Num(Ok(x.to_number()))
+            });
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        // 3. Return a Future that immediately resolves to the calculated result.
+        Box::pin(async move { result })
     }
 }
 
@@ -93,22 +90,18 @@ pub enum NotInBounds {
 impl From<NotInBounds> for CommandError {
     fn from(value: NotInBounds) -> Self {
         match value {
-            NotInBounds::LowerBound(val, min) => {
-                Self::CommandFailed(Box::new(TextComponent::text(format!(
-                    "{} must not be less than {}, found {}",
-                    val.qualifier(),
-                    min,
-                    val
-                ))))
-            }
-            NotInBounds::UpperBound(val, max) => {
-                Self::CommandFailed(Box::new(TextComponent::text(format!(
-                    "{} must not be more than {}, found {}",
-                    val.qualifier(),
-                    max,
-                    val
-                ))))
-            }
+            NotInBounds::LowerBound(val, min) => Self::CommandFailed(TextComponent::text(format!(
+                "{} must not be less than {}, found {}",
+                val.qualifier(),
+                min,
+                val
+            ))),
+            NotInBounds::UpperBound(val, max) => Self::CommandFailed(TextComponent::text(format!(
+                "{} must not be more than {}, found {}",
+                val.qualifier(),
+                max,
+                val
+            ))),
         }
     }
 }

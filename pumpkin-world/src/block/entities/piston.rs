@@ -1,6 +1,5 @@
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
-use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
@@ -50,7 +49,6 @@ const LAST_PROGRESS: &str = "progress";
 const EXTENDING: &str = "extending";
 const SOURCE: &str = "source";
 
-#[async_trait]
 impl BlockEntity for PistonBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
@@ -60,42 +58,47 @@ impl BlockEntity for PistonBlockEntity {
         self.position
     }
 
-    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
-        let current_progress = self.current_progress.load();
-        self.last_progress.store(current_progress);
-        if current_progress >= 1.0 {
-            let pos = self.position;
-            world.remove_block_entity(&pos).await;
-            if world.get_block(&pos).await == &Block::MOVING_PISTON {
-                if self.pushed_block_state.is_air() {
-                    world
-                        .clone()
-                        .set_block_state(
-                            &pos,
-                            self.pushed_block_state.id,
-                            BlockFlags::FORCE_STATE | BlockFlags::MOVED,
-                        )
-                        .await;
-                } else {
-                    world
-                        .clone()
-                        .set_block_state(
-                            &pos,
-                            self.pushed_block_state.id,
-                            BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
-                        )
-                        .await;
-                    world
-                        .clone()
-                        .update_neighbor(&pos, Block::from_state_id(self.pushed_block_state.id))
-                        .await;
+    fn tick<'a>(
+        &'a self,
+        world: Arc<dyn SimpleWorld>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let current_progress = self.current_progress.load();
+            self.last_progress.store(current_progress);
+            if current_progress >= 1.0 {
+                let pos = self.position;
+                world.remove_block_entity(&pos).await;
+                if world.get_block(&pos).await == &Block::MOVING_PISTON {
+                    if self.pushed_block_state.is_air() {
+                        world
+                            .clone()
+                            .set_block_state(
+                                &pos,
+                                self.pushed_block_state.id,
+                                BlockFlags::FORCE_STATE | BlockFlags::MOVED,
+                            )
+                            .await;
+                    } else {
+                        world
+                            .clone()
+                            .set_block_state(
+                                &pos,
+                                self.pushed_block_state.id,
+                                BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
+                            )
+                            .await;
+                        world
+                            .clone()
+                            .update_neighbor(&pos, Block::from_state_id(self.pushed_block_state.id))
+                            .await;
+                    }
                 }
             }
-        }
-        self.current_progress.store(current_progress + 0.5);
-        if current_progress + 0.5 >= 1.0 {
-            self.current_progress.store(1.0);
-        }
+            self.current_progress.store(current_progress + 0.5);
+            if current_progress + 0.5 >= 1.0 {
+                self.current_progress.store(1.0);
+            }
+        })
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
@@ -119,12 +122,17 @@ impl BlockEntity for PistonBlockEntity {
         }
     }
 
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        // TODO: pushed_block_state
-        nbt.put_byte(FACING, self.facing.to_index() as i8);
-        nbt.put_float(LAST_PROGRESS, self.last_progress.load());
-        nbt.put_bool(EXTENDING, self.extending);
-        nbt.put_bool(SOURCE, self.source);
+    fn write_nbt<'a>(
+        &'a self,
+        nbt: &'a mut NbtCompound,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            // TODO: pushed_block_state
+            nbt.put_byte(FACING, self.facing.to_index() as i8);
+            nbt.put_float(LAST_PROGRESS, self.last_progress.load());
+            nbt.put_bool(EXTENDING, self.extending);
+            nbt.put_bool(SOURCE, self.source);
+        })
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {

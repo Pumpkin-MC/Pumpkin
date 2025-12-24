@@ -18,7 +18,7 @@ jobs:
         toolchain:
           - stable
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
@@ -31,7 +31,7 @@ jobs:
         toolchain:
           - stable
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
@@ -41,11 +41,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest,  ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
         toolchain:
           - stable
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
@@ -55,22 +55,29 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest,  ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
         toolchain:
           - stable
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --verbose --release
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
+          cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}$EXT"
       - name: Export executable
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
-          name: pumpkin-${{ matrix.os }}
+          name: pumpkin-${{ runner.arch }}-${{ runner.os }}
           compression-level: 9
-          path: target/${{ matrix.target }}/release/pumpkin*
+          path: dist/pumpkin-*
+
   clippy_release:
     name: Run lints in release mode
     runs-on: ubuntu-latest
@@ -79,8 +86,43 @@ jobs:
         toolchain:
           - stable
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy rustfmt --toolchain ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --release --all-targets --all-features
+  draft_release:
+    permissions:
+      contents: write
+    needs: [build_release]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download prebuilt binary artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: "**/pumpkin-*"
+          path: dist/
+          merge-multiple: true
+      - name: Generate release notes
+        run: |
+          tree dist/
+          echo "From commit: $(git rev-parse --short HEAD)" > dist/RELEASE.md
+          echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
+          cat dist/RELEASE.md
+
+      - name: Update the nightly tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag --force nightly && git push --force origin tag nightly
+
+      - name: Draft a nightly github release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: dist/pumpkin*
+          tag_name: nightly
+          name: Nightly Build
+          body_path: dist/RELEASE.md

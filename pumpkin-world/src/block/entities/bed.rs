@@ -1,4 +1,6 @@
-use async_trait::async_trait;
+use std::pin::Pin;
+
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
 use super::BlockEntity;
@@ -7,7 +9,6 @@ pub struct BedBlockEntity {
     pub position: BlockPos,
 }
 
-#[async_trait]
 impl BlockEntity for BedBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
@@ -24,7 +25,12 @@ impl BlockEntity for BedBlockEntity {
         Self { position }
     }
 
-    async fn write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {}
+    fn write_nbt<'a>(
+        &'a self,
+        _nbt: &'a mut NbtCompound,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async {})
+    }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self

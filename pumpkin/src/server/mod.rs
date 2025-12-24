@@ -12,7 +12,7 @@ use crate::world::custom_bossbar::CustomBossbars;
 use crate::{command::dispatcher::CommandDispatcher, entity::player::Player, world::World};
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 
 use crate::command::CommandSender;
 use pumpkin_macros::send_cancellable;
@@ -54,6 +54,9 @@ use super::command::args::entities::{
 
 /// Represents a Minecraft server instance.
 pub struct Server {
+    pub basic_config: BasicConfiguration,
+    pub advanced_config: AdvancedConfiguration,
+
     /// Handles cryptographic keys for secure communication.
     key_store: KeyStore,
     /// Manages server status information.
@@ -102,17 +105,20 @@ pub struct Server {
     world_info_writer: Arc<dyn WorldInfoWriter>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
-    _locker: Arc<AnvilLevelLocker>,
+    _locker: Arc<Option<AnvilLevelLocker>>,
 }
 
 impl Server {
     #[allow(clippy::new_without_default)]
     #[allow(clippy::too_many_lines)]
     #[must_use]
-    pub async fn new() -> Arc<Self> {
+    pub async fn new(
+        basic_config: BasicConfiguration,
+        advanced_config: AdvancedConfiguration,
+    ) -> Arc<Self> {
         // First register the default commands. After that, plugins can put in their own.
-        let command_dispatcher = RwLock::new(default_dispatcher().await);
-        let world_path = BASIC_CONFIG.get_world_path();
+        let command_dispatcher = RwLock::new(default_dispatcher(&basic_config).await);
+        let world_path = basic_config.get_world_path();
 
         let block_registry = super::block::registry::default_registry();
 
@@ -138,21 +144,41 @@ impl Server {
                 fs::copy(dat_path, backup_path).unwrap();
             }
         }
-        // if we fail to lock, lets crash ???. maybe not the best solution when we have a large server with many worlds and one is locked.
-        // So TODO
-        let locker = AnvilLevelLocker::lock(&world_path).expect("Failed to lock level");
-
-        let world_name = world_path.to_str().unwrap();
+        let locker = match AnvilLevelLocker::lock(&world_path) {
+            Ok(l) => Some(l),
+            Err(err) => {
+                log::warn!(
+                    "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
+                );
+                None
+            }
+        };
 
         let level_info = level_info.unwrap_or_else(|err| {
             log::warn!("Failed to get level_info, using default instead: {err}");
-            LevelData::default()
+            LevelData::default(basic_config.seed)
         });
 
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(RwLock::new(level_info));
 
+        let listing = Mutex::new(CachedStatus::new(&basic_config));
+        let defaultgamemode = Mutex::new(DefaultGamemode {
+            gamemode: basic_config.default_gamemode,
+        });
+        let player_data_storage = ServerPlayerData::new(
+            world_path.join("playerdata"),
+            Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
+            advanced_config.player_data.save_player_data,
+        );
+        let white_list = AtomicBool::new(basic_config.white_list);
+
+        let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
+
         let server = Self {
+            basic_config,
+            advanced_config,
+
             cached_registry: Registry::get_synced(),
             container_id: 0.into(),
             worlds: RwLock::new(vec![]),
@@ -166,18 +192,13 @@ impl Server {
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: KeyStore::new(),
-            listing: Mutex::new(CachedStatus::new()),
+            listing,
             branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
-            defaultgamemode: Mutex::new(DefaultGamemode {
-                gamemode: BASIC_CONFIG.default_gamemode,
-            }),
-            player_data_storage: ServerPlayerData::new(
-                format!("{world_name}/playerdata"),
-                Duration::from_secs(advanced_config().player_data.save_player_cron_interval),
-            ),
-            white_list: AtomicBool::new(BASIC_CONFIG.white_list),
-            tick_rate_manager: Arc::new(ServerTickRateManager::default()),
+            defaultgamemode,
+            player_data_storage,
+            white_list,
+            tick_rate_manager,
             tick_times_nanos: Mutex::new([0; 100]),
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
@@ -191,9 +212,16 @@ impl Server {
 
         let server = Arc::new(server);
         let weak = Arc::downgrade(&server);
+        let level_config = &server.advanced_config.world;
+
         log::info!("Loading Overworld: {seed}");
         let overworld = World::load(
-            Dimension::Overworld.into_level(world_path.clone(), block_registry.clone(), seed),
+            Dimension::Overworld.into_level(
+                level_config,
+                world_path.clone(),
+                block_registry.clone(),
+                seed,
+            ),
             level_info.clone(),
             VanillaDimensionType::Overworld,
             block_registry.clone(),
@@ -201,7 +229,12 @@ impl Server {
         );
         log::info!("Loading Nether: {seed}");
         let nether = World::load(
-            Dimension::Nether.into_level(world_path.clone(), block_registry.clone(), seed),
+            Dimension::Nether.into_level(
+                level_config,
+                world_path.clone(),
+                block_registry.clone(),
+                seed,
+            ),
             level_info.clone(),
             VanillaDimensionType::TheNether,
             block_registry.clone(),
@@ -209,7 +242,7 @@ impl Server {
         );
         log::info!("Loading End: {seed}");
         let end = World::load(
-            Dimension::End.into_level(world_path.clone(), block_registry.clone(), seed),
+            Dimension::End.into_level(level_config, world_path, block_registry.clone(), seed),
             level_info,
             VanillaDimensionType::TheEnd,
             block_registry,
@@ -386,7 +419,7 @@ impl Server {
 
         if let Err(err) = self
             .world_info_writer
-            .write_world_info(&level_data, &BASIC_CONFIG.get_world_path())
+            .write_world_info(&level_data, &self.basic_config.get_world_path())
         {
             log::error!("Failed to save level.dat: {err}");
         }
@@ -450,7 +483,7 @@ impl Server {
             return;
         }
 
-        let difficulty = if BASIC_CONFIG.hardcore {
+        let difficulty = if self.basic_config.hardcore {
             Difficulty::Hard
         } else {
             difficulty
@@ -784,7 +817,7 @@ impl Server {
                 } else if target_selector.get_limit() == 1 {
                     // If the limit is 1, we just return a random entity
                     return if let Some(entity) = iter.choose(&mut rand::rng()) {
-                        vec![entity.clone()]
+                        vec![entity]
                     } else {
                         vec![]
                     };

@@ -121,7 +121,7 @@ impl SyncHandler {
 }
 
 // TrackedSlot in vanilla
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TrackedStack {
     pub received_stack: Option<ItemStack>,
     pub received_hash: Option<OptionalItemStackHash>,

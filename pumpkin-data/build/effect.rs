@@ -5,7 +5,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 struct Effect {
     id: u8,
     category: MobEffectCategory,
@@ -15,14 +15,14 @@ struct Effect {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 pub enum MobEffectCategory {
     BENEFICIAL,
     HARMFUL,
     NEUTRAL,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 pub struct Modifiers {
     attribute: String,
     id: String,
@@ -32,9 +32,9 @@ pub struct Modifiers {
 }
 
 impl Modifiers {
-    pub fn to_tokens(&self) -> TokenStream {
+    pub fn get_tokens(self) -> TokenStream {
         let attribute = format_ident!("{}", self.attribute.to_uppercase());
-        let id = self.id.clone();
+        let id = self.id;
         let base_value = self.base_value;
         let operation = format_ident!("{}", self.operation.to_pascal_case());
         quote! {
@@ -76,7 +76,7 @@ pub(crate) fn build() -> TokenStream {
         let translation_key = effect.translation_key;
         let category = effect.category.to_tokens();
         let slots = effect.attribute_modifiers;
-        let slots = slots.iter().map(|slot| slot.to_tokens());
+        let slots = slots.into_iter().map(|slot| slot.get_tokens());
 
         let minecraft_name = "minecraft:".to_string() + &name;
         variants.extend([quote! {
@@ -100,7 +100,6 @@ pub(crate) fn build() -> TokenStream {
         use crate::attributes::Attributes;
         use crate::data_component_impl::Operation;
 
-        #[derive(Debug)]
         pub struct StatusEffect {
             pub minecraft_name: &'static str,
             pub id: u8,

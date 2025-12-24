@@ -7,7 +7,6 @@ use pumpkin_data::noise_router::{self, BaseNoiseFunctionComponent};
 use serde::Deserialize;
 
 // I do a lot of leaking here, but its only for testing
-
 pub struct HashableF32(pub f32);
 
 // Normally this is bad, but we just care about checking if components are the same

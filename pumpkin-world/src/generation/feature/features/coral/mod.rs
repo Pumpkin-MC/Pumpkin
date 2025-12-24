@@ -62,10 +62,10 @@ impl CoralFeature {
             let props: Vec<(&str, &str)> = original_props
                 .iter()
                 .map(|(key, value)| {
-                    if key == "facing" {
-                        (key.as_str(), facing.to_value())
+                    if *key == "facing" {
+                        (*key, facing.to_value())
                     } else {
-                        (key.as_str(), value.as_str())
+                        (*key, *value)
                     }
                 })
                 .collect();

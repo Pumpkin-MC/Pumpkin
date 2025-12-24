@@ -10,7 +10,6 @@ use serde::{
 };
 use std::borrow::Cow;
 
-#[derive(Debug, Clone)]
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
 
 impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {

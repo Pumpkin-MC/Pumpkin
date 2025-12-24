@@ -4,7 +4,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::tick::{MAX_TICK_DELAY, OrderedTick, ScheduledTick};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ChunkTickScheduler<T> {
     tick_queue: [Vec<OrderedTick<T>>; MAX_TICK_DELAY],
     queued_ticks: HashSet<(BlockPos, T)>,
@@ -24,7 +24,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         res
     }
 
-    pub fn schedule_tick(&mut self, tick: ScheduledTick<&'a T>, sub_tick_order: u64) {
+    pub fn schedule_tick(&mut self, tick: &ScheduledTick<&'a T>, sub_tick_order: u64) {
         if self.queued_ticks.insert((tick.position, tick.value)) {
             let index = (self.offset + tick.delay as usize) % MAX_TICK_DELAY;
             self.tick_queue[index].push(OrderedTick {
@@ -57,7 +57,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
     pub fn from_vec(ticks: &[ScheduledTick<&'a T>]) -> Self {
         let mut scheduler = Self::default();
         for tick in ticks {
-            scheduler.schedule_tick(tick.clone(), 0);
+            scheduler.schedule_tick(tick, 0);
         }
         scheduler
     }

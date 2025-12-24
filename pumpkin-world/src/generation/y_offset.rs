@@ -9,13 +9,13 @@ pub enum YOffset {
 }
 
 impl YOffset {
-    pub fn get_y(&self, min_y: i8, height: u16) -> i16 {
+    pub fn get_y(&self, min_y: i16, height: u16) -> i32 {
         match self {
-            YOffset::AboveBottom(above_bottom) => min_y as i16 + above_bottom.above_bottom as i16,
+            YOffset::AboveBottom(above_bottom) => min_y as i32 + above_bottom.above_bottom as i32,
             YOffset::BelowTop(below_top) => {
-                height as i16 - 1 + min_y as i16 - below_top.below_top as i16
+                height as i32 - 1 + min_y as i32 - below_top.below_top as i32
             }
-            YOffset::Absolute(absolute) => absolute.absolute,
+            YOffset::Absolute(absolute) => absolute.absolute as i32,
         }
     }
 }

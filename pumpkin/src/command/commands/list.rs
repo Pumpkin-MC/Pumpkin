@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_util::text::TextComponent;
 
 use crate::{
     command::{
-        CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
+        CommandExecutor, CommandResult, CommandSender, args::ConsumedArgs, tree::CommandTree,
     },
     entity::player::Player,
 };
@@ -17,28 +15,27 @@ const DESCRIPTION: &str = "Print the list of online players.";
 
 struct Executor;
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let players: Vec<Arc<Player>> = server.get_all_players().await;
-
-        sender
-            .send_message(TextComponent::translate(
-                "commands.list.players",
-                [
-                    TextComponent::text(players.len().to_string()),
-                    TextComponent::text(BASIC_CONFIG.max_players.to_string()),
-                    TextComponent::text(get_player_names(players)),
-                ],
-            ))
-            .await;
-
-        Ok(())
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        _args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let players: Vec<Arc<Player>> = server.get_all_players().await;
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.list.players",
+                    [
+                        TextComponent::text(players.len().to_string()),
+                        TextComponent::text(server.basic_config.max_players.to_string()),
+                        TextComponent::text(get_player_names(players)),
+                    ],
+                ))
+                .await;
+            Ok(())
+        })
     }
 }
 

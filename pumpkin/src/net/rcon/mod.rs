@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::atomic::Ordering};
 
 use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
-use pumpkin_config::{RCONConfig, advanced_config};
+use pumpkin_config::RCONConfig;
 use std::sync::Arc;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -100,7 +100,7 @@ impl RCONClient {
         let Some(packet) = self.receive_packet().await? else {
             return Ok(());
         };
-        let config = &advanced_config().networking.rcon;
+        let config = &server.advanced_config.networking.rcon;
         match packet.get_type() {
             ServerboundPacket::Auth => {
                 if packet.get_body() == password {
@@ -131,7 +131,7 @@ impl RCONClient {
                             .read()
                             .await
                             .handle_command(
-                                &mut crate::command::CommandSender::Rcon(output_clone),
+                                &crate::command::CommandSender::Rcon(output_clone),
                                 &server_clone,
                                 &packet_body,
                             )

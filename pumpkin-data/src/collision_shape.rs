@@ -7,10 +7,6 @@ pub struct CollisionShape {
 }
 
 impl CollisionShape {
-    pub fn is_empty() -> bool {
-        unimplemented!()
-    }
-
     pub fn to_bounding_box(&self) -> BoundingBox {
         BoundingBox {
             min: self.min,

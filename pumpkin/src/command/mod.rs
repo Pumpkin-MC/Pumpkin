@@ -1,4 +1,5 @@
 use std::fmt;
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -6,7 +7,6 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use args::ConsumedArgs;
-use async_trait::async_trait;
 
 use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
@@ -118,12 +118,13 @@ impl CommandSender {
     }
 }
 
-#[async_trait]
-pub trait CommandExecutor: Sync {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError>;
+pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<(), CommandError>> + Send + 'a>>;
+
+pub trait CommandExecutor: Sync + Send {
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a>;
 }

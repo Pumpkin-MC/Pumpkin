@@ -17,17 +17,19 @@ pub mod positions;
 pub mod proto_chunk;
 pub mod rule;
 mod rule_test;
-mod seed;
 pub mod settings;
 pub mod structure;
 mod surface;
 pub mod y_offset;
 
 use generator::{GeneratorInit, VanillaGenerator};
-use pumpkin_util::random::{
-    RandomDeriver, RandomDeriverImpl, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
+use pumpkin_util::{
+    random::{
+        RandomDeriver, RandomDeriverImpl, RandomImpl, legacy_rand::LegacyRand,
+        xoroshiro128::Xoroshiro,
+    },
+    world_seed::Seed,
 };
-pub use seed::Seed;
 
 use crate::dimension::Dimension;
 

@@ -82,7 +82,7 @@ pub struct TextComponentBase {
     /// Style of the text. Bold, Italic, underline, Color...
     /// Also has `ClickEvent
     #[serde(flatten)]
-    pub style: Style,
+    pub style: Box<Style>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     /// Extra text components
     pub extra: Vec<TextComponentBase>,
@@ -144,7 +144,7 @@ impl TextComponentBase {
         // Divide the translation into slices and inserts the substitutions
         let component = match self.content {
             TextContent::Custom { key, with, locale } => {
-                let translation = get_translation(key, locale);
+                let translation = get_translation(&key, locale);
                 let mut translation_parent = translation.clone();
                 let mut translation_slices = vec![];
 
@@ -171,7 +171,7 @@ impl TextComponentBase {
                                     )
                                 },
                             },
-                            style: Style::default(),
+                            style: Box::new(Style::default()),
                             extra: vec![],
                         });
                     }
@@ -242,7 +242,7 @@ impl TextComponent {
     pub fn text<P: Into<Cow<'static, str>>>(plain: P) -> Self {
         Self(TextComponentBase {
             content: TextContent::Text { text: plain.into() },
-            style: Style::default(),
+            style: Box::new(Style::default()),
             extra: vec![],
         })
     }
@@ -256,7 +256,7 @@ impl TextComponent {
                 translate: key.into(),
                 with: with.into().into_iter().map(|x| x.0).collect(),
             },
-            style: Style::default(),
+            style: Box::new(Style::default()),
             extra: vec![],
         })
     }
@@ -275,7 +275,7 @@ impl TextComponent {
                 locale,
                 with: with.into().into_iter().map(|x| x.0).collect(),
             },
-            style: Style::default(),
+            style: Box::new(Style::default()),
             extra: vec![],
         })
     }
@@ -288,7 +288,7 @@ impl TextComponent {
     pub fn from_content(content: TextContent) -> Self {
         Self(TextComponentBase {
             content,
-            style: Style::default(),
+            style: Box::new(Style::default()),
             extra: vec![],
         })
     }
@@ -296,7 +296,7 @@ impl TextComponent {
     pub fn add_text<P: Into<Cow<'static, str>>>(mut self, text: P) -> Self {
         self.0.extra.push(TextComponentBase {
             content: TextContent::Text { text: text.into() },
-            style: Style::default(),
+            style: Box::new(Style::default()),
             extra: vec![],
         });
         self
@@ -317,7 +317,7 @@ impl TextComponent {
             content: TextContent::Text {
                 text: Cow::Owned(with_resolved_fields),
             },
-            style: Style::default(),
+            style: Box::new(Style::default()),
             extra: vec![],
         })
     }

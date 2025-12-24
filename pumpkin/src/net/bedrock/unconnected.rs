@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_protocol::bedrock::{
     client::raknet::unconnected_pong::{CUnconnectedPong, ServerInfo},
     server::raknet::unconnected_ping::SUnconnectedPing,
@@ -36,9 +35,9 @@ impl BedrockClient {
             version_name: CURRENT_BEDROCK_MC_VERSION,
             player_count,
             // A large number looks wreird on the client worlds window
-            max_player_count: BASIC_CONFIG.max_players,
+            max_player_count: server.basic_config.max_players,
             server_unique_id: server.server_guid,
-            motd_line_2: &BASIC_CONFIG.default_level_name,
+            motd_line_2: server.basic_config.default_level_name.clone(),
             game_mode: server.defaultgamemode.lock().await.gamemode.to_str(),
             game_mode_numeric: 1,
             port_ipv4: 19132,

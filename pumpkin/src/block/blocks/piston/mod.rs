@@ -69,7 +69,8 @@ impl<'a> PistonHandler<'a> {
         }
         for block_pos in self.moved_blocks.clone() {
             let block = self.world.get_block(&block_pos).await;
-            if Self::is_block_sticky(block) && !self.try_move_adjacent_block(block, block_pos).await
+            if Self::is_block_sticky(block)
+                && !self.try_move_adjacent_block(block, &block_pos).await
             {
                 return false;
             }
@@ -146,7 +147,7 @@ impl<'a> PistonHandler<'a> {
                     let block_pos3 = self.moved_blocks[m];
                     let block = self.world.get_block(&block_pos3).await;
                     if Self::is_block_sticky(block)
-                        && !Box::pin(self.try_move_adjacent_block(block, block_pos3)).await
+                        && !Box::pin(self.try_move_adjacent_block(block, &block_pos3)).await
                     {
                         return false;
                     }
@@ -193,7 +194,7 @@ impl<'a> PistonHandler<'a> {
         self.moved_blocks.extend(list3);
     }
 
-    async fn try_move_adjacent_block(&mut self, block: &Block, pos: BlockPos) -> bool {
+    async fn try_move_adjacent_block(&mut self, block: &Block, pos: &BlockPos) -> bool {
         for direction in BlockDirection::all() {
             if direction.to_axis() == self.motion_direction.to_axis() {
                 continue;

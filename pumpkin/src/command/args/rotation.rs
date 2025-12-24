@@ -1,7 +1,7 @@
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 
 use crate::command::CommandSender;
+use crate::command::args::ConsumeResult;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
@@ -22,39 +22,36 @@ impl GetClientSideArgParser for RotationArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for RotationArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _src: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let yaw = args.pop()?;
-        let pitch = args.pop()?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let yaw_str_opt = args.pop();
+        let pitch_str_opt = args.pop();
 
-        let mut yaw = yaw.parse::<f32>().ok()?;
-        let mut pitch = pitch.parse::<f32>().ok()?;
+        let (Some(yaw_str), Some(pitch_str)) = (yaw_str_opt, pitch_str_opt) else {
+            return Box::pin(async move { None });
+        };
 
-        yaw %= 360.0;
-        if yaw >= 180.0 {
-            yaw -= 360.0;
-        }
-        pitch %= 360.0;
-        if pitch >= 180.0 {
-            pitch -= 360.0;
-        }
+        let result: Option<Arg<'a>> = yaw_str.parse::<f32>().ok().and_then(|mut yaw| {
+            pitch_str.parse::<f32>().ok().map(|mut pitch| {
+                yaw %= 360.0;
+                if yaw >= 180.0 {
+                    yaw -= 360.0;
+                }
+                pitch %= 360.0;
+                if pitch >= 180.0 {
+                    pitch -= 360.0;
+                }
 
-        Some(Arg::Rotation(yaw, pitch))
-    }
+                Arg::Rotation(yaw, pitch)
+            })
+        });
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        Box::pin(async move { result })
     }
 }
 

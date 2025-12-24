@@ -24,7 +24,7 @@ pub enum CommandError {
     PermissionDenied,
     /// A general error occurred during command execution that doesn't fit into
     /// more specific `CommandError` variants.
-    CommandFailed(Box<TextComponent>),
+    CommandFailed(TextComponent),
 }
 
 impl CommandError {
@@ -49,7 +49,7 @@ impl CommandError {
                     "I'm sorry, but you do not have permission to perform this command. Please contact the server administrator if you believe this is an error.",
                 )
             }
-            CommandFailed(s) => *s,
+            CommandFailed(s) => s,
         }
     }
 }
@@ -64,7 +64,7 @@ pub struct CommandDispatcher {
 impl CommandDispatcher {
     pub async fn handle_command<'a>(
         &'a self,
-        sender: &mut CommandSender,
+        sender: &CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) {
@@ -138,9 +138,7 @@ impl CommandDispatcher {
 
     pub(crate) fn split_parts(cmd: &str) -> Result<(&str, Vec<&str>), CommandError> {
         if cmd.is_empty() {
-            return Err(CommandFailed(Box::new(TextComponent::text(
-                "Empty Command",
-            ))));
+            return Err(CommandFailed(TextComponent::text("Empty Command")));
         }
         let mut args = Vec::new();
         let mut current_arg_start = 0usize;
@@ -167,9 +165,7 @@ impl CommandDispatcher {
                 '}' => {
                     if !in_single_quotes && !in_double_quotes {
                         if in_braces == 0 {
-                            return Err(CommandFailed(Box::new(TextComponent::text(
-                                "Unmatched braces",
-                            ))));
+                            return Err(CommandFailed(TextComponent::text("Unmatched braces")));
                         }
                         in_braces -= 1;
                     }
@@ -182,9 +178,7 @@ impl CommandDispatcher {
                 ']' => {
                     if !in_single_quotes && !in_double_quotes {
                         if in_brackets == 0 {
-                            return Err(CommandFailed(Box::new(TextComponent::text(
-                                "Unmatched brackets",
-                            ))));
+                            return Err(CommandFailed(TextComponent::text("Unmatched brackets")));
                         }
                         in_brackets -= 1;
                     }
@@ -216,24 +210,22 @@ impl CommandDispatcher {
             args.push(&cmd[current_arg_start..]);
         }
         if in_single_quotes || in_double_quotes {
-            return Err(CommandFailed(Box::new(TextComponent::text(
+            return Err(CommandFailed(TextComponent::text(
                 "Unmatched quotes at the end",
-            ))));
+            )));
         }
         if in_braces != 0 {
-            return Err(CommandFailed(Box::new(TextComponent::text(
+            return Err(CommandFailed(TextComponent::text(
                 "Unmatched braces at the end",
-            ))));
+            )));
         }
         if in_brackets != 0 {
-            return Err(CommandFailed(Box::new(TextComponent::text(
+            return Err(CommandFailed(TextComponent::text(
                 "Unmatched brackets at the end",
-            ))));
+            )));
         }
         if args.is_empty() {
-            return Err(CommandFailed(Box::new(TextComponent::text(
-                "Empty Command",
-            ))));
+            return Err(CommandFailed(TextComponent::text("Empty Command")));
         }
         let key = args.remove(0);
         Ok((key, args.into_iter().rev().collect()))
@@ -242,22 +234,22 @@ impl CommandDispatcher {
     /// Execute a command using its corresponding [`CommandTree`].
     pub(crate) async fn dispatch<'a>(
         &'a self,
-        src: &mut CommandSender,
+        src: &CommandSender,
         server: &'a Server,
         cmd: &'a str,
     ) -> Result<(), CommandError> {
         let (key, raw_args) = Self::split_parts(cmd)?;
 
         if !self.commands.contains_key(key) {
-            return Err(CommandFailed(Box::new(TextComponent::text(format!(
+            return Err(CommandFailed(TextComponent::text(format!(
                 "Command {key} does not exist"
-            )))));
+            ))));
         }
 
         let Some(permission) = self.permissions.get(key) else {
-            return Err(CommandFailed(Box::new(TextComponent::text(
+            return Err(CommandFailed(TextComponent::text(
                 "Permission for Command not found".to_string(),
-            ))));
+            )));
         };
 
         if !src.has_permission(permission.as_str()).await {
@@ -272,18 +264,16 @@ impl CommandDispatcher {
                 return Ok(());
             }
         }
-        Err(CommandFailed(Box::new(TextComponent::text(format!(
+        Err(CommandFailed(TextComponent::text(format!(
             "Invalid Syntax. Usage: {tree}"
-        )))))
+        ))))
     }
 
     pub fn get_tree<'a>(&'a self, key: &str) -> Result<&'a CommandTree, CommandError> {
-        let command =
-            self.commands
-                .get(key)
-                .ok_or(CommandFailed(Box::new(TextComponent::text(
-                    "Command not found",
-                ))))?;
+        let command = self
+            .commands
+            .get(key)
+            .ok_or(CommandFailed(TextComponent::text("Command not found")))?;
 
         match command {
             Command::Tree(tree) => Ok(tree),
@@ -292,9 +282,9 @@ impl CommandDispatcher {
                     log::error!(
                         "Error while parsing command alias \"{key}\": pointing to \"{target}\" which is not a valid tree"
                     );
-                    return Err(CommandFailed(Box::new(TextComponent::text(
+                    return Err(CommandFailed(TextComponent::text(
                         "Internal Error (See logs for details)",
-                    ))));
+                    )));
                 };
                 Ok(tree)
             }
@@ -302,7 +292,7 @@ impl CommandDispatcher {
     }
 
     async fn try_is_fitting_path<'a>(
-        src: &mut CommandSender,
+        src: &'a CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,
@@ -357,7 +347,7 @@ impl CommandDispatcher {
     }
 
     async fn try_find_suggestions_on_path<'a>(
-        src: &CommandSender,
+        src: &'a CommandSender,
         server: &'a Server,
         path: &[usize],
         tree: &'a CommandTree,
@@ -403,9 +393,9 @@ impl CommandDispatcher {
     }
 
     /// Register a command with the dispatcher.
-    pub fn register(&mut self, tree: CommandTree, permission: &str) {
+    pub fn register<P: Into<String>>(&mut self, tree: CommandTree, permission: P) {
         let mut names = tree.names.iter();
-        let permission = permission.to_string();
+        let permission = permission.into();
 
         let primary_name = names.next().expect("at least one name must be provided");
 
@@ -442,10 +432,13 @@ impl CommandDispatcher {
 
 #[cfg(test)]
 mod test {
+    use pumpkin_config::BasicConfiguration;
+
     use crate::command::{commands::default_dispatcher, tree::CommandTree};
     #[tokio::test]
     async fn test_dynamic_command() {
-        let mut dispatcher = default_dispatcher().await;
+        let config = BasicConfiguration::default();
+        let mut dispatcher = default_dispatcher(&config).await;
         let tree = CommandTree::new(["test"], "test_desc");
         dispatcher.register(tree, "minecraft:test");
     }

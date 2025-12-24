@@ -31,10 +31,7 @@ impl NoiseValuePoint {
 #[cfg(test)]
 mod test {
     use pumpkin_data::{chunk::Biome, noise_router::OVERWORLD_BASE_NOISE_ROUTER};
-    use pumpkin_util::{
-        math::{vector2::Vector2, vector3::Vector3},
-        read_data_from_file,
-    };
+    use pumpkin_util::read_data_from_file;
 
     use crate::{
         GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
@@ -56,7 +53,9 @@ mod test {
             read_data_from_file!("../../assets/multi_noise_sample_no_blend_no_beard_0_0_0.json");
 
         let seed = 0;
-        let chunk_pos = Vector2::new(0, 0);
+        let chunk_x = 0;
+        let chunk_z = 0;
+
         let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
@@ -70,7 +69,8 @@ mod test {
         let biome_mixer_seed = hash_seed(random_config.seed);
 
         let _chunk = ProtoChunk::new(
-            chunk_pos,
+            chunk_x,
+            chunk_z,
             surface_config,
             surface_config.default_block.get_state(),
             biome_mixer_seed,
@@ -82,16 +82,12 @@ mod test {
         };
         use crate::generation::{biome_coords, positions::chunk_pos};
 
-        let start_x = chunk_pos::start_block_x(&chunk_pos);
-        let start_z = chunk_pos::start_block_z(&chunk_pos);
-        let biome_pos = Vector2::new(
-            biome_coords::from_block(start_x),
-            biome_coords::from_block(start_z),
-        );
+        let start_x = chunk_pos::start_block_x(chunk_x);
+        let start_z = chunk_pos::start_block_z(chunk_z);
         let horizontal_biome_end = biome_coords::from_block(16);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
-            biome_pos.x,
-            biome_pos.y,
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
             horizontal_biome_end as usize,
         );
         let mut multi_noise_sampler =
@@ -124,12 +120,8 @@ mod test {
         );
 
         for (x, y, z, biome_id) in expected_data {
-            let global_biome_pos = Vector3::new(x, y, z);
-            let calculated_biome = MultiNoiseBiomeSupplier::biome(
-                &global_biome_pos,
-                &mut sampler,
-                Dimension::Overworld,
-            );
+            let calculated_biome =
+                MultiNoiseBiomeSupplier::biome(x, y, z, &mut sampler, Dimension::Overworld);
 
             assert_eq!(
                 biome_id,

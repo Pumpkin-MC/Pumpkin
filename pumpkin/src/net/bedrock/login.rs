@@ -3,7 +3,7 @@ use crate::{
     net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
     server::Server,
 };
-use pumpkin_config::{BASIC_CONFIG, networking::compression::CompressionInfo};
+use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
     bedrock::{
         client::{
@@ -135,7 +135,7 @@ impl BedrockClient {
             .await
         {
             world
-                .spawn_bedrock_player(&BASIC_CONFIG, player.clone(), server)
+                .spawn_bedrock_player(&server.basic_config, player.clone(), server)
                 .await;
             *self.player.lock().await = Some(player);
         }

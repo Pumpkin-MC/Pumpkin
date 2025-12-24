@@ -4,8 +4,8 @@ pub mod water;
 
 use std::sync::Arc;
 
+use crate::block::BlockFuture;
 use crate::entity::{EntityBase, player::Player};
-use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::{fluid::Fluid, item::Item};
 use pumpkin_protocol::java::server::play::SUseItemOn;
@@ -16,78 +16,103 @@ use crate::{server::Server, world::World};
 
 use super::{BlockIsReplacing, registry::BlockActionResult};
 
-#[async_trait]
 pub trait FluidBehaviour: Send + Sync {
-    async fn normal_use(
-        &self,
-        _fluid: &Fluid,
-        _player: &Player,
+    fn normal_use<'a>(
+        &'a self,
+        _fluid: &'a Fluid,
+        _player: &'a Player,
         _location: BlockPos,
-        _server: &Server,
-        _world: &Arc<World>,
-    ) {
-    }
-    async fn use_with_item(
-        &self,
-        _fluid: &Fluid,
-        _player: &Player,
-        _location: BlockPos,
-        _item: &Item,
-        _server: &Server,
-        _world: &Arc<World>,
-    ) -> BlockActionResult {
-        BlockActionResult::Pass
+        _server: &'a Server,
+        _world: &'a Arc<World>,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
     }
 
-    async fn placed(
-        &self,
-        _world: &Arc<World>,
-        _fluid: &Fluid,
+    fn use_with_item<'a>(
+        &'a self,
+        _fluid: &'a Fluid,
+        _player: &'a Player,
+        _location: BlockPos,
+        _item: &'a Item,
+        _server: &'a Server,
+        _world: &'a Arc<World>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async { BlockActionResult::Pass })
+    }
+
+    fn placed<'a>(
+        &'a self,
+        _world: &'a Arc<World>,
+        _fluid: &'a Fluid,
         _state_id: BlockStateId,
-        _block_pos: &BlockPos,
+        _block_pos: &'a BlockPos,
         _old_state_id: BlockStateId,
         _notify: bool,
-    ) {
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn on_place(
-        &self,
-        _server: &Server,
-        _world: &Arc<World>,
-        fluid: &Fluid,
+    fn on_place<'a>(
+        &'a self,
+        _server: &'a Server,
+        _world: &'a Arc<World>,
+        fluid: &'a Fluid,
         _face: BlockDirection,
-        _block_pos: &BlockPos,
-        _use_item_on: &SUseItemOn,
+        _block_pos: &'a BlockPos,
+        _use_item_on: &'a SUseItemOn,
         _replacing: BlockIsReplacing,
-    ) -> BlockStateId {
-        fluid.default_state_index
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async { fluid.default_state_index })
     }
 
-    async fn get_state_for_neighbour_update(
-        &self,
-        _world: &Arc<World>,
-        _fluid: &Fluid,
-        _block_pos: &BlockPos,
+    fn get_state_for_neighbour_update<'a>(
+        &'a self,
+        _world: &'a Arc<World>,
+        _fluid: &'a Fluid,
+        _block_pos: &'a BlockPos,
         _notify: bool,
-    ) -> BlockStateId {
-        0
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async { 0 })
     }
 
-    async fn on_neighbor_update(
-        &self,
-        _world: &Arc<World>,
-        _fluid: &Fluid,
-        _block_pos: &BlockPos,
+    fn on_neighbor_update<'a>(
+        &'a self,
+        _world: &'a Arc<World>,
+        _fluid: &'a Fluid,
+        _block_pos: &'a BlockPos,
         _notify: bool,
-    ) {
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
     }
 
-    async fn on_entity_collision(&self, _entity: &dyn EntityBase) {}
+    fn on_entity_collision<'a>(&'a self, _entity: &'a dyn EntityBase) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
 
-    async fn on_scheduled_tick(&self, _world: &Arc<World>, _fluid: &Fluid, _block_pos: &BlockPos) {}
+    fn on_scheduled_tick<'a>(
+        &'a self,
+        _world: &'a Arc<World>,
+        _fluid: &'a Fluid,
+        _block_pos: &'a BlockPos,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
 
-    async fn random_tick(&self, _fluid: &Fluid, _world: &Arc<World>, _block_pos: &BlockPos) {}
+    fn random_tick<'a>(
+        &'a self,
+        _fluid: &'a Fluid,
+        _world: &'a Arc<World>,
+        _block_pos: &'a BlockPos,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
 
-    async fn create_legacy_block(&self, _world: &Arc<World>, _block_pos: &BlockPos) {}
+    fn create_legacy_block<'a>(
+        &'a self,
+        _world: &'a Arc<World>,
+        _block_pos: &'a BlockPos,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
 }

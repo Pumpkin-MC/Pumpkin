@@ -1,9 +1,8 @@
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+    BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
     UseWithItemArgs,
 };
-use async_trait::async_trait;
 use pumpkin_data::block_properties::Axis;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
@@ -61,18 +60,40 @@ impl NoteBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for NoteBlock {
-    async fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
-        let block_state = args.world.get_block_state(args.position).await;
-        let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
-        let powered = block_receives_redstone_power(args.world, args.position).await;
-        // check if powered state changed
-        if note_props.powered != powered {
-            if powered {
-                Self::play_note(&note_props, args.world, args.position).await;
+    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let block_state = args.world.get_block_state(args.position).await;
+            let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
+            let powered = block_receives_redstone_power(args.world, args.position).await;
+            // check if powered state changed
+            if note_props.powered != powered {
+                if powered {
+                    Self::play_note(&note_props, args.world, args.position).await;
+                }
+                note_props.powered = powered;
+                args.world
+                    .set_block_state(
+                        args.position,
+                        note_props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
             }
-            note_props.powered = powered;
+        })
+    }
+
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let block_state = args.world.get_block_state(args.position).await;
+            let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
+            let next_index = note_props.note.to_index() + 1;
+            // Increment and check if max
+            note_props.note = if next_index >= Integer0To24::variant_count() {
+                Integer0To24::from_index(0)
+            } else {
+                Integer0To24::from_index(next_index)
+            };
             args.world
                 .set_block_state(
                     args.position,
@@ -80,83 +101,78 @@ impl BlockBehaviour for NoteBlock {
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;
-        }
+            Self::play_note(&note_props, args.world, args.position).await;
+
+            BlockActionResult::Success
+        })
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        let block_state = args.world.get_block_state(args.position).await;
-        let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
-        let next_index = note_props.note.to_index() + 1;
-        // Increment and check if max
-        note_props.note = if next_index >= Integer0To24::variant_count() {
-            Integer0To24::from_index(0)
-        } else {
-            Integer0To24::from_index(next_index)
-        };
-        args.world
-            .set_block_state(
-                args.position,
-                note_props.to_state_id(args.block),
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
-        Self::play_note(&note_props, args.world, args.position).await;
-
-        BlockActionResult::Success
+    fn use_with_item<'a>(
+        &'a self,
+        _args: UseWithItemArgs<'a>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            // TODO
+            BlockActionResult::PassToDefaultBlockAction
+        })
     }
 
-    async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
-        // TODO
-        BlockActionResult::PassToDefaultBlockAction
+    fn on_synced_block_event<'a>(
+        &'a self,
+        args: OnSyncedBlockEventArgs<'a>,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            let block_state = args.world.get_block_state(args.position).await;
+            let note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
+            let instrument = note_props.instrument;
+            let pitch = if is_base_block(instrument) {
+                // checks if can be pitched
+                Self::get_note_pitch(note_props.note.to_index())
+            } else {
+                1.0 // default pitch
+            };
+            // check hasCustomSound
+            args.world
+                .play_sound_raw(
+                    convert_instrument_to_sound(instrument) as u16,
+                    SoundCategory::Records,
+                    &args.position.to_f64(),
+                    3.0,
+                    pitch,
+                )
+                .await;
+            true
+        })
     }
 
-    async fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
-        let block_state = args.world.get_block_state(args.position).await;
-        let note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
-        let instrument = note_props.instrument;
-        let pitch = if is_base_block(instrument) {
-            // checks if can be pitched
-            Self::get_note_pitch(note_props.note.to_index())
-        } else {
-            1.0 // default pitch
-        };
-        // check hasCustomSound
-        args.world
-            .play_sound_raw(
-                convert_instrument_to_sound(instrument) as u16,
-                SoundCategory::Records,
-                &args.position.to_f64(),
-                3.0,
-                pitch,
-            )
-            .await;
-        true
-    }
-
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        Self::get_state_with_instrument(
-            args.world,
-            args.position,
-            Block::NOTE_BLOCK.default_state.id,
-            args.block,
-        )
-        .await
-    }
-
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if args.direction.to_axis() == Axis::Y {
-            return Self::get_state_with_instrument(
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            Self::get_state_with_instrument(
                 args.world,
                 args.position,
-                args.state_id,
+                Block::NOTE_BLOCK.default_state.id,
                 args.block,
             )
-            .await;
-        }
-        args.state_id
+            .await
+        })
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if args.direction.to_axis() == Axis::Y {
+                return Self::get_state_with_instrument(
+                    args.world,
+                    args.position,
+                    args.state_id,
+                    args.block,
+                )
+                .await;
+            }
+            args.state_id
+        })
     }
 }
 

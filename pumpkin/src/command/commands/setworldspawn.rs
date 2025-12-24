@@ -1,3 +1,4 @@
+use crate::command::CommandResult;
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::{
     CommandExecutor, CommandSender,
@@ -9,7 +10,6 @@ use crate::command::{
     tree::{CommandTree, builder::argument},
 };
 use crate::server::Server;
-use async_trait::async_trait;
 use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::{math::position::BlockPos, text::TextComponent};
 
@@ -23,72 +23,75 @@ const ARG_ANGLE: &str = "angle";
 
 struct NoArgsWorldSpawnExecutor;
 
-#[async_trait]
 impl CommandExecutor for NoArgsWorldSpawnExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(block_pos) = sender.position() else {
-            let level_info_guard = server.level_info.read().await;
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.setworldspawn.success",
-                    [
-                        TextComponent::text(level_info_guard.spawn_x.to_string()),
-                        TextComponent::text(level_info_guard.spawn_y.to_string()),
-                        TextComponent::text(level_info_guard.spawn_z.to_string()),
-                        TextComponent::text(level_info_guard.spawn_angle.to_string()),
-                    ],
-                ))
-                .await;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        _args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(block_pos) = sender.position() else {
+                let level_info_guard = server.level_info.read().await;
+                sender
+                    .send_message(TextComponent::translate(
+                        "commands.setworldspawn.success",
+                        [
+                            TextComponent::text(level_info_guard.spawn_x.to_string()),
+                            TextComponent::text(level_info_guard.spawn_y.to_string()),
+                            TextComponent::text(level_info_guard.spawn_z.to_string()),
+                            TextComponent::text(level_info_guard.spawn_angle.to_string()),
+                        ],
+                    ))
+                    .await;
 
-            return Ok(());
-        };
+                return Ok(());
+            };
 
-        setworldspawn(sender, server, block_pos.to_block_pos(), 0.0).await
+            setworldspawn(sender, server, block_pos.to_block_pos(), 0.0).await
+        })
     }
 }
 
 struct DefaultWorldSpawnExecutor;
 
-#[async_trait]
 impl CommandExecutor for DefaultWorldSpawnExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::BlockPos(block_pos)) = args.get(ARG_BLOCK_POS) else {
-            return Err(InvalidConsumption(Some(ARG_BLOCK_POS.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::BlockPos(block_pos)) = args.get(ARG_BLOCK_POS) else {
+                return Err(InvalidConsumption(Some(ARG_BLOCK_POS.into())));
+            };
 
-        setworldspawn(sender, server, *block_pos, 0.0).await
+            setworldspawn(sender, server, *block_pos, 0.0).await
+        })
     }
 }
 
 struct AngleWorldSpawnExecutor;
 
-#[async_trait]
 impl CommandExecutor for AngleWorldSpawnExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::BlockPos(block_pos)) = args.get(ARG_BLOCK_POS) else {
-            return Err(InvalidConsumption(Some(ARG_BLOCK_POS.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::BlockPos(block_pos)) = args.get(ARG_BLOCK_POS) else {
+                return Err(InvalidConsumption(Some(ARG_BLOCK_POS.into())));
+            };
 
-        let Some(Arg::Rotation(_, yaw)) = args.get(ARG_ANGLE) else {
-            return Err(InvalidConsumption(Some(ARG_ANGLE.into())));
-        };
+            let Some(Arg::Rotation(_, yaw)) = args.get(ARG_ANGLE) else {
+                return Err(InvalidConsumption(Some(ARG_ANGLE.into())));
+            };
 
-        setworldspawn(sender, server, *block_pos, *yaw).await
+            setworldspawn(sender, server, *block_pos, *yaw).await
+        })
     }
 }
 
@@ -99,9 +102,9 @@ async fn setworldspawn(
     yaw: f32,
 ) -> Result<(), CommandError> {
     let Some(world) = sender.world() else {
-        return Err(CommandError::CommandFailed(Box::new(TextComponent::text(
+        return Err(CommandError::CommandFailed(TextComponent::text(
             "Failed to get world.",
-        ))));
+        )));
     };
 
     match world.dimension_type {

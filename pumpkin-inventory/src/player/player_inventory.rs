@@ -1,20 +1,20 @@
 use crate::entity_equipment::EntityEquipment;
 use crate::screen_handler::InventoryPlayer;
-use async_trait::async_trait;
+
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_util::Hand;
-use pumpkin_world::inventory::split_stack;
 use pumpkin_world::inventory::{Clearable, Inventory};
+use pumpkin_world::inventory::{InventoryFuture, split_stack};
 use pumpkin_world::item::ItemStack;
 use std::any::Any;
 use std::array::from_fn;
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use tokio::sync::Mutex;
 
-#[derive(Debug)]
 pub struct PlayerInventory {
     pub main_inventory: [Arc<Mutex<ItemStack>>; Self::MAIN_SIZE],
     pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
@@ -307,100 +307,110 @@ impl PlayerInventory {
     }
 }
 
-#[async_trait]
 impl Clearable for PlayerInventory {
-    async fn clear(&self) {
-        for item in self.main_inventory.iter() {
-            *item.lock().await = ItemStack::EMPTY.clone();
-        }
+    fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async move {
+            for item in self.main_inventory.iter() {
+                *item.lock().await = ItemStack::EMPTY.clone();
+            }
 
-        self.entity_equipment.lock().await.clear();
+            self.entity_equipment.lock().await.clear();
+        })
     }
 }
 
-#[async_trait]
 impl Inventory for PlayerInventory {
     fn size(&self) -> usize {
         self.main_inventory.len() + self.equipment_slots.len()
     }
 
-    async fn is_empty(&self) -> bool {
-        for item in self.main_inventory.iter() {
-            if !item.lock().await.is_empty() {
-                return false;
-            }
-        }
-
-        for slot in self.equipment_slots.values() {
-            if !self
-                .entity_equipment
-                .lock()
-                .await
-                .get(slot)
-                .lock()
-                .await
-                .is_empty()
-            {
-                return false;
-            }
-        }
-
-        true
-    }
-
-    async fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>> {
-        if slot < self.main_inventory.len() {
-            self.main_inventory[slot].clone()
-        } else {
-            let slot = self.equipment_slots.get(&slot).unwrap();
-            self.entity_equipment.lock().await.get(slot)
-        }
-    }
-
-    async fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
-        if slot < self.main_inventory.len() {
-            split_stack(&self.main_inventory, slot, amount).await
-        } else {
-            let slot = self.equipment_slots.get(&slot).unwrap();
-
-            let equipment = self.entity_equipment.lock().await.get(slot);
-            let mut stack = equipment.lock().await;
-
-            if !stack.is_empty() {
-                return stack.split(amount);
-            }
-
-            ItemStack::EMPTY.clone()
-        }
-    }
-
-    async fn remove_stack(&self, slot: usize) -> ItemStack {
-        if slot < self.main_inventory.len() {
-            let mut removed = ItemStack::EMPTY.clone();
-            let mut guard = self.main_inventory[slot].lock().await;
-            std::mem::swap(&mut removed, &mut *guard);
-            removed
-        } else {
-            let slot = self.equipment_slots.get(&slot).unwrap();
-            self.entity_equipment
-                .lock()
-                .await
-                .put(slot, ItemStack::EMPTY.clone())
-                .await
-        }
-    }
-
-    async fn set_stack(&self, slot: usize, stack: ItemStack) {
-        if slot < self.main_inventory.len() {
-            *self.main_inventory[slot].lock().await = stack;
-        } else {
-            match self.equipment_slots.get(&slot) {
-                Some(slot) => {
-                    self.entity_equipment.lock().await.put(slot, stack).await;
+    fn is_empty(&self) -> InventoryFuture<'_, bool> {
+        Box::pin(async move {
+            for item in self.main_inventory.iter() {
+                if !item.lock().await.is_empty() {
+                    return false;
                 }
-                None => log::warn!("Failed to get Equipment Slot at {slot}"),
             }
-        }
+
+            for slot in self.equipment_slots.values() {
+                if !self
+                    .entity_equipment
+                    .lock()
+                    .await
+                    .get(slot)
+                    .lock()
+                    .await
+                    .is_empty()
+                {
+                    return false;
+                }
+            }
+
+            true
+        })
+    }
+
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
+        Box::pin(async move {
+            if slot < self.main_inventory.len() {
+                self.main_inventory[slot].clone()
+            } else {
+                let slot = self.equipment_slots.get(&slot).unwrap();
+                self.entity_equipment.lock().await.get(slot)
+            }
+        })
+    }
+
+    fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            if slot < self.main_inventory.len() {
+                split_stack(&self.main_inventory, slot, amount).await
+            } else {
+                let slot = self.equipment_slots.get(&slot).unwrap();
+
+                let equipment = self.entity_equipment.lock().await.get(slot);
+                let mut stack = equipment.lock().await;
+
+                if !stack.is_empty() {
+                    return stack.split(amount);
+                }
+
+                ItemStack::EMPTY.clone()
+            }
+        })
+    }
+
+    fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            if slot < self.main_inventory.len() {
+                let mut removed = ItemStack::EMPTY.clone();
+                let mut guard = self.main_inventory[slot].lock().await;
+                std::mem::swap(&mut removed, &mut *guard);
+                removed
+            } else {
+                let slot = self.equipment_slots.get(&slot).unwrap();
+                self.entity_equipment
+                    .lock()
+                    .await
+                    .put(slot, ItemStack::EMPTY.clone())
+                    .await
+            }
+        })
+    }
+
+    fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
+        Box::pin(async move {
+            if slot < self.main_inventory.len() {
+                *self.main_inventory[slot].lock().await = stack;
+            } else {
+                match self.equipment_slots.get(&slot) {
+                    Some(slot) => {
+                        self.entity_equipment.lock().await.put(slot, stack).await;
+                    }
+                    None => log::warn!("Failed to get Equipment Slot at {slot}"),
+                }
+            }
+        })
     }
 
     fn mark_dirty(&self) {}

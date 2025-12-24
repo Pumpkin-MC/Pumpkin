@@ -1,5 +1,3 @@
-use async_trait::async_trait;
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -7,7 +5,7 @@ use pumpkin_util::text::{
 use std::sync::atomic::Ordering;
 
 use crate::command::{
-    CommandExecutor, CommandSender,
+    CommandExecutor, CommandResult, CommandSender,
     args::{
         ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer, time::TimeArgumentConsumer,
     },
@@ -199,115 +197,119 @@ impl TickExecutor {
     }
 }
 
-#[async_trait]
 impl CommandExecutor for TickExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let manager = &server.tick_rate_manager;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let manager = &server.tick_rate_manager;
 
-        match self.0 {
-            SubCommand::Query => self.handle_query(sender, server, manager).await,
-            SubCommand::Rate => {
-                let rate = BoundedNumArgumentConsumer::<f32>::find_arg(args, "rate")??;
-                manager.set_tick_rate(server, rate).await;
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.tick.rate.success",
-                        [TextComponent::text(format!("{rate:.1}"))],
-                    ))
-                    .await;
-                Ok(())
-            }
-            SubCommand::RateLiteral(rate) => {
-                manager.set_tick_rate(server, rate).await;
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.tick.rate.success",
-                        [TextComponent::text(format!("{rate:.1}"))],
-                    ))
-                    .await;
-                Ok(())
-            }
-            SubCommand::Freeze(freeze) => {
-                manager.set_frozen(server, freeze).await;
-                let message_key = if freeze {
-                    "commands.tick.status.frozen"
-                } else {
-                    "commands.tick.status.running"
-                };
-                sender
-                    .send_message(TextComponent::translate(message_key, []))
-                    .await;
-                Ok(())
-            }
-            SubCommand::StepDefault => self.handle_step_command(sender, server, manager, 1).await,
-            SubCommand::StepTimed => {
-                let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
-                self.handle_step_command(sender, server, manager, ticks)
-                    .await
-            }
-            SubCommand::StepLiteral(ticks) => {
-                self.handle_step_command(sender, server, manager, ticks)
-                    .await
-            }
-            SubCommand::StepStop => {
-                if manager.stop_stepping(server).await {
+            match self.0 {
+                SubCommand::Query => self.handle_query(sender, server, manager).await,
+                SubCommand::Rate => {
+                    let rate = BoundedNumArgumentConsumer::<f32>::find_arg(args, "rate")??;
+                    manager.set_tick_rate(server, rate).await;
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.tick.step.stop.success",
-                            [],
+                            "commands.tick.rate.success",
+                            [TextComponent::text(format!("{rate:.1}"))],
                         ))
                         .await;
-                } else {
-                    sender
-                        .send_message(TextComponent::translate("commands.tick.step.stop.fail", []))
-                        .await;
+                    Ok(())
                 }
-                Ok(())
-            }
-            SubCommand::SprintTimed => {
-                let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
-                self.handle_sprint_command(sender, server, manager, ticks)
-                    .await
-            }
-            SubCommand::SprintLiteral(ticks) => {
-                self.handle_sprint_command(sender, server, manager, ticks)
-                    .await
-            }
-            SubCommand::SprintStop => {
-                if manager.stop_sprinting(server).await {
+                SubCommand::RateLiteral(rate) => {
+                    manager.set_tick_rate(server, rate).await;
                     sender
                         .send_message(TextComponent::translate(
-                            "commands.tick.sprint.stop.success",
-                            [],
+                            "commands.tick.rate.success",
+                            [TextComponent::text(format!("{rate:.1}"))],
                         ))
                         .await;
-                } else {
-                    sender
-                        .send_message(
-                            TextComponent::translate("commands.tick.sprint.stop.fail", [])
-                                .color(Color::Named(NamedColor::Red)),
-                        )
-                        .await;
+                    Ok(())
                 }
-                Ok(())
+                SubCommand::Freeze(freeze) => {
+                    manager.set_frozen(server, freeze).await;
+                    let message_key = if freeze {
+                        "commands.tick.status.frozen"
+                    } else {
+                        "commands.tick.status.running"
+                    };
+                    sender
+                        .send_message(TextComponent::translate(message_key, []))
+                        .await;
+                    Ok(())
+                }
+                SubCommand::StepDefault => {
+                    self.handle_step_command(sender, server, manager, 1).await
+                }
+                SubCommand::StepTimed => {
+                    let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
+                    self.handle_step_command(sender, server, manager, ticks)
+                        .await
+                }
+                SubCommand::StepLiteral(ticks) => {
+                    self.handle_step_command(sender, server, manager, ticks)
+                        .await
+                }
+                SubCommand::StepStop => {
+                    if manager.stop_stepping(server).await {
+                        sender
+                            .send_message(TextComponent::translate(
+                                "commands.tick.step.stop.success",
+                                [],
+                            ))
+                            .await;
+                    } else {
+                        sender
+                            .send_message(TextComponent::translate(
+                                "commands.tick.step.stop.fail",
+                                [],
+                            ))
+                            .await;
+                    }
+                    Ok(())
+                }
+                SubCommand::SprintTimed => {
+                    let ticks = TimeArgumentConsumer::find_arg(args, "time")?;
+                    self.handle_sprint_command(sender, server, manager, ticks)
+                        .await
+                }
+                SubCommand::SprintLiteral(ticks) => {
+                    self.handle_sprint_command(sender, server, manager, ticks)
+                        .await
+                }
+                SubCommand::SprintStop => {
+                    if manager.stop_sprinting(server).await {
+                        sender
+                            .send_message(TextComponent::translate(
+                                "commands.tick.sprint.stop.success",
+                                [],
+                            ))
+                            .await;
+                    } else {
+                        sender
+                            .send_message(
+                                TextComponent::translate("commands.tick.sprint.stop.fail", [])
+                                    .color(Color::Named(NamedColor::Red)),
+                            )
+                            .await;
+                    }
+                    Ok(())
+                }
             }
-        }
+        })
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
+pub fn init_command_tree(default_tps: f32) -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(literal("query").execute(TickExecutor(SubCommand::Query)))
         .then(
             literal("rate")
-                .then(
-                    literal("20").execute(TickExecutor(SubCommand::RateLiteral(BASIC_CONFIG.tps))),
-                )
+                .then(literal("20").execute(TickExecutor(SubCommand::RateLiteral(default_tps))))
                 .then(argument("rate", rate_consumer()).execute(TickExecutor(SubCommand::Rate))),
         )
         .then(literal("freeze").execute(TickExecutor(SubCommand::Freeze(true))))

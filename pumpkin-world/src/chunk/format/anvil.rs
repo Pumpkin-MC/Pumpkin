@@ -1,15 +1,15 @@
-use async_trait::async_trait;
 use bytes::*;
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use itertools::Itertools;
 use lz4_java_wrc::Context;
-use pumpkin_config::advanced_config;
+use pumpkin_config::chunk::AnvilChunkConfig;
 use pumpkin_util::math::vector2::Vector2;
 use std::{
     collections::HashSet,
     io::{Read, SeekFrom, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
+    pin::Pin,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{
@@ -37,11 +37,8 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The number of bytes in a sector (4 KiB)
 const SECTOR_BYTES: usize = 4096;
 
-// 1.21.9
-pub const WORLD_DATA_VERSION: i32 = 4554;
-
-#[derive(Clone, Default)]
-pub struct AnvilChunkFormat;
+// 1.21.11
+pub const WORLD_DATA_VERSION: i32 = 4671;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -72,7 +69,6 @@ impl<R: Read> Read for CompressionRead<R> {
     }
 }
 
-#[derive(Default, Clone)]
 pub struct AnvilChunkData {
     compression: Option<Compression>,
     // Length is always the length of this + compression byte (1) so we dont need to save a length
@@ -307,15 +303,16 @@ impl AnvilChunkData {
                 .decompress_data(&self.compressed_data)
                 .map_err(ChunkReadingError::Compression)?;
 
-            S::from_bytes(decompress_bytes.into(), pos)
+            S::from_bytes(&decompress_bytes.into(), pos)
         } else {
-            S::from_bytes(self.compressed_data.clone(), pos)
+            S::from_bytes(&self.compressed_data, pos)
         }
     }
 
     async fn from_chunk<S>(
         chunk: &S,
         compression: Option<Compression>,
+        chunk_config: &AnvilChunkConfig,
     ) -> Result<Self, ChunkWritingError>
     where
         S: SingleChunkDataSerializer,
@@ -325,12 +322,11 @@ impl AnvilChunkData {
             .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
-        let compression = compression
-            .unwrap_or_else(|| advanced_config().chunk.compression.algorithm.clone().into());
+        let compression = compression.unwrap_or_else(|| chunk_config.compression.algorithm.into());
 
         // We need to buffer here anyway so there's no use in making an impl Write for this
         let compressed_data = compression
-            .compress_data(&raw_bytes, advanced_config().chunk.compression.level)
+            .compress_data(&raw_bytes, chunk_config.compression.level)
             .map_err(ChunkWritingError::Compression)?;
 
         Ok(AnvilChunkData {
@@ -346,15 +342,15 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         (at.x >> SUBREGION_BITS, at.y >> SUBREGION_BITS)
     }
 
-    pub const fn get_chunk_index(pos: &Vector2<i32>) -> usize {
-        let local_x = pos.x & SUBREGION_AND;
-        let local_z = pos.y & SUBREGION_AND;
+    pub const fn get_chunk_index(x: i32, z: i32) -> usize {
+        let local_x = x & SUBREGION_AND;
+        let local_z = z & SUBREGION_AND;
         let index = (local_z << SUBREGION_BITS) + local_x;
         index as usize
     }
 
     async fn write_indices(&self, path: &Path, indices: &[usize]) -> Result<(), std::io::Error> {
-        log::trace!("Writing in place: {path:?}");
+        log::trace!("Writing in place: {}", path.display());
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -500,7 +496,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, path).await?;
 
-        log::trace!("Wrote file to Disk: {path:?}");
+        log::trace!("Wrote file to Disk: {}", path.display());
         Ok(())
     }
 }
@@ -517,17 +513,19 @@ impl<S: SingleChunkDataSerializer> Default for AnvilChunkFile<S> {
     }
 }
 
-#[async_trait]
 pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable {
-    async fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError>;
-    fn from_bytes(bytes: Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
-    fn position(&self) -> &Vector2<i32>;
+    fn to_bytes(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>>;
+    fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError>;
+    fn position(&self) -> (i32, i32);
 }
 
-#[async_trait]
 impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
     type Data = S;
     type WriteBackend = PathBuf;
+
+    type ChunkConfig = AnvilChunkConfig;
 
     fn should_write(&self, is_watched: bool) -> bool {
         !is_watched
@@ -538,16 +536,19 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         format!("./r.{region_x}.{region_z}.mca")
     }
 
-    async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
+    async fn write(&self, path: &PathBuf) -> Result<(), std::io::Error> {
         let mut write_action = self.write_action.lock().await;
         match &*write_action {
             WriteAction::Pass => {
-                log::debug!("Skipping write for {path:?} as there were no dirty chunks");
+                log::debug!(
+                    "Skipping write for {}, as there were no dirty chunks",
+                    path.display()
+                );
                 Ok(())
             }
-            WriteAction::All => self.write_all(&path).await,
+            WriteAction::All => self.write_all(path).await,
             WriteAction::Parts(parts) => {
-                self.write_indices(&path, Vec::from_iter(parts.iter().cloned()).as_slice())
+                self.write_indices(path, Vec::from_iter(parts.iter().cloned()).as_slice())
                     .await
             }
         }?;
@@ -618,21 +619,26 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         Ok(chunk_file)
     }
 
-    async fn update_chunk(&mut self, chunk: &Self::Data) -> Result<(), ChunkWritingError> {
+    async fn update_chunk(
+        &mut self,
+        chunk: &Self::Data,
+        chunk_config: &Self::ChunkConfig,
+    ) -> Result<(), ChunkWritingError> {
         let epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as u32;
 
-        let index = AnvilChunkFile::<S>::get_chunk_index(chunk.position());
+        let index = AnvilChunkFile::<S>::get_chunk_index(chunk.position().0, chunk.position().1);
         // Default to the compression type read from the file
         let compression_type = self.chunks_data[index]
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
-        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type).await?;
+        let new_chunk_data =
+            AnvilChunkData::from_chunk(chunk, compression_type, chunk_config).await?;
 
         let mut write_action = self.write_action.lock().await;
-        if !advanced_config().chunk.write_in_place {
+        if !chunk_config.write_in_place {
             *write_action = WriteAction::All;
         }
 
@@ -791,13 +797,13 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 
     async fn get_chunks(
         &self,
-        chunks: &[Vector2<i32>],
+        chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
-        for chunk in chunks.iter().cloned() {
-            let index = AnvilChunkFile::<S>::get_chunk_index(&chunk);
+        for chunk in chunks.into_iter() {
+            let index = AnvilChunkFile::<S>::get_chunk_index(chunk.x, chunk.y);
             let is_ok = match &self.chunks_data[index] {
                 None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
                 Some(chunk_metadata) => {
@@ -822,7 +828,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
 /*
 #[cfg(test)]
 mod tests {
-    use async_trait::async_trait;
+
     use pumpkin_config::{AdvancedConfiguration, advanced_config, override_config_for_testing};
     use pumpkin_data::BlockDirection;
     use pumpkin_util::math::position::BlockPos;
@@ -844,7 +850,6 @@ mod tests {
 
     struct BlockRegistry;
 
-    #[async_trait]
     impl BlockRegistryExt for BlockRegistry {
         fn can_place_at(
             &self,

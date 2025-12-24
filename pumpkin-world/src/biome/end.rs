@@ -1,5 +1,4 @@
 use pumpkin_data::chunk::Biome;
-use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     biome::BiomeSupplier,
@@ -21,13 +20,15 @@ impl TheEndBiomeSupplier {
 
 impl BiomeSupplier for TheEndBiomeSupplier {
     fn biome(
-        global_biome_pos: &Vector3<i32>,
+        x: i32,
+        y: i32,
+        z: i32,
         noise: &mut MultiNoiseSampler<'_>,
         _dimension: Dimension,
     ) -> &'static Biome {
-        let x = biome_coords::to_block(global_biome_pos.x);
-        let y = biome_coords::to_block(global_biome_pos.y);
-        let z = biome_coords::to_block(global_biome_pos.z);
+        let x = biome_coords::to_block(x);
+        let y = biome_coords::to_block(y);
+        let z = biome_coords::to_block(z);
         let section_x = section_coords::block_to_section(x);
         let section_z = section_coords::block_to_section(z);
         if section_x * section_x + section_z * section_z <= 4096 {

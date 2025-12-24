@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use serde::Deserialize;
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum RecipeTypes {
     #[serde(rename = "minecraft:blasting")]
@@ -34,7 +34,7 @@ pub enum RecipeTypes {
     CraftingSpecial,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 pub struct CookingRecipeStruct {
     category: Option<RecipeCategoryTypes>,
     group: Option<String>,
@@ -72,7 +72,7 @@ impl ToTokens for CookingRecipeStruct {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 pub struct CraftingShapedRecipeStruct {
     category: Option<RecipeCategoryTypes>,
     group: Option<String>,
@@ -121,7 +121,7 @@ impl ToTokens for CraftingShapedRecipeStruct {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 pub struct CraftingShapelessRecipeStruct {
     category: Option<RecipeCategoryTypes>,
     group: Option<String>,
@@ -157,7 +157,7 @@ impl ToTokens for CraftingShapelessRecipeStruct {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 pub struct CraftingTransmuteRecipeStruct {
     category: Option<RecipeCategoryTypes>,
     group: Option<String>,
@@ -192,7 +192,7 @@ impl ToTokens for CraftingTransmuteRecipeStruct {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 pub struct CraftingDecoratedPotStruct {
     category: Option<RecipeCategoryTypes>,
 }
@@ -212,7 +212,7 @@ impl ToTokens for CraftingDecoratedPotStruct {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 pub struct RecipeResultStruct {
     id: String,
     count: Option<u8>,
@@ -233,7 +233,7 @@ impl ToTokens for RecipeResultStruct {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 #[serde(untagged)]
 pub enum RecipeIngredientTypes {
     Simple(String),
@@ -263,7 +263,7 @@ impl ToTokens for RecipeIngredientTypes {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 pub enum RecipeCategoryTypes {
     #[serde(rename = "equipment")]
     Equipment,

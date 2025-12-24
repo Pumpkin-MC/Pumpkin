@@ -1,6 +1,6 @@
 // use std::{fs, path::PathBuf, sync::Arc};
 //
-// use async_trait::async_trait;
+//
 // use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 // use pumpkin_data::BlockDirection;
 // use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
@@ -79,7 +79,6 @@
 //
 // struct BlockRegistry;
 //
-// #[async_trait]
 // impl BlockRegistryExt for BlockRegistry {
 //     fn can_place_at(
 //         &self,

@@ -1,6 +1,5 @@
 use std::sync::atomic::Ordering;
 
-use async_trait::async_trait;
 use pumpkin_util::math::experience;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
@@ -10,7 +9,7 @@ use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandError, CommandExecutor, CommandSender};
+use crate::command::{CommandExecutor, CommandResult, CommandSender};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 
@@ -196,76 +195,77 @@ impl Executor {
     }
 }
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-        match self.mode {
-            Mode::Query => {
-                if targets.len() != 1 {
-                    // TODO: Add proper error message for multiple players in query mode
-                    return Ok(());
-                }
-                self.handle_query(sender, &targets[0], self.exp_type.unwrap())
-                    .await;
-            }
-            Mode::Add | Mode::Set => {
-                let Ok(amount) = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_AMOUNT)?
-                else {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.experience.set.points.invalid",
-                            [],
-                        ))
+            match self.mode {
+                Mode::Query => {
+                    if targets.len() != 1 {
+                        // TODO: Add proper error message for multiple players in query mode
+                        return Ok(());
+                    }
+                    self.handle_query(sender, &targets[0], self.exp_type.unwrap())
                         .await;
-                    return Ok(());
-                };
-
-                if self.mode == Mode::Set && amount < 0 {
-                    sender
-                        .send_message(TextComponent::translate(
-                            "commands.experience.set.points.invalid",
-                            [],
-                        ))
-                        .await;
-                    return Ok(());
                 }
+                Mode::Add | Mode::Set => {
+                    let Ok(amount) = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_AMOUNT)?
+                    else {
+                        sender
+                            .send_message(TextComponent::translate(
+                                "commands.experience.set.points.invalid",
+                                [],
+                            ))
+                            .await;
+                        return Ok(());
+                    };
 
-                for target in targets {
-                    match self
-                        .handle_modify(target, amount, self.exp_type.unwrap(), self.mode)
-                        .await
-                    {
-                        Ok(()) => {
-                            let msg = Self::get_success_message(
-                                self.mode,
-                                self.exp_type.unwrap(),
-                                amount,
-                                targets.len(),
-                                Some(target.get_display_name().await),
-                            );
-                            sender.send_message(msg).await;
-                        }
-                        Err(error_msg) => {
-                            sender
-                                .send_message(
-                                    TextComponent::translate(error_msg, [])
-                                        .color(Color::Named(NamedColor::Red)),
-                                )
-                                .await;
+                    if self.mode == Mode::Set && amount < 0 {
+                        sender
+                            .send_message(TextComponent::translate(
+                                "commands.experience.set.points.invalid",
+                                [],
+                            ))
+                            .await;
+                        return Ok(());
+                    }
+
+                    for target in targets {
+                        match self
+                            .handle_modify(target, amount, self.exp_type.unwrap(), self.mode)
+                            .await
+                        {
+                            Ok(()) => {
+                                let msg = Self::get_success_message(
+                                    self.mode,
+                                    self.exp_type.unwrap(),
+                                    amount,
+                                    targets.len(),
+                                    Some(target.get_display_name().await),
+                                );
+                                sender.send_message(msg).await;
+                            }
+                            Err(error_msg) => {
+                                sender
+                                    .send_message(
+                                        TextComponent::translate(error_msg, [])
+                                            .color(Color::Named(NamedColor::Red)),
+                                    )
+                                    .await;
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 

@@ -2,10 +2,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::CURRENT_MC_VERSION;
-use crate::generation::Seed;
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_data::game_rules::GameRuleRegistry;
-use pumpkin_util::{Difficulty, serde_enum_as_integer};
+use pumpkin_util::{Difficulty, serde_enum_as_integer, world_seed::Seed};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -13,7 +11,7 @@ pub mod anvil;
 
 // Constraint: disk biome palette serialization changed in 1.21.5
 pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4435; // 1.21.9
-pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4554; // 1.21.9
+pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4671; // 1.21.11
 
 pub const MINIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19132; // 1.21.9
 pub const MAXIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19133; // 1.21.9
@@ -138,13 +136,9 @@ pub struct DataPacks {
     pub enabled: Vec<String>,
 }
 
-fn get_or_create_seed() -> Seed {
-    // TODO: if there is a seed in the config (!= "") use it. Otherwise make a random one
-    Seed::from(BASIC_CONFIG.seed.as_str())
-}
-
-impl Default for WorldGenSettings {
-    fn default() -> Self {
+impl WorldGenSettings {
+    #[must_use]
+    pub fn new(seed: Seed) -> Self {
         // TODO: Adjust according to enabled worlds
         let mut dimensions = Dimensions::new();
         dimensions.insert(
@@ -188,9 +182,10 @@ impl Default for WorldGenSettings {
                 dimension_type: "minecraft:the_end".to_string(),
             },
         );
+
         Self {
             dimensions,
-            seed: get_or_create_seed().0 as i64,
+            seed: seed.0 as i64,
         }
     }
 }
@@ -219,8 +214,8 @@ impl Default for WorldVersion {
     }
 }
 
-impl Default for LevelData {
-    fn default() -> Self {
+impl LevelData {
+    pub fn default(seed: Seed) -> Self {
         Self {
             allow_commands: true,
             border_center_x: 0.0,
@@ -242,7 +237,7 @@ impl Default for LevelData {
             difficulty: Difficulty::Normal,
             difficulty_locked: false,
             game_rules: GameRuleRegistry::default(),
-            world_gen_settings: Default::default(),
+            world_gen_settings: WorldGenSettings::new(seed),
             last_played: -1,
             level_name: "world".to_string(),
             spawn_x: 0,

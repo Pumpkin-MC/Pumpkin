@@ -1,12 +1,9 @@
+use crate::command::CommandResult;
 use crate::command::args::gamemode::GamemodeArgumentConsumer;
 use crate::command::args::{Arg, GetCloned};
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::builder::argument;
-use crate::command::{
-    CommandError, CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree,
-};
-use async_trait::async_trait;
-use pumpkin_config::BASIC_CONFIG;
+use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
 use pumpkin_util::GameMode;
 use pumpkin_util::text::TextComponent;
 
@@ -22,38 +19,39 @@ pub struct DefaultGamemode {
 
 struct DefaultGamemodeExecutor;
 
-#[async_trait]
 impl CommandExecutor for DefaultGamemodeExecutor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::GameMode(gamemode)) = args.get_cloned(&ARG_GAMEMODE) else {
-            return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
-        };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::GameMode(gamemode)) = args.get_cloned(&ARG_GAMEMODE) else {
+                return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
+            };
 
-        if BASIC_CONFIG.force_gamemode {
-            for player in server.get_all_players().await {
-                player.set_gamemode(gamemode).await;
+            if server.basic_config.force_gamemode {
+                for player in server.get_all_players().await {
+                    player.set_gamemode(gamemode).await;
+                }
             }
-        }
 
-        let gamemode_string = format!("{gamemode:?}").to_lowercase();
-        let gamemode_string = format!("gameMode.{gamemode_string}");
+            let gamemode_string = format!("{gamemode:?}").to_lowercase();
+            let gamemode_string = format!("gameMode.{gamemode_string}");
 
-        sender
-            .send_message(TextComponent::translate(
-                "commands.defaultgamemode.success",
-                [TextComponent::translate(gamemode_string, [])],
-            ))
-            .await;
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.defaultgamemode.success",
+                    [TextComponent::translate(gamemode_string, [])],
+                ))
+                .await;
 
-        //Change the default gamemode (not in configuration.toml)
-        server.defaultgamemode.lock().await.gamemode = gamemode;
+            //Change the default gamemode (not in configuration.toml)
+            server.defaultgamemode.lock().await.gamemode = gamemode;
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 

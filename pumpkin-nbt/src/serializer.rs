@@ -11,7 +11,6 @@ use crate::{
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug)]
 pub struct WriteAdaptor<W: Write> {
     writer: W,
 }
@@ -213,22 +212,16 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         }
     }
 
-    fn serialize_u16(self, _v: u16) -> Result<()> {
-        Err(Error::UnsupportedType(
-            "u16; NBT only supports signed values".to_string(),
-        ))
+    fn serialize_u16(self, v: u16) -> Result<()> {
+        self.serialize_i16(v as i16)
     }
 
-    fn serialize_u32(self, _v: u32) -> Result<()> {
-        Err(Error::UnsupportedType(
-            "u32; NBT only supports signed values".to_string(),
-        ))
+    fn serialize_u32(self, v: u32) -> Result<()> {
+        self.serialize_i32(v as i32)
     }
 
-    fn serialize_u64(self, _v: u64) -> Result<()> {
-        Err(Error::UnsupportedType(
-            "u64; NBT only supports signed values".to_string(),
-        ))
+    fn serialize_u64(self, v: u64) -> Result<()> {
+        self.serialize_i64(v as i64)
     }
 
     fn serialize_f32(self, v: f32) -> Result<()> {

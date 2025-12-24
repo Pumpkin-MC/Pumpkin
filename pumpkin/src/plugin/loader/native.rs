@@ -2,47 +2,40 @@ use std::any::Any;
 
 use libloading::Library;
 
-use super::{LoaderError, Path, Plugin, PluginLoader, PluginMetadata, async_trait};
+use crate::plugin::loader::{PluginLoadFuture, PluginUnloadFuture};
 
-#[derive(Debug)]
+use super::{LoaderError, Path, Plugin, PluginLoader, PluginMetadata};
+
 pub struct NativePluginLoader;
 
-#[async_trait]
 impl PluginLoader for NativePluginLoader {
-    async fn load(
-        &self,
-        path: &Path,
-    ) -> Result<
-        (
-            Box<dyn Plugin>,
-            PluginMetadata<'static>,
-            Box<dyn Any + Send + Sync>,
-        ),
-        LoaderError,
-    > {
-        let path = path.to_owned();
-        let library = tokio::task::spawn_blocking(move || unsafe { Library::new(&path) })
-            .await
-            .map_err(|e| LoaderError::RuntimeError(e.to_string()))?
-            .map_err(|e| LoaderError::LibraryLoad(e.to_string()))?;
+    fn load<'a>(&'a self, path: &'a Path) -> PluginLoadFuture<'a> {
+        Box::pin(async {
+            let path = path.to_owned();
 
-        let metadata = unsafe {
-            &**library
-                .get::<*const PluginMetadata>(b"METADATA")
-                .map_err(|_| LoaderError::MetadataMissing)?
-        };
+            let library = unsafe { Library::new(&path) }
+                .map_err(|e| LoaderError::LibraryLoad(e.to_string()))?;
 
-        let plugin = unsafe {
-            library
-                .get::<fn() -> Box<dyn Plugin>>(b"plugin")
-                .map_err(|_| LoaderError::EntrypointMissing)?
-        };
+            // 2. Extract Metadata (METADATA)
+            let metadata = unsafe {
+                &**library
+                    .get::<*const PluginMetadata>(b"METADATA")
+                    .map_err(|_| LoaderError::MetadataMissing)?
+            };
 
-        Ok((
-            plugin(),
-            metadata.clone(),
-            Box::new(library) as Box<dyn Any + Send + Sync>,
-        ))
+            // 3. Extract Plugin Factory (plugin)
+            let plugin_factory = unsafe {
+                library
+                    .get::<fn() -> Box<dyn Plugin>>(b"plugin")
+                    .map_err(|_| LoaderError::EntrypointMissing)?
+            };
+
+            Ok((
+                plugin_factory(),
+                metadata.clone(),
+                Box::new(library) as Box<dyn Any + Send + Sync>,
+            ))
+        })
     }
 
     fn can_load(&self, path: &Path) -> bool {
@@ -60,14 +53,17 @@ impl PluginLoader for NativePluginLoader {
         }
     }
 
-    async fn unload(&self, data: Box<dyn Any + Send + Sync>) -> Result<(), LoaderError> {
-        match data.downcast::<Library>() {
-            Ok(_) => Ok(()),
-            Err(_) => Err(LoaderError::InvalidLoaderData),
-        }
+    fn unload(&self, data: Box<dyn Any + Send + Sync>) -> PluginUnloadFuture<'_> {
+        Box::pin(async {
+            data.downcast::<Library>()
+                .map_or(Err(LoaderError::InvalidLoaderData), |library| {
+                    drop(library);
+                    Ok(())
+                })
+        })
     }
 
-    /// Windows specific issue
+    /// Windows specific issue: Windows locks DLLs, so we must indicate they cannot be unloaded.
     fn can_unload(&self) -> bool {
         !cfg!(target_os = "windows")
     }

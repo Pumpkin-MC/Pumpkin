@@ -13,11 +13,10 @@ use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
+use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
-use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
-use pumpkin_config::advanced_config;
 use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
@@ -76,13 +75,6 @@ pub struct LivingEntity {
 
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
-}
-
-#[async_trait]
-pub trait LivingEntityTrait: EntityBase {
-    async fn on_actually_hurt(&self, _amount: f32, _damage_type: DamageType) {
-        //TODO: wolves, etc...
-    }
 }
 
 impl LivingEntity {
@@ -914,150 +906,152 @@ impl LivingEntity {
     }
 }
 
-impl LivingEntityTrait for LivingEntity {}
-
-#[async_trait]
 impl NBTStorage for LivingEntity {
-    async fn write_nbt(&self, nbt: &mut NbtCompound) {
-        self.entity.write_nbt(nbt).await;
-        nbt.put("Health", NbtTag::Float(self.health.load()));
-        nbt.put("fall_distance", NbtTag::Float(self.fall_distance.load()));
-        {
-            let effects = self.active_effects.lock().await;
-            if !effects.is_empty() {
-                // Iterate effects and create Box<[NbtTag]>
-                let mut effects_list = Vec::with_capacity(effects.len());
-                for effect in effects.values() {
-                    let mut effect_nbt = pumpkin_nbt::compound::NbtCompound::new();
-                    effect.write_nbt(&mut effect_nbt).await;
-                    effects_list.push(NbtTag::Compound(effect_nbt));
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.entity.write_nbt(nbt).await;
+            nbt.put("Health", NbtTag::Float(self.health.load()));
+            nbt.put("fall_distance", NbtTag::Float(self.fall_distance.load()));
+            {
+                let effects = self.active_effects.lock().await;
+                if !effects.is_empty() {
+                    // Iterate effects and create Box<[NbtTag]>
+                    let mut effects_list = Vec::with_capacity(effects.len());
+                    for effect in effects.values() {
+                        let mut effect_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                        effect.write_nbt(&mut effect_nbt).await;
+                        effects_list.push(NbtTag::Compound(effect_nbt));
+                    }
+                    nbt.put("active_effects", NbtTag::List(effects_list));
                 }
-                nbt.put("active_effects", NbtTag::List(effects_list));
             }
-        }
-        //TODO: write equipment
-        // todo more...
+            //TODO: write equipment
+            // todo more...
+        })
     }
 
-    async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
-        self.entity.read_nbt_non_mut(nbt).await;
-        self.health.store(nbt.get_float("Health").unwrap_or(0.0));
-        self.fall_distance
-            .store(nbt.get_float("fall_distance").unwrap_or(0.0));
-        {
-            let mut active_effects = self.active_effects.lock().await;
-            let nbt_effects = nbt.get_list("active_effects");
-            if let Some(nbt_effects) = nbt_effects {
-                for effect in nbt_effects {
-                    if let NbtTag::Compound(effect_nbt) = effect {
-                        let effect = Effect::create_from_nbt(&mut effect_nbt.clone()).await;
-                        if effect.is_none() {
-                            log::warn!("Unable to read effect from nbt");
-                            continue;
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            self.entity.read_nbt_non_mut(nbt).await;
+            self.health.store(nbt.get_float("Health").unwrap_or(0.0));
+            self.fall_distance
+                .store(nbt.get_float("fall_distance").unwrap_or(0.0));
+            {
+                let mut active_effects = self.active_effects.lock().await;
+                let nbt_effects = nbt.get_list("active_effects");
+                if let Some(nbt_effects) = nbt_effects {
+                    for effect in nbt_effects {
+                        if let NbtTag::Compound(effect_nbt) = effect {
+                            let effect = Effect::create_from_nbt(&mut effect_nbt.clone()).await;
+                            if effect.is_none() {
+                                log::warn!("Unable to read effect from nbt");
+                                continue;
+                            }
+                            let mut effect = effect.unwrap();
+                            effect.blend = true; // TODO: change, is taken from effect give command
+                            active_effects.insert(effect.effect_type, effect);
                         }
-                        let mut effect = effect.unwrap();
-                        effect.blend = true; // TODO: change, is taken from effect give command
-                        active_effects.insert(effect.effect_type, effect);
                     }
                 }
             }
-        }
+        })
         // todo more...
     }
 }
 
-#[async_trait]
 impl EntityBase for LivingEntity {
-    async fn damage_with_context(
-        &self,
+    fn damage_with_context<'a>(
+        &'a self,
         caller: Arc<dyn EntityBase>,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
-        source: Option<&dyn EntityBase>,
-        cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        // Check invulnerability before applying damage
-        if self.entity.is_invulnerable_to(&damage_type) {
-            return false;
-        }
-
-        if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
-            return false; // Dying or dead
-        }
-
-        if amount < 0.0 {
-            return false;
-        }
-
-        if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
-            && self.has_effect(&StatusEffect::FIRE_RESISTANCE).await
-        {
-            return false; // Fire resistance
-        }
-
-        let world = &self.entity.world;
-
-        let last_damage = self.last_damage_taken.load();
-        let play_sound;
-        let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 {
-            if amount <= last_damage {
+        source: Option<&'a dyn EntityBase>,
+        cause: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            // Check invulnerability before applying damage
+            if self.entity.is_invulnerable_to(&damage_type) {
                 return false;
             }
-            play_sound = false;
-            amount - self.last_damage_taken.load()
-        } else {
-            self.hurt_cooldown.store(20, Relaxed);
-            play_sound = true;
-            amount
-        };
-        self.last_damage_taken.store(amount);
-        damage_amount = damage_amount.max(0.0);
 
-        let config = &advanced_config().pvp;
+            if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
+                return false; // Dying or dead
+            }
 
-        if config.hurt_animation {
-            let entity_id = VarInt(self.entity.entity_id);
-            world
-                .broadcast_packet_all(&CHurtAnimation::new(entity_id, self.entity.yaw.load()))
-                .await;
-        }
+            if amount < 0.0 {
+                return false;
+            }
 
-        self.entity
-            .world
-            .broadcast_packet_all(&CDamageEvent::new(
-                self.entity.entity_id.into(),
-                damage_type.id.into(),
-                source.map(|e| e.get_entity().entity_id.into()),
-                cause.map(|e| e.get_entity().entity_id.into()),
-                position,
-            ))
-            .await;
+            if (damage_type == DamageType::IN_FIRE || damage_type == DamageType::ON_FIRE)
+                && self.has_effect(&StatusEffect::FIRE_RESISTANCE).await
+            {
+                return false; // Fire resistance
+            }
 
-        if play_sound {
+            let world = &self.entity.world;
+
+            let last_damage = self.last_damage_taken.load();
+            let play_sound;
+            let mut damage_amount = if self.hurt_cooldown.load(Relaxed) > 10 {
+                if amount <= last_damage {
+                    return false;
+                }
+                play_sound = false;
+                amount - self.last_damage_taken.load()
+            } else {
+                self.hurt_cooldown.store(20, Relaxed);
+                play_sound = true;
+                amount
+            };
+            self.last_damage_taken.store(amount);
+            damage_amount = damage_amount.max(0.0);
+
+            let config = &world.server.upgrade().unwrap().advanced_config.pvp;
+
+            if config.hurt_animation {
+                let entity_id = VarInt(self.entity.entity_id);
+                world
+                    .broadcast_packet_all(&CHurtAnimation::new(entity_id, self.entity.yaw.load()))
+                    .await;
+            }
+
             self.entity
                 .world
-                .play_sound(
-                    // Sound::EntityPlayerHurt,
-                    Sound::EntityGenericHurt,
-                    SoundCategory::Players,
-                    &self.entity.pos.load(),
-                )
+                .broadcast_packet_all(&CDamageEvent::new(
+                    self.entity.entity_id.into(),
+                    damage_type.id.into(),
+                    source.map(|e| e.get_entity().entity_id.into()),
+                    cause.map(|e| e.get_entity().entity_id.into()),
+                    position,
+                ))
                 .await;
-            // todo: calculate knockback
-        }
 
-        let new_health = self.health.load() - damage_amount;
-        if damage_amount > 0.0 {
-            self.on_actually_hurt(damage_amount, damage_type).await;
-            self.set_health(new_health).await;
-        }
+            if play_sound {
+                self.entity
+                    .world
+                    .play_sound(
+                        // Sound::EntityPlayerHurt,
+                        Sound::EntityGenericHurt,
+                        SoundCategory::Players,
+                        &self.entity.pos.load(),
+                    )
+                    .await;
+                // todo: calculate knockback
+            }
 
-        if new_health <= 0.0 && !self.try_use_death_protector(&caller).await {
-            self.on_death(damage_type, source, cause).await;
-        }
+            let new_health = self.health.load() - damage_amount;
+            if damage_amount > 0.0 {
+                //self.on_actually_hurt(damage_amount, damage_type).await;
+                self.set_health(new_health).await;
+            }
 
-        true
+            if new_health <= 0.0 && !self.try_use_death_protector(&caller).await {
+                self.on_death(damage_type, source, cause).await;
+            }
+
+            true
+        })
     }
 
     fn get_gravity(&self) -> f64 {
@@ -1065,57 +1059,63 @@ impl EntityBase for LivingEntity {
         GRAVITY
     }
 
-    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
-        self.entity.tick(caller.clone(), server).await;
-        self.tick_movement(server, caller.clone()).await;
-        // TODO
-        if caller.get_player().is_none() {
-            self.entity.send_pos_rot().await;
-            self.entity.send_velocity().await;
-        }
-        self.tick_effects().await;
-        // Current active item
-        {
-            let item_in_use = self.item_in_use.lock().await.clone();
-            if let Some(item) = item_in_use.as_ref()
-                && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
+    fn tick<'a>(
+        &'a self,
+        caller: Arc<dyn EntityBase>,
+        server: &'a Server,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.entity.tick(caller.clone(), server).await;
+            self.tick_movement(server, caller.clone()).await;
+            // TODO
+            if caller.get_player().is_none() {
+                self.entity.send_pos_rot().await;
+                self.entity.send_velocity().await;
+            }
+            self.tick_effects().await;
+            // Current active item
             {
-                // Consume item
-                if let Some(food) = item.get_data_component::<FoodImpl>()
-                    && let Some(player) = caller.get_player()
+                let item_in_use = self.item_in_use.lock().await.clone();
+                if let Some(item) = item_in_use.as_ref()
+                    && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
-                    player
-                        .hunger_manager
-                        .eat(player, food.nutrition as u8, food.saturation)
+                    // Consume item
+                    if let Some(food) = item.get_data_component::<FoodImpl>()
+                        && let Some(player) = caller.get_player()
+                    {
+                        player
+                            .hunger_manager
+                            .eat(player, food.nutrition as u8, food.saturation)
+                            .await;
+                    }
+                    if let Some(player) = caller.get_player() {
+                        player
+                            .inventory
+                            .held_item()
+                            .lock()
+                            .await
+                            .decrement_unless_creative(player.gamemode.load(), 1);
+                    }
+
+                    self.clear_active_hand().await;
+                }
+            }
+
+            if self.hurt_cooldown.load(Relaxed) > 0 {
+                self.hurt_cooldown.fetch_sub(1, Relaxed);
+            }
+            if self.health.load() <= 0.0 {
+                let time = self.death_time.fetch_add(1, Relaxed);
+                if time == 20 {
+                    // Spawn Death particles
+                    self.entity
+                        .world
+                        .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
                         .await;
+                    self.entity.remove().await;
                 }
-                if let Some(player) = caller.get_player() {
-                    player
-                        .inventory
-                        .held_item()
-                        .lock()
-                        .await
-                        .decrement_unless_creative(player.gamemode.load(), 1);
-                }
-
-                self.clear_active_hand().await;
             }
-        }
-
-        if self.hurt_cooldown.load(Relaxed) > 0 {
-            self.hurt_cooldown.fetch_sub(1, Relaxed);
-        }
-        if self.health.load() <= 0.0 {
-            let time = self.death_time.fetch_add(1, Relaxed);
-            if time == 20 {
-                // Spawn Death particles
-                self.entity
-                    .world
-                    .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
-                    .await;
-                self.entity.remove().await;
-            }
-        }
+        })
     }
 
     fn get_entity(&self) -> &Entity {

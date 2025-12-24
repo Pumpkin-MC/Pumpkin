@@ -9,6 +9,7 @@ use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::Player;
 use crate::world::World;
 use crate::world::loot::{LootContextParameters, LootTableExt};
+use std::pin::Pin;
 use std::sync::Arc;
 
 pub mod blocks;
@@ -18,7 +19,6 @@ pub mod registry;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::server::Server;
-use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::vector3::Vector3;
@@ -37,86 +37,127 @@ pub trait BlockMetadata {
     }
 }
 
-#[async_trait]
+pub type BlockFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
 pub trait BlockBehaviour: Send + Sync {
-    async fn normal_use(&self, _args: NormalUseArgs<'_>) -> BlockActionResult {
-        BlockActionResult::Pass
+    fn normal_use<'a>(&'a self, _args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move { BlockActionResult::Pass })
     }
 
-    async fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
-        BlockActionResult::PassToDefaultBlockAction
+    fn use_with_item<'a>(
+        &'a self,
+        _args: UseWithItemArgs<'a>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move { BlockActionResult::PassToDefaultBlockAction })
     }
 
-    async fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {}
+    fn on_entity_collision<'a>(&'a self, _args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
 
     fn should_drop_items_on_explosion(&self) -> bool {
         true
     }
 
-    async fn explode(&self, _args: ExplodeArgs<'_>) {}
+    fn explode<'a>(&'a self, _args: ExplodeArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
 
     /// Handles the block event, which is an event specific to a block with an integer ID and data.
     ///
     /// returns whether the event was handled successfully
-    async fn on_synced_block_event(&self, _args: OnSyncedBlockEventArgs<'_>) -> bool {
-        false
+    fn on_synced_block_event<'a>(
+        &'a self,
+        _args: OnSyncedBlockEventArgs<'a>,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move { false })
     }
 
     /// getPlacementState in source code
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        args.block.default_state.id
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move { args.block.default_state.id })
     }
 
-    async fn random_tick(&self, _args: RandomTickArgs<'_>) {}
-
-    async fn can_place_at(&self, _args: CanPlaceAtArgs<'_>) -> bool {
-        true
+    fn random_tick<'a>(&'a self, _args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
     }
 
-    async fn can_update_at(&self, _args: CanUpdateAtArgs<'_>) -> bool {
-        false
+    fn can_place_at<'a>(&'a self, _args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move { true })
+    }
+
+    fn can_update_at<'a>(&'a self, _args: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move { false })
     }
 
     /// onBlockAdded in source code
-    async fn placed(&self, _args: PlacedArgs<'_>) {}
-
-    async fn player_placed(&self, _args: PlayerPlacedArgs<'_>) {}
-
-    async fn broken(&self, _args: BrokenArgs<'_>) {}
-
-    async fn on_neighbor_update(&self, _args: OnNeighborUpdateArgs<'_>) {}
-
-    /// Called if a block state is replaced or it replaces another state
-    async fn prepare(&self, _args: PrepareArgs<'_>) {}
-
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        args.state_id
+    fn placed<'a>(&'a self, _args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
     }
 
-    async fn on_scheduled_tick(&self, _args: OnScheduledTickArgs<'_>) {}
+    fn player_placed<'a>(&'a self, _args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
 
-    async fn on_state_replaced(&self, _args: OnStateReplacedArgs<'_>) {}
+    fn broken<'a>(&'a self, _args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn on_neighbor_update<'a>(&'a self, _args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    /// Called if a block state is replaced or it replaces another state
+    fn prepare<'a>(&'a self, _args: PrepareArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move { args.state_id })
+    }
+
+    fn on_scheduled_tick<'a>(&'a self, _args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    fn on_state_replaced<'a>(&'a self, _args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    // --- Redstone/Comparator Methods ---
 
     /// Sides where redstone connects to
-    async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
-        false
+    fn emits_redstone_power<'a>(
+        &'a self,
+        _args: EmitsRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move { false })
     }
 
     /// Weak redstone power, aka. block that should be powered needs to be directly next to the source block
-    async fn get_weak_redstone_power(&self, _args: GetRedstonePowerArgs<'_>) -> u8 {
-        0
+    fn get_weak_redstone_power<'a>(
+        &'a self,
+        _args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move { 0 })
     }
 
     /// Strong redstone power. this can power a block that then gives power
-    async fn get_strong_redstone_power(&self, _args: GetRedstonePowerArgs<'_>) -> u8 {
-        0
+    fn get_strong_redstone_power<'a>(
+        &'a self,
+        _args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move { 0 })
     }
 
-    async fn get_comparator_output(&self, _args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        None
+    fn get_comparator_output<'a>(
+        &'a self,
+        _args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move { None })
     }
 }
 
@@ -335,12 +376,12 @@ pub async fn calc_block_breaking(
         return 0.0;
     }
     let i = if player.can_harvest(state, block).await {
-        30
+        30.0
     } else {
-        100
+        100.0
     };
 
-    player.get_mining_speed(block).await / hardness / i as f32
+    player.get_mining_speed(block).await / hardness / i
 }
 
 #[derive(PartialEq)]

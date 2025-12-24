@@ -1,9 +1,11 @@
-use async_trait::async_trait;
 use pumpkin_protocol::java::client::play::{
-    ArgumentType, CommandSuggestion, StringProtoArgBehavior, SuggestionProviders,
+    ArgumentType, StringProtoArgBehavior, SuggestionProviders,
 };
 
-use crate::{command::dispatcher::CommandError, server::Server};
+use crate::{
+    command::{args::ConsumeResult, dispatcher::CommandError},
+    server::Server,
+};
 
 use super::{
     super::{
@@ -26,31 +28,26 @@ impl GetClientSideArgParser for MsgArgConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for MsgArgConsumer {
-    async fn consume<'a>(
+    fn consume<'a>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
         args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let mut msg = args.pop()?.to_string();
+    ) -> ConsumeResult<'a> {
+        let first_word_opt = args.pop();
+
+        let mut msg = match first_word_opt {
+            Some(word) => word.to_string(),
+            None => return Box::pin(async { None }),
+        };
 
         while let Some(word) = args.pop() {
             msg.push(' ');
             msg.push_str(word);
         }
 
-        Some(Arg::Msg(msg))
-    }
-
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        Box::pin(async move { Some(Arg::Msg(msg)) })
     }
 }
 

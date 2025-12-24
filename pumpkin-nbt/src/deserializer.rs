@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::io::{Seek, SeekFrom};
 
 use crate::*;
@@ -7,7 +8,20 @@ use serde::{Deserialize, forward_to_deserialize_any};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug)]
+thread_local! {
+    pub static CURR_VISITOR_LIST_TYPE: RefCell<Option<u8>> = const { std::cell::RefCell::new(None) };
+}
+
+pub(super) fn take_curr_visitor_seq_list_id() -> Option<u8> {
+    CURR_VISITOR_LIST_TYPE.with(|cell| cell.take())
+}
+
+pub(super) fn set_curr_visitor_seq_list_id(tag: Option<u8>) {
+    CURR_VISITOR_LIST_TYPE.with(|cell| {
+        *cell.borrow_mut() = tag;
+    });
+}
+
 pub struct NbtReadHelper<R: Read + Seek> {
     reader: R,
 }
@@ -61,7 +75,6 @@ impl<R: Read + Seek> NbtReadHelper<R> {
     }
 }
 
-#[derive(Debug)]
 pub struct Deserializer<R: Read + Seek> {
     input: NbtReadHelper<R>,
     tag_to_deserialize_stack: Option<u8>,
@@ -135,6 +148,9 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
                     return Err(Error::NegativeLength(remaining_values));
                 }
 
+                //TODO this is a bit hacky but I couldn't think of a better way
+                // This flag gets auto cleared in visit_seq
+                set_curr_visitor_seq_list_id(Some(list_type));
                 let result = visitor.visit_seq(ListAccess {
                     de: self,
                     list_type,
@@ -170,22 +186,19 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
         }
     }
 
-    fn deserialize_u16<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType(
-            "u16; NBT only supports signed values".to_string(),
-        ))
+    fn deserialize_u16<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        let value = self.input.get_i16_be()?;
+        visitor.visit_i16::<Error>(value)
     }
 
-    fn deserialize_u32<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType(
-            "u32; NBT only supports signed values".to_string(),
-        ))
+    fn deserialize_u32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        let value = self.input.get_i32_be()?;
+        visitor.visit_i32::<Error>(value)
     }
 
-    fn deserialize_u64<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType(
-            "u64; NBT only supports signed values".to_string(),
-        ))
+    fn deserialize_u64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        let value = self.input.get_i64_be()?;
+        visitor.visit_i64::<Error>(value)
     }
 
     fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {

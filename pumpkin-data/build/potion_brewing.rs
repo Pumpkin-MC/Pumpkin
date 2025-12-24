@@ -3,14 +3,14 @@ use quote::{format_ident, quote};
 use serde::Deserialize;
 use std::fs;
 
-#[derive(Deserialize, Clone, Hash, Eq, PartialEq)]
+#[derive(Deserialize)]
 struct PotionBrewing {
-    potion_types: Vec<Vec<String>>,
+    //potion_types: Vec<Vec<String>>,
     potion_recipes: Vec<Recipes>,
     item_recipes: Vec<Recipes>,
 }
 
-#[derive(Deserialize, Clone, Hash, Eq, PartialEq)]
+#[derive(Deserialize)]
 pub struct Recipes {
     from: String,
     ingredient: Vec<String>,
@@ -78,18 +78,20 @@ pub(crate) fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../assets/potion_brewing.json").unwrap())
             .expect("Failed to parse potion_brewing.json");
 
-    let mut item = TokenStream::new();
-    let mut potion = TokenStream::new();
+    let item_recipes_tokens: Vec<TokenStream> = json
+        .item_recipes
+        .into_iter()
+        .map(|recipe| recipe.get_tokens_item())
+        .collect();
+    let item_len = item_recipes_tokens.len();
 
-    let item_len = json.item_recipes.len();
-    let potion_len = json.potion_recipes.len();
-
-    for j in json.item_recipes {
-        item.extend(j.get_tokens_item());
-    }
-    for j in json.potion_recipes {
-        potion.extend(j.get_tokens_potion());
-    }
+    // 3. Generate Potion Recipes
+    let potion_recipes_tokens: Vec<TokenStream> = json
+        .potion_recipes
+        .into_iter()
+        .map(|recipe| recipe.get_tokens_potion())
+        .collect();
+    let potion_len = potion_recipes_tokens.len();
 
     quote! {
         #![allow(dead_code)]
@@ -108,7 +110,7 @@ pub(crate) fn build() -> TokenStream {
             to: &'static Item,
         }
 
-        pub const ITEM_RECIPES: [ItemRecipe; #item_len] = [#item];
-        pub const POTION_RECIPES: [PotionRecipe; #potion_len] = [#potion];
+        pub const ITEM_RECIPES: [ItemRecipe; #item_len] = [#(#item_recipes_tokens)*];
+        pub const POTION_RECIPES: [PotionRecipe; #potion_len] = [#(#potion_recipes_tokens)*];
     }
 }

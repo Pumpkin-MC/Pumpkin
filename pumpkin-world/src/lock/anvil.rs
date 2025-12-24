@@ -1,6 +1,10 @@
 use super::{LevelLocker, LockError};
 
-use std::{fs::File, io::Write, path::Path};
+use std::{
+    fs::{File, TryLockError},
+    io::Write,
+    path::Path,
+};
 
 pub struct AnvilLevelLocker {
     _locked_file: File,
@@ -23,8 +27,12 @@ impl LevelLocker<Self> for AnvilLevelLocker {
         // im not joking, mojang writes a snowman into the lock file
         file.write_all(SNOWMAN)
             .map_err(|_| LockError::FailedWrite)?;
-        file.try_lock()
-            .map_err(|_| LockError::AlreadyLocked(SESSION_LOCK_FILE_NAME.to_string()))?;
+        file.try_lock().map_err(|e| match e {
+            TryLockError::WouldBlock => {
+                LockError::AlreadyLocked(SESSION_LOCK_FILE_NAME.to_string())
+            }
+            TryLockError::Error(io_err) => LockError::Error(io_err),
+        })?;
         Ok(Self { _locked_file: file })
     }
 }

@@ -1,15 +1,16 @@
-use async_trait::async_trait;
 use pumpkin_data::world::{MSG_COMMAND_INCOMING, MSG_COMMAND_OUTGOING};
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
-    CommandError, CommandExecutor, CommandSender,
+    CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{
         Arg, ConsumedArgs, FindArgDefaultName, message::MsgArgConsumer,
         players::PlayersArgumentConsumer,
     },
-    tree::CommandTree,
-    tree::builder::{argument, argument_default_name},
+    tree::{
+        CommandTree,
+        builder::{argument, argument_default_name},
+    },
 };
 use crate::entity::EntityBase;
 use CommandError::InvalidConsumption;
@@ -22,42 +23,43 @@ const ARG_MESSAGE: &str = "message";
 
 struct Executor;
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
-            return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
-        };
-        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-        let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
+                return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
+            };
+            let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
+            let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
 
-        for target in targets {
-            player
-                .send_message(
-                    &TextComponent::text(msg.clone()),
-                    MSG_COMMAND_OUTGOING,
-                    &player.get_display_name().await,
-                    Some(&target.get_display_name().await),
-                )
-                .await;
-        }
-        for target in targets {
-            target
-                .send_message(
-                    &TextComponent::text(msg.clone()),
-                    MSG_COMMAND_INCOMING,
-                    &player.get_display_name().await,
-                    Some(&target.get_display_name().await),
-                )
-                .await;
-        }
+            for target in targets {
+                player
+                    .send_message(
+                        &TextComponent::text(msg.clone()),
+                        MSG_COMMAND_OUTGOING,
+                        &player.get_display_name().await,
+                        Some(&target.get_display_name().await),
+                    )
+                    .await;
+            }
+            for target in targets {
+                target
+                    .send_message(
+                        &TextComponent::text(msg.clone()),
+                        MSG_COMMAND_INCOMING,
+                        &player.get_display_name().await,
+                        Some(&target.get_display_name().await),
+                    )
+                    .await;
+            }
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 

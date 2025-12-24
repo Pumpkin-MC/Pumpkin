@@ -3,6 +3,9 @@
     "description": {
       "translate": "enchantment.minecraft.aqua_affinity"
     },
+    "supported_items": "#minecraft:enchantable/head_armor",
+    "weight": 2,
+    "max_level": 1,
     "min_cost": {
       "base": 1,
       "per_level_above_first": 0
@@ -15,9 +18,6 @@
     "slots": [
       "head"
     ],
-    "supported_items": "#minecraft:enchantable/head_armor",
-    "weight": 2,
-    "max_level": 1,
     "effects": {
       "minecraft:attributes": [
         {
@@ -38,6 +38,10 @@
     "description": {
       "translate": "enchantment.minecraft.bane_of_arthropods"
     },
+    "supported_items": "#minecraft:enchantable/weapon",
+    "primary_items": "#minecraft:enchantable/melee_weapon",
+    "weight": 5,
+    "max_level": 5,
     "min_cost": {
       "base": 5,
       "per_level_above_first": 8
@@ -50,10 +54,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/weapon",
-    "primary_items": "#minecraft:enchantable/sword",
-    "weight": 5,
-    "max_level": 5,
     "exclusive_set": "#minecraft:exclusive_set/damage",
     "effects": {
       "minecraft:damage": [
@@ -80,6 +80,8 @@
           "enchanted": "attacker",
           "affected": "victim",
           "effect": {
+            "to_apply": "minecraft:slowness",
+            "min_duration": 1.5,
             "max_duration": {
               "base": 1.5,
               "per_level_above_first": 0.5,
@@ -87,8 +89,6 @@
             },
             "min_amplifier": 3.0,
             "max_amplifier": 3.0,
-            "to_apply": "minecraft:slowness",
-            "min_duration": 1.5,
             "type": "minecraft:apply_mob_effect"
           },
           "requirements": {
@@ -118,6 +118,9 @@
     "description": {
       "translate": "enchantment.minecraft.binding_curse"
     },
+    "supported_items": "#minecraft:enchantable/equippable",
+    "weight": 1,
+    "max_level": 1,
     "min_cost": {
       "base": 25,
       "per_level_above_first": 0
@@ -130,9 +133,6 @@
     "slots": [
       "armor"
     ],
-    "supported_items": "#minecraft:enchantable/equippable",
-    "weight": 1,
-    "max_level": 1,
     "effects": {
       "minecraft:prevent_armor_change": {}
     },
@@ -142,6 +142,9 @@
     "description": {
       "translate": "enchantment.minecraft.blast_protection"
     },
+    "supported_items": "#minecraft:enchantable/armor",
+    "weight": 2,
+    "max_level": 4,
     "min_cost": {
       "base": 5,
       "per_level_above_first": 8
@@ -154,9 +157,6 @@
     "slots": [
       "armor"
     ],
-    "supported_items": "#minecraft:enchantable/armor",
-    "weight": 2,
-    "max_level": 4,
     "exclusive_set": "#minecraft:exclusive_set/armor",
     "effects": {
       "minecraft:attributes": [
@@ -205,6 +205,9 @@
     "description": {
       "translate": "enchantment.minecraft.breach"
     },
+    "supported_items": "#minecraft:enchantable/mace",
+    "weight": 2,
+    "max_level": 4,
     "min_cost": {
       "base": 15,
       "per_level_above_first": 9
@@ -217,9 +220,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/mace",
-    "weight": 2,
-    "max_level": 4,
     "exclusive_set": "#minecraft:exclusive_set/damage",
     "effects": {
       "minecraft:armor_effectiveness": [
@@ -241,6 +241,9 @@
     "description": {
       "translate": "enchantment.minecraft.channeling"
     },
+    "supported_items": "#minecraft:enchantable/trident",
+    "weight": 1,
+    "max_level": 1,
     "min_cost": {
       "base": 25,
       "per_level_above_first": 0
@@ -253,9 +256,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/trident",
-    "weight": 1,
-    "max_level": 1,
     "effects": {
       "minecraft:hit_block": [
         {
@@ -354,6 +354,9 @@
     "description": {
       "translate": "enchantment.minecraft.density"
     },
+    "supported_items": "#minecraft:enchantable/mace",
+    "weight": 5,
+    "max_level": 5,
     "min_cost": {
       "base": 5,
       "per_level_above_first": 8
@@ -366,9 +369,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/mace",
-    "weight": 5,
-    "max_level": 5,
     "exclusive_set": "#minecraft:exclusive_set/damage",
     "effects": {
       "minecraft:smash_damage_per_fallen_block": [
@@ -390,6 +390,9 @@
     "description": {
       "translate": "enchantment.minecraft.depth_strider"
     },
+    "supported_items": "#minecraft:enchantable/foot_armor",
+    "weight": 2,
+    "max_level": 3,
     "min_cost": {
       "base": 10,
       "per_level_above_first": 10
@@ -402,9 +405,6 @@
     "slots": [
       "feet"
     ],
-    "supported_items": "#minecraft:enchantable/foot_armor",
-    "weight": 2,
-    "max_level": 3,
     "exclusive_set": "#minecraft:exclusive_set/boots",
     "effects": {
       "minecraft:attributes": [
@@ -426,6 +426,9 @@
     "description": {
       "translate": "enchantment.minecraft.efficiency"
     },
+    "supported_items": "#minecraft:enchantable/mining",
+    "weight": 10,
+    "max_level": 5,
     "min_cost": {
       "base": 1,
       "per_level_above_first": 10
@@ -438,9 +441,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/mining",
-    "weight": 10,
-    "max_level": 5,
     "effects": {
       "minecraft:attributes": [
         {
@@ -460,6 +460,9 @@
     "description": {
       "translate": "enchantment.minecraft.feather_falling"
     },
+    "supported_items": "#minecraft:enchantable/foot_armor",
+    "weight": 5,
+    "max_level": 4,
     "min_cost": {
       "base": 5,
       "per_level_above_first": 6
@@ -472,9 +475,6 @@
     "slots": [
       "armor"
     ],
-    "supported_items": "#minecraft:enchantable/foot_armor",
-    "weight": 5,
-    "max_level": 4,
     "effects": {
       "minecraft:damage_protection": [
         {
@@ -510,6 +510,10 @@
     "description": {
       "translate": "enchantment.minecraft.fire_aspect"
     },
+    "supported_items": "#minecraft:enchantable/fire_aspect",
+    "primary_items": "#minecraft:enchantable/melee_weapon",
+    "weight": 2,
+    "max_level": 2,
     "min_cost": {
       "base": 10,
       "per_level_above_first": 20
@@ -522,10 +526,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/fire_aspect",
-    "primary_items": "#minecraft:enchantable/sword",
-    "weight": 2,
-    "max_level": 2,
     "effects": {
       "minecraft:post_attack": [
         {
@@ -554,6 +554,9 @@
     "description": {
       "translate": "enchantment.minecraft.fire_protection"
     },
+    "supported_items": "#minecraft:enchantable/armor",
+    "weight": 5,
+    "max_level": 4,
     "min_cost": {
       "base": 10,
       "per_level_above_first": 8
@@ -566,9 +569,6 @@
     "slots": [
       "armor"
     ],
-    "supported_items": "#minecraft:enchantable/armor",
-    "weight": 5,
-    "max_level": 4,
     "exclusive_set": "#minecraft:exclusive_set/armor",
     "effects": {
       "minecraft:attributes": [
@@ -622,6 +622,9 @@
     "description": {
       "translate": "enchantment.minecraft.flame"
     },
+    "supported_items": "#minecraft:enchantable/bow",
+    "weight": 2,
+    "max_level": 1,
     "min_cost": {
       "base": 20,
       "per_level_above_first": 0
@@ -634,9 +637,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/bow",
-    "weight": 2,
-    "max_level": 1,
     "effects": {
       "minecraft:projectile_spawned": [
         {
@@ -653,6 +653,9 @@
     "description": {
       "translate": "enchantment.minecraft.fortune"
     },
+    "supported_items": "#minecraft:enchantable/mining_loot",
+    "weight": 2,
+    "max_level": 3,
     "min_cost": {
       "base": 15,
       "per_level_above_first": 9
@@ -665,9 +668,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/mining_loot",
-    "weight": 2,
-    "max_level": 3,
     "exclusive_set": "#minecraft:exclusive_set/mining",
     "id": 13
   },
@@ -675,6 +675,9 @@
     "description": {
       "translate": "enchantment.minecraft.frost_walker"
     },
+    "supported_items": "#minecraft:enchantable/foot_armor",
+    "weight": 2,
+    "max_level": 2,
     "min_cost": {
       "base": 10,
       "per_level_above_first": 10
@@ -687,9 +690,6 @@
     "slots": [
       "feet"
     ],
-    "supported_items": "#minecraft:enchantable/foot_armor",
-    "weight": 2,
-    "max_level": 2,
     "exclusive_set": "#minecraft:exclusive_set/boots",
     "effects": {
       "minecraft:damage_immunity": [
@@ -715,6 +715,22 @@
       "minecraft:location_changed": [
         {
           "effect": {
+            "radius": {
+              "value": {
+                "base": 3.0,
+                "per_level_above_first": 1.0,
+                "type": "minecraft:linear"
+              },
+              "min": 0.0,
+              "max": 16.0,
+              "type": "minecraft:clamped"
+            },
+            "height": 1.0,
+            "offset": [
+              0,
+              -1,
+              0
+            ],
             "predicate": {
               "predicates": [
                 {
@@ -750,22 +766,6 @@
               "type": "minecraft:simple_state_provider"
             },
             "trigger_game_event": "minecraft:block_place",
-            "radius": {
-              "value": {
-                "base": 3.0,
-                "per_level_above_first": 1.0,
-                "type": "minecraft:linear"
-              },
-              "min": 0.0,
-              "max": 16.0,
-              "type": "minecraft:clamped"
-            },
-            "height": 1.0,
-            "offset": [
-              0,
-              -1,
-              0
-            ],
             "type": "minecraft:replace_disk"
           },
           "requirements": {
@@ -801,6 +801,9 @@
     "description": {
       "translate": "enchantment.minecraft.impaling"
     },
+    "supported_items": "#minecraft:enchantable/trident",
+    "weight": 2,
+    "max_level": 5,
     "min_cost": {
       "base": 1,
       "per_level_above_first": 8
@@ -813,9 +816,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/trident",
-    "weight": 2,
-    "max_level": 5,
     "exclusive_set": "#minecraft:exclusive_set/damage",
     "effects": {
       "minecraft:damage": [
@@ -844,6 +844,9 @@
     "description": {
       "translate": "enchantment.minecraft.infinity"
     },
+    "supported_items": "#minecraft:enchantable/bow",
+    "weight": 1,
+    "max_level": 1,
     "min_cost": {
       "base": 20,
       "per_level_above_first": 0
@@ -856,9 +859,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/bow",
-    "weight": 1,
-    "max_level": 1,
     "exclusive_set": "#minecraft:exclusive_set/bow",
     "effects": {
       "minecraft:ammo_use": [
@@ -882,6 +882,9 @@
     "description": {
       "translate": "enchantment.minecraft.knockback"
     },
+    "supported_items": "#minecraft:enchantable/melee_weapon",
+    "weight": 5,
+    "max_level": 2,
     "min_cost": {
       "base": 5,
       "per_level_above_first": 20
@@ -894,9 +897,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/sword",
-    "weight": 5,
-    "max_level": 2,
     "effects": {
       "minecraft:knockback": [
         {
@@ -917,6 +917,9 @@
     "description": {
       "translate": "enchantment.minecraft.looting"
     },
+    "supported_items": "#minecraft:enchantable/melee_weapon",
+    "weight": 2,
+    "max_level": 3,
     "min_cost": {
       "base": 15,
       "per_level_above_first": 9
@@ -929,9 +932,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/sword",
-    "weight": 2,
-    "max_level": 3,
     "effects": {
       "minecraft:equipment_drops": [
         {
@@ -960,6 +960,9 @@
     "description": {
       "translate": "enchantment.minecraft.loyalty"
     },
+    "supported_items": "#minecraft:enchantable/trident",
+    "weight": 5,
+    "max_level": 3,
     "min_cost": {
       "base": 12,
       "per_level_above_first": 7
@@ -972,9 +975,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/trident",
-    "weight": 5,
-    "max_level": 3,
     "effects": {
       "minecraft:trident_return_acceleration": [
         {
@@ -995,6 +995,9 @@
     "description": {
       "translate": "enchantment.minecraft.luck_of_the_sea"
     },
+    "supported_items": "#minecraft:enchantable/fishing",
+    "weight": 2,
+    "max_level": 3,
     "min_cost": {
       "base": 15,
       "per_level_above_first": 9
@@ -1007,9 +1010,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/fishing",
-    "weight": 2,
-    "max_level": 3,
     "effects": {
       "minecraft:fishing_luck_bonus": [
         {
@@ -1026,10 +1026,118 @@
     },
     "id": 20
   },
+  "minecraft:lunge": {
+    "description": {
+      "translate": "enchantment.minecraft.lunge"
+    },
+    "supported_items": "#minecraft:enchantable/lunge",
+    "weight": 5,
+    "max_level": 3,
+    "min_cost": {
+      "base": 5,
+      "per_level_above_first": 8
+    },
+    "max_cost": {
+      "base": 25,
+      "per_level_above_first": 8
+    },
+    "anvil_cost": 2,
+    "slots": [
+      "hand"
+    ],
+    "effects": {
+      "minecraft:post_piercing_attack": [
+        {
+          "effect": {
+            "effects": [
+              {
+                "amount": 1.0,
+                "type": "minecraft:change_item_damage"
+              },
+              {
+                "amount": {
+                  "base": 4.0,
+                  "per_level_above_first": 4.0,
+                  "type": "minecraft:linear"
+                },
+                "type": "minecraft:apply_exhaustion"
+              },
+              {
+                "direction": [
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "coordinate_scale": [
+                  1.0,
+                  0.0,
+                  1.0
+                ],
+                "magnitude": {
+                  "base": 0.458,
+                  "per_level_above_first": 0.458,
+                  "type": "minecraft:linear"
+                },
+                "type": "minecraft:apply_impulse"
+              },
+              {
+                "sound": [
+                  "minecraft:item.spear.lunge_1",
+                  "minecraft:item.spear.lunge_2",
+                  "minecraft:item.spear.lunge_3"
+                ],
+                "volume": 1.0,
+                "pitch": 1.0,
+                "type": "minecraft:play_sound"
+              }
+            ],
+            "type": "minecraft:all_of"
+          },
+          "requirements": {
+            "terms": [
+              {
+                "term": {
+                  "predicate": {
+                    "vehicle": {}
+                  },
+                  "entity": "this",
+                  "condition": "minecraft:entity_properties"
+                },
+                "condition": "minecraft:inverted"
+              },
+              {
+                "predicate": {
+                  "flags": {
+                    "is_fall_flying": false
+                  }
+                },
+                "entity": "this",
+                "condition": "minecraft:entity_properties"
+              },
+              {
+                "predicate": {
+                  "flags": {
+                    "is_in_water": false
+                  }
+                },
+                "entity": "this",
+                "condition": "minecraft:entity_properties"
+              }
+            ],
+            "condition": "minecraft:all_of"
+          }
+        }
+      ]
+    },
+    "id": 21
+  },
   "minecraft:lure": {
     "description": {
       "translate": "enchantment.minecraft.lure"
     },
+    "supported_items": "#minecraft:enchantable/fishing",
+    "weight": 2,
+    "max_level": 3,
     "min_cost": {
       "base": 15,
       "per_level_above_first": 9
@@ -1042,9 +1150,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/fishing",
-    "weight": 2,
-    "max_level": 3,
     "effects": {
       "minecraft:fishing_time_reduction": [
         {
@@ -1059,12 +1164,15 @@
         }
       ]
     },
-    "id": 21
+    "id": 22
   },
   "minecraft:mending": {
     "description": {
       "translate": "enchantment.minecraft.mending"
     },
+    "supported_items": "#minecraft:enchantable/durability",
+    "weight": 2,
+    "max_level": 1,
     "min_cost": {
       "base": 25,
       "per_level_above_first": 25
@@ -1077,9 +1185,6 @@
     "slots": [
       "any"
     ],
-    "supported_items": "#minecraft:enchantable/durability",
-    "weight": 2,
-    "max_level": 1,
     "effects": {
       "minecraft:repair_with_xp": [
         {
@@ -1090,12 +1195,15 @@
         }
       ]
     },
-    "id": 22
+    "id": 23
   },
   "minecraft:multishot": {
     "description": {
       "translate": "enchantment.minecraft.multishot"
     },
+    "supported_items": "#minecraft:enchantable/crossbow",
+    "weight": 2,
+    "max_level": 1,
     "min_cost": {
       "base": 20,
       "per_level_above_first": 0
@@ -1108,9 +1216,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/crossbow",
-    "weight": 2,
-    "max_level": 1,
     "exclusive_set": "#minecraft:exclusive_set/crossbow",
     "effects": {
       "minecraft:projectile_count": [
@@ -1138,12 +1243,15 @@
         }
       ]
     },
-    "id": 23
+    "id": 24
   },
   "minecraft:piercing": {
     "description": {
       "translate": "enchantment.minecraft.piercing"
     },
+    "supported_items": "#minecraft:enchantable/crossbow",
+    "weight": 10,
+    "max_level": 4,
     "min_cost": {
       "base": 1,
       "per_level_above_first": 10
@@ -1156,9 +1264,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/crossbow",
-    "weight": 10,
-    "max_level": 4,
     "exclusive_set": "#minecraft:exclusive_set/crossbow",
     "effects": {
       "minecraft:projectile_piercing": [
@@ -1174,12 +1279,15 @@
         }
       ]
     },
-    "id": 24
+    "id": 25
   },
   "minecraft:power": {
     "description": {
       "translate": "enchantment.minecraft.power"
     },
+    "supported_items": "#minecraft:enchantable/bow",
+    "weight": 10,
+    "max_level": 5,
     "min_cost": {
       "base": 1,
       "per_level_above_first": 10
@@ -1192,9 +1300,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/bow",
-    "weight": 10,
-    "max_level": 5,
     "effects": {
       "minecraft:damage": [
         {
@@ -1216,12 +1321,15 @@
         }
       ]
     },
-    "id": 25
+    "id": 26
   },
   "minecraft:projectile_protection": {
     "description": {
       "translate": "enchantment.minecraft.projectile_protection"
     },
+    "supported_items": "#minecraft:enchantable/armor",
+    "weight": 5,
+    "max_level": 4,
     "min_cost": {
       "base": 3,
       "per_level_above_first": 6
@@ -1234,9 +1342,6 @@
     "slots": [
       "armor"
     ],
-    "supported_items": "#minecraft:enchantable/armor",
-    "weight": 5,
-    "max_level": 4,
     "exclusive_set": "#minecraft:exclusive_set/armor",
     "effects": {
       "minecraft:damage_protection": [
@@ -1267,12 +1372,15 @@
         }
       ]
     },
-    "id": 26
+    "id": 27
   },
   "minecraft:protection": {
     "description": {
       "translate": "enchantment.minecraft.protection"
     },
+    "supported_items": "#minecraft:enchantable/armor",
+    "weight": 10,
+    "max_level": 4,
     "min_cost": {
       "base": 1,
       "per_level_above_first": 11
@@ -1285,9 +1393,6 @@
     "slots": [
       "armor"
     ],
-    "supported_items": "#minecraft:enchantable/armor",
-    "weight": 10,
-    "max_level": 4,
     "exclusive_set": "#minecraft:exclusive_set/armor",
     "effects": {
       "minecraft:damage_protection": [
@@ -1314,12 +1419,15 @@
         }
       ]
     },
-    "id": 27
+    "id": 28
   },
   "minecraft:punch": {
     "description": {
       "translate": "enchantment.minecraft.punch"
     },
+    "supported_items": "#minecraft:enchantable/bow",
+    "weight": 2,
+    "max_level": 2,
     "min_cost": {
       "base": 12,
       "per_level_above_first": 20
@@ -1332,9 +1440,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/bow",
-    "weight": 2,
-    "max_level": 2,
     "effects": {
       "minecraft:knockback": [
         {
@@ -1356,12 +1461,15 @@
         }
       ]
     },
-    "id": 28
+    "id": 29
   },
   "minecraft:quick_charge": {
     "description": {
       "translate": "enchantment.minecraft.quick_charge"
     },
+    "supported_items": "#minecraft:enchantable/crossbow",
+    "weight": 5,
+    "max_level": 3,
     "min_cost": {
       "base": 12,
       "per_level_above_first": 20
@@ -1375,9 +1483,6 @@
       "mainhand",
       "offhand"
     ],
-    "supported_items": "#minecraft:enchantable/crossbow",
-    "weight": 5,
-    "max_level": 3,
     "effects": {
       "minecraft:crossbow_charge_time": {
         "value": {
@@ -1402,12 +1507,15 @@
         }
       ]
     },
-    "id": 29
+    "id": 30
   },
   "minecraft:respiration": {
     "description": {
       "translate": "enchantment.minecraft.respiration"
     },
+    "supported_items": "#minecraft:enchantable/head_armor",
+    "weight": 2,
+    "max_level": 3,
     "min_cost": {
       "base": 10,
       "per_level_above_first": 10
@@ -1420,9 +1528,6 @@
     "slots": [
       "head"
     ],
-    "supported_items": "#minecraft:enchantable/head_armor",
-    "weight": 2,
-    "max_level": 3,
     "effects": {
       "minecraft:attributes": [
         {
@@ -1437,12 +1542,15 @@
         }
       ]
     },
-    "id": 30
+    "id": 31
   },
   "minecraft:riptide": {
     "description": {
       "translate": "enchantment.minecraft.riptide"
     },
+    "supported_items": "#minecraft:enchantable/trident",
+    "weight": 2,
+    "max_level": 3,
     "min_cost": {
       "base": 17,
       "per_level_above_first": 7
@@ -1455,9 +1563,6 @@
     "slots": [
       "hand"
     ],
-    "supported_items": "#minecraft:enchantable/trident",
-    "weight": 2,
-    "max_level": 3,
     "exclusive_set": "#minecraft:exclusive_set/riptide",
     "effects": {
       "minecraft:trident_sound": [
@@ -1474,12 +1579,16 @@
         "type": "minecraft:add"
       }
     },
-    "id": 31
+    "id": 32
   },
   "minecraft:sharpness": {
     "description": {
       "translate": "enchantment.minecraft.sharpness"
     },
+    "supported_items": "#minecraft:enchantable/sharp_weapon",
+    "primary_items": "#minecraft:enchantable/melee_weapon",
+    "weight": 10,
+    "max_level": 5,
     "min_cost": {
       "base": 1,
       "per_level_above_first": 11
@@ -1492,10 +1601,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/sharp_weapon",
-    "primary_items": "#minecraft:enchantable/sword",
-    "weight": 10,
-    "max_level": 5,
     "exclusive_set": "#minecraft:exclusive_set/damage",
     "effects": {
       "minecraft:damage": [
@@ -1511,12 +1616,15 @@
         }
       ]
     },
-    "id": 32
+    "id": 33
   },
   "minecraft:silk_touch": {
     "description": {
       "translate": "enchantment.minecraft.silk_touch"
     },
+    "supported_items": "#minecraft:enchantable/mining_loot",
+    "weight": 1,
+    "max_level": 1,
     "min_cost": {
       "base": 15,
       "per_level_above_first": 0
@@ -1529,9 +1637,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/mining_loot",
-    "weight": 1,
-    "max_level": 1,
     "exclusive_set": "#minecraft:exclusive_set/mining",
     "effects": {
       "minecraft:block_experience": [
@@ -1543,12 +1648,16 @@
         }
       ]
     },
-    "id": 33
+    "id": 34
   },
   "minecraft:smite": {
     "description": {
       "translate": "enchantment.minecraft.smite"
     },
+    "supported_items": "#minecraft:enchantable/weapon",
+    "primary_items": "#minecraft:enchantable/melee_weapon",
+    "weight": 5,
+    "max_level": 5,
     "min_cost": {
       "base": 5,
       "per_level_above_first": 8
@@ -1561,10 +1670,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/weapon",
-    "primary_items": "#minecraft:enchantable/sword",
-    "weight": 5,
-    "max_level": 5,
     "exclusive_set": "#minecraft:exclusive_set/damage",
     "effects": {
       "minecraft:damage": [
@@ -1587,12 +1692,15 @@
         }
       ]
     },
-    "id": 34
+    "id": 35
   },
   "minecraft:soul_speed": {
     "description": {
       "translate": "enchantment.minecraft.soul_speed"
     },
+    "supported_items": "#minecraft:enchantable/foot_armor",
+    "weight": 1,
+    "max_level": 3,
     "min_cost": {
       "base": 10,
       "per_level_above_first": 10
@@ -1605,9 +1713,6 @@
     "slots": [
       "feet"
     ],
-    "supported_items": "#minecraft:enchantable/foot_armor",
-    "weight": 1,
-    "max_level": 3,
     "effects": {
       "minecraft:location_changed": [
         {
@@ -1699,13 +1804,13 @@
                       },
                       {
                         "predicate": {
-                          "flags": {
-                            "is_flying": false
-                          },
                           "movement_affected_by": {
                             "block": {
                               "blocks": "#minecraft:soul_speed_blocks"
                             }
+                          },
+                          "flags": {
+                            "is_flying": false
                           }
                         },
                         "entity": "this",
@@ -1737,13 +1842,13 @@
               },
               {
                 "predicate": {
-                  "flags": {
-                    "is_on_ground": true
-                  },
                   "movement_affected_by": {
                     "block": {
                       "blocks": "#minecraft:soul_speed_blocks"
                     }
+                  },
+                  "flags": {
+                    "is_on_ground": true
                   }
                 },
                 "entity": "this",
@@ -1757,13 +1862,6 @@
       "minecraft:tick": [
         {
           "effect": {
-            "horizontal_velocity": {
-              "movement_scale": -0.2
-            },
-            "vertical_velocity": {
-              "base": 0.1
-            },
-            "speed": 1.0,
             "particle": {
               "type": "minecraft:soul"
             },
@@ -1774,15 +1872,17 @@
               "type": "entity_position",
               "offset": 0.1
             },
+            "horizontal_velocity": {
+              "movement_scale": -0.2
+            },
+            "vertical_velocity": {
+              "base": 0.1
+            },
+            "speed": 1.0,
             "type": "minecraft:spawn_particles"
           },
           "requirements": {
             "predicate": {
-              "periodic_tick": 5,
-              "flags": {
-                "is_flying": false,
-                "is_on_ground": true
-              },
               "movement": {
                 "horizontal_speed": {
                   "min": 9.999999747378752E-6
@@ -1792,7 +1892,12 @@
                 "block": {
                   "blocks": "#minecraft:soul_speed_blocks"
                 }
-              }
+              },
+              "flags": {
+                "is_on_ground": true,
+                "is_flying": false
+              },
+              "periodic_tick": 5
             },
             "entity": "this",
             "condition": "minecraft:entity_properties"
@@ -1817,11 +1922,6 @@
               },
               {
                 "predicate": {
-                  "periodic_tick": 5,
-                  "flags": {
-                    "is_flying": false,
-                    "is_on_ground": true
-                  },
                   "movement": {
                     "horizontal_speed": {
                       "min": 9.999999747378752E-6
@@ -1831,7 +1931,12 @@
                     "block": {
                       "blocks": "#minecraft:soul_speed_blocks"
                     }
-                  }
+                  },
+                  "flags": {
+                    "is_on_ground": true,
+                    "is_flying": false
+                  },
+                  "periodic_tick": 5
                 },
                 "entity": "this",
                 "condition": "minecraft:entity_properties"
@@ -1842,12 +1947,15 @@
         }
       ]
     },
-    "id": 35
+    "id": 36
   },
   "minecraft:sweeping_edge": {
     "description": {
       "translate": "enchantment.minecraft.sweeping_edge"
     },
+    "supported_items": "#minecraft:enchantable/sweeping",
+    "weight": 2,
+    "max_level": 3,
     "min_cost": {
       "base": 5,
       "per_level_above_first": 9
@@ -1860,9 +1968,6 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/sword",
-    "weight": 2,
-    "max_level": 3,
     "effects": {
       "minecraft:attributes": [
         {
@@ -1885,12 +1990,15 @@
         }
       ]
     },
-    "id": 36
+    "id": 37
   },
   "minecraft:swift_sneak": {
     "description": {
       "translate": "enchantment.minecraft.swift_sneak"
     },
+    "supported_items": "#minecraft:enchantable/leg_armor",
+    "weight": 1,
+    "max_level": 3,
     "min_cost": {
       "base": 25,
       "per_level_above_first": 25
@@ -1903,9 +2011,6 @@
     "slots": [
       "legs"
     ],
-    "supported_items": "#minecraft:enchantable/leg_armor",
-    "weight": 1,
-    "max_level": 3,
     "effects": {
       "minecraft:attributes": [
         {
@@ -1920,12 +2025,16 @@
         }
       ]
     },
-    "id": 37
+    "id": 38
   },
   "minecraft:thorns": {
     "description": {
       "translate": "enchantment.minecraft.thorns"
     },
+    "supported_items": "#minecraft:enchantable/armor",
+    "primary_items": "#minecraft:enchantable/chest_armor",
+    "weight": 1,
+    "max_level": 3,
     "min_cost": {
       "base": 10,
       "per_level_above_first": 20
@@ -1938,10 +2047,6 @@
     "slots": [
       "any"
     ],
-    "supported_items": "#minecraft:enchantable/armor",
-    "primary_items": "#minecraft:enchantable/chest_armor",
-    "weight": 1,
-    "max_level": 3,
     "effects": {
       "minecraft:post_attack": [
         {
@@ -1976,12 +2081,15 @@
         }
       ]
     },
-    "id": 38
+    "id": 39
   },
   "minecraft:unbreaking": {
     "description": {
       "translate": "enchantment.minecraft.unbreaking"
     },
+    "supported_items": "#minecraft:enchantable/durability",
+    "weight": 5,
+    "max_level": 3,
     "min_cost": {
       "base": 5,
       "per_level_above_first": 8
@@ -1994,9 +2102,6 @@
     "slots": [
       "any"
     ],
-    "supported_items": "#minecraft:enchantable/durability",
-    "weight": 5,
-    "max_level": 3,
     "effects": {
       "minecraft:item_damage": [
         {
@@ -2052,12 +2157,15 @@
         }
       ]
     },
-    "id": 39
+    "id": 40
   },
   "minecraft:vanishing_curse": {
     "description": {
       "translate": "enchantment.minecraft.vanishing_curse"
     },
+    "supported_items": "#minecraft:enchantable/vanishing",
+    "weight": 1,
+    "max_level": 1,
     "min_cost": {
       "base": 25,
       "per_level_above_first": 0
@@ -2070,18 +2178,18 @@
     "slots": [
       "any"
     ],
-    "supported_items": "#minecraft:enchantable/vanishing",
-    "weight": 1,
-    "max_level": 1,
     "effects": {
       "minecraft:prevent_equipment_drop": {}
     },
-    "id": 40
+    "id": 41
   },
   "minecraft:wind_burst": {
     "description": {
       "translate": "enchantment.minecraft.wind_burst"
     },
+    "supported_items": "#minecraft:enchantable/mace",
+    "weight": 2,
+    "max_level": 3,
     "min_cost": {
       "base": 15,
       "per_level_above_first": 9
@@ -2094,25 +2202,12 @@
     "slots": [
       "mainhand"
     ],
-    "supported_items": "#minecraft:enchantable/mace",
-    "weight": 2,
-    "max_level": 3,
     "effects": {
       "minecraft:post_attack": [
         {
           "enchanted": "attacker",
           "affected": "attacker",
           "effect": {
-            "large_particle": {
-              "type": "minecraft:gust_emitter_large"
-            },
-            "sound": "minecraft:entity.wind_charge.wind_burst",
-            "block_interaction": "trigger",
-            "small_particle": {
-              "type": "minecraft:gust_emitter_small"
-            },
-            "immune_blocks": "#minecraft:blocks_wind_charge_explosions",
-            "radius": 3.5,
             "knockback_multiplier": {
               "values": [
                 1.2,
@@ -2126,17 +2221,27 @@
               },
               "type": "minecraft:lookup"
             },
+            "immune_blocks": "#minecraft:blocks_wind_charge_explosions",
+            "radius": 3.5,
+            "block_interaction": "trigger",
+            "small_particle": {
+              "type": "minecraft:gust_emitter_small"
+            },
+            "large_particle": {
+              "type": "minecraft:gust_emitter_large"
+            },
+            "sound": "minecraft:entity.wind_charge.wind_burst",
             "type": "minecraft:explode"
           },
           "requirements": {
             "predicate": {
-              "flags": {
-                "is_flying": false
-              },
               "movement": {
                 "fall_distance": {
                   "min": 1.5
                 }
+              },
+              "flags": {
+                "is_flying": false
               }
             },
             "entity": "direct_attacker",
@@ -2145,6 +2250,6 @@
         }
       ]
     },
-    "id": 41
+    "id": 42
   }
 }

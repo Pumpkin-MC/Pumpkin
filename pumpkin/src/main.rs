@@ -42,11 +42,10 @@
 compile_error!("Compiling for WASI targets is not supported!");
 
 use plugin::PluginManager;
-use pumpkin_config::BASIC_CONFIG;
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use std::{
     io::{self},
-    sync::{Arc, LazyLock},
+    sync::{Arc, LazyLock, OnceLock},
 };
 #[cfg(not(unix))]
 use tokio::signal::ctrl_c;
@@ -54,13 +53,15 @@ use tokio::signal::ctrl_c;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
 
-use pumpkin::{LOGGER_IMPL, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, init_log, stop_server};
+use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::{
     permission::{PermissionManager, PermissionRegistry},
     text::{TextComponent, color::NamedColor},
 };
 use std::time::Instant;
+
 // Setup some tokens to allow us to identify which event is for which socket.
 
 pub mod block;
@@ -69,17 +70,11 @@ pub mod data;
 pub mod entity;
 pub mod error;
 pub mod item;
+pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod world;
-
-#[cfg(feature = "dhat-heap")]
-#[global_allocator]
-static ALLOC: dhat::Alloc = dhat::Alloc;
-
-#[cfg(feature = "dhat-heap")]
-use pumpkin::HEAP_PROFILER;
 
 pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
     LazyLock::new(|| Arc::new(PluginManager::new()));
@@ -93,6 +88,9 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
+pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
+    LazyLock::new(|| Arc::new(OnceLock::new()));
+
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
@@ -102,23 +100,23 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 async fn main() {
     #[cfg(feature = "console-subscriber")]
     console_subscriber::init();
-    #[cfg(feature = "dhat-heap")]
-    {
-        let profiler = dhat::Profiler::new_heap();
-        let mut static_loc = HEAP_PROFILER.lock().await;
-        *static_loc = Some(profiler);
-    };
-
     let time = Instant::now();
 
-    init_log!();
+    let exec_dir = std::env::current_dir().unwrap();
+    let config_dir = exec_dir.join("config");
+
+    let basic_config = BasicConfiguration::load(&config_dir);
+    let advanced_config = AdvancedConfiguration::load(&config_dir);
+
+    pumpkin::init_logger(&advanced_config);
+
+    if let Some((logger_impl, level)) = pumpkin::LOGGER_IMPL.wait() {
+        log::set_logger(logger_impl).unwrap();
+        log::set_max_level(*level);
+    }
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        if let Some((wrapper, _)) = LOGGER_IMPL.as_ref() {
-            // Drop readline to reset terminal state
-            let _ = wrapper.take_readline();
-        }
         default_panic(info);
         // TODO: Gracefully exit?
         // We need to abide by the panic rules here.
@@ -148,24 +146,25 @@ async fn main() {
             .expect("Unable to setup signal handlers");
     });
 
-    let pumpkin_server = PumpkinServer::new().await;
+    let pumpkin_server = PumpkinServer::new(basic_config, advanced_config).await;
     pumpkin_server.init_plugins().await;
 
     log::info!("Started server; took {}ms", time.elapsed().as_millis());
+    let basic_config = &pumpkin_server.server.basic_config;
     log::info!(
         "Server is now running. Connect using port: {}{}{}",
-        if BASIC_CONFIG.java_edition {
-            format!("Java Edition: {}", BASIC_CONFIG.java_edition_address)
+        if basic_config.java_edition {
+            format!("Java Edition: {}", basic_config.java_edition_address)
         } else {
             String::new()
         },
-        if BASIC_CONFIG.java_edition && BASIC_CONFIG.bedrock_edition {
+        if basic_config.java_edition && basic_config.bedrock_edition {
             " | " // Separator if both are enabled
         } else {
             ""
         },
-        if BASIC_CONFIG.bedrock_edition {
-            format!("Bedrock Edition: {}", BASIC_CONFIG.bedrock_edition_address)
+        if basic_config.bedrock_edition {
+            format!("Bedrock Edition: {}", basic_config.bedrock_edition_address)
         } else {
             String::new()
         }

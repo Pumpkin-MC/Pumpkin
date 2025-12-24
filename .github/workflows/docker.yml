@@ -34,7 +34,7 @@ jobs:
 
       - name: Checkout
         if: steps.repo_check.outputs.should_deploy == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to GitHub CR
         if: steps.repo_check.outputs.should_deploy == 'true'

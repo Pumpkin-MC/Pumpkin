@@ -1,8 +1,7 @@
-use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing, Integer1To4};
 use pumpkin_world::BlockStateId;
 
-use crate::block::{BlockBehaviour, CanUpdateAtArgs};
+use crate::block::{BlockBehaviour, BlockFuture, CanUpdateAtArgs};
 use crate::block::{BlockIsReplacing, OnPlaceArgs};
 
 pub trait SegmentProperties {
@@ -43,7 +42,6 @@ impl_segment_properties!(
     segment_amount
 );
 
-#[async_trait]
 pub trait Segmented: BlockBehaviour {
     type Properties: BlockProperties + SegmentProperties;
 
@@ -80,30 +78,34 @@ pub trait Segmented: BlockBehaviour {
         }
     }
 
-    async fn can_update_at(&self, ctx: CanUpdateAtArgs<'_>) -> bool {
-        let current_props = Self::Properties::from_state_id(ctx.state_id, ctx.block);
-        self.can_add_segment(&current_props)
+    fn can_update_at<'a>(&'a self, ctx: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            let current_props = Self::Properties::from_state_id(ctx.state_id, ctx.block);
+            self.can_add_segment(&current_props)
+        })
     }
 
-    async fn on_place(&self, ctx: OnPlaceArgs<'_>) -> BlockStateId {
-        if let BlockIsReplacing::Itself(existing_state_id) = ctx.replacing {
-            let mut props = Self::Properties::from_state_id(existing_state_id, ctx.block);
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if let BlockIsReplacing::Itself(existing_state_id) = args.replacing {
+                let mut props = Self::Properties::from_state_id(existing_state_id, args.block);
 
-            if self.can_add_segment(&props) {
-                let current_amount = props.get_segment_amount();
-                let next_amount = self.get_next_segment_amount(current_amount);
-                props.set_segment_amount(next_amount);
-                props.to_state_id(ctx.block)
+                if self.can_add_segment(&props) {
+                    let current_amount = props.get_segment_amount();
+                    let next_amount = self.get_next_segment_amount(current_amount);
+                    props.set_segment_amount(next_amount);
+                    props.to_state_id(args.block)
+                } else {
+                    existing_state_id
+                }
             } else {
-                existing_state_id
+                // Set first segment orientation based on player direction
+                let player_facing = args.player.living_entity.entity.get_horizontal_facing();
+                let mut props = Self::Properties::default(args.block);
+                props.set_segment_amount(Integer1To4::L1);
+                props.set_facing(self.get_facing_for_segment(player_facing, Integer1To4::L1));
+                props.to_state_id(args.block)
             }
-        } else {
-            // Set first segment orientation based on player direction
-            let player_facing = ctx.player.living_entity.entity.get_horizontal_facing();
-            let mut props = Self::Properties::default(ctx.block);
-            props.set_segment_amount(Integer1To4::L1);
-            props.set_facing(self.get_facing_for_segment(player_facing, Integer1To4::L1));
-            props.to_state_id(ctx.block)
-        }
+        })
     }
 }

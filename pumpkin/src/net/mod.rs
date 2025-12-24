@@ -19,7 +19,6 @@ use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;
-use simplelog::FormatItem;
 use tokio::task::JoinHandle;
 
 use thiserror::Error;
@@ -180,7 +179,7 @@ pub async fn can_not_join(
     address: &SocketAddr,
     server: &Server,
 ) -> Option<TextComponent> {
-    const FORMAT_DESCRIPTION: &[FormatItem<'_>] = time::macros::format_description!(
+    const FORMAT_DESCRIPTION: &[time::format_description::FormatItem<'static>] = time::macros::format_description!(
         "[year]-[month]-[day] at [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
     );
 
@@ -242,7 +241,10 @@ pub enum EncryptionError {
 }
 
 fn is_valid_player_name(name: &str) -> bool {
-    name.len() <= 16 && name.chars().all(|c| c > 32u8 as char && c < 127u8 as char)
+    if name.len() > 16 {
+        return false;
+    }
+    !name.chars().any(|c| c.is_control() || c == ' ')
 }
 
 #[derive(Clone, Copy)]
@@ -369,4 +371,130 @@ pub enum DisconnectReason {
     RealmsTimelineRequired = 119,
     GuestWithoutHost = 120,
     FailedToJoinExperience = 121,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::net::is_valid_player_name;
+
+    /// Test case for a standard, valid English name at max length.
+    #[test]
+    fn test_valid_max_length_ascii() {
+        let name = "player_name_1234"; // 16 characters (16 bytes)
+        assert!(
+            is_valid_player_name(name),
+            "Max length ASCII name should be valid"
+        );
+    }
+
+    /// Test case for a short, valid ASCII name.
+    #[test]
+    fn test_valid_short_ascii() {
+        let name = "GamerX";
+        assert!(
+            is_valid_player_name(name),
+            "Short ASCII name should be valid"
+        );
+    }
+
+    /// Test case for a name containing allowed punctuation (codepoints 33-126).
+    #[test]
+    fn test_valid_with_punctuation() {
+        let name = "!-@#$%.^&*_+-=";
+        assert!(
+            is_valid_player_name(name),
+            "Name with valid punctuation should be valid"
+        );
+    }
+
+    /// Test case for allowed high-codepoint Unicode characters (like Chinese/CJK).
+    #[test]
+    fn test_valid_unicode_chinese() {
+        let name = "玩家一号"; // 4 characters, 12 bytes
+        assert!(
+            is_valid_player_name(name),
+            "Chinese characters should be valid"
+        );
+    }
+
+    /// Test case for a mix of valid ASCII and Unicode characters.
+    #[test]
+    fn test_valid_mixed_chars() {
+        let name = "Player_玩家"; // 9 characters
+        assert!(
+            is_valid_player_name(name),
+            "Mixed ASCII and Unicode should be valid"
+        );
+    }
+
+    /// Test case for a name that exceeds the 16-byte limit (ASCII).
+    #[test]
+    fn test_invalid_length_ascii_over() {
+        let name = "this_name_is_too_long"; // 21 characters (21 bytes)
+        assert!(
+            !is_valid_player_name(name),
+            "Name over 16 bytes (ASCII) should be invalid"
+        );
+    }
+
+    /// Test case for a name that exceeds the 16-byte limit (Unicode).
+    #[test]
+    fn test_invalid_length_unicode_over() {
+        let name = "超长玩家名称哈哈"; // 8 Chinese characters * 3 bytes/char = 24 bytes
+        assert!(
+            !is_valid_player_name(name),
+            "Name over 16 bytes (Unicode) should be invalid by byte count"
+        );
+    }
+
+    /// Test case for a name containing a standard space (codepoint 32).
+    #[test]
+    fn test_invalid_contains_space() {
+        let name = "Player Name";
+        assert!(
+            !is_valid_player_name(name),
+            "Name containing a space should be invalid"
+        );
+    }
+
+    /// Test case for an empty string (length 0, but included for completeness).
+    #[test]
+    fn test_invalid_empty_string() {
+        let name = "";
+        assert!(
+            is_valid_player_name(name),
+            "Empty string should be valid (length <= 16 and no invalid chars)"
+        );
+    }
+
+    /// Test case for a name containing a control character (e.g., Null, codepoint 0).
+    #[test]
+    fn test_invalid_contains_null() {
+        let name = "Player\0Name";
+        assert!(
+            !is_valid_player_name(name),
+            "Name containing a null character should be invalid"
+        );
+    }
+
+    /// Test case for a name containing a newline character (codepoint 10).
+    #[test]
+    fn test_invalid_contains_newline() {
+        let name = "Player\nName";
+        assert!(
+            !is_valid_player_name(name),
+            "Name containing a newline should be invalid"
+        );
+    }
+
+    /// Test case for a name containing the DEL control character (codepoint 127).
+    #[test]
+    fn test_invalid_contains_del() {
+        // DEL character is char::from_u32(127).unwrap()
+        let name = format!("Player{}Name", 127u8 as char);
+        assert!(
+            !is_valid_player_name(&name),
+            "Name containing DEL (127) should be invalid"
+        );
+    }
 }

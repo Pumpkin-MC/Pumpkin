@@ -8,7 +8,6 @@ use rand::Rng;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use async_trait::async_trait;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -17,7 +16,7 @@ use pumpkin_world::tick::TickPriority;
 
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
     OnEntityCollisionArgs, OnScheduledTickArgs, PlacedArgs,
 };
 use crate::world::World;
@@ -44,7 +43,7 @@ impl FireBlock {
                     .to_props()
                     .into_iter()
                     .find(|p| p.0 == "waterlogged")
-                    .map(|(_, v)| v == true.to_string())
+                    .map(|(_, v)| v == "true")
             })
             .unwrap_or(false)
         {
@@ -165,144 +164,125 @@ impl FireBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for FireBlock {
-    async fn placed(&self, args: PlacedArgs<'_>) {
-        if args.old_state_id == args.state_id {
-            // Already a fire
-            return;
-        }
-
-        let dimension = args.world.dimension_type;
-        // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
-        if (dimension == VanillaDimensionType::Overworld
-            || dimension == VanillaDimensionType::TheNether)
-            && let Some(portal) =
-                NetherPortal::get_new_portal(args.world, args.position, HorizontalAxis::X).await
-        {
-            portal.create(args.world).await;
-            return;
-        }
-
-        args.world
-            .schedule_block_tick(
-                args.block,
-                *args.position,
-                Self::get_fire_tick_delay() as u8,
-                TickPriority::Normal,
-            )
-            .await;
-    }
-
-    async fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        let base_entity = args.entity.get_entity();
-        if !base_entity.entity_type.fire_immune {
-            let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
-            if ticks < 0 {
-                base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
-            } else if base_entity.entity_type == &EntityType::PLAYER {
-                let rnd_ticks = rand::rng().random_range(1..3);
-                base_entity
-                    .fire_ticks
-                    .store(ticks + rnd_ticks, Ordering::Relaxed);
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if args.old_state_id == args.state_id {
+                // Already a fire
+                return;
             }
-            if base_entity.fire_ticks.load(Ordering::Relaxed) >= 0 {
-                base_entity.set_on_fire_for(8.0);
-            }
-        }
-    }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if self
-            .can_place_at(CanPlaceAtArgs {
-                server: None,
-                world: Some(args.world),
-                block_accessor: args.world,
-                block: &Block::FIRE,
-                position: args.position,
-                direction: BlockDirection::Up,
-                player: None,
-                use_item_on: None,
-            })
-            .await
-        {
-            let old_fire_props = FireProperties::from_state_id(args.state_id, &Block::FIRE);
-            let fire_state_id = self
-                .get_state_for_position(args.world, &Block::FIRE, args.position)
+            let dimension = args.world.dimension_type;
+            // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
+            if (dimension == VanillaDimensionType::Overworld
+                || dimension == VanillaDimensionType::TheNether)
+                && let Some(portal) =
+                    NetherPortal::get_new_portal(args.world, args.position, HorizontalAxis::X).await
+            {
+                portal.create(args.world).await;
+                return;
+            }
+
+            args.world
+                .schedule_block_tick(
+                    args.block,
+                    *args.position,
+                    Self::get_fire_tick_delay() as u8,
+                    TickPriority::Normal,
+                )
                 .await;
-            let mut fire_props = FireProperties::from_state_id(fire_state_id, &Block::FIRE);
-            fire_props.age = EnumVariants::from_index(old_fire_props.age.to_index());
-            return fire_props.to_state_id(&Block::FIRE);
-        }
-        Block::AIR.default_state.id
+        })
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let state = args
-            .block_accessor
-            .get_block_state(&args.position.down())
-            .await;
-        if state.is_side_solid(BlockDirection::Up) {
-            return true;
-        }
-        self.are_blocks_around_flammable(args.block_accessor, args.position)
-            .await
+    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let base_entity = args.entity.get_entity();
+            if !base_entity.entity_type.fire_immune {
+                let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
+                if ticks < 0 {
+                    base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
+                } else if base_entity.entity_type == &EntityType::PLAYER {
+                    let rnd_ticks = rand::rng().random_range(1..3);
+                    base_entity
+                        .fire_ticks
+                        .store(ticks + rnd_ticks, Ordering::Relaxed);
+                }
+                if base_entity.fire_ticks.load(Ordering::Relaxed) >= 0 {
+                    base_entity.set_on_fire_for(8.0);
+                }
+            }
+        })
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if self
+                .can_place_at(CanPlaceAtArgs {
+                    server: None,
+                    world: Some(args.world),
+                    block_accessor: args.world,
+                    block: &Block::FIRE,
+                    position: args.position,
+                    direction: BlockDirection::Up,
+                    player: None,
+                    use_item_on: None,
+                })
+                .await
+            {
+                let old_fire_props = FireProperties::from_state_id(args.state_id, &Block::FIRE);
+                let fire_state_id = self
+                    .get_state_for_position(args.world, &Block::FIRE, args.position)
+                    .await;
+                let mut fire_props = FireProperties::from_state_id(fire_state_id, &Block::FIRE);
+                fire_props.age = EnumVariants::from_index(old_fire_props.age.to_index());
+                return fire_props.to_state_id(&Block::FIRE);
+            }
+            Block::AIR.default_state.id
+        })
+    }
+
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            let state = args
+                .block_accessor
+                .get_block_state(&args.position.down())
+                .await;
+            if state.is_side_solid(BlockDirection::Up) {
+                return true;
+            }
+            self.are_blocks_around_flammable(args.block_accessor, args.position)
+                .await
+        })
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let (world, block, pos) = (args.world, args.block, args.position);
-        world
-            .schedule_block_tick(
-                block,
-                *pos,
-                Self::get_fire_tick_delay() as u8,
-                TickPriority::Normal,
-            )
-            .await;
-        if !Self
-            .can_place_at(CanPlaceAtArgs {
-                server: None,
-                world: Some(world),
-                block_accessor: world.as_ref(),
-                block,
-                position: pos,
-                direction: BlockDirection::Up,
-                player: None,
-                use_item_on: None,
-            })
-            .await
-        {
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let (world, block, pos) = (args.world, args.block, args.position);
             world
-                .set_block_state(
-                    pos,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
+                .schedule_block_tick(
+                    block,
+                    *pos,
+                    Self::get_fire_tick_delay() as u8,
+                    TickPriority::Normal,
                 )
                 .await;
-            return;
-        }
-        let block_state = world.get_block_state(pos).await;
-        //TODO add checks for raining and infiniburn
-        let mut fire_props = FireProperties::from_state_id(block_state.id, &Block::FIRE);
-        let age = fire_props.age.to_index() + 1;
-
-        let random = rand::rng().random_range(0..3) / 2;
-        let new_age = (age + random).min(15);
-        if new_age != age {
-            fire_props.age = EnumVariants::from_index(new_age);
-            let new_state_id = fire_props.to_state_id(&Block::FIRE);
-            world
-                .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
-                .await;
-        }
-
-        if !Self.are_blocks_around_flammable(world.as_ref(), pos).await {
-            let block_below_state = world.get_block_state(&pos.down()).await;
-            if block_below_state.is_side_solid(BlockDirection::Up) {
+            if !Self
+                .can_place_at(CanPlaceAtArgs {
+                    server: None,
+                    world: Some(world),
+                    block_accessor: world.as_ref(),
+                    block,
+                    position: pos,
+                    direction: BlockDirection::Up,
+                    player: None,
+                    use_item_on: None,
+                })
+                .await
+            {
                 world
                     .set_block_state(
                         pos,
@@ -310,100 +290,132 @@ impl BlockBehaviour for FireBlock {
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
+                return;
             }
-            return;
-        }
+            let block_state = world.get_block_state(pos).await;
+            //TODO add checks for raining and infiniburn
+            let mut fire_props = FireProperties::from_state_id(block_state.id, &Block::FIRE);
+            let age = fire_props.age.to_index() + 1;
 
-        if age == 15
-            && rand::rng().random_range(0..4) == 0
-            && !Self::is_flammable(world.get_block_state(&pos.down()).await)
-        {
-            world
-                .set_block_state(
-                    pos,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                )
-                .await;
-            return;
-        }
+            let random = rand::rng().random_range(0..3) / 2;
+            let new_age = (age + random).min(15);
+            if new_age != age {
+                fire_props.age = EnumVariants::from_index(new_age);
+                let new_state_id = fire_props.to_state_id(&Block::FIRE);
+                world
+                    .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
+                    .await;
+            }
 
-        Self.try_spreading_fire(
-            world,
-            &pos.offset(BlockDirection::East.to_offset()),
-            300,
-            age,
-        )
-        .await;
-        Self.try_spreading_fire(
-            world,
-            &pos.offset(BlockDirection::West.to_offset()),
-            300,
-            age,
-        )
-        .await;
-        Self.try_spreading_fire(
-            world,
-            &pos.offset(BlockDirection::North.to_offset()),
-            300,
-            age,
-        )
-        .await;
-        Self.try_spreading_fire(
-            world,
-            &pos.offset(BlockDirection::South.to_offset()),
-            300,
-            age,
-        )
-        .await;
-        Self.try_spreading_fire(world, &pos.offset(BlockDirection::Up.to_offset()), 250, age)
+            if !Self.are_blocks_around_flammable(world.as_ref(), pos).await {
+                let block_below_state = world.get_block_state(&pos.down()).await;
+                if block_below_state.is_side_solid(BlockDirection::Up) {
+                    world
+                        .set_block_state(
+                            pos,
+                            Block::AIR.default_state.id,
+                            BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                }
+                return;
+            }
+
+            if age == 15
+                && rand::rng().random_range(0..4) == 0
+                && !Self::is_flammable(world.get_block_state(&pos.down()).await)
+            {
+                world
+                    .set_block_state(
+                        pos,
+                        Block::AIR.default_state.id,
+                        BlockFlags::NOTIFY_NEIGHBORS,
+                    )
+                    .await;
+                return;
+            }
+
+            Self.try_spreading_fire(
+                world,
+                &pos.offset(BlockDirection::East.to_offset()),
+                300,
+                age,
+            )
             .await;
-        Self.try_spreading_fire(
-            world,
-            &pos.offset(BlockDirection::Down.to_offset()),
-            250,
-            age,
-        )
-        .await;
+            Self.try_spreading_fire(
+                world,
+                &pos.offset(BlockDirection::West.to_offset()),
+                300,
+                age,
+            )
+            .await;
+            Self.try_spreading_fire(
+                world,
+                &pos.offset(BlockDirection::North.to_offset()),
+                300,
+                age,
+            )
+            .await;
+            Self.try_spreading_fire(
+                world,
+                &pos.offset(BlockDirection::South.to_offset()),
+                300,
+                age,
+            )
+            .await;
+            Self.try_spreading_fire(world, &pos.offset(BlockDirection::Up.to_offset()), 250, age)
+                .await;
+            Self.try_spreading_fire(
+                world,
+                &pos.offset(BlockDirection::Down.to_offset()),
+                250,
+                age,
+            )
+            .await;
 
-        for l in -1..=1 {
-            for m in -1..=1 {
-                for n in -1..=4 {
-                    if l != 0 || n != 0 || m != 0 {
-                        let offset_pos = pos.offset(Vector3::new(l, n, m));
-                        let burn_chance = Self.get_burn_chance(world, &offset_pos).await;
-                        if burn_chance > 0 {
-                            let o = 100 + if n > 1 { (n - 1) * 100 } else { 0 };
-                            let p: i32 = burn_chance
-                                + 40
-                                + (world.level_info.read().await.difficulty as i32) * 7
-                                    / i32::from(age + 30);
+            for l in -1..=1 {
+                for m in -1..=1 {
+                    for n in -1..=4 {
+                        if l != 0 || n != 0 || m != 0 {
+                            let offset_pos = pos.offset(Vector3::new(l, n, m));
+                            let burn_chance = Self.get_burn_chance(world, &offset_pos).await;
+                            if burn_chance > 0 {
+                                let o = 100 + if n > 1 { (n - 1) * 100 } else { 0 };
+                                let p: i32 = burn_chance
+                                    + 40
+                                    + (world.level_info.read().await.difficulty as i32) * 7
+                                        / i32::from(age + 30);
 
-                            if p > 0 && rand::rng().random_range(0..o) <= p {
-                                let new_age = (age + rand::rng().random_range(0..5) / 4).min(15);
-                                let fire_state_id =
-                                    self.get_state_for_position(world, block, &offset_pos).await;
-                                let mut new_fire_props =
-                                    FireProperties::from_state_id(fire_state_id, &Block::FIRE);
-                                new_fire_props.age = EnumVariants::from_index(new_age);
+                                if p > 0 && rand::rng().random_range(0..o) <= p {
+                                    let new_age =
+                                        (age + rand::rng().random_range(0..5) / 4).min(15);
+                                    let fire_state_id = self
+                                        .get_state_for_position(world, block, &offset_pos)
+                                        .await;
+                                    let mut new_fire_props =
+                                        FireProperties::from_state_id(fire_state_id, &Block::FIRE);
+                                    new_fire_props.age = EnumVariants::from_index(new_age);
 
-                                //TODO drop items for burned blocks
-                                world
-                                    .set_block_state(
-                                        &offset_pos,
-                                        new_fire_props.to_state_id(&Block::FIRE),
-                                        BlockFlags::NOTIFY_NEIGHBORS,
-                                    )
-                                    .await;
+                                    //TODO drop items for burned blocks
+                                    world
+                                        .set_block_state(
+                                            &offset_pos,
+                                            new_fire_props.to_state_id(&Block::FIRE),
+                                            BlockFlags::NOTIFY_NEIGHBORS,
+                                        )
+                                        .await;
+                                }
                             }
                         }
                     }
                 }
             }
-        }
+        })
     }
 
-    async fn broken(&self, args: BrokenArgs<'_>) {
-        FireBlockBase::broken(args.world.clone(), *args.position).await;
+    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            FireBlockBase::broken(args.world, *args.position).await;
+        })
     }
 }

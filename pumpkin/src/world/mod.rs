@@ -1,4 +1,5 @@
 use std::num::NonZeroU32;
+use std::pin::Pin;
 use std::sync::Weak;
 use std::sync::atomic::Ordering::Relaxed;
 use std::time::Duration;
@@ -32,8 +33,8 @@ use crate::{
     server::Server,
 };
 use crate::{block::BlockEvent, entity::item::ItemEntity};
-use async_trait::async_trait;
 use border::Worldborder;
+use crossbeam::queue::SegQueue;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -103,7 +104,8 @@ use pumpkin_util::{
     math::{position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
-use pumpkin_world::world::GetBlockError;
+use pumpkin_world::chunk::palette::BlockPalette;
+use pumpkin_world::world::{GetBlockError, WorldFuture};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, GENERATION_SETTINGS, GeneratorSetting, biome,
     block::entities::BlockEntity, chunk::io::Dirtiable, inventory::Inventory, item::ItemStack,
@@ -182,6 +184,8 @@ pub struct World {
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
     pub server: Weak<Server>,
+    decrease_block_light_queue: SegQueue<(BlockPos, u8)>,
+    increase_block_light_queue: SegQueue<(BlockPos, u8)>,
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
@@ -215,7 +219,7 @@ impl World {
             level_info,
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
-            scoreboard: Mutex::new(Scoreboard::new()),
+            scoreboard: Mutex::new(Scoreboard::default()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 30_000_000.0, 0, 0, 0)),
             level_time: Mutex::new(LevelTime::new()),
             dimension_type,
@@ -225,6 +229,8 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
+            decrease_block_light_queue: SegQueue::new(),
+            increase_block_light_queue: SegQueue::new(),
             server,
         }
     }
@@ -562,52 +568,17 @@ impl World {
 
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         let start = tokio::time::Instant::now();
+
         self.flush_block_updates().await;
         // tick block entities
         self.flush_synced_block_events().await;
 
-        // world ticks
-        {
-            let mut level_time = self.level_time.lock().await;
-            level_time.tick_time();
-            if level_time.world_age % 100 == 0 {
-                log::debug!("should unload set true");
-                self.level.should_unload.store(true, Relaxed);
-                if level_time.world_age % 300 != 0 {
-                    self.level.level_channel.notify();
-                }
-            }
-            if level_time.world_age % 300 == 0 {
-                log::debug!("should save set true");
-                self.level.should_save.store(true, Relaxed);
-                self.level.level_channel.notify();
-            }
-            let mut weather = self.weather.lock().await;
-            weather.tick_weather(self).await;
-
-            if self.should_skip_night().await {
-                let time = level_time.time_of_day + 24000;
-                level_time.set_time(time - time % 24000);
-                level_time.send_time(self).await;
-
-                for player in self.players.read().await.values() {
-                    player.wake_up().await;
-                }
-
-                if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
-                    weather.reset_weather_cycle(self).await;
-                    drop(weather);
-                }
-            } else if level_time.world_age % 20 == 0 {
-                level_time.send_time(self).await;
-                drop(level_time);
-            }
-        }
+        self.tick_environment().await;
 
         let chunk_start = tokio::time::Instant::now();
         // log::debug!("Ticking chunks");
         self.tick_chunks().await;
-        let elapsed = chunk_start.elapsed();
+        let chunk_elapsed = chunk_start.elapsed();
 
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
 
@@ -623,6 +594,7 @@ impl World {
         // Entity ticks
         for entity in entities_to_tick {
             entity.get_entity().age.fetch_add(1, Relaxed);
+
             entity.tick(entity.clone(), server).await;
             for player in self.players.read().await.values() {
                 if player
@@ -642,12 +614,13 @@ impl World {
 
         self.level.chunk_loading.lock().unwrap().send_change();
 
-        log::debug!(
-            "Ticking world took {:?}, loaded chunks: {}, chunk tick took {:?}",
-            start.elapsed(),
-            self.level.loaded_chunk_count(),
-            elapsed
-        );
+        if start.elapsed().as_millis() > 50 {
+            log::warn!(
+                "Slow Tick: Total {:?} | Chunks {:?}",
+                start.elapsed(),
+                chunk_elapsed,
+            );
+        }
     }
 
     pub async fn flush_block_updates(&self) {
@@ -680,6 +653,42 @@ impl World {
         }
     }
 
+    async fn tick_environment(&self) {
+        let mut level_time = self.level_time.lock().await;
+        level_time.tick_time();
+
+        // Auto-save logic
+        if level_time.world_age % 100 == 0 {
+            self.level.should_unload.store(true, Relaxed);
+            if level_time.world_age % 300 != 0 {
+                self.level.level_channel.notify();
+            }
+        }
+        if level_time.world_age % 300 == 0 {
+            self.level.should_save.store(true, Relaxed);
+            self.level.level_channel.notify();
+        }
+
+        let mut weather = self.weather.lock().await;
+        weather.tick_weather(self).await;
+
+        if self.should_skip_night().await {
+            let time = level_time.time_of_day + 24000;
+            level_time.set_time(time - time % 24000);
+            level_time.send_time(self).await;
+
+            for player in self.players.read().await.values() {
+                player.wake_up().await;
+            }
+
+            if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
+                weather.reset_weather_cycle(self).await;
+            }
+        } else if level_time.world_age % 20 == 0 {
+            level_time.send_time(self).await;
+        }
+    }
+
     pub async fn tick_chunks(self: &Arc<Self>) {
         let tick_data = self.level.get_tick_data().await;
         for scheduled_tick in tick_data.block_ticks {
@@ -705,13 +714,13 @@ impl World {
 
         /* TODO: Fix this deadlock
         for scheduled_tick in tick_data.random_ticks {
-            let block = self.get_block(&scheduled_tick.block_pos).await;
+            let block = self.get_block(&scheduled_tick.position).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
                     .random_tick(RandomTickArgs {
                         world: self,
                         block,
-                        position: &scheduled_tick.block_pos,
+                        position: &scheduled_tick.position,
                     })
                     .await;
             }
@@ -759,7 +768,6 @@ impl World {
             );
 
         // log::debug!("spawning list size {}", spawn_list.len());
-        log::trace!("spawning counter {:?}", spawn_state.mob_category_counts);
 
         spawning_chunks.shuffle(&mut rng());
 
@@ -1768,7 +1776,7 @@ impl World {
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
         let explosion = Explosion::new(power, position);
-        explosion.explode(self).await;
+        let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion
         } else {
@@ -1783,6 +1791,8 @@ impl World {
                 .client
                 .enqueue_packet(&CExplosion::new(
                     position,
+                    power,
+                    block_count as i32,
                     None,
                     VarInt(particle as i32),
                     sound.clone(),
@@ -1925,7 +1935,9 @@ impl World {
                 let Some((chunk, _first_load)) = recv_result else {
                     break;
                 };
-                let position = chunk.read().await.chunk_position;
+                let tmp_chunk = chunk.read().await;
+                let position = Vector2::new(tmp_chunk.x, tmp_chunk.z);
+                drop(tmp_chunk);
 
                 let chunk = if level.is_chunk_watched(&position) {
                     chunk
@@ -2341,6 +2353,189 @@ impl World {
         .await;
     }
 
+    pub fn queue_block_light_decrease(self: &Arc<Self>, pos: BlockPos, level: u8) {
+        self.decrease_block_light_queue.push((pos, level));
+    }
+
+    pub fn queue_block_light_increase(self: &Arc<Self>, pos: BlockPos, level: u8) {
+        self.increase_block_light_queue.push((pos, level));
+    }
+
+    pub async fn perform_block_light_updates(self: &Arc<Self>) -> i32 {
+        let mut updates = 0;
+
+        updates += self.perform_block_light_decrease_updates().await;
+
+        updates += self.perform_block_light_increase_updates().await;
+
+        updates
+    }
+
+    async fn perform_block_light_decrease_updates(self: &Arc<Self>) -> i32 {
+        let mut updates = 0;
+
+        while let Some((pos, expected_light)) = self.decrease_block_light_queue.pop() {
+            self.propagate_block_light_decrease(&pos, expected_light)
+                .await;
+            updates += 1;
+        }
+
+        updates
+    }
+
+    async fn perform_block_light_increase_updates(self: &Arc<Self>) -> i32 {
+        let mut updates = 0;
+
+        while let Some((pos, expected_light)) = self.increase_block_light_queue.pop() {
+            self.propagate_block_light_increase(&pos, expected_light)
+                .await;
+            updates += 1;
+        }
+
+        updates
+    }
+
+    async fn propagate_block_light_increase(self: &Arc<Self>, pos: &BlockPos, light_level: u8) {
+        for dir in BlockDirection::all() {
+            let neighbor_pos = pos.offset(dir.to_offset());
+
+            if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await {
+                let neighbor_state = self.get_block_state(&neighbor_pos).await;
+                let new_light = light_level.saturating_sub(neighbor_state.opacity.max(1));
+
+                if new_light > neighbor_light {
+                    // TODO: Add shape checking for non-trivial blocks
+
+                    self.set_block_light_level(&neighbor_pos, new_light)
+                        .await
+                        .unwrap();
+
+                    if new_light > 1 {
+                        self.queue_block_light_increase(neighbor_pos, new_light);
+                    }
+                }
+            }
+        }
+    }
+
+    async fn propagate_block_light_decrease(
+        self: &Arc<Self>,
+        pos: &BlockPos,
+        removed_light_level: u8,
+    ) {
+        for dir in BlockDirection::all() {
+            let neighbor_pos = pos.offset(dir.to_offset());
+
+            if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await {
+                if neighbor_light == 0 {
+                    continue; // Skip if already 0
+                }
+
+                let neighbor_state = self.get_block_state(&neighbor_pos).await;
+                let opacity = neighbor_state.opacity.max(1);
+
+                let expected_from_removed_source = removed_light_level.saturating_sub(opacity);
+
+                if neighbor_light <= expected_from_removed_source {
+                    let neighbor_luminance = neighbor_state.luminance;
+
+                    self.set_block_light_level(&neighbor_pos, 0).await.unwrap();
+
+                    if neighbor_luminance == 0 {
+                        self.queue_block_light_decrease(neighbor_pos, neighbor_light);
+                    } else {
+                        self.set_block_light_level(&neighbor_pos, neighbor_luminance)
+                            .await
+                            .unwrap();
+                        self.queue_block_light_increase(neighbor_pos, neighbor_luminance);
+                    }
+                } else {
+                    self.queue_block_light_increase(neighbor_pos, neighbor_light);
+                }
+            }
+        }
+    }
+
+    pub async fn check_block_light_updates(self: &Arc<Self>, pos: BlockPos) {
+        let current_light = self.get_block_light_level(&pos).await.unwrap_or(0);
+        let block_state = self.get_block_state(&pos).await;
+        let expected_light = block_state.luminance;
+
+        if expected_light < current_light {
+            self.set_block_light_level(&pos, 0).await.unwrap();
+            self.queue_block_light_decrease(pos, current_light);
+        }
+
+        if expected_light > 0 {
+            self.set_block_light_level(&pos, expected_light)
+                .await
+                .unwrap();
+            self.queue_block_light_increase(pos, expected_light);
+        }
+
+        //TODO check sky light updates
+
+        self.check_neighbors_light_updates(pos, current_light).await;
+    }
+
+    pub async fn check_neighbors_light_updates(self: &Arc<Self>, pos: BlockPos, current_light: u8) {
+        for dir in BlockDirection::all() {
+            let neighbor_pos = pos.offset(dir.to_offset());
+            if let Some(neighbor_light) = self.get_block_light_level(&neighbor_pos).await
+                && neighbor_light > current_light + 1
+            {
+                self.queue_block_light_increase(neighbor_pos, neighbor_light);
+            }
+        }
+        // TODO check sky light updates
+    }
+
+    pub async fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.level.get_chunk(chunk_coordinate).await;
+        let Ok(chunk) = tokio::time::timeout(std::time::Duration::from_secs(1), chunk.read()).await
+        else {
+            panic!("Timed out while waiting to acquire chunk read lock")
+        };
+        let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+        // +1 since block light has 1 section padding on both top and bottom
+        if section_index + 1 >= chunk.light_engine.block_light.len() {
+            return None;
+        }
+        Some(chunk.light_engine.block_light[section_index + 1].get(
+            relative.x as usize,
+            (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE,
+            relative.z as usize,
+        ))
+    }
+
+    pub async fn set_block_light_level(
+        &self,
+        position: &BlockPos,
+        light_level: u8,
+    ) -> Result<(), String> {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.level.get_chunk(chunk_coordinate).await;
+        let Ok(mut chunk) =
+            tokio::time::timeout(std::time::Duration::from_secs(1), chunk.write()).await
+        else {
+            panic!("Timed out while waiting to acquire chunk write lock")
+        };
+        let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+        if section_index >= chunk.light_engine.block_light.len() {
+            return Err("Invalid section index".to_string());
+        }
+        let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
+        chunk.light_engine.block_light[section_index + 1].set(
+            relative.x as usize,
+            relative_y,
+            relative.z as usize,
+            light_level,
+        );
+        chunk.mark_dirty(true);
+        Ok(())
+    }
+
     /// Sets a block and returns the old block id
     #[allow(clippy::too_many_lines)]
     pub async fn set_block_state(
@@ -2472,6 +2667,9 @@ impl World {
             }
         }
 
+        self.check_block_light_updates(*position).await;
+        self.perform_block_light_updates().await;
+
         replaced_block_state_id
     }
 
@@ -2526,7 +2724,7 @@ impl World {
                         .to_props()
                         .into_iter()
                         .find(|p| p.0 == "waterlogged")
-                        .map(|(_, value)| value == true.to_string())
+                        .map(|(_, value)| value == "true")
                 })
                 .unwrap_or(false)
             {
@@ -2671,7 +2869,7 @@ impl World {
                     .into_iter()
                     .find(|p| p.0 == "waterlogged")
                     .map(|(_, value)| {
-                        if value == true.to_string() {
+                        if value == "true" {
                             &Fluid::FLOWING_WATER
                         } else {
                             &Fluid::EMPTY
@@ -2702,7 +2900,7 @@ impl World {
                             .into_iter()
                             .find(|p| p.0 == "waterlogged")
                             .map(|(_, value)| {
-                                if value == true.to_string() {
+                                if value == "true" {
                                     &Fluid::FLOWING_WATER
                                 } else {
                                     &Fluid::EMPTY
@@ -2721,12 +2919,10 @@ impl World {
             let block = Block::from_state_id(id);
             if let Some(properties) = block.properties(id) {
                 for (name, value) in properties.to_props() {
-                    if name == *"waterlogged" {
-                        if value == true.to_string() {
+                    if name == "waterlogged" {
+                        if value == "true" {
                             let fluid = Fluid::FLOWING_WATER;
-
                             let state = fluid.states[0].clone();
-
                             return (fluid, state);
                         }
 
@@ -2736,7 +2932,6 @@ impl World {
             }
 
             let fluid = Fluid::EMPTY;
-
             let state = fluid.states[0].clone();
 
             return (fluid, state);
@@ -3139,100 +3334,143 @@ impl World {
     }
 }
 
-#[async_trait]
 impl pumpkin_world::world::SimpleWorld for World {
-    async fn set_block_state(
+    fn set_block_state(
         self: Arc<Self>,
         position: &BlockPos,
         block_state_id: BlockStateId,
         flags: BlockFlags,
-    ) -> BlockStateId {
-        Self::set_block_state(&self, position, block_state_id, flags).await
+    ) -> WorldFuture<'_, BlockStateId> {
+        Box::pin(async move { Self::set_block_state(&self, position, block_state_id, flags).await })
     }
 
-    async fn update_neighbor(self: Arc<Self>, neighbor_block_pos: &BlockPos, source_block: &Block) {
-        Self::update_neighbor(&self, neighbor_block_pos, source_block).await;
+    fn update_neighbor<'a>(
+        self: Arc<Self>,
+        neighbor_block_pos: &'a BlockPos,
+        source_block: &'a pumpkin_data::Block,
+    ) -> WorldFuture<'a, ()> {
+        Box::pin(async move {
+            Self::update_neighbor(&self, neighbor_block_pos, source_block).await;
+        })
     }
 
-    async fn update_neighbors(
+    fn update_neighbors(
         self: Arc<Self>,
         block_pos: &BlockPos,
         except: Option<BlockDirection>,
-    ) {
-        Self::update_neighbors(&self, block_pos, except).await;
+    ) -> WorldFuture<'_, ()> {
+        Box::pin(async move {
+            Self::update_neighbors(&self, block_pos, except).await;
+        })
     }
 
-    async fn is_space_empty(&self, bounding_box: BoundingBox) -> bool {
-        self.is_space_empty(bounding_box).await
+    fn is_space_empty(&self, bounding_box: BoundingBox) -> WorldFuture<'_, bool> {
+        Box::pin(async move { self.is_space_empty(bounding_box).await })
     }
 
-    async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
-        self.add_synced_block_event(pos, r#type, data).await;
+    fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) -> WorldFuture<'_, ()> {
+        Box::pin(async move {
+            self.add_synced_block_event(pos, r#type, data).await;
+        })
     }
 
-    async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
-        self.sync_world_event(world_event, position, data).await;
+    fn sync_world_event(
+        &self,
+        world_event: WorldEvent,
+        position: BlockPos,
+        data: i32,
+    ) -> WorldFuture<'_, ()> {
+        Box::pin(async move {
+            self.sync_world_event(world_event, position, data).await;
+        })
     }
 
-    async fn spawn_from_type(
+    fn spawn_from_type(
         self: Arc<Self>,
         entity_type: &'static EntityType,
         position: Vector3<f64>,
-    ) {
-        let mob = from_type(entity_type, position, &self, Uuid::new_v4()).await;
-        self.spawn_entity(mob).await;
+    ) -> WorldFuture<'static, ()> {
+        Box::pin(async move {
+            let mob = from_type(entity_type, position, &self, Uuid::new_v4()).await;
+            self.spawn_entity(mob).await;
+        })
     }
 
-    async fn remove_block_entity(&self, block_pos: &BlockPos) {
-        self.remove_block_entity(block_pos).await;
+    fn remove_block_entity<'a>(&'a self, block_pos: &'a BlockPos) -> WorldFuture<'a, ()> {
+        Box::pin(async move {
+            self.remove_block_entity(block_pos).await;
+        })
     }
 
-    async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
-        self.get_block_entity(block_pos).await
+    fn get_block_entity<'a>(
+        &'a self,
+        block_pos: &'a BlockPos,
+    ) -> WorldFuture<'a, Option<Arc<dyn BlockEntity>>> {
+        Box::pin(async move { self.get_block_entity(block_pos).await })
     }
 
-    async fn get_world_age(&self) -> i64 {
-        self.level_time.lock().await.world_age
+    fn get_world_age(&self) -> WorldFuture<'_, i64> {
+        Box::pin(async move {
+            // Note: MutexGuard must be released before returning the future's result.
+            let level_time_guard = self.level_time.lock().await;
+            level_time_guard.world_age
+        })
     }
 
-    async fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
-        self.play_sound(sound, category, position).await;
-    }
-
-    async fn play_sound_fine(
-        &self,
+    fn play_sound<'a>(
+        &'a self,
         sound: Sound,
         category: SoundCategory,
-        position: &Vector3<f64>,
-        volume: f32,
-        pitch: f32,
-    ) {
-        self.play_sound_fine(sound, category, position, volume, pitch)
-            .await;
+        position: &'a Vector3<f64>,
+    ) -> WorldFuture<'a, ()> {
+        Box::pin(async move {
+            self.play_sound(sound, category, position).await;
+        })
     }
 
-    async fn scatter_inventory(
+    fn play_sound_fine<'a>(
+        &'a self,
+        sound: Sound,
+        category: SoundCategory,
+        position: &'a Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) -> WorldFuture<'a, ()> {
+        Box::pin(async move {
+            self.play_sound_fine(sound, category, position, volume, pitch)
+                .await;
+        })
+    }
+
+    fn scatter_inventory<'a>(
         self: Arc<Self>,
-        position: &BlockPos,
-        inventory: &Arc<dyn Inventory>,
-    ) {
-        Self::scatter_inventory(&self, position, inventory).await;
+        position: &'a BlockPos,
+        inventory: &'a Arc<dyn Inventory>,
+    ) -> WorldFuture<'a, ()> {
+        Box::pin(async move {
+            Self::scatter_inventory(&self, position, inventory).await;
+        })
     }
 }
 
-#[async_trait]
 impl BlockAccessor for World {
-    async fn get_block(&self, position: &BlockPos) -> &'static Block {
-        Self::get_block(self, position).await
+    fn get_block<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = &'static Block> + Send + 'a>> {
+        Box::pin(async move { Self::get_block(self, position).await })
     }
-    async fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
-        Self::get_block_state(self, position).await
+    fn get_block_state<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = &'static BlockState> + Send + 'a>> {
+        Box::pin(async move { Self::get_block_state(self, position).await })
     }
 
-    async fn get_block_and_state(
-        &self,
-        position: &BlockPos,
-    ) -> (&'static Block, &'static BlockState) {
-        self.get_block_and_state(position).await
+    fn get_block_and_state<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = (&'static Block, &'static BlockState)> + Send + 'a>> {
+        Box::pin(async move { self.get_block_and_state(position).await })
     }
 }

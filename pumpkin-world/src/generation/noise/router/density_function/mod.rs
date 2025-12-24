@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 use enum_dispatch::enum_dispatch;
 use pumpkin_data::noise_router::WrapperType;
 
@@ -20,13 +18,12 @@ mod test;
 #[cfg(test)]
 mod test_deserializer;
 
-pub trait NoisePos: Debug {
+pub trait NoisePos {
     fn x(&self) -> i32;
     fn y(&self) -> i32;
     fn z(&self) -> i32;
 }
 
-#[derive(Debug)]
 pub struct UnblendedNoisePos {
     x: i32,
     y: i32,

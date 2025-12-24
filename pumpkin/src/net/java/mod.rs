@@ -159,10 +159,7 @@ impl JavaClient {
     ///
     /// * `server`: A reference to the `Server` instance.
     pub async fn process_packets(self: &Arc<Self>, server: &Arc<Server>) {
-        loop {
-            let packet = self.get_packet().await;
-            let Some(packet) = packet else { break };
-
+        while let Some(packet) = self.get_packet().await {
             if let Err(error) = self.handle_packet(server, &packet).await {
                 let text = format!("Error while reading incoming packet {error}");
                 log::error!(
@@ -474,7 +471,7 @@ impl JavaClient {
                     .await;
             }
             SLoginPluginResponse::PACKET_ID => {
-                self.handle_plugin_response(SLoginPluginResponse::read(payload)?)
+                self.handle_plugin_response(server, SLoginPluginResponse::read(payload)?)
                     .await;
             }
             SLoginAcknowledged::PACKET_ID => {
@@ -520,7 +517,7 @@ impl JavaClient {
                 self.handle_config_cookie_response(&SConfigCookieResponse::read(payload)?);
             }
             SConfigResourcePack::PACKET_ID => {
-                self.handle_resource_pack_response(SConfigResourcePack::read(payload)?)
+                self.handle_resource_pack_response(server, SConfigResourcePack::read(payload)?)
                     .await;
             }
             _ => {
@@ -555,7 +552,7 @@ impl JavaClient {
                     .await;
             }
             SChatMessage::PACKET_ID => {
-                self.handle_chat_message(player, SChatMessage::read(payload)?)
+                self.handle_chat_message(server, player, SChatMessage::read(payload)?)
                     .await;
             }
             SClientInformationPlay::PACKET_ID => {

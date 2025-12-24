@@ -1,10 +1,9 @@
 use std::sync::{Arc, atomic::AtomicU8};
 
-use async_trait::async_trait;
 use pumpkin_data::{fuels::is_fuel, item::Item};
 use pumpkin_world::inventory::Inventory;
 
-use crate::slot::Slot;
+use crate::slot::{BoxFuture, Slot};
 
 #[derive(Debug, Clone, Copy)]
 pub enum FurnaceSlotType {
@@ -13,7 +12,6 @@ pub enum FurnaceSlotType {
     Side = 2,
 }
 
-#[derive(Debug)]
 pub struct FurnaceSlot {
     pub inventory: Arc<dyn Inventory>,
     pub slot_type: FurnaceSlotType,
@@ -31,7 +29,6 @@ impl FurnaceSlot {
         }
     }
 }
-#[async_trait]
 impl Slot for FurnaceSlot {
     fn get_inventory(&self) -> Arc<dyn Inventory> {
         self.inventory.clone()
@@ -46,15 +43,21 @@ impl Slot for FurnaceSlot {
             .store(id as u8, std::sync::atomic::Ordering::Relaxed);
     }
 
-    async fn mark_dirty(&self) {
-        self.inventory.mark_dirty();
+    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.inventory.mark_dirty();
+        })
     }
 
-    async fn can_insert(&self, stack: &pumpkin_world::item::ItemStack) -> bool {
-        match self.slot_type {
-            FurnaceSlotType::Top => true,
-            FurnaceSlotType::Bottom => is_fuel(stack.item.id) || stack.item.id == Item::BUCKET.id,
-            FurnaceSlotType::Side => false,
-        }
+    fn can_insert<'a>(&'a self, stack: &'a pumpkin_world::item::ItemStack) -> BoxFuture<'a, bool> {
+        Box::pin(async move {
+            match self.slot_type {
+                FurnaceSlotType::Top => true,
+                FurnaceSlotType::Bottom => {
+                    is_fuel(stack.item.id) || stack.item.id == Item::BUCKET.id
+                }
+                FurnaceSlotType::Side => false,
+            }
+        })
     }
 }

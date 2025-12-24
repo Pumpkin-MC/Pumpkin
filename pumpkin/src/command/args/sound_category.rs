@@ -1,11 +1,11 @@
 use crate::command::CommandSender;
 use crate::command::args::{
-    Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
+    Arg, ArgumentConsumer, ConsumeResult, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
+    SuggestResult,
 };
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
-use async_trait::async_trait;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 
@@ -24,51 +24,54 @@ impl GetClientSideArgParser for SoundCategoryArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for SoundCategoryArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
 
-        // Convert string input to SoundCategory enum
-        // Uses lowercase to make the command case-insensitive
-        let category = match s.to_lowercase().as_str() {
-            "master" => Some(SoundCategory::Master), // Default category, affects all sounds
-            "music" => Some(SoundCategory::Music),   // Background music
-            // i don't use SoundCategory::from_name because its is record and not records :c
-            "record" => Some(SoundCategory::Records), // Music discs
-            "weather" => Some(SoundCategory::Weather), // Rain, thunder
-            "block" => Some(SoundCategory::Blocks),   // Block sounds
-            "hostile" => Some(SoundCategory::Hostile), // Hostile mob sounds
-            "neutral" => Some(SoundCategory::Neutral), // Neutral mob sounds
-            "player" => Some(SoundCategory::Players), // Player sounds
-            "ambient" => Some(SoundCategory::Ambient), // Ambient environment
-            "voice" => Some(SoundCategory::Voice),    // Voice/speech
-            _ => None,
-        };
+        let result: Option<Arg<'a>> = s_opt.and_then(|s| {
+            let category = match s.to_lowercase().as_str() {
+                "master" => Some(SoundCategory::Master),
+                "music" => Some(SoundCategory::Music),
+                // i don't use SoundCategory::from_name because its is record and not records :c
+                "record" => Some(SoundCategory::Records),
+                "weather" => Some(SoundCategory::Weather),
+                "block" => Some(SoundCategory::Blocks),
+                "hostile" => Some(SoundCategory::Hostile),
+                "neutral" => Some(SoundCategory::Neutral),
+                "player" => Some(SoundCategory::Players),
+                "ambient" => Some(SoundCategory::Ambient),
+                "voice" => Some(SoundCategory::Voice),
+                _ => None,
+            };
 
-        category.map(Arg::SoundCategory) // Simplified by removing redundant closure
+            category.map(Arg::SoundCategory)
+        });
+
+        Box::pin(async move { result })
     }
 
-    async fn suggest<'a>(
+    fn suggest<'a>(
         &'a self,
         _sender: &CommandSender,
         _server: &'a Server,
         _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        let categories = [
-            "master", "music", "record", "weather", "block", "hostile", "neutral", "player",
-            "ambient", "voice",
-        ];
-        let suggestions: Vec<CommandSuggestion> = categories
-            .iter()
-            .map(|cat| CommandSuggestion::new((*cat).to_string(), None))
-            .collect();
-        Ok(Some(suggestions))
+    ) -> SuggestResult<'a> {
+        Box::pin(async move {
+            let categories = [
+                "master", "music", "record", "weather", "block", "hostile", "neutral", "player",
+                "ambient", "voice",
+            ];
+            let suggestions: Vec<CommandSuggestion> = categories
+                .iter()
+                .map(|cat| CommandSuggestion::new((*cat).to_string(), None))
+                .collect();
+            Ok(Some(suggestions))
+        })
     }
 }
 

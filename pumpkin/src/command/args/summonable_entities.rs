@@ -1,9 +1,11 @@
-use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
-use crate::{command::dispatcher::CommandError, server::Server};
+use crate::{
+    command::{args::ConsumeResult, dispatcher::CommandError},
+    server::Server,
+};
 
 use super::{
     super::{
@@ -25,25 +27,16 @@ impl GetClientSideArgParser for SummonableEntitiesArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for SummonableEntitiesArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
-        Some(Arg::Block(s))
-    }
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        Box::pin(async move { s_opt.map(Arg::Block) })
     }
 }
 
@@ -61,9 +54,9 @@ impl<'a> FindArg<'a> for SummonableEntitiesArgumentConsumer {
             Some(Arg::Block(name)) => {
                 EntityType::from_name(name.strip_prefix("minecraft:").unwrap_or(name)).map_or_else(
                     || {
-                        Err(CommandError::CommandFailed(Box::new(TextComponent::text(
+                        Err(CommandError::CommandFailed(TextComponent::text(
                             "Can't find Entity",
-                        ))))
+                        )))
                     },
                     Result::Ok,
                 )

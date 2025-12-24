@@ -1,12 +1,11 @@
 use crate::command::CommandSender;
 use crate::command::args::{
-    Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
+    Arg, ArgumentConsumer, ConsumeResult, DefaultNameArgConsumer, FindArg, GetClientSideArgParser,
 };
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::server::Server;
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 
 pub struct ResourceLocationArgumentConsumer {
     autocomplete: bool,
@@ -22,39 +21,43 @@ impl GetClientSideArgParser for ResourceLocationArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for ResourceLocationArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        Some(Arg::ResourceLocation(args.pop()?))
-    }
-
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
         if !self.autocomplete {
-            return Ok(None);
+            return Box::pin(async move { None });
         }
-        // TODO
+        let s_opt: Option<&'a str> = args.pop();
 
-        // let suggestions = server
-        //     .bossbars
-        //     .lock()
-        //     .await
-        //     .custom_bossbars
-        //     .keys()
-        //     .map(|suggestion| CommandSuggestion::new(suggestion, None))
-        //     .collect();
-
-        Ok(None)
+        Box::pin(async move { s_opt.map(Arg::ResourceLocation) })
     }
+
+    // async fn suggest<'a>(
+    //     &'a self,
+    //     _sender: &CommandSender,
+    //     _server: &'a Server,
+    //     _input: &'a str,
+    // ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
+    //     if !self.autocomplete {
+    //         return Ok(None);
+    //     }
+    //     // TODO
+
+    //     // let suggestions = server
+    //     //     .bossbars
+    //     //     .lock()
+    //     //     .await
+    //     //     .custom_bossbars
+    //     //     .keys()
+    //     //     .map(|suggestion| CommandSuggestion::new(suggestion, None))
+    //     //     .collect();
+
+    //     Ok(None)
+    // }
 }
 
 impl DefaultNameArgConsumer for ResourceLocationArgumentConsumer {

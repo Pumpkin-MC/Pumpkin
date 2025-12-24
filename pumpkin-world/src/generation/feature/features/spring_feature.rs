@@ -21,6 +21,15 @@ enum BlockWrapper {
     Multi(Vec<String>),
 }
 
+impl BlockWrapper {
+    fn contains(&self, name: &str) -> bool {
+        match self {
+            Self::Single(s) => s == name,
+            Self::Multi(h) => h.contains(&name.to_string()),
+        }
+    }
+}
+
 impl SpringFeatureFeature {
     pub fn generate<T: GenerationCache>(
         &self,
@@ -29,91 +38,80 @@ impl SpringFeatureFeature {
         _random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        // i don't think this is the most efficient way, but it works
-        let valid_blocks = match self.valid_blocks.clone() {
-            BlockWrapper::Single(item) => vec![item],
-            BlockWrapper::Multi(items) => items,
-        };
+        let valid_blocks = &self.valid_blocks;
+
         if !valid_blocks.contains(
-            &GenerationCache::get_block_state(chunk, &pos.up().0)
+            GenerationCache::get_block_state(chunk, &pos.up().0)
                 .to_block()
-                .name
-                .to_string(),
+                .name,
         ) {
             return false;
         }
         if self.requires_block_below
             && !valid_blocks.contains(
-                &GenerationCache::get_block_state(
+                GenerationCache::get_block_state(
                     chunk,
                     &pos.offset(BlockDirection::Down.to_offset()).0,
                 )
                 .to_block()
-                .name
-                .to_string(),
+                .name,
             )
         {
             return false;
         }
         let state = GenerationCache::get_block_state(chunk, &pos.0);
-        if !state.to_state().is_air() && !valid_blocks.contains(&state.to_block().name.to_string())
-        {
+        if !state.to_state().is_air() && !valid_blocks.contains(state.to_block().name) {
             return false;
         }
 
         let mut valid = 0;
         if valid_blocks.contains(
-            &GenerationCache::get_block_state(
+            GenerationCache::get_block_state(
                 chunk,
                 &pos.offset(BlockDirection::West.to_offset()).0,
             )
             .to_block()
-            .name
-            .to_string(),
+            .name,
         ) {
             valid += 1;
         }
         if valid_blocks.contains(
-            &GenerationCache::get_block_state(
+            GenerationCache::get_block_state(
                 chunk,
                 &pos.offset(BlockDirection::East.to_offset()).0,
             )
             .to_block()
-            .name
-            .to_string(),
+            .name,
         ) {
             valid += 1;
         }
         if valid_blocks.contains(
-            &GenerationCache::get_block_state(
+            GenerationCache::get_block_state(
                 chunk,
                 &pos.offset(BlockDirection::North.to_offset()).0,
             )
             .to_block()
-            .name
-            .to_string(),
+            .name,
         ) {
             valid += 1;
         }
         if valid_blocks.contains(
-            &GenerationCache::get_block_state(
+            GenerationCache::get_block_state(
                 chunk,
                 &pos.offset(BlockDirection::South.to_offset()).0,
             )
             .to_block()
-            .name
-            .to_string(),
+            .name,
         ) {
             valid += 1;
         }
         if valid_blocks.contains(
-            &GenerationCache::get_block_state(
+            GenerationCache::get_block_state(
                 chunk,
                 &pos.offset(BlockDirection::Down.to_offset()).0,
             )
             .to_block()
-            .name
-            .to_string(),
+            .name,
         ) {
             valid += 1;
         }

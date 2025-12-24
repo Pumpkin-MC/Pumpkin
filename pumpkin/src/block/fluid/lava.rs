@@ -1,16 +1,23 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use pumpkin_data::{
     Block, BlockDirection,
     fluid::{Falling, Fluid, FluidProperties, Level},
     world::WorldEvent,
 };
 use pumpkin_macros::pumpkin_block;
+use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
-use crate::{block::fluid::FluidBehaviour, entity::EntityBase, world::World};
+use crate::{
+    block::{
+        BlockFuture,
+        fluid::{FluidBehaviour, flowing::FluidFuture},
+    },
+    entity::EntityBase,
+    world::World,
+};
 
 use super::flowing::FlowingFluid;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
@@ -72,95 +79,120 @@ impl FlowingLava {
 
 const LAVA_FLOW_SPEED: u8 = 30;
 
-#[async_trait]
 impl FluidBehaviour for FlowingLava {
-    async fn placed(
-        &self,
-        world: &Arc<World>,
-        fluid: &Fluid,
+    fn placed<'a>(
+        &'a self,
+        world: &'a Arc<World>,
+        fluid: &'a Fluid,
         state_id: BlockStateId,
-        block_pos: &BlockPos,
+        block_pos: &'a BlockPos,
         old_state_id: BlockStateId,
         _notify: bool,
-    ) {
-        if old_state_id != state_id && self.receive_neighbor_fluids(world, fluid, block_pos).await {
-            world
-                .schedule_fluid_tick(fluid, *block_pos, LAVA_FLOW_SPEED, TickPriority::Normal)
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if old_state_id != state_id
+                && self.receive_neighbor_fluids(world, fluid, block_pos).await
+            {
+                world
+                    .schedule_fluid_tick(fluid, *block_pos, LAVA_FLOW_SPEED, TickPriority::Normal)
+                    .await;
+            }
+        })
+    }
+
+    fn on_scheduled_tick<'a>(
+        &'a self,
+        world: &'a Arc<World>,
+        fluid: &'a Fluid,
+        block_pos: &'a BlockPos,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            self.on_scheduled_tick_internal(world, fluid, block_pos)
                 .await;
-        }
+        })
     }
 
-    async fn on_scheduled_tick(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
-        self.spread_fluid(world, fluid, block_pos).await;
-    }
-
-    async fn on_neighbor_update(
-        &self,
-        world: &Arc<World>,
-        fluid: &Fluid,
-        block_pos: &BlockPos,
+    fn on_neighbor_update<'a>(
+        &'a self,
+        world: &'a Arc<World>,
+        fluid: &'a Fluid,
+        block_pos: &'a BlockPos,
         _notify: bool,
-    ) {
-        if self.receive_neighbor_fluids(world, fluid, block_pos).await {
-            world
-                .schedule_fluid_tick(fluid, *block_pos, LAVA_FLOW_SPEED, TickPriority::Normal)
-                .await;
-        }
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if self.receive_neighbor_fluids(world, fluid, block_pos).await {
+                world
+                    .schedule_fluid_tick(fluid, *block_pos, LAVA_FLOW_SPEED, TickPriority::Normal)
+                    .await;
+            }
+        })
     }
 
-    async fn on_entity_collision(&self, entity: &dyn EntityBase) {
-        let base_entity = entity.get_entity();
-        if !base_entity.entity_type.fire_immune {
-            base_entity.set_on_fire_for(15.0);
-        }
+    fn on_entity_collision<'a>(&'a self, entity: &'a dyn EntityBase) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let base_entity = entity.get_entity();
+            if !base_entity.entity_type.fire_immune {
+                base_entity.set_on_fire_for(15.0);
+            }
+        })
     }
 }
 
-#[async_trait]
 impl FlowingFluid for FlowingLava {
-    //TODO implement ultrawarm logic
-    async fn get_drop_off(&self) -> i32 {
-        2
+    fn get_level_decrease_per_block(&self, world: &World) -> i32 {
+        // ultrawarm logic
+        if world.dimension_type == VanillaDimensionType::TheNether {
+            1
+        } else {
+            2
+        }
     }
 
-    async fn get_slope_find_distance(&self) -> i32 {
-        2
+    fn get_max_flow_distance(&self, world: &World) -> i32 {
+        // ultrawarm logic
+        if world.dimension_type == VanillaDimensionType::TheNether {
+            4
+        } else {
+            2
+        }
     }
 
-    async fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
+    fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
         //TODO add game rule check for lava conversion
         false
     }
 
-    async fn spread_to(
-        &self,
-        world: &Arc<World>,
-        fluid: &Fluid,
-        pos: &BlockPos,
+    fn spread_to<'a>(
+        &'a self,
+        world: &'a Arc<World>,
+        fluid: &'a Fluid,
+        pos: &'a BlockPos,
         state_id: BlockStateId,
-    ) {
-        let mut new_props = FlowingFluidProperties::default(fluid);
-        new_props.level = Level::L8;
-        new_props.falling = Falling::True;
-        if state_id == new_props.to_state_id(fluid) {
-            // STONE creation
-            if world.get_block(pos).await == &Block::WATER {
-                world
-                    .set_block_state(pos, Block::STONE.default_state.id, BlockFlags::NOTIFY_ALL)
-                    .await;
-                world
-                    .sync_world_event(WorldEvent::LavaExtinguished, *pos, 0)
-                    .await;
+    ) -> FluidFuture<'a, ()> {
+        Box::pin(async move {
+            let mut new_props = FlowingFluidProperties::default(fluid);
+            new_props.level = Level::L8;
+            new_props.falling = Falling::True;
+            if state_id == new_props.to_state_id(fluid) {
+                // STONE creation
+                if world.get_block(pos).await == &Block::WATER {
+                    world
+                        .set_block_state(pos, Block::STONE.default_state.id, BlockFlags::NOTIFY_ALL)
+                        .await;
+                    world
+                        .sync_world_event(WorldEvent::LavaExtinguished, *pos, 0)
+                        .await;
+                    return;
+                }
+            }
+
+            if self.is_waterlogged(world, pos).await.is_some() {
                 return;
             }
-        }
 
-        if self.is_waterlogged(world, pos).await.is_some() {
-            return;
-        }
-
-        world
-            .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
-            .await;
+            world
+                .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
+                .await;
+        })
     }
 }

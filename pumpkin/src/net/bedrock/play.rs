@@ -3,7 +3,6 @@ use std::{
     sync::Arc,
 };
 
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     bedrock::{
@@ -159,7 +158,7 @@ impl BedrockClient {
         }
     }
 
-    pub async fn handle_chat_message(&self, player: &Arc<Player>, packet: SText) {
+    pub async fn handle_chat_message(&self, server: &Server, player: &Arc<Player>, packet: SText) {
         let gameprofile = &player.gameprofile;
 
         send_cancellable! {{
@@ -168,9 +167,9 @@ impl BedrockClient {
             'after: {
                 log::info!("<chat> {}: {}", gameprofile.name, event.message);
 
-                let config = advanced_config();
+                let config = &server.advanced_config;
 
-                let message = match seasonal_events::modify_chat_message(&event.message) {
+                let message = match seasonal_events::modify_chat_message(&event.message, config) {
                     Some(m) => m,
                     None => event.message.clone(),
                 };
@@ -182,7 +181,7 @@ impl BedrockClient {
                 );
 
                 let entity = &player.living_entity.entity;
-                if BASIC_CONFIG.allow_chat_reports {
+                if server.basic_config.allow_chat_reports {
                     //TODO Alex help, what is this?
                     //world.broadcast_secure_player_chat(player, &message, decorated_message).await;
                 } else {
@@ -225,14 +224,14 @@ impl BedrockClient {
                     let dispatcher = server_clone.command_dispatcher.read().await;
                     dispatcher
                         .handle_command(
-                            &mut CommandSender::Player(player_clone),
+                            &CommandSender::Player(player_clone),
                             &server_clone,
                             &command_clone,
                         )
                         .await;
                 });
 
-                if advanced_config().commands.log_console {
+                if server.advanced_config.commands.log_console {
                     log::info!(
                         "Player ({}): executed command /{}",
                         player.gameprofile.name,

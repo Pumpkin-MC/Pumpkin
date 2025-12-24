@@ -4,12 +4,11 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
-use async_trait::async_trait;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
-use crate::{server::Server, world::World};
+use crate::{entity::EntityBaseFuture, server::Server, world::World};
 
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
@@ -75,54 +74,61 @@ impl ExperienceOrbEntity {
 
 impl NBTStorage for ExperienceOrbEntity {}
 
-#[async_trait]
 impl EntityBase for ExperienceOrbEntity {
-    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
-        let entity = &self.entity;
-        entity.tick(caller.clone(), server).await;
-        let bounding_box = entity.bounding_box.load();
+    fn tick<'a>(
+        &'a self,
+        caller: Arc<dyn EntityBase>,
+        server: &'a Server,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = &self.entity;
+            entity.tick(caller.clone(), server).await;
+            let bounding_box = entity.bounding_box.load();
 
-        let original_velo = entity.velocity.load();
+            let original_velo = entity.velocity.load();
 
-        let mut velo = original_velo;
+            let mut velo = original_velo;
 
-        let no_clip = !self
-            .entity
-            .world
-            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
-            .await;
-        // TODO: isSubmergedIn
-        if !no_clip {
-            velo.y -= self.get_gravity();
-        }
+            let no_clip = !self
+                .entity
+                .world
+                .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
+                .await;
+            // TODO: isSubmergedIn
+            if !no_clip {
+                velo.y -= self.get_gravity();
+            }
 
-        entity.velocity.store(velo);
+            entity.velocity.store(velo);
 
-        entity.move_entity(caller.clone(), velo).await;
+            entity.move_entity(caller.clone(), velo).await;
 
-        entity.tick_block_collisions(&caller, server).await;
+            entity.tick_block_collisions(&caller, server).await;
 
-        let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
-        if age >= 6000 {
-            self.entity.remove().await;
-        }
+            let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
+            if age >= 6000 {
+                self.entity.remove().await;
+            }
+        })
     }
 
     fn get_entity(&self) -> &Entity {
         &self.entity
     }
 
-    async fn on_player_collision(&self, player: &Arc<Player>) {
-        if player.living_entity.health.load() > 0.0 {
-            let mut delay = player.experience_pick_up_delay.lock().await;
-            if *delay == 0 {
-                *delay = 2;
-                player.living_entity.pickup(&self.entity, 1).await;
-                player.add_experience_points(self.amount as i32).await;
-                // TODO: pickingCount for merging
-                self.entity.remove().await;
+    fn on_player_collision<'a>(&'a self, player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if player.living_entity.health.load() > 0.0 {
+                let mut delay = player.experience_pick_up_delay.lock().await;
+                if *delay == 0 {
+                    *delay = 2;
+                    player.living_entity.pickup(&self.entity, 1).await;
+                    player.add_experience_points(self.amount as i32).await;
+                    // TODO: pickingCount for merging
+                    self.entity.remove().await;
+                }
             }
-        }
+        })
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {

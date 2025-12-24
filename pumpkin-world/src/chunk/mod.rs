@@ -11,7 +11,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
-use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_util::math::position::BlockPos;
 use serde::{Deserialize, Serialize};
 use std::ops::{BitAnd, BitOr};
 use std::{collections::HashMap, sync::Arc};
@@ -72,7 +72,8 @@ pub struct ChunkData {
     pub section: ChunkSections,
     /// See `https://minecraft.wiki/w/Heightmap` for more info
     pub heightmap: ChunkHeightmaps,
-    pub position: Vector2<i32>,
+    pub x: i32,
+    pub z: i32,
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
     pub block_entities: HashMap<BlockPos, Arc<dyn BlockEntity>>,
@@ -83,7 +84,10 @@ pub struct ChunkData {
 
 #[derive(Clone)]
 pub struct ChunkEntityData {
-    pub chunk_position: Vector2<i32>,
+    /// Chunk X
+    pub x: i32,
+    /// Chunk Z
+    pub z: i32,
     pub data: HashMap<uuid::Uuid, NbtCompound>,
 
     pub dirty: bool,
@@ -95,7 +99,7 @@ pub struct ChunkEntityData {
 ///
 /// A chunk can be:
 /// - Subchunks: 24 separate subchunks are stored.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ChunkSections {
     pub sections: Box<[SubChunk]>,
     pub min_y: i32,
@@ -127,13 +131,13 @@ impl ChunkSections {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct SubChunk {
     pub block_states: BlockPalette,
     pub biomes: BiomePalette,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct ChunkLight {
     pub sky_light: Box<[LightContainer]>,
     pub block_light: Box<[LightContainer]>,
@@ -329,13 +333,13 @@ impl ChunkSections {
         relative_x: usize,
         y: i32,
         relative_z: usize,
-        block_state: BlockStateId,
+        block_state_id: BlockStateId,
     ) -> BlockStateId {
         let y = y - self.min_y;
         debug_assert!(y >= 0);
         let relative_y = y as usize;
 
-        self.set_relative_block(relative_x, relative_y, relative_z, block_state)
+        self.set_relative_block(relative_x, relative_y, relative_z, block_state_id)
     }
 
     /// Gets the given block in the chunk
@@ -425,6 +429,22 @@ impl ChunkSections {
             .get(index)
             .map(|section| section.biomes.get(scale_x, scale_y, scale_z))
     }
+
+    pub fn get_top_y(&self, relative_x: usize, relative_z: usize, first_y: i32) -> Option<i32> {
+        debug_assert!(relative_x < BlockPalette::SIZE);
+        debug_assert!(relative_z < BlockPalette::SIZE);
+
+        let mut y = first_y;
+        while y >= self.min_y {
+            if let Some(block_state_id) = self.get_block_absolute_y(relative_x, y, relative_z)
+                && !BlockState::from_id(block_state_id).is_air()
+            {
+                return Some(y);
+            }
+            y -= 1;
+        }
+        None
+    }
 }
 
 impl ChunkData {
@@ -512,7 +532,7 @@ impl ChunkData {
                 has_found[ChunkHeightmapType::WorldSurface as usize] = true;
             }
 
-            let is_motion_blocking = blocks_movement(block_state)
+            let is_motion_blocking = blocks_movement(block_state, block)
                 || Fluid::from_registry_key(block.registry_key())
                     .is_some_and(|fluid| !fluid.states.is_empty());
 

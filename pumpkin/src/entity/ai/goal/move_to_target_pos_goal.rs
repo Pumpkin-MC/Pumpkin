@@ -1,10 +1,11 @@
 use super::{Controls, Goal, to_goal_ticks};
+use crate::entity::ai::goal::GoalFuture;
 use crate::entity::{ai::goal::ParentHandle, mob::Mob};
 use crate::world::World;
-use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::Rng;
+use std::pin::Pin;
 use std::sync::Arc;
 
 const MIN_WAITING_TIME: i32 = 1200;
@@ -121,66 +122,77 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
 }
 
 // Contains overridable functions
-#[async_trait]
 pub trait MoveToTargetPos: Send + Sync {
-    async fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool;
+    fn is_target_pos<'a>(
+        &'a self,
+        world: Arc<World>,
+        block_pos: BlockPos,
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
 
     fn get_desired_distance_to_target(&self) -> f64 {
         1.0
     }
 }
 
-#[async_trait]
 impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
-    async fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if self.cooldown > 0 {
-            self.cooldown -= 1;
-            return false;
-        }
-        self.cooldown = Self::get_interval(mob);
-        self.find_target_pos(mob).await
-    }
-
-    async fn should_continue(&self, mob: &dyn Mob) -> bool {
-        let world = &mob.get_entity().world;
-        let can_target = if let Some(x) = self.move_to_target_pos.get() {
-            x.is_target_pos(world.clone(), self.target_pos).await
-        } else {
-            false
-        };
-        self.trying_time >= -self.safe_waiting_time
-            && self.trying_time <= MAX_TRYING_TIME
-            && can_target
-    }
-
-    async fn start(&mut self, mob: &dyn Mob) {
-        Self::start_moving_to_target(mob);
-        self.trying_time = 0;
-        let random = mob.get_random().random_range(0..MIN_WAITING_TIME);
-        self.safe_waiting_time =
-            mob.get_random().random_range(random..MIN_WAITING_TIME) + MIN_WAITING_TIME;
-    }
-
-    async fn tick(&mut self, mob: &dyn Mob) {
-        let block_pos = self.get_target_pos();
-        let block_pos: Vector3<f64> = block_pos.0.to_f64();
-        let Some(move_to_target_pos) = self.move_to_target_pos.get() else {
-            return;
-        };
-        let desired_distance = move_to_target_pos.get_desired_distance_to_target();
-        if block_pos.squared_distance_to_vec(mob.get_entity().pos.load())
-            < desired_distance * desired_distance
-        {
-            self.reached = true;
-            self.trying_time -= 1;
-        } else {
-            self.reached = false;
-            self.trying_time += 1;
-            if self.should_reset_path() {
-                // TODO: implement when navigation is implemented
-                // this.mob.getNavigation().startMovingTo(lv.getX() + 0.5, lv.getY(), lv.getZ() + 0.5, this.speed);
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async {
+            if self.cooldown > 0 {
+                self.cooldown -= 1;
+                return false;
             }
-        }
+            self.cooldown = Self::get_interval(mob);
+            self.find_target_pos(mob).await
+        })
+    }
+
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async {
+            let world = &mob.get_entity().world;
+            let can_target = if let Some(x) = self.move_to_target_pos.get() {
+                x.is_target_pos(world.clone(), self.target_pos).await
+            } else {
+                false
+            };
+            self.trying_time >= -self.safe_waiting_time
+                && self.trying_time <= MAX_TRYING_TIME
+                && can_target
+        })
+    }
+
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            Self::start_moving_to_target(mob);
+            self.trying_time = 0;
+            let random = mob.get_random().random_range(0..MIN_WAITING_TIME);
+            self.safe_waiting_time =
+                mob.get_random().random_range(random..MIN_WAITING_TIME) + MIN_WAITING_TIME;
+        })
+    }
+
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            let block_pos = self.get_target_pos();
+            let block_pos: Vector3<f64> = block_pos.to_f64();
+            let Some(move_to_target_pos) = self.move_to_target_pos.get() else {
+                return;
+            };
+            let desired_distance = move_to_target_pos.get_desired_distance_to_target();
+
+            if block_pos.squared_distance_to_vec(mob.get_entity().pos.load())
+                < desired_distance * desired_distance
+            {
+                self.reached = true;
+                self.trying_time -= 1;
+            } else {
+                self.reached = false;
+                self.trying_time += 1;
+                if self.should_reset_path() {
+                    // TODO: implement when navigation is implemented
+                    // this.mob.getNavigation().startMovingTo(lv.getX() + 0.5, lv.getY(), lv.getZ() + 0.5, this.speed);
+                }
+            }
+        })
     }
 
     fn should_run_every_tick(&self) -> bool {

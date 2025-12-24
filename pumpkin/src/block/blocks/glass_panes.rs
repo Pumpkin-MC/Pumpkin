@@ -1,6 +1,6 @@
+use crate::block::BlockFuture;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
-use async_trait::async_trait;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::RegistryKey;
@@ -26,21 +26,24 @@ impl BlockMetadata for GlassPaneBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for GlassPaneBlock {
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut pane_props = GlassPaneProperties::default(args.block);
-        pane_props.waterlogged = args.replacing.water_source();
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut pane_props = GlassPaneProperties::default(args.block);
+            pane_props.waterlogged = args.replacing.water_source();
 
-        compute_pane_state(pane_props, args.world, args.block, args.position).await
+            compute_pane_state(pane_props, args.world, args.block, args.position).await
+        })
     }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let pane_props = GlassPaneProperties::from_state_id(args.state_id, args.block);
-        compute_pane_state(pane_props, args.world, args.block, args.position).await
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let pane_props = GlassPaneProperties::from_state_id(args.state_id, args.block);
+            compute_pane_state(pane_props, args.world, args.block, args.position).await
+        })
     }
 }
 

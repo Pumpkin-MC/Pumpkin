@@ -1,6 +1,5 @@
 use crate::entity::mob::Mob;
-use async_trait::async_trait;
-use std::{any::TypeId, ops::BitOr, ptr};
+use std::{any::TypeId, ops::BitOr, pin::Pin, ptr};
 
 pub mod active_target_goal;
 pub mod ambient_stand_goal;
@@ -18,18 +17,33 @@ pub fn to_goal_ticks(server_ticks: i32) -> i32 {
     -(-server_ticks).div_euclid(2)
 }
 
-#[async_trait]
+pub type GoalFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
 pub trait Goal: Send + Sync {
     /// How should the `Goal` initially start?
-    async fn can_start(&mut self, mob: &dyn Mob) -> bool;
+    fn can_start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { false })
+    }
+
     /// When it's started, how should it continue to run?
-    async fn should_continue(&self, mob: &dyn Mob) -> bool;
+    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { false })
+    }
+
     /// Call when goal start
-    async fn start(&mut self, _: &dyn Mob) {}
+    fn start<'a>(&'a mut self, _: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     /// Call when goal stop
-    async fn stop(&mut self, _: &dyn Mob) {}
+    fn stop<'a>(&'a mut self, _: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     /// If the `Goal` is running, this gets called every tick.
-    async fn tick(&mut self, _: &dyn Mob) {}
+    fn tick<'a>(&'a mut self, _: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {})
+    }
 
     fn should_run_every_tick(&self) -> bool {
         false
@@ -52,7 +66,7 @@ pub trait Goal: Send + Sync {
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 // We actually only use the first 4 bits ;)
 pub struct Controls(u8);
 
@@ -125,33 +139,39 @@ impl PrioritizedGoal {
     }
 }
 
-#[async_trait]
 impl Goal for PrioritizedGoal {
-    async fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        self.goal.can_start(mob).await
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { self.goal.can_start(mob).await })
     }
 
-    async fn should_continue(&self, mob: &dyn Mob) -> bool {
-        self.goal.should_continue(mob).await
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { self.goal.should_continue(mob).await })
     }
 
-    async fn start(&mut self, mob: &dyn Mob) {
-        if !self.running {
-            self.running = true;
-            self.goal.start(mob).await;
-        }
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            if !self.running {
+                self.running = true;
+                self.goal.start(mob).await;
+            }
+        })
     }
 
-    async fn stop(&mut self, mob: &dyn Mob) {
-        if self.running {
-            self.running = false;
-            self.goal.stop(mob).await;
-        }
+    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            if self.running {
+                self.running = false;
+                self.goal.stop(mob).await;
+            }
+        })
     }
 
-    async fn tick(&mut self, mob: &dyn Mob) {
-        self.goal.tick(mob).await;
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            self.goal.tick(mob).await;
+        })
     }
+
     fn should_run_every_tick(&self) -> bool {
         self.goal.should_run_every_tick()
     }

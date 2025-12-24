@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use pumpkin_data::block_properties::{BlockProperties, Integer0To1};
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -8,7 +7,9 @@ use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::{BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs};
+use crate::block::{
+    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
+};
 use crate::world::World;
 
 type SaplingProperties = pumpkin_data::block_properties::OakSaplingLikeProperties;
@@ -31,27 +32,32 @@ impl SaplingBlock {
     }
 }
 
-#[async_trait]
 impl BlockBehaviour for SaplingBlock {
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
+        })
     }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        <Self as PlantBlockBase>::get_state_for_neighbor_update(
-            self,
-            args.world,
-            args.position,
-            args.state_id,
-        )
-        .await
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            <Self as PlantBlockBase>::get_state_for_neighbor_update(
+                self,
+                args.world,
+                args.position,
+                args.state_id,
+            )
+            .await
+        })
     }
 
-    async fn random_tick(&self, args: RandomTickArgs<'_>) {
-        self.generate(args.world, args.position).await;
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            self.generate(args.world, args.position).await;
+        })
     }
 }
 

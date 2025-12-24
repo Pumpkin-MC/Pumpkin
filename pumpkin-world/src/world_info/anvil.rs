@@ -112,9 +112,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
             .expect("Time went backwards");
         let mut level_data = info.clone();
         level_data.last_played = since_the_epoch.as_millis() as i64;
-        let level = LevelDat {
-            data: level_data.clone(),
-        };
+        let level = LevelDat { data: level_data };
 
         // open file
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
@@ -152,7 +150,7 @@ mod test {
     use flate2::read::GzDecoder;
     use pumpkin_data::game_rules::GameRuleRegistry;
     use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};
-    use pumpkin_util::Difficulty;
+    use pumpkin_util::{Difficulty, world_seed::Seed};
     use temp_dir::TempDir;
 
     use crate::{
@@ -166,8 +164,7 @@ mod test {
     fn test_preserve_level_dat_seed() {
         let seed = 1337;
 
-        let mut data = LevelData::default();
-        data.world_gen_settings.seed = seed;
+        let data = LevelData::default(Seed(1337));
 
         let temp_dir = TempDir::new().unwrap();
 
@@ -206,27 +203,8 @@ mod test {
             difficulty: Difficulty::Normal,
             difficulty_locked: false,
             game_rules: GameRuleRegistry {
-                announce_advancements: true,
                 block_explosion_drop_decay: true,
                 command_block_output: true,
-                command_modification_block_limit: 32768,
-                disable_elytra_movement_check: false,
-                disable_player_movement_check: false,
-                disable_raids: false,
-                do_daylight_cycle: true,
-                do_entity_drops: true,
-                do_fire_tick: true,
-                do_immediate_respawn: false,
-                do_insomnia: true,
-                do_limited_crafting: false,
-                do_mob_loot: true,
-                do_mob_spawning: true,
-                do_patrol_spawning: true,
-                do_tile_drops: true,
-                do_trader_spawning: true,
-                do_vines_spread: true,
-                do_warden_spawning: true,
-                do_weather_cycle: true,
                 drowning_damage: true,
                 ender_pearls_vanish_on_death: true,
                 fall_damage: true,
@@ -237,12 +215,9 @@ mod test {
                 keep_inventory: false,
                 lava_source_conversion: false,
                 log_admin_commands: true,
-                max_command_chain_length: 65536,
-                max_command_fork_count: 65536,
                 max_entity_cramming: 24,
                 mob_explosion_drop_decay: true,
                 mob_griefing: true,
-                natural_regeneration: true,
                 players_nether_portal_creative_delay: 0,
                 players_nether_portal_default_delay: 80,
                 players_sleeping_percentage: 100,
@@ -251,18 +226,13 @@ mod test {
                 reduced_debug_info: false,
                 send_command_feedback: true,
                 show_death_messages: true,
-                snow_accumulation_height: 1,
-                spawn_radius: 10,
                 spectators_generate_chunks: true,
                 tnt_explosion_drop_decay: false,
                 universal_anger: false,
                 water_source_conversion: true,
                 ..Default::default()
             },
-            world_gen_settings: WorldGenSettings {
-                seed: 1,
-                ..Default::default()
-            },
+            world_gen_settings: WorldGenSettings::new(Seed(1)),
             last_played: 1733847709327,
             level_name: "New World".to_string(),
             spawn_x: 160,

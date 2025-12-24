@@ -1,11 +1,10 @@
 use std::str::FromStr;
 
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::GameMode;
 
 use crate::{
-    command::{CommandSender, dispatcher::CommandError, tree::RawArgs},
+    command::{CommandSender, args::ConsumeResult, dispatcher::CommandError, tree::RawArgs},
     server::Server,
 };
 
@@ -23,32 +22,26 @@ impl GetClientSideArgParser for GamemodeArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for GamemodeArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
 
-        if let Ok(id) = s.parse::<i8>()
-            && let Ok(gamemode) = GameMode::try_from(id)
-        {
-            return Some(Arg::GameMode(gamemode));
-        }
+        let result: Option<Arg<'a>> = s_opt.and_then(|s| {
+            if let Ok(id) = s.parse::<i8>()
+                && let Ok(gamemode) = GameMode::try_from(id)
+            {
+                return Some(Arg::GameMode(gamemode));
+            }
 
-        GameMode::from_str(s).map_or_else(|_| None, |gamemode| Some(Arg::GameMode(gamemode)))
-    }
+            GameMode::from_str(s).map(Arg::GameMode).ok() // Convert Result to Option<T>
+        });
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        Box::pin(async move { result })
     }
 }
 

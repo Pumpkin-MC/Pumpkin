@@ -1,12 +1,13 @@
-use async_trait::async_trait;
 use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, FacingExt};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomImpl, get_seed};
 use std::any::Any;
+use std::pin::Pin;
 use std::{
     array::from_fn,
     sync::{
@@ -16,7 +17,8 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-use crate::block::viewer::{ViewerCountListener, ViewerCountTracker};
+use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerFuture};
+use crate::inventory::InventoryFuture;
 use crate::world::{BlockFlags, SimpleWorld};
 use crate::{
     inventory::{
@@ -27,7 +29,6 @@ use crate::{
 
 use super::BlockEntity;
 
-#[derive(Debug)]
 pub struct BarrelBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
@@ -37,7 +38,6 @@ pub struct BarrelBlockEntity {
     viewers: ViewerCountTracker,
 }
 
-#[async_trait]
 impl BlockEntity for BarrelBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
@@ -63,16 +63,26 @@ impl BlockEntity for BarrelBlockEntity {
         barrel
     }
 
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        self.write_data(nbt, &self.items, true).await;
+    fn write_nbt<'a>(
+        &'a self,
+        nbt: &'a mut NbtCompound,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            self.write_data(nbt, &self.items, true).await;
+        })
         // Safety precaution
         //self.clear().await;
     }
 
-    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
-        self.viewers
-            .update_viewer_count::<BarrelBlockEntity>(self, world, &self.position)
-            .await;
+    fn tick<'a>(
+        &'a self,
+        world: Arc<dyn SimpleWorld>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            self.viewers
+                .update_viewer_count::<BarrelBlockEntity>(self, world, &self.position)
+                .await;
+        })
     }
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
@@ -88,16 +98,27 @@ impl BlockEntity for BarrelBlockEntity {
     }
 }
 
-#[async_trait]
 impl ViewerCountListener for BarrelBlockEntity {
-    async fn on_container_open(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
-        self.play_sound(world, Sound::BlockBarrelOpen).await;
-        self.set_open(world, true).await;
+    fn on_container_open<'a>(
+        &'a self,
+        world: &'a Arc<dyn SimpleWorld>,
+        _position: &'a BlockPos,
+    ) -> ViewerFuture<'a, ()> {
+        Box::pin(async move {
+            self.play_sound(world, Sound::BlockBarrelOpen).await;
+            self.set_open(world, true).await;
+        })
     }
 
-    async fn on_container_close(&self, world: &Arc<dyn SimpleWorld>, _position: &BlockPos) {
-        self.play_sound(world, Sound::BlockBarrelClose).await;
-        self.set_open(world, false).await;
+    fn on_container_close<'a>(
+        &'a self,
+        world: &'a Arc<dyn SimpleWorld>,
+        _position: &'a BlockPos,
+    ) -> ViewerFuture<'a, ()> {
+        Box::pin(async move {
+            self.play_sound(world, Sound::BlockBarrelClose).await;
+            self.set_open(world, false).await;
+        })
     }
 }
 
@@ -153,47 +174,56 @@ impl BarrelBlockEntity {
     }
 }
 
-#[async_trait]
 impl Inventory for BarrelBlockEntity {
     fn size(&self) -> usize {
         self.items.len()
     }
 
-    async fn is_empty(&self) -> bool {
-        for slot in self.items.iter() {
-            if !slot.lock().await.is_empty() {
-                return false;
+    fn is_empty(&self) -> InventoryFuture<'_, bool> {
+        Box::pin(async move {
+            for slot in self.items.iter() {
+                if !slot.lock().await.is_empty() {
+                    return false;
+                }
             }
-        }
 
-        true
+            true
+        })
     }
 
-    async fn get_stack(&self, slot: usize) -> Arc<Mutex<ItemStack>> {
-        self.items[slot].clone()
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
+        Box::pin(async move { self.items[slot].clone() })
     }
 
-    async fn remove_stack(&self, slot: usize) -> ItemStack {
-        let mut removed = ItemStack::EMPTY.clone();
-        let mut guard = self.items[slot].lock().await;
-        std::mem::swap(&mut removed, &mut *guard);
-        removed
+    fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let mut removed = ItemStack::EMPTY.clone();
+            let mut guard = self.items[slot].lock().await;
+            std::mem::swap(&mut removed, &mut *guard);
+            removed
+        })
     }
 
-    async fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
-        split_stack(&self.items, slot, amount).await
+    fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move { split_stack(&self.items, slot, amount).await })
     }
 
-    async fn set_stack(&self, slot: usize, stack: ItemStack) {
-        *self.items[slot].lock().await = stack;
+    fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
+        Box::pin(async move {
+            *self.items[slot].lock().await = stack;
+        })
     }
 
-    async fn on_open(&self) {
-        self.viewers.open_container();
+    fn on_open(&self) -> InventoryFuture<'_, ()> {
+        Box::pin(async move {
+            self.viewers.open_container();
+        })
     }
 
-    async fn on_close(&self) {
-        self.viewers.close_container();
+    fn on_close(&self) -> InventoryFuture<'_, ()> {
+        Box::pin(async move {
+            self.viewers.close_container();
+        })
     }
 
     fn mark_dirty(&self) {
@@ -205,11 +235,12 @@ impl Inventory for BarrelBlockEntity {
     }
 }
 
-#[async_trait]
 impl Clearable for BarrelBlockEntity {
-    async fn clear(&self) {
-        for slot in self.items.iter() {
-            *slot.lock().await = ItemStack::EMPTY.clone();
-        }
+    fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async move {
+            for slot in self.items.iter() {
+                *slot.lock().await = ItemStack::EMPTY.clone();
+            }
+        })
     }
 }

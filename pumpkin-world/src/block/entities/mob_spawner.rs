@@ -1,9 +1,11 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicI32, Ordering},
+use std::{
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicI32, Ordering},
+    },
 };
 
-use async_trait::async_trait;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{entity::EntityType, world::WorldEvent};
 use pumpkin_nbt::compound::NbtCompound;
@@ -67,7 +69,6 @@ impl MobSpawnerBlockEntity {
     }
 }
 
-#[async_trait]
 impl BlockEntity for MobSpawnerBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
@@ -77,53 +78,58 @@ impl BlockEntity for MobSpawnerBlockEntity {
         self.position
     }
 
-    async fn tick(&self, world: Arc<dyn SimpleWorld>) {
-        if let Some(entity_type) = &self.entity_type.load() {
-            if self.delay.load(Ordering::Relaxed) == -1 {
-                self.update_spawns(&world).await;
-            } else {
-                self.delay.fetch_sub(1, Ordering::Relaxed);
-                return;
-            }
-            let spawn_range = self.spawn_range;
-            let mut update_spawns = false;
-            for _ in 0..self.spawn_count {
-                let pos = self.position.0;
-
-                let spawn_pos = Vector3::new(
-                    pos.x as f64
-                        + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
-                        + 0.5,
-                    (pos.y + rand::random_range(0..3) - 1) as f64,
-                    pos.z as f64
-                        + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
-                        + 0.5,
-                );
-                // TODO: we should use getSpawnBox, but this is only modified for slimes and magma slimes
-                if !world
-                    .is_space_empty(BoundingBox::new_from_pos(
-                        spawn_pos.x,
-                        spawn_pos.y,
-                        spawn_pos.z,
-                        &EntityDimensions {
-                            width: entity_type.dimension[0],
-                            height: entity_type.dimension[1],
-                        },
-                    ))
-                    .await
-                {
-                    continue;
+    fn tick<'a>(
+        &'a self,
+        world: Arc<dyn SimpleWorld>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            if let Some(entity_type) = &self.entity_type.load() {
+                if self.delay.load(Ordering::Relaxed) == -1 {
+                    self.update_spawns(&world).await;
+                } else {
+                    self.delay.fetch_sub(1, Ordering::Relaxed);
+                    return;
                 }
-                world.clone().spawn_from_type(entity_type, spawn_pos).await;
-                world
-                    .sync_world_event(WorldEvent::SpawnerSpawnsMob, self.position, 0)
-                    .await;
-                update_spawns = true;
+                let spawn_range = self.spawn_range;
+                let mut update_spawns = false;
+                for _ in 0..self.spawn_count {
+                    let pos = self.position.0;
+
+                    let spawn_pos = Vector3::new(
+                        pos.x as f64
+                            + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
+                            + 0.5,
+                        (pos.y + rand::random_range(0..3) - 1) as f64,
+                        pos.z as f64
+                            + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
+                            + 0.5,
+                    );
+                    // TODO: we should use getSpawnBox, but this is only modified for slimes and magma slimes
+                    if !world
+                        .is_space_empty(BoundingBox::new_from_pos(
+                            spawn_pos.x,
+                            spawn_pos.y,
+                            spawn_pos.z,
+                            &EntityDimensions {
+                                width: entity_type.dimension[0],
+                                height: entity_type.dimension[1],
+                            },
+                        ))
+                        .await
+                    {
+                        continue;
+                    }
+                    world.clone().spawn_from_type(entity_type, spawn_pos).await;
+                    world
+                        .sync_world_event(WorldEvent::SpawnerSpawnsMob, self.position, 0)
+                        .await;
+                    update_spawns = true;
+                }
+                if update_spawns {
+                    self.update_spawns(&world).await;
+                }
             }
-            if update_spawns {
-                self.update_spawns(&world).await;
-            }
-        }
+        })
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
@@ -156,13 +162,18 @@ impl BlockEntity for MobSpawnerBlockEntity {
         }
     }
 
-    async fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        if let Some(entity_type) = self.entity_type.load() {
-            let mut entity_nbt = NbtCompound::new();
-            entity_nbt.put_string("id", format!("minecraft:{}", entity_type.resource_name));
+    fn write_nbt<'a>(
+        &'a self,
+        nbt: &'a mut NbtCompound,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            if let Some(entity_type) = self.entity_type.load() {
+                let mut entity_nbt = NbtCompound::new();
+                entity_nbt.put_string("id", format!("minecraft:{}", entity_type.resource_name));
 
-            nbt.put_component("entity", entity_nbt);
-        }
+                nbt.put_component("entity", entity_nbt);
+            }
+        })
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {

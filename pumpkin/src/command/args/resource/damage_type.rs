@@ -1,11 +1,10 @@
-use async_trait::async_trait;
 use pumpkin_data::damage::DamageType;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 
 use crate::command::{
     CommandSender,
     args::{
-        Arg, ArgumentConsumer, ConsumedArgs, DefaultNameArgConsumer, FindArg,
+        Arg, ArgumentConsumer, ConsumeResult, ConsumedArgs, DefaultNameArgConsumer, FindArg,
         GetClientSideArgParser,
     },
     dispatcher::CommandError,
@@ -27,30 +26,24 @@ impl GetClientSideArgParser for DamageTypeArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for DamageTypeArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        _sender: &CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let name = args.pop()?;
-        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let name_opt: Option<&'a str> = args.pop();
 
-        // Create a static damage type first
-        let damage_type = DamageType::from_name(name)?;
-        // Find matching static damage type from values array
-        Some(Arg::DamageType(damage_type))
-    }
+        let result: Option<Arg<'a>> = name_opt.map_or_else(
+            || None,
+            |name| {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
+                DamageType::from_name(name).map(Arg::DamageType)
+            },
+        );
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        Box::pin(async move { result })
     }
 }
 

@@ -2,7 +2,7 @@ use std::num::NonZeroU8;
 
 use pumpkin_util::math::vector2::Vector2;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Cylindrical {
     pub center: Vector2<i32>,
     pub view_distance: NonZeroU8,

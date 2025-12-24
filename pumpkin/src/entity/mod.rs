@@ -1,7 +1,6 @@
 use crate::entity::item::ItemEntity;
 use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
-use async_trait::async_trait;
 use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
@@ -42,6 +41,7 @@ use pumpkin_world::entity::entity_data_flags::DATA_POSE;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
+use std::pin::Pin;
 use std::sync::{
     Arc,
     atomic::{
@@ -69,7 +69,10 @@ pub mod r#type;
 mod combat;
 pub mod predicate;
 
-#[async_trait]
+pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+pub type TeleportFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
 pub trait EntityBase: Send + Sync + NBTStorage {
     /// Called every tick for this entity.
     ///
@@ -78,26 +81,40 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     /// but in some scenarios (e.g., interactions or events), it might be a different entity.
     ///
     /// The `server` parameter provides access to the game server instance.
-    async fn tick(&self, caller: Arc<dyn EntityBase>, server: &Server) {
-        if let Some(living) = self.get_living_entity() {
-            living.tick(caller, server).await;
-        } else {
-            self.get_entity().tick(caller, server).await;
-        }
+    fn tick<'a>(
+        &'a self,
+        caller: Arc<dyn EntityBase>,
+        server: &'a Server,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(living) = self.get_living_entity() {
+                living.tick(caller, server).await;
+            } else {
+                self.get_entity().tick(caller, server).await;
+            }
+        })
     }
 
-    async fn init_data_tracker(&self) {}
+    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
 
-    async fn teleport(
+    // This method takes ownership of Arc<Self>, so the lifetime bounds are different.
+    fn teleport(
         self: Arc<Self>,
         position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
-    ) {
-        self.get_entity()
-            .teleport(position, yaw, pitch, world)
-            .await;
+    ) -> TeleportFuture
+    where
+        Self: 'static,
+    {
+        Box::pin(async move {
+            self.get_entity()
+                .teleport(position, yaw, pitch, world)
+                .await;
+        })
     }
 
     fn is_pushed_by_fluids(&self) -> bool {
@@ -109,14 +126,16 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     /// Returns if damage was successful or not
-    async fn damage(
+    fn damage(
         &self,
         caller: Arc<dyn EntityBase>,
         amount: f32,
         damage_type: DamageType,
-    ) -> bool {
-        self.damage_with_context(caller, amount, damage_type, None, None, None)
-            .await
+    ) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async move {
+            self.damage_with_context(caller, amount, damage_type, None, None, None)
+                .await
+        })
     }
 
     fn is_spectator(&self) -> bool {
@@ -135,21 +154,26 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         false
     }
 
-    async fn damage_with_context(
-        &self,
+    fn damage_with_context<'a>(
+        &'a self,
         _caller: Arc<dyn EntityBase>,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&dyn EntityBase>,
-        _cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        // Just do nothing
-        false
+        _source: Option<&'a dyn EntityBase>,
+        _cause: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async {
+            // Just do nothing
+            false
+        })
     }
 
     /// Called when a player collides with a entity
-    async fn on_player_collision(&self, _player: &Arc<Player>) {}
+    fn on_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
 
@@ -172,36 +196,41 @@ pub trait EntityBase: Send + Sync + NBTStorage {
                 [],
             ))
     }
-    async fn get_display_name(&self) -> TextComponent {
-        // TODO: team color
-        let entity = self.get_entity();
-        let mut name = entity
-            .custom_name
-            .clone()
-            .unwrap_or(TextComponent::translate(
-                format!("entity.minecraft.{}", entity.entity_type.resource_name),
-                [],
+
+    fn get_display_name(&self) -> EntityBaseFuture<'_, TextComponent> {
+        Box::pin(async move {
+            // TODO: team color
+            let entity = self.get_entity();
+            let mut name = entity
+                .custom_name
+                .clone()
+                .unwrap_or(TextComponent::translate(
+                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                    [],
+                ));
+            let name_clone = name.clone();
+            name = name.hover_event(HoverEvent::show_entity(
+                entity.entity_uuid.to_string(),
+                entity.entity_type.resource_name.into(),
+                Some(name_clone),
             ));
-        let name_clone = name.clone();
-        name = name.hover_event(HoverEvent::show_entity(
-            entity.entity_uuid.to_string(),
-            entity.entity_type.resource_name.into(),
-            Some(name_clone),
-        ));
-        name = name.insertion(entity.entity_uuid.to_string());
-        name
+            name = name.insertion(entity.entity_uuid.to_string());
+            name
+        })
     }
 
     /// Kills the Entity.
-    async fn kill(&self, caller: Arc<dyn EntityBase>) {
-        if let Some(living) = self.get_living_entity() {
-            living
-                .damage(caller, f32::MAX, DamageType::GENERIC_KILL)
-                .await;
-        } else {
-            // TODO this should be removed once all entities are implemented
-            self.get_entity().remove().await;
-        }
+    fn kill(&self, caller: Arc<dyn EntityBase>) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            if let Some(living) = self.get_living_entity() {
+                living
+                    .damage(caller, f32::MAX, DamageType::GENERIC_KILL)
+                    .await;
+            } else {
+                // TODO this should be removed once all entities are implemented
+                self.get_entity().remove().await;
+            }
+        })
     }
 
     /// Returns itself as the nbt storage for saving and loading data.
@@ -1749,125 +1778,137 @@ impl Entity {
     }
 }
 
-#[async_trait]
 impl NBTStorage for Entity {
-    async fn write_nbt(&self, nbt: &mut NbtCompound) {
-        let position = self.pos.load();
-        nbt.put_string(
-            "id",
-            format!("minecraft:{}", self.entity_type.resource_name),
-        );
-        let uuid = self.entity_uuid.as_u128();
-        nbt.put(
-            "UUID",
-            NbtTag::IntArray(vec![
-                (uuid >> 96) as i32,
-                ((uuid >> 64) & 0xFFFF_FFFF) as i32,
-                ((uuid >> 32) & 0xFFFF_FFFF) as i32,
-                (uuid & 0xFFFF_FFFF) as i32,
-            ]),
-        );
-        nbt.put(
-            "Pos",
-            NbtTag::List(vec![
-                position.x.into(),
-                position.y.into(),
-                position.z.into(),
-            ]),
-        );
-        let velocity = self.velocity.load();
-        nbt.put(
-            "Motion",
-            NbtTag::List(vec![
-                velocity.x.into(),
-                velocity.y.into(),
-                velocity.z.into(),
-            ]),
-        );
-        nbt.put(
-            "Rotation",
-            NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
-        );
-        nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
-        nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
-        nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
-        nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
-        if self.has_visual_fire.load(Relaxed) {
-            nbt.put_bool("HasVisualFire", true);
-        }
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            let position = self.pos.load();
+            nbt.put_string(
+                "id",
+                format!("minecraft:{}", self.entity_type.resource_name),
+            );
+            let uuid = self.entity_uuid.as_u128();
+            nbt.put(
+                "UUID",
+                NbtTag::IntArray(vec![
+                    (uuid >> 96) as i32,
+                    ((uuid >> 64) & 0xFFFF_FFFF) as i32,
+                    ((uuid >> 32) & 0xFFFF_FFFF) as i32,
+                    (uuid & 0xFFFF_FFFF) as i32,
+                ]),
+            );
+            nbt.put(
+                "Pos",
+                NbtTag::List(vec![
+                    position.x.into(),
+                    position.y.into(),
+                    position.z.into(),
+                ]),
+            );
+            let velocity = self.velocity.load();
+            nbt.put(
+                "Motion",
+                NbtTag::List(vec![
+                    velocity.x.into(),
+                    velocity.y.into(),
+                    velocity.z.into(),
+                ]),
+            );
+            nbt.put(
+                "Rotation",
+                NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
+            );
+            nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
+            nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
+            nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
+            nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
+            if self.has_visual_fire.load(Relaxed) {
+                nbt.put_bool("HasVisualFire", true);
+            }
 
-        // todo more...
+            // todo more...
+        })
     }
 
-    async fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
-        let position = nbt.get_list("Pos").unwrap();
-        let x = position[0].extract_double().unwrap_or(0.0);
-        let y = position[1].extract_double().unwrap_or(0.0);
-        let z = position[2].extract_double().unwrap_or(0.0);
-        let pos = Vector3::new(x, y, z);
-        self.set_pos(pos);
-        self.first_loaded_chunk_position.store(Some(pos.to_i32()));
-        let velocity = nbt.get_list("Motion").unwrap();
-        let x = velocity[0].extract_double().unwrap_or(0.0);
-        let y = velocity[1].extract_double().unwrap_or(0.0);
-        let z = velocity[2].extract_double().unwrap_or(0.0);
-        self.velocity.store(Vector3::new(x, y, z));
-        let rotation = nbt.get_list("Rotation").unwrap();
-        let yaw = rotation[0].extract_float().unwrap_or(0.0);
-        let pitch = rotation[1].extract_float().unwrap_or(0.0);
-        self.set_rotation(yaw, pitch);
-        self.head_yaw.store(yaw);
-        self.fire_ticks
-            .store(i32::from(nbt.get_short("Fire").unwrap_or(0)), Relaxed);
-        self.on_ground
-            .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
-        self.invulnerable
-            .store(nbt.get_bool("Invulnerable").unwrap_or(false), Relaxed);
-        self.portal_cooldown
-            .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
-        self.has_visual_fire
-            .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
-        // todo more...
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            let position = nbt.get_list("Pos").unwrap();
+            let x = position[0].extract_double().unwrap_or(0.0);
+            let y = position[1].extract_double().unwrap_or(0.0);
+            let z = position[2].extract_double().unwrap_or(0.0);
+            let pos = Vector3::new(x, y, z);
+            self.set_pos(pos);
+            self.first_loaded_chunk_position.store(Some(pos.to_i32()));
+            let velocity = nbt.get_list("Motion").unwrap();
+            let x = velocity[0].extract_double().unwrap_or(0.0);
+            let y = velocity[1].extract_double().unwrap_or(0.0);
+            let z = velocity[2].extract_double().unwrap_or(0.0);
+            self.velocity.store(Vector3::new(x, y, z));
+            let rotation = nbt.get_list("Rotation").unwrap();
+            let yaw = rotation[0].extract_float().unwrap_or(0.0);
+            let pitch = rotation[1].extract_float().unwrap_or(0.0);
+            self.set_rotation(yaw, pitch);
+            self.head_yaw.store(yaw);
+            self.fire_ticks
+                .store(i32::from(nbt.get_short("Fire").unwrap_or(0)), Relaxed);
+            self.on_ground
+                .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
+            self.invulnerable
+                .store(nbt.get_bool("Invulnerable").unwrap_or(false), Relaxed);
+            self.portal_cooldown
+                .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
+            self.has_visual_fire
+                .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
+            // todo more...
+        })
     }
 }
 
-#[async_trait]
 impl EntityBase for Entity {
-    async fn tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
-        self.tick_portal(&caller).await;
-        self.update_fluid_state(&caller).await;
-        self.check_out_of_world(caller.clone()).await;
-        let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
-        if fire_ticks > 0 {
-            if self.entity_type.fire_immune {
-                self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
-                if self.fire_ticks.load(Ordering::Relaxed) < 0 {
-                    self.extinguish();
-                }
-            } else {
-                if fire_ticks % 20 == 0 {
-                    caller
-                        .damage(caller.clone(), 1.0, DamageType::ON_FIRE)
-                        .await;
-                }
+    fn tick<'a>(
+        &'a self,
+        caller: Arc<dyn EntityBase>,
+        _server: &'a Server,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.tick_portal(&caller).await;
+            self.update_fluid_state(&caller).await;
+            self.check_out_of_world(caller.clone()).await;
+            let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
+            if fire_ticks > 0 {
+                if self.entity_type.fire_immune {
+                    self.fire_ticks.store(fire_ticks - 4, Ordering::Relaxed);
+                    if self.fire_ticks.load(Ordering::Relaxed) < 0 {
+                        self.extinguish();
+                    }
+                } else {
+                    if fire_ticks % 20 == 0 {
+                        caller
+                            .damage(caller.clone(), 1.0, DamageType::ON_FIRE)
+                            .await;
+                    }
 
-                self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
+                    self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
+                }
             }
-        }
-        self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
-            .await;
-        // TODO: Tick
+            self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
+                .await;
+            // TODO: Tick
+        })
     }
 
-    async fn teleport(
+    fn teleport(
         self: Arc<Self>,
         position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
-    ) {
+    ) -> TeleportFuture {
         // TODO: handle world change
-        self.teleport(position, yaw, pitch, world).await;
+        Box::pin(async move {
+            self.get_entity()
+                .teleport(position, yaw, pitch, world)
+                .await;
+        })
     }
 
     fn get_entity(&self) -> &Entity {
@@ -1883,22 +1924,32 @@ impl EntityBase for Entity {
     }
 }
 
-#[async_trait]
-pub trait NBTStorage: Send + Sync {
-    async fn write_nbt(&self, _nbt: &mut NbtCompound) {}
+pub type NbtFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-    async fn read_nbt(&mut self, nbt: &mut NbtCompound) {
-        self.read_nbt_non_mut(nbt).await;
+pub trait NBTStorage: Send + Sync {
+    fn write_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
     }
 
-    async fn read_nbt_non_mut(&self, _nbt: &NbtCompound) {}
+    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.read_nbt_non_mut(nbt).await;
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {})
+    }
 }
 
-#[async_trait]
+pub type NBTInitFuture<'a, T> = Pin<Box<dyn Future<Output = Option<T>> + Send + 'a>>;
+
 pub trait NBTStorageInit: Send + Sync + Sized {
-    /// Creates an instance of the type from NBT data. If the NBT data is invalid or cannot be parsed, it returns `None`.
-    async fn create_from_nbt(_nbt: &mut NbtCompound) -> Option<Self> {
-        None
+    fn create_from_nbt<'a>(_nbt: &'a mut NbtCompound) -> NBTInitFuture<'a, Self>
+    where
+        Self: 'a,
+    {
+        Box::pin(async move { None })
     }
 }
 

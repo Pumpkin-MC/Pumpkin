@@ -6,13 +6,14 @@ use crate::{
     server::Server,
 };
 use core::str;
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_protocol::{
     ConnectionState,
-    java::client::config::{CFinishConfig, CRegistryData},
-    java::server::config::{
-        ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
-        SConfigResourcePack, SKnownPacks, SPluginMessage,
+    java::{
+        client::config::{CFinishConfig, CRegistryData, CUpdateTags},
+        server::config::{
+            ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
+            SConfigResourcePack, SKnownPacks, SPluginMessage,
+        },
     },
 };
 use pumpkin_util::{Hand, text::TextComponent};
@@ -67,8 +68,12 @@ impl JavaClient {
         }
     }
 
-    pub async fn handle_resource_pack_response(&self, packet: SConfigResourcePack) {
-        let resource_config = &advanced_config().resource_pack;
+    pub async fn handle_resource_pack_response(
+        &self,
+        server: &Server,
+        packet: SConfigResourcePack,
+    ) {
+        let resource_config = &server.advanced_config.resource_pack;
         if resource_config.enabled {
             let expected_uuid =
                 uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
@@ -153,6 +158,17 @@ impl JavaClient {
             ))
             .await;
         }
+        self.send_packet_now(&CUpdateTags::new(&[
+            pumpkin_data::tag::RegistryKey::Block,
+            pumpkin_data::tag::RegistryKey::Fluid,
+            pumpkin_data::tag::RegistryKey::Enchantment,
+            pumpkin_data::tag::RegistryKey::WorldgenBiome,
+            pumpkin_data::tag::RegistryKey::Item,
+            pumpkin_data::tag::RegistryKey::EntityType,
+            pumpkin_data::tag::RegistryKey::Dialog,
+            pumpkin_data::tag::RegistryKey::Timeline,
+        ]))
+        .await;
 
         // We are done with configuring
         log::debug!("Finished config");
@@ -179,7 +195,7 @@ impl JavaClient {
             .await
         {
             world
-                .spawn_java_player(&BASIC_CONFIG, player.clone(), server)
+                .spawn_java_player(&server.basic_config, player.clone(), server)
                 .await;
             *self.player.lock().await = Some(player);
         }

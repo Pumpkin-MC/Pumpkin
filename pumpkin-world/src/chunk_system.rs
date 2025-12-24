@@ -1,9 +1,7 @@
 /*
 TODO
-1. use Crate flume
-2. use DAG to schedule tasks (IMPORTANT)
-3. send changes instead of whole level hashmap
-4. make another hashmap store chunk stage
+1. add proto chunk dirty flag
+2. better priority
 5. add lifetime to loading ticket
 6. solve entity not unload problem
 */
@@ -12,6 +10,8 @@ use crate::block::RawBlockState;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
 use crate::dimension::Dimension;
+use std::default::Default;
+use std::pin::Pin;
 
 use crate::generation::height_limit::HeightLimitView;
 
@@ -20,14 +20,14 @@ use crate::generation::settings::{GenerationSettings, gen_settings_from_dimensio
 use crate::level::{Level, SyncChunk};
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
-use async_trait::async_trait;
 use crossbeam::channel::{Receiver, Sender};
 use dashmap::DashMap;
 use itertools::Itertools;
-use log::debug;
+use log::{debug, error};
 use num_traits::abs;
 use pumpkin_data::biome::Biome;
 
+use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
@@ -35,8 +35,8 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 
 use std::cmp::{Ordering, PartialEq, max, min};
-use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry;
+use std::collections::{BinaryHeap, HashMap};
 use std::mem::swap;
 use std::ops::Deref;
 use std::sync::{Arc, Condvar, Mutex};
@@ -47,13 +47,14 @@ use crate::chunk::palette::{BiomePalette, BlockPalette};
 use crate::chunk_system::Chunk::Proto;
 use crate::chunk_system::StagedChunkEnum::{Biomes, Empty, Features, Full, Noise, Surface};
 use crate::generation::{biome_coords, section_coords};
+use crossfire::AsyncRx;
 use pumpkin_data::chunk::ChunkStatus;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::atomic::Ordering::Relaxed;
+use slotmap::{Key, SlotMap, new_key_type};
+use std::sync::atomic::Ordering::{Relaxed, SeqCst};
 use std::thread;
 use std::thread::JoinHandle;
 use tokio::sync::{RwLock, oneshot};
-use tokio::task;
 
 type HashMapType<K, V> = FxHashMap<K, V>;
 type HashSetType<K> = FxHashSet<K>;
@@ -89,20 +90,104 @@ impl From<HeapNode> for (ChunkPos, i8) {
     }
 }
 
+struct LevelCache(i32, i32, usize, [(i8, i8); 256 * 256]);
+
+impl LevelCache {
+    fn new() -> Self {
+        Self(0, 0, 0, [(0, 0); 256 * 256])
+    }
+}
+impl LevelCache {
+    fn clean(&mut self, pos: ChunkPos, level: i8) {
+        let dst = ChunkLoading::MAX_LEVEL - level + 1;
+        self.0 = pos.x - dst as i32;
+        self.1 = pos.y - dst as i32;
+        self.2 = (dst as usize) << 1 | 1;
+        self.3[..self.2 * self.2].fill((-127, -127));
+    }
+    fn get(&mut self, map: &ChunkLevel, pos: ChunkPos) -> i8 {
+        let dx = (pos.x - self.0) as usize;
+        let dy = (pos.y - self.1) as usize;
+        debug_assert!(pos.x >= self.0 && pos.y >= self.1);
+        let value = &mut self.3[dx * self.2 + dy];
+        if value.0 == -127 {
+            value.0 = *map.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL);
+            value.1 = value.0;
+        }
+        value.1
+    }
+    fn set(&mut self, map: &ChunkLevel, pos: ChunkPos, level: i8) {
+        let dx = (pos.x - self.0) as usize;
+        let dy = (pos.y - self.1) as usize;
+        debug_assert!(pos.x >= self.0 && pos.y >= self.1);
+        let value = &mut self.3[dx * self.2 + dy];
+        if value.0 == -127 {
+            value.0 = *map.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL);
+        }
+        value.1 = level;
+    }
+    fn write(
+        &mut self,
+        map: &mut ChunkLevel,
+        change: &mut HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
+    ) {
+        for i in 0..self.2 {
+            for j in 0..self.2 {
+                let value = self.3[i * self.2 + j];
+                if value.0 != value.1 {
+                    let pos = ChunkPos::new(i as i32 + self.0, j as i32 + self.1);
+                    if value.1 == ChunkLoading::MAX_LEVEL {
+                        map.remove(&pos);
+                    } else {
+                        map.insert(pos, value.1);
+                    }
+                    let value = (
+                        StagedChunkEnum::level_to_stage(value.0),
+                        StagedChunkEnum::level_to_stage(value.1),
+                    );
+                    if value.0 == value.1 {
+                        continue;
+                    }
+                    match change.entry(pos) {
+                        Entry::Occupied(mut entry) => {
+                            let i = entry.get_mut();
+                            debug_assert!(i.1 == value.0);
+                            if i.0 == value.1 {
+                                entry.remove();
+                            } else {
+                                i.1 = value.1;
+                            }
+                        }
+                        Entry::Vacant(entry) => {
+                            entry.insert(value);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub struct ChunkLoading {
-    pub is_dirty: bool,
     pub is_priority_dirty: bool,
     pub pos_level: ChunkLevel,
+    change: HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
     pub ticket: HashMapType<ChunkPos, Vec<i8>>, // TODO lifetime & id
     pub high_priority: Vec<ChunkPos>,
     pub sender: Arc<LevelChannel>,
     pub increase_update: BinaryHeap<HeapNode>,
     pub decrease_update: BinaryHeap<HeapNode>,
+    cache: LevelCache,
 }
 
 #[test]
 fn test() {
     let mut a = ChunkLoading::new(Arc::new(LevelChannel::new()));
+
+    a.add_ticket((0, 0).into(), 44);
+    a.add_ticket((0, 1).into(), 44);
+    a.remove_ticket((0, 0).into(), 44);
+
     a.add_ticket((0, 0).into(), 30);
     a.add_ticket((0, 10).into(), 25);
     a.add_ticket((10, 10).into(), 26);
@@ -231,33 +316,36 @@ impl ChunkLoading {
         debug!("\nloading level:\n{header}\n{grid}");
     }
 
+    #[inline]
     pub const fn get_level_from_view_distance(view_distance: u8) -> i8 {
-        Self::FULL_CHUNK_LEVEL + 1 - (view_distance as i8)
+        Self::FULL_CHUNK_LEVEL - (view_distance as i8)
     }
 
     pub fn new(sender: Arc<LevelChannel>) -> Self {
         Self {
-            is_dirty: true,
             is_priority_dirty: true,
             pos_level: ChunkLevel::default(),
+            change: HashMapType::default(),
             ticket: HashMapType::default(),
             high_priority: Vec::new(),
             sender,
-            increase_update: Default::default(),
-            decrease_update: Default::default(),
+            increase_update: BinaryHeap::default(),
+            decrease_update: BinaryHeap::default(),
+            cache: LevelCache::new(),
         }
     }
 
     pub fn send_change(&mut self) {
         // debug!("sending change");
-        if self.is_dirty {
-            self.is_dirty = false;
+        if !self.change.is_empty() {
+            let mut tmp = HashMapType::default();
+            swap(&mut tmp, &mut self.change);
             if self.is_priority_dirty {
                 self.is_priority_dirty = false;
                 self.sender
-                    .set_both(self.pos_level.clone(), self.high_priority.clone());
+                    .set_both((tmp, self.pos_level.clone()), self.high_priority.clone());
             } else {
-                self.sender.set_level(self.pos_level.clone());
+                self.sender.set_level((tmp, self.pos_level.clone()));
             }
         }
         if self.is_priority_dirty {
@@ -270,10 +358,10 @@ impl ChunkLoading {
         while let Some(node) = self.increase_update.pop() {
             let (pos, level) = node.into();
             debug_assert!(level < Self::MAX_LEVEL);
-            if level > *self.pos_level.get(&pos).unwrap_or(&Self::MAX_LEVEL) {
+            if level > self.cache.get(&self.pos_level, pos) {
                 continue;
             }
-            debug_assert_eq!(level, *self.pos_level.get(&pos).unwrap_or(&Self::MAX_LEVEL));
+            debug_assert_eq!(level, self.cache.get(&self.pos_level, pos));
             let spread_level = level + 1;
             if spread_level >= Self::MAX_LEVEL {
                 continue;
@@ -291,18 +379,11 @@ impl ChunkLoading {
 
     fn check_then_push(&mut self, pos: ChunkPos, level: i8) {
         debug_assert!(level < Self::MAX_LEVEL);
-        match self.pos_level.entry(pos) {
-            Entry::Occupied(mut entry) => {
-                let old = entry.get_mut();
-                if *old <= level {
-                    return;
-                }
-                *old = level;
-            }
-            Entry::Vacant(empty) => {
-                empty.insert(level);
-            }
+        let old = self.cache.get(&self.pos_level, pos);
+        if old <= level {
+            return;
         }
+        self.cache.set(&self.pos_level, pos, level);
         self.increase_update.push((pos, level).into());
     }
 
@@ -317,20 +398,18 @@ impl ChunkLoading {
                     if new_pos == pos {
                         continue;
                     }
-                    match self.pos_level.entry(new_pos) {
-                        Entry::Occupied(entry) => {
-                            let new_pos_level = *entry.get();
-                            debug_assert!(new_pos_level <= spread_level);
-                            if new_pos_level == spread_level {
-                                entry.remove();
-                                if spread_level < Self::MAX_LEVEL {
-                                    self.decrease_update.push((new_pos, spread_level).into());
-                                }
-                            } else {
-                                self.increase_update.push((new_pos, new_pos_level).into());
-                            }
+                    let new_pos_level = self.cache.get(&self.pos_level, new_pos);
+                    if new_pos_level == Self::MAX_LEVEL {
+                        continue;
+                    }
+                    debug_assert!(new_pos_level <= spread_level);
+                    if new_pos_level == spread_level {
+                        self.cache.set(&self.pos_level, new_pos, Self::MAX_LEVEL);
+                        if spread_level < Self::MAX_LEVEL {
+                            self.decrease_update.push((new_pos, spread_level).into());
                         }
-                        Entry::Vacant(_) => continue,
+                    } else {
+                        self.increase_update.push((new_pos, new_pos_level).into());
                     }
                 }
             }
@@ -340,18 +419,11 @@ impl ChunkLoading {
             if abs(ticket_pos.x - pos.x) <= range && abs(ticket_pos.y - pos.y) <= range {
                 let level = *levels.iter().min().unwrap();
                 debug_assert!(level < Self::MAX_LEVEL);
-                match self.pos_level.entry(*ticket_pos) {
-                    Entry::Occupied(mut entry) => {
-                        let old = entry.get_mut();
-                        if *old <= level {
-                            continue;
-                        }
-                        *old = level;
-                    }
-                    Entry::Vacant(empty) => {
-                        empty.insert(level);
-                    }
+                let old = self.cache.get(&self.pos_level, *ticket_pos);
+                if old <= level {
+                    continue;
                 }
+                self.cache.set(&self.pos_level, *ticket_pos, level);
                 self.increase_update.push((*ticket_pos, level).into());
             }
         }
@@ -387,22 +459,18 @@ impl ChunkLoading {
                 empty.insert(vec![level]);
             }
         }
-        match self.pos_level.entry(pos) {
-            Entry::Occupied(mut entry) => {
-                let old = entry.get_mut();
-                if *old < level {
-                    return;
-                }
-                *old = level;
-            }
-            Entry::Vacant(empty) => {
-                empty.insert(level);
-            }
+
+        let old = *self.pos_level.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL);
+        if old <= level {
+            return;
         }
-        self.is_dirty = true;
+        self.cache.clean(pos, level);
+        self.cache.set(&self.pos_level, pos, level);
+
         debug_assert!(self.increase_update.is_empty());
         self.increase_update.push((pos, level).into());
         self.run_increase_update();
+        self.cache.write(&mut self.pos_level, &mut self.change);
         debug_assert!(self.debug_check_error());
     }
     pub fn remove_ticket(&mut self, pos: ChunkPos, level: i8) {
@@ -420,16 +488,17 @@ impl ChunkLoading {
         match self.pos_level.entry(pos) {
             Entry::Occupied(entry) => {
                 let old_level = *entry.get();
-                let source = *vec.iter().max().unwrap_or(&Self::MAX_LEVEL);
+                let source = *vec.iter().min().unwrap_or(&Self::MAX_LEVEL);
                 if vec.is_empty() {
                     self.ticket.remove(&pos);
                 }
                 if level == old_level && source != level {
-                    self.is_dirty = true;
-                    entry.remove();
+                    self.cache.clean(pos, old_level);
+                    self.cache.set(&self.pos_level, pos, Self::MAX_LEVEL);
                     debug_assert!(self.decrease_update.is_empty());
                     self.decrease_update.push((pos, level).into());
                     self.run_decrease_update(pos, (Self::MAX_LEVEL - level - 1) as i32);
+                    self.cache.write(&mut self.pos_level, &mut self.change);
                 }
             }
             Entry::Vacant(_) => panic!(),
@@ -505,19 +574,6 @@ impl From<StagedChunkEnum> for ChunkStatus {
 
 impl StagedChunkEnum {
     const fn level_to_stage(level: i8) -> Self {
-        // if level <= 33 {
-        //     Full
-        // } else if level <= 35 {
-        //     Features
-        // } else if level <= 36 {
-        //     Surface
-        // } else if level <= 37 {
-        //     Biomes
-        // } else if level <= 45 {
-        //     Empty
-        // } else {
-        //     Self::None
-        // }
         if level <= 43 {
             Full
         } else if level <= 44 {
@@ -528,24 +584,17 @@ impl StagedChunkEnum {
             Self::None
         }
     }
-    const fn get_radius(self) -> i32 {
+    const FULL_DEPENDENCIES: &'static [Self] = &[Full, Features, Surface];
+    const FULL_RADIUS: i32 = 2;
+    const fn get_direct_radius(self) -> i32 {
         // self exclude
-        // match self {
-        //     Empty => 0,
-        //     Biomes => 8,
-        //     Noise => 9,
-        //     Surface => 9,
-        //     Features => 10,
-        //     Full => 11,
-        //     _ => panic!(),
-        // }
         match self {
             Empty => 0,
             Biomes => 0,
             Noise => 0,
             Surface => 0,
             Features => 1,
-            Full => 2,
+            Full => 1,
             _ => panic!(),
         }
     }
@@ -561,20 +610,25 @@ impl StagedChunkEnum {
             _ => panic!(),
         }
     }
-    const fn get_dependencies(self) -> &'static [StagedChunkEnum] {
+    const fn get_direct_dependencies(self) -> &'static [StagedChunkEnum] {
         match self {
             Biomes => &[Empty],
             Noise => &[Biomes],
             Surface => &[Noise],
             Features => &[Surface, Surface],
-            Full => &[Features, Features, Surface],
+            Full => &[Features, Features],
             _ => panic!(),
         }
     }
 }
 
+type LevelChange = (
+    HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
+    ChunkLevel,
+);
+
 pub struct LevelChannel {
-    pub value: Mutex<(Option<ChunkLevel>, Option<Vec<ChunkPos>>)>,
+    pub value: Mutex<(Option<LevelChange>, Option<Vec<ChunkPos>>)>,
     pub notify: Condvar,
 }
 
@@ -591,14 +645,72 @@ impl LevelChannel {
             notify: Condvar::new(),
         }
     }
-    pub fn set_both(&self, new_value: ChunkLevel, pos: Vec<ChunkPos>) {
+    pub fn set_both(
+        &self,
+        new_value: (
+            HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
+            ChunkLevel,
+        ),
+        pos: Vec<ChunkPos>,
+    ) {
         // debug!("set new level and priority");
-        *self.value.lock().unwrap() = (Some(new_value), Some(pos));
+        let mut value = self.value.lock().unwrap();
+        value.1 = Some(pos);
+        if let Some(old) = &mut value.0 {
+            for (pos, change) in new_value.0 {
+                match old.0.entry(pos) {
+                    Entry::Occupied(mut entry) => {
+                        let tmp = entry.get_mut();
+                        debug_assert_eq!(tmp.1, change.0);
+                        if tmp.0 == change.1 {
+                            entry.remove();
+                        } else {
+                            tmp.1 = change.1;
+                        }
+                    }
+                    Entry::Vacant(entry) => {
+                        debug_assert_ne!(change.0, change.1);
+                        entry.insert(change);
+                    }
+                }
+            }
+            old.1 = new_value.1;
+        } else {
+            value.0 = Some(new_value);
+        }
         self.notify.notify_one();
     }
-    pub fn set_level(&self, new_value: ChunkLevel) {
+    pub fn set_level(
+        &self,
+        new_value: (
+            HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
+            ChunkLevel,
+        ),
+    ) {
         // debug!("set new level");
-        self.value.lock().unwrap().0 = Some(new_value);
+        let mut value = self.value.lock().unwrap();
+        if let Some(old) = &mut value.0 {
+            for (pos, change) in new_value.0 {
+                match old.0.entry(pos) {
+                    Entry::Occupied(mut entry) => {
+                        let tmp = entry.get_mut();
+                        debug_assert_eq!(tmp.1, change.0);
+                        if tmp.0 == change.1 {
+                            entry.remove();
+                        } else {
+                            tmp.1 = change.1;
+                        }
+                    }
+                    Entry::Vacant(entry) => {
+                        debug_assert_ne!(change.0, change.1);
+                        entry.insert(change);
+                    }
+                }
+            }
+            old.1 = new_value.1;
+        } else {
+            value.0 = Some(new_value);
+        }
         self.notify.notify_one();
     }
     pub fn set_priority(&self, pos: Vec<ChunkPos>) {
@@ -606,19 +718,19 @@ impl LevelChannel {
         self.value.lock().unwrap().1 = Some(pos);
         self.notify.notify_one();
     }
-    pub fn get(&self) -> (Option<ChunkLevel>, Option<Vec<ChunkPos>>) {
+    pub fn get(&self) -> (Option<LevelChange>, Option<Vec<ChunkPos>>) {
         let mut lock = self.value.lock().unwrap();
         let mut ret = (None, None);
         swap(&mut ret, &mut *lock);
         ret
     }
-    pub fn wait_and_get(&self, level: &Arc<Level>) -> (Option<ChunkLevel>, Option<Vec<ChunkPos>>) {
+    pub fn wait_and_get(&self, level: &Arc<Level>) -> (Option<LevelChange>, Option<Vec<ChunkPos>>) {
         let mut lock = self.value.lock().unwrap();
         while lock.0.is_none()
             && lock.1.is_none()
-            && !level.should_unload.load(Relaxed)
-            && !level.should_save.load(Relaxed)
-            && !level.shut_down_chunk_system.load(Relaxed)
+            && !level.should_unload.load(SeqCst)
+            && !level.should_save.load(SeqCst)
+            && !level.shut_down_chunk_system.load(SeqCst)
         {
             lock = self.notify.wait(lock).unwrap();
         }
@@ -635,7 +747,7 @@ impl LevelChannel {
 
 pub enum Chunk {
     Level(SyncChunk),
-    Proto(ProtoChunk),
+    Proto(Box<ProtoChunk>),
 }
 
 impl Chunk {
@@ -667,8 +779,7 @@ impl Chunk {
                         let absolute_y =
                             biome_coords::from_block(generation_settings.shape.min_y as i32)
                                 + y as i32;
-                        let biome =
-                            proto_chunk.get_biome(&Vector3::new(x as i32, absolute_y, z as i32));
+                        let biome = proto_chunk.get_biome(x as i32, absolute_y, z as i32);
                         section.biomes.set(x, relative_y, z, biome.id);
                     }
                 }
@@ -681,8 +792,7 @@ impl Chunk {
             if let Some(section) = sections.sections.get_mut(section_index) {
                 for z in 0..BlockPalette::SIZE {
                     for x in 0..BlockPalette::SIZE {
-                        let block = proto_chunk
-                            .get_block_state_raw(&Vector3::new(x as i32, y as i32, z as i32));
+                        let block = proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32);
                         section.block_states.set(x, relative_y, z, block);
                     }
                 }
@@ -694,12 +804,13 @@ impl Chunk {
                     .map(|_| LightContainer::new_filled(15))
                     .collect(),
                 block_light: (0..sections.sections.len())
-                    .map(|_| LightContainer::new_empty(15))
+                    .map(|_| LightContainer::new_empty(0))
                     .collect(),
             },
             section: sections,
             heightmap: Default::default(),
-            position: proto_chunk.chunk_pos,
+            x: proto_chunk.x,
+            z: proto_chunk.z,
             dirty: true,
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),
@@ -737,22 +848,29 @@ impl HeightLimitView for Cache {
     }
 }
 
-#[async_trait]
 impl BlockAccessor for Cache {
-    async fn get_block(&self, position: &BlockPos) -> &'static Block {
-        GenerationCache::get_block_state(self, &position.0).to_block()
+    fn get_block<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = &'static Block> + Send + 'a>> {
+        Box::pin(async move { GenerationCache::get_block_state(self, &position.0).to_block() })
     }
 
-    async fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
-        GenerationCache::get_block_state(self, &position.0).to_state()
+    fn get_block_state<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = &'static BlockState> + Send + 'a>> {
+        Box::pin(async move { GenerationCache::get_block_state(self, &position.0).to_state() })
     }
 
-    async fn get_block_and_state(
-        &self,
-        position: &BlockPos,
-    ) -> (&'static Block, &'static BlockState) {
-        let id = GenerationCache::get_block_state(self, &position.0);
-        (id.to_block(), id.to_state())
+    fn get_block_and_state<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = (&'static Block, &'static BlockState)> + Send + 'a>> {
+        Box::pin(async move {
+            let id = GenerationCache::get_block_state(self, &position.0);
+            (id.to_block(), id.to_state())
+        })
     }
 }
 
@@ -760,6 +878,37 @@ impl GenerationCache for Cache {
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk {
         let mid = ((self.size * self.size) >> 1) as usize;
         self.chunks[mid].get_proto_chunk_mut()
+    }
+
+    fn get_fluid_and_fluid_state(&self, pos: &Vector3<i32>) -> (Fluid, FluidState) {
+        let id = GenerationCache::get_block_state(self, pos).0;
+
+        let Some(fluid) = Fluid::from_state_id(id) else {
+            let block = Block::from_state_id(id);
+            if let Some(properties) = block.properties(id) {
+                for (name, value) in properties.to_props() {
+                    if name == "waterlogged" {
+                        if value == "true" {
+                            let fluid = Fluid::FLOWING_WATER;
+                            let state = fluid.states[0].clone();
+                            return (fluid, state);
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            let fluid = Fluid::EMPTY;
+            let state = fluid.states[0].clone();
+
+            return (fluid, state);
+        };
+
+        //let state = fluid.get_state(id);
+        let state = fluid.states[0].clone();
+
+        (fluid.clone(), state)
     }
 
     fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState {
@@ -821,22 +970,22 @@ impl GenerationCache for Cache {
         }
     }
 
-    fn get_top_y(&self, heightmap: &HeightMap, pos: &Vector2<i32>) -> i32 {
+    fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
-            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(pos),
-            HeightMap::WorldSurface => self.top_block_height_exclusive(pos),
-            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(pos),
-            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(pos),
-            HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(pos),
+            HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
+            HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
+            HeightMap::OceanFloorWg => self.ocean_floor_height_exclusive(x, z),
+            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(x, z),
+            HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(x, z),
             HeightMap::MotionBlockingNoLeaves => {
-                self.top_motion_blocking_block_no_leaves_height_exclusive(pos)
+                self.top_motion_blocking_block_no_leaves_height_exclusive(x, z)
             }
         }
     }
 
-    fn top_motion_blocking_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let dx = (pos.x >> 4) - self.x;
-        let dy = (pos.y >> 4) - self.y;
+    fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.y;
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
@@ -844,18 +993,18 @@ impl GenerationCache for Cache {
                 let chunk = data.blocking_read();
                 chunk.heightmap.get_height(
                     ChunkHeightmapType::MotionBlocking,
-                    pos.x,
-                    pos.y,
+                    x,
+                    z,
                     chunk.section.min_y,
                 )
             }
-            Chunk::Proto(data) => data.top_motion_blocking_block_height_exclusive(pos),
+            Chunk::Proto(data) => data.top_motion_blocking_block_height_exclusive(x, z),
         }
     }
 
-    fn top_motion_blocking_block_no_leaves_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let dx = (pos.x >> 4) - self.x;
-        let dy = (pos.y >> 4) - self.y;
+    fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.y;
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
@@ -863,18 +1012,18 @@ impl GenerationCache for Cache {
                 let chunk = data.blocking_read();
                 chunk.heightmap.get_height(
                     ChunkHeightmapType::MotionBlockingNoLeaves,
-                    pos.x,
-                    pos.y,
+                    x,
+                    z,
                     chunk.section.min_y,
                 )
             }
-            Chunk::Proto(data) => data.top_motion_blocking_block_no_leaves_height_exclusive(pos),
+            Chunk::Proto(data) => data.top_motion_blocking_block_no_leaves_height_exclusive(x, z),
         }
     }
 
-    fn top_block_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let dx = (pos.x >> 4) - self.x;
-        let dy = (pos.y >> 4) - self.y;
+    fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.y;
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
@@ -882,31 +1031,31 @@ impl GenerationCache for Cache {
                 let chunk = data.blocking_read();
                 chunk.heightmap.get_height(
                     ChunkHeightmapType::WorldSurface,
-                    pos.x,
-                    pos.y,
+                    x,
+                    z,
                     chunk.section.min_y,
                 ) // can we return this?
             }
-            Chunk::Proto(data) => data.top_block_height_exclusive(pos),
+            Chunk::Proto(data) => data.top_block_height_exclusive(x, z),
         }
     }
 
-    fn ocean_floor_height_exclusive(&self, pos: &Vector2<i32>) -> i32 {
-        let dx = (pos.x >> 4) - self.x;
-        let dy = (pos.y >> 4) - self.y;
+    fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.y;
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(_data) => {
                 0 // todo missing
             }
-            Chunk::Proto(data) => data.ocean_floor_height_exclusive(pos),
+            Chunk::Proto(data) => data.ocean_floor_height_exclusive(x, z),
         }
     }
 
-    fn get_biome_for_terrain_gen(&self, global_block_pos: &Vector3<i32>) -> &'static Biome {
-        let dx = (global_block_pos.x >> 4) - self.x;
-        let dy = (global_block_pos.z >> 4) - self.y;
+    fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
+        let dx = (x >> 4) - self.x;
+        let dy = (z >> 4) - self.y;
         debug_assert!(dx < self.size && dy < self.size);
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
@@ -915,16 +1064,12 @@ impl GenerationCache for Cache {
                 Biome::from_id(
                     data.blocking_read()
                         .section
-                        .get_rough_biome_absolute_y(
-                            (global_block_pos.x & 15) as usize,
-                            global_block_pos.y,
-                            (global_block_pos.z & 15) as usize,
-                        )
+                        .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
                         .unwrap_or(0),
                 )
                 .unwrap()
             }
-            Chunk::Proto(data) => data.get_biome_for_terrain_gen(global_block_pos),
+            Chunk::Proto(data) => data.get_biome_for_terrain_gen(x, y, z),
         }
     }
 
@@ -1061,22 +1206,124 @@ impl ChunkListener {
     }
 }
 
+struct ChunkHolder {
+    pub target_stage: StagedChunkEnum,
+    pub current_stage: StagedChunkEnum,
+    pub chunk: Option<Chunk>,
+    pub occupied: NodeKey,
+    pub occupied_by: EdgeKey,
+    pub public: bool,
+    pub tasks: [NodeKey; 7],
+}
+
+impl Default for ChunkHolder {
+    fn default() -> Self {
+        Self {
+            target_stage: StagedChunkEnum::None,
+            current_stage: StagedChunkEnum::None,
+            chunk: None,
+            occupied: NodeKey::null(),
+            occupied_by: EdgeKey::null(),
+            public: false,
+            tasks: [NodeKey::null(); 7],
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Node {
+    pub pos: ChunkPos,
+    pub stage: StagedChunkEnum,
+    pub in_degree: u32,
+    pub in_queue: bool,
+    pub edge: EdgeKey,
+}
+
+impl Node {
+    fn new(pos: ChunkPos, stage: StagedChunkEnum) -> Self {
+        Self {
+            pos,
+            stage,
+            in_degree: 0,
+            in_queue: false,
+            edge: EdgeKey::null(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Edge {
+    pub to: NodeKey,
+    pub next: EdgeKey,
+}
+
+impl Edge {
+    fn new(to: NodeKey, next: EdgeKey) -> Self {
+        Self { to, next }
+    }
+}
+
+new_key_type! { struct NodeKey; }
+new_key_type! { struct EdgeKey; }
+
+#[derive(Default)]
+#[allow(clippy::upper_case_acronyms)]
+struct DAG {
+    pub nodes: SlotMap<NodeKey, Node>,
+    pub edges: SlotMap<EdgeKey, Edge>,
+}
+
+impl DAG {
+    fn fast_drop_node(&mut self, node: NodeKey) {
+        let mut edge = self.nodes.remove(node).unwrap().edge;
+        // debug!("drop node {node:?}");
+        while !edge.is_null() {
+            edge = self.edges.remove(edge).unwrap().next;
+        }
+    }
+    fn add_edge(&mut self, from: NodeKey, to: NodeKey) {
+        self.nodes.get_mut(to).unwrap().in_degree += 1;
+        let edge = &mut self.nodes.get_mut(from).unwrap().edge;
+        *edge = self.edges.insert(Edge::new(to, *edge));
+    }
+}
+
+struct TaskHeapNode(i8, NodeKey);
+impl PartialEq for TaskHeapNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+impl Eq for TaskHeapNode {}
+impl PartialOrd for TaskHeapNode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for TaskHeapNode {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0).reverse()
+    }
+}
+
 pub struct GenerationSchedule {
-    queue: Vec<(ChunkPos, i8, StagedChunkEnum)>,
+    queue: BinaryHeap<TaskHeapNode>,
+    graph: DAG,
+
     last_level: ChunkLevel,
     last_high_priority: Vec<ChunkPos>,
     send_level: Arc<LevelChannel>,
-    loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
-    proto_chunks: HashMapType<ChunkPos, ProtoChunk>,
-    unload_chunks: HashMapType<ChunkPos, Chunk>,
-    occupied: HashSetType<ChunkPos>,
-    task_mark: HashMapType<ChunkPos, (u8, u8)>,
+
+    public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    chunk_map: HashMap<ChunkPos, ChunkHolder>,
+    unload_chunks: HashSetType<ChunkPos>,
+
     io_lock: IOLock,
     running_task_count: u16,
-    recv_chunk: Receiver<(ChunkPos, RecvChunk)>,
-    io_read: Sender<ChunkPos>,
-    io_write: Sender<Vec<(ChunkPos, Chunk)>>,
-    generate: Sender<(ChunkPos, Cache, StagedChunkEnum)>,
+    recv_chunk: crossfire::MRx<(ChunkPos, RecvChunk)>,
+    io_read: crossfire::MTx<ChunkPos>,
+    io_write: crossfire::Tx<Vec<(ChunkPos, Chunk)>>,
+    generate: crossfire::MTx<(ChunkPos, Cache, StagedChunkEnum)>,
     listener: Arc<ChunkListener>,
 }
 
@@ -1090,10 +1337,11 @@ impl GenerationSchedule {
         thread_tracker: &mut Vec<JoinHandle<()>>,
     ) {
         let tracker = &level.chunk_system_tasks;
-        let (send_chunk, recv_chunk) = crossbeam::channel::unbounded();
-        let (send_read_io, recv_read_io) = crossbeam::channel::bounded(oi_read_thread_count + 2);
-        let (send_write_io, recv_write_io) = crossbeam::channel::unbounded();
-        let (send_gen, recv_gen) = crossbeam::channel::bounded(gen_thread_count + 5);
+        let (send_chunk, recv_chunk) = crossfire::mpmc::unbounded_blocking();
+        let (send_read_io, recv_read_io) =
+            crossfire::mpmc::bounded_tx_blocking_rx_async(oi_read_thread_count + 2);
+        let (send_write_io, recv_write_io) = crossfire::spsc::unbounded_async();
+        let (send_gen, recv_gen) = crossfire::mpmc::bounded_blocking(gen_thread_count + 5);
         let io_lock = Arc::new((Mutex::new(HashMapType::default()), Condvar::new()));
         for _ in 0..oi_read_thread_count {
             tracker.spawn(Self::io_read_work(
@@ -1128,15 +1376,13 @@ impl GenerationSchedule {
             builder
                 .spawn(move || {
                     Self {
-                        queue: Vec::new(),
+                        queue: BinaryHeap::new(),
+                        graph: DAG::default(),
                         last_level: ChunkLevel::default(),
                         last_high_priority: Vec::new(),
                         send_level: level_channel,
-                        loaded_chunks: level.loaded_chunks.clone(),
-                        proto_chunks: HashMapType::default(),
-                        unload_chunks: HashMapType::default(),
-                        occupied: HashSetType::default(),
-                        task_mark: HashMapType::default(),
+                        public_chunk_map: level.loaded_chunks.clone(),
+                        unload_chunks: HashSetType::default(),
                         io_lock,
                         running_task_count: 0,
                         recv_chunk,
@@ -1144,6 +1390,7 @@ impl GenerationSchedule {
                         io_write: send_write_io,
                         generate: send_gen,
                         listener,
+                        chunk_map: Default::default(),
                     }
                     .work(level);
                 })
@@ -1151,152 +1398,165 @@ impl GenerationSchedule {
         )
     }
 
-    fn get_chunk(
-        loaded_chunks: &Arc<DashMap<Vector2<i32>, SyncChunk>>,
-        proto_chunks: &mut HashMapType<ChunkPos, ProtoChunk>,
+    fn calc_priority(
+        last_level: &ChunkLevel,
+        last_high_priority: &Vec<ChunkPos>,
         pos: ChunkPos,
-    ) -> Option<Chunk> {
-        if let Some(data) = loaded_chunks.get(&pos) {
-            Some(Chunk::Level(data.clone()))
-        } else {
-            proto_chunks.remove(&pos).map(Chunk::Proto)
+        stage: StagedChunkEnum,
+    ) -> i8 {
+        if last_high_priority.is_empty() {
+            return last_level.get(&pos).unwrap() + (stage as i8);
         }
-    }
-
-    fn remove_chunk(
-        loaded_chunks: &Arc<DashMap<Vector2<i32>, SyncChunk>>,
-        proto_chunks: &mut HashMapType<ChunkPos, ProtoChunk>,
-        pos: ChunkPos,
-    ) -> Option<Chunk> {
-        if let Some(data) = loaded_chunks.remove(&pos) {
-            Some(Chunk::Level(data.1))
-        } else {
-            proto_chunks.remove(&pos).map(Chunk::Proto)
+        for i in last_high_priority {
+            let dst = max(abs(i.x - pos.x), abs(i.y - pos.y));
+            if dst <= StagedChunkEnum::FULL_RADIUS
+                && stage <= StagedChunkEnum::FULL_DEPENDENCIES[dst as usize]
+            {
+                return last_level.get(&pos).unwrap() + (stage as i8) - 100;
+            }
         }
-    }
-
-    fn get_chunk_stage_id(
-        loaded_chunks: &Arc<DashMap<Vector2<i32>, SyncChunk>>,
-        proto_chunks: &HashMapType<ChunkPos, ProtoChunk>,
-        pos: ChunkPos,
-    ) -> u8 {
-        if loaded_chunks.contains_key(&pos) {
-            6
-        } else if let Some(data) = proto_chunks.get(&pos) {
-            data.stage_id()
-        } else {
-            0
-        }
+        last_level.get(&pos).unwrap() + (stage as i8)
     }
 
     fn sort_queue(&mut self) {
-        for (pos, level, _) in self.queue.iter_mut() {
-            *level = *self.last_level.get(pos).unwrap_or(&ChunkLoading::MAX_LEVEL);
-            if let Some(dst) = self
-                .last_high_priority
-                .iter()
-                .map(|center| (center.x - pos.x).abs().max((center.y - pos.y).abs()))
-                .min()
-                && dst <= Full.get_radius()
-            {
-                *level += -100 + dst as i8;
+        let mut new_queue = BinaryHeap::with_capacity(self.queue.len());
+        for i in &self.queue {
+            if let Some(node) = self.graph.nodes.get(i.1) {
+                new_queue.push(TaskHeapNode(
+                    Self::calc_priority(
+                        &self.last_level,
+                        &self.last_high_priority,
+                        node.pos,
+                        node.stage,
+                    ),
+                    i.1,
+                ));
             }
         }
-        self.queue
-            .sort_unstable_by(|(_l_pos, l_level, l_stage), (_r_pos, r_level, r_stage)| {
-                if l_level != r_level {
-                    l_level.cmp(r_level)
-                } else {
-                    l_stage.cmp(r_stage)
-                }
-            });
+        self.queue = new_queue;
     }
 
-    fn resort_work(&mut self, new_data: (Option<ChunkLevel>, Option<Vec<ChunkPos>>)) -> bool {
+    fn resort_work(&mut self, new_data: (Option<LevelChange>, Option<Vec<ChunkPos>>)) -> bool {
         // true -> updated | false -> not update
         if new_data.0.is_none() && new_data.1.is_none() {
             return false;
         }
-        // log::debug!("receive new level or new priority");
         if let Some(high_priority) = new_data.1 {
+            // log::debug!("receive new priority");
             self.last_high_priority = high_priority;
         }
         let Some(new_level) = new_data.0 else {
             self.sort_queue();
             return true;
         };
-        for pos in self.last_level.keys() {
-            if !new_level.contains_key(pos)
-                && let Some(chunk) =
-                    Self::remove_chunk(&self.loaded_chunks, &mut self.proto_chunks, *pos)
-            {
-                // log::debug!("unload chunk {pos:?}");
-                match self.task_mark.entry(*pos) {
-                    Entry::Occupied(mut entry) => entry.get_mut().1 = 0,
-                    Entry::Vacant(_) => panic!(),
-                };
-                self.unload_chunks.insert(*pos, chunk);
-            }
-        }
-        for (pos, level) in &new_level {
-            let old_level = *self.last_level.get(pos).unwrap_or(&ChunkLoading::MAX_LEVEL);
-            if old_level == ChunkLoading::MAX_LEVEL
-                && let Some(chunk) = self.unload_chunks.remove(pos)
-            {
-                self.task_mark.entry(*pos).or_insert((0, 0)).1 = chunk.get_stage_id();
-                match chunk {
-                    Chunk::Level(data) => {
-                        self.loaded_chunks.insert(*pos, data.clone());
-                        self.listener.process_new_chunk(*pos, &data);
-                    }
-                    Chunk::Proto(data) => {
-                        self.proto_chunks.insert(*pos, data);
+        // log::debug!("receive new level");
+        for (pos, (old_stage, new_stage)) in new_level.0 {
+            debug_assert_ne!(old_stage, new_stage);
+            debug_assert_eq!(
+                new_stage,
+                StagedChunkEnum::level_to_stage(
+                    *new_level.1.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL)
+                )
+            );
+            let mut holder = self.chunk_map.remove(&pos).unwrap_or_default();
+            debug_assert_eq!(holder.target_stage, old_stage);
+            holder.target_stage = new_stage;
+            if old_stage > new_stage {
+                for i in (new_stage.max(holder.current_stage) as usize + 1)..=(old_stage as usize) {
+                    let task = &mut holder.tasks[i];
+                    self.graph.fast_drop_node(*task);
+                    *task = NodeKey::null();
+                }
+                if new_stage == StagedChunkEnum::None {
+                    self.unload_chunks.insert(pos);
+                }
+            } else {
+                if old_stage == StagedChunkEnum::None {
+                    self.unload_chunks.remove(&pos);
+                    if holder.current_stage == Full && !holder.public {
+                        holder.public = true;
+                        match holder.chunk.as_ref().unwrap() {
+                            Chunk::Level(chunk) => {
+                                self.public_chunk_map.insert(pos, chunk.clone());
+                                self.listener.process_new_chunk(pos, chunk);
+                            }
+                            Proto(_) => panic!(),
+                        }
                     }
                 }
-            }
+                for i in (old_stage.max(holder.current_stage) as u8 + 1)..=(new_stage as u8) {
+                    let task = &mut holder.tasks[i as usize];
+                    if task.is_null() {
+                        *task = self.graph.nodes.insert(Node::new(pos, i.into()));
+                        if !holder.occupied.is_null() {
+                            self.graph.add_edge(holder.occupied, *task);
+                        }
+                    }
+                    let task = *task;
+                    if i > 1 {
+                        let stage = StagedChunkEnum::from(i);
+                        let dependency = stage.get_direct_dependencies();
+                        let radius = stage.get_direct_radius();
+                        for dx in -radius..=radius {
+                            for dy in -radius..=radius {
+                                let new_pos = pos.add_raw(dx, dy);
+                                let req_stage = dependency[dx.abs().max(dy.abs()) as usize];
+                                if new_pos == pos {
+                                    // TODO
+                                    holder.occupied_by = self
+                                        .graph
+                                        .edges
+                                        .insert(Edge::new(task, holder.occupied_by));
+                                    if holder.current_stage >= req_stage {
+                                        continue;
+                                    }
+                                    let ano_task = &mut holder.tasks[req_stage as usize];
+                                    if ano_task.is_null() {
+                                        *ano_task =
+                                            self.graph.nodes.insert(Node::new(new_pos, i.into()));
+                                    }
+                                    self.graph.add_edge(*ano_task, task); // task depend on ano_task
+                                    continue;
+                                }
+                                let ano_chunk = self.chunk_map.entry(new_pos).or_default();
+                                ano_chunk.occupied_by = self
+                                    .graph
+                                    .edges
+                                    .insert(Edge::new(task, ano_chunk.occupied_by));
 
-            if old_level != *level {
-                match self.task_mark.entry(*pos) {
-                    Entry::Occupied(mut entry) => {
-                        let (mark, stage) = entry.get_mut();
-                        if stage == &(Full as u8) {
-                            continue;
-                        }
-                        let next_stage =
-                            (StagedChunkEnum::level_to_stage(old_level) as u8).max(*stage);
-                        let new_highest_stage = StagedChunkEnum::level_to_stage(*level) as u8;
-                        if next_stage >= new_highest_stage {
-                            continue;
-                        }
-                        for i in (next_stage + 1)..=new_highest_stage {
-                            if (*mark >> i & 1) == 0 {
-                                // no task before
-                                self.queue.push((*pos, i8::MAX, i.into()));
-                                *mark |= 1 << i;
+                                if !ano_chunk.occupied.is_null() {
+                                    self.graph.add_edge(ano_chunk.occupied, task);
+                                }
+
+                                if ano_chunk.current_stage >= req_stage {
+                                    continue;
+                                }
+                                let ano_task = &mut ano_chunk.tasks[req_stage as usize];
+                                if ano_task.is_null() {
+                                    *ano_task =
+                                        self.graph.nodes.insert(Node::new(new_pos, req_stage));
+                                }
+                                self.graph.add_edge(*ano_task, task); // task depend on ano_task
                             }
                         }
                     }
-                    Entry::Vacant(entry) => {
-                        let mut mark = 0;
-                        let new_highest_stage = StagedChunkEnum::level_to_stage(*level) as u8;
-                        for i in 1..=new_highest_stage {
-                            self.queue.push((*pos, i8::MAX, i.into()));
-                            mark |= 1 << i;
-                        }
-                        entry.insert((mark, 0));
+                    let node = self.graph.nodes.get_mut(task).unwrap();
+                    if node.in_degree == 0 {
+                        node.in_queue = true;
+                        self.queue.push(TaskHeapNode(0, task));
                     }
-                };
+                }
             }
+            self.chunk_map.insert(pos, holder);
         }
-
-        self.last_level = new_level;
+        self.last_level = new_level.1;
         self.sort_queue();
         true
     }
 
     async fn io_read_work(
-        recv: Receiver<ChunkPos>,
-        send: Sender<(ChunkPos, RecvChunk)>,
+        recv: crossfire::MAsyncRx<ChunkPos>,
+        send: crossfire::MTx<(ChunkPos, RecvChunk)>,
         level: Arc<Level>,
         lock: IOLock,
     ) {
@@ -1305,12 +1565,12 @@ impl GenerationSchedule {
         let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
         let generation_setting = gen_settings_from_dimension(&level.world_gen.dimension);
         let (t_send, mut t_recv) = tokio::sync::mpsc::channel(2);
-        while let Ok(pos) = task::block_in_place(|| recv.recv()) {
+        while let Ok(pos) = recv.recv().await {
             // debug!("io read thread receive chunk pos {pos:?}");
             {
                 let mut data = lock.0.lock().unwrap();
                 while data.contains_key(&pos) {
-                    data = task::block_in_place(|| lock.1.wait(data).unwrap());
+                    data = tokio::task::block_in_place(|| lock.1.wait(data).unwrap());
                 }
             }
             level
@@ -1329,18 +1589,14 @@ impl GenerationSchedule {
                         }
                     } else {
                         // debug!("io read thread receive proto chunk {pos:?}",);
-                        if send
-                            .send((
-                                pos,
-                                RecvChunk::IO(Chunk::Proto(ProtoChunk::from_chunk_data(
-                                    chunk.read().await.deref(),
-                                    generation_setting,
-                                    level.world_gen.default_block,
-                                    biome_mixer_seed,
-                                ))),
-                            ))
-                            .is_err()
-                        {
+                        let val =
+                            RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
+                                chunk.read().await.deref(),
+                                generation_setting,
+                                level.world_gen.default_block,
+                                biome_mixer_seed,
+                            ))));
+                        if send.send((pos, val)).is_err() {
                             break;
                         }
                     }
@@ -1354,12 +1610,13 @@ impl GenerationSchedule {
             if send
                 .send((
                     pos,
-                    RecvChunk::IO(Proto(ProtoChunk::new(
-                        pos,
+                    RecvChunk::IO(Proto(Box::new(ProtoChunk::new(
+                        pos.x,
+                        pos.y,
                         generation_setting,
                         level.world_gen.default_block,
                         biome_mixer_seed,
-                    ))),
+                    )))),
                 ))
                 .is_err()
             {
@@ -1369,14 +1626,10 @@ impl GenerationSchedule {
         log::info!("io read thread stop");
     }
 
-    async fn io_write_work(
-        recv: Receiver<Vec<(ChunkPos, Chunk)>>,
-        level: Arc<Level>,
-        lock: IOLock,
-    ) {
+    async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
         log::info!("io write thread start",);
         let generation_setting = gen_settings_from_dimension(&level.world_gen.dimension);
-        while let Ok(data) = task::block_in_place(|| recv.recv()) {
+        while let Ok(data) = recv.recv().await {
             // debug!("io write thread receive chunks size {}", data.len());
             let mut vec = Vec::with_capacity(data.len());
             for (pos, chunk) in data {
@@ -1421,8 +1674,8 @@ impl GenerationSchedule {
     }
 
     fn generation_work(
-        recv: Receiver<(ChunkPos, Cache, StagedChunkEnum)>,
-        send: Sender<(ChunkPos, RecvChunk)>,
+        recv: crossfire::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
+        send: crossfire::MTx<(ChunkPos, RecvChunk)>,
         level: Arc<Level>,
     ) {
         log::info!(
@@ -1454,38 +1707,43 @@ impl GenerationSchedule {
         );
     }
 
-    fn drop_mark(&mut self, stage: StagedChunkEnum, pos: ChunkPos) {
-        match self.task_mark.entry(pos) {
-            Entry::Occupied(mut entry) => {
-                let (mark, _) = entry.get_mut();
-                debug_assert!((*mark >> (stage as u8) & 1) == 1);
-                *mark -= 1 << (stage as u8);
-                if *mark == 0 && !self.last_level.contains_key(&pos) {
-                    entry.remove();
-                }
-            }
-            Entry::Vacant(_) => panic!(),
-        }
-    }
-
     fn unload_chunk(&mut self) {
-        let mut unload_chunks = HashMapType::default();
+        let mut unload_chunks = HashSetType::default();
         swap(&mut unload_chunks, &mut self.unload_chunks);
         let mut chunks = Vec::with_capacity(unload_chunks.len());
-        for (pos, data) in unload_chunks {
-            match data {
-                Chunk::Level(chunk) => {
-                    if Arc::strong_count(&chunk) != 1 {
-                        log::warn!("chunk {pos:?} is still used somewhere. it can't be unloaded");
-                        self.unload_chunks.insert(pos, Chunk::Level(chunk));
-                    } else {
-                        // log::debug!("unload chunk {pos:?} to file");
-                        chunks.push((pos, Chunk::Level(chunk)));
+        for pos in unload_chunks {
+            let holder = self.chunk_map.get_mut(&pos).unwrap();
+            debug_assert_eq!(holder.target_stage, StagedChunkEnum::None);
+            if holder.occupied.is_null() {
+                let mut tmp = None;
+                swap(&mut holder.chunk, &mut tmp);
+                let Some(tmp) = tmp else {
+                    continue;
+                };
+                match tmp {
+                    Chunk::Level(chunk) => {
+                        if holder.public {
+                            self.public_chunk_map.remove(&pos);
+                            holder.public = false;
+                        }
+                        if Arc::strong_count(&chunk) != 1 {
+                            // log::debug!(
+                            //     "chunk {pos:?} is still used somewhere. it can't be unloaded"
+                            // );
+                            self.unload_chunks.insert(pos);
+                            holder.chunk = Some(Chunk::Level(chunk));
+                        } else {
+                            // log::debug!("unload chunk {pos:?} to file");
+                            chunks.push((pos, Chunk::Level(chunk)));
+                            self.chunk_map.remove(&pos);
+                        }
                     }
-                }
-                Chunk::Proto(chunk) => {
-                    // log::debug!("unload proto chunk {pos:?} to file");
-                    chunks.push((pos, Chunk::Proto(chunk)));
+                    Chunk::Proto(chunk) => {
+                        debug_assert!(!holder.public);
+                        // log::debug!("unload proto chunk {pos:?} to file");
+                        chunks.push((pos, Proto(chunk)));
+                        self.chunk_map.remove(&pos);
+                    }
                 }
             }
         }
@@ -1501,23 +1759,21 @@ impl GenerationSchedule {
         self.io_write.send(chunks).expect("io write thread stop");
     }
 
-    fn save_all_chunk(&self) {
-        let mut chunks = Vec::with_capacity(
-            self.unload_chunks.len() + self.proto_chunks.len() + self.loaded_chunks.len(),
-        );
-        for (pos, chunk) in &self.unload_chunks {
-            match chunk {
-                Chunk::Level(chunk) => {
-                    chunks.push((*pos, Chunk::Level(chunk.clone())));
+    fn save_all_chunk(&self, save_proto_chunk: bool) {
+        let mut chunks = Vec::with_capacity(self.chunk_map.len());
+        for (pos, chunk) in &self.chunk_map {
+            if let Some(chunk) = &chunk.chunk {
+                match chunk {
+                    Chunk::Level(chunk) => {
+                        chunks.push((*pos, Chunk::Level(chunk.clone())));
+                    }
+                    Chunk::Proto(chunk) => {
+                        if save_proto_chunk {
+                            chunks.push((*pos, Chunk::Proto(chunk.clone())));
+                        }
+                    }
                 }
-                Chunk::Proto(chunk) => chunks.push((*pos, Chunk::Proto(chunk.clone()))),
             }
-        }
-        for (pos, chunk) in &self.proto_chunks {
-            chunks.push((*pos, Chunk::Proto(chunk.clone())));
-        }
-        for i in self.loaded_chunks.iter() {
-            chunks.push((*i.key(), Chunk::Level(i.value().clone())));
         }
         // log::debug!("send {} chunks to io write", chunks.len());
         if chunks.is_empty() {
@@ -1531,145 +1787,127 @@ impl GenerationSchedule {
         self.io_write.send(chunks).expect("io write thread stop");
     }
 
+    fn drop_node(&mut self, node: NodeKey) {
+        let Some(old) = self.graph.nodes.remove(node) else {
+            return;
+        };
+        // debug!("drop node {node:?}");
+        let mut edge = old.edge;
+        while !edge.is_null() {
+            let cur = self.graph.edges.remove(edge).unwrap();
+            if let Some(node) = self.graph.nodes.get_mut(cur.to) {
+                debug_assert!(node.in_degree >= 1);
+                node.in_degree -= 1;
+                if node.in_degree == 0 && !node.in_queue {
+                    self.queue.push(TaskHeapNode(
+                        Self::calc_priority(
+                            &self.last_level,
+                            &self.last_high_priority,
+                            node.pos,
+                            node.stage,
+                        ),
+                        cur.to,
+                    ));
+                    node.in_queue = true;
+                }
+            }
+            edge = cur.next;
+        }
+    }
+
     fn receive_chunk(&mut self, pos: ChunkPos, data: RecvChunk) {
-        // debug!("receive chunk pos {pos:?}");
         match data {
-            RecvChunk::IO(chunk) => match chunk {
-                Chunk::Level(data) => {
-                    let mut mark = match self.task_mark.entry(pos) {
-                        Entry::Occupied(entry) => entry,
-                        Entry::Vacant(_) => panic!(),
-                    };
-                    if self.last_level.contains_key(&pos) {
-                        mark.get_mut().1 = Full as u8;
-                        self.loaded_chunks.insert(pos, data.clone());
-                    } else {
-                        // log::debug!("receive chunk {pos:?} to unload chunks");
-                        mark.get_mut().1 = StagedChunkEnum::None as u8;
-                        self.unload_chunks.insert(pos, Chunk::Level(data.clone()));
-                    }
-                    self.listener.process_new_chunk(pos, &data);
-                    self.drop_mark(Empty, pos);
-                    self.occupied.remove(&pos);
+            RecvChunk::IO(chunk) => {
+                // debug!("receive io chunk pos {pos:?}");
+                let mut holder = self.chunk_map.remove(&pos).unwrap();
+                debug_assert!(holder.chunk.is_none());
+                debug_assert_eq!(holder.current_stage, StagedChunkEnum::None);
+
+                for i in (holder.current_stage as usize + 1)..=(chunk.get_stage_id() as usize) {
+                    self.drop_node(holder.tasks[i]);
+                    holder.tasks[i] = NodeKey::null();
                 }
-                Chunk::Proto(data) => {
-                    // log::debug!("receive proto chunk {pos:?}");
-                    let mut mark = match self.task_mark.entry(pos) {
-                        Entry::Occupied(entry) => entry,
-                        Entry::Vacant(_) => panic!(),
-                    };
-                    if self.last_level.contains_key(&pos) {
-                        mark.get_mut().1 = data.stage_id();
-                        self.proto_chunks.insert(pos, data);
-                    } else {
-                        // log::debug!("receive chunk {pos:?} to unload chunks");
-                        mark.get_mut().1 = StagedChunkEnum::None as u8;
-                        self.unload_chunks.insert(pos, Chunk::Proto(data));
+                holder.current_stage = StagedChunkEnum::from(chunk.get_stage_id());
+                debug_assert!(self.graph.nodes.contains_key(holder.occupied));
+                self.drop_node(holder.occupied);
+                holder.occupied = NodeKey::null();
+
+                debug_assert!(!holder.public);
+                match &chunk {
+                    Chunk::Level(data) => {
+                        let result = self.public_chunk_map.insert(pos, data.clone());
+                        debug_assert!(result.is_none());
+                        holder.public = true;
+                        self.listener.process_new_chunk(pos, data);
                     }
-                    self.drop_mark(Empty, pos);
-                    self.occupied.remove(&pos);
+                    Chunk::Proto(_) => {}
                 }
-            },
+                holder.chunk = Some(chunk);
+                self.chunk_map.insert(pos, holder);
+            }
             RecvChunk::Generation(data) => {
+                // debug!("receive gen chunk pos {pos:?}");
                 let mut dx = 0;
                 let mut dy = 0;
-                let mut stage = Empty;
                 for chunk in data.chunks {
                     let new_pos = ChunkPos::new(data.x + dx, data.y + dy);
                     match chunk {
                         Chunk::Level(chunk) => {
+                            let mut holder = self.chunk_map.remove(&new_pos).unwrap();
                             if new_pos == pos {
-                                // other chunk is borrowed by arc. don't need to return
-                                let mut mark = match self.task_mark.entry(new_pos) {
-                                    Entry::Occupied(entry) => entry,
-                                    Entry::Vacant(_) => panic!(),
-                                };
-                                stage = Full;
-                                if self.last_level.contains_key(&new_pos) {
-                                    mark.get_mut().1 = Full as u8;
-                                    self.loaded_chunks.insert(new_pos, chunk.clone());
-                                } else {
-                                    // log::debug!("receive chunk {new_pos:?} to unload chunks");
-                                    mark.get_mut().1 = StagedChunkEnum::None as u8;
-                                    self.unload_chunks
-                                        .insert(new_pos, Chunk::Level(chunk.clone()));
-                                }
+                                debug_assert_eq!(holder.current_stage, Features);
+                                self.drop_node(holder.tasks[Full as usize]);
+                                holder.tasks[Full as usize] = NodeKey::null();
+                                debug_assert!(self.graph.nodes.contains_key(holder.occupied));
+                                self.drop_node(holder.occupied);
+                                holder.current_stage = Full;
+
+                                holder.chunk = Some(Chunk::Level(chunk.clone()));
+                                debug_assert!(!holder.public);
+                                let result = self.public_chunk_map.insert(new_pos, chunk.clone());
+                                holder.public = true;
+                                debug_assert!(result.is_none());
                                 self.listener.process_new_chunk(new_pos, &chunk);
                             }
+
+                            holder.occupied = NodeKey::null();
+                            self.chunk_map.insert(new_pos, holder);
                         }
                         Chunk::Proto(chunk) => {
-                            match self.task_mark.entry(new_pos) {
-                                Entry::Occupied(mut mark) => {
-                                    if new_pos == pos {
-                                        mark.get_mut().1 = chunk.stage_id();
-                                        stage = chunk.stage_id().into();
-                                    }
-                                    if self.last_level.contains_key(&new_pos) {
-                                        self.proto_chunks.insert(new_pos, chunk);
-                                    } else {
-                                        // log::debug!("receive chunk {new_pos:?} to unload chunks");
-                                        mark.get_mut().1 = StagedChunkEnum::None as u8;
-                                        self.unload_chunks.insert(new_pos, Chunk::Proto(chunk));
-                                    }
+                            let mut holder = self.chunk_map.remove(&new_pos).unwrap();
+                            debug_assert!(holder.chunk.is_none());
+                            debug_assert_eq!(
+                                holder.current_stage as u8,
+                                if new_pos == pos {
+                                    chunk.stage_id() - 1
+                                } else {
+                                    chunk.stage_id()
                                 }
-                                Entry::Vacant(_) => {
-                                    if new_pos == pos {
-                                        stage = chunk.stage_id().into();
-                                    }
-                                    // log::debug!("receive chunk {new_pos:?} to unload chunks");
-                                    self.unload_chunks.insert(new_pos, Chunk::Proto(chunk));
-                                }
-                            };
+                            );
+
+                            if new_pos == pos {
+                                debug_assert_ne!(holder.current_stage, StagedChunkEnum::None);
+                                let stage = chunk.stage_id();
+                                self.drop_node(holder.tasks[stage as usize]);
+                                holder.tasks[stage as usize] = NodeKey::null();
+                                debug_assert!(self.graph.nodes.contains_key(holder.occupied));
+                                self.drop_node(holder.occupied);
+                                holder.current_stage = StagedChunkEnum::from(stage);
+                            }
+                            holder.occupied = NodeKey::null();
+                            holder.chunk = Some(Chunk::Proto(chunk));
+                            self.chunk_map.insert(new_pos, holder);
                         }
                     }
-                    self.occupied.remove(&new_pos);
                     dy += 1;
                     if dy == data.size {
                         dy = 0;
                         dx += 1;
                     }
                 }
-                debug_assert_ne!(stage, Empty);
-                if stage == Empty {
-                    panic!();
-                }
-                self.drop_mark(stage, pos);
             }
         }
         self.running_task_count -= 1;
-    }
-
-    fn dump_debug_info(&self, sx: i32, tx: i32, sy: i32, ty: i32) {
-        debug!("queue len {}", self.queue.len());
-        debug!("proto chunk size {}", self.proto_chunks.len());
-        debug!("unload chunk size {}", self.unload_chunks.len());
-        // debug!("queue {:?}", self.queue);
-        debug!("running tasks {}", self.running_task_count);
-        debug!(
-            "global listener count {}",
-            self.listener.global.lock().unwrap().len()
-        );
-        debug!(
-            "single listener count {}",
-            self.listener.single.lock().unwrap().len()
-        );
-        let mut s = String::new();
-        for x in sx..=tx {
-            for y in sy..=ty {
-                s += Self::get_chunk_stage_id(
-                    &self.loaded_chunks,
-                    &self.proto_chunks,
-                    ChunkPos::new(x, y),
-                )
-                .to_string()
-                .as_str();
-                s += " ";
-            }
-            s += "\n";
-        }
-        debug!("chunk stage:\n{s}\n");
-
-        ChunkLoading::dump_level_debug(&self.last_high_priority, &self.last_level, sx, tx, sy, ty);
     }
 
     fn work(mut self, level: Arc<Level>) {
@@ -1687,139 +1925,145 @@ impl GenerationSchedule {
             }
             if level.should_save.load(Relaxed) {
                 // log::debug!("save all chunk signal");
-                self.save_all_chunk();
+                self.save_all_chunk(false);
                 level.should_save.store(false, Relaxed);
             }
             if level.shut_down_chunk_system.load(Relaxed) {
                 // log::debug!("shut down signal");
                 break;
             }
-            let mut nothing = true;
-            let mut i = 0;
 
-            // let now = Instant::now();
-            // if now - clock > Duration::from_secs(5) {
-            //     self.dump_debug_info(-20, 20, -20, 20);
-            //     clock = now;
-            // }
-            'outer: while i < self.queue.len() {
-                let mut have_recv = false;
+            'out2: while let Some(task) = self.queue.pop() {
+                if self.resort_work(self.send_level.get()) {
+                    self.queue.push(task);
+                    break 'out2;
+                }
                 while let Ok((pos, data)) = self.recv_chunk.try_recv() {
                     self.receive_chunk(pos, data);
-                    have_recv = true;
                 }
-                if have_recv {
-                    nothing = false;
-                    break 'outer;
-                }
-
-                let (pos, _, stage) = self.queue[i];
-
-                let level = *self
-                    .last_level
-                    .get(&pos)
-                    .unwrap_or(&ChunkLoading::MAX_LEVEL);
-                if level == ChunkLoading::MAX_LEVEL {
-                    self.drop_mark(stage, pos);
-                    self.queue.remove(i);
-                    continue;
-                }
-
-                let highest_stage = StagedChunkEnum::level_to_stage(level);
-                if (highest_stage as u8) < (stage as u8) {
-                    self.drop_mark(stage, pos);
-                    self.queue.remove(i);
-                    continue;
-                }
-
-                let (_, current_stage) = self.task_mark.get(&pos).unwrap(); // unwrap because we have checked MAX_LEVEL
-                if *current_stage >= (stage as u8) {
-                    self.drop_mark(stage, pos);
-                    self.queue.remove(i);
-                    continue;
-                }
-
-                if stage == Empty {
-                    nothing = false;
-                    self.running_task_count += 1;
-                    self.occupied.insert(pos);
-                    self.io_read
-                        .send(pos)
-                        .expect("oi thread close unexpectedly");
-                    self.queue.remove(i);
-                    continue;
-                }
-
-                let radius = stage.get_radius();
-                let write_radius = stage.get_write_radius();
-                let depend = stage.get_dependencies();
-                for dx in -radius..=radius {
-                    for dy in -radius..=radius {
-                        let new_pos = pos.add_raw(dx, dy);
-                        let dst = max(abs(dx), abs(dy)) as usize;
-                        if self.task_mark.get(&new_pos).unwrap_or(&(0, 0)).1 < (depend[dst] as u8) {
-                            i += 1;
-                            continue 'outer;
+                if let Some(node) = self.graph.nodes.get_mut(task.1) {
+                    if node.in_degree != 0 {
+                        node.in_queue = false;
+                        continue;
+                    }
+                    let node = node.clone();
+                    if node.stage == Empty {
+                        self.running_task_count += 1;
+                        let holder = self.chunk_map.get_mut(&node.pos).unwrap();
+                        debug_assert!(holder.occupied.is_null());
+                        debug_assert_eq!(holder.current_stage, StagedChunkEnum::None);
+                        let occupy = self.graph.nodes.insert(Node::new(
+                            ChunkPos::new(i32::MAX, i32::MAX),
+                            StagedChunkEnum::None,
+                        ));
+                        for i in
+                            (holder.current_stage as usize + 1)..=(holder.target_stage as usize)
+                        {
+                            self.graph.add_edge(occupy, holder.tasks[i]);
                         }
-                    }
-                }
-                for dx in -write_radius..=write_radius {
-                    for dy in -write_radius..=write_radius {
-                        let new_pos = pos.add_raw(dx, dy);
-                        if self.occupied.contains(&new_pos) {
-                            i += 1;
-                            continue 'outer;
-                        }
-                    }
-                }
-                let mut cache = Cache::new(
-                    pos.x - write_radius,
-                    pos.y - write_radius,
-                    (write_radius << 1) + 1,
-                );
-                for dx in -write_radius..=write_radius {
-                    for dy in -write_radius..=write_radius {
-                        let new_pos = pos.add_raw(dx, dy);
-                        let Some(chunk) =
-                            Self::get_chunk(&self.loaded_chunks, &mut self.proto_chunks, new_pos)
-                        else {
-                            self.dump_debug_info(pos.x - 20, pos.x + 20, pos.y - 20, pos.y + 20);
-                            log::error!("chunk does not exist at {new_pos:?}");
-                            log::error!("task chunk {pos:?} to stage {stage:?}");
+                        holder.occupied = occupy;
 
-                            panic!("chunk does not exist at {new_pos:?}");
-                        };
-                        cache.chunks.push(chunk);
-                        self.occupied.insert(new_pos);
+                        // debug!("send task {:?} {node:?}", task.1);
+
+                        self.io_read
+                            .send(node.pos)
+                            .expect("io thread close unexpectedly");
+                    } else {
+                        let occupy = self.graph.nodes.insert(Node::new(
+                            ChunkPos::new(i32::MAX, i32::MAX),
+                            StagedChunkEnum::None,
+                        ));
+                        let write_radius = node.stage.get_write_radius();
+                        let mut cache = Cache::new(
+                            node.pos.x - write_radius,
+                            node.pos.y - write_radius,
+                            write_radius << 1 | 1,
+                        );
+                        #[cfg(debug_assertions)]
+                        {
+                            let dp = node.stage.get_direct_dependencies();
+                            let r = node.stage.get_direct_radius();
+                            for dx in -r..=r {
+                                for dy in -r..=r {
+                                    let new_pos = node.pos.add_raw(dx, dy);
+                                    let holder = self.chunk_map.get(&new_pos).unwrap();
+                                    let dst = dy.abs().max(dx.abs());
+                                    debug_assert!(holder.current_stage >= dp[dst as usize]);
+                                    if dx == 0 && dy == 0 {
+                                        debug_assert_eq!(holder.current_stage, dp[0]);
+                                    }
+                                }
+                            }
+                        }
+
+                        for dx in -write_radius..=write_radius {
+                            for dy in -write_radius..=write_radius {
+                                let new_pos = node.pos.add_raw(dx, dy);
+                                let holder = self.chunk_map.get_mut(&new_pos).unwrap();
+                                let mut tmp = None;
+                                swap(&mut tmp, &mut holder.chunk);
+                                match tmp.unwrap() {
+                                    Chunk::Level(chunk) => {
+                                        cache.chunks.push(Chunk::Level(chunk.clone()));
+                                        holder.chunk = Some(Chunk::Level(chunk));
+                                    }
+                                    Proto(chunk) => cache.chunks.push(Proto(chunk)),
+                                }
+
+                                debug_assert!(holder.occupied.is_null());
+
+                                let mut cur_edge = holder.occupied_by;
+                                let mut prev_edge = EdgeKey::null();
+                                let mut change_head = None;
+                                while !cur_edge.is_null() {
+                                    let edge = self.graph.edges.get(cur_edge).unwrap();
+                                    if self.graph.nodes.contains_key(edge.to) {
+                                        prev_edge = cur_edge;
+                                        cur_edge = edge.next;
+                                        self.graph.add_edge(occupy, edge.to);
+                                    } else {
+                                        let next = edge.next;
+                                        self.graph.edges.remove(cur_edge);
+                                        cur_edge = next;
+                                        if prev_edge.is_null() {
+                                            change_head = Some(next);
+                                        } else {
+                                            self.graph.edges.get_mut(prev_edge).unwrap().next =
+                                                next;
+                                        }
+                                    }
+                                }
+                                if let Some(next) = change_head {
+                                    holder.occupied_by = next;
+                                }
+
+                                holder.occupied = occupy;
+                            }
+                        }
+
+                        // debug!("send task {:?} {node:?}", task.1);
+
+                        self.running_task_count += 1;
+                        self.generate
+                            .send((node.pos, cache, node.stage))
+                            .expect("generate thread close unexpectedly");
                     }
                 }
-                self.running_task_count += 1;
-                self.generate
-                    .send((pos, cache, stage))
-                    .expect("oi thread close unexpectedly");
-                self.queue.remove(i);
             }
+
             if self.queue.is_empty() {
                 // debug!("the queue is empty. thread sleep");
-                let mut no_resort = true;
                 'out: while self.running_task_count > 0 {
                     let (pos, data) = self.recv_chunk.recv().expect("recv_chunk stop");
                     self.receive_chunk(pos, data);
-                    if self.resort_work(self.send_level.get()) {
-                        no_resort = false;
+                    if !self.queue.is_empty() || self.resort_work(self.send_level.get()) {
                         break 'out;
                     }
                 }
-                if no_resort {
+                if self.queue.is_empty() {
+                    // debug!("no work to do. thread sleep");
+                    debug_assert!(self.running_task_count > 0 || self.debug_check());
                     self.resort_work(self.send_level.wait_and_get(&level));
-                }
-            } else if !self.resort_work(self.send_level.get())
-                && nothing
-                && self.running_task_count > 0
-            {
-                // debug!("nothing to do. thread sleep.");
-                if let Ok((pos, data)) = self.recv_chunk.recv() {
-                    self.receive_chunk(pos, data);
                 }
             }
         }
@@ -1829,11 +2073,42 @@ impl GenerationSchedule {
             self.receive_chunk(pos, data);
         }
         log::info!("saving all chunks");
-        self.save_all_chunk();
+        self.save_all_chunk(true);
+        log::info!("there are {} chunks to write", self.io_write.len());
         log::info!(
             "schedule thread stop id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")
         );
+    }
+
+    fn debug_check(&self) -> bool {
+        if !self.graph.nodes.is_empty() {
+            // error!("nodes: {:?}", self.graph.nodes);
+            for (key, value) in &self.graph.nodes {
+                error!("unrelease node {key:?}: {value:?}");
+            }
+            panic!("nodes count error");
+        }
+        for (pos, holder) in &self.chunk_map {
+            for i in &holder.tasks {
+                debug_assert!(i.is_null());
+            }
+            debug_assert_eq!(
+                holder.target_stage,
+                StagedChunkEnum::level_to_stage(
+                    *self.last_level.get(pos).unwrap_or(&ChunkLoading::MAX_LEVEL)
+                )
+            );
+            debug_assert!(holder.current_stage >= holder.target_stage);
+            debug_assert!(holder.occupied.is_null());
+            if holder.current_stage != StagedChunkEnum::None {
+                debug_assert_eq!(
+                    holder.chunk.as_ref().unwrap().get_stage_id(),
+                    holder.current_stage as u8
+                );
+            }
+        }
+        true
     }
 }

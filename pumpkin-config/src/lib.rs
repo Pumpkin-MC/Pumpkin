@@ -1,13 +1,12 @@
-use chunk::ChunkConfig;
 use fun::FunConfig;
-use log::warn;
 use logging::LoggingConfig;
+use pumpkin_util::world_seed::Seed;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::{env, fs, num::NonZeroU8, path::Path, sync::LazyLock};
+use std::{fs, num::NonZeroU8, path::Path};
 pub mod fun;
 pub mod logging;
 pub mod networking;
@@ -32,53 +31,12 @@ mod player_data;
 mod pvp;
 mod server_links;
 pub mod whitelist;
+pub mod world;
 
 use networking::NetworkingConfig;
 use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
-
-const CONFIG_ROOT_FOLDER: &str = "config/";
-
-pub static BASIC_CONFIG: LazyLock<BasicConfiguration> = LazyLock::new(|| {
-    let exec_dir = env::current_dir().unwrap();
-    BasicConfiguration::load(&exec_dir)
-});
-
-#[cfg(not(feature = "test_helper"))]
-static ADVANCED_CONFIG: LazyLock<AdvancedConfiguration> = LazyLock::new(|| {
-    let exec_dir = env::current_dir().unwrap();
-    AdvancedConfiguration::load(&exec_dir)
-});
-
-#[cfg(not(feature = "test_helper"))]
-pub fn advanced_config() -> &'static AdvancedConfiguration {
-    &ADVANCED_CONFIG
-}
-
-// This is pretty jank but it works :(
-// TODO: Can we refactor this better?
-#[cfg(feature = "test_helper")]
-use std::cell::RefCell;
-
-// Yes, we are leaking memory here, but it is only for tests. Need to maintain pairity with the
-// non-test code
-#[cfg(feature = "test_helper")]
-thread_local! {
-    // Needs to be thread local so we don't override the config while another test is running
-    static ADVANCED_CONFIG: RefCell<&'static AdvancedConfiguration> = RefCell::new(Box::leak(Box::new(AdvancedConfiguration::default())));
-}
-
-#[cfg(feature = "test_helper")]
-pub fn override_config_for_testing(config: AdvancedConfiguration) {
-    ADVANCED_CONFIG.with_borrow_mut(|ref_config| {
-        *ref_config = Box::leak(Box::new(config));
-    });
-}
-
-#[cfg(feature = "test_helper")]
-pub fn advanced_config() -> &'static AdvancedConfiguration {
-    ADVANCED_CONFIG.with_borrow(|config| *config)
-}
+use world::LevelConfig;
 
 /// The idea is that Pumpkin should very customizable.
 /// You can enable or disable features depending on your needs.
@@ -90,7 +48,7 @@ pub fn advanced_config() -> &'static AdvancedConfiguration {
 pub struct AdvancedConfiguration {
     pub logging: LoggingConfig,
     pub resource_pack: ResourcePackConfig,
-    pub chunk: ChunkConfig,
+    pub world: LevelConfig,
     pub networking: NetworkingConfig,
     pub commands: CommandsConfig,
     pub chat: ChatConfig,
@@ -112,7 +70,7 @@ pub struct BasicConfiguration {
     // Whether Bedrock Edition Client's are Accepted
     pub bedrock_edition_address: SocketAddr,
     /// The seed for world generation.
-    pub seed: String,
+    pub seed: Seed,
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
     pub max_players: u32,
     /// The maximum view distance for players.
@@ -162,7 +120,7 @@ impl Default for BasicConfiguration {
             java_edition_address: "0.0.0.0:25565".parse().unwrap(),
             bedrock_edition: true,
             bedrock_edition_address: "0.0.0.0:19132".parse().unwrap(),
-            seed: "".to_string(),
+            seed: Seed(0),
             max_players: 1000,
             view_distance: NonZeroU8::new(16).unwrap(),
             simulation_distance: NonZeroU8::new(10).unwrap(),
@@ -189,19 +147,18 @@ impl Default for BasicConfiguration {
 
 impl BasicConfiguration {
     pub fn get_world_path(&self) -> PathBuf {
-        format!("./{}", self.default_level_name).parse().unwrap()
+        PathBuf::from(&self.default_level_name)
     }
 }
 
-trait LoadConfiguration {
-    fn load(exec_dir: &Path) -> Self
+pub trait LoadConfiguration {
+    fn load(config_dir: &Path) -> Self
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
     {
-        let config_dir = exec_dir.join(CONFIG_ROOT_FOLDER);
         if !config_dir.exists() {
             log::debug!("creating new config root folder");
-            fs::create_dir(&config_dir).expect("Failed to create config root folder");
+            fs::create_dir(config_dir).expect("Failed to create config root folder");
         }
         let path = config_dir.join(Self::get_path());
 
@@ -222,12 +179,13 @@ trait LoadConfiguration {
             if changed {
                 println!(
                     "{} changed because values were missing. The missing values were filled with default values.",
-                    path.file_name().unwrap().to_str().unwrap()
+                    path.file_name().unwrap().display()
                 );
                 if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
-                    warn!(
+                    log::warn!(
                         "Couldn't write merged config to {:?}. Reason: {}",
-                        &path, err
+                        &path,
+                        err
                     );
                 }
             }
@@ -237,9 +195,10 @@ trait LoadConfiguration {
             let content = Self::default();
 
             if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
-                warn!(
+                log::warn!(
                     "Couldn't write default config to {:?}. Reason: {}",
-                    &path, err
+                    &path,
+                    err
                 );
             }
 

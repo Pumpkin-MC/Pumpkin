@@ -172,7 +172,7 @@ pub(crate) fn build() -> TokenStream {
     let mut name_to_type = TokenStream::new();
     let mut id_to_type = TokenStream::new();
 
-    for (name, biome) in biomes.iter() {
+    for (name, biome) in biomes.into_iter() {
         // let full_name = format!("minecraft:{name}");
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let has_precipitation = biome.has_precipitation;
@@ -184,7 +184,6 @@ pub(crate) fn build() -> TokenStream {
 
         let temperature_modifier = biome
             .temperature_modifier
-            .clone()
             .unwrap_or(TemperatureModifier::None);
 
         let monster: Vec<_> = biome

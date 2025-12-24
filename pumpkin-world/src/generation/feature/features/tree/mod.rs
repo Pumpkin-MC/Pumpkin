@@ -46,7 +46,7 @@ impl TreeFeature {
         let log_positions = self.generate_main(chunk, min_y, height, feature_name, random, pos);
 
         for decorator in &self.decorators {
-            decorator.generate(chunk, random, Vec::new(), log_positions.clone());
+            decorator.generate(chunk, random, &[], &log_positions);
         }
         true
     }

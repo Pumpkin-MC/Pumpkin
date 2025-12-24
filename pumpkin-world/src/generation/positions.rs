@@ -39,10 +39,10 @@ pub mod chunk_pos {
     use crate::generation::section_coords::get_offset_pos;
 
     // A chunk outside of normal bounds
-    pub const MARKER: u64 = packed(&Vector2::new(1875066, 1875066));
+    pub const MARKER: u64 = packed(1875066, 1875066);
 
-    pub const fn packed(vec: &Vector2<i32>) -> u64 {
-        (vec.x as u64 & 4294967295u64) | ((vec.y as u64 & 4294967295u64) << 32)
+    pub const fn packed(x: u64, y: u64) -> u64 {
+        (x & 4294967295u64) | ((y & 4294967295u64) << 32)
     }
 
     pub const fn unpack_x(packed: u64) -> i32 {
@@ -69,20 +69,20 @@ pub mod chunk_pos {
         get_offset_pos(coord, offset)
     }
 
-    pub const fn start_block_x(vec: &Vector2<i32>) -> i32 {
-        vec.x << 4
+    pub const fn start_block_x(x: i32) -> i32 {
+        x << 4
     }
 
-    pub const fn end_block_x(vec: &Vector2<i32>) -> i32 {
-        start_block_x(vec) + 15
+    pub const fn end_block_x(x: i32) -> i32 {
+        start_block_x(x) + 15
     }
 
-    pub const fn start_block_z(vec: &Vector2<i32>) -> i32 {
-        vec.y << 4
+    pub const fn start_block_z(z: i32) -> i32 {
+        z << 4
     }
 
-    pub const fn end_block_z(vec: &Vector2<i32>) -> i32 {
-        start_block_z(vec) + 15
+    pub const fn end_block_z(z: i32) -> i32 {
+        start_block_z(z) + 15
     }
 
     pub const fn to_chunk_pos(vec: &Vector2<i32>) -> Vector2<i32> {
@@ -107,17 +107,18 @@ pub const MIN_HEIGHT_CELL: i32 = MIN_HEIGHT << 4;
 
 #[cfg(test)]
 mod test {
-    use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+    use pumpkin_util::math::vector3::Vector3;
 
     use super::{block_pos, chunk_pos};
 
     #[test]
     fn test_chunk_packing() {
-        let pos = Vector2::new(305135135, -1351513511);
-        let packed = chunk_pos::packed(&pos);
+        let x = 305135135_i32;
+        let y = -1351513511_i32;
+        let packed = chunk_pos::packed(x as u64, y as u64);
         assert_eq!(packed as i64, -5804706329542001121i64);
-        assert_eq!(pos.x, chunk_pos::unpack_x(packed));
-        assert_eq!(pos.y, chunk_pos::unpack_z(packed));
+        assert_eq!(x, chunk_pos::unpack_x(packed));
+        assert_eq!(y, chunk_pos::unpack_z(packed));
     }
 
     #[test]

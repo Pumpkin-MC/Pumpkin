@@ -10,7 +10,7 @@ pub use state::RawBlockState;
 
 use crate::BlockStateId;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct BlockStateCodec {
     /// Block name
@@ -51,17 +51,18 @@ impl BlockStateCodec {
     pub fn get_state_id(&self) -> BlockStateId {
         let block = self.name;
 
-        let mut state_id = block.default_state.id;
+        let properties_map = match &self.properties {
+            Some(map) => map,
+            None => return block.default_state.id,
+        };
 
-        if let Some(properties) = &self.properties {
-            let props: Vec<(&str, &str)> = properties
-                .iter()
-                .map(|(k, v)| (k.as_str(), v.as_str()))
-                .collect();
-            let block_properties = block.from_properties(&props);
-            state_id = block_properties.to_state_id(block);
-        }
-        state_id
+        let props_iter = properties_map
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect::<Vec<(&str, &str)>>();
+
+        let block_properties = block.from_properties(&props_iter);
+        block_properties.to_state_id(block)
     }
 }
 

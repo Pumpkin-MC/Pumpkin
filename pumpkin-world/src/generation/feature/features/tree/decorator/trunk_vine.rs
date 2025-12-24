@@ -17,7 +17,7 @@ impl TrunkVineTreeDecorator {
         &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
-        log_positions: Vec<BlockPos>,
+        log_positions: &[BlockPos],
     ) {
         for pos in log_positions {
             if random.next_bounded_i32(3) > 0

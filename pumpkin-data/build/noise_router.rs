@@ -9,7 +9,6 @@ use quote::{ToTokens, TokenStreamExt, quote};
 use serde::Deserialize;
 use syn::Ident;
 
-#[derive(Clone)]
 struct HashableF32(pub f32);
 
 // Normally this is bad, but we just care about checking if components are the same
@@ -45,7 +44,6 @@ impl<'de> Deserialize<'de> for HashableF32 {
     }
 }
 
-#[derive(Clone)]
 struct HashableF64(pub f64);
 
 // Normally this is bad, but we just care about checking if components are the same
@@ -81,7 +79,7 @@ impl<'de> Deserialize<'de> for HashableF64 {
     }
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 #[serde(tag = "_type", content = "value")]
 enum SplineRepr {
     #[serde(rename(deserialize = "standard"))]
@@ -97,8 +95,8 @@ enum SplineRepr {
 }
 
 impl SplineRepr {
-    fn into_token_stream(
-        self,
+    fn get_token_stream(
+        &self,
         stack: &mut Vec<TokenStream>,
         hash_to_index_map: &mut BTreeMap<u64, usize>,
     ) -> TokenStream {
@@ -130,7 +128,7 @@ impl SplineRepr {
                 let point_reprs = points
                     .into_iter()
                     .map(|(location, value, derivative)| {
-                        let value_repr = value.into_token_stream(stack, hash_to_index_map);
+                        let value_repr = value.get_token_stream(stack, hash_to_index_map);
 
                         quote! {
                             SplinePoint {
@@ -166,7 +164,7 @@ enum BinaryOperation {
 }
 
 impl BinaryOperation {
-    fn into_token_stream(self) -> TokenStream {
+    fn get_token_stream(&self) -> TokenStream {
         match self {
             Self::Add => {
                 quote! {
@@ -337,7 +335,7 @@ impl WrapperType {
     }
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 struct NoiseData {
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
@@ -347,7 +345,7 @@ struct NoiseData {
     y_scale: HashableF64,
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 struct ShiftedNoiseData {
     #[serde(rename(deserialize = "xzScale"))]
     xz_scale: HashableF64,
@@ -365,7 +363,7 @@ struct WeirdScaledData {
     mapper: WeirdScaledMapper,
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 struct InterpolatedNoiseSamplerData {
     #[serde(rename(deserialize = "scaledXzScale"))]
     scaled_xz_scale: HashableF64,
@@ -386,7 +384,7 @@ struct InterpolatedNoiseSamplerData {
     //y_scale: HashableF64,
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 struct ClampedYGradientData {
     #[serde(rename(deserialize = "fromY"))]
     from_y: i32,
@@ -398,7 +396,7 @@ struct ClampedYGradientData {
     to_value: HashableF64,
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 struct BinaryData {
     #[serde(rename(deserialize = "type"))]
     operation: BinaryOperation,
@@ -408,7 +406,7 @@ struct BinaryData {
     max_value: HashableF64,
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 struct LinearData {
     #[serde(rename(deserialize = "specificType"))]
     operation: LinearOperation,
@@ -419,7 +417,7 @@ struct LinearData {
     max_value: HashableF64,
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 struct UnaryData {
     #[serde(rename(deserialize = "type"))]
     operation: UnaryOperation,
@@ -429,7 +427,7 @@ struct UnaryData {
     max_value: HashableF64,
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 struct ClampData {
     #[serde(rename(deserialize = "minValue"))]
     min_value: HashableF64,
@@ -437,7 +435,7 @@ struct ClampData {
     max_value: HashableF64,
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 struct RangeChoiceData {
     #[serde(rename(deserialize = "minInclusive"))]
     min_inclusive: HashableF64,
@@ -445,7 +443,7 @@ struct RangeChoiceData {
     max_exclusive: HashableF64,
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 struct SplineData {
     #[serde(rename(deserialize = "minValue"))]
     min_value: HashableF64,
@@ -453,7 +451,7 @@ struct SplineData {
     max_value: HashableF64,
 }
 
-#[derive(Deserialize, Hash, Clone)]
+#[derive(Deserialize, Hash)]
 #[serde(tag = "_class", content = "value")]
 enum DensityFunctionRepr {
     // This is a placeholder for leaving space for world structures
@@ -562,7 +560,7 @@ impl DensityFunctionRepr {
     }
 
     fn get_index_for_component(
-        self,
+        &self,
         stack: &mut Vec<TokenStream>,
         hash_to_index_map: &mut BTreeMap<u64, usize>,
     ) -> usize {
@@ -570,7 +568,7 @@ impl DensityFunctionRepr {
             *index
         } else {
             let id = self.unique_id();
-            let repr = self.into_token_stream(stack, hash_to_index_map);
+            let repr = self.get_token_stream(stack, hash_to_index_map);
             stack.push(repr);
             let index = stack.len() - 1;
             hash_to_index_map.insert(id, index);
@@ -578,15 +576,15 @@ impl DensityFunctionRepr {
         }
     }
 
-    fn into_token_stream(
-        self,
+    fn get_token_stream(
+        &self,
         stack: &mut Vec<TokenStream>,
         hash_to_index_map: &mut BTreeMap<u64, usize>,
     ) -> TokenStream {
         match self {
             Self::Spline { spline, data } => {
                 let _ = data;
-                let spline_repr = spline.into_token_stream(stack, hash_to_index_map);
+                let spline_repr = spline.get_token_stream(stack, hash_to_index_map);
 
                 quote! {
                     BaseNoiseFunctionComponent::Spline {
@@ -598,9 +596,9 @@ impl DensityFunctionRepr {
                 BaseNoiseFunctionComponent::EndIslands
             },
             Self::Noise { data } => {
-                let noise_id = data.noise_id;
-                let xz_scale = data.xz_scale;
-                let y_scale = data.y_scale;
+                let noise_id = &data.noise_id;
+                let xz_scale = &data.xz_scale;
+                let y_scale = &data.y_scale;
 
                 quote! {
                     BaseNoiseFunctionComponent::Noise {
@@ -660,9 +658,9 @@ impl DensityFunctionRepr {
                 let shift_y_index = shift_y.get_index_for_component(stack, hash_to_index_map);
                 let shift_z_index = shift_z.get_index_for_component(stack, hash_to_index_map);
 
-                let xz_scale = data.xz_scale;
-                let y_scale = data.y_scale;
-                let noise_id = data.noise_id;
+                let xz_scale = &data.xz_scale;
+                let y_scale = &data.y_scale;
+                let noise_id = &data.noise_id;
 
                 quote! {
                     BaseNoiseFunctionComponent::ShiftedNoise {
@@ -688,8 +686,8 @@ impl DensityFunctionRepr {
                 let when_out_index =
                     when_out_range.get_index_for_component(stack, hash_to_index_map);
 
-                let min_inclusive = data.min_inclusive;
-                let max_exclusive = data.max_exclusive;
+                let min_inclusive = &data.min_inclusive;
+                let max_exclusive = &data.max_exclusive;
 
                 quote! {
                     BaseNoiseFunctionComponent::RangeChoice {
@@ -711,7 +709,7 @@ impl DensityFunctionRepr {
                 let argument1_index = argument1.get_index_for_component(stack, hash_to_index_map);
                 let argument2_index = argument2.get_index_for_component(stack, hash_to_index_map);
 
-                let action = data.operation.into_token_stream();
+                let action = data.operation.get_token_stream();
                 quote! {
                     BaseNoiseFunctionComponent::Binary {
                         argument1_index: #argument1_index,
@@ -725,8 +723,8 @@ impl DensityFunctionRepr {
             Self::ClampedYGradient { data } => {
                 let from_y = data.from_y as f64;
                 let to_y = data.to_y as f64;
-                let from_value = data.from_value;
-                let to_value = data.to_value;
+                let from_value = &data.from_value;
+                let to_value = &data.to_value;
 
                 quote! {
                     BaseNoiseFunctionComponent::ClampedYGradient {
@@ -761,7 +759,7 @@ impl DensityFunctionRepr {
                 let input_index = input.get_index_for_component(stack, hash_to_index_map);
 
                 let action = data.operation.into_token_stream();
-                let argument = data.argument;
+                let argument = &data.argument;
                 quote! {
                     BaseNoiseFunctionComponent::Linear {
                         input_index: #input_index,
@@ -775,8 +773,8 @@ impl DensityFunctionRepr {
             Self::Clamp { input, data } => {
                 let input_index = input.get_index_for_component(stack, hash_to_index_map);
 
-                let min_value = data.min_value;
-                let max_value = data.max_value;
+                let min_value = &data.min_value;
+                let max_value = &data.max_value;
 
                 quote! {
                     BaseNoiseFunctionComponent::Clamp {
@@ -805,7 +803,7 @@ impl DensityFunctionRepr {
             Self::WeirdScaled { input, data } => {
                 let input_index = input.get_index_for_component(stack, hash_to_index_map);
 
-                let noise_id = data.noise_id;
+                let noise_id = &data.noise_id;
                 let action = data.mapper.into_token_stream();
 
                 quote! {
@@ -819,11 +817,11 @@ impl DensityFunctionRepr {
                 }
             }
             Self::InterpolatedNoiseSampler { data } => {
-                let scaled_xz_scale = data.scaled_xz_scale;
-                let scaled_y_scale = data.scaled_y_scale;
-                let xz_factor = data.xz_factor;
-                let y_factor = data.y_factor;
-                let smear_scale_multiplier = data.smear_scale_multiplier;
+                let scaled_xz_scale = &data.scaled_xz_scale;
+                let scaled_y_scale = &data.scaled_y_scale;
+                let xz_factor = &data.xz_factor;
+                let y_factor = &data.y_factor;
+                let smear_scale_multiplier = &data.smear_scale_multiplier;
 
                 quote! {
                     BaseNoiseFunctionComponent::InterpolatedNoiseSampler {
@@ -918,11 +916,9 @@ impl NoiseRouterRepr {
         // These should all be cached so it doesn't matter where their components are
         let noise_erosion = self
             .erosion
-            .clone()
             .get_index_for_component(&mut noise_component_stack, &mut noise_lookup_map);
         let noise_depth = self
             .depth
-            .clone()
             .get_index_for_component(&mut noise_component_stack, &mut noise_lookup_map);
 
         let mut surface_component_stack = Vec::new();

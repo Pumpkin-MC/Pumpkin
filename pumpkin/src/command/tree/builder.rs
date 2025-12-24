@@ -39,7 +39,7 @@ impl CommandTree {
     ///
     /// Also see [`NonLeafNodeBuilder::execute`].
     #[must_use]
-    pub fn execute(mut self, executor: impl CommandExecutor + 'static + Send) -> Self {
+    pub fn execute(mut self, executor: impl CommandExecutor + 'static) -> Self {
         let node = Node {
             node_type: NodeType::ExecuteLeaf {
                 executor: Arc::new(executor),
@@ -73,7 +73,7 @@ impl NodeBuilder for LeafNodeBuilder {
 
 pub struct NonLeafNodeBuilder {
     node_type: NodeType,
-    child_nodes: Vec<NonLeafNodeBuilder>,
+    child_nodes: Vec<Self>,
     leaf_nodes: Vec<LeafNodeBuilder>,
 }
 
@@ -116,7 +116,7 @@ impl NonLeafNodeBuilder {
     ///
     /// Also see [`CommandTree::execute`].
     #[must_use]
-    pub fn execute(mut self, executor: impl CommandExecutor + 'static + Send) -> Self {
+    pub fn execute(mut self, executor: impl CommandExecutor + 'static) -> Self {
         self.leaf_nodes.push(LeafNodeBuilder {
             node_type: NodeType::ExecuteLeaf {
                 executor: Arc::new(executor),
@@ -149,7 +149,7 @@ pub fn literal(string: impl Into<String>) -> NonLeafNodeBuilder {
 /// reversed, so [`Vec::pop`] can be used to obtain args in ltr order.
 pub fn argument(
     name: impl Into<String>,
-    consumer: impl ArgumentConsumer + 'static + Send,
+    consumer: impl ArgumentConsumer + 'static,
 ) -> NonLeafNodeBuilder {
     NonLeafNodeBuilder {
         node_type: NodeType::Argument {

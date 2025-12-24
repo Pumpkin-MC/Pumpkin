@@ -29,7 +29,7 @@ pub struct Structures {
     pub structure: StructureType,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub enum StructureType {
     #[serde(rename = "minecraft:buried_treasure")]
     BuriedTreasure(BuriedTreasureGenerator),
@@ -38,35 +38,52 @@ pub enum StructureType {
 }
 
 impl StructureType {
-    pub fn get_structure_position(
+    pub fn try_generate(
         &self,
         name: &str,
-        chunk: &ProtoChunk,
+        seed: i64,
+        chunk_x: i32,
+        chunk_z: i32,
+        chunk_ref_for_biomes: &ProtoChunk,
     ) -> Option<StructurePosition> {
-        let position = match self {
-            StructureType::BuriedTreasure(generator) => generator.get_structure_position(chunk),
-            StructureType::NetherFortress(generator) => generator.get_structure_position(chunk),
+        let structure_pos = match self {
+            StructureType::BuriedTreasure(generator) => {
+                generator.try_generate(seed, chunk_x, chunk_z)
+            }
+            StructureType::NetherFortress(generator) => {
+                generator.try_generate(seed, chunk_x, chunk_z)
+            }
         };
-        if let Some(structure) = STRUCTURES.get(name) {
-            let current_biome = chunk.get_biome(&position.position.0);
-            if Biome::get_tag_values(&structure.biomes)
-                .unwrap()
+
+        if let Some(pos) = structure_pos
+            && let Some(structure_data) = STRUCTURES.get(name)
+        {
+            // Get the biome at the structure's starting position
+            let current_biome = chunk_ref_for_biomes.get_biome(
+                pos.start_pos.0.x,
+                pos.start_pos.0.y,
+                pos.start_pos.0.z,
+            );
+
+            // Check if the biome is allowed for this structure
+            if Biome::get_tag_values(&structure_data.biomes)
+                .unwrap_or_default()
                 .contains(&current_biome.registry_id)
             {
-                return Some(position);
+                return Some(pos);
             }
         }
+
         None
     }
+}
 
-    pub fn generate(&self, position: StructurePosition, chunk: &mut crate::ProtoChunk) {
-        for pos in position.generator.pieces_positions {
-            match self {
-                StructureType::BuriedTreasure(generator) => generator.generate(pos, chunk),
-                StructureType::NetherFortress(generator) => generator.generate(pos, chunk),
-            }
-        }
-    }
+pub fn generate_structure_pieces(
+    structure_pos: &StructurePosition,
+    chunk: &mut ProtoChunk,
+    seed: i64,
+) {
+    structure_pos.collector.generate_in_chunk(chunk, seed);
 }
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Hash, Debug)]

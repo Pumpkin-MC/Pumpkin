@@ -17,35 +17,25 @@ impl ClientPacket for CChunkData<'_> {
         let mut write = write;
 
         // Chunk X
-        write.write_i32_be(self.0.position.x)?;
+        write.write_i32_be(self.0.x)?;
         // Chunk Z
-        write.write_i32_be(self.0.position.y)?;
+        write.write_i32_be(self.0.z)?;
 
         let heightmaps = &self.0.heightmap;
-        // the heighmap is a map, we put 3 values in so the size is 3
-        write.write_var_int(&VarInt(3))?;
+        write.write_var_int(&VarInt(3))?; // Map size
 
-        // heighmap index
-        write.write_var_int(&VarInt(1))?;
-        // write long array
-        write.write_var_int(&VarInt(heightmaps.world_surface.len() as i32))?;
-        for mb in &heightmaps.world_surface {
-            write.write_i64_be(*mb)?;
-        }
-        // heighmap index
-        write.write_var_int(&VarInt(4))?;
-        // write long array
-        write.write_var_int(&VarInt(heightmaps.motion_blocking.len() as i32))?;
-        for mb in &heightmaps.motion_blocking {
-            write.write_i64_be(*mb)?;
-        }
-        // heighmap index
-        write.write_var_int(&VarInt(5))?;
-        // write long array
-        write.write_var_int(&VarInt(heightmaps.motion_blocking_no_leaves.len() as i32))?;
-        for mb in &heightmaps.motion_blocking {
-            write.write_i64_be(*mb)?;
-        }
+        let mut write_heightmap = |index: i32, data: &[i64]| -> Result<(), WritingError> {
+            write.write_var_int(&VarInt(index))?;
+            write.write_var_int(&VarInt(data.len() as i32))?;
+            for val in data {
+                write.write_i64_be(*val)?;
+            }
+            Ok(())
+        };
+
+        write_heightmap(1, &heightmaps.world_surface)?;
+        write_heightmap(4, &heightmaps.motion_blocking)?;
+        write_heightmap(5, &heightmaps.motion_blocking_no_leaves)?;
 
         {
             let mut blocks_and_biomes_buf = Vec::new();
@@ -120,16 +110,15 @@ impl ClientPacket for CChunkData<'_> {
 
         write.write_var_int(&VarInt(self.0.block_entities.len() as i32))?;
         for block_entity in self.0.block_entities.values() {
-            let block_entity = &block_entity;
-            let chunk_data_nbt = block_entity.chunk_data_nbt();
             let pos = block_entity.get_position();
-            let block_entity_id = block_entity.get_id();
-            let local_xz = (get_local_cord(pos.0.x) << 4) | get_local_cord(pos.0.z);
+            let local_xz = ((get_local_cord(pos.0.x) & 0xF) << 4) | (get_local_cord(pos.0.z) & 0xF);
+
             write.write_u8(local_xz as u8)?;
             write.write_i16_be(pos.0.y as i16)?;
-            write.write_var_int(&VarInt(block_entity_id as i32))?;
-            if let Some(chunk_data_nbt) = chunk_data_nbt {
-                write.write_nbt(&chunk_data_nbt.into())?;
+            write.write_var_int(&VarInt(block_entity.get_id() as i32))?;
+
+            if let Some(nbt) = block_entity.chunk_data_nbt() {
+                write.write_nbt(&nbt.into())?;
             } else {
                 write.write_u8(END_ID)?;
             }

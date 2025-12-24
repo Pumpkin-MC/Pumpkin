@@ -6,7 +6,6 @@ use std::{
     sync::Arc,
 };
 
-use async_trait::async_trait;
 use futures::future::join_all;
 use log::{error, trace};
 use num_traits::Zero;
@@ -18,7 +17,10 @@ use tokio::{
 };
 
 use crate::{
-    chunk::{ChunkReadingError, ChunkWritingError, io::Dirtiable},
+    chunk::{
+        ChunkReadingError, ChunkWritingError,
+        io::{BoxFuture, Dirtiable},
+    },
     level::LevelFolder,
 };
 
@@ -41,6 +43,8 @@ pub struct ChunkFileManager<S: ChunkSerializer<WriteBackend = PathBuf>> {
     // - Allow for ease of usage (able to return the serializer from a function)
     file_locks: RwLock<BTreeMap<PathBuf, ChunkSerializerLazyLoader<S>>>,
     watchers: RwLock<BTreeMap<PathBuf, usize>>,
+
+    chunk_config: S::ChunkConfig,
 }
 
 pub(crate) trait PathFromLevelFolder {
@@ -83,7 +87,7 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
     }
 
     async fn read_from_disk(&self) -> Result<S, ChunkReadingError> {
-        trace!("Opening file from Disk: {:?}", self.path);
+        trace!("Opening file from Disk: {}", self.path.display());
         let file = tokio::fs::OpenOptions::new()
             .read(true)
             .write(false)
@@ -114,16 +118,17 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
             Err(err) => return Err(err),
         };
 
-        trace!("Successfully read file from Disk: {:?}", self.path);
+        trace!("Successfully read file from Disk: {}", self.path.display());
         Ok(value)
     }
 }
 
-impl<S: ChunkSerializer<WriteBackend = PathBuf>> Default for ChunkFileManager<S> {
-    fn default() -> Self {
+impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
+    pub fn new(chunk_config: S::ChunkConfig) -> Self {
         Self {
             file_locks: RwLock::new(BTreeMap::new()),
             watchers: RwLock::new(BTreeMap::new()),
+            chunk_config,
         }
     }
 }
@@ -149,250 +154,284 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
     }
 }
 
-#[async_trait]
 impl<P, S> FileIO for ChunkFileManager<S>
 where
     P: PathFromLevelFolder + Send + Sync + Sized + Dirtiable + 'static,
     S: ChunkSerializer<Data = P, WriteBackend = PathBuf>,
+    S::ChunkConfig: Send + Sync,
 {
     type Data = Arc<RwLock<S::Data>>;
 
-    async fn watch_chunks(&self, folder: &LevelFolder, chunks: &[Vector2<i32>]) {
-        // It is intentional that regions are watched multiple times (once per chunk)
-        let mut watchers = self.watchers.write().await;
-        for chunk in chunks {
-            let key = S::get_chunk_key(chunk);
-            let map_key = P::file_path(folder, &key);
-            match watchers.entry(map_key) {
-                std::collections::btree_map::Entry::Vacant(vacant) => {
-                    let _ = vacant.insert(1);
-                }
-                std::collections::btree_map::Entry::Occupied(mut occupied) => {
-                    occupied.get_mut().add_assign(1);
-                }
-            }
-        }
-    }
-
-    async fn unwatch_chunks(&self, folder: &LevelFolder, chunks: &[Vector2<i32>]) {
-        let mut watchers = self.watchers.write().await;
-        for chunk in chunks {
-            let key = S::get_chunk_key(chunk);
-            let map_key = P::file_path(folder, &key);
-            match watchers.entry(map_key) {
-                std::collections::btree_map::Entry::Vacant(_vacant) => {}
-                std::collections::btree_map::Entry::Occupied(mut occupied) => {
-                    occupied.get_mut().sub_assign(1);
-                    if occupied.get().is_zero() {
-                        occupied.remove_entry();
+    // Changed: Return BoxFuture<()>
+    fn watch_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunks: &'a [Vector2<i32>],
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            // It is intentional that regions are watched multiple times (once per chunk)
+            let mut watchers = self.watchers.write().await;
+            for chunk in chunks {
+                let key = S::get_chunk_key(chunk);
+                let map_key = P::file_path(folder, &key);
+                match watchers.entry(map_key) {
+                    std::collections::btree_map::Entry::Vacant(vacant) => {
+                        let _ = vacant.insert(1);
+                    }
+                    std::collections::btree_map::Entry::Occupied(mut occupied) => {
+                        occupied.get_mut().add_assign(1);
                     }
                 }
             }
-        }
+        })
     }
 
-    async fn clear_watched_chunks(&self) {
-        self.watchers.write().await.clear();
-    }
-
-    async fn fetch_chunks(
-        &self,
-        folder: &LevelFolder,
-        chunk_coords: &[Vector2<i32>],
-        stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
-    ) {
-        let mut regions_chunks: BTreeMap<String, Vec<Vector2<i32>>> = BTreeMap::new();
-
-        for at in chunk_coords {
-            let key = S::get_chunk_key(at);
-
-            regions_chunks
-                .entry(key)
-                .and_modify(|chunks| chunks.push(*at))
-                .or_insert(vec![*at]);
-        }
-
-        // we use a Sync Closure with an Async Block to execute the tasks concurrently
-        // Also improves File Cache utilizations.
-        let region_read_tasks = regions_chunks.into_iter().map(async |(file_name, chunks)| {
-            let path = P::file_path(folder, &file_name);
-            let chunk_serializer = match self.get_serializer(&path).await {
-                Ok(chunk_serializer) => chunk_serializer,
-                Err(ChunkReadingError::ChunkNotExist) => {
-                    unreachable!("Default Serializer must be created")
-                }
-                Err(err) => {
-                    let _ = stream.send(LoadedData::Error((chunks[0], err))).await;
-                    return;
-                }
-            };
-
-            // Intermediate channel for wrapping the data with the Arc<RwLock>
-            let (send, mut recv) = mpsc::channel::<LoadedData<S::Data, ChunkReadingError>>(1);
-
-            let intermediary = async {
-                while let Some(data) = recv.recv().await {
-                    let wrapped_data = data.map_loaded(|data| Arc::new(RwLock::new(data)));
-                    if stream.send(wrapped_data).await.is_err() {
-                        // Stream is closed, so stop unneeded computation and io
-                        return;
-                    }
-                }
-            };
-
-            // We need to hold the read lock only for the duration of get_chunks
-            // This minimizes the time we block other operations
-            let reader = async move {
-                let serializer = chunk_serializer.read().await;
-                serializer.get_chunks(&chunks, send).await;
-            };
-
-            join!(intermediary, reader);
-        });
-
-        let _ = join_all(region_read_tasks).await;
-    }
-
-    async fn save_chunks(
-        &self,
-        folder: &LevelFolder,
-        chunks_data: Vec<(Vector2<i32>, Self::Data)>,
-    ) -> Result<(), ChunkWritingError> {
-        let mut regions_chunks: BTreeMap<String, Vec<Self::Data>> = BTreeMap::new();
-
-        for (at, chunk) in chunks_data {
-            let key = S::get_chunk_key(&at);
-
-            match regions_chunks.entry(key) {
-                std::collections::btree_map::Entry::Occupied(mut occupied) => {
-                    occupied.get_mut().push(chunk);
-                }
-                std::collections::btree_map::Entry::Vacant(vacant) => {
-                    vacant.insert(vec![chunk]);
-                }
-            }
-        }
-
-        // we use a Sync Closure with an Async Block to execute the tasks in parallel
-        // with out waiting the future. Also it improve we File Cache utilizations.
-        let tasks = regions_chunks
-            .into_iter()
-            .map(async |(file_name, chunk_locks)| {
-                let path = P::file_path(folder, &file_name);
-                log::trace!("Updating data for file {path:?}");
-
-                let chunk_serializer = match self.get_serializer(&path).await {
-                    Ok(file) => Ok(file),
-                    Err(ChunkReadingError::ChunkNotExist) => {
-                        unreachable!("Must be managed by the cache")
-                    }
-                    Err(ChunkReadingError::IoError(err)) => {
-                        error!("Error reading the data before write: {err}");
-                        Err(ChunkWritingError::IoError(err))
-                    }
-                    Err(_) => {
-                        Err(ChunkWritingError::IoError(std::io::ErrorKind::Other))
-                    }
-                }?;
-
-                // Create a task for each chunk_lock
-                let update_tasks = chunk_locks.into_iter().map(|chunk_lock| {
-                    let chunk_serializer = chunk_serializer.clone();
-                    async move {
-                        let mut chunk = chunk_lock.write().await;
-                        let chunk_is_dirty = chunk.is_dirty();
-                        // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
-                        // updating what we will write here
-                        chunk.mark_dirty(false);
-                        // It is important that we keep the lock after we mark the chunk as clean so no one else
-                        // can modify it
-                        let chunk = chunk.downgrade();
-
-                        // We only need to update the chunk if it is dirty
-                        if chunk_is_dirty {
-                            chunk_serializer.write().await.update_chunk(&*chunk).await?;
+    // Changed: Return BoxFuture<()>
+    fn unwatch_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunks: &'a [Vector2<i32>],
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            let mut watchers = self.watchers.write().await;
+            for chunk in chunks {
+                let key = S::get_chunk_key(chunk);
+                let map_key = P::file_path(folder, &key);
+                match watchers.entry(map_key) {
+                    std::collections::btree_map::Entry::Vacant(_vacant) => {}
+                    std::collections::btree_map::Entry::Occupied(mut occupied) => {
+                        occupied.get_mut().sub_assign(1);
+                        if occupied.get().is_zero() {
+                            occupied.remove_entry();
                         }
-                        Ok::<(), ChunkWritingError>(())
                     }
-                });
-                // Run all update tasks concurrently and propagate any error
-                futures::future::try_join_all(update_tasks).await?;
-                log::trace!("Updated data for file {path:?}");
+                }
+            }
+        })
+    }
 
-                let is_watched = self
-                    .watchers
-                    .read()
-                    .await
-                    .get(&path)
-                    .is_some_and(|count| !count.is_zero());
+    // Changed: Return BoxFuture<()>
+    fn clear_watched_chunks(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.watchers.write().await.clear();
+        })
+    }
 
-                if !is_watched {
-                    // With the modification done, we can drop the write lock but keep the read lock
-                    // to avoid other threads to write/modify the data, but allow other threads to read it
-                    let serializer = chunk_serializer.read().await;
+    // Changed: Return BoxFuture<()>
+    fn fetch_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunk_coords: &'a [Vector2<i32>],
+        stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            let mut regions_chunks: BTreeMap<String, Vec<Vector2<i32>>> = BTreeMap::new();
 
-                    log::debug!("Writing file for {path:?}");
-                    serializer
-                        .write(path.clone())
-                        .await
-                        .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
+            for at in chunk_coords {
+                let key = S::get_chunk_key(at);
 
-                    // Remove lock
-                    drop(serializer);
-                    // Decrement strong count
-                    drop(chunk_serializer);
+                regions_chunks
+                    .entry(key)
+                    .and_modify(|chunks| chunks.push(*at))
+                    .or_insert(vec![*at]);
+            }
 
-                    // If there are still no watchers, drop from the locks
-                    let mut locks = self.file_locks.write().await;
+            // we use a Sync Closure with an Async Block to execute the tasks concurrently
+            // Also improves File Cache utilizations.
+            let region_read_tasks = regions_chunks.into_iter().map(move |(file_name, chunks)| {
+                let task_stream = stream.clone();
 
-                    if self
+                async move {
+                    let path = P::file_path(folder, &file_name);
+                    let chunk_serializer = match self.get_serializer(&path).await {
+                        Ok(chunk_serializer) => chunk_serializer,
+                        Err(ChunkReadingError::ChunkNotExist) => {
+                            unreachable!("Default Serializer must be created")
+                        }
+                        Err(err) => {
+                            let _ = task_stream.send(LoadedData::Error((chunks[0], err))).await;
+                            return;
+                        }
+                    };
+
+                    // Intermediate channel for wrapping the data with the Arc<RwLock>
+                    let (send, mut recv) =
+                        mpsc::channel::<LoadedData<S::Data, ChunkReadingError>>(1);
+
+                    let intermediary = async move {
+                        // Note: 'task_stream' is captured and moved here
+                        while let Some(data) = recv.recv().await {
+                            let wrapped_data = data.map_loaded(|data| Arc::new(RwLock::new(data)));
+                            if task_stream.send(wrapped_data).await.is_err() {
+                                // Stream is closed, so stop unneeded computation and io
+                                return;
+                            }
+                        }
+                    };
+
+                    // We need to hold the read lock only for the duration of get_chunks
+                    // This minimizes the time we block other operations
+                    let reader = async move {
+                        let serializer = chunk_serializer.read().await;
+                        serializer.get_chunks(chunks, send).await;
+                    };
+
+                    join!(intermediary, reader);
+                }
+            });
+
+            let _ = join_all(region_read_tasks).await;
+        })
+    }
+
+    // Changed: Return BoxFuture<Result<(), ChunkWritingError>>
+    fn save_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunks_data: Vec<(Vector2<i32>, Self::Data)>,
+    ) -> BoxFuture<'a, Result<(), ChunkWritingError>> {
+        Box::pin(async move {
+            let mut regions_chunks: BTreeMap<String, Vec<Self::Data>> = BTreeMap::new();
+
+            for (at, chunk) in chunks_data {
+                let key = S::get_chunk_key(&at);
+
+                match regions_chunks.entry(key) {
+                    std::collections::btree_map::Entry::Occupied(mut occupied) => {
+                        occupied.get_mut().push(chunk);
+                    }
+                    std::collections::btree_map::Entry::Vacant(vacant) => {
+                        vacant.insert(vec![chunk]);
+                    }
+                }
+            }
+
+            // we use a Sync Closure with an Async Block to execute the tasks in parallel
+            // with out waiting the future. Also it improve we File Cache utilizations.
+            let tasks = regions_chunks
+                .into_iter()
+                // The closure now needs `move` to capture `self` and `folder` by value
+                .map(move |(file_name, chunk_locks)| async move {
+                    let path = P::file_path(folder, &file_name);
+                    log::trace!("Updating data for file {}", path.display());
+
+                    let chunk_serializer = match self.get_serializer(&path).await {
+                        Ok(file) => Ok(file),
+                        Err(ChunkReadingError::ChunkNotExist) => {
+                            unreachable!("Must be managed by the cache")
+                        }
+                        Err(ChunkReadingError::IoError(err)) => {
+                            error!("Error reading the data before write: {err}");
+                            Err(ChunkWritingError::IoError(err))
+                        }
+                        Err(_) => Err(ChunkWritingError::IoError(std::io::ErrorKind::Other)),
+                    }?;
+
+                    // Create a task for each chunk_lock
+                    let update_tasks = chunk_locks.into_iter().map(|chunk_lock| {
+                        let chunk_serializer = chunk_serializer.clone();
+                        async move {
+                            let mut chunk = chunk_lock.write().await;
+                            let chunk_is_dirty = chunk.is_dirty();
+                            // Edge case: this chunk is loaded while we were saving, mark it as cleaned since we are
+                            // updating what we will write here
+                            chunk.mark_dirty(false);
+                            // It is important that we keep the lock after we mark the chunk as clean so no one else
+                            // can modify it
+                            let chunk = chunk.downgrade();
+
+                            // We only need to update the chunk if it is dirty
+                            if chunk_is_dirty {
+                                chunk_serializer.write().await.update_chunk(&*chunk, &self.chunk_config).await?;
+                            }
+                            Ok::<(), ChunkWritingError>(())
+                        }
+                    });
+                    // Run all update tasks concurrently and propagate any error
+                    futures::future::try_join_all(update_tasks).await?;
+                    log::trace!("Updated data for file {}", path.display());
+
+                    let is_watched = self
                         .watchers
                         .read()
                         .await
                         .get(&path)
-                        .is_none_or(|count| count.is_zero())
-                    {
-                        let can_remove = if let Some(loader) = locks.get(&path) {
-                            loader.can_remove().await
-                        } else {
-                            true
-                        };
+                        .is_some_and(|count| !count.is_zero());
 
-                        if can_remove {
-                            locks.remove(&path);
-                            log::trace!("Removed lockfile cache {path:?}");
-                        } else {
-                            log::trace!("Wanted to remove lockfile cache {path:?} but someone still holds a reference to it!");
+                    if !is_watched {
+                        // With the modification done, we can drop the write lock but keep the read lock
+                        // to avoid other threads to write/modify the data, but allow other threads to read it
+                        let serializer = chunk_serializer.read().await;
+
+                        log::debug!("Writing file for {}", path.display());
+                        serializer
+                            .write(&path)
+                            .await
+                            .map_err(|err| ChunkWritingError::IoError(err.kind()))?;
+
+                        // Remove lock
+                        drop(serializer);
+                        // Decrement strong count
+                        drop(chunk_serializer);
+
+                        // If there are still no watchers, drop from the locks
+                        let mut locks = self.file_locks.write().await;
+
+                        if self
+                            .watchers
+                            .read()
+                            .await
+                            .get(&path)
+                            .is_none_or(|count| count.is_zero())
+                        {
+                            let can_remove = if let Some(loader) = locks.get(&path) {
+                                loader.can_remove().await
+                            } else {
+                                true
+                            };
+
+                            if can_remove {
+                                locks.remove(&path);
+                                log::trace!("Removed lockfile cache {}", path.display());
+                            } else {
+                                log::trace!("Wanted to remove lockfile cache {} but someone still holds a reference to it!", path.display());
+                            }
                         }
                     }
-                }
 
-                Ok(())
-            });
+                    Ok(())
+                });
 
-        //TODO: we need to handle the errors and return the result
-        // files to save
-        let _test: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
+            //TODO: we need to handle the errors and return the result
+            // files to save
+            let _test: Vec<Result<(), ChunkWritingError>> = join_all(tasks).await;
 
-        Ok(())
+            Ok(())
+        })
     }
 
-    async fn clean_up_log(&self) {
-        let locks = self.file_locks.read().await;
-        log::debug!("{} File locks remain in cache", locks.len());
+    // Changed: Return BoxFuture<()>
+    fn clean_up_log(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            let locks = self.file_locks.read().await;
+            log::debug!("{} File locks remain in cache", locks.len());
+        })
     }
 
-    async fn block_and_await_ongoing_tasks(&self) {
-        //we need to block any other operation
-        let serializer_cache = self.file_locks.write().await;
+    // Changed: Return BoxFuture<()>
+    fn block_and_await_ongoing_tasks(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            //we need to block any other operation
+            let serializer_cache = self.file_locks.write().await;
 
-        // Acquire a write lock on all entries to verify they are complete
-        let tasks = serializer_cache
-            .values()
-            .map(async |serializer| serializer.can_remove());
+            // Acquire a write lock on all entries to verify they are complete
+            let tasks = serializer_cache
+                .values()
+                .map(|serializer| serializer.can_remove());
 
-        // We need to wait to ensure that all the locks are acquired
-        // so there is no **operation** ongoing
-        let _ = join_all(tasks).await;
+            // We need to wait to ensure that all the locks are acquired
+            // so there is no **operation** ongoing
+            let _ = join_all(tasks).await;
+        })
     }
 }

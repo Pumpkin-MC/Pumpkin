@@ -5,8 +5,6 @@ use std::{
     task::{Context, Poll},
 };
 
-// TODO: Wait for aes/crypto-common to update generic array
-#[expect(deprecated)]
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, BlockSizeUser, generic_array::GenericArray};
 use bytes::Bytes;
 use codec::var_int::VarInt;
@@ -265,9 +263,6 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
                 // This should never panic
                 out[0] = out_to_use;
             } else {
-                // This is a stream cipher, so this value must be used
-                // TODO: Wait for aes/crypto-common to update generic array
-                #[expect(deprecated)]
                 let out_block = GenericArray::from_mut_slice(&mut out);
                 cipher.encrypt_block_b2b_mut(block.into(), out_block);
             }

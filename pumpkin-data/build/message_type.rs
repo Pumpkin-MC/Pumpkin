@@ -1,29 +1,28 @@
 use std::{collections::BTreeMap, fs};
 
 use proc_macro2::TokenStream;
-use pumpkin_util::text::style::Style;
 use quote::{format_ident, quote};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct RawChatType {
     id: u32,
-    components: ChatType,
+    //    components: ChatType,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatType {
-    chat: Decoration,
-    narration: Decoration,
-}
+// #[derive(Deserialize)]
+// pub struct ChatType {
+//     chat: Decoration,
+//     narration: Decoration,
+// }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Decoration {
-    translation_key: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    style: Option<Style>,
-    parameters: Vec<String>,
-}
+// #[derive(Deserialize)]
+// pub struct Decoration {
+//     translation_key: String,
+//     #[serde(default, skip_serializing_if = "Option::is_none")]
+//     style: Option<Style>,
+//     parameters: Vec<String>,
+// }
 
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/message_type.json");

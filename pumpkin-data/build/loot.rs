@@ -7,7 +7,7 @@ use serde::Deserialize;
 use syn::LitStr;
 
 /// These are required to be defined twice because serde can't deserialize into static context for obvious reasons.
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 pub struct LootTableStruct {
     r#type: LootTableTypeStruct,
     random_sequence: Option<String>,

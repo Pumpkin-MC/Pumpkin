@@ -1,10 +1,8 @@
 use super::{Controls, Goal};
-use crate::entity::mob::Mob;
-use async_trait::async_trait;
+use crate::entity::{ai::goal::GoalFuture, mob::Mob};
 use rand::Rng;
 
 #[allow(dead_code)]
-#[derive(Default)]
 pub struct AmbientStandGoal {
     goal_control: Controls,
     cooldown: i32,
@@ -18,18 +16,16 @@ impl AmbientStandGoal {
     }
 }
 
-#[async_trait]
 impl Goal for AmbientStandGoal {
-    async fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        self.cooldown += 1;
-        if self.cooldown > 0 && mob.get_random().random_range(0..1000) < self.cooldown {
-            self.reset_cooldown();
-        }
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async {
+            self.cooldown += 1;
+            if self.cooldown > 0 && mob.get_random().random_range(0..1000) < self.cooldown {
+                self.reset_cooldown();
+            }
 
-        false
-    }
-    async fn should_continue(&self, _mob: &dyn Mob) -> bool {
-        false
+            false
+        })
     }
 
     fn controls(&self) -> Controls {

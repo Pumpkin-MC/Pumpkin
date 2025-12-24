@@ -15,7 +15,7 @@ use std::cmp::{max, min};
 
 mod categories;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ItemStack {
     pub item_count: u8,
     pub item: &'static Item,

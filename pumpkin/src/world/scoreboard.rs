@@ -17,13 +17,6 @@ pub struct Scoreboard {
 }
 
 impl Scoreboard {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            objectives: HashMap::new(),
-        }
-    }
-
     pub async fn add_objective(&mut self, world: &World, objective: ScoreboardObjective<'_>) {
         if self.objectives.contains_key(objective.name) {
             // Maybe make this an error?

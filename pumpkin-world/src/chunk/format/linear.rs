@@ -6,9 +6,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
-use async_trait::async_trait;
 use bytes::{Buf, BufMut, Bytes};
 use log::error;
+use pumpkin_config::chunk::LinearChunkConfig;
 use pumpkin_util::math::vector2::Vector2;
 use ruzstd::decoding::StreamingDecoder;
 use ruzstd::encoding::{CompressionLevel, compress_to_vec};
@@ -20,7 +20,7 @@ use super::anvil::CHUNK_COUNT;
 /// used as a header and footer described in https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98
 const SIGNATURE: [u8; 8] = u64::to_be_bytes(0xc3ff13183cca9d9a);
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Copy, Clone)]
 struct LinearChunkHeader {
     size: u32,
     timestamp: u32,
@@ -139,8 +139,8 @@ impl LinearFileHeader {
 }
 
 impl<S: SingleChunkDataSerializer> LinearFile<S> {
-    const fn get_chunk_index(at: &Vector2<i32>) -> usize {
-        AnvilChunkFile::<S>::get_chunk_index(at)
+    const fn get_chunk_index(x: i32, z: i32) -> usize {
+        AnvilChunkFile::<S>::get_chunk_index(x, z)
     }
 
     fn check_signature(bytes: &[u8]) -> Result<(), ChunkReadingError> {
@@ -163,10 +163,11 @@ impl<S: SingleChunkDataSerializer> Default for LinearFile<S> {
     }
 }
 
-#[async_trait]
 impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
     type Data = S;
     type WriteBackend = PathBuf;
+
+    type ChunkConfig = LinearChunkConfig;
 
     fn should_write(&self, is_watched: bool) -> bool {
         !is_watched
@@ -177,9 +178,9 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         format!("./r.{region_x}.{region_z}.linear")
     }
 
-    async fn write(&self, path: PathBuf) -> Result<(), std::io::Error> {
+    async fn write(&self, path: &PathBuf) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        log::trace!("Writing tmp file to disk: {:?}", temp_path);
+        log::trace!("Writing tmp file to disk: {}", temp_path.display());
 
         let file = tokio::fs::OpenOptions::new()
             .read(false)
@@ -236,7 +237,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, &path).await?;
 
-        log::trace!("Wrote file to Disk: {:?}", path);
+        log::trace!("Wrote file to Disk: {}", path.display());
         Ok(())
     }
 
@@ -321,8 +322,12 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         })
     }
 
-    async fn update_chunk(&mut self, chunk: &Self::Data) -> Result<(), ChunkWritingError> {
-        let index = LinearFile::<S>::get_chunk_index(chunk.position());
+    async fn update_chunk(
+        &mut self,
+        chunk: &Self::Data,
+        _chunk_config: &Self::ChunkConfig,
+    ) -> Result<(), ChunkWritingError> {
+        let index = LinearFile::<S>::get_chunk_index(chunk.position().0, chunk.position().1);
         let chunk_raw: Bytes = chunk
             .to_bytes()
             .await
@@ -343,17 +348,17 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
 
     async fn get_chunks(
         &self,
-        chunks: &[Vector2<i32>],
+        chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
     ) {
         // Don't par iter here so we can prevent backpressure with the await in the async
         // runtime
-        for chunk in chunks.iter().cloned() {
-            let index = LinearFile::<S>::get_chunk_index(&chunk);
+        for chunk in chunks.into_iter() {
+            let index = LinearFile::<S>::get_chunk_index(chunk.x, chunk.y);
             let linear_chunk_data = &self.chunks_data[index];
 
             let result = if let Some(data) = linear_chunk_data {
-                match S::from_bytes(data.clone(), chunk) {
+                match S::from_bytes(data, chunk) {
                     Ok(chunk) => LoadedData::Loaded(chunk),
                     Err(err) => LoadedData::Error((chunk, err)),
                 }
@@ -372,7 +377,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
 /*
 #[cfg(test)]
 mod tests {
-    use async_trait::async_trait;
+
     use core::panic;
     use pumpkin_data::BlockDirection;
     use pumpkin_util::math::position::BlockPos;
@@ -394,7 +399,6 @@ mod tests {
 
     struct BlockRegistry;
 
-    #[async_trait]
     impl BlockRegistryExt for BlockRegistry {
         fn can_place_at(
             &self,

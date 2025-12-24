@@ -9,13 +9,13 @@ use serde::Deserialize;
 use std::{collections::BTreeMap, fs};
 use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 pub struct Item {
     pub id: u16,
     pub components: ItemComponents,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 pub struct ItemComponents {
     #[serde(rename = "minecraft:item_name")]
     pub item_name: TextComponent,
@@ -284,7 +284,7 @@ impl ToTokens for ItemComponents {
                 .clone()
                 .map(|list| {
                     let vec: Vec<_> = list
-                        .get_values()
+                        .into_vec()
                         .iter()
                         .map(|reg| {
                             match reg {
@@ -354,7 +354,7 @@ fn return_1f32() -> f32 {
 fn return_true() -> bool {
     true
 }
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize)]
 pub struct ToolComponent {
     rules: Vec<ToolRule>,
     #[serde(default = "return_1f32")]
@@ -369,7 +369,7 @@ fn return_false() -> bool {
     false
 }
 
-#[derive(Deserialize, Copy, Clone, Debug)]
+#[derive(Deserialize, Copy, Clone)]
 pub struct FoodComponent {
     nutrition: u8,
     saturation: f32,
@@ -377,7 +377,7 @@ pub struct FoodComponent {
     can_always_eat: bool,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub struct ToolRule {
     blocks: RegistryEntryList,
     speed: Option<f32>,
@@ -398,23 +398,23 @@ fn _true() -> bool {
     true
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub struct Consumable {
     consume_seconds: Option<f32>, // TODO
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub struct DeathProtection {
     // TODO
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub struct BlocksAttacks {
     // TODO
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 pub struct EquippableComponent {
     pub slot: String,
     pub equip_sound: Option<String>,
@@ -493,7 +493,7 @@ pub(crate) fn build() -> TokenStream {
         use crate::data_component::DataComponent;
         use crate::Block;
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone)]
         pub struct Item {
             pub id: u16,
             pub registry_key: &'static str,

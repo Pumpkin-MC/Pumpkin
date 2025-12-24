@@ -1,10 +1,9 @@
-use async_trait::async_trait;
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 use uuid::Uuid;
 
 use crate::{
     command::{
-        CommandError, CommandExecutor, CommandSender,
+        CommandError, CommandExecutor, CommandResult, CommandSender,
         args::{
             ConsumedArgs, FindArg, position_3d::Position3DArgumentConsumer,
             summonable_entities::SummonableEntitiesArgumentConsumer,
@@ -23,52 +22,53 @@ const ARG_POS: &str = "pos";
 
 struct Executor;
 
-#[async_trait]
 impl CommandExecutor for Executor {
-    async fn execute<'a>(
-        &self,
-        sender: &mut CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs<'a>,
-    ) -> Result<(), CommandError> {
-        let entity = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
-        let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
-        let (world, pos) = match sender {
-            CommandSender::Console | CommandSender::Rcon(_) => {
-                let guard = server.worlds.read().await;
-                let world = guard
-                    .first()
-                    .cloned()
-                    .ok_or(CommandError::InvalidRequirement)?;
-                let pos = {
-                    let info = &world.level_info.read().await;
-                    // default position for spawning a player, in this case for mob
-                    pos.unwrap_or(Vector3::new(
-                        f64::from(info.spawn_x) + 0.5,
-                        f64::from(info.spawn_y) + 1.0,
-                        f64::from(info.spawn_z) + 0.5,
-                    ))
-                };
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let entity = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
+            let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
+            let (world, pos) = match sender {
+                CommandSender::Console | CommandSender::Rcon(_) => {
+                    let guard = server.worlds.read().await;
+                    let world = guard
+                        .first()
+                        .cloned()
+                        .ok_or(CommandError::InvalidRequirement)?;
+                    let pos = {
+                        let info = &world.level_info.read().await;
+                        // default position for spawning a player, in this case for mob
+                        pos.unwrap_or(Vector3::new(
+                            f64::from(info.spawn_x) + 0.5,
+                            f64::from(info.spawn_y) + 1.0,
+                            f64::from(info.spawn_z) + 0.5,
+                        ))
+                    };
 
-                (world, pos)
-            }
-            CommandSender::Player(player) => {
-                let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
+                    (world, pos)
+                }
+                CommandSender::Player(player) => {
+                    let pos = pos.unwrap_or(player.living_entity.entity.pos.load());
 
-                (player.world().clone(), pos)
-            }
-        };
-        let mob = from_type(entity, pos, &world, Uuid::new_v4()).await;
-        world.spawn_entity(mob).await;
+                    (player.world().clone(), pos)
+                }
+            };
+            let mob = from_type(entity, pos, &world, Uuid::new_v4()).await;
+            world.spawn_entity(mob).await;
 
-        sender
-            .send_message(TextComponent::translate(
-                "commands.summon.success",
-                [TextComponent::text(format!("{entity:?}"))],
-            ))
-            .await;
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.summon.success",
+                    [TextComponent::text(format!("{entity:?}"))],
+                ))
+                .await;
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 

@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
+use crate::block::BlockFuture;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::NormalUseArgs;
 use crate::block::OnPlaceArgs;
 use crate::entity::player::Player;
-use async_trait::async_trait;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag;
 use pumpkin_data::tag::RegistryKey;
@@ -57,26 +57,31 @@ pub async fn toggle_fence_gate(
 #[pumpkin_block_from_tag("minecraft:fence_gates")]
 pub struct FenceGateBlock;
 
-#[async_trait]
 impl BlockBehaviour for FenceGateBlock {
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut fence_gate_props = FenceGateProperties::default(args.block);
-        fence_gate_props.facing = args.player.living_entity.entity.get_horizontal_facing();
-        fence_gate_props.to_state_id(args.block)
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut fence_gate_props = FenceGateProperties::default(args.block);
+            fence_gate_props.facing = args.player.living_entity.entity.get_horizontal_facing();
+            fence_gate_props.to_state_id(args.block)
+        })
     }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let fence_props = is_in_wall(&args).await;
-        fence_props.to_state_id(args.block)
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let fence_props = is_in_wall(&args).await;
+            fence_props.to_state_id(args.block)
+        })
     }
 
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        toggle_fence_gate(args.world, args.position, args.player).await;
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            toggle_fence_gate(args.world, args.position, args.player).await;
 
-        BlockActionResult::Success
+            BlockActionResult::Success
+        })
     }
 }
 

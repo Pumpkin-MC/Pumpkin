@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::HorizontalFacingExt;
@@ -16,6 +15,7 @@ use pumpkin_world::world::BlockFlags;
 
 type ButtonLikeProperties = pumpkin_data::block_properties::LeverLikeProperties;
 
+use crate::block::BlockFuture;
 use crate::block::CanPlaceAtArgs;
 use crate::block::EmitsRedstonePowerArgs;
 use crate::block::GetRedstonePowerArgs;
@@ -57,78 +57,100 @@ async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
 #[pumpkin_block_from_tag("minecraft:buttons")]
 pub struct ButtonBlock;
 
-#[async_trait]
 impl BlockBehaviour for ButtonBlock {
-    async fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        click_button(args.world, args.position).await;
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            click_button(args.world, args.position).await;
 
-        BlockActionResult::Success
+            BlockActionResult::Success
+        })
     }
 
-    async fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let state = args.world.get_block_state(args.position).await;
-        let mut props = ButtonLikeProperties::from_state_id(state.id, args.block);
-        props.powered = false;
-        args.world
-            .set_block_state(
-                args.position,
-                props.to_state_id(args.block),
-                BlockFlags::NOTIFY_ALL,
-            )
-            .await;
-        Self::update_neighbors(args.world, args.position, &props).await;
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let state = args.world.get_block_state(args.position).await;
+            let mut props = ButtonLikeProperties::from_state_id(state.id, args.block);
+            props.powered = false;
+            args.world
+                .set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
+            Self::update_neighbors(args.world, args.position, &props).await;
+        })
     }
 
-    async fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
-        true
+    fn emits_redstone_power<'a>(
+        &'a self,
+        _args: EmitsRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move { true })
     }
 
-    async fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let button_props = ButtonLikeProperties::from_state_id(args.state.id, args.block);
-        if button_props.powered { 15 } else { 0 }
+    fn get_weak_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            let button_props = ButtonLikeProperties::from_state_id(args.state.id, args.block);
+            if button_props.powered { 15 } else { 0 }
+        })
     }
 
-    async fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let button_props = ButtonLikeProperties::from_state_id(args.state.id, args.block);
-        if button_props.powered && button_props.get_direction() == args.direction {
-            15
-        } else {
-            0
-        }
-    }
-
-    async fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
-        if !args.moved {
-            let button_props = ButtonLikeProperties::from_state_id(args.old_state_id, args.block);
-            if button_props.powered {
-                Self::update_neighbors(args.world, args.position, &button_props).await;
+    fn get_strong_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            let button_props = ButtonLikeProperties::from_state_id(args.state.id, args.block);
+            if button_props.powered && button_props.get_direction() == args.direction {
+                15
+            } else {
+                0
             }
-        }
+        })
     }
 
-    async fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            ButtonLikeProperties::from_state_id(args.block.default_state.id, args.block);
-        (props.face, props.facing) =
-            WallMountedBlock::get_placement_face(self, args.player, args.direction);
-
-        props.to_state_id(args.block)
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if !args.moved {
+                let button_props =
+                    ButtonLikeProperties::from_state_id(args.old_state_id, args.block);
+                if button_props.powered {
+                    Self::update_neighbors(args.world, args.position, &button_props).await;
+                }
+            }
+        })
     }
 
-    async fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        WallMountedBlock::can_place_at(self, args.block_accessor, args.position, args.direction)
-            .await
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut props =
+                ButtonLikeProperties::from_state_id(args.block.default_state.id, args.block);
+            (props.face, props.facing) =
+                WallMountedBlock::get_placement_face(self, args.player, args.direction);
+
+            props.to_state_id(args.block)
+        })
     }
 
-    async fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        WallMountedBlock::get_state_for_neighbor_update(self, args).await
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            WallMountedBlock::can_place_at(self, args.block_accessor, args.position, args.direction)
+                .await
+        })
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move { WallMountedBlock::get_state_for_neighbor_update(self, args).await })
     }
 }
 
-#[async_trait]
 impl WallMountedBlock for ButtonBlock {
     fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
         let props = ButtonLikeProperties::from_state_id(state_id, block);

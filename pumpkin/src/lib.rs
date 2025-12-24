@@ -5,24 +5,23 @@ use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
 use crate::net::DisconnectReason;
 use crate::net::bedrock::BedrockClient;
 use crate::net::java::JavaClient;
-use crate::net::{lan_broadcast, query, rcon::RCONServer};
+use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use log::{Level, LevelFilter};
 use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
-use pumpkin_config::{BASIC_CONFIG, advanced_config};
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::ConnectionState::Play;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
-use simplelog::SharedLogger;
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
@@ -43,10 +42,6 @@ pub mod plugin;
 pub mod server;
 pub mod world;
 
-#[cfg(feature = "dhat-heap")]
-pub static HEAP_PROFILER: LazyLock<Mutex<Option<dhat::Profiler>>> =
-    LazyLock::new(|| Mutex::new(None));
-
 pub static PLUGIN_MANAGER: LazyLock<Arc<PluginManager>> =
     LazyLock::new(|| Arc::new(PluginManager::new()));
 
@@ -59,11 +54,17 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
-pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = LazyLock::new(|| {
-    if advanced_config().logging.enabled {
-        let mut config = simplelog::ConfigBuilder::new();
+pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter)>;
+pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
+    LazyLock::new(|| Arc::new(OnceLock::new()));
 
-        if advanced_config().logging.timestamp {
+pub fn init_logger(advanced_config: &AdvancedConfiguration) {
+    use simplelog::{ConfigBuilder, SharedLogger, SimpleLogger, WriteLogger};
+
+    let logger = if advanced_config.logging.enabled {
+        let mut config = ConfigBuilder::new();
+
+        if advanced_config.logging.timestamp {
             config.set_time_format_custom(time::macros::format_description!(
                 "[year]-[month]-[day] [hour]:[minute]:[second]"
             ));
@@ -73,7 +74,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             config.set_time_level(LevelFilter::Off);
         }
 
-        if !advanced_config().logging.color {
+        if !advanced_config.logging.color {
             for level in Level::iter() {
                 config.set_level_color(level, None);
             }
@@ -82,7 +83,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             config.set_write_log_enable_colors(true);
         }
 
-        if !advanced_config().logging.threads {
+        if !advanced_config.logging.threads {
             config.set_thread_level(LevelFilter::Off);
         } else {
             config.set_thread_level(LevelFilter::Info);
@@ -96,7 +97,7 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
             .unwrap_or(LevelFilter::Info);
 
         let file_logger: Option<Box<dyn SharedLogger + 'static>> =
-            if advanced_config().logging.file.is_empty() {
+            if advanced_config.logging.file.is_empty() {
                 None
             } else {
                 Some(
@@ -109,47 +110,37 @@ pub static LOGGER_IMPL: LazyLock<Option<(ReadlineLogWrapper, LevelFilter)>> = La
                             }
                             config.build()
                         },
-                        advanced_config().logging.file.clone(),
+                        advanced_config.logging.file.clone(),
                     )
                     .expect("Failed to initialize file logger.")
                         as Box<dyn SharedLogger>,
                 )
             };
 
-        if advanced_config().commands.use_tty && stdin().is_terminal() {
+        let (logger, rl): (Box<dyn SharedLogger + 'static>, _) = if advanced_config.commands.use_tty
+            && stdin().is_terminal()
+        {
             match Readline::new("$ ".to_owned()) {
-                Ok((rl, stdout)) => {
-                    let logger = simplelog::WriteLogger::new(level, config.build(), stdout);
-                    Some((
-                        ReadlineLogWrapper::new(logger, file_logger, Some(rl)),
-                        level,
-                    ))
-                }
+                Ok((rl, stdout)) => (WriteLogger::new(level, config.build(), stdout), Some(rl)),
                 Err(e) => {
                     log::warn!(
                         "Failed to initialize console input ({e}); falling back to simple logger"
                     );
-                    let logger = simplelog::SimpleLogger::new(level, config.build());
-                    Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
+                    (SimpleLogger::new(level, config.build()), None)
                 }
             }
         } else {
-            let logger = simplelog::SimpleLogger::new(level, config.build());
-            Some((ReadlineLogWrapper::new(logger, file_logger, None), level))
-        }
+            (SimpleLogger::new(level, config.build()), None)
+        };
+
+        Some((ReadlineLogWrapper::new(logger, file_logger, rl), level))
     } else {
         None
-    }
-});
-
-#[macro_export]
-macro_rules! init_log {
-    () => {
-        if let Some((logger_impl, level)) = &*pumpkin::LOGGER_IMPL {
-            log::set_logger(logger_impl).unwrap();
-            log::set_max_level(*level);
-        }
     };
+
+    if LOGGER_IMPL.set(logger).is_err() {
+        panic!("Failed to set logger. already initialized");
+    }
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
@@ -160,27 +151,41 @@ pub fn stop_server() {
     STOP_INTERRUPT.notify_waiters();
 }
 
+fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
+    opt: Option<D>,
+    func: F,
+) -> futures::future::Either<T, std::future::Pending<T::Output>> {
+    use futures::future::Either;
+    match opt {
+        Some(val) => Either::Left(func(val)),
+        None => Either::Right(std::future::pending()),
+    }
+}
+
 pub struct PumpkinServer {
     pub server: Arc<Server>,
-    pub tcp_listener: TcpListener,
-    pub udp_socket: Arc<UdpSocket>,
+    pub tcp_listener: Option<TcpListener>,
+    pub udp_socket: Option<Arc<UdpSocket>>,
 }
 
 impl PumpkinServer {
-    pub async fn new() -> Self {
-        let server = Server::new().await;
+    pub async fn new(
+        basic_config: BasicConfiguration,
+        advanced_config: AdvancedConfiguration,
+    ) -> Self {
+        let server = Server::new(basic_config, advanced_config).await;
 
-        let rcon = advanced_config().networking.rcon.clone();
+        let rcon = server.advanced_config.networking.rcon.clone();
 
         let mut ticker = Ticker::new();
 
-        if advanced_config().commands.use_console
-            && let Some((wrapper, _)) = &*LOGGER_IMPL
+        if server.advanced_config.commands.use_console
+            && let Some((wrapper, _)) = LOGGER_IMPL.wait()
         {
             if let Some(rl) = wrapper.take_readline() {
                 setup_console(rl, server.clone());
             } else {
-                if advanced_config().commands.use_tty {
+                if server.advanced_config.commands.use_tty {
                     log::warn!(
                         "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
                     );
@@ -199,30 +204,43 @@ impl PumpkinServer {
             });
         }
 
-        // Setup the TCP server socket.
-        let listener = tokio::net::TcpListener::bind(BASIC_CONFIG.java_edition_address)
-            .await
-            .expect("Failed to start `TcpListener`");
-        // In the event the user puts 0 for their port, this will allow us to know what port it is running on
-        let addr = listener
-            .local_addr()
-            .expect("Unable to get the address of the server!");
+        let mut tcp_listener = None;
 
-        if advanced_config().networking.query.enabled {
-            log::info!("Query protocol is enabled. Starting...");
-            server.spawn_task(query::start_query_handler(
-                server.clone(),
-                advanced_config().networking.query.address,
-            ));
+        if server.basic_config.java_edition {
+            // Setup the TCP server socket.
+            let listener = tokio::net::TcpListener::bind(server.basic_config.java_edition_address)
+                .await
+                .expect("Failed to start `TcpListener`");
+            // In the event the user puts 0 for their port, this will allow us to know what port it is running on
+            let addr = listener
+                .local_addr()
+                .expect("Unable to get the address of the server!");
+
+            if server.advanced_config.networking.query.enabled {
+                log::info!("Query protocol is enabled. Starting...");
+                server.spawn_task(query::start_query_handler(
+                    server.clone(),
+                    server.advanced_config.networking.query.address,
+                ));
+            }
+
+            if server.advanced_config.networking.lan_broadcast.enabled {
+                log::info!("LAN broadcast is enabled. Starting...");
+
+                let lan_broadcast = LANBroadcast::new(
+                    &server.advanced_config.networking.lan_broadcast,
+                    &server.basic_config,
+                );
+                server.spawn_task(lan_broadcast.start(addr));
+            }
+
+            tcp_listener = Some(listener);
         }
 
-        if advanced_config().networking.lan_broadcast.enabled {
-            log::info!("LAN broadcast is enabled. Starting...");
-            server.spawn_task(lan_broadcast::start_lan_broadcast(addr));
-        }
-
-        if BASIC_CONFIG.allow_chat_reports {
-            let mojang_public_keys = fetch_mojang_public_keys().unwrap();
+        if server.basic_config.allow_chat_reports {
+            let mojang_public_keys =
+                fetch_mojang_public_keys(&server.advanced_config.networking.authentication)
+                    .unwrap();
             *server.mojang_public_keys.lock().await = mojang_public_keys;
         }
 
@@ -234,14 +252,20 @@ impl PumpkinServer {
             });
         };
 
-        let udp_socket = UdpSocket::bind(BASIC_CONFIG.bedrock_edition_address)
-            .await
-            .expect("Failed to bind UDP Socket");
+        let mut udp_socket = None;
+
+        if server.basic_config.bedrock_edition {
+            udp_socket = Some(Arc::new(
+                UdpSocket::bind(server.basic_config.bedrock_edition_address)
+                    .await
+                    .expect("Failed to bind UDP Socket"),
+            ));
+        }
 
         Self {
             server: server.clone(),
-            tcp_listener: listener,
-            udp_socket: Arc::new(udp_socket),
+            tcp_listener,
+            udp_socket,
         }
     }
 
@@ -307,7 +331,7 @@ impl PumpkinServer {
         log::info!("Completed save!");
 
         // Explicitly drop the line reader to return the terminal to the original state.
-        if let Some((wrapper, _)) = &*LOGGER_IMPL
+        if let Some((wrapper, _)) = LOGGER_IMPL.wait()
             && let Some(rl) = wrapper.take_readline()
         {
             let _ = rl;
@@ -324,7 +348,7 @@ impl PumpkinServer {
 
         select! {
             // Branch for TCP connections (Java Edition)
-            tcp_result = self.tcp_listener.accept() => {
+            tcp_result = resolve_some(self.tcp_listener.as_ref(), |listener| listener.accept()) => {
                 match tcp_result {
                     Ok((connection, client_addr)) => {
                         if let Err(e) = connection.set_nodelay(true) {
@@ -334,7 +358,7 @@ impl PumpkinServer {
                         let client_id = *master_client_id_counter;
                         *master_client_id_counter += 1;
 
-                        let formatted_address = if BASIC_CONFIG.scrub_ips {
+                        let formatted_address = if self.server.basic_config.scrub_ips {
                             scrub_address(&format!("{client_addr}"))
                         } else {
                             format!("{client_addr}")
@@ -378,7 +402,7 @@ impl PumpkinServer {
             },
 
             // Branch for UDP packets (Bedrock Edition)
-            udp_result = self.udp_socket.recv_from(&mut udp_buf) => {
+            udp_result = resolve_some(self.udp_socket.as_ref(), |sock: &Arc<UdpSocket>| sock.recv_from(&mut udp_buf)) => {
                 match udp_result {
                     Ok((len, client_addr)) => {
                         if len == 0 {
@@ -402,7 +426,7 @@ impl PumpkinServer {
                                 } else if let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
                                     *master_client_id_counter += 1;
 
-                                    let mut platform = BedrockClient::new(self.udp_socket.clone(), client_addr, be_clients);
+                                    let mut platform = BedrockClient::new(self.udp_socket.clone().unwrap(), client_addr, be_clients);
                                     platform.handle_connection_request(packet).await;
                                     platform.start_outgoing_packet_task();
 
@@ -415,7 +439,7 @@ impl PumpkinServer {
                                 // Please keep the function as simple as possible!
                                 // We dont care about the result, the client just resends the packet
                                 // Since offline packets are very small we dont need to move and clone the data
-                                let _ = BedrockClient::handle_offline_packet(&self.server, id, &mut Cursor::new(&udp_buf[1..len]), client_addr, &self.udp_socket).await;
+                                let _ = BedrockClient::handle_offline_packet(&self.server, id, &mut Cursor::new(&udp_buf[1..len]), client_addr, self.udp_socket.as_ref().unwrap()).await;
                             }
 
                         }
@@ -466,7 +490,7 @@ async fn setup_stdin_console(server: Arc<Server>) {
                     'after: {
                         let dispatcher = &server.command_dispatcher.read().await;
                         dispatcher
-                            .handle_command(&mut command::CommandSender::Console, &server, command.as_str())
+                            .handle_command(&command::CommandSender::Console, &server, command.as_str())
                             .await;
                     };
                 }}
@@ -499,7 +523,7 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
                             let dispatcher = server.command_dispatcher.read().await;
 
                             dispatcher
-                                .handle_command(&mut command::CommandSender::Console, &server, &line)
+                                .handle_command(&command::CommandSender::Console, &server, &line)
                                 .await;
                             rl.add_history_entry(line).unwrap();
                         }
@@ -516,7 +540,7 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
                 }
             }
         }
-        if let Some((wrapper, _)) = &*LOGGER_IMPL {
+        if let Some((wrapper, _)) = LOGGER_IMPL.wait() {
             wrapper.return_readline(rl);
         }
 

@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority};
 
-use crate::{block::fluid::FluidBehaviour, entity::EntityBase, world::World};
+use crate::{
+    block::{BlockFuture, fluid::FluidBehaviour},
+    entity::EntityBase,
+    world::World,
+};
 
 use super::flowing::FlowingFluid;
 
@@ -15,56 +18,68 @@ pub struct FlowingWater;
 
 const WATER_FLOW_SPEED: u8 = 5;
 
-#[async_trait]
 impl FluidBehaviour for FlowingWater {
-    async fn placed(
-        &self,
-        world: &Arc<World>,
-        fluid: &Fluid,
+    fn placed<'a>(
+        &'a self,
+        world: &'a Arc<World>,
+        fluid: &'a Fluid,
         state_id: BlockStateId,
-        block_pos: &BlockPos,
+        block_pos: &'a BlockPos,
         old_state_id: BlockStateId,
         _notify: bool,
-    ) {
-        if old_state_id != state_id {
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if old_state_id != state_id {
+                world
+                    .schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal)
+                    .await;
+            }
+        })
+    }
+
+    fn on_scheduled_tick<'a>(
+        &'a self,
+        world: &'a Arc<World>,
+        fluid: &'a Fluid,
+        block_pos: &'a BlockPos,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async {
+            self.on_scheduled_tick_internal(world, fluid, block_pos)
+                .await;
+        })
+    }
+
+    fn on_neighbor_update<'a>(
+        &'a self,
+        world: &'a Arc<World>,
+        fluid: &'a Fluid,
+        block_pos: &'a BlockPos,
+        _notify: bool,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async {
             world
                 .schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal)
                 .await;
-        }
+        })
     }
 
-    async fn on_scheduled_tick(&self, world: &Arc<World>, fluid: &Fluid, block_pos: &BlockPos) {
-        self.spread_fluid(world, fluid, block_pos).await;
-    }
-
-    async fn on_neighbor_update(
-        &self,
-        world: &Arc<World>,
-        fluid: &Fluid,
-        block_pos: &BlockPos,
-        _notify: bool,
-    ) {
-        world
-            .schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal)
-            .await;
-    }
-
-    async fn on_entity_collision(&self, entity: &dyn EntityBase) {
-        entity.get_entity().extinguish();
+    fn on_entity_collision<'a>(&'a self, entity: &'a dyn EntityBase) -> BlockFuture<'a, ()> {
+        Box::pin(async {
+            entity.get_entity().extinguish();
+        })
     }
 }
 
-#[async_trait]
 impl FlowingFluid for FlowingWater {
-    async fn get_drop_off(&self) -> i32 {
+    fn get_level_decrease_per_block(&self, _world: &World) -> i32 {
         1
     }
 
-    async fn get_slope_find_distance(&self) -> i32 {
+    fn get_max_flow_distance(&self, _world: &World) -> i32 {
         4
     }
 
-    async fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
+    fn can_convert_to_source(&self, _world: &Arc<World>) -> bool {
         //TODO add game rule check for water conversion
         true
     }

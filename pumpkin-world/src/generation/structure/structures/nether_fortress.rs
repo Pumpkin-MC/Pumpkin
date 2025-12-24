@@ -1,5 +1,5 @@
 use pumpkin_data::Block;
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{block_box::BlockBox, position::BlockPos, vector3::Vector3};
 use serde::Deserialize;
 
 use crate::{
@@ -7,7 +7,8 @@ use crate::{
     generation::{
         positions::chunk_pos,
         structure::structures::{
-            StructureGenerator, StructurePiecesCollector, StructurePosition, fill_with_outline,
+            StructureGenerator, StructurePiece, StructurePiecesCollector, StructurePosition, fill,
+            fill_downwards, fill_with_outline,
         },
     },
 };
@@ -16,131 +17,169 @@ use crate::{
 pub struct NetherFortressGenerator;
 
 impl StructureGenerator for NetherFortressGenerator {
-    fn get_structure_position(&self, chunk: &ProtoChunk) -> StructurePosition {
-        let chunk_pos = chunk.chunk_pos;
-        let start_x = chunk_pos::start_block_x(&chunk_pos);
-        let start_z = chunk_pos::start_block_z(&chunk_pos);
-        let generator = StructurePiecesCollector {
-            pieces_positions: vec![], // TODO
+    fn try_generate(&self, _seed: i64, chunk_x: i32, chunk_z: i32) -> Option<StructurePosition> {
+        let start_x = chunk_pos::start_block_x(chunk_x);
+        let start_z = chunk_pos::start_block_z(chunk_z);
+        let start_y = 64;
+
+        let mut collector = StructurePiecesCollector::default();
+
+        // Add a Bridge Platform piece
+        let box_min = BlockPos::new(start_x, start_y, start_z);
+        let box_max = BlockPos::new(start_x + 8, start_y + 10, start_z + 8);
+
+        collector.add_piece(Box::new(NetherFortressPiece {
+            bounding_box: BlockBox::new(
+                box_min.0.x,
+                box_min.0.y,
+                box_min.0.z,
+                box_max.0.x,
+                box_max.0.y,
+                box_max.0.z,
+            ),
+            piece_type: NetherFortressPieceType::BridgePlatform,
+        }));
+
+        Some(StructurePosition {
+            start_pos: box_min,
+            collector: collector.into(),
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum NetherFortressPieceType {
+    BridgePlatform,
+    SmallCorridor,
+}
+
+#[derive(Debug, Clone)]
+pub struct NetherFortressPiece {
+    pub bounding_box: BlockBox,
+    pub piece_type: NetherFortressPieceType,
+}
+
+impl StructurePiece for NetherFortressPiece {
+    fn bounding_box(&self) -> &BlockBox {
+        &self.bounding_box
+    }
+
+    fn place(&self, chunk: &mut ProtoChunk, _seed: i64) {
+        let origin_x = self.bounding_box.min.x;
+        let origin_y = self.bounding_box.min.y;
+        let origin_z = self.bounding_box.min.z;
+
+        let offset = |x, y, z| Vector3::new(origin_x + x, origin_y + y, origin_z + z);
+
+        let fill_rel = |min_x, min_y, min_z, max_x, max_y, max_z, block, c: &mut ProtoChunk| {
+            fill(
+                origin_x + min_x,
+                origin_y + min_y,
+                origin_z + min_z,
+                origin_x + max_x,
+                origin_y + max_y,
+                origin_z + max_z,
+                block,
+                c,
+            )
         };
 
-        StructurePosition {
-            position: BlockPos::new(start_x, 64, start_z),
-            generator,
-        }
-    }
-    fn generate(&self, position: BlockPos, chunk: &mut crate::ProtoChunk) {
-        BridgePlatform::generate(&BridgePlatform, position, chunk);
-    }
-}
+        let fill_outline_rel =
+            |min_x, min_y, min_z, max_x, max_y, max_z, outline, inside, c: &mut ProtoChunk| {
+                fill_with_outline(
+                    origin_x + min_x,
+                    origin_y + min_y,
+                    origin_z + min_z,
+                    origin_x + max_x,
+                    origin_y + max_y,
+                    origin_z + max_z,
+                    outline,
+                    inside,
+                    c,
+                )
+            };
 
-pub struct BridgePlatform;
+        match self.piece_type {
+            NetherFortressPieceType::BridgePlatform => {
+                fill_rel(0, 2, 0, 6, 7, 7, Block::AIR.default_state, chunk);
+                fill_rel(1, 0, 0, 5, 1, 7, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(1, 2, 1, 5, 2, 7, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(1, 3, 2, 5, 3, 7, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(1, 4, 3, 5, 4, 7, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(1, 2, 0, 1, 4, 2, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(5, 2, 0, 5, 4, 2, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(1, 5, 2, 1, 5, 3, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(5, 5, 2, 5, 5, 3, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(0, 5, 3, 0, 5, 8, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(6, 5, 3, 6, 5, 8, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(1, 5, 8, 5, 5, 8, Block::NETHER_BRICKS.default_state, chunk);
 
-impl BridgePlatform {
-    fn generate(&self, _position: BlockPos, chunk: &mut crate::ProtoChunk) {
-        super::fill(0, 2, 0, 6, 7, 7, Block::AIR.default_state, chunk);
-        super::fill(1, 0, 0, 5, 1, 7, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(1, 2, 1, 5, 2, 7, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(1, 3, 2, 5, 3, 7, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(1, 4, 3, 5, 4, 7, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(1, 2, 0, 1, 4, 2, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(5, 2, 0, 5, 4, 2, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(1, 5, 2, 1, 5, 3, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(5, 5, 2, 5, 5, 3, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(0, 5, 3, 0, 5, 8, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(6, 5, 3, 6, 5, 8, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(1, 5, 8, 5, 5, 8, Block::NETHER_BRICKS.default_state, chunk);
-        // TODO
-        let block_state = Block::NETHER_BRICK_FENCE.default_state;
-        let block_state2 = Block::NETHER_BRICK_FENCE.default_state;
+                let fence = &Block::NETHER_BRICK_FENCE.default_state;
 
-        chunk.set_block_state(
-            &Vector3::new(1, 6, 3),
-            Block::NETHER_BRICK_FENCE.default_state,
-        );
-        chunk.set_block_state(
-            &Vector3::new(5, 6, 3),
-            Block::NETHER_BRICK_FENCE.default_state,
-        );
-        chunk.set_block_state(
-            &Vector3::new(0, 6, 3),
-            Block::NETHER_BRICK_FENCE.default_state,
-        );
-        chunk.set_block_state(
-            &Vector3::new(6, 6, 3),
-            Block::NETHER_BRICK_FENCE.default_state,
-        );
+                chunk.set_block_state(&offset(1, 6, 3), fence);
+                chunk.set_block_state(&offset(5, 6, 3), fence);
+                chunk.set_block_state(&offset(0, 6, 3), fence);
+                chunk.set_block_state(&offset(6, 6, 3), fence);
 
-        fill_with_outline(0, 6, 4, 0, 6, 7, block_state2, block_state2, chunk);
-        fill_with_outline(6, 6, 4, 6, 6, 7, block_state2, block_state2, chunk);
+                fill_outline_rel(0, 6, 4, 0, 6, 7, fence, fence, chunk);
+                fill_outline_rel(6, 6, 4, 6, 6, 7, fence, fence, chunk);
 
-        chunk.set_block_state(
-            &Vector3::new(0, 6, 8),
-            Block::NETHER_BRICK_FENCE.default_state,
-        );
-        chunk.set_block_state(
-            &Vector3::new(6, 6, 8),
-            Block::NETHER_BRICK_FENCE.default_state,
-        );
+                chunk.set_block_state(&offset(0, 6, 8), fence);
+                chunk.set_block_state(&offset(6, 6, 8), fence);
 
-        fill_with_outline(1, 6, 8, 5, 6, 8, block_state, block_state, chunk);
+                fill_outline_rel(1, 6, 8, 5, 6, 8, fence, fence, chunk);
 
-        chunk.set_block_state(
-            &Vector3::new(1, 7, 8),
-            Block::NETHER_BRICK_FENCE.default_state,
-        );
+                chunk.set_block_state(&offset(1, 7, 8), fence);
+                fill_outline_rel(2, 7, 8, 4, 7, 8, fence, fence, chunk);
+                chunk.set_block_state(&offset(5, 7, 8), fence);
 
-        fill_with_outline(2, 7, 8, 4, 7, 8, block_state, block_state, chunk);
+                chunk.set_block_state(&offset(2, 8, 8), fence);
+                chunk.set_block_state(&offset(3, 8, 8), fence);
+                chunk.set_block_state(&offset(4, 8, 8), fence);
 
-        chunk.set_block_state(
-            &Vector3::new(5, 7, 8),
-            Block::NETHER_BRICK_FENCE.default_state,
-        );
-        chunk.set_block_state(
-            &Vector3::new(2, 8, 8),
-            Block::NETHER_BRICK_FENCE.default_state,
-        );
-        chunk.set_block_state(&Vector3::new(3, 8, 8), block_state);
-        chunk.set_block_state(
-            &Vector3::new(4, 8, 8),
-            Block::NETHER_BRICK_FENCE.default_state,
-        );
+                // Blaze Spawner
+                chunk.set_block_state(&offset(3, 5, 5), Block::SPAWNER.default_state);
 
-        // Blaze Spawner
-        chunk.set_block_state(
-            &Vector3::new(3, 5, 5), // ?
-            Block::SPAWNER.default_state,
-        );
-
-        for x in 0..6 {
-            for z in 0..6 {
-                super::fill_downwards(x, -1, z, Block::NETHER_BRICKS.default_state, chunk);
+                // Pillars down
+                for x in 0..6 {
+                    for z in 0..6 {
+                        fill_downwards(
+                            origin_x + x,
+                            origin_y - 1,
+                            origin_z + z,
+                            Block::NETHER_BRICKS.default_state,
+                            chunk,
+                        );
+                    }
+                }
             }
-        }
-    }
-}
+            NetherFortressPieceType::SmallCorridor => {
+                fill_rel(0, 0, 0, 4, 1, 4, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(0, 2, 0, 4, 5, 4, Block::AIR.default_state, chunk);
 
-pub struct SmallCorridor;
+                let fence = &Block::NETHER_BRICK_FENCE.default_state;
 
-impl SmallCorridor {
-    fn generate(&self, _position: BlockPos, chunk: &mut crate::ProtoChunk) {
-        super::fill(0, 0, 0, 4, 1, 4, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(0, 2, 0, 4, 5, 4, Block::AIR.default_state, chunk);
+                fill_rel(0, 2, 0, 0, 5, 4, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(4, 2, 0, 4, 5, 4, Block::NETHER_BRICKS.default_state, chunk);
 
-        // TODO
-        let block_state = Block::NETHER_BRICK_FENCE.default_state;
+                fill_rel(0, 3, 1, 0, 4, 1, fence, chunk);
+                fill_rel(0, 3, 3, 0, 4, 3, fence, chunk);
+                fill_rel(4, 3, 1, 4, 4, 1, fence, chunk);
+                fill_rel(4, 3, 3, 4, 4, 3, fence, chunk);
 
-        super::fill(0, 2, 0, 0, 5, 4, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(4, 2, 0, 4, 5, 4, Block::NETHER_BRICKS.default_state, chunk);
-        super::fill(0, 3, 1, 0, 4, 1, block_state, chunk);
-        super::fill(0, 3, 3, 0, 4, 3, block_state, chunk);
-        super::fill(4, 3, 1, 4, 4, 1, block_state, chunk);
-        super::fill(4, 3, 3, 4, 4, 3, block_state, chunk);
-        super::fill(0, 6, 0, 4, 6, 4, Block::NETHER_BRICKS.default_state, chunk);
+                fill_rel(0, 6, 0, 4, 6, 4, Block::NETHER_BRICKS.default_state, chunk);
 
-        for i in 0..=4 {
-            for j in 0..=4 {
-                super::fill_downwards(i, -1, j, Block::NETHER_BRICKS.default_state, chunk);
+                for i in 0..=4 {
+                    for j in 0..=4 {
+                        fill_downwards(
+                            origin_x + i,
+                            origin_y - 1,
+                            origin_z + j,
+                            Block::NETHER_BRICKS.default_state,
+                            chunk,
+                        );
+                    }
+                }
             }
         }
     }

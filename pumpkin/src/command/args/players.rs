@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 
 use crate::command::CommandSender;
+use crate::command::args::ConsumeResult;
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::RawArgs;
 use crate::entity::player::Player;
@@ -28,45 +28,49 @@ impl GetClientSideArgParser for PlayersArgumentConsumer {
     }
 }
 
-#[async_trait]
 impl ArgumentConsumer for PlayersArgumentConsumer {
-    async fn consume<'a>(
+    fn consume<'a, 'b>(
         &'a self,
-        src: &CommandSender,
+        sender: &'a CommandSender,
         server: &'a Server,
-        args: &mut RawArgs<'a>,
-    ) -> Option<Arg<'a>> {
-        let s = args.pop()?;
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop();
 
-        let players = match s {
-            "@s" => match src {
+        let Some(s) = s_opt else {
+            return Box::pin(async move { None });
+        };
+
+        let sync_result: Option<Vec<Arc<Player>>> = match s {
+            "@s" => match sender {
                 CommandSender::Player(p) => Some(vec![p.clone()]),
                 _ => None,
             },
             #[allow(clippy::match_same_arms)]
             // todo: implement for non-players and remove this line
-            "@n" | "@p" => match src {
+            "@n" | "@p" => match sender {
                 CommandSender::Player(p) => Some(vec![p.clone()]),
-                // todo: implement for non-players: how should this behave when sender is console/rcon?
                 _ => None,
             },
-            "@r" => {
-                (server.get_random_player().await).map_or_else(|| Some(vec![]), |p| Some(vec![p]))
-            }
-            "@a" | "@e" => Some(server.get_all_players().await),
-            name => server.get_player_by_name(name).await.map(|p| vec![p]),
+            _ => None,
         };
 
-        players.map(Arg::Players)
-    }
+        if let Some(players) = sync_result {
+            return Box::pin(async move { Some(Arg::Players(players)) });
+        }
 
-    async fn suggest<'a>(
-        &'a self,
-        _sender: &CommandSender,
-        _server: &'a Server,
-        _input: &'a str,
-    ) -> Result<Option<Vec<CommandSuggestion>>, CommandError> {
-        Ok(None)
+        Box::pin(async move {
+            let players = match s {
+                "@r" => server
+                    .get_random_player()
+                    .await
+                    .map_or_else(|| Some(vec![]), |p| Some(vec![p])),
+                "@a" | "@e" => Some(server.get_all_players().await),
+                name => server.get_player_by_name(name).await.map(|p| vec![p]),
+            };
+
+            players.map(Arg::Players)
+        })
     }
 }
 

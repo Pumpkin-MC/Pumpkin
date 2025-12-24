@@ -9,7 +9,7 @@ use crate::{
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
     dimension::Dimension,
-    generation::{Seed, get_world_gen},
+    generation::get_world_gen,
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
@@ -17,10 +17,11 @@ use crossbeam::channel::Sender;
 use dashmap::{DashMap, Entry};
 use log::trace;
 use num_traits::Zero;
-use pumpkin_config::{advanced_config, chunk::ChunkFormat};
+use pumpkin_config::{chunk::ChunkConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_util::world_seed::Seed;
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::sync::Mutex;
 // use std::time::Duration;
@@ -127,6 +128,7 @@ pub async fn dump() {
 
 impl Level {
     pub fn from_root_folder(
+        level_config: &LevelConfig,
         root_folder: PathBuf,
         block_registry: Arc<dyn BlockRegistryExt>,
         seed: i64,
@@ -151,21 +153,22 @@ impl Level {
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
-        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match advanced_config().chunk.format {
-            ChunkFormat::Linear => Arc::new(ChunkFileManager::<LinearFile<ChunkData>>::default()),
-            ChunkFormat::Anvil => {
-                Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkData>>::default())
-            }
+        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
+            ChunkConfig::Linear(chunk_config) => Arc::new(
+                ChunkFileManager::<LinearFile<ChunkData>>::new(chunk_config.clone()),
+            ),
+            ChunkConfig::Anvil(chunk_config) => Arc::new(ChunkFileManager::<
+                AnvilChunkFile<ChunkData>,
+            >::new(chunk_config.clone())),
         };
-        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> =
-            match advanced_config().chunk.format {
-                ChunkFormat::Linear => {
-                    Arc::new(ChunkFileManager::<LinearFile<ChunkEntityData>>::default())
-                }
-                ChunkFormat::Anvil => {
-                    Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkEntityData>>::default())
-                }
-            };
+        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
+            ChunkConfig::Linear(chunk_config) => Arc::new(ChunkFileManager::<
+                LinearFile<ChunkEntityData>,
+            >::new(chunk_config.clone())),
+            ChunkConfig::Anvil(chunk_config) => Arc::new(ChunkFileManager::<
+                AnvilChunkFile<ChunkEntityData>,
+            >::new(chunk_config.clone())),
+        };
 
         let (gen_entity_request_tx, gen_entity_request_rx) = crossbeam::channel::unbounded();
         let pending_entity_generations = Arc::new(DashMap::new());
@@ -213,7 +216,7 @@ impl Level {
 
         // let mut tracker = level_ref.thread_tracker.lock().unwrap();
         // Entity Chunks
-        for thread_id in 0..num_threads {
+        for thread_id in 0..(num_threads / 2).max(1) {
             let level_clone = level_ref.clone();
             let pending_clone = pending_entity_generations.clone();
             let rx = gen_entity_request_rx.clone();
@@ -221,35 +224,38 @@ impl Level {
             let builder =
                 thread::Builder::new().name(format!("Entity Chunk Generation Thread {thread_id}"));
             // tracker.push( TODO
-            builder.spawn(move || {
-                while let Ok(pos) = rx.recv() {
-                    if level_clone.is_shutting_down.load(Ordering::Relaxed) {
-                        break;
-                    }
+            builder
+                .spawn(move || {
+                    while let Ok(pos) = rx.recv() {
+                        if level_clone.is_shutting_down.load(Ordering::Relaxed) {
+                            break;
+                        }
 
-                    log::debug!(
-                        "Generating entity chunk {pos:?}, worker thread {thread_id:?}, queue length {}",
-                        rx.len()
-                    );
+                        // log::debug!(
+                        //     "Generating entity chunk {pos:?}, worker thread {thread_id:?}, queue length {}",
+                        //     rx.len()
+                        // );
 
-                    let chunk = ChunkEntityData {
-                        chunk_position: pos,
-                        data: HashMap::new(),
-                        dirty: true,
-                    };
-                    let arc_chunk = Arc::new(RwLock::new(chunk));
+                        let chunk = ChunkEntityData {
+                            x: pos.x,
+                            z: pos.y,
+                            data: HashMap::new(),
+                            dirty: true,
+                        };
+                        let arc_chunk = Arc::new(RwLock::new(chunk));
 
-                    level_clone
-                        .loaded_entity_chunks
-                        .insert(pos, arc_chunk.clone());
+                        level_clone
+                            .loaded_entity_chunks
+                            .insert(pos, arc_chunk.clone());
 
-                    if let Some(waiters) = pending_clone.remove(&pos) {
-                        for tx in waiters.1 {
-                            let _ = tx.send(arc_chunk.clone());
+                        if let Some(waiters) = pending_clone.remove(&pos) {
+                            for tx in waiters.1 {
+                                let _ = tx.send(arc_chunk.clone());
+                            }
                         }
                     }
-                }
-            }).unwrap();
+                })
+                .unwrap();
             // );
         }
         // drop(tracker);
@@ -490,7 +496,7 @@ impl Level {
             block_entities: Vec::new(),
         };
 
-        let mut rng = SmallRng::from_os_rng();
+        let mut rng = SmallRng::from_rng(&mut rand::rng());
         let chunks = self
             .loaded_chunks
             .iter()
@@ -503,8 +509,8 @@ impl Level {
 
             let chunk = chunk.downgrade();
 
-            let chunk_x_base = chunk.position.x * 16;
-            let chunk_z_base = chunk.position.y * 16;
+            let chunk_x_base = chunk.x * 16;
+            let chunk_z_base = chunk.z * 16;
 
             let mut section_blocks = Vec::new();
             for i in 0..chunk.section.sections.len() {
@@ -664,7 +670,9 @@ impl Level {
                     while let Some(data) = rx.recv().await {
                         match data {
                             LoadedData::Loaded(chunk) => {
-                                let pos = chunk.read().await.chunk_position;
+                                let tmp_chunk = chunk.read().await;
+                                let pos = Vector2::new(tmp_chunk.x, tmp_chunk.z);
+                                drop(tmp_chunk);
                                 level.loaded_entity_chunks.insert(pos, chunk.clone());
                                 let _ = sender.send((chunk, false));
                             }
@@ -837,7 +845,7 @@ impl Level {
             .await;
         let mut chunk = chunk.write().await;
         chunk.block_ticks.schedule_tick(
-            ScheduledTick {
+            &ScheduledTick {
                 delay,
                 position: block_pos,
                 priority,
@@ -860,7 +868,7 @@ impl Level {
             .await;
         let mut chunk = chunk.write().await;
         chunk.fluid_ticks.schedule_tick(
-            ScheduledTick {
+            &ScheduledTick {
                 delay,
                 position: block_pos,
                 priority,

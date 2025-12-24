@@ -1,6 +1,5 @@
-use std::error;
+use std::{error, pin::Pin};
 
-use async_trait::async_trait;
 use bytes::Bytes;
 use pumpkin_util::math::vector2::Vector2;
 
@@ -39,6 +38,8 @@ pub trait Dirtiable {
     fn mark_dirty(&mut self, flag: bool);
 }
 
+type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
 /// Trait to handle the IO of chunks
 /// for loading and saving chunks data
 /// can be implemented for different types of IO
@@ -46,7 +47,6 @@ pub trait Dirtiable {
 ///
 /// The `R` type is the type of the data that will be loaded/saved
 /// like ChunkData or EntityData
-#[async_trait]
 pub trait FileIO
 where
     Self: Send + Sync,
@@ -54,43 +54,52 @@ where
     type Data: Send + Sync + Sized;
 
     /// Load the chunks data
-    async fn fetch_chunks(
-        &self,
-        folder: &LevelFolder,
-        chunk_coords: &[Vector2<i32>],
+    fn fetch_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunk_coords: &'a [Vector2<i32>],
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
-    );
+    ) -> BoxFuture<'a, ()>; // Returns BoxFuture<()>
 
     /// Persist the chunks data
-    async fn save_chunks(
-        &self,
-        folder: &LevelFolder,
+    fn save_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
         chunks_data: Vec<(Vector2<i32>, Self::Data)>,
-    ) -> Result<(), ChunkWritingError>;
+    ) -> BoxFuture<'a, Result<(), ChunkWritingError>>; // Returns BoxFuture<Result>
 
     /// Tells the `ChunkIO` that these chunks are currently loaded in memory
-    async fn watch_chunks(&self, folder: &LevelFolder, chunks: &[Vector2<i32>]);
+    fn watch_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunks: &'a [Vector2<i32>],
+    ) -> BoxFuture<'a, ()>;
 
     /// Tells the `ChunkIO` that these chunks are no longer loaded in memory
-    async fn unwatch_chunks(&self, folder: &LevelFolder, chunks: &[Vector2<i32>]);
+    fn unwatch_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunks: &'a [Vector2<i32>],
+    ) -> BoxFuture<'a, ()>;
 
     /// Tells the `ChunkIO` that no more chunks are loaded in memory
-    async fn clear_watched_chunks(&self);
+    fn clear_watched_chunks(&self) -> BoxFuture<'_, ()>;
 
-    async fn clean_up_log(&self);
+    fn clean_up_log(&self) -> BoxFuture<'_, ()>;
 
     /// Ensure that all ongoing operations are finished
-    async fn block_and_await_ongoing_tasks(&self);
+    fn block_and_await_ongoing_tasks(&self) -> BoxFuture<'_, ()>;
 }
 
 /// Trait to serialize and deserialize the chunk data to and from bytes.
 ///
 /// The `Data` type is the type of the data that will be updated or serialized/deserialized
 /// like ChunkData or EntityData
-#[async_trait]
 pub trait ChunkSerializer: Send + Sync + Default {
     type Data: Send + Sync + Sized + Dirtiable;
     type WriteBackend;
+
+    type ChunkConfig;
 
     /// Get the key for the chunk (like the file name)
     fn get_chunk_key(chunk: &Vector2<i32>) -> String;
@@ -98,18 +107,25 @@ pub trait ChunkSerializer: Send + Sync + Default {
     fn should_write(&self, is_watched: bool) -> bool;
 
     /// Serialize the data to bytes.
-    async fn write(&self, backend: Self::WriteBackend) -> Result<(), std::io::Error>;
+    fn write(
+        &self,
+        backend: &Self::WriteBackend,
+    ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 
     /// Create a new instance from bytes
     fn read(r: Bytes) -> Result<Self, ChunkReadingError>;
 
     /// Add the chunk data to the serializer
-    async fn update_chunk(&mut self, chunk_data: &Self::Data) -> Result<(), ChunkWritingError>;
+    fn update_chunk(
+        &mut self,
+        chunk_data: &Self::Data,
+        chunk_config: &Self::ChunkConfig,
+    ) -> impl Future<Output = Result<(), ChunkWritingError>> + Send;
 
     /// Get the chunks data from the serializer
-    async fn get_chunks(
+    fn get_chunks(
         &self,
-        chunks: &[Vector2<i32>],
+        chunks: Vec<Vector2<i32>>,
         stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
-    );
+    ) -> impl Future<Output = ()> + Send;
 }
