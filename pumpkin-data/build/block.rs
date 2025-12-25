@@ -271,7 +271,7 @@ impl ToTokens for BlockPropertyStruct {
                     index
                 }
 
-                #[expect(unused_assignments)]
+                #[allow(unused_assignments)]
                 fn from_index(mut index: u16) -> Self {
                     Self {
                         #(#from_index_body),*
@@ -980,7 +980,7 @@ pub(crate) fn build() -> TokenStream {
 
             #[doc = r" Try to parse a block from an item id."]
             pub const fn from_item_id(id: u16) -> Option<&'static Self> {
-                #[expect(unreachable_patterns)]
+                #[allow(unreachable_patterns)]
                 match id {
                     #(#block_from_item_id_arms)*
                     _ => None

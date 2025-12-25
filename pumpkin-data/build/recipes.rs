@@ -406,7 +406,7 @@ pub(crate) fn build() -> TokenStream {
             CraftingSpecial,
         }
 
-        #[expect(dead_code)]
+        #[allow(dead_code)]
         #[derive(Clone, Debug)]
         pub struct CookingRecipe {
             pub category: RecipeCategoryTypes,
