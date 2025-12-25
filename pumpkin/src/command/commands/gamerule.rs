@@ -82,7 +82,6 @@ impl CommandExecutor for SetExecutor {
     }
 }
 
-#[expect(clippy::redundant_closure_for_method_calls)]
 pub fn init_command_tree() -> CommandTree {
     let mut command_tree = CommandTree::new(NAMES, DESCRIPTION);
     let rule_registry = GameRuleRegistry::default();

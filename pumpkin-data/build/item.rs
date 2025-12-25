@@ -413,7 +413,6 @@ pub struct BlocksAttacks {
     // TODO
 }
 
-#[expect(dead_code)]
 #[derive(Deserialize, Clone)]
 pub struct EquippableComponent {
     pub slot: String,

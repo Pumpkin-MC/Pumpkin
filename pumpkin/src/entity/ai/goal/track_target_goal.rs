@@ -8,9 +8,7 @@ use rand::Rng;
 use std::sync::Arc;
 
 const UNSET: i32 = 0;
-#[expect(dead_code)]
 const CAN_TRACK: i32 = 1;
-#[expect(dead_code)]
 const CANNOT_TRACK: i32 = 2;
 
 #[expect(dead_code)]

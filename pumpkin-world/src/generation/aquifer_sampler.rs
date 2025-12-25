@@ -446,7 +446,6 @@ impl WorldAquiferSampler {
         surface_height_estimate.min(local_height)
     }
 
-    #[expect(clippy::too_many_arguments)]
     fn get_fluid_block_state(
         block_x: i32,
         block_y: i32,

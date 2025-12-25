@@ -4,7 +4,6 @@ use super::{Controls, Goal};
 use crate::entity::{ai::goal::GoalFuture, mob::Mob};
 use rand::Rng;
 
-#[expect(dead_code)]
 pub struct LookAroundGoal {
     goal_control: Controls,
     delta_x: f64,

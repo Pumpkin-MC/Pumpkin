@@ -11,7 +11,6 @@ use std::sync::Arc;
 
 const MAX_COOLDOWN: i32 = 20;
 
-#[expect(dead_code)]
 pub struct StepAndDestroyBlockGoal<S: Stepping, M: MoveToTargetPos> {
     pub stepping: ParentHandle<S>,
     pub move_to_target_pos_goal: MoveToTargetPosGoal<M>,

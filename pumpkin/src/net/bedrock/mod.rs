@@ -508,7 +508,6 @@ impl BedrockClient {
         Ok(())
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn handle_play_packet(
         &self,
         player: &Arc<Player>,

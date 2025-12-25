@@ -4,7 +4,6 @@ use serde::Deserialize;
 
 use crate::{IdOr, SoundEvent, VarInt};
 
-#[expect(dead_code)]
 #[derive(Deserialize)]
 #[packet(PLAY_SOUND_ENTITY)]
 pub struct CEntitySoundEffect {
@@ -17,7 +16,6 @@ pub struct CEntitySoundEffect {
 }
 
 impl CEntitySoundEffect {
-    #[expect(clippy::too_many_arguments)]
     pub fn new(
         sound_event: IdOr<SoundEvent>,
         sound_category: SoundCategory,

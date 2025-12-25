@@ -153,7 +153,6 @@ fn enchantment_level_consumer() -> BoundedNumArgumentConsumer<i32> {
         .max(i32::MAX)
 }
 
-#[expect(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument_default_name(EntitiesArgumentConsumer).then(

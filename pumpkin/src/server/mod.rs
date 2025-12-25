@@ -109,7 +109,6 @@ pub struct Server {
 }
 
 impl Server {
-    #[expect(clippy::new_without_default)]
     #[expect(clippy::too_many_lines)]
     #[must_use]
     pub async fn new(

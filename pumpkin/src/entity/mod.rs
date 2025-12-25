@@ -1128,7 +1128,6 @@ impl Entity {
 
     // Entity.movementInputToVelocity in yarn
 
-    #[expect(dead_code)]
     fn movement_input_to_velocity(&self, movement_input: Vector3<f64>, speed: f64) -> Vector3<f64> {
         let yaw = f64::from(self.yaw.load()).to_radians();
 

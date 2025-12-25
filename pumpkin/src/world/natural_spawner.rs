@@ -454,7 +454,6 @@ pub fn is_right_distance_to_player_and_spawn_point(
     if pos.to_centered_f64().squared_distance_to(0., 0., 0.) <= 24. * 24. {
         return false;
     }
-    #[expect(clippy::overly_complex_bool_expr)]
     #[expect(clippy::nonminimal_bool)]
     {
         chunk_pos == &Vector2::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)) || false // TODO canSpawnEntitiesInChunk(ChunkPos chunkPos)

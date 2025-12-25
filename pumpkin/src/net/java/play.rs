@@ -1371,7 +1371,6 @@ impl JavaClient {
             .await;
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn handle_use_item_on(
         &self,
         player: &Player,

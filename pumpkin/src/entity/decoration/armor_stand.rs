@@ -85,7 +85,6 @@ impl From<NbtTag> for PackedRotation {
     }
 }
 
-#[expect(dead_code)]
 pub struct ArmorStandEntity {
     living_entity: LivingEntity,
 
