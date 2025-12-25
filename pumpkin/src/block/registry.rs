@@ -135,7 +135,7 @@ use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
 
 #[must_use]
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
 
@@ -432,7 +432,7 @@ impl BlockRegistry {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn use_with_item(
         &self,
         block: &Block,
@@ -478,7 +478,7 @@ impl BlockRegistry {
         BlockActionResult::Pass
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn can_place_at(
         &self,
         server: Option<&Server>,
@@ -508,7 +508,7 @@ impl BlockRegistry {
         true
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn can_update_at(
         &self,
         world: &World,
@@ -536,7 +536,7 @@ impl BlockRegistry {
         false
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn on_place(
         &self,
         server: &Server,
@@ -729,7 +729,7 @@ impl BlockRegistry {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn get_state_for_neighbor_update(
         &self,
         world: &Arc<World>,

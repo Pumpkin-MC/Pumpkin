@@ -170,7 +170,7 @@ impl TripwireHookBlock {
         place_block_state.is_side_solid(face)
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     pub async fn update(
         world: &Arc<World>,
         start_hook_pos: BlockPos,
@@ -315,7 +315,7 @@ impl TripwireHookBlock {
         }
     }
 
-    #[allow(clippy::fn_params_excessive_bools)]
+    #[expect(clippy::fn_params_excessive_bools)]
     async fn play_sound(
         world: &Arc<World>,
         block_pos: &BlockPos,

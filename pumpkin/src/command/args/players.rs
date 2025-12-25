@@ -46,7 +46,7 @@ impl ArgumentConsumer for PlayersArgumentConsumer {
                 CommandSender::Player(p) => Some(vec![p.clone()]),
                 _ => None,
             },
-            #[allow(clippy::match_same_arms)]
+            #[expect(clippy::match_same_arms)]
             // todo: implement for non-players and remove this line
             "@n" | "@p" => match sender {
                 CommandSender::Player(p) => Some(vec![p.clone()]),

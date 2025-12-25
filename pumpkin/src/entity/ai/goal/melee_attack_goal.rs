@@ -13,11 +13,11 @@ pub struct MeleeAttackGoal {
     speed: f64,
     pause_when_mob_idle: bool,
     //path: Path, TODO: add path when Navigation is implemented
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     target_location: Vector3<f64>,
     update_countdown_ticks: i32,
     pub cooldown: i32,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     attack_interval_ticks: i32,
     last_update_time: i64,
 }

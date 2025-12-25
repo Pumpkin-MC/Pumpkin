@@ -8,7 +8,7 @@ use pumpkin_data::entity::EntityType;
 use rand::Rng;
 use std::sync::{Arc, Weak};
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct LookAtEntityGoal {
     goal_control: Controls,
     target: Option<Arc<dyn EntityBase>>,

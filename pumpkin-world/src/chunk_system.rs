@@ -1089,7 +1089,7 @@ impl Cache {
             chunks: Vec::with_capacity((size * size) as usize),
         }
     }
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn advance(
         &mut self,
         stage: StagedChunkEnum,
@@ -1267,7 +1267,7 @@ new_key_type! { struct NodeKey; }
 new_key_type! { struct EdgeKey; }
 
 #[derive(Default)]
-#[allow(clippy::upper_case_acronyms)]
+#[expect(clippy::upper_case_acronyms)]
 struct DAG {
     pub nodes: SlotMap<NodeKey, Node>,
     pub edges: SlotMap<EdgeKey, Edge>,

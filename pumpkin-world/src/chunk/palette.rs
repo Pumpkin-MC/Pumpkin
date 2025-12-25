@@ -343,7 +343,7 @@ impl BiomePalette {
     }
 
     pub fn to_disk_nbt(&self) -> ChunkSectionBiomes {
-        #[allow(clippy::unnecessary_min_or_max)]
+        #[expect(clippy::unnecessary_min_or_max)]
         let bits_per_entry = self.bits_per_entry().max(BIOME_DISK_MIN_BITS);
         let (palette, packed_data) = self.to_palette_and_packed_data(bits_per_entry);
         ChunkSectionBiomes {

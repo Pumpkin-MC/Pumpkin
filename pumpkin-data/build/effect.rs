@@ -14,7 +14,7 @@ struct Effect {
     attribute_modifiers: Vec<Modifiers>,
 }
 
-#[allow(clippy::upper_case_acronyms)]
+#[expect(clippy::upper_case_acronyms)]
 #[derive(Deserialize)]
 pub enum MobEffectCategory {
     BENEFICIAL,

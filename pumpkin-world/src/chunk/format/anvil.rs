@@ -201,7 +201,7 @@ impl Compression {
     }
 
     /// Returns Ok when a compression is found otherwise an Err
-    #[allow(clippy::result_unit_err)]
+    #[expect(clippy::result_unit_err)]
     pub fn from_byte(byte: u8) -> Result<Option<Self>, ()> {
         match byte {
             Self::GZIP_ID => Ok(Some(Self::GZip)),

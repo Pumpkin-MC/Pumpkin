@@ -638,7 +638,7 @@ pub(crate) fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../assets/properties.json").unwrap())
             .expect("Failed to parse properties.json");
 
-    let generated_prop_map: std::collections::HashMap<i32, &GeneratedProperty> =
+    let generated_prop_map: std::collections::BTreeMap<i32, &GeneratedProperty> =
         generated_properties
             .iter()
             .map(|p| (p.hash_key, p))

@@ -52,7 +52,7 @@ pub trait FluidBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn on_place<'a>(
         &'a self,
         _server: &'a Server,

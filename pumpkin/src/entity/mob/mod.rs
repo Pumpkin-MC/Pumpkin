@@ -158,7 +158,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 const DEFAULT_PATHFINDING_FAVOR: f32 = 0.0;
 
 pub trait PathAwareEntity: Mob + Send + Sync {

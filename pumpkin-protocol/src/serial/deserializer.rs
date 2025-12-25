@@ -122,7 +122,7 @@ impl PacketRead for f64 {
 
 impl<T: PacketRead, const N: usize> PacketRead for [T; N] {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        #[allow(clippy::uninit_assumed_init)]
+        #[expect(clippy::uninit_assumed_init)]
         let mut buf: [T; N] = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
         for i in &mut buf {
             *i = T::read(reader)?;
@@ -140,7 +140,7 @@ impl PacketRead for String {
 
 impl PacketRead for Vec<u8> {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        #[allow(clippy::uninit_vec)]
+        #[expect(clippy::uninit_vec)]
         {
             let len = VarUInt::read(reader)?.0 as _;
             let mut buf = Vec::with_capacity(len);
