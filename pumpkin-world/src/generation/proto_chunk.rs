@@ -1037,7 +1037,7 @@ impl BlockAccessor for ProtoChunk {
 }
 
 #[cfg(test)]
-#[allow(dead_code)] // TODO: Fix tests to work with new ProtoChunk API
+#[expect(dead_code)] // TODO: Fix tests to work with new ProtoChunk API
 mod test {
     /*
     TODO: Update all tests to work with the new ProtoChunk API that doesn't use lifetimes.

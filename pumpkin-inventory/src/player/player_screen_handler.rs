@@ -121,7 +121,7 @@ impl ScreenHandler for PlayerScreenHandler {
                     .map_or(&EquipmentSlot::MAIN_HAND, |equippable| equippable.slot);
 
                 // Quick move logic
-                #[allow(clippy::if_same_then_else)]
+                #[expect(clippy::if_same_then_else)]
                 let success = if slot_index == 0 {
                     // From crafting result slot (0) -> Player Inventory (9-45, from end)
                     self.insert_item(&mut slot_stack, 9, 45, true).await

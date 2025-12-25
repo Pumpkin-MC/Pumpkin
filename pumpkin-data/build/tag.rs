@@ -150,7 +150,7 @@ pub(crate) fn build() -> TokenStream {
             .collect::<Vec<_>>();
         // Add the static array declaration
         tag_dicts.push(quote! {
-            #[allow(non_snake_case)]
+            #[expect(non_snake_case)]
             pub mod #key_pascal {
                 use crate::tag::Tag;
 
@@ -191,7 +191,7 @@ pub(crate) fn build() -> TokenStream {
 
         impl RegistryKey {
             // IDK why the linter is saying this isn't used
-            #[allow(dead_code)]
+            #[expect(dead_code)]
             pub fn identifier_string(&self) -> &str {
                 match self {
                     #(#tag_identifiers),*

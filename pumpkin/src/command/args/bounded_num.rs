@@ -111,7 +111,7 @@ pub enum Number {
     F64(f64),
     F32(f32),
     I32(i32),
-    #[allow(unused)]
+    #[expect(unused)]
     I64(i64),
 }
 
@@ -153,7 +153,7 @@ impl<T: ToFromNumber> BoundedNumArgumentConsumer<T> {
     }
 
     #[must_use]
-    #[allow(unused)]
+    #[expect(unused)]
     pub const fn max(mut self, max_inclusive: T) -> Self {
         self.max_inclusive = Some(max_inclusive);
         self

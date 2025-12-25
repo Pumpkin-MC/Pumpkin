@@ -28,13 +28,13 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
     #[derive(Deserialize)]
     #[serde(rename_all = "PascalCase")]
     struct LevelData {
-        #[allow(dead_code)]
+        #[expect(dead_code)]
         data_version: i32,
     }
     #[derive(Deserialize)]
     #[serde(rename_all = "PascalCase")]
     struct LevelDat {
-        #[allow(dead_code)]
+        #[expect(dead_code)]
         data: LevelData,
     }
 

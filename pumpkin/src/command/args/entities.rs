@@ -16,7 +16,7 @@ use uuid::Uuid;
 use super::super::args::ArgumentConsumer;
 use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub enum EntitySelectorType {
     Source,
     NearestPlayer,
@@ -29,13 +29,13 @@ pub enum EntitySelectorType {
 }
 
 // todo tags
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub enum ValueCondition<T> {
     Equals(T),
     NotEquals(T),
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub enum ComparableValueCondition<T> {
     Equals(T),
     NotEquals(T),
@@ -46,7 +46,7 @@ pub enum ComparableValueCondition<T> {
     Between(T, T),
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Copy, Clone, PartialEq)]
 pub enum EntityFilterSort {
     Arbitrary,
@@ -55,7 +55,7 @@ pub enum EntityFilterSort {
     Random,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub enum EntityFilter {
     X(ComparableValueCondition<f64>),
     Y(ComparableValueCondition<f64>),
@@ -127,7 +127,7 @@ impl FromStr for EntityFilter {
 }
 
 /// <https://minecraft.wiki/w/Target_selectors>
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct TargetSelector {
     pub selector_type: EntitySelectorType,
     pub conditions: Vec<EntityFilter>,

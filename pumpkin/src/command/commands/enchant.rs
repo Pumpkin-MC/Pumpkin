@@ -15,7 +15,7 @@ const DESCRIPTION: &str = "Adds an enchantment to a player's selected item, subj
 struct Executor;
 
 impl CommandExecutor for Executor {
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
@@ -153,7 +153,7 @@ fn enchantment_level_consumer() -> BoundedNumArgumentConsumer<i32> {
         .max(i32::MAX)
 }
 
-#[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
+#[expect(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument_default_name(EntitiesArgumentConsumer).then(

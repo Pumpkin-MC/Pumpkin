@@ -8,12 +8,12 @@ use rand::Rng;
 use std::sync::Arc;
 
 const UNSET: i32 = 0;
-#[allow(dead_code)]
+#[expect(dead_code)]
 const CAN_TRACK: i32 = 1;
-#[allow(dead_code)]
+#[expect(dead_code)]
 const CANNOT_TRACK: i32 = 2;
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct TrackTargetGoal {
     goal_control: Controls,
     target: Option<Arc<dyn EntityBase>>,
@@ -25,7 +25,7 @@ pub struct TrackTargetGoal {
     max_time_without_visibility: i32, // Default 60
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 impl TrackTargetGoal {
     #[must_use]
     pub fn new(check_visibility: bool, check_can_navigate: bool) -> Self {

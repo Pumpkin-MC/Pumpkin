@@ -112,7 +112,7 @@ pub enum Arg<'a> {
     Time(i32),
     Num(Result<Number, NotInBounds>),
     Bool(bool),
-    #[allow(unused)]
+    #[expect(unused)]
     Simple(&'a str),
     SoundCategory(SoundCategory),
     DamageType(DamageType),

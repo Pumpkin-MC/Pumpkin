@@ -23,7 +23,7 @@ type SeaPickleProperties = pumpkin_data::block_properties::SeaPickleLikeProperti
 pub struct SeaPickleBlock;
 
 impl BlockBehaviour for SeaPickleBlock {
-    #[allow(clippy::many_single_char_names)]
+    #[expect(clippy::many_single_char_names)]
     fn use_with_item<'a>(
         &'a self,
         args: UseWithItemArgs<'a>,

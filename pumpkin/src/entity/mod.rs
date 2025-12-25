@@ -562,7 +562,7 @@ impl Entity {
         }
     }
 
-    #[allow(clippy::float_cmp)]
+    #[expect(clippy::float_cmp)]
     async fn adjust_movement_for_collisions(&self, movement: Vector3<f64>) -> Vector3<f64> {
         self.on_ground.store(false, Ordering::SeqCst);
 
@@ -725,7 +725,7 @@ impl Entity {
         self.velocity.store(motion);
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn tick_block_underneath(_caller: &Arc<dyn EntityBase>) {
         // let world = self.world.read().await;
 
@@ -1128,7 +1128,7 @@ impl Entity {
 
     // Entity.movementInputToVelocity in yarn
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn movement_input_to_velocity(&self, movement_input: Vector3<f64>, speed: f64) -> Vector3<f64> {
         let yaw = f64::from(self.yaw.load()).to_radians();
 
@@ -1155,7 +1155,7 @@ impl Entity {
         )
     }
 
-    #[allow(clippy::float_cmp)]
+    #[expect(clippy::float_cmp)]
     async fn get_velocity_multiplier(&self) -> f32 {
         let block = self.world.get_block(&self.block_pos.load()).await;
 
@@ -1170,7 +1170,7 @@ impl Entity {
         }
     }
 
-    #[allow(clippy::float_cmp)]
+    #[expect(clippy::float_cmp)]
     async fn get_jump_velocity_multiplier(&self) -> f32 {
         let f = self
             .world
@@ -1771,7 +1771,7 @@ impl Entity {
         }
     }
 
-    #[allow(clippy::unused_async)]
+    #[expect(clippy::unused_async)]
     pub async fn reset_state(&self) {
         self.pose.store(EntityPose::Standing);
         self.fall_flying.store(false, Relaxed);

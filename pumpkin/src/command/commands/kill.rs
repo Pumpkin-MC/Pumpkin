@@ -76,7 +76,7 @@ impl CommandExecutor for SelfExecutor {
     }
 }
 
-#[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
+#[expect(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(Executor))

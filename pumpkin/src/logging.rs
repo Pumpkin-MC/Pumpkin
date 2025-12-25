@@ -225,7 +225,7 @@ impl ReadlineLogWrapper {
     }
 
     // This isn't really dead code, just for some reason rust thinks that it might be.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn return_readline(&self, rl: Readline) {
         if let Ok(mut result) = self.readline.lock() {
             println!("Returned rl");

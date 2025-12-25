@@ -55,7 +55,7 @@ impl From<PackedRotation> for NbtTag {
 }
 
 impl From<NbtTag> for PackedRotation {
-    #[allow(clippy::unnecessary_fallible_conversions)]
+    #[expect(clippy::unnecessary_fallible_conversions)]
     fn from(tag: NbtTag) -> Self {
         if let NbtTag::Compound(compound) = tag {
             fn get_rotation(
@@ -85,7 +85,7 @@ impl From<NbtTag> for PackedRotation {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct ArmorStandEntity {
     living_entity: LivingEntity,
 

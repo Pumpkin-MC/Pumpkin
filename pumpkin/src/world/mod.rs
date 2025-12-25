@@ -1185,7 +1185,7 @@ impl World {
         i32::from(generation_settings.shape.min_y)
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
         base_config: &BasicConfiguration,
@@ -1895,7 +1895,7 @@ impl World {
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     fn spawn_world_entity_chunks(
         self: &Arc<Self>,
         player: Arc<Player>,
@@ -2537,7 +2537,7 @@ impl World {
     }
 
     /// Sets a block and returns the old block id
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,

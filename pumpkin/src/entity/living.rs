@@ -80,7 +80,7 @@ pub struct LivingEntity {
 impl LivingEntity {
     const USING_ITEM_FLAG: i32 = 1;
     const OFF_HAND_ACTIVE_FLAG: i32 = 2;
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: i32 = 4;
 
     pub fn new(entity: Entity) -> Self {

@@ -155,7 +155,7 @@ pub struct ChunkNoiseGenerator<'a> {
 }
 
 impl<'a> ChunkNoiseGenerator<'a> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         noise_router_base: &'a ProtoNoiseRouter,
         random_config: &GlobalRandomConfig,

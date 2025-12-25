@@ -9,7 +9,7 @@ pub enum TagType {
 }
 
 impl TagType {
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn serialize(&self) -> String {
         match self {
             TagType::Item(name) => name.clone(),

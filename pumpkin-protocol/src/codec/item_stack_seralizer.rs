@@ -161,7 +161,7 @@ pub struct ItemComponentHash {
 pub struct ItemStackHash {
     item_id: VarInt,
     count: VarInt,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     components: ItemComponentHash,
 }
 

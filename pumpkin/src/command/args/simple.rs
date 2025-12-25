@@ -16,7 +16,7 @@ use super::{
 };
 
 /// Should never be a permanent solution
-#[allow(unused)]
+#[expect(unused)]
 pub struct SimpleArgConsumer;
 
 impl GetClientSideArgParser for SimpleArgConsumer {

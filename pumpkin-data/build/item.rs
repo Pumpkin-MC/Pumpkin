@@ -413,7 +413,7 @@ pub struct BlocksAttacks {
     // TODO
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Deserialize, Clone)]
 pub struct EquippableComponent {
     pub slot: String,
@@ -436,7 +436,7 @@ pub struct EquippableComponent {
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
-#[allow(clippy::enum_variant_names)]
+#[expect(clippy::enum_variant_names)]
 pub enum Operation {
     AddValue,
     AddMultipliedBase,

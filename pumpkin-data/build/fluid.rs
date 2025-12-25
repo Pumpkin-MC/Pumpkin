@@ -194,7 +194,7 @@ impl ToTokens for FluidPropertyStruct {
             }
 
             impl FluidProperties for #name {
-                #[allow(unused_assignments)]
+                #[expect(unused_assignments)]
                 fn to_index(&self) -> u16 {
                     let mut index = 0;
                     let mut multiplier = 1;
@@ -207,7 +207,7 @@ impl ToTokens for FluidPropertyStruct {
                     index
                 }
 
-                #[allow(unused_assignments)]
+                #[expect(unused_assignments)]
                 fn from_index(mut index: u16) -> Self {
                     Self {
                         #(
@@ -708,7 +708,7 @@ pub(crate) fn build() -> TokenStream {
                     _ => None
                 }
             }
-            #[allow(unreachable_patterns)]
+            #[expect(unreachable_patterns)]
             pub const fn from_state_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #fluid_from_state_id

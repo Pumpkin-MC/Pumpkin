@@ -258,7 +258,7 @@ impl CommandExecutor for ClearExecutor {
     }
 }
 
-#[allow(clippy::redundant_closure_for_method_calls)]
+#[expect(clippy::redundant_closure_for_method_calls)]
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(

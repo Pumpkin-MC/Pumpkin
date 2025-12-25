@@ -372,7 +372,7 @@ impl WorldAquiferSampler {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn get_fluid_block_y(
         block_x: i32,
         block_y: i32,
@@ -446,7 +446,7 @@ impl WorldAquiferSampler {
         surface_height_estimate.min(local_height)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn get_fluid_block_state(
         block_x: i32,
         block_y: i32,

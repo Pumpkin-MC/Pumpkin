@@ -21,7 +21,7 @@ impl ItemMetadata for AxeItem {
 }
 
 impl ItemBehaviour for AxeItem {
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     fn use_on_block<'a>(
         &'a self,
         _item: &'a mut ItemStack,
