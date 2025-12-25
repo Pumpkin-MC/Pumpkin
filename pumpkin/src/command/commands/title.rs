@@ -2,6 +2,7 @@ use pumpkin_protocol::java::client::play::CClearTitle;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandResult;
+use crate::command::args::time::TimeArgumentConsumer;
 use crate::entity::EntityBase;
 use crate::{
     command::{
@@ -23,7 +24,9 @@ const DESCRIPTION: &str = "Displays a title.";
 const ARG_TARGETS: &str = "targets";
 
 const ARG_TITLE: &str = "title";
-
+const ARG_FADE_IN: &str = "fadeIn";
+const ARG_STAY: &str = "stay";
+const ARG_FADE_OUT: &str = "fadeOut";
 /// bool: Whether to reset or not
 struct ClearOrResetExecutor(bool);
 
@@ -108,6 +111,47 @@ impl CommandExecutor for TitleExecutor {
     }
 }
 
+struct TimesTitleExecutor;
+
+impl CommandExecutor for TimesTitleExecutor {
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
+                return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
+            };
+
+            let fade_in = TimeArgumentConsumer::find_arg(args, ARG_FADE_IN)?;
+            let stay = TimeArgumentConsumer::find_arg(args, ARG_STAY)?;
+            let fade_out = TimeArgumentConsumer::find_arg(args, ARG_FADE_OUT)?;
+
+            for target in targets {
+                target.send_title_animation(fade_in, stay, fade_out).await;
+            }
+
+            sender
+                .send_message(if targets.len() == 1 {
+                    TextComponent::translate(
+                        "commands.title.times.single",
+                        [targets[0].get_display_name().await],
+                    )
+                } else {
+                    TextComponent::translate(
+                        "commands.title.times.multiple",
+                        [TextComponent::text(targets.len().to_string())],
+                    )
+                })
+                .await;
+
+            Ok(())
+        })
+    }
+}
+
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument(ARG_TARGETS, PlayersArgumentConsumer)
@@ -130,7 +174,13 @@ pub fn init_command_tree() -> CommandTree {
                     argument(ARG_TITLE, TextComponentArgConsumer)
                         .execute(TitleExecutor(TitleMode::ActionBar)),
                 ),
-            ),
-        // TODO: times
+            )
+            .then(literal("times").then(
+                argument(ARG_FADE_IN, TimeArgumentConsumer).then(
+                    argument(ARG_STAY, TimeArgumentConsumer).then(
+                        argument(ARG_FADE_OUT, TimeArgumentConsumer).execute(TimesTitleExecutor),
+                    ),
+                ),
+            )),
     )
 }
