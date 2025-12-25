@@ -221,6 +221,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(EndRodBlock);
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
+    manager.register(NetherWartBlock);
 
     manager.register(FallingBlock);
 

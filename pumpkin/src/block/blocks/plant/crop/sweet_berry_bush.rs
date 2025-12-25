@@ -113,10 +113,7 @@ impl PlantBlockBase for SweetBerryBushBlock {
 
 impl CropBlockBase for SweetBerryBushBlock {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, pos).await
-        })
-        .await
+        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, pos).await
     }
 
     fn max_age(&self) -> i32 {
