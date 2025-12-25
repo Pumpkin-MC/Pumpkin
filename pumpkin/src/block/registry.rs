@@ -31,6 +31,7 @@ use crate::block::blocks::piston::piston::PistonBlock;
 use crate::block::blocks::piston::piston_extension::PistonExtensionBlock;
 use crate::block::blocks::piston::piston_head::PistonHeadBlock;
 use crate::block::blocks::plant::bush::BushBlock;
+use crate::block::blocks::plant::crop::sweet_berry_bush::SweetBerryBushBlock;
 use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
 use crate::block::blocks::plant::flower::FlowerBlock;
 use crate::block::blocks::plant::flowerbed::FlowerbedBlock;
@@ -184,6 +185,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BeetrootBlock);
     manager.register(TorchFlowerBlock);
     manager.register(CarrotBlock);
+    manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
     manager.register(NetherWartBlock);
     manager.register(WheatBlock);

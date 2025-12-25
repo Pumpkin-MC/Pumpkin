@@ -14,6 +14,7 @@ pub mod loot;
 pub mod portal;
 pub mod time;
 
+use crate::block::RandomTickArgs;
 use crate::world::loot::LootContextParameters;
 use crate::{
     PLUGIN_MANAGER,
@@ -712,7 +713,8 @@ impl World {
             }
         }
 
-        /* TODO: Fix this deadlock
+        // TODO: Fix this deadlock
+        // TODO: ^ find this deadlock ^
         for scheduled_tick in tick_data.random_ticks {
             let block = self.get_block(&scheduled_tick.position).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
@@ -724,7 +726,7 @@ impl World {
                     })
                     .await;
             }
-        } */
+        }
 
         let spawn_entity_clock_start = tokio::time::Instant::now();
 

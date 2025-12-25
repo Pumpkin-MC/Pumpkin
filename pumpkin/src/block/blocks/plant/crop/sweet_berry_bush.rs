@@ -143,11 +143,11 @@ impl CropBlockBase for SweetBerryBushBlock {
         let (block, state) = world.get_block_and_state_id(pos).await;
         let age = self.get_age(state, block);
         if age < self.max_age() {
-            //let (block_above, _) = world.get_block_and_state_id(&pos.up()).await;
-            //
-            //if (block_above.is_tagged_with("").unwrap_or(false)) {
-            //    return;
-            //}; TODO dont grow when full block above
+            let state_above = world.get_block_state(&pos.up()).await;
+
+            if state_above.is_full_cube() || state_above.is_solid() {
+                return;
+            }
             if rand::rng().random_range(0..=25) == 0 {
                 world
                     .set_block_state(
