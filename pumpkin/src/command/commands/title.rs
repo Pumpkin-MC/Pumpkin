@@ -24,9 +24,9 @@ const DESCRIPTION: &str = "Displays a title.";
 const ARG_TARGETS: &str = "targets";
 
 const ARG_TITLE: &str = "title";
-const ARG_FADE_IN: &'static str = "fadeIn";
-const ARG_STAY: &'static str = "stay";
-const ARG_FADE_OUT: &'static str = "fadeOut";
+const ARG_FADE_IN: &str = "fadeIn";
+const ARG_STAY: &str = "stay";
+const ARG_FADE_OUT: &str = "fadeOut";
 /// bool: Whether to reset or not
 struct ClearOrResetExecutor(bool);
 
@@ -136,12 +136,12 @@ impl CommandExecutor for TimesTitleExecutor {
             sender
                 .send_message(if targets.len() == 1 {
                     TextComponent::translate(
-                        format!("commands.title.times.single"),
+                        "commands.title.times.single",
                         [targets[0].get_display_name().await],
                     )
                 } else {
                     TextComponent::translate(
-                        format!("commands.title.times.multiple"),
+                        "commands.title.times.multiple",
                         [TextComponent::text(targets.len().to_string())],
                     )
                 })
