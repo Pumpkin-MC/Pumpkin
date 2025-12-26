@@ -1,15 +1,17 @@
+use std::sync::Arc;
+
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockAccessor};
+use pumpkin_world::{BlockStateId, world::{BlockAccessor, BlockFlags}};
 use rand::Rng;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BrokenArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
+        BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
         blocks::plant::{PlantBlockBase, crop::CropBlockBase},
     },
     world::World,
@@ -19,6 +21,12 @@ use crate::{
 pub struct NetherWartBlock;
 
 impl BlockBehaviour for NetherWartBlock {
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
+        })
+    }
+
     fn get_state_for_neighbor_update<'a>(
         &'a self,
         args: GetStateForNeighborUpdateArgs<'a>,
@@ -72,24 +80,17 @@ impl CropBlockBase for NetherWartBlock {
         props.to_state_id(block)
     }
 
-    async fn random_tick(&self, world: &std::sync::Arc<World>, pos: &BlockPos) {
+    async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
         let (block, state) = world.get_block_and_state_id(pos).await;
         let age = self.get_age(state, block);
-        if age < self.max_age() {
-            let state_above = world.get_block_state(&pos.up()).await;
-
-            if state_above.is_full_cube() || state_above.is_solid() {
-                return;
-            }
-            if rand::rng().random_range(0..=10) == 0 {
-                world
-                    .set_block_state(
-                        pos,
-                        self.state_with_age(block, state, age + 1),
-                        pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
-            }
+        if age < self.max_age() && rand::rng().random_range(0..=10) == 0 {
+            world
+                .set_block_state(
+                    pos,
+                    self.state_with_age(block, state, age + 1),
+                    BlockFlags::NOTIFY_NEIGHBORS,
+                )
+                .await;
         }
     }
 }

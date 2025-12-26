@@ -31,6 +31,7 @@ use crate::block::blocks::piston::piston::PistonBlock;
 use crate::block::blocks::piston::piston_extension::PistonExtensionBlock;
 use crate::block::blocks::piston::piston_head::PistonHeadBlock;
 use crate::block::blocks::plant::bush::BushBlock;
+use crate::block::blocks::plant::crop::nether_wart::NetherWartBlock;
 use crate::block::blocks::plant::crop::sweet_berry_bush::SweetBerryBushBlock;
 use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
 use crate::block::blocks::plant::flower::FlowerBlock;
@@ -104,7 +105,6 @@ use crate::block::blocks::plant::crop::carrot::CarrotBlock;
 use crate::block::blocks::plant::crop::potatoes::PotatoBlock;
 use crate::block::blocks::plant::crop::torch_flower::TorchFlowerBlock;
 use crate::block::blocks::plant::crop::wheat::WheatBlock;
-use crate::block::blocks::plant::nether_wart::NetherWartBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
@@ -221,7 +221,6 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(EndRodBlock);
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
-    manager.register(NetherWartBlock);
 
     manager.register(FallingBlock);
 
