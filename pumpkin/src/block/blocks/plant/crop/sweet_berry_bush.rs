@@ -18,7 +18,7 @@ use rand::Rng;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
-        RandomTickArgs,
+        RandomTickArgs, UseWithItemArgs,
         blocks::plant::{PlantBlockBase, crop::CropBlockBase},
         registry::BlockActionResult,
     },
@@ -60,6 +60,23 @@ impl BlockBehaviour for SweetBerryBushBlock {
         })
     }
 
+    fn use_with_item<'a>(
+        &'a self,
+        args: UseWithItemArgs<'a>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let state_id = args.world.get_block_state_id(args.position).await;
+            let props = NetherWartLikeProperties::from_state_id(state_id, &Block::SWEET_BERRY_BUSH);
+            if props.age != Integer0To3::L3
+                && args.item_stack.lock().await.get_item() == &Item::BONE_MEAL
+            {
+                BlockActionResult::Pass
+            } else {
+                BlockActionResult::PassToDefaultBlockAction
+            }
+        })
+    }
+
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
             <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
@@ -83,7 +100,9 @@ impl BlockBehaviour for SweetBerryBushBlock {
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            <Self as CropBlockBase>::random_tick(self, args.world, args.position).await;
+            if rand::rng().random_range(0..5) == 0 {
+                <Self as CropBlockBase>::random_tick(self, args.world, args.position).await;
+            }
         })
     }
 }
