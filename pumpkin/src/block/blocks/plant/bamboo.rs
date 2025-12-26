@@ -141,76 +141,81 @@ impl BlockBehaviour for BambooBlock {
 }
 
 async fn update_leaves_and_grow(world: Arc<World>, position: &BlockPos) {
-    let state_above = world.get_block_state(&position.up()).await;
+    let above_pos = position.up();
+    let below_pos = position.down();
+    let two_below_pos = position.down_height(2);
+
     let (block, state_id) = world.get_block_and_state_id(position).await;
+    let state_above = world.get_block_state(&above_pos).await;
+
+    if !state_above.is_air() {
+        return;
+    }
+
     let mut props = BambooLikeProperties::from_state_id(state_id, block);
-    if props.stage == Integer0To1::L0 && state_above.is_air() {
-        // TODO: light level
-        let bamboo_count = count_bamboo_below(world.clone(), position).await;
-        if bamboo_count < 16 {
-            let (block_below, state_id_below) =
-                world.get_block_and_state_id(&position.down()).await;
-            let mut props_below = BambooLikeProperties::from_state_id(state_id_below, block_below);
-            let (block_two_below, state_id_two_below) =
-                world.get_block_and_state_id(&position.down_height(2)).await;
+    if props.stage != Integer0To1::L0 {
+        return;
+    }
 
-            if bamboo_count >= 1 {
-                if block_below != &Block::BAMBOO || props_below.leaves == BambooLeaves::None {
-                    props.leaves = BambooLeaves::Small;
-                } else if block_below == &Block::BAMBOO && props_below.leaves != BambooLeaves::None
-                {
-                    props.leaves = BambooLeaves::Large;
+    let bamboo_count = count_bamboo_below(world.clone(), position).await;
+    if bamboo_count >= 16 {
+        return;
+    }
+    let (block_below, state_id_below) = world.get_block_and_state_id(&below_pos).await;
+    let (block_two_below, state_id_two_below) = world.get_block_and_state_id(&two_below_pos).await;
 
-                    if block_two_below == &Block::BAMBOO {
-                        let mut props_two_below = BambooLikeProperties::from_state_id(
-                            state_id_two_below,
-                            block_two_below,
-                        );
-                        props_below.leaves = BambooLeaves::Small;
+    let mut props_below = BambooLikeProperties::from_state_id(state_id_below, block_below);
 
-                        world
-                            .set_block_state(
-                                &position.down(),
-                                props_below.to_state_id(block_below),
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
+    if bamboo_count >= 1 {
+        let below_is_bamboo = block_below == &Block::BAMBOO;
+        let below_has_leaves = props_below.leaves != BambooLeaves::None;
 
-                        props_two_below.leaves = BambooLeaves::None;
+        props.leaves = if !below_is_bamboo || !below_has_leaves {
+            BambooLeaves::Small
+        } else {
+            BambooLeaves::Large
+        };
 
-                        world
-                            .set_block_state(
-                                &position.down_height(2),
-                                props_two_below.to_state_id(block_two_below),
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-                    }
-                }
-            }
-            props.age = if props.age != Integer0To1::L1 && block_two_below == &Block::BAMBOO {
-                Integer0To1::L0
-            } else {
-                Integer0To1::L1
-            };
+        if props.leaves == BambooLeaves::Large && block_two_below == &Block::BAMBOO {
+            props_below.leaves = BambooLeaves::Small;
 
-            props.stage = if (bamboo_count < 11 || rand::rng().random::<f32>() >= 0.25f32)
-                && bamboo_count != 15
-            {
-                Integer0To1::L0
-            } else {
-                Integer0To1::L1
-            };
+            let mut props_two_below =
+                BambooLikeProperties::from_state_id(state_id_two_below, block_two_below);
+            props_two_below.leaves = BambooLeaves::None;
 
             world
                 .set_block_state(
-                    &position.up(),
-                    props.to_state_id(block),
+                    &below_pos,
+                    props_below.to_state_id(block_below),
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
+            world
+                .set_block_state(
+                    &two_below_pos,
+                    props_two_below.to_state_id(block_two_below),
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;
         }
     }
+
+    props.age = if props.age != Integer0To1::L1 && block_two_below == &Block::BAMBOO {
+        Integer0To1::L0
+    } else {
+        Integer0To1::L1
+    };
+
+    props.stage =
+        if (bamboo_count < 11 || rand::rng().random::<f32>() >= 0.25) && bamboo_count != 15 {
+            Integer0To1::L0
+        } else {
+            Integer0To1::L1
+        };
+
+    world
+        .set_block_state(&above_pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
+        .await;
 }
 
 async fn count_bamboo_below(world: Arc<World>, pos: &BlockPos) -> usize {
