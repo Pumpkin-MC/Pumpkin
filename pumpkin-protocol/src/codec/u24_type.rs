@@ -2,7 +2,7 @@ use std::io::{Error, Read, Write};
 
 use crate::serial::{PacketRead, PacketWrite};
 
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 #[derive(Clone, Copy)]
 pub struct u24(pub u32);
 

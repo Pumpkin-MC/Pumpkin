@@ -3,7 +3,7 @@ use crate::world::World;
 use std::pin::Pin;
 use std::sync::Arc;
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 const MIN_DISTANCE: f32 = 2.0;
 
 pub type PredicateFn = dyn Fn(Arc<LivingEntity>, Arc<World>) -> Pin<Box<dyn Future<Output = bool> + Send>>

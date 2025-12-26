@@ -1,7 +1,4 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering},
-};
+use std::sync::atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering};
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
@@ -55,7 +52,7 @@ impl From<PackedRotation> for NbtTag {
 }
 
 impl From<NbtTag> for PackedRotation {
-    #[allow(clippy::unnecessary_fallible_conversions)]
+    #[expect(clippy::unnecessary_fallible_conversions)]
     fn from(tag: NbtTag) -> Self {
         if let NbtTag::Compound(compound) = tag {
             fn get_rotation(
@@ -85,7 +82,6 @@ impl From<NbtTag> for PackedRotation {
     }
 }
 
-#[allow(dead_code)]
 pub struct ArmorStandEntity {
     living_entity: LivingEntity,
 
@@ -301,7 +297,7 @@ impl EntityBase for ArmorStandEntity {
 
     fn damage_with_context<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a dyn EntityBase,
         _amount: f32,
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,

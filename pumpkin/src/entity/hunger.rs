@@ -71,7 +71,7 @@ impl HungerManager {
                     || (difficulty == Difficulty::Hard)
                     || (health > 1.0 && difficulty == Difficulty::Normal)
                 {
-                    player.damage(player.clone(), 1.0, DamageType::STARVE).await;
+                    player.damage(&**player, 1.0, DamageType::STARVE).await;
                 }
                 self.tick_timer.store(0);
             }

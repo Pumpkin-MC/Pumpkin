@@ -6,6 +6,7 @@ use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
 use crate::entity::EntityBase;
+use crate::server::Server;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 1] = ["kill"];
@@ -19,7 +20,7 @@ impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        _server: &'a Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
@@ -29,7 +30,7 @@ impl CommandExecutor for Executor {
 
             let target_count = targets.len();
             for target in targets {
-                target.kill(target.clone()).await;
+                target.kill(&**target).await;
             }
 
             let msg = if target_count == 1 {
@@ -57,12 +58,12 @@ impl CommandExecutor for SelfExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
+        _server: &'a Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let target = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
-            target.kill(target.clone()).await;
+            target.kill(&*target).await;
 
             sender
                 .send_message(TextComponent::translate(
@@ -76,7 +77,7 @@ impl CommandExecutor for SelfExecutor {
     }
 }
 
-#[allow(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
+#[expect(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(Executor))

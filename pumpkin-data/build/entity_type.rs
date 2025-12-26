@@ -42,8 +42,8 @@ pub enum SpawnLocation {
 }
 
 #[derive(Deserialize)]
-#[allow(non_camel_case_types)]
-#[allow(clippy::upper_case_acronyms)]
+#[expect(non_camel_case_types)]
+#[expect(clippy::upper_case_acronyms)]
 pub enum MobCategory {
     MONSTER,
     CREATURE,

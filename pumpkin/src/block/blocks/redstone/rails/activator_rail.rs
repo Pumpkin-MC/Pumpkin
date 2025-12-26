@@ -556,7 +556,7 @@ impl ActivatorRailBlock {
         pos: &BlockPos,
     ) -> Option<(&'static Block, RailProperties)> {
         let block = world.get_block(pos).await;
-        #[allow(clippy::if_then_some_else_none)]
+        #[expect(clippy::if_then_some_else_none)]
         if *block == Block::ACTIVATOR_RAIL {
             let state_id = world.get_block_state_id(pos).await;
             let rail_props = RailProperties::new(state_id, block);

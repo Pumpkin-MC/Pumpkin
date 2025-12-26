@@ -37,6 +37,9 @@ impl BlockBehaviour for SugarCaneBlock {
                 .get_block_state(&args.position.up())
                 .await
                 .is_air()
+                && !(args.world.get_block(&args.position.down()).await == &Block::SUGAR_CANE
+                    && args.world.get_block(&args.position.down().down()).await
+                        == &Block::SUGAR_CANE)
             {
                 let state_id = args.world.get_block_state(args.position).await.id;
                 let age = CactusLikeProperties::from_state_id(state_id, args.block).age;

@@ -94,7 +94,7 @@ impl PerlinNoiseSampler {
         self.permutation[(input & 0xFF) as usize] as i32
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn sample(
         &self,
         x: i32,

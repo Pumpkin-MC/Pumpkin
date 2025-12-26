@@ -102,7 +102,7 @@ fn get_sound(block: &Block, open: bool) -> Sound {
     }
 }
 
-#[allow(clippy::pedantic)]
+#[expect(clippy::pedantic)]
 #[inline]
 async fn get_hinge(
     world: &World,

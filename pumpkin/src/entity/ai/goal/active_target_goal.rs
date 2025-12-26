@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,

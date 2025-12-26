@@ -621,7 +621,7 @@ impl Player {
 
         if !victim
             .damage_with_context(
-                victim.clone(),
+                &*victim,
                 damage as f32,
                 DamageType::PLAYER_ATTACK,
                 None,
@@ -854,7 +854,7 @@ impl Player {
     }
 
     // TODO Abstract the chunk sending
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.current_screen_handler
             .lock()
@@ -2307,7 +2307,7 @@ impl NBTStorageInit for EnderChestInventory {}
 impl EntityBase for Player {
     fn damage_with_context<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,

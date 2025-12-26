@@ -32,7 +32,7 @@ struct SpawnGroups {
     water_creature: Vec<Spawner>,
 }
 
-#[allow(non_snake_case)]
+#[expect(non_snake_case)]
 #[derive(Deserialize, Hash, PartialEq, Eq)]
 struct Spawner {
     r#type: String,

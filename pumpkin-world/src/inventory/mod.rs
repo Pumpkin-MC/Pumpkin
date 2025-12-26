@@ -4,7 +4,7 @@ use tokio::sync::Mutex;
 
 use crate::item::ItemStack;
 
-#[allow(clippy::module_inception)]
+#[expect(clippy::module_inception)]
 mod inventory;
 
 pub use inventory::*;

@@ -1,5 +1,4 @@
 pub mod anvil;
-pub mod bamboo;
 pub mod barrel;
 pub mod barrier;
 pub mod bed;
@@ -48,7 +47,6 @@ pub mod skull_block;
 pub mod slabs;
 pub mod spawner;
 pub mod stairs;
-pub mod sugar_cane;
 pub mod tnt;
 pub mod torches;
 pub mod trapdoor;

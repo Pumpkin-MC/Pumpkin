@@ -51,11 +51,11 @@ impl TemperatureModifier {
 
 #[derive(Clone, Debug)]
 pub struct Weather {
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     has_precipitation: bool,
     temperature: f32,
     temperature_modifier: TemperatureModifier,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     downfall: f32,
 }
 

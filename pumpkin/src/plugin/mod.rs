@@ -316,7 +316,7 @@ impl PluginManager {
     }
 
     /// Start loading a plugin asynchronously
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     async fn start_loading_plugin(
         &self,
         path: &Path,

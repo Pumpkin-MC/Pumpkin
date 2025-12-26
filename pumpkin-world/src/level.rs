@@ -529,19 +529,19 @@ impl Level {
                         chunk_z_base + z_offset,
                     );
 
-                    let block_id = chunk
+                    let block_state_id = chunk
                         .section
                         .get_block_absolute_y(x_offset as usize, random_pos.0.y, z_offset as usize)
                         .unwrap_or(Block::AIR.default_state.id);
 
-                    section_block_data.push((random_pos, block_id));
+                    section_block_data.push((random_pos, block_state_id));
                 }
                 section_blocks.push(section_block_data);
             }
 
             for section_data in section_blocks {
-                for (random_pos, block_id) in section_data {
-                    if has_random_ticks(block_id) {
+                for (random_pos, block_state_id) in section_data {
+                    if has_random_ticks(block_state_id) {
                         ticks.random_ticks.push(ScheduledTick {
                             position: random_pos,
                             delay: 0,

@@ -109,8 +109,7 @@ pub struct Server {
 }
 
 impl Server {
-    #[allow(clippy::new_without_default)]
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     #[must_use]
     pub async fn new(
         basic_config: BasicConfiguration,
@@ -280,7 +279,7 @@ impl Server {
         .unwrap()
     }
 
-    #[allow(clippy::if_then_some_else_none)]
+    #[expect(clippy::if_then_some_else_none)]
     /// Adds a new player to the server.
     ///
     /// This function takes an `Arc<Client>` representing the connected client and performs the following actions:
@@ -710,8 +709,8 @@ impl Server {
         *self.tick_times_nanos.lock().await
     }
 
-    #[allow(clippy::too_many_lines)]
-    #[allow(clippy::option_if_let_else)]
+    #[expect(clippy::too_many_lines)]
+    #[expect(clippy::option_if_let_else)]
     pub async fn select_entities(
         &self,
         target_selector: &TargetSelector,

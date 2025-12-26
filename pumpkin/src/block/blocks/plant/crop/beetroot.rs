@@ -46,7 +46,7 @@ impl BlockBehaviour for BeetrootBlock {
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if rand::rng().random_range(0..2) != 0 {
+            if rand::rng().random_range(0..3) == 0 {
                 <Self as CropBlockBase>::random_tick(self, args.world, args.position).await;
             }
         })

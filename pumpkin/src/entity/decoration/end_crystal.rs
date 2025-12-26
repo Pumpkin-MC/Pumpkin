@@ -1,5 +1,4 @@
 use core::f32;
-use std::sync::Arc;
 
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
 use pumpkin_data::damage::DamageType;
@@ -37,7 +36,7 @@ impl EntityBase for EndCrystalEntity {
 
     fn damage_with_context<'a>(
         &'a self,
-        _caller: Arc<dyn EntityBase>,
+        _caller: &'a dyn EntityBase,
         _amount: f32,
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,

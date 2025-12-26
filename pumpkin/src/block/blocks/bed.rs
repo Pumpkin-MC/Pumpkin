@@ -143,7 +143,7 @@ impl BlockBehaviour for BedBlock {
         })
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position).await;

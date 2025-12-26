@@ -258,7 +258,7 @@ impl BlockBehaviour for FireBlock {
         })
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let (world, block, pos) = (args.world, args.block, args.position);

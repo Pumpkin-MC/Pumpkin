@@ -112,7 +112,7 @@ impl<'a, T> MutableSplitSlice<'a, T> {
 impl<T> Index<usize> for MutableSplitSlice<'_, T> {
     type Output = T;
 
-    #[allow(clippy::comparison_chain)]
+    #[expect(clippy::comparison_chain)]
     fn index(&self, index: usize) -> &Self::Output {
         if index < self.start.len() {
             &self.start[index]
@@ -132,7 +132,7 @@ pub struct DoublePerlinNoiseParametersCodec {
 }
 
 impl<T> IndexMut<usize> for MutableSplitSlice<'_, T> {
-    #[allow(clippy::comparison_chain)]
+    #[expect(clippy::comparison_chain)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         if index < self.start.len() {
             &mut self.start[index]

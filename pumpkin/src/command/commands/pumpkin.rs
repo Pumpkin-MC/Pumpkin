@@ -17,7 +17,7 @@ struct Executor;
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
