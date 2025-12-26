@@ -2,6 +2,8 @@ use pumpkin_data::{Block, tag, tag::Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
+pub mod bamboo;
+pub mod bamboo_sapling;
 pub mod bush;
 pub mod crop;
 pub mod dry_vegetation;
@@ -16,6 +18,7 @@ pub mod sea_grass;
 pub mod sea_pickles;
 pub mod segmented;
 pub mod short_plant;
+pub mod sugar_cane;
 pub mod tall_plant;
 
 trait PlantBlockBase {
