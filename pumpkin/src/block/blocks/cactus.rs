@@ -1,6 +1,7 @@
 use pumpkin_data::block_properties::{
     BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
 };
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
@@ -11,7 +12,7 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    OnScheduledTickArgs, RandomTickArgs,
+    OnEntityCollisionArgs, OnScheduledTickArgs, RandomTickArgs,
 };
 
 #[pumpkin_block("minecraft:cactus")]
@@ -69,10 +70,20 @@ impl BlockBehaviour for CactusBlock {
         })
     }
 
-    // async fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {
-    //     // TODO
-    //     //args.entity.damage(1.0, DamageType::CACTUS).await;
-    // }
+    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            args.entity
+                .damage_with_context(
+                    args.entity,
+                    1.0,
+                    DamageType::CACTUS,
+                    Some(args.position.to_f64()),
+                    None,
+                    None,
+                )
+                .await;
+        })
+    }
 
     fn get_state_for_neighbor_update<'a>(
         &'a self,

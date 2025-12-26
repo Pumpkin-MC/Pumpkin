@@ -359,7 +359,7 @@ impl EntityBase for ItemEntity {
 
     fn damage_with_context<'a>(
         &'a self,
-        _caller: Arc<dyn EntityBase>,
+        _caller: &'a dyn EntityBase,
         amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
@@ -376,12 +376,12 @@ impl EntityBase for ItemEntity {
         })
     }
 
-    fn damage(
-        &self,
-        _caller: Arc<dyn EntityBase>,
+    fn damage<'a>(
+        &'a self,
+        _caller: &'a dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
-    ) -> EntityBaseFuture<'_, bool> {
+    ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async { false })
     }
 

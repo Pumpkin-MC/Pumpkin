@@ -332,7 +332,7 @@ impl LivingEntity {
         let suffocating = self.entity.tick_block_collisions(&caller, server).await;
 
         if suffocating {
-            self.damage(caller, 1.0, DamageType::IN_WALL).await;
+            self.damage(&*caller, 1.0, DamageType::IN_WALL).await;
         }
     }
 
@@ -697,7 +697,7 @@ impl LivingEntity {
 
             // TODO: Play block fall sound
             if damage > 0.0 {
-                let check_damage = self.damage(caller, damage, DamageType::FALL).await; // Fall
+                let check_damage = self.damage(&*caller, damage, DamageType::FALL).await; // Fall
                 if check_damage {
                     self.entity
                         .play_sound(Self::get_fall_sound(fall_distance as i32))
@@ -840,7 +840,7 @@ impl LivingEntity {
         }
     }
 
-    async fn try_use_death_protector(&self, caller: &Arc<dyn EntityBase>) -> bool {
+    async fn try_use_death_protector(&self, caller: &dyn EntityBase) -> bool {
         for hand in Hand::all() {
             let stack = self.get_stack_in_hand(caller, hand).await;
             let mut stack = stack.lock().await;
@@ -859,7 +859,7 @@ impl LivingEntity {
         false
     }
 
-    pub async fn held_item(&self, caller: &Arc<dyn EntityBase>) -> Arc<Mutex<ItemStack>> {
+    pub async fn held_item(&self, caller: &dyn EntityBase) -> Arc<Mutex<ItemStack>> {
         if let Some(player) = caller.get_player() {
             return player.inventory.held_item();
         }
@@ -873,7 +873,7 @@ impl LivingEntity {
 
     pub async fn get_stack_in_hand(
         &self,
-        caller: &Arc<dyn EntityBase>,
+        caller: &dyn EntityBase,
         hand: Hand,
     ) -> Arc<Mutex<ItemStack>> {
         match hand {
@@ -962,7 +962,7 @@ impl NBTStorage for LivingEntity {
 impl EntityBase for LivingEntity {
     fn damage_with_context<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -1046,7 +1046,7 @@ impl EntityBase for LivingEntity {
                 self.set_health(new_health).await;
             }
 
-            if new_health <= 0.0 && !self.try_use_death_protector(&caller).await {
+            if new_health <= 0.0 && !self.try_use_death_protector(caller).await {
                 self.on_death(damage_type, source, cause).await;
             }
 

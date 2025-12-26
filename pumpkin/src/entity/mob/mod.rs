@@ -126,7 +126,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn damage_with_context<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,

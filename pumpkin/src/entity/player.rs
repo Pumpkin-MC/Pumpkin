@@ -621,7 +621,7 @@ impl Player {
 
         if !victim
             .damage_with_context(
-                victim.clone(),
+                &*victim,
                 damage as f32,
                 DamageType::PLAYER_ATTACK,
                 None,
@@ -2307,7 +2307,7 @@ impl NBTStorageInit for EnderChestInventory {}
 impl EntityBase for Player {
     fn damage_with_context<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
