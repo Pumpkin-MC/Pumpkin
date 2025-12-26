@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
     BambooLeaves, BambooLikeProperties, BlockProperties, EnumVariants, Integer0To1,
 };
@@ -8,6 +7,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::tag::Block::MINECRAFT_BAMBOO_PLANTABLE_ON;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::{self};
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -113,6 +113,19 @@ impl BlockBehaviour for BambooBlock {
                 args.world
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                     .await;
+            }
+            let neighbor_block = args.world.get_block(args.neighbor_position).await;
+            if args.direction == BlockDirection::Up && neighbor_block == &Block::BAMBOO {
+                let neighbor_props =
+                    BambooLikeProperties::from_state_id(args.neighbor_state_id, neighbor_block);
+                let mut props = BambooLikeProperties::from_state_id(args.state_id, args.block);
+                if neighbor_props.age.to_index() > props.age.to_index() {
+                    props.age = match props.age {
+                        Integer0To1::L0 => Integer0To1::L1,
+                        Integer0To1::L1 => Integer0To1::L0,
+                    };
+                    return props.to_state_id(args.block);
+                }
             }
             args.state_id
         })
