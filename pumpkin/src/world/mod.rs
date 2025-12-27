@@ -690,8 +690,9 @@ impl World {
     }
 
     pub async fn tick_chunks(self: &Arc<Self>) {
-        let tick_data = self.level.get_tick_data().await;
-        for scheduled_tick in tick_data.block_ticks {
+        self.level.get_tick_data().await;
+        let tick_data = &self.level.tick_data;
+        for scheduled_tick in &tick_data.lock().await.block_ticks {
             let block = self.get_block(&scheduled_tick.position).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
                 pumpkin_block
@@ -703,7 +704,7 @@ impl World {
                     .await;
             }
         }
-        for scheduled_tick in tick_data.fluid_ticks {
+        for scheduled_tick in &tick_data.lock().await.fluid_ticks {
             let fluid = self.get_fluid(&scheduled_tick.position).await;
             if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid) {
                 pumpkin_fluid
@@ -787,7 +788,7 @@ impl World {
                 .unwrap_or(Duration::new(0, 0))
         );
 
-        for block_entity in tick_data.block_entities {
+        for block_entity in &tick_data.lock().await.block_entities {
             let world: Arc<dyn SimpleWorld> = self.clone();
             block_entity.tick(world).await;
         }
