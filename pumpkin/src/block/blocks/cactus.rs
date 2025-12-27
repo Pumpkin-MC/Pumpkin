@@ -73,14 +73,7 @@ impl BlockBehaviour for CactusBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             args.entity
-                .damage_with_context(
-                    args.entity,
-                    1.0,
-                    DamageType::CACTUS,
-                    Some(args.position.to_f64()),
-                    None,
-                    None,
-                )
+                .damage(args.entity, 1.0, DamageType::CACTUS)
                 .await;
         })
     }

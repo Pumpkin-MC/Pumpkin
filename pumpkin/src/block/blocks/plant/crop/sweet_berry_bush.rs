@@ -3,6 +3,8 @@ use std::sync::Arc;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties},
+    damage::DamageType,
+    entity::EntityType,
     item::Item,
     tag::{self, Taggable},
 };
@@ -18,7 +20,7 @@ use rand::Rng;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
-        RandomTickArgs, UseWithItemArgs,
+        OnEntityCollisionArgs, RandomTickArgs, UseWithItemArgs,
         blocks::plant::{PlantBlockBase, crop::CropBlockBase},
         registry::BlockActionResult,
     },
@@ -95,6 +97,34 @@ impl BlockBehaviour for SweetBerryBushBlock {
                 args.state_id,
             )
             .await
+        })
+    }
+
+    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = args.entity.get_entity();
+
+            if entity.entity_type == &EntityType::FOX || entity.entity_type == &EntityType::BEE {
+                return;
+            }
+
+            let state_id = args.world.get_block_state_id(args.position).await;
+            let props = NetherWartLikeProperties::from_state_id(state_id, args.block);
+            if props.age == Integer0To3::L0 {
+                return;
+            }
+
+            let velocity = entity.velocity.load(); // FIXME: velocity != momentum/movement
+
+            if velocity.horizontal_length_squared() <= 0.0
+                || (velocity.x.abs() < 0.003 && velocity.z.abs() < 0.003)
+            {
+                return;
+            }
+
+            args.entity
+                .damage(args.entity, 1.0, DamageType::SWEET_BERRY_BUSH)
+                .await;
         })
     }
 
