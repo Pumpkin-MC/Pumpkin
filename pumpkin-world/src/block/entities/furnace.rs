@@ -12,7 +12,7 @@ use pumpkin_data::{
     fuels::get_item_burn_ticks,
     item::Item,
     recipe_remainder::get_recipe_remainder_id,
-    recipes::{CookingRecipe, CookingRecipeType, RECIPES_COOKING},
+    recipes::{CookingRecipe, CookingRecipeKind, get_cooking_recipe_with_ingredient},
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -42,26 +42,6 @@ impl FurnaceBlockEntity {
     #[must_use]
     pub fn is_burning(&self) -> bool {
         self.lit_time_remaining.load(Ordering::Relaxed) > 0
-    }
-
-    pub fn get_furnace_cooking_recipe(item: &Item) -> Option<&CookingRecipe> {
-        if let Some(recipe_type) = RECIPES_COOKING.iter().find(|recipe| match recipe {
-            CookingRecipeType::Smelting(smelting_recipe) => {
-                smelting_recipe.ingredient.match_item(item)
-            }
-            _ => false,
-        }) {
-            match recipe_type {
-                CookingRecipeType::Smelting(cooking_recipe) => {
-                    return Some(cooking_recipe);
-                }
-                _ => {
-                    return None;
-                }
-            }
-        }
-
-        None
     }
 
     async fn can_accept_recipe_output(
@@ -135,25 +115,6 @@ impl FurnaceBlockEntity {
 
         false
     }
-
-    pub async fn get_cook_progress(&self) -> f32 {
-        let current = self.cooking_time_spent.load(Ordering::Relaxed) as i32;
-        let total = self.cooking_total_time.load(Ordering::Relaxed) as i32;
-
-        if total != 0 && current != 0 {
-            (current as f32 / total as f32).clamp(0.0, 1.0)
-        } else {
-            0.0
-        }
-    }
-
-    pub async fn get_fuel_progress(&self) -> f32 {
-        let remaining = self.lit_time_remaining.load(Ordering::Relaxed) as i32;
-        let total = self.lit_total_time.load(Ordering::Relaxed) as i32;
-        let adjusted_total = if total == 0 { 200 } else { total };
-
-        (remaining as f32 / adjusted_total as f32).clamp(0.0, 1.0)
-    }
 }
 
 impl BlockEntity for FurnaceBlockEntity {
@@ -171,7 +132,8 @@ impl BlockEntity for FurnaceBlockEntity {
             let top_items = self.items[0].lock().await;
             let is_top_items_empty = top_items.is_empty();
 
-            let furnace_recipe = Self::get_furnace_cooking_recipe(top_items.item);
+            let furnace_recipe =
+                get_cooking_recipe_with_ingredient(top_items.item, CookingRecipeKind::Smelting);
             drop(top_items);
 
             let can_accept_output = self
@@ -419,7 +381,9 @@ impl Inventory for FurnaceBlockEntity {
             drop(furnace_stack);
 
             if slot == 0 && !is_same_item {
-                if let Some(recipe) = Self::get_furnace_cooking_recipe(stack.item) {
+                if let Some(recipe) =
+                    get_cooking_recipe_with_ingredient(stack.item, CookingRecipeKind::Smelting)
+                {
                     self.cooking_total_time
                         .store(recipe.cookingtime as u16, Ordering::Relaxed);
                 } else {

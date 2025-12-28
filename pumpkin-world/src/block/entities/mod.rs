@@ -13,6 +13,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
+use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
@@ -24,6 +25,7 @@ use crate::{
 
 pub mod barrel;
 pub mod bed;
+pub mod blasting_furnace;
 pub mod chest;
 pub mod chiseled_bookshelf;
 pub mod command_block;
@@ -32,6 +34,7 @@ pub mod dropper;
 pub mod end_portal;
 pub mod ender_chest;
 pub mod furnace;
+pub mod furnace_like_block_entity;
 pub mod hopper;
 pub mod mob_spawner;
 pub mod piston;
@@ -143,6 +146,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             ChiseledBookshelfBlockEntity,
         >(nbt)),
         FurnaceBlockEntity::ID => Arc::new(block_entity_from_generic::<FurnaceBlockEntity>(nbt)),
+        BlastingFurnaceBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<BlastingFurnaceBlockEntity>(nbt))
+        }
         _ => return None,
     })
 }
