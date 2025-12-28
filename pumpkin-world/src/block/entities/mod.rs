@@ -18,6 +18,7 @@ use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
+use crate::block::entities::smoker::SmokerBlockEntity;
 use crate::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
     block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
@@ -40,6 +41,7 @@ pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
 pub mod sign;
+pub mod smoker;
 
 //TODO: We need a mark_dirty for chests
 pub trait BlockEntity: Send + Sync {
@@ -149,6 +151,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         BlastingFurnaceBlockEntity::ID => {
             Arc::new(block_entity_from_generic::<BlastingFurnaceBlockEntity>(nbt))
         }
+        SmokerBlockEntity::ID => Arc::new(block_entity_from_generic::<SmokerBlockEntity>(nbt)),
         _ => return None,
     })
 }
