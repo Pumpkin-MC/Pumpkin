@@ -26,7 +26,7 @@ impl RCONServer {
         let listener = tokio::net::TcpListener::bind(config.address).await.unwrap();
 
         let password = Arc::new(config.password.clone());
-        
+
         // Create rate limiter for RCON authentication
         let rate_limiter = Arc::new(RateLimiter::new(
             RCON_MAX_FAILED_ATTEMPTS,
@@ -61,7 +61,10 @@ impl RCONServer {
 
             // Reject new connections when max_connections limit is reached
             if config.max_connections != 0 && connections >= config.max_connections {
-                log::warn!("RCON: Rejected connection from {} - max connections reached", address);
+                log::warn!(
+                    "RCON: Rejected connection from {} - max connections reached",
+                    address
+                );
                 drop(connection);
                 continue;
             }
@@ -72,7 +75,9 @@ impl RCONServer {
             let password = password.clone();
             let server = server.clone();
             let rate_limiter = rate_limiter.clone();
-            tokio::spawn(async move { while !client.handle(&server, &password, &rate_limiter).await {} });
+            tokio::spawn(async move {
+                while !client.handle(&server, &password, &rate_limiter).await {}
+            });
             log::debug!("closed RCON connection");
             connections -= 1;
         }
@@ -101,7 +106,12 @@ impl RCONClient {
     }
 
     /// Returns whether the client is closed or not.
-    pub async fn handle(&mut self, server: &Arc<Server>, password: &str, rate_limiter: &Arc<RateLimiter>) -> bool {
+    pub async fn handle(
+        &mut self,
+        server: &Arc<Server>,
+        password: &str,
+        rate_limiter: &Arc<RateLimiter>,
+    ) -> bool {
         if !self.closed {
             match self.read_bytes().await {
                 // The stream is closed, so we can't reply, so we just close everything.
@@ -113,15 +123,23 @@ impl RCONClient {
                 }
             }
             // If we get a close here, we might have a reply, which we still want to write.
-            let _ = self.poll(server, password, rate_limiter).await.map_err(|e| {
-                log::error!("RCON error: {e}");
-                self.closed = true;
-            });
+            let _ = self
+                .poll(server, password, rate_limiter)
+                .await
+                .map_err(|e| {
+                    log::error!("RCON error: {e}");
+                    self.closed = true;
+                });
         }
         self.closed
     }
 
-    async fn poll(&mut self, server: &Arc<Server>, password: &str, rate_limiter: &Arc<RateLimiter>) -> Result<(), PacketError> {
+    async fn poll(
+        &mut self,
+        server: &Arc<Server>,
+        password: &str,
+        rate_limiter: &Arc<RateLimiter>,
+    ) -> Result<(), PacketError> {
         let Some(packet) = self.receive_packet().await? else {
             return Ok(());
         };
@@ -139,7 +157,7 @@ impl RCONClient {
                 // Use constant-time comparison to prevent timing attacks
                 let password_bytes = password.as_bytes();
                 let provided_bytes = packet.get_body().as_bytes();
-                
+
                 // Constant-time comparison: compare byte by byte without early exit
                 let password_matches: bool = if password_bytes.len() == provided_bytes.len() {
                     password_bytes.ct_eq(provided_bytes).into()
@@ -161,15 +179,18 @@ impl RCONClient {
                     if config.logging.wrong_password {
                         log::info!("RCON ({}): Client tried the wrong password", self.address);
                     }
-                    
+
                     // Record failed attempt in rate limiter
                     rate_limiter.record(&self.address.ip()).await;
-                    
+
                     // Check if IP is now blocked after this failed attempt
                     if rate_limiter.is_blocked(&self.address.ip()).await {
-                        log::warn!("RCON ({}): IP blocked after too many failed attempts", self.address);
+                        log::warn!(
+                            "RCON ({}): IP blocked after too many failed attempts",
+                            self.address
+                        );
                     }
-                    
+
                     self.send(ClientboundPacket::AuthResponse, -1, "").await?;
                     self.closed = true;
                 }

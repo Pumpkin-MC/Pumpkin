@@ -122,7 +122,7 @@ pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<
 
 pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), TextureError> {
     let scheme = url.scheme().ok_or(TextureError::InvalidURL)?;
-    
+
     // Exact match for scheme (not suffix match)
     if !config
         .allowed_url_schemes
@@ -131,16 +131,16 @@ pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), Tex
     {
         return Err(TextureError::DisallowedUrlScheme(scheme.to_string()));
     }
-    
+
     let authority = url.authority().ok_or(TextureError::InvalidURL)?;
     let domain = authority.host();
-    
+
     // Check for suspicious patterns in domain
     // These patterns could indicate path traversal or URL encoding attacks
     if domain.contains("..") || domain.contains('%') {
         return Err(TextureError::DisallowedUrlDomain(domain.to_string()));
     }
-    
+
     // Exact match for domain (not suffix match)
     // This prevents attacks like "evil-textures.minecraft.net" matching "minecraft.net"
     if !config
@@ -150,7 +150,7 @@ pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), Tex
     {
         return Err(TextureError::DisallowedUrlDomain(domain.to_string()));
     }
-    
+
     Ok(())
 }
 
@@ -225,7 +225,6 @@ pub enum TextureError {
     JSONError(String),
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,10 +247,8 @@ mod tests {
     #[test]
     fn test_property_exact_domain_match_rejects_suffix() {
         // Test that suffix matching is NOT allowed
-        let config = config_with_domains(
-            vec!["minecraft.net".to_string()],
-            vec!["https".to_string()],
-        );
+        let config =
+            config_with_domains(vec!["minecraft.net".to_string()], vec!["https".to_string()]);
 
         // These should all be REJECTED because they only suffix-match, not exact match
         let malicious_urls = [
@@ -287,7 +284,10 @@ mod tests {
     #[test]
     fn test_property_suspicious_patterns_rejected() {
         let config = config_with_domains(
-            vec!["minecraft.net".to_string(), "textures..minecraft.net".to_string()],
+            vec![
+                "minecraft.net".to_string(),
+                "textures..minecraft.net".to_string(),
+            ],
             vec!["https".to_string()],
         );
 
@@ -315,10 +315,8 @@ mod tests {
     /// **Validates: Requirements 6.1, 6.2**
     #[test]
     fn test_property_exact_scheme_match() {
-        let config = config_with_domains(
-            vec!["minecraft.net".to_string()],
-            vec!["https".to_string()],
-        );
+        let config =
+            config_with_domains(vec!["minecraft.net".to_string()], vec!["https".to_string()]);
 
         // HTTP should be rejected when only HTTPS is allowed
         let http_url: Uri = "http://minecraft.net/texture.png".parse().unwrap();
@@ -349,7 +347,7 @@ mod tests {
         ) {
             // Create a domain that is a subdomain of the allowed domain
             let malicious_domain = format!("{}.{}", subdomain, allowed_domain);
-            
+
             let config = config_with_domains(
                 vec![allowed_domain.clone()],
                 vec!["https".to_string()],
@@ -407,7 +405,7 @@ mod tests {
             // Create a domain with percent encoding
             let malicious_domain = format!("{}%2e{}", prefix, suffix);
             let url_str = format!("https://{}.net/texture.png", malicious_domain);
-            
+
             if let Ok(url) = url_str.parse::<Uri>() {
                 let result = is_texture_url_valid(&url, &config);
                 // Should be rejected due to percent encoding

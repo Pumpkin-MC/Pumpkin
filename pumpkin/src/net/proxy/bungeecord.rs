@@ -92,7 +92,6 @@ pub async fn bungeecord_login(
     ))
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,8 +289,8 @@ mod tests {
             let should_allow = config.allowed_ips.contains(&client_ip);
             let is_in_whitelist = client_ip == ip1 || client_ip == ip2;
 
-            prop_assert_eq!(should_allow, is_in_whitelist, 
-                "Client IP {} should be allowed={} when whitelist contains {} and {}", 
+            prop_assert_eq!(should_allow, is_in_whitelist,
+                "Client IP {} should be allowed={} when whitelist contains {} and {}",
                 client_ip, is_in_whitelist, ip1, ip2);
         }
     }

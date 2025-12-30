@@ -156,7 +156,8 @@ impl JavaClient {
                     "Client {} sent encryption response without pending login",
                     self.id
                 );
-                self.kick(TextComponent::text("No pending login found")).await;
+                self.kick(TextComponent::text("No pending login found"))
+                    .await;
                 return;
             }
         }

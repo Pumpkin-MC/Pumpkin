@@ -121,7 +121,11 @@ impl RateLimiter {
         let unblock_time = Instant::now() + self.block_duration;
         let mut blocked = self.blocked.write().await;
         blocked.insert(*ip, unblock_time);
-        log::warn!("Rate limiter: Blocked IP {} for {:?}", ip, self.block_duration);
+        log::warn!(
+            "Rate limiter: Blocked IP {} for {:?}",
+            ip,
+            self.block_duration
+        );
     }
 
     /// Cleans up expired entries to prevent memory growth.
@@ -236,7 +240,7 @@ mod tests {
         // Test with various max_requests values
         for max_requests in [1u32, 3, 5, 10] {
             let limiter = RateLimiter::new(max_requests, 60, 300);
-            
+
             // Generate random IP
             let ip = IpAddr::V4(Ipv4Addr::new(
                 rand::random(),
@@ -328,11 +332,11 @@ mod tests {
         let max_connections_per_second = 10u32;
         let window_secs = 1u64;
         let block_secs = 60u64;
-        
+
         // Test with 100 random IPs
         for _ in 0..100 {
             let limiter = RateLimiter::new(max_connections_per_second, window_secs, block_secs);
-            
+
             // Generate random IP
             let ip = IpAddr::V4(Ipv4Addr::new(
                 rand::random(),
@@ -356,7 +360,7 @@ mod tests {
                 !limiter.check(&ip).await,
                 "Connection after limit should be rejected"
             );
-            
+
             // IP should be blocked
             assert!(
                 limiter.is_blocked(&ip).await,
@@ -372,7 +376,7 @@ mod tests {
     async fn test_property_connection_under_limit_allowed() {
         let max_connections_per_second = 10u32;
         let limiter = RateLimiter::new(max_connections_per_second, 1, 60);
-        
+
         // Test with 50 random IPs, each making fewer than max connections
         for _ in 0..50 {
             let ip = IpAddr::V4(Ipv4Addr::new(
@@ -381,10 +385,10 @@ mod tests {
                 rand::random(),
                 rand::random(),
             ));
-            
+
             // Random number of connections under the limit
             let num_connections = rand::random::<u32>() % max_connections_per_second;
-            
+
             for _ in 0..num_connections {
                 assert!(
                     limiter.check(&ip).await,
@@ -392,7 +396,7 @@ mod tests {
                 );
                 limiter.record(&ip).await;
             }
-            
+
             // Should still be allowed (not blocked)
             assert!(
                 !limiter.is_blocked(&ip).await,
@@ -409,7 +413,7 @@ mod tests {
         // Use a short block duration for testing
         let block_secs = 1u64;
         let limiter = RateLimiter::new(1, 1, block_secs);
-        
+
         let ip = IpAddr::V4(Ipv4Addr::new(
             rand::random(),
             rand::random(),
@@ -419,20 +423,17 @@ mod tests {
 
         // Exceed the limit to trigger blocking
         limiter.record(&ip).await;
-        
+
         // Should be blocked immediately
         assert!(
             limiter.is_blocked(&ip).await,
             "IP should be blocked after exceeding limit"
         );
-        assert!(
-            !limiter.check(&ip).await,
-            "Blocked IP should fail check"
-        );
-        
+        assert!(!limiter.check(&ip).await, "Blocked IP should fail check");
+
         // Wait for block to expire
         tokio::time::sleep(Duration::from_secs(block_secs + 1)).await;
-        
+
         // Should be unblocked after duration
         assert!(
             !limiter.is_blocked(&ip).await,

@@ -174,7 +174,7 @@ impl CommandError {
                     "I'm sorry, but you do not have permission to perform this command. Please contact the server administrator if you believe this is an error.",
                 )
             }
-            RateLimited => {
+            CommandError::RateLimited => {
                 // Silent - we don't send an error message for rate limited commands
                 // The command is simply ignored per Requirements 7.2
                 TextComponent::text("")
@@ -249,6 +249,10 @@ impl CommandDispatcher {
                 }
                 Err(PermissionDenied) => {
                     log::trace!("Permission denied for command \"{cmd}\"");
+                    return Vec::new();
+                }
+                Err(CommandError::RateLimited) => {
+                    log::trace!("Rate limited for command \"{cmd}\"");
                     return Vec::new();
                 }
                 Err(CommandFailed(_)) => {

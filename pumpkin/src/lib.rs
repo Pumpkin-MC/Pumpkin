@@ -385,7 +385,7 @@ impl PumpkinServer {
                             // Connection is dropped automatically when it goes out of scope
                             return true;
                         }
-                        
+
                         // Record the connection attempt
                         self.connection_rate_limiter.record(&client_ip).await;
 

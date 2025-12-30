@@ -77,7 +77,6 @@ pub fn auth_digest(bytes: &[u8]) -> String {
     BigInt::from_signed_bytes_be(bytes).to_str_radix(16)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,7 +91,7 @@ mod tests {
         for _ in 0..5 {
             let key = KeyStore::generate_private_key();
             let key_bits = key.n().bits();
-            
+
             assert!(
                 key_bits >= 2048,
                 "RSA key length should be at least 2048 bits, but got {} bits",
@@ -104,7 +103,7 @@ mod tests {
     #[test]
     fn test_keystore_creates_valid_keys() {
         let keystore = KeyStore::new();
-        
+
         // Verify private key has correct bit length
         let key_bits = keystore.private_key.n().bits();
         assert!(
@@ -112,7 +111,7 @@ mod tests {
             "KeyStore private key should be at least 2048 bits, got {} bits",
             key_bits
         );
-        
+
         // Verify public key DER is not empty
         assert!(
             !keystore.public_key_der.is_empty(),
@@ -124,17 +123,19 @@ mod tests {
     fn test_decrypt_roundtrip() {
         let keystore = KeyStore::new();
         let original_data = b"test encryption data";
-        
+
         // Encrypt with public key
         let public_key = keystore.private_key.to_public_key();
         let mut rng = rand::rng();
         let encrypted = public_key
             .encrypt(&mut rng, Pkcs1v15Encrypt, original_data)
             .expect("Encryption should succeed");
-        
+
         // Decrypt with private key
-        let decrypted = keystore.decrypt(&encrypted).expect("Decryption should succeed");
-        
+        let decrypted = keystore
+            .decrypt(&encrypted)
+            .expect("Decryption should succeed");
+
         assert_eq!(
             decrypted, original_data,
             "Decrypted data should match original"

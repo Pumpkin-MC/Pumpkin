@@ -69,7 +69,7 @@ pub fn check_integrity(data: (&[u8], &[u8]), secret: &str) -> bool {
     let mut mac =
         HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
     mac.update(data_without_signature);
-    
+
     // Use constant-time comparison to prevent timing attacks
     let expected = mac.finalize().into_bytes();
     signature.ct_eq(&expected).into()

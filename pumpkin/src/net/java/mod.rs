@@ -1,7 +1,7 @@
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
 use std::io::Write;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Instant;
 
 use bytes::Bytes;
@@ -240,7 +240,7 @@ impl JavaClient {
     async fn check_packet_rate_limit(&self) -> bool {
         let now = Instant::now();
         let mut window_start = self.packet_window_start.lock().await;
-        
+
         // Check if we're in a new second window
         if now.duration_since(*window_start).as_secs() >= 1 {
             // Reset the counter for the new window
@@ -248,7 +248,7 @@ impl JavaClient {
             *window_start = now;
             return true;
         }
-        
+
         // Increment and check the count
         let count = self.packet_count.fetch_add(1, Ordering::Relaxed) + 1;
         count <= MAX_PACKETS_PER_SECOND
@@ -717,7 +717,6 @@ impl JavaClient {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -743,7 +742,7 @@ mod tests {
         async fn check_rate_limit(&self) -> bool {
             let now = Instant::now();
             let mut window_start = self.window_start.lock().await;
-            
+
             // Check if we're in a new second window
             if now.duration_since(*window_start).as_secs() >= 1 {
                 // Reset the counter for the new window
@@ -751,7 +750,7 @@ mod tests {
                 *window_start = now;
                 return true;
             }
-            
+
             // Increment and check the count
             let count = self.packet_count.fetch_add(1, Ordering::Relaxed) + 1;
             count <= self.max_packets_per_second
@@ -771,7 +770,7 @@ mod tests {
         // Test with various max_packets values
         for max_packets in [10u32, 50, 100, 500] {
             let limiter = PacketRateLimiter::new(max_packets);
-            
+
             // Send exactly max_packets - all should be allowed
             for i in 0..max_packets {
                 assert!(
@@ -781,7 +780,7 @@ mod tests {
                     max_packets
                 );
             }
-            
+
             // The next packet should be rejected
             assert!(
                 !limiter.check_rate_limit().await,
@@ -799,7 +798,7 @@ mod tests {
     async fn test_property_packets_under_limit_allowed() {
         let max_packets = 500u32;
         let limiter = PacketRateLimiter::new(max_packets);
-        
+
         // Send packets up to but not exceeding the limit
         for i in 0..(max_packets - 1) {
             assert!(
@@ -808,13 +807,13 @@ mod tests {
                 i + 1
             );
         }
-        
+
         // Last packet before limit should still be allowed
         assert!(
             limiter.check_rate_limit().await,
             "Packet at limit should still be allowed"
         );
-        
+
         // Verify count matches
         assert_eq!(
             limiter.get_count(),
@@ -830,27 +829,27 @@ mod tests {
     async fn test_property_rate_limit_window_reset() {
         let max_packets = 10u32;
         let limiter = PacketRateLimiter::new(max_packets);
-        
+
         // Exhaust the limit
         for _ in 0..max_packets {
             limiter.check_rate_limit().await;
         }
-        
+
         // Should be blocked now
         assert!(
             !limiter.check_rate_limit().await,
             "Should be blocked after exceeding limit"
         );
-        
+
         // Wait for window to reset
         tokio::time::sleep(Duration::from_secs(1)).await;
-        
+
         // Should be allowed again
         assert!(
             limiter.check_rate_limit().await,
             "Should be allowed after window reset"
         );
-        
+
         // Count should be reset to 1
         assert_eq!(
             limiter.get_count(),
