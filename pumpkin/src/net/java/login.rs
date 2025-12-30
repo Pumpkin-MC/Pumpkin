@@ -57,6 +57,7 @@ impl JavaClient {
                     &self.address,
                     &self.server_address.lock().await,
                     login_start.name,
+                    &proxy.bungeecord,
                 )
                 .await
                 {
@@ -88,6 +89,8 @@ impl JavaClient {
 
             if server.basic_config.encryption {
                 let verify_token: [u8; 4] = rand::random();
+                // Store the verification token for later validation (Requirements 5.1)
+                server.store_pending_login(self.id, verify_token).await;
                 // Wait until we have sent the encryption packet to the client
                 self.send_packet_now(
                     &server.encryption_request(&verify_token, server.basic_config.online_mode),
@@ -107,7 +110,70 @@ impl JavaClient {
         encryption_response: SEncryptionResponse,
     ) {
         log::debug!("Handling encryption");
-        let shared_secret = server.decrypt(&encryption_response.shared_secret).unwrap();
+
+        // Verify the verification token (Requirements 5.1, 5.2, 5.3, 5.4)
+        let pending_login = server.take_pending_login(self.id).await;
+        match pending_login {
+            Some(pending) => {
+                // Check for timeout (Requirements 5.4)
+                if pending.is_expired() {
+                    log::warn!(
+                        "Client {} login timeout - verification token expired",
+                        self.id
+                    );
+                    self.kick(TextComponent::text("Login timeout")).await;
+                    return;
+                }
+
+                // Decrypt and verify the token (Requirements 5.2, 5.3)
+                let decrypted_token = match server.decrypt(&encryption_response.verify_token) {
+                    Ok(token) => token,
+                    Err(error) => {
+                        log::warn!(
+                            "Client {} failed to decrypt verification token: {}",
+                            self.id,
+                            error
+                        );
+                        self.kick(TextComponent::text("Invalid verification token"))
+                            .await;
+                        return;
+                    }
+                };
+
+                // Compare tokens (Requirements 5.2, 5.3)
+                if decrypted_token.as_slice() != pending.verification_token {
+                    log::warn!(
+                        "Client {} verification token mismatch - possible MITM attack",
+                        self.id
+                    );
+                    self.kick(TextComponent::text("Verification token mismatch"))
+                        .await;
+                    return;
+                }
+            }
+            None => {
+                log::warn!(
+                    "Client {} sent encryption response without pending login",
+                    self.id
+                );
+                self.kick(TextComponent::text("No pending login found")).await;
+                return;
+            }
+        }
+
+        let shared_secret = match server.decrypt(&encryption_response.shared_secret) {
+            Ok(secret) => secret,
+            Err(error) => {
+                log::warn!(
+                    "Client {} failed to decrypt shared secret: {}",
+                    self.id,
+                    error
+                );
+                self.kick(TextComponent::text("Failed to decrypt shared secret"))
+                    .await;
+                return;
+            }
+        };
 
         if let Err(error) = self.set_encryption(&shared_secret).await {
             self.kick(TextComponent::text(error.to_string())).await;

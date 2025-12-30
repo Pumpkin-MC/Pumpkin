@@ -5,6 +5,7 @@ use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
 use crate::net::DisconnectReason;
 use crate::net::bedrock::BedrockClient;
 use crate::net::java::JavaClient;
+use crate::net::rate_limiter::RateLimiter;
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
 use log::{Level, LevelFilter};
@@ -146,6 +147,15 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
 pub static STOP_INTERRUPT: LazyLock<Notify> = LazyLock::new(Notify::new);
 
+/// Connection rate limit: maximum connections per second per IP
+/// Requirements: 4.4
+pub const CONNECTION_RATE_LIMIT_MAX: u32 = 10;
+/// Connection rate limit window in seconds
+pub const CONNECTION_RATE_LIMIT_WINDOW_SECS: u64 = 1;
+/// Connection rate limit block duration in seconds
+/// Requirements: 4.5
+pub const CONNECTION_RATE_LIMIT_BLOCK_SECS: u64 = 60;
+
 pub fn stop_server() {
     SHOULD_STOP.store(true, Ordering::Relaxed);
     STOP_INTERRUPT.notify_waiters();
@@ -166,6 +176,10 @@ pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub tcp_listener: Option<TcpListener>,
     pub udp_socket: Option<Arc<UdpSocket>>,
+    /// Connection rate limiter to prevent DoS attacks
+    /// Limits connections to CONNECTION_RATE_LIMIT_MAX per second per IP
+    /// Requirements: 4.4, 4.5
+    pub connection_rate_limiter: Arc<RateLimiter>,
 }
 
 impl PumpkinServer {
@@ -266,6 +280,11 @@ impl PumpkinServer {
             server: server.clone(),
             tcp_listener,
             udp_socket,
+            connection_rate_limiter: Arc::new(RateLimiter::new(
+                CONNECTION_RATE_LIMIT_MAX,
+                CONNECTION_RATE_LIMIT_WINDOW_SECS,
+                CONNECTION_RATE_LIMIT_BLOCK_SECS,
+            )),
         }
     }
 
@@ -351,6 +370,25 @@ impl PumpkinServer {
             tcp_result = resolve_some(self.tcp_listener.as_ref(), |listener| listener.accept()) => {
                 match tcp_result {
                     Ok((connection, client_addr)) => {
+                        // Check connection rate limit before accepting
+                        // Requirements: 4.4, 4.5
+                        let client_ip = client_addr.ip();
+                        if !self.connection_rate_limiter.check(&client_ip).await {
+                            let formatted_address = if self.server.basic_config.scrub_ips {
+                                scrub_address(&format!("{client_addr}"))
+                            } else {
+                                format!("{client_addr}")
+                            };
+                            log::warn!(
+                                "Connection rate limit exceeded for {formatted_address}, rejecting connection"
+                            );
+                            // Connection is dropped automatically when it goes out of scope
+                            return true;
+                        }
+                        
+                        // Record the connection attempt
+                        self.connection_rate_limiter.record(&client_ip).await;
+
                         if let Err(e) = connection.set_nodelay(true) {
                             log::warn!("Failed to set TCP_NODELAY: {e}");
                         }

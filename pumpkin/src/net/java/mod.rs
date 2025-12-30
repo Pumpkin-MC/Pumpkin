@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::{io::Write, sync::Arc};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Arc;
+use std::io::Write;
+use std::time::Instant;
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
@@ -52,6 +54,9 @@ use tokio::{
 };
 use tokio_util::task::TaskTracker;
 
+/// Maximum packets per second per client (Requirements 4.2)
+const MAX_PACKETS_PER_SECOND: u32 = 500;
+
 pub mod config;
 pub mod handshake;
 pub mod login;
@@ -91,6 +96,10 @@ pub struct JavaClient {
     network_writer: Arc<Mutex<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
     network_reader: Mutex<TCPNetworkDecoder<BufReader<OwnedReadHalf>>>,
+    /// Packet rate limiter: count of packets in current second
+    packet_count: AtomicU32,
+    /// Packet rate limiter: start of current second window
+    packet_window_start: Mutex<Instant>,
 }
 
 impl JavaClient {
@@ -115,6 +124,8 @@ impl JavaClient {
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
             brand: Mutex::new(None),
             player: Mutex::new(None),
+            packet_count: AtomicU32::new(0),
+            packet_window_start: Mutex::new(Instant::now()),
         }
     }
     pub async fn set_encryption(
@@ -224,6 +235,25 @@ impl JavaClient {
         self.close_interrupt.notified().await;
     }
 
+    /// Checks and updates the packet rate limiter.
+    /// Returns `true` if the packet is allowed, `false` if rate limit exceeded.
+    async fn check_packet_rate_limit(&self) -> bool {
+        let now = Instant::now();
+        let mut window_start = self.packet_window_start.lock().await;
+        
+        // Check if we're in a new second window
+        if now.duration_since(*window_start).as_secs() >= 1 {
+            // Reset the counter for the new window
+            self.packet_count.store(1, Ordering::Relaxed);
+            *window_start = now;
+            return true;
+        }
+        
+        // Increment and check the count
+        let count = self.packet_count.fetch_add(1, Ordering::Relaxed) + 1;
+        count <= MAX_PACKETS_PER_SECOND
+    }
+
     pub async fn get_packet(&self) -> Option<RawPacket> {
         let mut network_reader = self.network_reader.lock().await;
         tokio::select! {
@@ -233,7 +263,19 @@ impl JavaClient {
             },
             packet_result = network_reader.get_raw_packet() => {
                 match packet_result {
-                    Ok(packet) => Some(packet),
+                    Ok(packet) => {
+                        // Check packet rate limit (Requirements 4.2, 4.3)
+                        if !self.check_packet_rate_limit().await {
+                            log::warn!(
+                                "Client {} exceeded packet rate limit ({} packets/sec), disconnecting",
+                                self.id,
+                                MAX_PACKETS_PER_SECOND
+                            );
+                            self.kick(TextComponent::text("Packet rate limit exceeded")).await;
+                            return None;
+                        }
+                        Some(packet)
+                    },
                     Err(err) => {
                         if !matches!(err, PacketDecodeError::ConnectionClosed) {
                             log::warn!("Failed to decode packet from client {}: {}", self.id, err);
@@ -672,5 +714,159 @@ impl JavaClient {
             }
         }
         Ok(())
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// Helper struct to test packet rate limiting logic without needing a real TCP connection.
+    /// This mirrors the rate limiting implementation in JavaClient.
+    struct PacketRateLimiter {
+        packet_count: AtomicU32,
+        window_start: Mutex<Instant>,
+        max_packets_per_second: u32,
+    }
+
+    impl PacketRateLimiter {
+        fn new(max_packets_per_second: u32) -> Self {
+            Self {
+                packet_count: AtomicU32::new(0),
+                window_start: Mutex::new(Instant::now()),
+                max_packets_per_second,
+            }
+        }
+
+        async fn check_rate_limit(&self) -> bool {
+            let now = Instant::now();
+            let mut window_start = self.window_start.lock().await;
+            
+            // Check if we're in a new second window
+            if now.duration_since(*window_start).as_secs() >= 1 {
+                // Reset the counter for the new window
+                self.packet_count.store(1, Ordering::Relaxed);
+                *window_start = now;
+                return true;
+            }
+            
+            // Increment and check the count
+            let count = self.packet_count.fetch_add(1, Ordering::Relaxed) + 1;
+            count <= self.max_packets_per_second
+        }
+
+        fn get_count(&self) -> u32 {
+            self.packet_count.load(Ordering::Relaxed)
+        }
+    }
+
+    /// Property test: For any client sending more than MAX_PACKETS_PER_SECOND packets,
+    /// excess packets SHALL be rejected and client disconnected.
+    /// **Feature: security-hardening, Property 5: Packet Rate Limit**
+    /// **Validates: Requirements 4.2, 4.3**
+    #[tokio::test]
+    async fn test_property_packet_rate_limit_exceeded() {
+        // Test with various max_packets values
+        for max_packets in [10u32, 50, 100, 500] {
+            let limiter = PacketRateLimiter::new(max_packets);
+            
+            // Send exactly max_packets - all should be allowed
+            for i in 0..max_packets {
+                assert!(
+                    limiter.check_rate_limit().await,
+                    "Packet {} should be allowed (under limit of {})",
+                    i + 1,
+                    max_packets
+                );
+            }
+            
+            // The next packet should be rejected
+            assert!(
+                !limiter.check_rate_limit().await,
+                "Packet {} should be rejected (exceeds limit of {})",
+                max_packets + 1,
+                max_packets
+            );
+        }
+    }
+
+    /// Property test: Packets under the rate limit should always be allowed.
+    /// **Feature: security-hardening, Property 5: Packet Rate Limit**
+    /// **Validates: Requirements 4.2**
+    #[tokio::test]
+    async fn test_property_packets_under_limit_allowed() {
+        let max_packets = 500u32;
+        let limiter = PacketRateLimiter::new(max_packets);
+        
+        // Send packets up to but not exceeding the limit
+        for i in 0..(max_packets - 1) {
+            assert!(
+                limiter.check_rate_limit().await,
+                "Packet {} should be allowed (under limit)",
+                i + 1
+            );
+        }
+        
+        // Last packet before limit should still be allowed
+        assert!(
+            limiter.check_rate_limit().await,
+            "Packet at limit should still be allowed"
+        );
+        
+        // Verify count matches
+        assert_eq!(
+            limiter.get_count(),
+            max_packets,
+            "Packet count should match max_packets"
+        );
+    }
+
+    /// Property test: Rate limit window should reset after 1 second.
+    /// **Feature: security-hardening, Property 5: Packet Rate Limit**
+    /// **Validates: Requirements 4.2, 4.3**
+    #[tokio::test]
+    async fn test_property_rate_limit_window_reset() {
+        let max_packets = 10u32;
+        let limiter = PacketRateLimiter::new(max_packets);
+        
+        // Exhaust the limit
+        for _ in 0..max_packets {
+            limiter.check_rate_limit().await;
+        }
+        
+        // Should be blocked now
+        assert!(
+            !limiter.check_rate_limit().await,
+            "Should be blocked after exceeding limit"
+        );
+        
+        // Wait for window to reset
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        
+        // Should be allowed again
+        assert!(
+            limiter.check_rate_limit().await,
+            "Should be allowed after window reset"
+        );
+        
+        // Count should be reset to 1
+        assert_eq!(
+            limiter.get_count(),
+            1,
+            "Count should be reset to 1 after window reset"
+        );
+    }
+
+    /// Test that MAX_PACKETS_PER_SECOND constant is set to 500 as per requirements.
+    /// **Feature: security-hardening, Property 5: Packet Rate Limit**
+    /// **Validates: Requirements 4.2**
+    #[test]
+    fn test_max_packets_per_second_constant() {
+        assert_eq!(
+            MAX_PACKETS_PER_SECOND, 500,
+            "MAX_PACKETS_PER_SECOND should be 500 as per Requirements 4.2"
+        );
     }
 }

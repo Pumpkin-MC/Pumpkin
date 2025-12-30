@@ -3,14 +3,21 @@ use std::{net::SocketAddr, sync::atomic::Ordering};
 use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
 use pumpkin_config::RCONConfig;
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     select,
 };
 
-use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
+use crate::{SHOULD_STOP, STOP_INTERRUPT, net::rate_limiter::RateLimiter, server::Server};
 
 mod packet;
+
+/// RCON rate limiter configuration
+/// 5 failed attempts within 5 minutes (300 seconds) = 15 minute (900 seconds) block
+const RCON_MAX_FAILED_ATTEMPTS: u32 = 5;
+const RCON_WINDOW_SECS: u64 = 300; // 5 minutes
+const RCON_BLOCK_SECS: u64 = 900; // 15 minutes
 
 pub struct RCONServer;
 
@@ -19,6 +26,13 @@ impl RCONServer {
         let listener = tokio::net::TcpListener::bind(config.address).await.unwrap();
 
         let password = Arc::new(config.password.clone());
+        
+        // Create rate limiter for RCON authentication
+        let rate_limiter = Arc::new(RateLimiter::new(
+            RCON_MAX_FAILED_ATTEMPTS,
+            RCON_WINDOW_SECS,
+            RCON_BLOCK_SECS,
+        ));
 
         let mut connections = 0;
         while !SHOULD_STOP.load(Ordering::Relaxed) {
@@ -38,7 +52,17 @@ impl RCONServer {
             };
             let (connection, address) = result?;
 
+            // Check if IP is blocked by rate limiter
+            if rate_limiter.is_blocked(&address.ip()).await {
+                log::warn!("RCON: Rejected connection from blocked IP {}", address.ip());
+                drop(connection);
+                continue;
+            }
+
+            // Reject new connections when max_connections limit is reached
             if config.max_connections != 0 && connections >= config.max_connections {
+                log::warn!("RCON: Rejected connection from {} - max connections reached", address);
+                drop(connection);
                 continue;
             }
 
@@ -47,7 +71,8 @@ impl RCONServer {
 
             let password = password.clone();
             let server = server.clone();
-            tokio::spawn(async move { while !client.handle(&server, &password).await {} });
+            let rate_limiter = rate_limiter.clone();
+            tokio::spawn(async move { while !client.handle(&server, &password, &rate_limiter).await {} });
             log::debug!("closed RCON connection");
             connections -= 1;
         }
@@ -76,7 +101,7 @@ impl RCONClient {
     }
 
     /// Returns whether the client is closed or not.
-    pub async fn handle(&mut self, server: &Arc<Server>, password: &str) -> bool {
+    pub async fn handle(&mut self, server: &Arc<Server>, password: &str, rate_limiter: &Arc<RateLimiter>) -> bool {
         if !self.closed {
             match self.read_bytes().await {
                 // The stream is closed, so we can't reply, so we just close everything.
@@ -88,7 +113,7 @@ impl RCONClient {
                 }
             }
             // If we get a close here, we might have a reply, which we still want to write.
-            let _ = self.poll(server, password).await.map_err(|e| {
+            let _ = self.poll(server, password, rate_limiter).await.map_err(|e| {
                 log::error!("RCON error: {e}");
                 self.closed = true;
             });
@@ -96,14 +121,36 @@ impl RCONClient {
         self.closed
     }
 
-    async fn poll(&mut self, server: &Arc<Server>, password: &str) -> Result<(), PacketError> {
+    async fn poll(&mut self, server: &Arc<Server>, password: &str, rate_limiter: &Arc<RateLimiter>) -> Result<(), PacketError> {
         let Some(packet) = self.receive_packet().await? else {
             return Ok(());
         };
         let config = &server.advanced_config.networking.rcon;
         match packet.get_type() {
             ServerboundPacket::Auth => {
-                if packet.get_body() == password {
+                // Check if IP is blocked before processing auth
+                if rate_limiter.is_blocked(&self.address.ip()).await {
+                    log::warn!("RCON ({}): Auth attempt from blocked IP", self.address);
+                    self.send(ClientboundPacket::AuthResponse, -1, "").await?;
+                    self.closed = true;
+                    return Ok(());
+                }
+
+                // Use constant-time comparison to prevent timing attacks
+                let password_bytes = password.as_bytes();
+                let provided_bytes = packet.get_body().as_bytes();
+                
+                // Constant-time comparison: compare byte by byte without early exit
+                let password_matches: bool = if password_bytes.len() == provided_bytes.len() {
+                    password_bytes.ct_eq(provided_bytes).into()
+                } else {
+                    // Still do a comparison to maintain constant time even for different lengths
+                    // Compare against password itself to keep timing consistent
+                    let _ = password_bytes.ct_eq(password_bytes);
+                    false
+                };
+
+                if password_matches {
                     self.send(ClientboundPacket::AuthResponse, packet.get_id(), "")
                         .await?;
                     if config.logging.logged_successfully {
@@ -114,6 +161,15 @@ impl RCONClient {
                     if config.logging.wrong_password {
                         log::info!("RCON ({}): Client tried the wrong password", self.address);
                     }
+                    
+                    // Record failed attempt in rate limiter
+                    rate_limiter.record(&self.address.ip()).await;
+                    
+                    // Check if IP is now blocked after this failed attempt
+                    if rate_limiter.is_blocked(&self.address.ip()).await {
+                        log::warn!("RCON ({}): IP blocked after too many failed attempts", self.address);
+                    }
+                    
                     self.send(ClientboundPacket::AuthResponse, -1, "").await?;
                     self.closed = true;
                 }

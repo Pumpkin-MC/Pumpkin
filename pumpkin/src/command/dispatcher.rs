@@ -1,5 +1,6 @@
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
 
 use super::args::ConsumedArgs;
 
@@ -10,6 +11,127 @@ use crate::command::dispatcher::CommandError::{
 use crate::command::tree::{Command, CommandTree, NodeType, RawArgs};
 use crate::server::Server;
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
+use uuid::Uuid;
+
+/// Maximum commands per second per player
+/// Requirements: 7.1
+pub const MAX_COMMANDS_PER_SECOND: u32 = 10;
+
+/// Warning threshold - warn player when they reach this percentage of the limit
+/// Requirements: 7.3
+pub const COMMAND_RATE_WARNING_THRESHOLD: u32 = 8;
+
+/// Entry tracking command usage from a specific player
+#[derive(Debug, Clone)]
+struct CommandRateLimitEntry {
+    /// Number of commands in current window
+    count: u32,
+    /// Start of the current time window
+    window_start: Instant,
+    /// Whether we've already warned the player this window
+    warned: bool,
+}
+
+/// A thread-safe rate limiter for player commands.
+/// Tracks command usage per player UUID.
+/// Requirements: 7.1, 7.2, 7.3
+pub struct CommandRateLimiter {
+    /// Command counts per player UUID
+    entries: RwLock<HashMap<Uuid, CommandRateLimitEntry>>,
+    /// Maximum commands allowed per second
+    max_commands: u32,
+    /// Warning threshold (number of commands before warning)
+    warning_threshold: u32,
+}
+
+impl Default for CommandRateLimiter {
+    fn default() -> Self {
+        Self::new(MAX_COMMANDS_PER_SECOND, COMMAND_RATE_WARNING_THRESHOLD)
+    }
+}
+
+impl CommandRateLimiter {
+    /// Creates a new command rate limiter.
+    ///
+    /// # Arguments
+    /// * `max_commands` - Maximum commands allowed per second
+    /// * `warning_threshold` - Number of commands before warning the player
+    #[must_use]
+    pub fn new(max_commands: u32, warning_threshold: u32) -> Self {
+        Self {
+            entries: RwLock::new(HashMap::new()),
+            max_commands,
+            warning_threshold,
+        }
+    }
+
+    /// Checks if a player is allowed to execute a command and records the attempt.
+    /// Returns a tuple of (allowed, should_warn).
+    /// Requirements: 7.1, 7.2, 7.3
+    pub async fn check_and_record(&self, player_id: &Uuid) -> (bool, bool) {
+        let now = Instant::now();
+        let window = Duration::from_secs(1);
+        let mut entries = self.entries.write().await;
+
+        let entry = entries.entry(*player_id).or_insert(CommandRateLimitEntry {
+            count: 0,
+            window_start: now,
+            warned: false,
+        });
+
+        // Reset window if expired
+        if now.duration_since(entry.window_start) >= window {
+            entry.count = 0;
+            entry.window_start = now;
+            entry.warned = false;
+        }
+
+        // Check if rate limited
+        if entry.count >= self.max_commands {
+            log::debug!(
+                "Player {} exceeded command rate limit ({}/{})",
+                player_id,
+                entry.count,
+                self.max_commands
+            );
+            return (false, false);
+        }
+
+        entry.count += 1;
+
+        // Check if we should warn
+        let should_warn = entry.count >= self.warning_threshold && !entry.warned;
+        if should_warn {
+            entry.warned = true;
+        }
+
+        (true, should_warn)
+    }
+
+    /// Gets the current command count for a player (useful for testing/monitoring).
+    #[cfg(test)]
+    pub async fn get_count(&self, player_id: &Uuid) -> u32 {
+        let entries = self.entries.read().await;
+        entries.get(player_id).map(|e| e.count).unwrap_or(0)
+    }
+
+    /// Resets the rate limiter state for a player (useful for testing).
+    #[cfg(test)]
+    pub async fn reset(&self, player_id: &Uuid) {
+        self.entries.write().await.remove(player_id);
+    }
+
+    /// Cleans up expired entries to prevent memory growth.
+    /// Should be called periodically.
+    pub async fn cleanup(&self) {
+        let now = Instant::now();
+        let window = Duration::from_secs(2); // Keep entries for 2 seconds
+        let mut entries = self.entries.write().await;
+        entries.retain(|_, entry| now.duration_since(entry.window_start) < window);
+    }
+}
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -22,6 +144,9 @@ pub enum CommandError {
     /// The command could not be executed due to insufficient permissions.
     /// The user attempting to run the command lacks the necessary authorization.
     PermissionDenied,
+    /// The command was rate limited - player is sending too many commands.
+    /// Requirements: 7.2
+    RateLimited,
     /// A general error occurred during command execution that doesn't fit into
     /// more specific `CommandError` variants.
     CommandFailed(TextComponent),
@@ -48,6 +173,11 @@ impl CommandError {
                 TextComponent::text(
                     "I'm sorry, but you do not have permission to perform this command. Please contact the server administrator if you believe this is an error.",
                 )
+            }
+            RateLimited => {
+                // Silent - we don't send an error message for rate limited commands
+                // The command is simply ignored per Requirements 7.2
+                TextComponent::text("")
             }
             CommandFailed(s) => s,
         }

@@ -121,22 +121,36 @@ pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<
 }
 
 pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), TextureError> {
-    let scheme = url.scheme().unwrap();
+    let scheme = url.scheme().ok_or(TextureError::InvalidURL)?;
+    
+    // Exact match for scheme (not suffix match)
     if !config
         .allowed_url_schemes
         .iter()
-        .any(|allowed_scheme| scheme.as_str().ends_with(allowed_scheme))
+        .any(|allowed_scheme| scheme.as_str() == allowed_scheme)
     {
         return Err(TextureError::DisallowedUrlScheme(scheme.to_string()));
     }
-    let domain = url.authority().unwrap();
+    
+    let authority = url.authority().ok_or(TextureError::InvalidURL)?;
+    let domain = authority.host();
+    
+    // Check for suspicious patterns in domain
+    // These patterns could indicate path traversal or URL encoding attacks
+    if domain.contains("..") || domain.contains('%') {
+        return Err(TextureError::DisallowedUrlDomain(domain.to_string()));
+    }
+    
+    // Exact match for domain (not suffix match)
+    // This prevents attacks like "evil-textures.minecraft.net" matching "minecraft.net"
     if !config
         .allowed_url_domains
         .iter()
-        .any(|allowed_domain| domain.as_str().ends_with(allowed_domain))
+        .any(|allowed_domain| domain == *allowed_domain)
     {
         return Err(TextureError::DisallowedUrlDomain(domain.to_string()));
     }
+    
     Ok(())
 }
 
@@ -209,4 +223,200 @@ pub enum TextureError {
     DecodeError(String),
     #[error("Failed to parse JSON from player texture: {0}")]
     JSONError(String),
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Helper to create a TextureConfig with specific allowed domains and schemes
+    fn config_with_domains(domains: Vec<String>, schemes: Vec<String>) -> TextureConfig {
+        TextureConfig {
+            enabled: true,
+            allowed_url_schemes: schemes,
+            allowed_url_domains: domains,
+            types: Default::default(),
+        }
+    }
+
+    /// Property test: For any texture URL, the domain SHALL exactly match an allowed domain (not suffix match).
+    /// This prevents attacks like "evil-textures.minecraft.net" matching "minecraft.net"
+    /// **Feature: security-hardening, Property 7: Texture URL Exact Match**
+    /// **Validates: Requirements 6.1, 6.2**
+    #[test]
+    fn test_property_exact_domain_match_rejects_suffix() {
+        // Test that suffix matching is NOT allowed
+        let config = config_with_domains(
+            vec!["minecraft.net".to_string()],
+            vec!["https".to_string()],
+        );
+
+        // These should all be REJECTED because they only suffix-match, not exact match
+        let malicious_urls = [
+            "https://evil-minecraft.net/texture.png",
+            "https://fake.minecraft.net/texture.png",
+            "https://textures.minecraft.net/texture.png",
+            "https://attacker-minecraft.net/texture.png",
+            "https://xminecraft.net/texture.png",
+        ];
+
+        for url_str in malicious_urls {
+            let url: Uri = url_str.parse().unwrap();
+            let result = is_texture_url_valid(&url, &config);
+            assert!(
+                result.is_err(),
+                "URL {} should be rejected (suffix match not allowed), but was accepted",
+                url_str
+            );
+        }
+
+        // This should be ACCEPTED because it's an exact match
+        let valid_url: Uri = "https://minecraft.net/texture.png".parse().unwrap();
+        let result = is_texture_url_valid(&valid_url, &config);
+        assert!(
+            result.is_ok(),
+            "URL https://minecraft.net/texture.png should be accepted (exact match)"
+        );
+    }
+
+    /// Property test: URLs with suspicious patterns (.., %, encoded chars) SHALL be rejected
+    /// **Feature: security-hardening, Property 7: Texture URL Exact Match**
+    /// **Validates: Requirements 6.1, 6.2**
+    #[test]
+    fn test_property_suspicious_patterns_rejected() {
+        let config = config_with_domains(
+            vec!["minecraft.net".to_string(), "textures..minecraft.net".to_string()],
+            vec!["https".to_string()],
+        );
+
+        // URLs with suspicious patterns should be rejected
+        let suspicious_urls = [
+            "https://textures..minecraft.net/texture.png", // double dots
+            "https://minecraft%2enet/texture.png",         // percent encoding
+        ];
+
+        for url_str in suspicious_urls {
+            if let Ok(url) = url_str.parse::<Uri>() {
+                let result = is_texture_url_valid(&url, &config);
+                assert!(
+                    result.is_err(),
+                    "URL {} with suspicious pattern should be rejected",
+                    url_str
+                );
+            }
+            // If URL parsing fails, that's also acceptable (invalid URL)
+        }
+    }
+
+    /// Property test: Exact scheme matching (not suffix match)
+    /// **Feature: security-hardening, Property 7: Texture URL Exact Match**
+    /// **Validates: Requirements 6.1, 6.2**
+    #[test]
+    fn test_property_exact_scheme_match() {
+        let config = config_with_domains(
+            vec!["minecraft.net".to_string()],
+            vec!["https".to_string()],
+        );
+
+        // HTTP should be rejected when only HTTPS is allowed
+        let http_url: Uri = "http://minecraft.net/texture.png".parse().unwrap();
+        let result = is_texture_url_valid(&http_url, &config);
+        assert!(
+            result.is_err(),
+            "HTTP URL should be rejected when only HTTPS is allowed"
+        );
+
+        // HTTPS should be accepted
+        let https_url: Uri = "https://minecraft.net/texture.png".parse().unwrap();
+        let result = is_texture_url_valid(&https_url, &config);
+        assert!(
+            result.is_ok(),
+            "HTTPS URL should be accepted when HTTPS is allowed"
+        );
+    }
+
+    proptest! {
+        /// Property test using proptest: For any domain that is NOT in the allowed list,
+        /// the URL SHALL be rejected
+        /// **Feature: security-hardening, Property 7: Texture URL Exact Match**
+        /// **Validates: Requirements 6.1, 6.2**
+        #[test]
+        fn test_proptest_non_whitelisted_domain_rejected(
+            subdomain in "[a-z]{1,10}",
+            allowed_domain in "[a-z]{3,10}\\.[a-z]{2,4}",
+        ) {
+            // Create a domain that is a subdomain of the allowed domain
+            let malicious_domain = format!("{}.{}", subdomain, allowed_domain);
+            
+            let config = config_with_domains(
+                vec![allowed_domain.clone()],
+                vec!["https".to_string()],
+            );
+
+            let url_str = format!("https://{}/texture.png", malicious_domain);
+            if let Ok(url) = url_str.parse::<Uri>() {
+                let result = is_texture_url_valid(&url, &config);
+                // Subdomain should be rejected (not exact match)
+                prop_assert!(
+                    result.is_err(),
+                    "Subdomain {} of allowed domain {} should be rejected",
+                    malicious_domain,
+                    allowed_domain
+                );
+            }
+        }
+
+        /// Property test: Exact domain match should be accepted
+        /// **Feature: security-hardening, Property 7: Texture URL Exact Match**
+        /// **Validates: Requirements 6.1, 6.2**
+        #[test]
+        fn test_proptest_exact_domain_accepted(
+            domain in "[a-z]{3,10}\\.[a-z]{2,4}",
+        ) {
+            let config = config_with_domains(
+                vec![domain.clone()],
+                vec!["https".to_string()],
+            );
+
+            let url_str = format!("https://{}/texture.png", domain);
+            if let Ok(url) = url_str.parse::<Uri>() {
+                let result = is_texture_url_valid(&url, &config);
+                prop_assert!(
+                    result.is_ok(),
+                    "Exact domain match {} should be accepted",
+                    domain
+                );
+            }
+        }
+
+        /// Property test: URLs with percent encoding in domain should be rejected
+        /// **Feature: security-hardening, Property 7: Texture URL Exact Match**
+        /// **Validates: Requirements 6.1, 6.2**
+        #[test]
+        fn test_proptest_percent_encoding_rejected(
+            prefix in "[a-z]{1,5}",
+            suffix in "[a-z]{1,5}",
+        ) {
+            let config = config_with_domains(
+                vec!["minecraft.net".to_string()],
+                vec!["https".to_string()],
+            );
+
+            // Create a domain with percent encoding
+            let malicious_domain = format!("{}%2e{}", prefix, suffix);
+            let url_str = format!("https://{}.net/texture.png", malicious_domain);
+            
+            if let Ok(url) = url_str.parse::<Uri>() {
+                let result = is_texture_url_valid(&url, &config);
+                // Should be rejected due to percent encoding
+                prop_assert!(
+                    result.is_err(),
+                    "Domain with percent encoding {} should be rejected",
+                    malicious_domain
+                );
+            }
+        }
+    }
 }

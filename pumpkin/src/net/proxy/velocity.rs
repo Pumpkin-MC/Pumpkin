@@ -15,6 +15,7 @@ use pumpkin_protocol::{
 };
 use rand::Rng;
 use sha2::Sha256;
+use subtle::ConstantTimeEq;
 use thiserror::Error;
 
 use crate::net::{GameProfile, java::JavaClient};
@@ -68,7 +69,10 @@ pub fn check_integrity(data: (&[u8], &[u8]), secret: &str) -> bool {
     let mut mac =
         HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
     mac.update(data_without_signature);
-    mac.verify_slice(signature).is_ok()
+    
+    // Use constant-time comparison to prevent timing attacks
+    let expected = mac.finalize().into_bytes();
+    signature.ct_eq(&expected).into()
 }
 
 fn read_game_profile(read: impl Read) -> Result<GameProfile, VelocityError> {

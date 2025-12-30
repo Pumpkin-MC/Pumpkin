@@ -71,6 +71,9 @@ sha1.workspace = true
 hmac.workspace = true
 sha2.workspace = true
 
+# constant-time comparison for security
+subtle.workspace = true
+
 base64.workspace = true
 
 # logging
@@ -91,6 +94,7 @@ console-subscriber = { workspace = true, optional = true }
 signature.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
+proptest = "1.4"
 
 [features]
 console-subscriber = ["dep:console-subscriber"]
