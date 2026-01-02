@@ -52,8 +52,8 @@ use pumpkin_protocol::java::client::play::{
     CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
     CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetEquipment,
     CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
-    GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CSubtitle, CSystemChatMessage, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
+    CUpdateTime, GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_registry::VanillaDimensionType;
@@ -792,6 +792,12 @@ impl Player {
             TitleMode::SubTitle => self.client.enqueue_packet(&CSubtitle::new(text)).await,
             TitleMode::ActionBar => self.client.enqueue_packet(&CActionBar::new(text)).await,
         }
+    }
+
+    pub async fn send_title_animation(&self, fade_in: i32, stay: i32, fade_out: i32) {
+        self.client
+            .enqueue_packet(&CTitleAnimation::new(fade_in, stay, fade_out))
+            .await;
     }
 
     pub async fn spawn_particle(

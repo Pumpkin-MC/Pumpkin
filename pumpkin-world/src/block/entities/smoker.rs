@@ -19,7 +19,7 @@ use crate::{
     impl_inventory_for_cooking, impl_property_delegate_for_cooking, item::ItemStack,
 };
 
-pub struct FurnaceBlockEntity {
+pub struct SmokerBlockEntity {
     pub position: BlockPos,
     pub dirty: AtomicBool,
 
@@ -31,9 +31,9 @@ pub struct FurnaceBlockEntity {
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
 }
 
-impl FurnaceBlockEntity {
+impl SmokerBlockEntity {
     pub const INVENTORY_SIZE: usize = 3;
-    pub const ID: &'static str = "minecraft:furnace";
+    pub const ID: &'static str = "minecraft:smoker";
 
     pub fn new(position: BlockPos) -> Self {
         Self {
@@ -48,8 +48,8 @@ impl FurnaceBlockEntity {
     }
 }
 
-impl_cooking_block_entity_base!(FurnaceBlockEntity);
-impl_block_entity_for_cooking!(FurnaceBlockEntity, CookingRecipeKind::Smelting);
-impl_inventory_for_cooking!(FurnaceBlockEntity);
-impl_clearable_for_cooking!(FurnaceBlockEntity);
-impl_property_delegate_for_cooking!(FurnaceBlockEntity);
+impl_cooking_block_entity_base!(SmokerBlockEntity);
+impl_block_entity_for_cooking!(SmokerBlockEntity, CookingRecipeKind::Smoking);
+impl_inventory_for_cooking!(SmokerBlockEntity);
+impl_clearable_for_cooking!(SmokerBlockEntity);
+impl_property_delegate_for_cooking!(SmokerBlockEntity);

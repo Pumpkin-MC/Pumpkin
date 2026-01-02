@@ -5,10 +5,10 @@ edition.workspace = true
 rust-version = "1.89"
 
 [dependencies]
-pumpkin-nbt = { path = "../pumpkin-nbt" }
-pumpkin-util = { path = "../pumpkin-util" }
-pumpkin-config = { path = "../pumpkin-config" }
-pumpkin-data = { path = "../pumpkin-data" }
+pumpkin-nbt.workspace = true
+pumpkin-util.workspace = true
+pumpkin-config.workspace = true
+pumpkin-data.workspace = true
 
 futures.workspace = true
 
@@ -31,41 +31,41 @@ serde_json.workspace = true
 log.workspace = true
 crossbeam.workspace = true
 
-num-derive = "0.4"
-sha2 = "0.10"
-bitflags = "2.10.0"
+num-derive.workspace = true
+sha2.workspace = true
+bitflags.workspace = true
 
-dashmap = "6.1"
+dashmap.workspace = true
 
-num-traits = "0.2"
+num-traits.workspace = true
 
 # Compression
-flate2 = "1.1"
-lz4-java-wrc = "0.2.0"
-ruzstd = "0.8.2"
+flate2.workspace = true
+lz4-java-wrc.workspace = true
+ruzstd.workspace = true
 
-itertools = "0.14.0"
-enum_dispatch = "0.3"
+itertools.workspace = true
+enum_dispatch.workspace = true
 
-thread_local = "1.1.9"
-lru = "0.16.2"
+thread_local.workspace = true
+lru.workspace = true
 
-tokio-util = { version = "0.7.17", features = ["rt"] }
-rand = "=0.10.0-rc.5"
-num_cpus = "1.17.0"
-rustc-hash = "2.1.1"
-slotmap = "1.1"
-crossfire = "2.1.8"
+tokio-util = { workspace = true, features = ["rt"] }
+rand.workspace = true
+num_cpus.workspace = true
+rustc-hash.workspace = true
+slotmap.workspace = true
+crossfire.workspace = true
 
 [dev-dependencies]
-criterion = { version = "0.8", default-features = false, features = ["html_reports", "async_tokio"] }
-temp-dir = "0.1.16"
+criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
+temp-dir.workspace = true
 # Print log info inside tests when needed
-env_logger = "0.11.8"
+env_logger.workspace = true
 # Allows us to modify the config
-pumpkin-config = { path = "../pumpkin-config", features = ["test_helper"] }
+pumpkin-config = { workspace = true, features = ["test_helper"] }
 # Deserialize NaN and Inf
-serde_json5 = "0.2.1"
+serde_json5.workspace = true
 
 [[bench]]
 name = "chunk"
