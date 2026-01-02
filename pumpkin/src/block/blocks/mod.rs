@@ -2,7 +2,6 @@ pub mod anvil;
 pub mod barrel;
 pub mod barrier;
 pub mod bed;
-pub mod cactus;
 pub mod cake;
 pub mod campfire;
 pub mod candle_cakes;

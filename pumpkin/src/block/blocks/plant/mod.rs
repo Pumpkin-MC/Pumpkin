@@ -5,6 +5,7 @@ use pumpkin_world::{BlockStateId, world::BlockAccessor};
 pub mod bamboo;
 pub mod bamboo_sapling;
 pub mod bush;
+pub mod cactus;
 pub mod crop;
 pub mod dry_vegetation;
 pub mod flower;

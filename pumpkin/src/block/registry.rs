@@ -3,7 +3,7 @@ use crate::block::blocks::anvil::AnvilBlock;
 use crate::block::blocks::barrel::BarrelBlock;
 use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::bed::BedBlock;
-use crate::block::blocks::cactus::CactusBlock;
+use crate::block::blocks::plant::cactus::CactusBlock;
 use crate::block::blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
 use crate::block::blocks::carved_pumpkin::CarvedPumpkinBlock;
 use crate::block::blocks::chests::ChestBlock;
