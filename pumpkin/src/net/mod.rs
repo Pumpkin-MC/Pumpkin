@@ -29,6 +29,7 @@ pub mod java;
 pub mod lan_broadcast;
 mod proxy;
 pub mod query;
+pub mod rate_limiter;
 pub mod rcon;
 
 #[derive(Deserialize, Clone, Debug)]
