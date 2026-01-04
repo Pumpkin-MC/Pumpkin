@@ -1610,7 +1610,7 @@ impl GenerationSchedule {
             loop {
                 let notify = {
                     let pending_writes = lock.lock().await;
-                    pending_writes.get(&pos).map(|n| n.clone())
+                    pending_writes.get(&pos).cloned()
                 };
                 match notify {
                     Some(n) => {
@@ -1795,7 +1795,7 @@ impl GenerationSchedule {
         }
         let mut data = self.io_lock.lock().await;
         for (pos, _chunk) in &chunks {
-            if data.contains_key(&pos) {
+            if data.contains_key(pos) {
                 continue;
             }
             data.insert(*pos, Arc::new(Notify::new()));
@@ -1826,7 +1826,7 @@ impl GenerationSchedule {
         }
         let mut data = self.io_lock.lock().await;
         for (pos, _chunk) in &chunks {
-            if data.contains_key(&pos) {
+            if data.contains_key(pos) {
                 continue;
             }
             data.insert(*pos, Arc::new(Notify::new()));
