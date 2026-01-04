@@ -10,7 +10,7 @@ use crate::command::{
     tree::{CommandTree, builder::argument},
 };
 use crate::server::Server;
-use pumpkin_registry::VanillaDimensionType;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_util::{math::position::BlockPos, text::TextComponent};
 
 const NAMES: [&str; 1] = ["setworldspawn"];
@@ -106,18 +106,14 @@ async fn setworldspawn(
             "Failed to get world.",
         )));
     };
-
-    match world.dimension_type {
-        VanillaDimensionType::Overworld | VanillaDimensionType::OverworldCaves => {}
-        _ => {
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.setworldspawn.failure.not_overworld",
-                    [],
-                ))
-                .await;
-            return Ok(());
-        }
+    if world.dimension != Dimension::OVERWORLD && world.dimension != Dimension::OVERWORLD_CAVES {
+        sender
+            .send_message(TextComponent::translate(
+                "commands.setworldspawn.failure.not_overworld",
+                [],
+            ))
+            .await;
+        return Ok(());
     }
 
     let mut level_info_guard = server.level_info.write().await;

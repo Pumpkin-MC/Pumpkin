@@ -1,9 +1,10 @@
 use std::{collections::HashMap, sync::LazyLock};
 
+use pumpkin_data::dimension::Dimension;
 use pumpkin_util::include_json_static;
 use serde::Deserialize;
 
-use crate::{block::BlockStateCodec, dimension::Dimension};
+use crate::block::BlockStateCodec;
 
 use super::{biome_coords::to_block, height_limit::HeightLimitView, surface::rule::MaterialRule};
 
@@ -13,13 +14,14 @@ pub static GENERATION_SETTINGS: LazyLock<HashMap<GeneratorSetting, GenerationSet
     );
 
 pub fn gen_settings_from_dimension(dimension: &Dimension) -> &GenerationSettings {
-    match dimension {
-        Dimension::Overworld => GENERATION_SETTINGS
-            .get(&GeneratorSetting::Overworld)
-            .unwrap(),
-        Dimension::Nether => GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap(),
-        Dimension::End => GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap(),
-    }
+    let setting = if dimension == &Dimension::OVERWORLD {
+        GeneratorSetting::Overworld
+    } else if dimension == &Dimension::THE_NETHER {
+        GeneratorSetting::Nether
+    } else {
+        GeneratorSetting::End
+    };
+    GENERATION_SETTINGS.get(&setting).unwrap()
 }
 
 #[derive(Deserialize, Hash, PartialEq, Eq)]

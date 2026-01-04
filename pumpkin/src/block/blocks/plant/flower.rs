@@ -1,6 +1,6 @@
 use pumpkin_data::Block;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
 
@@ -48,14 +48,8 @@ impl BlockBehaviour for FlowerBlock {
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             //TODO add trail particule
-            if (args
-                .world
-                .dimension_type
-                .eq(&VanillaDimensionType::Overworld)
-                || args
-                    .world
-                    .dimension_type
-                    .eq(&VanillaDimensionType::OverworldCaves))
+            if (args.world.dimension.eq(&Dimension::OVERWORLD)
+                || args.world.dimension.eq(&Dimension::OVERWORLD_CAVES))
                 && args.block.eq(&Block::CLOSED_EYEBLOSSOM)
                 && args.world.level_time.lock().await.time_of_day % 24000 > 14500
             {

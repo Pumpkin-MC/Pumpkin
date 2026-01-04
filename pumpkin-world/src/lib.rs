@@ -1,6 +1,5 @@
-use dimension::Dimension;
 use generation::settings::GenerationSettings;
-use pumpkin_data::BlockState;
+use pumpkin_data::{BlockState, dimension::Dimension};
 use pumpkin_util::math::vector2::Vector2;
 
 pub mod biome;
@@ -67,7 +66,7 @@ pub fn bench_create_and_populate_noise(
     };
 
     let biome_mixer_seed = hash_seed(random_config.seed);
-    let mut chunk = ProtoChunk::new(0, 0, settings, default_block, biome_mixer_seed);
+    let mut chunk = ProtoChunk::new(0, 0, &Dimension::OVERWORLD, default_block, biome_mixer_seed);
 
     // Create noise sampler and other required components
     let generation_shape = &settings.shape;
@@ -128,7 +127,7 @@ pub fn bench_create_and_populate_biome(
     use crate::generation::{biome_coords, positions::chunk_pos};
 
     let biome_mixer_seed = hash_seed(random_config.seed);
-    let mut chunk = ProtoChunk::new(0, 0, settings, default_block, biome_mixer_seed);
+    let mut chunk = ProtoChunk::new(0, 0, &Dimension::OVERWORLD, default_block, biome_mixer_seed);
 
     // Create multi-noise sampler
     let generation_shape = &settings.shape;
@@ -150,7 +149,7 @@ pub fn bench_create_and_populate_biome(
     let mut multi_noise_sampler =
         MultiNoiseSampler::generate(&base_router.multi_noise, &multi_noise_config);
 
-    chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
+    chunk.populate_biomes(Dimension::OVERWORLD, &mut multi_noise_sampler);
 }
 
 pub fn bench_create_and_populate_noise_with_surface(
@@ -176,7 +175,7 @@ pub fn bench_create_and_populate_noise_with_surface(
     };
 
     let biome_mixer_seed = hash_seed(random_config.seed);
-    let mut chunk = ProtoChunk::new(0, 0, settings, default_block, biome_mixer_seed);
+    let mut chunk = ProtoChunk::new(0, 0, &Dimension::OVERWORLD, default_block, biome_mixer_seed);
 
     // Create all required components
     let generation_shape = &settings.shape;
@@ -230,7 +229,7 @@ pub fn bench_create_and_populate_noise_with_surface(
     let mut surface_height_estimate_sampler =
         SurfaceHeightEstimateSampler::generate(&base_router.surface_estimator, &surface_config);
 
-    chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
+    chunk.populate_biomes(Dimension::OVERWORLD, &mut multi_noise_sampler);
     chunk.populate_noise(&mut noise_sampler, &mut surface_height_estimate_sampler);
     chunk.build_surface(
         settings,

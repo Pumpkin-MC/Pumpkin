@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::tag;
 use pumpkin_data::{
@@ -42,7 +43,6 @@ use crate::{
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier},
     block::RawBlockState,
     chunk::CHUNK_AREA,
-    dimension::Dimension,
     generation::{biome, positions::chunk_pos},
     world::{BlockAccessor, BlockRegistryExt},
 };
@@ -126,7 +126,7 @@ pub struct ProtoChunk {
     biome_mixer_seed: i64,
     // These are local positions
     flat_block_map: Box<[BlockStateId]>,
-    flat_biome_map: Box<[&'static Biome]>,
+    pub flat_biome_map: Box<[&'static Biome]>,
     /// HEIGHTMAPS
     ///
     /// Top block that is not air
@@ -168,12 +168,11 @@ impl ProtoChunk {
     pub fn new(
         x: i32,
         z: i32,
-        settings: &GenerationSettings,
+        dimension: &Dimension,
         default_block: &'static BlockState,
         biome_mixer_seed: i64,
     ) -> Self {
-        let generation_shape = &settings.shape;
-        let height = generation_shape.height;
+        let height = dimension.logical_height as u16;
 
         let default_heightmap = vec![i16::MIN; CHUNK_AREA].into_boxed_slice();
         Self {
@@ -195,34 +194,40 @@ impl ProtoChunk {
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
             structure_starts: HashMap::new(),
             height,
-            bottom_y: generation_shape.min_y,
+            bottom_y: dimension.min_y as i8,
             stage: StagedChunkEnum::Empty,
         }
     }
 
     pub fn from_chunk_data(
         chunk_data: &ChunkData,
-        settings: &GenerationSettings,
+        dimension: &Dimension,
         default_block: &'static BlockState,
         biome_mixer_seed: i64,
     ) -> Self {
         let mut proto_chunk = ProtoChunk::new(
             chunk_data.x,
             chunk_data.z,
-            settings,
+            dimension,
             default_block,
             biome_mixer_seed,
         );
 
         for (section_y, section) in chunk_data.section.sections.iter().enumerate() {
+            // 1. Calculate the base Y for this section
+            let section_base_y = section_y as i32 * 16;
+
+            if section_base_y >= proto_chunk.height() as i32 {
+                continue;
+            }
+
             for x in 0..16 {
                 for y in 0..16 {
                     for z in 0..16 {
                         let block_state_id = section.block_states.get(x, y, z);
                         let block_state = BlockState::from_id(block_state_id);
 
-                        let absolute_y =
-                            (section_y << 4) as i32 + y as i32 + chunk_data.section.min_y;
+                        let absolute_y = section_base_y + y as i32 + chunk_data.section.min_y;
 
                         proto_chunk.set_block_state(
                             &Vector3::new(x as i32, absolute_y, z as i32),
@@ -231,18 +236,23 @@ impl ProtoChunk {
                     }
                 }
             }
+
             for x in 0..4 {
                 for y in 0..4 {
                     for z in 0..4 {
                         let biome_id = section.biomes.get(x, y, z);
                         let biome = Biome::from_id(biome_id).unwrap();
 
-                        let relative_y_block = (section_y as i32 * 16) + (y as i32 * 4);
+                        let relative_y_block = section_base_y + (y as i32 * 4);
+
+                        let biome_y_idx = biome_coords::from_block(relative_y_block);
+
                         let index = proto_chunk.local_biome_pos_to_biome_index(
                             x as i32,
-                            biome_coords::from_block(relative_y_block),
+                            biome_y_idx,
                             z as i32,
                         );
+
                         proto_chunk.flat_biome_map[index] = biome;
                     }
                 }
@@ -396,7 +406,7 @@ impl ProtoChunk {
     }
 
     #[inline]
-    fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
+    pub fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
         #[cfg(debug_assertions)]
         {
             assert!((0..=3).contains(&x));
@@ -607,7 +617,7 @@ impl ProtoChunk {
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
-                        let biome = if dimension == Dimension::End {
+                        let biome = if dimension == Dimension::THE_END {
                             TheEndBiomeSupplier::biome(
                                 start_biome_x + x,
                                 start_biome_y + y,

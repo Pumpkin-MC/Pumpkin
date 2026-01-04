@@ -7,6 +7,7 @@ use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
@@ -25,7 +26,6 @@ use pumpkin_protocol::{
     },
     ser::serializer::Serializer,
 };
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::vector3::Axis;
 use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
@@ -993,7 +993,7 @@ impl Entity {
                 .await;
         }
 
-        let lava_speed = if self.world.dimension_type == VanillaDimensionType::TheNether {
+        let lava_speed = if self.world.dimension == Dimension::THE_NETHER {
             0.007
         } else {
             0.002_333_333
@@ -1305,21 +1305,9 @@ impl Entity {
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
                 let pos = self.pos.load();
-                // TODO: this is bad
-                let scale_factor_new = if portal_manager.portal_world.dimension_type
-                    == VanillaDimensionType::TheNether
-                {
-                    8.0
-                } else {
-                    1.0
-                };
-                // TODO: this is bad
-                let scale_factor_current =
-                    if self.world.dimension_type == VanillaDimensionType::TheNether {
-                        8.0
-                    } else {
-                        1.0
-                    };
+                let scale_factor_new = portal_manager.portal_world.dimension.coordinate_scale;
+                let scale_factor_current = self.world.dimension.coordinate_scale;
+
                 let scale_factor = scale_factor_current / scale_factor_new;
                 // TODO
                 let pos = BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
@@ -1762,7 +1750,7 @@ impl Entity {
     }
 
     pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
-        if self.pos.load().y < f64::from(self.world.generation_settings().shape.min_y) - 64.0 {
+        if self.pos.load().y < f64::from(self.world.dimension.min_y) - 64.0 {
             // Tick out of world damage
             dyn_self
                 .damage(dyn_self, 4.0, DamageType::OUT_OF_WORLD)

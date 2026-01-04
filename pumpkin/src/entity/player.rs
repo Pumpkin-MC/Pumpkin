@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use log::warn;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
@@ -56,7 +57,6 @@ use pumpkin_protocol::java::client::play::{
     CUpdateTime, GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -661,7 +661,7 @@ impl Player {
 
     pub async fn set_respawn_point(
         &self,
-        dimension: VanillaDimensionType,
+        dimension: Dimension,
         block_pos: BlockPos,
         yaw: f32,
     ) -> bool {
@@ -690,12 +690,12 @@ impl Player {
 
         let block = self.world().get_block(&respawn_point.position).await;
 
-        if respawn_point.dimension == VanillaDimensionType::Overworld
+        if respawn_point.dimension == Dimension::OVERWORLD
             && block.has_tag(&tag::Block::MINECRAFT_BEDS)
         {
             // TODO: calculate respawn position
             Some((respawn_point.position.to_f64(), respawn_point.yaw))
-        } else if respawn_point.dimension == VanillaDimensionType::TheNether
+        } else if respawn_point.dimension == Dimension::THE_NETHER
             && block == &Block::RESPAWN_ANCHOR
         {
             // TODO: calculate respawn position
@@ -1292,7 +1292,7 @@ impl Player {
                 self.chunk_manager.lock().await.change_world(&current_world.level, &new_world.level);
 
                 let last_pos = self.living_entity.entity.last_pos.load();
-                let death_dimension = self.world().dimension_type.resource_location();
+                let death_dimension = ResourceLocation::from(self.world().dimension.minecraft_name);
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
                     last_pos.y.round() as i32,
@@ -1300,8 +1300,8 @@ impl Player {
                 ));
                 self.client
                     .send_packet_now(&CRespawn::new(
-                        (new_world.dimension_type as u8).into(),
-                        new_world.dimension_type.resource_location(),
+                        (new_world.dimension.id).into(),
+                        ResourceLocation::from(new_world.dimension.minecraft_name),
                         biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
@@ -2117,7 +2117,7 @@ impl NBTStorage for Player {
 
             nbt.put_string(
                 "Dimension",
-                self.world().dimension_type.resource_location().to_string(),
+                ResourceLocation::from(self.world().dimension.minecraft_name).to_string(),
             );
         })
     }
@@ -2531,7 +2531,7 @@ impl Abilities {
 /// Represents the player's respawn point.
 #[derive(Copy, Debug, Clone, PartialEq)]
 pub struct RespawnPoint {
-    pub dimension: VanillaDimensionType,
+    pub dimension: Dimension,
     pub position: BlockPos,
     pub yaw: f32,
     pub force: bool,

@@ -2,11 +2,12 @@ use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 
 use enum_dispatch::enum_dispatch;
-use pumpkin_data::chunk::{Biome, BiomeTree, NETHER_BIOME_SOURCE, OVERWORLD_BIOME_SOURCE};
-
-use crate::{
-    dimension::Dimension, generation::noise::router::multi_noise_sampler::MultiNoiseSampler,
+use pumpkin_data::{
+    chunk::{Biome, BiomeTree, NETHER_BIOME_SOURCE, OVERWORLD_BIOME_SOURCE},
+    dimension::Dimension,
 };
+
+use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
 pub mod end;
 pub mod multi_noise;
 
@@ -36,10 +37,10 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
         noise: &mut MultiNoiseSampler<'_>,
         dimension: Dimension,
     ) -> &'static Biome {
-        let source: &'static BiomeTree = match dimension {
-            Dimension::Overworld => &OVERWORLD_BIOME_SOURCE,
-            Dimension::Nether => &NETHER_BIOME_SOURCE,
-            Dimension::End => unreachable!(), // Use TheEndBiomeSupplier
+        let source: &'static BiomeTree = if dimension == Dimension::OVERWORLD {
+            &OVERWORLD_BIOME_SOURCE
+        } else {
+            &NETHER_BIOME_SOURCE
         };
         let point = noise.sample(x, y, z);
         let point_list = point.convert_to_list();
@@ -56,14 +57,15 @@ pub fn hash_seed(seed: u64) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::{chunk::Biome, noise_router::OVERWORLD_BASE_NOISE_ROUTER};
+    use pumpkin_data::{
+        chunk::Biome, dimension::Dimension, noise_router::OVERWORLD_BASE_NOISE_ROUTER,
+    };
     use pumpkin_util::read_data_from_file;
     use serde::Deserialize;
 
     use crate::{
         GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
         chunk::palette::BIOME_NETWORK_MAX_BITS,
-        dimension::Dimension,
         generation::{
             noise::router::{
                 multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -84,7 +86,7 @@ mod test {
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
         let mut sampler =
             MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
-        let biome = MultiNoiseBiomeSupplier::biome(-24, 1, 8, &mut sampler, Dimension::Overworld);
+        let biome = MultiNoiseBiomeSupplier::biome(-24, 1, 8, &mut sampler, Dimension::OVERWORLD);
         assert_eq!(biome, &Biome::DESERT)
     }
 
@@ -121,7 +123,7 @@ mod test {
             let mut chunk = ProtoChunk::new(
                 chunk_x,
                 chunk_z,
-                surface_settings,
+                &Dimension::OVERWORLD,
                 default_block,
                 biome_mixer_seed,
             );
@@ -144,7 +146,7 @@ mod test {
             let mut multi_noise_sampler =
                 MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
 
-            chunk.populate_biomes(Dimension::Overworld, &mut multi_noise_sampler);
+            chunk.populate_biomes(Dimension::OVERWORLD, &mut multi_noise_sampler);
 
             for (biome_x, biome_y, biome_z, biome_id) in data.data {
                 let calculated_biome = chunk.get_biome(biome_x, biome_y, biome_z);

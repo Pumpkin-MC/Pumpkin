@@ -6,11 +6,11 @@ use crate::{
 };
 use pumpkin_data::{
     Block,
+    dimension::Dimension,
     fluid::Fluid,
     item::Item,
     sound::{Sound, SoundCategory},
 };
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::{
     GameMode,
     math::{position::BlockPos, vector3::Vector3},
@@ -236,9 +236,7 @@ impl ItemBehaviour for FilledBucketItem {
                 return;
             };
 
-            if item.id != Item::LAVA_BUCKET.id
-                && world.dimension_type == VanillaDimensionType::TheNether
-            {
+            if item.id != Item::LAVA_BUCKET.id && world.dimension == Dimension::THE_NETHER {
                 world
                     .play_sound_raw(
                         Sound::BlockFireExtinguish as u16,

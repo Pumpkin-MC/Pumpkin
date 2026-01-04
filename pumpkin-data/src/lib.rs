@@ -85,6 +85,10 @@ mod entity_type;
 mod spawn_egg;
 
 #[rustfmt::skip]
+#[path = "generated/dimension.rs"]
+pub mod dimension;
+
+#[rustfmt::skip]
 #[path = "generated/enchantment.rs"]
 mod enchantment;
 pub use enchantment::*;

@@ -30,13 +30,14 @@ impl NoiseValuePoint {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::{chunk::Biome, noise_router::OVERWORLD_BASE_NOISE_ROUTER};
+    use pumpkin_data::{
+        chunk::Biome, dimension::Dimension, noise_router::OVERWORLD_BASE_NOISE_ROUTER,
+    };
     use pumpkin_util::read_data_from_file;
 
     use crate::{
         GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
-        dimension::Dimension,
         generation::{
             noise::router::{
                 multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -71,7 +72,7 @@ mod test {
         let _chunk = ProtoChunk::new(
             chunk_x,
             chunk_z,
-            surface_config,
+            &Dimension::OVERWORLD,
             surface_config.default_block.get_state(),
             biome_mixer_seed,
         );
@@ -121,7 +122,7 @@ mod test {
 
         for (x, y, z, biome_id) in expected_data {
             let calculated_biome =
-                MultiNoiseBiomeSupplier::biome(x, y, z, &mut sampler, Dimension::Overworld);
+                MultiNoiseBiomeSupplier::biome(x, y, z, &mut sampler, Dimension::OVERWORLD);
 
             assert_eq!(
                 biome_id,
