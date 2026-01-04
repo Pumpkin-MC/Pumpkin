@@ -97,8 +97,11 @@ pub struct Level {
     pub level_channel: Arc<LevelChannel>,
     pub thread_tracker: Mutex<Vec<thread::JoinHandle<()>>>,
     pub chunk_listener: Arc<ChunkListener>,
+
+    pub tick_data: tokio::sync::Mutex<TickData>,
 }
 
+#[derive(Default)]
 pub struct TickData {
     pub block_ticks: Vec<OrderedTick<&'static Block>>,
     pub fluid_ticks: Vec<OrderedTick<&'static Fluid>>,
@@ -201,6 +204,7 @@ impl Level {
             level_channel: level_channel.clone(),
             thread_tracker,
             chunk_listener: listener.clone(),
+            tick_data: tokio::sync::Mutex::new(TickData::default()),
         });
 
         let num_threads = num_cpus::get().saturating_sub(2).max(1);
@@ -488,13 +492,9 @@ impl Level {
     }
 
     // Gets random ticks, block ticks and fluid ticks
-    pub async fn get_tick_data(&self) -> TickData {
-        let mut ticks = TickData {
-            block_ticks: Vec::new(),
-            fluid_ticks: Vec::new(),
-            random_ticks: Vec::with_capacity(self.loaded_chunks.len() * 3 * 16 * 16),
-            block_entities: Vec::new(),
-        };
+    pub async fn get_tick_data(&self) {
+        let mut ticks = self.tick_data.lock().await;
+        ticks.clear();
 
         let mut rng = SmallRng::from_rng(&mut rand::rng());
         let chunks = self
@@ -559,8 +559,6 @@ impl Level {
 
         ticks.block_ticks.sort_unstable();
         ticks.fluid_ticks.sort_unstable();
-
-        ticks
     }
 
     pub async fn clean_entity_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
@@ -901,5 +899,14 @@ impl Level {
             .await;
         let chunk = chunk.read().await;
         chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
+    }
+}
+
+impl TickData {
+    fn clear(&mut self) {
+        self.block_entities.clear();
+        self.block_ticks.clear();
+        self.fluid_ticks.clear();
+        self.random_ticks.clear();
     }
 }
