@@ -61,7 +61,8 @@ type HashMapType<K, V> = FxHashMap<K, V>;
 type HashSetType<K> = FxHashSet<K>;
 type ChunkPos = Vector2<i32>;
 type ChunkLevel = HashMapType<ChunkPos, i8>;
-type IOLock = Arc<(tokio::sync::Mutex<HashMapType<ChunkPos, u8>>, Notify)>;
+/// HashMap containing pending writes and a notify to wake tasks up when the chunk has been saved
+type IOLock = Arc<tokio::sync::Mutex<HashMapType<ChunkPos, Arc<Notify>>>>;
 
 pub struct HeapNode(i8, ChunkPos);
 impl PartialEq for HeapNode {
@@ -1361,10 +1362,7 @@ impl GenerationSchedule {
             crossfire::mpmc::bounded_tx_blocking_rx_async(oi_read_thread_count + 2);
         let (send_write_io, recv_write_io) = crossfire::spsc::unbounded_async();
         let (send_gen, recv_gen) = crossfire::mpmc::bounded_blocking(gen_thread_count + 5);
-        let io_lock = Arc::new((
-            tokio::sync::Mutex::new(HashMapType::default()),
-            Notify::new(),
-        ));
+        let io_lock: IOLock = Arc::new(tokio::sync::Mutex::new(HashMapType::default()));
         for _ in 0..oi_read_thread_count {
             tracker.spawn(Self::io_read_work(
                 recv_read_io.clone(),
@@ -1594,20 +1592,16 @@ impl GenerationSchedule {
         while let Ok(pos) = recv.recv().await {
             // debug!("io read thread receive chunk pos {pos:?}");
             loop {
-                let notified = lock.1.notified();
-                {
-                    log::warn!("Read: {:?} - Trying to acquire IOLock!", pos);
-                    let data = lock.0.lock().await;
-                    log::warn!("Read: {:?} - Acquired IOLock! ", pos);
-                    if !data.contains_key(&pos) {
-                        log::warn!("Read: {:?} - No write pending!", pos);
-                        log::warn!("Read: {:?} - Dropped IOLock!", pos);
-                        break;
+                let notify = {
+                    let pending_writes = lock.lock().await;
+                    pending_writes.get(&pos).map(|n| n.clone())
+                };
+                match notify {
+                    Some(n) => {
+                        n.notified().await;
                     }
-                    log::warn!("Read: {:?} - Dropped IOLock!", pos);
+                    None => break,
                 }
-                notified.await;
-                log::warn!("Read: {:?} - Got notified to continue!", pos);
             }
 
             level
@@ -1688,24 +1682,16 @@ impl GenerationSchedule {
                 .unwrap();
 
             {
-                log::warn!("Write: {:?} - Trying to acquire IOLock!", positions.len());
-                let mut data = lock.0.lock().await;
-                log::warn!("Write: {:?} - Acquired IOLock!", positions.len());
+                let mut data = lock.lock().await;
                 for pos in &positions {
-                    if let Entry::Occupied(mut entry) = data.entry(*pos) {
-                        let rc = entry.get_mut();
-                        if *rc == 1 {
-                            entry.remove();
-                        } else {
-                            *rc -= 1;
-                        }
+                    if let Entry::Occupied(entry) = data.entry(*pos) {
+                        let n = entry.remove();
+                        n.notify_waiters(); // could maybe be notify_one?
                     } else {
                         panic!("Position {:?} not in lock map!", pos);
                     }
                 }
-                log::warn!("Write: {:?} - Dropped IOLock!", positions.len());
             }
-            lock.1.notify_waiters();
         }
         log::info!(
             "io write thread stop id: {:?} name: {}",
@@ -1792,14 +1778,14 @@ impl GenerationSchedule {
         if chunks.is_empty() {
             return;
         }
-        log::warn!("Unload: Trying to acquire IOLock!");
-        let mut data = self.io_lock.0.lock().await;
-        log::warn!("Unload: Acquired IOLock!");
+        let mut data = self.io_lock.lock().await;
         for (pos, _chunk) in &chunks {
-            *data.entry(*pos).or_insert(0) += 1;
+            if data.contains_key(&pos) {
+                continue;
+            }
+            data.insert(*pos, Arc::new(Notify::new()));
         }
         drop(data);
-        log::warn!("Unload: Dropped IOLock!");
         self.io_write.send(chunks).expect("io write thread stop");
     }
 
@@ -1823,14 +1809,14 @@ impl GenerationSchedule {
         if chunks.is_empty() {
             return;
         }
-        log::warn!("Save: Trying to acquire IOLock!");
-        let mut data = self.io_lock.0.lock().await;
-        log::warn!("Save: Acquired IOLock!");
+        let mut data = self.io_lock.lock().await;
         for (pos, _chunk) in &chunks {
-            *data.entry(*pos).or_insert(0) += 1;
+            if data.contains_key(&pos) {
+                continue;
+            }
+            data.insert(*pos, Arc::new(Notify::new()));
         }
         drop(data);
-        log::warn!("Save: Dropped IOLock!");
         self.io_write.send(chunks).expect("io write thread stop");
     }
 
