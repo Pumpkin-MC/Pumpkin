@@ -1646,12 +1646,13 @@ impl JavaClient {
                 *equip_item = binding;
             }
         }
+        drop(held);
 
         send_cancellable! {{
             event;
             'after: {
+                let held = item_in_hand.lock().await;
                 let item = held.item;
-                drop(held);
                 server.item_registry.on_use(item, player).await;
             }
         }}
