@@ -10,11 +10,11 @@ clientbound = []
 query = []
 
 [dependencies]
-pumpkin-nbt = { path = "../pumpkin-nbt" }
-pumpkin-data = { path = "../pumpkin-data" }
-pumpkin-macros = { path = "../pumpkin-macros" }
-pumpkin-world = { path = "../pumpkin-world" }
-pumpkin-util = { path = "../pumpkin-util" }
+pumpkin-nbt.workspace = true
+pumpkin-data.workspace = true
+pumpkin-macros.workspace = true
+pumpkin-world.workspace = true
+pumpkin-util.workspace = true
 
 uuid.workspace = true
 serde.workspace = true
@@ -23,15 +23,15 @@ tokio.workspace = true
 bytes.workspace = true
 
 # encryption
-aes = "0.8"
-cfb8 = "0.8"
+aes.workspace = true
+cfb8.workspace = true
 
 # compression
-async-compression = { version = "0.4.35", features = ["tokio", "zlib"] }
+async-compression = { workspace = true, features = ["tokio", "zlib"] }
 
-take_mut = "0.2.2"
-bitflags = "2.10.0"
+take_mut.workspace = true
+bitflags.workspace = true
 
 [dev-dependencies]
 # Validate correctness
-flate2 = "1.1.5"
+flate2.workspace = true

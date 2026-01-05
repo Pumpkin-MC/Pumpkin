@@ -4,26 +4,26 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-pumpkin-nbt = { path = "../pumpkin-nbt" }
+pumpkin-nbt.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 bytes.workspace = true
 
-num-derive = "0.4"
-num-traits = "0.2"
+num-derive.workspace = true
+num-traits.workspace = true
 
-colored = "3.0"
-md5 = "0.8"
-quote = "1.0"
+colored.workspace = true
+md5.workspace = true
+quote.workspace = true
 syn.workspace = true
-proc-macro2 = "1.0"
-enum_dispatch = "0.3.13"
+proc-macro2.workspace = true
+enum_dispatch.workspace = true
 
 uuid.workspace = true
 tokio = { workspace = true, features = [
     "sync",
 ] }
-base64 = "0.22.1"
-p384 = { version = "0.13.1", features = ["ecdsa"] }
+base64.workspace = true
+p384 = { workspace = true, features = ["ecdsa"] }
 thiserror.workspace = true
-ecdsa = "0.16.9"
+ecdsa.workspace = true

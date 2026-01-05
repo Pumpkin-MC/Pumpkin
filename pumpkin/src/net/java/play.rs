@@ -1443,7 +1443,6 @@ impl JavaClient {
             .await;
     }
 
-    #[allow(clippy::too_many_lines)]
     pub async fn handle_use_item_on(
         &self,
         player: &Player,
@@ -1548,7 +1547,7 @@ impl JavaClient {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     async fn call_use_item_on(
         &self,
         player: &Player,
@@ -1872,7 +1871,7 @@ impl JavaClient {
     const WORLD_LOWEST_Y: i8 = -64;
     const WORLD_MAX_Y: u16 = 320;
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     async fn run_is_block_place(
         &self,
         player: &Player,

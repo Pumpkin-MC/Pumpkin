@@ -3,10 +3,10 @@ use std::sync::Arc;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
@@ -143,7 +143,7 @@ impl BlockBehaviour for BedBlock {
         })
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position).await;
@@ -163,7 +163,7 @@ impl BlockBehaviour for BedBlock {
             };
 
             // Explode if not in the overworld
-            if args.world.dimension_type != VanillaDimensionType::Overworld {
+            if args.world.dimension != Dimension::OVERWORLD {
                 args.world
                     .break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS)
                     .await;
@@ -235,7 +235,7 @@ impl BlockBehaviour for BedBlock {
             if args
                 .player
                 .set_respawn_point(
-                    args.world.dimension_type,
+                    args.world.dimension,
                     bed_head_pos,
                     args.player.get_entity().yaw.load(),
                 )

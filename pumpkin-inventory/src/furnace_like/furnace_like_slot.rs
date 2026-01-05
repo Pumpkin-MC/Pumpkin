@@ -6,21 +6,21 @@ use pumpkin_world::inventory::Inventory;
 use crate::slot::{BoxFuture, Slot};
 
 #[derive(Debug, Clone, Copy)]
-pub enum FurnaceSlotType {
+pub enum FurnaceLikeSlotType {
     Top = 0,
     Bottom = 1,
     Side = 2,
 }
 
-pub struct FurnaceSlot {
+pub struct FurnaceLikeSlot {
     pub inventory: Arc<dyn Inventory>,
-    pub slot_type: FurnaceSlotType,
+    pub slot_type: FurnaceLikeSlotType,
     pub index: usize,
     pub id: AtomicU8,
 }
 
-impl FurnaceSlot {
-    pub fn new(inventory: Arc<dyn Inventory>, slot_type: FurnaceSlotType) -> Self {
+impl FurnaceLikeSlot {
+    pub fn new(inventory: Arc<dyn Inventory>, slot_type: FurnaceLikeSlotType) -> Self {
         Self {
             inventory,
             slot_type,
@@ -29,7 +29,7 @@ impl FurnaceSlot {
         }
     }
 }
-impl Slot for FurnaceSlot {
+impl Slot for FurnaceLikeSlot {
     fn get_inventory(&self) -> Arc<dyn Inventory> {
         self.inventory.clone()
     }
@@ -52,11 +52,11 @@ impl Slot for FurnaceSlot {
     fn can_insert<'a>(&'a self, stack: &'a pumpkin_world::item::ItemStack) -> BoxFuture<'a, bool> {
         Box::pin(async move {
             match self.slot_type {
-                FurnaceSlotType::Top => true,
-                FurnaceSlotType::Bottom => {
+                FurnaceLikeSlotType::Top => true,
+                FurnaceLikeSlotType::Bottom => {
                     is_fuel(stack.item.id) || stack.item.id == Item::BUCKET.id
                 }
-                FurnaceSlotType::Side => false,
+                FurnaceLikeSlotType::Side => false,
             }
         })
     }

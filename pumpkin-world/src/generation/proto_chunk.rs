@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::tag;
 use pumpkin_data::{
@@ -35,14 +36,13 @@ use crate::generation::height_limit::HeightLimitView;
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
 use crate::generation::structure::placement::StructurePlacementCalculator;
-use crate::generation::structure::structures::StructurePosition;
-use crate::generation::structure::{STRUCTURE_SETS, STRUCTURES, Structure, StructureType};
+use crate::generation::structure::structures::StructureInstance;
+use crate::generation::structure::{STRUCTURE_SETS, STRUCTURES, Structure};
 use crate::{
     BlockStateId, ProtoNoiseRouters,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier},
     block::RawBlockState,
     chunk::CHUNK_AREA,
-    dimension::Dimension,
     generation::{biome, positions::chunk_pos},
     world::{BlockAccessor, BlockRegistryExt},
 };
@@ -118,7 +118,7 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 ///
 /// 12. full: Generation is done and a chunk can now be loaded. The proto-chunk is now converted to a level chunk and all block updates deferred in the above steps are executed.
 ///
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ProtoChunk {
     pub x: i32,
     pub z: i32,
@@ -126,7 +126,7 @@ pub struct ProtoChunk {
     biome_mixer_seed: i64,
     // These are local positions
     flat_block_map: Box<[BlockStateId]>,
-    flat_biome_map: Box<[&'static Biome]>,
+    pub flat_biome_map: Box<[&'static Biome]>,
     /// HEIGHTMAPS
     ///
     /// Top block that is not air
@@ -135,7 +135,8 @@ pub struct ProtoChunk {
     pub flat_motion_blocking_height_map: Box<[i16]>,
     pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
     // may want to use chunk status
-    structure_starts: HashMap<Structure, (StructurePosition, StructureType)>,
+    structure_starts: HashMap<Structure, StructureInstance>,
+
     // Height of the chunk for indexing
     height: u16,
     bottom_y: i8,
@@ -167,12 +168,11 @@ impl ProtoChunk {
     pub fn new(
         x: i32,
         z: i32,
-        settings: &GenerationSettings,
+        dimension: &Dimension,
         default_block: &'static BlockState,
         biome_mixer_seed: i64,
     ) -> Self {
-        let generation_shape = &settings.shape;
-        let height = generation_shape.height;
+        let height = dimension.logical_height as u16;
 
         let default_heightmap = vec![i16::MIN; CHUNK_AREA].into_boxed_slice();
         Self {
@@ -194,34 +194,40 @@ impl ProtoChunk {
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
             structure_starts: HashMap::new(),
             height,
-            bottom_y: generation_shape.min_y,
+            bottom_y: dimension.min_y as i8,
             stage: StagedChunkEnum::Empty,
         }
     }
 
     pub fn from_chunk_data(
         chunk_data: &ChunkData,
-        settings: &GenerationSettings,
+        dimension: &Dimension,
         default_block: &'static BlockState,
         biome_mixer_seed: i64,
     ) -> Self {
         let mut proto_chunk = ProtoChunk::new(
             chunk_data.x,
             chunk_data.z,
-            settings,
+            dimension,
             default_block,
             biome_mixer_seed,
         );
 
         for (section_y, section) in chunk_data.section.sections.iter().enumerate() {
+            // 1. Calculate the base Y for this section
+            let section_base_y = section_y as i32 * 16;
+
+            if section_base_y >= proto_chunk.height() as i32 {
+                continue;
+            }
+
             for x in 0..16 {
                 for y in 0..16 {
                     for z in 0..16 {
                         let block_state_id = section.block_states.get(x, y, z);
                         let block_state = BlockState::from_id(block_state_id);
 
-                        let absolute_y =
-                            (section_y << 4) as i32 + y as i32 + chunk_data.section.min_y;
+                        let absolute_y = section_base_y + y as i32 + chunk_data.section.min_y;
 
                         proto_chunk.set_block_state(
                             &Vector3::new(x as i32, absolute_y, z as i32),
@@ -230,18 +236,23 @@ impl ProtoChunk {
                     }
                 }
             }
+
             for x in 0..4 {
                 for y in 0..4 {
                     for z in 0..4 {
                         let biome_id = section.biomes.get(x, y, z);
                         let biome = Biome::from_id(biome_id).unwrap();
 
-                        let relative_y_block = (section_y as i32 * 16) + (y as i32 * 4);
+                        let relative_y_block = section_base_y + (y as i32 * 4);
+
+                        let biome_y_idx = biome_coords::from_block(relative_y_block);
+
                         let index = proto_chunk.local_biome_pos_to_biome_index(
                             x as i32,
-                            biome_coords::from_block(relative_y_block),
+                            biome_y_idx,
                             z as i32,
                         );
+
                         proto_chunk.flat_biome_map[index] = biome;
                     }
                 }
@@ -395,7 +406,7 @@ impl ProtoChunk {
     }
 
     #[inline]
-    fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
+    pub fn local_biome_pos_to_biome_index(&self, x: i32, y: i32, z: i32) -> usize {
         #[cfg(debug_assertions)]
         {
             assert!((0..=3).contains(&x));
@@ -479,7 +490,6 @@ impl ProtoChunk {
     }
 
     pub fn step_to_biomes(&mut self, dimension: Dimension, noise_router: &ProtoNoiseRouters) {
-        debug_assert_eq!(self.stage, StagedChunkEnum::Empty);
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
         let horizontal_biome_end = biome_coords::from_block(16);
@@ -501,7 +511,7 @@ impl ProtoChunk {
         random_config: &GlobalRandomConfig,
         noise_router: &ProtoNoiseRouters,
     ) {
-        debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
+        //debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
 
         let generation_shape = &settings.shape;
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
@@ -607,7 +617,7 @@ impl ProtoChunk {
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
-                        let biome = if dimension == Dimension::End {
+                        let biome = if dimension == Dimension::THE_END {
                             TheEndBiomeSupplier::biome(
                                 start_biome_x + x,
                                 start_biome_y + y,
@@ -912,11 +922,17 @@ impl ProtoChunk {
             Xoroshiro::get_population_seed(random_config.seed, block_pos.0.x, block_pos.0.z);
 
         let _chunk_box = chunk.get_block_box_for_chunk();
-        for (_structure, (pos, stype)) in chunk.structure_starts.clone() {
-            dbg!("generating structure");
-            stype.generate(pos.clone(), chunk);
+        for (_structure_config, instance) in chunk.structure_starts.clone() {
+            dbg!("generating");
+            match instance {
+                StructureInstance::Start(pos, _stype) => {
+                    // Use the collector directly to place blocks
+                    pos.collector
+                        .generate_in_chunk(chunk, random_config.seed as i64);
+                }
+                StructureInstance::Reference(_start_block_pos) => {}
+            }
         }
-
         // TODO: This needs to be different depending on what biomes are in the chunk -> affects the
         // random
         for (name, feature) in PLACED_FEATURES.iter() {
@@ -938,33 +954,40 @@ impl ProtoChunk {
     }
 
     pub fn set_structure_starts(&mut self, random_config: &GlobalRandomConfig) {
-        for (name, set) in STRUCTURE_SETS.iter() {
+        for (_set_name, set) in STRUCTURE_SETS.iter() {
             let calculator = StructurePlacementCalculator {
                 seed: random_config.seed as i64,
             };
-            // for structure in &set.structures {
-            //     let start = self.structure_starts.get(STRUCTURES.get(name).unwrap());
-            // }
-            if !set.placement.should_generate(calculator, self.x, self.z) {
-                continue; // ??
-            }
 
-            if set.structures.len() == 1 {
-                let position = set.structures[0]
-                    .structure
-                    .get_structure_position(name, self);
-                if let Some(position) = position
-                    && !position.generator.pieces_positions.is_empty()
+            if !set.placement.should_generate(calculator, self.x, self.z) {
+                continue;
+            }
+            if set.structures.len() == 1
+                && let Some(structure_entry) = set.structures.first()
+            {
+                let position = structure_entry.structure.try_generate(
+                    random_config.seed as i64,
+                    self.x,
+                    self.z,
+                    self,
+                );
+
+                if let Some(pos) = position
+                    && let Some(structure_config) = STRUCTURES.get(&structure_entry.structure)
                 {
                     self.structure_starts.insert(
-                        STRUCTURES.get(name).unwrap().clone(),
-                        (position, set.structures[0].structure.clone()),
+                        structure_config.clone(),
+                        StructureInstance::Start(pos, structure_entry.structure.clone()),
                     );
                 }
-                return;
             }
-            // TODO: handle multiple structures
+            // TODO add weight
         }
+        self.stage = StagedChunkEnum::StructureStart;
+    }
+
+    pub fn set_structure_references(&mut self) {
+        self.stage = StagedChunkEnum::StructureReferences;
     }
 
     fn get_block_box_for_chunk(&self) -> BlockBox {
@@ -1018,8 +1041,7 @@ impl BlockAccessor for ProtoChunk {
     }
 }
 
-#[cfg(test)]
-#[allow(dead_code)] // TODO: Fix tests to work with new ProtoChunk API
+#[cfg(test)] // TODO: Fix tests to work with new ProtoChunk API
 mod test {
     /*
     TODO: Update all tests to work with the new ProtoChunk API that doesn't use lifetimes.

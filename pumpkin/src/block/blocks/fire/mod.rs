@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, tag};
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
@@ -84,10 +84,8 @@ impl FireBlockBase {
         block_pos: &BlockPos,
         direction: BlockDirection,
     ) -> bool {
-        let dimension = world.dimension_type;
-        if dimension != VanillaDimensionType::Overworld
-            && dimension != VanillaDimensionType::TheNether
-        {
+        let dimension = world.dimension;
+        if dimension != Dimension::OVERWORLD && dimension != Dimension::THE_NETHER {
             return false;
         }
         let mut found = false;

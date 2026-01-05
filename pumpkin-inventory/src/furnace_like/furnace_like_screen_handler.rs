@@ -1,6 +1,6 @@
 use std::{any::Any, pin::Pin, sync::Arc};
 
-use pumpkin_data::fuels::is_fuel;
+use pumpkin_data::{fuels::is_fuel, screen::WindowType};
 use pumpkin_world::{block::entities::BlockEntity, inventory::Inventory, item::ItemStack};
 
 use crate::{
@@ -11,31 +11,29 @@ use crate::{
     },
 };
 
-use super::furnace_slot::{FurnaceSlot, FurnaceSlotType};
+use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType};
 
-pub struct FurnaceScreenHandler {
+pub struct FurnaceLikeScreenHandler {
     pub inventory: Arc<dyn Inventory>,
     behaviour: ScreenHandlerBehaviour,
 }
 
-impl FurnaceScreenHandler {
+impl FurnaceLikeScreenHandler {
     pub async fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
         inventory: Arc<dyn Inventory>,
         furnace_block_entity: Arc<dyn BlockEntity>,
+        window_type: WindowType,
     ) -> Self {
-        let furnace_property_delegate = furnace_block_entity.to_property_delegate().unwrap();
+        let furnace_like_property_delegate = furnace_block_entity.to_property_delegate().unwrap();
         let mut handler = Self {
             inventory,
-            behaviour: ScreenHandlerBehaviour::new(
-                sync_id,
-                Some(pumpkin_data::screen::WindowType::Furnace),
-            ),
+            behaviour: ScreenHandlerBehaviour::new(sync_id, Some(window_type)),
         };
 
-        struct FurnaceScreenListener;
-        impl ScreenHandlerListener for FurnaceScreenListener {
+        struct FurnaceLikeScreenListener;
+        impl ScreenHandlerListener for FurnaceLikeScreenListener {
             fn on_property_update<'a>(
                 &'a self,
                 screen_handler: &'a ScreenHandlerBehaviour,
@@ -57,10 +55,15 @@ impl FurnaceScreenHandler {
         // 2: Progress arrow counting from 0 to maximum progress (in-game ticks)
         // 3: Maximum progress always 200 on the vanilla server
         for i in 0..4 {
-            handler.add_property(ScreenProperty::new(furnace_property_delegate.clone(), i));
+            handler.add_property(ScreenProperty::new(
+                furnace_like_property_delegate.clone(),
+                i,
+            ));
         }
 
-        handler.add_listener(Arc::new(FurnaceScreenListener)).await;
+        handler
+            .add_listener(Arc::new(FurnaceLikeScreenListener))
+            .await;
         handler.add_inventory_slots();
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);
@@ -69,22 +72,22 @@ impl FurnaceScreenHandler {
     }
 
     fn add_inventory_slots(&mut self) {
-        self.add_slot(Arc::new(FurnaceSlot::new(
+        self.add_slot(Arc::new(FurnaceLikeSlot::new(
             self.inventory.clone(),
-            FurnaceSlotType::Top,
+            FurnaceLikeSlotType::Top,
         )));
-        self.add_slot(Arc::new(FurnaceSlot::new(
+        self.add_slot(Arc::new(FurnaceLikeSlot::new(
             self.inventory.clone(),
-            FurnaceSlotType::Bottom,
+            FurnaceLikeSlotType::Bottom,
         )));
-        self.add_slot(Arc::new(FurnaceSlot::new(
+        self.add_slot(Arc::new(FurnaceLikeSlot::new(
             self.inventory.clone(),
-            FurnaceSlotType::Side,
+            FurnaceLikeSlotType::Side,
         )));
     }
 }
 
-impl ScreenHandler for FurnaceScreenHandler {
+impl ScreenHandler for FurnaceLikeScreenHandler {
     fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
             self.default_on_closed(player).await;

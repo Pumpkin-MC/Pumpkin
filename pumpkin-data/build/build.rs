@@ -16,6 +16,7 @@ mod chunk_status;
 mod composter_increase_chance;
 mod damage_type;
 mod data_component;
+mod dimension;
 mod effect;
 mod enchantments;
 mod entity_pose;
@@ -62,6 +63,7 @@ pub fn main() {
         (chunk_status::build, "chunk_status.rs"),
         (game_event::build, "game_event.rs"),
         (game_rules::build, "game_rules.rs"),
+        (dimension::build, "dimension.rs"),
         (sound_category::build, "sound_category.rs"),
         (entity_pose::build, "entity_pose.rs"),
         (scoreboard_slot::build, "scoreboard_slot.rs"),

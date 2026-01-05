@@ -1,7 +1,8 @@
 use pumpkin_util::{
     math::floor_div,
     random::{
-        RandomGenerator, RandomImpl, get_carver_seed, get_region_seed, xoroshiro128::Xoroshiro,
+        RandomGenerator, RandomImpl, get_carver_seed, get_region_seed, legacy_rand::LegacyRand,
+        xoroshiro128::Xoroshiro,
     },
 };
 use serde::Deserialize;
@@ -10,7 +11,7 @@ use serde::Deserialize;
 pub struct StructurePlacement {
     frequency_reduction_method: Option<FrequencyReductionMethod>,
     frequency: Option<f32>,
-    salt: i32,
+    salt: u32,
     #[serde(flatten)]
     r#type: StructurePlacementType,
 }
@@ -43,8 +44,11 @@ impl StructurePlacement {
 #[serde(rename_all = "snake_case")]
 pub enum FrequencyReductionMethod {
     Default,
+    #[serde(rename = "legacy_type_1")]
     LegacyType1,
+    #[serde(rename = "legacy_type_2")]
     LegacyType2,
+    #[serde(rename = "legacy_type_3")]
     LegacyType3,
 }
 
@@ -54,7 +58,7 @@ impl FrequencyReductionMethod {
         seed: i64,
         chunk_x: i32,
         chunk_z: i32,
-        salt: i32,
+        salt: u32,
         frequency: f32,
     ) -> bool {
         match self {
@@ -105,7 +109,7 @@ impl StructurePlacementType {
         calculator: &StructurePlacementCalculator,
         chunk_x: i32,
         chunk_z: i32,
-        salt: i32,
+        salt: u32,
     ) -> bool {
         match self {
             StructurePlacementType::RandomSpread(placement) => {
@@ -120,7 +124,7 @@ impl StructurePlacementType {
 pub struct RandomSpreadStructurePlacement {
     spacing: i32,
     separation: i32,
-    spread_type: SpreadType,
+    spread_type: Option<SpreadType>,
 }
 
 #[derive(Deserialize)]
@@ -142,14 +146,15 @@ impl SpreadType {
 }
 
 impl RandomSpreadStructurePlacement {
-    fn get_start_chunk(&self, seed: i64, chunk_x: i32, chunk_z: i32, salt: i32) -> (i32, i32) {
+    fn get_start_chunk(&self, seed: i64, chunk_x: i32, chunk_z: i32, salt: u32) -> (i32, i32) {
         let x = floor_div(chunk_x, self.spacing);
         let z = floor_div(chunk_z, self.spacing);
         let region_seed = get_region_seed(seed as u64, x, z, salt);
-        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(region_seed));
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(region_seed));
         let bound = self.spacing - self.separation;
-        let rand_x = self.spread_type.get(&mut random, bound);
-        let rand_z = self.spread_type.get(&mut random, bound);
+        let spread_type = self.spread_type.as_ref().unwrap_or(&SpreadType::Linear);
+        let rand_x = spread_type.get(&mut random, bound);
+        let rand_z = spread_type.get(&mut random, bound);
         (x * self.spacing + rand_x, z * self.spacing + rand_z)
     }
 
@@ -158,7 +163,7 @@ impl RandomSpreadStructurePlacement {
         calculator: &StructurePlacementCalculator,
         chunk_x: i32,
         chunk_z: i32,
-        salt: i32,
+        salt: u32,
     ) -> bool {
         let pos = self.get_start_chunk(calculator.seed, chunk_x, chunk_z, salt);
         (chunk_x == pos.0) && (chunk_z == pos.1)
@@ -167,4 +172,32 @@ impl RandomSpreadStructurePlacement {
 
 pub struct StructurePlacementCalculator {
     pub seed: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::random::{
+        RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand,
+    };
+
+    use crate::generation::structure::placement::RandomSpreadStructurePlacement;
+
+    #[test]
+    fn test_get_start_chunk_random() {
+        let region_seed = get_region_seed(123, 1, 1, 14357620);
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(region_seed));
+        assert_eq!(random.next_bounded_i32(32 - 8), 8)
+    }
+
+    #[test]
+    fn test_get_start_chunk() {
+        let random = RandomSpreadStructurePlacement {
+            spacing: 32,
+            separation: 8,
+            spread_type: None,
+        };
+        let (x, z) = random.get_start_chunk(123, 1, 1, 14357620);
+        assert_eq!(x, 5);
+        assert_eq!(z, 4);
+    }
 }

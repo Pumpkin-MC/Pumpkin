@@ -21,7 +21,6 @@ pub async fn from_type(
 ) -> Arc<dyn EntityBase> {
     let entity = Entity::new(uuid, world.clone(), position, entity_type, false);
 
-    #[allow(clippy::single_match)]
     let mob: Arc<dyn EntityBase> = match entity_type.id {
         id if id == EntityType::ZOMBIE.id => Zombie::make(entity).await,
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),

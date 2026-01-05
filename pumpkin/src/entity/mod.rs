@@ -7,6 +7,7 @@ use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
@@ -25,7 +26,6 @@ use pumpkin_protocol::{
     },
     ser::serializer::Serializer,
 };
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::vector3::Axis;
 use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
@@ -126,12 +126,12 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     /// Returns if damage was successful or not
-    fn damage(
-        &self,
-        caller: Arc<dyn EntityBase>,
+    fn damage<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
-    ) -> EntityBaseFuture<'_, bool> {
+    ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             self.damage_with_context(caller, amount, damage_type, None, None, None)
                 .await
@@ -156,7 +156,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     fn damage_with_context<'a>(
         &'a self,
-        _caller: Arc<dyn EntityBase>,
+        _caller: &'a dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
@@ -220,7 +220,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     /// Kills the Entity.
-    fn kill(&self, caller: Arc<dyn EntityBase>) -> EntityBaseFuture<'_, ()> {
+    fn kill<'a>(&'a self, caller: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             if let Some(living) = self.get_living_entity() {
                 living
@@ -562,7 +562,7 @@ impl Entity {
         }
     }
 
-    #[allow(clippy::float_cmp)]
+    #[expect(clippy::float_cmp)]
     async fn adjust_movement_for_collisions(&self, movement: Vector3<f64>) -> Vector3<f64> {
         self.on_ground.store(false, Ordering::SeqCst);
 
@@ -725,7 +725,7 @@ impl Entity {
         self.velocity.store(motion);
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn tick_block_underneath(_caller: &Arc<dyn EntityBase>) {
         // let world = self.world.read().await;
 
@@ -993,7 +993,7 @@ impl Entity {
                 .await;
         }
 
-        let lava_speed = if self.world.dimension_type == VanillaDimensionType::TheNether {
+        let lava_speed = if self.world.dimension == Dimension::THE_NETHER {
             0.007
         } else {
             0.002_333_333
@@ -1128,7 +1128,6 @@ impl Entity {
 
     // Entity.movementInputToVelocity in yarn
 
-    #[allow(dead_code)]
     fn movement_input_to_velocity(&self, movement_input: Vector3<f64>, speed: f64) -> Vector3<f64> {
         let yaw = f64::from(self.yaw.load()).to_radians();
 
@@ -1155,7 +1154,7 @@ impl Entity {
         )
     }
 
-    #[allow(clippy::float_cmp)]
+    #[expect(clippy::float_cmp)]
     async fn get_velocity_multiplier(&self) -> f32 {
         let block = self.world.get_block(&self.block_pos.load()).await;
 
@@ -1170,7 +1169,7 @@ impl Entity {
         }
     }
 
-    #[allow(clippy::float_cmp)]
+    #[expect(clippy::float_cmp)]
     async fn get_jump_velocity_multiplier(&self) -> f32 {
         let f = self
             .world
@@ -1306,21 +1305,9 @@ impl Entity {
                 self.portal_cooldown
                     .store(self.default_portal_cooldown(), Ordering::Relaxed);
                 let pos = self.pos.load();
-                // TODO: this is bad
-                let scale_factor_new = if portal_manager.portal_world.dimension_type
-                    == VanillaDimensionType::TheNether
-                {
-                    8.0
-                } else {
-                    1.0
-                };
-                // TODO: this is bad
-                let scale_factor_current =
-                    if self.world.dimension_type == VanillaDimensionType::TheNether {
-                        8.0
-                    } else {
-                        1.0
-                    };
+                let scale_factor_new = portal_manager.portal_world.dimension.coordinate_scale;
+                let scale_factor_current = self.world.dimension.coordinate_scale;
+
                 let scale_factor = scale_factor_current / scale_factor_new;
                 // TODO
                 let pos = BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
@@ -1762,16 +1749,16 @@ impl Entity {
         vehicle.is_some()
     }
 
-    pub async fn check_out_of_world(&self, dyn_self: Arc<dyn EntityBase>) {
-        if self.pos.load().y < f64::from(self.world.generation_settings().shape.min_y) - 64.0 {
+    pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
+        if self.pos.load().y < f64::from(self.world.dimension.min_y) - 64.0 {
             // Tick out of world damage
             dyn_self
-                .damage(dyn_self.clone(), 4.0, DamageType::OUT_OF_WORLD)
+                .damage(dyn_self, 4.0, DamageType::OUT_OF_WORLD)
                 .await;
         }
     }
 
-    #[allow(clippy::unused_async)]
+    #[expect(clippy::unused_async)]
     pub async fn reset_state(&self) {
         self.pose.store(EntityPose::Standing);
         self.fall_flying.store(false, Relaxed);
@@ -1872,7 +1859,7 @@ impl EntityBase for Entity {
         Box::pin(async move {
             self.tick_portal(&caller).await;
             self.update_fluid_state(&caller).await;
-            self.check_out_of_world(caller.clone()).await;
+            self.check_out_of_world(&*caller).await;
             let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
             if fire_ticks > 0 {
                 if self.entity_type.fire_immune {
@@ -1882,9 +1869,7 @@ impl EntityBase for Entity {
                     }
                 } else {
                     if fire_ticks % 20 == 0 {
-                        caller
-                            .damage(caller.clone(), 1.0, DamageType::ON_FIRE)
-                            .await;
+                        caller.damage(&*caller, 1.0, DamageType::ON_FIRE).await;
                     }
 
                     self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);

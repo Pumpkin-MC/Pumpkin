@@ -365,7 +365,7 @@ pub async fn spawn_category_for_position(
         let mut new_z = new_pos.0.z;
         let mut random_group_size = (rng().random::<f32>() * 4.).ceil() as i32;
         let mut inc = 0;
-        #[allow(unused_variables)]
+        #[expect(unused_variables)]
         let group_size = 0;
         'outer: while inc < random_group_size {
             new_x += rng().random_range(0..6) - rng().random_range(0..6);
@@ -454,8 +454,7 @@ pub fn is_right_distance_to_player_and_spawn_point(
     if pos.to_centered_f64().squared_distance_to(0., 0., 0.) <= 24. * 24. {
         return false;
     }
-    #[allow(clippy::overly_complex_bool_expr)]
-    #[allow(clippy::nonminimal_bool)]
+    #[expect(clippy::nonminimal_bool)]
     {
         chunk_pos == &Vector2::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)) || false // TODO canSpawnEntitiesInChunk(ChunkPos chunkPos)
     }

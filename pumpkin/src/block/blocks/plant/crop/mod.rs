@@ -22,7 +22,9 @@ type FarmlandProperties = FarmlandLikeProperties;
 pub mod beetroot;
 pub mod carrot;
 pub mod gourds;
+pub mod nether_wart;
 pub mod potatoes;
+pub mod sweet_berry_bush;
 pub mod torch_flower;
 pub mod wheat;
 

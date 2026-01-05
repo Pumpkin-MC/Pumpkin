@@ -100,7 +100,7 @@ mod format {
 
         use crate::data::banlist_serializer::format::DATE_FORMAT;
 
-        #[allow(clippy::ref_option)]
+        #[expect(clippy::ref_option)]
         pub fn serialize<S: Serializer>(
             date: &Option<OffsetDateTime>,
             serializer: S,

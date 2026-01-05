@@ -14,10 +14,12 @@ use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
 use crate::block::entities::command_block::CommandBlockEntity;
+use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
+use crate::block::entities::smoker::SmokerBlockEntity;
 use crate::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
     block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
@@ -25,6 +27,7 @@ use crate::{
 
 pub mod barrel;
 pub mod bed;
+pub mod blasting_furnace;
 pub mod chest;
 pub mod chiseled_bookshelf;
 pub mod command_block;
@@ -33,11 +36,13 @@ pub mod dropper;
 pub mod end_portal;
 pub mod ender_chest;
 pub mod furnace;
+pub mod furnace_like_block_entity;
 pub mod hopper;
 pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
 pub mod sign;
+pub mod smoker;
 
 //TODO: We need a mark_dirty for chests
 pub trait BlockEntity: Send + Sync {
@@ -148,6 +153,10 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         >(nbt)),
         FurnaceBlockEntity::ID => Arc::new(block_entity_from_generic::<FurnaceBlockEntity>(nbt)),
         CommandBlockEntity::ID => Arc::new(block_entity_from_generic::<CommandBlockEntity>(nbt)),
+        BlastingFurnaceBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<BlastingFurnaceBlockEntity>(nbt))
+        }
+        SmokerBlockEntity::ID => Arc::new(block_entity_from_generic::<SmokerBlockEntity>(nbt)),
         _ => return None,
     })
 }

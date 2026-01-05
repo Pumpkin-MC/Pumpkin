@@ -4,12 +4,12 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-pumpkin-util = { path = "../pumpkin-util" }
+pumpkin-util.workspace = true
 serde.workspace = true
 log.workspace = true
 uuid.workspace = true
 
-toml = "0.9"
+toml.workspace = true
 
 [features]
 # Adds helper to change the config at runtime

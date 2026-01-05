@@ -336,7 +336,9 @@ impl ChunkSections {
         block_state_id: BlockStateId,
     ) -> BlockStateId {
         let y = y - self.min_y;
-        debug_assert!(y >= 0);
+        if y < 0 {
+            return Block::AIR.default_state.id;
+        }
         let relative_y = y as usize;
 
         self.set_relative_block(relative_x, relative_y, relative_z, block_state_id)

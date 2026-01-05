@@ -8,7 +8,6 @@ use crate::{
         format::{anvil::AnvilChunkFile, linear::LinearFile},
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
     },
-    dimension::Dimension,
     generation::get_world_gen,
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
@@ -19,6 +18,7 @@ use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{chunk::ChunkConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
@@ -529,19 +529,19 @@ impl Level {
                         chunk_z_base + z_offset,
                     );
 
-                    let block_id = chunk
+                    let block_state_id = chunk
                         .section
                         .get_block_absolute_y(x_offset as usize, random_pos.0.y, z_offset as usize)
                         .unwrap_or(Block::AIR.default_state.id);
 
-                    section_block_data.push((random_pos, block_id));
+                    section_block_data.push((random_pos, block_state_id));
                 }
                 section_blocks.push(section_block_data);
             }
 
             for section_data in section_blocks {
-                for (random_pos, block_id) in section_data {
-                    if has_random_ticks(block_id) {
+                for (random_pos, block_state_id) in section_data {
+                    if has_random_ticks(block_state_id) {
                         ticks.random_ticks.push(ScheduledTick {
                             position: random_pos,
                             delay: 0,

@@ -12,7 +12,6 @@ const MIN_WAITING_TIME: i32 = 1200;
 const MAX_TRYING_TIME: i32 = 1200;
 const MIN_INTERVAL: i32 = 200;
 
-#[allow(dead_code)]
 pub struct MoveToTargetPosGoal<M: MoveToTargetPos> {
     goal_control: Controls,
     pub move_to_target_pos: ParentHandle<M>,
@@ -50,7 +49,6 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
         }
     }
 
-    #[allow(dead_code)]
     #[must_use]
     pub fn with_default(move_to_target_pos: ParentHandle<M>, speed: f64, range: i32) -> Self {
         Self::new(move_to_target_pos, speed, range, 1)

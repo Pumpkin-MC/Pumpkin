@@ -17,15 +17,15 @@ doctest = false
 
 [dependencies]
 # pumpkin
-pumpkin-util = { path = "../pumpkin-util" }
-pumpkin-nbt = { path = "../pumpkin-nbt" }
-pumpkin-config = { path = "../pumpkin-config" }
-pumpkin-inventory = { path = "../pumpkin-inventory" }
-pumpkin-world = { path = "../pumpkin-world" }
-pumpkin-data = { path = "../pumpkin-data" }
-pumpkin-protocol = { path = "../pumpkin-protocol" }
-pumpkin-registry = { path = "../pumpkin-registry" }
-pumpkin-macros = { path = "../pumpkin-macros" }
+pumpkin-util.workspace = true
+pumpkin-nbt.workspace = true
+pumpkin-config.workspace = true
+pumpkin-inventory.workspace = true
+pumpkin-world.workspace = true
+pumpkin-data.workspace = true
+pumpkin-protocol.workspace = true
+pumpkin-registry.workspace = true
+pumpkin-macros.workspace = true
 
 log.workspace = true
 crossbeam.workspace = true
@@ -50,47 +50,45 @@ serde_json.workspace = true
 
 bytes.workspace = true
 
-rand = "=0.10.0-rc.5"
+rand.workspace = true
 
-num-bigint = "0.4"
+num-bigint.workspace = true
 
 # Console line reading
-rustyline-async = "0.4.7"
+rustyline-async.workspace = true
 
 # encryption
-rsa = { version = "=0.10.0-rc.10", features = ["sha1"] }
-pkcs8 = "=0.11.0-rc.8"
+rsa = { workspace = true, features = ["sha1"] }
+pkcs8.workspace = true
 
 # authentication
-ureq = { version = "3.1.4", features = [
-    "json",
-] }
+ureq = { workspace = true, features = ["json"] }
 
 
-sha1 = "=0.11.0-rc.3"
+sha1.workspace = true
 
 # velocity en
-hmac = "=0.13.0-rc.3"
-sha2 = "=0.11.0-rc.3"
+hmac.workspace = true
+sha2.workspace = true
 
-base64 = "0.22.1"
+base64.workspace = true
 
 # logging
-simplelog = { version = "0.12.2", features = ["ansi_term"] }
+simplelog = { workspace = true, features = ["ansi_term"] }
 
 # Remove time in favor of chrono?
-time = { version = "0.3", features = ["parsing", "macros"] }
+time = { workspace = true, features = ["parsing", "macros"] }
 
 # plugins
-libloading = "0.9"
-rustc-hash = "2.1.1"
+libloading.workspace = true
+rustc-hash.workspace = true
 
 # Task handling
-tokio-util = { version = "0.7.17", features = ["rt"] }
+tokio-util = { workspace = true, features = ["rt"] }
 
-flate2 = "1.1.5"
-console-subscriber = { version = "0.5.0", default-features= false, optional = true }
-signature = "2.2.0"
+flate2.workspace = true
+console-subscriber = { workspace = true, optional = true }
+signature.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 

@@ -55,7 +55,7 @@ pub struct MaterialRuleContext<'a> {
 }
 
 impl<'a> MaterialRuleContext<'a> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         min_y: i8,
         height: u16,

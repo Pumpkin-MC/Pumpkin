@@ -1,8 +1,10 @@
-use pumpkin_data::block_properties::{
-    BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
-};
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, tag};
+use pumpkin_data::{
+    Block,
+    block_properties::{BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15},
+    tag,
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -14,10 +16,10 @@ use crate::block::{
     OnScheduledTickArgs, RandomTickArgs,
 };
 
-#[pumpkin_block("minecraft:cactus")]
-pub struct CactusBlock;
+#[pumpkin_block("minecraft:sugar_cane")]
+pub struct SugarCaneBlock;
 
-impl BlockBehaviour for CactusBlock {
+impl BlockBehaviour for SugarCaneBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if !can_place_at(args.world.as_ref(), args.position).await {
@@ -35,21 +37,23 @@ impl BlockBehaviour for CactusBlock {
                 .get_block_state(&args.position.up())
                 .await
                 .is_air()
+                && !(args.world.get_block(&args.position.down()).await == &Block::SUGAR_CANE
+                    && args.world.get_block(&args.position.down().down()).await
+                        == &Block::SUGAR_CANE)
             {
                 let state_id = args.world.get_block_state(args.position).await.id;
                 let age = CactusLikeProperties::from_state_id(state_id, args.block).age;
                 if age == Integer0To15::L15 {
                     args.world
-                        .set_block_state(
-                            &args.position.up(),
-                            Block::CACTUS.default_state.id,
-                            BlockFlags::empty(),
-                        )
+                        .set_block_state(&args.position.up(), state_id, BlockFlags::empty())
                         .await;
+                    let props = CactusLikeProperties {
+                        age: Integer0To15::L0,
+                    };
                     args.world
                         .set_block_state(
                             args.position,
-                            Block::CACTUS.default_state.id,
+                            props.to_state_id(args.block),
                             BlockFlags::empty(),
                         )
                         .await;
@@ -69,11 +73,6 @@ impl BlockBehaviour for CactusBlock {
         })
     }
 
-    // async fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {
-    //     // TODO
-    //     //args.entity.damage(1.0, DamageType::CACTUS).await;
-    // }
-
     fn get_state_for_neighbor_update<'a>(
         &'a self,
         args: GetStateForNeighborUpdateArgs<'a>,
@@ -84,7 +83,6 @@ impl BlockBehaviour for CactusBlock {
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                     .await;
             }
-
             args.state_id
         })
     }
@@ -94,19 +92,26 @@ impl BlockBehaviour for CactusBlock {
     }
 }
 
-async fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    // TODO: use tags
-    // Disallow to place any blocks nearby a cactus
-    for direction in BlockDirection::horizontal() {
-        let (block, state) = world
-            .get_block_and_state(&block_pos.offset(direction.to_offset()))
-            .await;
-        if state.is_solid() || block == &Block::LAVA {
-            return false;
+async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    let block_below = block_accessor.get_block(&block_pos.down()).await;
+
+    if block_below == &Block::SUGAR_CANE {
+        return true;
+    }
+
+    if block_below.has_tag(&tag::Block::MINECRAFT_DIRT)
+        || block_below.has_tag(&tag::Block::MINECRAFT_SAND)
+    {
+        for direction in HorizontalFacing::all() {
+            let block = block_accessor
+                .get_block(&block_pos.down().offset(direction.to_offset()))
+                .await;
+
+            if block == &Block::WATER || block == &Block::FROSTED_ICE {
+                return true;
+            }
         }
     }
-    let block = world.get_block(&block_pos.down()).await;
-    // TODO: use tags
-    (block == &Block::CACTUS || block.has_tag(&tag::Block::MINECRAFT_SAND))
-        && !world.get_block_state(&block_pos.up()).await.is_liquid()
+
+    false
 }

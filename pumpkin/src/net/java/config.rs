@@ -166,6 +166,7 @@ impl JavaClient {
             pumpkin_data::tag::RegistryKey::Item,
             pumpkin_data::tag::RegistryKey::EntityType,
             pumpkin_data::tag::RegistryKey::Dialog,
+            pumpkin_data::tag::RegistryKey::Timeline,
         ]))
         .await;
 

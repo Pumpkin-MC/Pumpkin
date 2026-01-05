@@ -1,5 +1,5 @@
 {
-  "version": 773,
+  "version": 774,
   "serverbound": {
     "handshake": [
       "intention"
@@ -172,7 +172,7 @@
       "forget_level_chunk",
       "game_event",
       "game_test_highlight_pos",
-      "horse_screen_open",
+      "mount_screen_open",
       "hurt_animation",
       "initialize_border",
       "keep_alive",
