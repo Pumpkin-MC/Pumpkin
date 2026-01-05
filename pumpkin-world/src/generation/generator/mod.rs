@@ -1,4 +1,5 @@
 use pumpkin_data::BlockState;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::noise_router::{
     END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
 };
@@ -6,7 +7,6 @@ use pumpkin_data::noise_router::{
 use super::{
     noise::router::proto_noise_router::ProtoNoiseRouters, settings::gen_settings_from_dimension,
 };
-use crate::dimension::Dimension;
 use crate::generation::proto_chunk::TerrainCache;
 use crate::generation::{GlobalRandomConfig, Seed};
 
@@ -30,10 +30,14 @@ impl GeneratorInit for VanillaGenerator {
 
         // TODO: The generation settings contains (part of?) the noise routers too; do we keep the separate or
         // use only the generation settings?
-        let base = match dimension {
-            Dimension::Overworld => OVERWORLD_BASE_NOISE_ROUTER,
-            Dimension::Nether => NETHER_BASE_NOISE_ROUTER,
-            Dimension::End => END_BASE_NOISE_ROUTER,
+        let base = if dimension == Dimension::OVERWORLD {
+            OVERWORLD_BASE_NOISE_ROUTER
+        } else if dimension == Dimension::THE_NETHER {
+            NETHER_BASE_NOISE_ROUTER
+        } else if dimension == Dimension::THE_END {
+            END_BASE_NOISE_ROUTER
+        } else {
+            unreachable!()
         };
         let terrain_cache = TerrainCache::from_random(&random_config);
         let generation_settings = gen_settings_from_dimension(&dimension);

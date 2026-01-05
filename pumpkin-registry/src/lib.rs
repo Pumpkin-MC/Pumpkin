@@ -46,35 +46,6 @@ impl SyncedRegistry {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VanillaDimensionType {
-    Overworld,
-    OverworldCaves,
-    TheEnd,
-    TheNether,
-}
-
-impl VanillaDimensionType {
-    pub fn resource_location(&self) -> ResourceLocation {
-        match self {
-            Self::Overworld => ResourceLocation::vanilla("overworld"),
-            Self::OverworldCaves => ResourceLocation::vanilla("overworld_caves"),
-            Self::TheEnd => ResourceLocation::vanilla("the_end"),
-            Self::TheNether => ResourceLocation::vanilla("the_nether"),
-        }
-    }
-
-    pub fn from_resource_location_string(resource_location: &str) -> Option<Self> {
-        match resource_location {
-            "minecraft:overworld" => Some(Self::Overworld),
-            "minecraft:overworld_caves" => Some(Self::OverworldCaves),
-            "minecraft:the_end" => Some(Self::TheEnd),
-            "minecraft:the_nether" => Some(Self::TheNether),
-            _ => None,
-        }
-    }
-}
-
 impl Registry {
     pub fn get_synced() -> Vec<Self> {
         let mut synced_registries = Vec::new();

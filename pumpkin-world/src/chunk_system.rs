@@ -9,7 +9,7 @@ TODO
 use crate::block::RawBlockState;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
-use crate::dimension::Dimension;
+use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
 
@@ -43,10 +43,9 @@ use std::sync::{Arc, Condvar, Mutex};
 
 use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData;
-use crate::chunk::palette::{BiomePalette, BlockPalette};
 use crate::chunk_system::Chunk::Proto;
 use crate::chunk_system::StagedChunkEnum::{Biomes, Empty, Features, Full, Noise, Surface};
-use crate::generation::{biome_coords, section_coords};
+use crate::generation::biome_coords;
 use crossfire::AsyncRx;
 use pumpkin_data::chunk::ChunkStatus;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -775,36 +774,45 @@ impl Chunk {
             Proto(chunk) => chunk,
         }
     }
-    fn upgrade_to_level_chunk(&mut self, generation_settings: &GenerationSettings) {
+    fn upgrade_to_level_chunk(&mut self, dimension: &Dimension) {
         let proto_chunk = self.get_proto_chunk_mut();
-        let sub_chunks = generation_settings.shape.height as usize / BlockPalette::SIZE;
-        let sections = (0..sub_chunks).map(|_| SubChunk::default()).collect();
-        let mut sections = ChunkSections::new(sections, generation_settings.shape.min_y as i32);
 
-        for y in 0..biome_coords::from_block(generation_settings.shape.height) {
-            let relative_y = y as usize;
-            let section_index = relative_y / BiomePalette::SIZE;
-            let relative_y = relative_y % BiomePalette::SIZE;
+        let total_sections = dimension.height as usize / 16;
+        let mut sections = ChunkSections::new(
+            (0..total_sections).map(|_| SubChunk::default()).collect(),
+            dimension.min_y,
+        );
+
+        let proto_biome_height = biome_coords::from_block(proto_chunk.height());
+        let biome_min_y = biome_coords::from_block(dimension.min_y);
+
+        for y_offset in 0..proto_biome_height {
+            let section_index = y_offset as usize / 4;
+            let relative_y = y_offset as usize % 4;
+
             if let Some(section) = sections.sections.get_mut(section_index) {
-                for z in 0..BiomePalette::SIZE {
-                    for x in 0..BiomePalette::SIZE {
-                        let absolute_y =
-                            biome_coords::from_block(generation_settings.shape.min_y as i32)
-                                + y as i32;
-                        let biome = proto_chunk.get_biome(x as i32, absolute_y, z as i32);
+                let absolute_biome_y = biome_min_y + y_offset as i32;
+
+                for z in 0..4 {
+                    for x in 0..4 {
+                        let biome = proto_chunk.get_biome(x as i32, absolute_biome_y, z as i32);
                         section.biomes.set(x, relative_y, z, biome.id);
                     }
                 }
             }
         }
-        for y in 0..generation_settings.shape.height {
-            let relative_y = y as usize;
-            let section_index = section_coords::block_to_section(relative_y);
-            let relative_y = relative_y % BlockPalette::SIZE;
+
+        let proto_block_height = proto_chunk.height();
+
+        for y_offset in 0..proto_block_height {
+            let section_index = (y_offset as usize) / 16;
+            let relative_y = (y_offset as usize) % 16;
+
             if let Some(section) = sections.sections.get_mut(section_index) {
-                for z in 0..BlockPalette::SIZE {
-                    for x in 0..BlockPalette::SIZE {
-                        let block = proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32);
+                for z in 0..16 {
+                    for x in 0..16 {
+                        let block =
+                            proto_chunk.get_block_state_raw(x as i32, y_offset as i32, z as i32);
                         section.block_states.set(x, relative_y, z, block);
                     }
                 }
@@ -813,7 +821,15 @@ impl Chunk {
         let mut chunk = ChunkData {
             light_engine: ChunkLight {
                 sky_light: (0..sections.sections.len())
-                    .map(|_| LightContainer::new_filled(15))
+                    .map(|_| {
+                        if dimension.has_skylight {
+                            // Overworld: Start with full sky light before occlusion
+                            LightContainer::new_filled(15)
+                        } else {
+                            // Nether/End: No sky light permitted
+                            LightContainer::new_empty(0)
+                        }
+                    })
                     .collect(),
                 block_light: (0..sections.sections.len())
                     .map(|_| LightContainer::new_empty(0))
@@ -1141,7 +1157,7 @@ impl Cache {
             Full => {
                 debug_assert_eq!(self.chunks[mid].get_proto_chunk_mut().stage, Features);
                 self.chunks[mid].get_proto_chunk_mut().stage = Full;
-                self.chunks[mid].upgrade_to_level_chunk(settings);
+                self.chunks[mid].upgrade_to_level_chunk(&dimension);
             }
             StagedChunkEnum::None => {}
         }
@@ -1581,7 +1597,7 @@ impl GenerationSchedule {
         log::info!("io read thread start");
         use crate::biome::hash_seed;
         let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
-        let generation_setting = gen_settings_from_dimension(&level.world_gen.dimension);
+        let dimension = &level.world_gen.dimension;
         let (t_send, mut t_recv) = tokio::sync::mpsc::channel(2);
         while let Ok(pos) = recv.recv().await {
             // debug!("io read thread receive chunk pos {pos:?}");
@@ -1610,7 +1626,7 @@ impl GenerationSchedule {
                         let val =
                             RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
                                 chunk.read().await.deref(),
-                                generation_setting,
+                                dimension,
                                 level.world_gen.default_block,
                                 biome_mixer_seed,
                             ))));
@@ -1631,7 +1647,7 @@ impl GenerationSchedule {
                     RecvChunk::IO(Proto(Box::new(ProtoChunk::new(
                         pos.x,
                         pos.y,
-                        generation_setting,
+                        dimension,
                         level.world_gen.default_block,
                         biome_mixer_seed,
                     )))),
@@ -1646,7 +1662,6 @@ impl GenerationSchedule {
 
     async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
         log::info!("io write thread start",);
-        let generation_setting = gen_settings_from_dimension(&level.world_gen.dimension);
         while let Ok(data) = recv.recv().await {
             // debug!("io write thread receive chunks size {}", data.len());
             let mut vec = Vec::with_capacity(data.len());
@@ -1655,7 +1670,7 @@ impl GenerationSchedule {
                     Chunk::Level(chunk) => vec.push((pos, chunk)),
                     Proto(chunk) => {
                         let mut temp = Proto(chunk);
-                        temp.upgrade_to_level_chunk(generation_setting);
+                        temp.upgrade_to_level_chunk(&level.world_gen.dimension);
                         let Chunk::Level(chunk) = temp else { panic!() };
                         vec.push((pos, chunk));
                     }

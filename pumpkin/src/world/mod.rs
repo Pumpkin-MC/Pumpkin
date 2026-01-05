@@ -39,6 +39,7 @@ use crossbeam::queue::SegQueue;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
 use pumpkin_data::{
@@ -94,7 +95,6 @@ use pumpkin_protocol::{
         CWorldEvent,
     },
 };
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::{
@@ -108,9 +108,8 @@ use pumpkin_util::{
 use pumpkin_world::chunk::palette::BlockPalette;
 use pumpkin_world::world::{GetBlockError, WorldFuture};
 use pumpkin_world::{
-    BlockStateId, CURRENT_BEDROCK_MC_VERSION, GENERATION_SETTINGS, GeneratorSetting, biome,
-    block::entities::BlockEntity, chunk::io::Dirtiable, inventory::Inventory, item::ItemStack,
-    world::SimpleWorld,
+    BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, block::entities::BlockEntity,
+    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
@@ -132,7 +131,7 @@ pub mod weather;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
-use pumpkin_world::generation::settings::GenerationSettings;
+use pumpkin_world::generation::settings::gen_settings_from_dimension;
 use uuid::Uuid;
 use weather::Weather;
 
@@ -177,7 +176,7 @@ pub struct World {
     /// The world's time, including counting ticks for weather, time cycles, and statistics.
     pub level_time: Mutex<LevelTime>,
     /// The type of dimension the world is in.
-    pub dimension_type: VanillaDimensionType,
+    pub dimension: Dimension,
     pub sea_level: i32,
     pub min_y: i32,
     /// The world's weather, including rain and thunder levels.
@@ -197,33 +196,21 @@ impl World {
     pub fn load(
         level: Arc<Level>,
         level_info: Arc<RwLock<LevelData>>,
-        dimension_type: VanillaDimensionType,
+        dimension: Dimension,
         block_registry: Arc<BlockRegistry>,
         server: Weak<Server>,
     ) -> Self {
         // TODO
-        let generation_settings = match dimension_type {
-            VanillaDimensionType::Overworld => GENERATION_SETTINGS
-                .get(&GeneratorSetting::Overworld)
-                .unwrap(),
-            VanillaDimensionType::OverworldCaves => todo!(),
-            VanillaDimensionType::TheEnd => {
-                GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap()
-            }
-            VanillaDimensionType::TheNether => {
-                GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
-            }
-        };
-
+        let generation_settings = gen_settings_from_dimension(&dimension);
         Self {
             level,
             level_info,
             players: Arc::new(RwLock::new(HashMap::new())),
             entities: Arc::new(RwLock::new(HashMap::new())),
             scoreboard: Mutex::new(Scoreboard::default()),
-            worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 30_000_000.0, 0, 0, 0)),
+            worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 5.999_996_8E7, 0, 5, 300)),
             level_time: Mutex::new(LevelTime::new()),
-            dimension_type,
+            dimension,
             weather: Mutex::new(Weather::new()),
             block_registry,
             sea_level: generation_settings.sea_level,
@@ -1154,29 +1141,9 @@ impl World {
         spawn_for_chunk(self, chunk_pos, chunk, spawn_state, spawn_list).await;
     }
 
-    pub fn generation_settings(&self) -> &GenerationSettings {
-        // TODO: this is bad
-        match self.dimension_type {
-            VanillaDimensionType::Overworld => GENERATION_SETTINGS
-                .get(&GeneratorSetting::Overworld)
-                .unwrap(),
-            VanillaDimensionType::OverworldCaves => todo!(),
-            VanillaDimensionType::TheEnd => {
-                GENERATION_SETTINGS.get(&GeneratorSetting::End).unwrap()
-            }
-            VanillaDimensionType::TheNether => {
-                GENERATION_SETTINGS.get(&GeneratorSetting::Nether).unwrap()
-            }
-        }
-    }
-
     /// Gets the y position of the first non air block from the top down
     pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
-        let generation_settings = self.generation_settings();
-        for y in (i32::from(generation_settings.shape.min_y)
-            ..i32::from(generation_settings.shape.max_y()))
-            .rev()
-        {
+        for y in (self.dimension.min_y..self.dimension.height).rev() {
             let pos = BlockPos::new(position.x, y, position.y);
             let block = self.get_block_state(&pos).await;
             if block.is_air() {
@@ -1184,7 +1151,7 @@ impl World {
             }
             return y;
         }
-        i32::from(generation_settings.shape.min_y)
+        self.dimension.min_y
     }
 
     #[expect(clippy::too_many_lines)]
@@ -1379,7 +1346,7 @@ impl World {
         let dimensions: Vec<ResourceLocation> = server
             .dimensions
             .iter()
-            .map(VanillaDimensionType::resource_location)
+            .map(|d| ResourceLocation::from(d.minecraft_name))
             .collect();
 
         // This code follows the vanilla packet order
@@ -1404,8 +1371,8 @@ impl World {
                 false,
                 true,
                 false,
-                (self.dimension_type as u8).into(),
-                self.dimension_type.resource_location(),
+                (self.dimension.id).into(),
+                ResourceLocation::from(self.dimension.minecraft_name),
                 biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
                 player
@@ -1805,7 +1772,7 @@ impl World {
 
     pub async fn respawn_player(&self, player: &Arc<Player>, alive: bool) {
         let last_pos = player.living_entity.entity.last_pos.load();
-        let death_dimension = player.world().dimension_type.resource_location();
+        let death_dimension = ResourceLocation::from(player.world().dimension.minecraft_name);
         let death_location = BlockPos(Vector3::new(
             last_pos.x.round() as i32,
             last_pos.y.round() as i32,
@@ -1819,8 +1786,8 @@ impl World {
         player
             .client
             .enqueue_packet(&CRespawn::new(
-                (self.dimension_type as u8).into(),
-                self.dimension_type.resource_location(),
+                (self.dimension.id).into(),
+                ResourceLocation::from(self.dimension.minecraft_name),
                 biome::hash_seed(self.level.seed.0), // seed
                 player.gamemode.load() as u8,
                 player.gamemode.load() as i8,

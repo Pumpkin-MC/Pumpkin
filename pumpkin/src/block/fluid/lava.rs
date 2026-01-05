@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection,
+    dimension::Dimension,
     fluid::{Falling, Fluid, FluidProperties, Level},
     world::WorldEvent,
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
@@ -141,7 +141,7 @@ impl FluidBehaviour for FlowingLava {
 impl FlowingFluid for FlowingLava {
     fn get_level_decrease_per_block(&self, world: &World) -> i32 {
         // ultrawarm logic
-        if world.dimension_type == VanillaDimensionType::TheNether {
+        if world.dimension == Dimension::THE_NETHER {
             1
         } else {
             2
@@ -150,7 +150,7 @@ impl FlowingFluid for FlowingLava {
 
     fn get_max_flow_distance(&self, world: &World) -> i32 {
         // ultrawarm logic
-        if world.dimension_type == VanillaDimensionType::TheNether {
+        if world.dimension == Dimension::THE_NETHER {
             4
         } else {
             2

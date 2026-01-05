@@ -8,9 +8,9 @@ use crate::world::World;
 use crate::world::portal::nether::NetherPortal;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{Axis, BlockProperties, NetherPortalLikeProperties};
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_world::BlockStateId;
 
@@ -62,13 +62,13 @@ impl BlockBehaviour for NetherPortalBlock {
 
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let target_world = if args.world.dimension_type == VanillaDimensionType::TheNether {
+            let target_world = if args.world.dimension == Dimension::THE_NETHER {
                 args.server
-                    .get_world_from_dimension(VanillaDimensionType::Overworld)
+                    .get_world_from_dimension(&Dimension::OVERWORLD)
                     .await
             } else {
                 args.server
-                    .get_world_from_dimension(VanillaDimensionType::TheNether)
+                    .get_world_from_dimension(&Dimension::THE_NETHER)
                     .await
             };
 
