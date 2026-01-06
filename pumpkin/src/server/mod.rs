@@ -670,6 +670,9 @@ impl Server {
                 world.tick(&server).await;
             }));
         }
+
+        // kopf linux zahl pumpkin
+
         for handle in handles {
             // Wait for all world ticks to complete
             let _ = handle.await;

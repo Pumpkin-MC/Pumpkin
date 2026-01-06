@@ -2,7 +2,7 @@ use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, Level
 use crate::generation::generator::VanillaGenerator;
 use crate::{
     BlockStateId,
-    block::{RawBlockState, entities::BlockEntity},
+    block::RawBlockState,
     chunk::{
         ChunkData, ChunkEntityData, ChunkReadingError,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
@@ -10,7 +10,7 @@ use crate::{
     },
     dimension::Dimension,
     generation::get_world_gen,
-    tick::{OrderedTick, ScheduledTick, TickPriority},
+    tick::{ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
 use crossbeam::channel::Sender;
@@ -19,10 +19,9 @@ use log::trace;
 use num_traits::Zero;
 use pumpkin_config::{chunk::ChunkConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
-use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
+use pumpkin_data::{Block, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
-use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::sync::Mutex;
 // use std::time::Duration;
 use std::{
@@ -97,16 +96,6 @@ pub struct Level {
     pub level_channel: Arc<LevelChannel>,
     pub thread_tracker: Mutex<Vec<thread::JoinHandle<()>>>,
     pub chunk_listener: Arc<ChunkListener>,
-
-    pub tick_data: tokio::sync::Mutex<TickData>,
-}
-
-#[derive(Default)]
-pub struct TickData {
-    pub block_ticks: Vec<OrderedTick<&'static Block>>,
-    pub fluid_ticks: Vec<OrderedTick<&'static Fluid>>,
-    pub random_ticks: Vec<ScheduledTick<()>>,
-    pub block_entities: Vec<Arc<dyn BlockEntity>>,
 }
 
 #[derive(Clone)]
@@ -204,7 +193,6 @@ impl Level {
             level_channel: level_channel.clone(),
             thread_tracker,
             chunk_listener: listener.clone(),
-            tick_data: tokio::sync::Mutex::new(TickData::default()),
         });
 
         let num_threads = num_cpus::get().saturating_sub(2).max(1);
@@ -489,76 +477,6 @@ impl Level {
                 });
             }
         });
-    }
-
-    // Gets random ticks, block ticks and fluid ticks
-    pub async fn get_tick_data(&self) {
-        let mut ticks = self.tick_data.lock().await;
-        ticks.clear();
-
-        let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let chunks = self
-            .loaded_chunks
-            .iter()
-            .map(|x| x.value().clone())
-            .collect::<Vec<_>>();
-        for chunk in chunks {
-            let mut chunk = chunk.write().await;
-            ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
-            ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
-
-            let chunk = chunk.downgrade();
-
-            let chunk_x_base = chunk.x * 16;
-            let chunk_z_base = chunk.z * 16;
-
-            let mut section_blocks = Vec::new();
-            for i in 0..chunk.section.sections.len() {
-                let mut section_block_data = Vec::new();
-
-                //TODO use game rules to determine how many random ticks to perform
-                for _ in 0..3 {
-                    let r = rng.random::<u32>();
-                    let x_offset = (r & 0xF) as i32;
-                    let y_offset = ((r >> 4) & 0xF) as i32 - 32;
-                    let z_offset = (r >> 8 & 0xF) as i32;
-
-                    let random_pos = BlockPos::new(
-                        chunk_x_base + x_offset,
-                        i as i32 * 16 + y_offset,
-                        chunk_z_base + z_offset,
-                    );
-
-                    let block_id = chunk
-                        .section
-                        .get_block_absolute_y(x_offset as usize, random_pos.0.y, z_offset as usize)
-                        .unwrap_or(Block::AIR.default_state.id);
-
-                    section_block_data.push((random_pos, block_id));
-                }
-                section_blocks.push(section_block_data);
-            }
-
-            for section_data in section_blocks {
-                for (random_pos, block_id) in section_data {
-                    if has_random_ticks(block_id) {
-                        ticks.random_ticks.push(ScheduledTick {
-                            position: random_pos,
-                            delay: 0,
-                            priority: TickPriority::Normal,
-                            value: (),
-                        });
-                    }
-                }
-            }
-
-            ticks
-                .block_entities
-                .extend(chunk.block_entities.values().cloned());
-        }
-
-        ticks.block_ticks.sort_unstable();
-        ticks.fluid_ticks.sort_unstable();
     }
 
     pub async fn clean_entity_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
@@ -899,14 +817,5 @@ impl Level {
             .await;
         let chunk = chunk.read().await;
         chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
-    }
-}
-
-impl TickData {
-    fn clear(&mut self) {
-        self.block_entities.clear();
-        self.block_ticks.clear();
-        self.fluid_ticks.clear();
-        self.random_ticks.clear();
     }
 }
