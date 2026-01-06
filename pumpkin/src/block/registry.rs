@@ -33,6 +33,7 @@ use crate::block::blocks::plant::bamboo::BambooBlock;
 use crate::block::blocks::plant::bamboo_sapling::BambooSaplingBlock;
 use crate::block::blocks::plant::bush::BushBlock;
 use crate::block::blocks::plant::cactus::CactusBlock;
+use crate::block::blocks::plant::cocoa::CocoaBlock;
 use crate::block::blocks::plant::crop::nether_wart::NetherWartBlock;
 use crate::block::blocks::plant::crop::sweet_berry_bush::SweetBerryBushBlock;
 use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
@@ -224,6 +225,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(EndRodBlock);
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
+    manager.register(CocoaBlock);
 
     manager.register(FallingBlock);
 
