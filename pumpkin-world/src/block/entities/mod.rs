@@ -13,8 +13,8 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
-use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity;
+use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;

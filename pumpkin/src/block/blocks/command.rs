@@ -1,5 +1,6 @@
 use std::sync::{Arc, atomic::Ordering};
 
+use log::warn;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
@@ -26,8 +27,6 @@ use crate::{
 
 use super::redstone::block_receives_redstone_power;
 
-// todo: chaining command blocks
-// conditional execution
 pub struct CommandBlock;
 
 impl CommandBlock {
@@ -80,7 +79,7 @@ impl CommandBlock {
             return false;
         };
         let Some(before_entity) = world.get_block_entity(&before.0).await else {
-            log::warn!("Command block has no matching entity");
+            warn!("Command block has no matching entity");
             return false;
         };
         let command_entity: &CommandBlockEntity = before_entity.as_any().downcast_ref().unwrap();
@@ -120,7 +119,7 @@ impl CommandBlock {
             return;
         };
         let Some(behind_entity) = world.get_block_entity(&behind.0).await else {
-            log::warn!(
+            warn!(
                 "Command Block exists at {} with no matching block entity!",
                 behind.0
             );
@@ -183,7 +182,7 @@ impl CommandBlock {
                 break;
             }
             let Some(block_entity) = world.get_block_entity(&pos).await else {
-                log::warn!("Missing command block entity");
+                warn!("Missing command block entity");
                 break;
             };
 
@@ -208,7 +207,7 @@ impl CommandBlock {
 
             i -= 1;
             if i == 0 {
-                log::warn!(
+                warn!(
                     "Command block chain executed {} times (the maximum)!",
                     u16::MAX
                 );
@@ -344,6 +343,29 @@ impl BlockBehaviour for CommandBlock {
                 args.block.id == Block::CHAIN_COMMAND_BLOCK.id,
             );
             args.world.add_block_entity(Arc::new(entity)).await;
+        })
+    }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: crate::block::GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async {
+            let entity = args.world.get_block_entity(args.position).await;
+
+            entity.map_or_else(
+                || {
+                    warn!("Command block is missing its corresponding block entity");
+                    None
+                },
+                |entity| {
+                    let command_block_entity: &CommandBlockEntity =
+                        entity.as_any().downcast_ref().expect(
+                            "Block entity command block's position should be a matching entity",
+                        );
+                    Some(command_block_entity.success_count.load(Ordering::Acquire) as u8)
+                },
+            )
         })
     }
 }
