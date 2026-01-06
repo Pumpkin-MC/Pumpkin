@@ -12,6 +12,7 @@ use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, Sub
 use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
+use tokio_util::sync::CancellationToken;
 
 use crate::generation::height_limit::HeightLimitView;
 
@@ -54,14 +55,14 @@ use slotmap::{Key, SlotMap, new_key_type};
 use std::sync::atomic::Ordering::{Relaxed, SeqCst};
 use std::thread;
 use std::thread::JoinHandle;
-use tokio::sync::{Notify, RwLock, oneshot};
+use tokio::sync::{RwLock, oneshot};
 
 type HashMapType<K, V> = FxHashMap<K, V>;
 type HashSetType<K> = FxHashSet<K>;
 type ChunkPos = Vector2<i32>;
 type ChunkLevel = HashMapType<ChunkPos, i8>;
 /// HashMap containing pending writes and a notify to wake tasks up when the chunk has been saved
-type IOLock = Arc<tokio::sync::Mutex<HashMapType<ChunkPos, Arc<Notify>>>>;
+type IOLock = Arc<tokio::sync::Mutex<HashMapType<ChunkPos, Arc<CancellationToken>>>>;
 
 pub struct HeapNode(i8, ChunkPos);
 impl PartialEq for HeapNode {
@@ -1614,7 +1615,7 @@ impl GenerationSchedule {
                 };
                 match notify {
                     Some(n) => {
-                        n.notified().await;
+                        n.cancelled().await;
                     }
                     None => break,
                 }
@@ -1701,7 +1702,7 @@ impl GenerationSchedule {
                 for pos in &positions {
                     if let Entry::Occupied(entry) = data.entry(*pos) {
                         let n = entry.remove();
-                        n.notify_waiters(); // could maybe be notify_one?
+                        n.cancel();
                     } else {
                         panic!("Position {:?} not in lock map!", pos);
                     }
@@ -1798,7 +1799,7 @@ impl GenerationSchedule {
             if data.contains_key(pos) {
                 continue;
             }
-            data.insert(*pos, Arc::new(Notify::new()));
+            data.insert(*pos, Arc::new(CancellationToken::new()));
         }
         drop(data);
         self.io_write.send(chunks).expect("io write thread stop");
@@ -1829,7 +1830,7 @@ impl GenerationSchedule {
             if data.contains_key(pos) {
                 continue;
             }
-            data.insert(*pos, Arc::new(Notify::new()));
+            data.insert(*pos, Arc::new(CancellationToken::new()));
         }
         drop(data);
         self.io_write.send(chunks).expect("io write thread stop");
