@@ -686,7 +686,7 @@ impl World {
 
     pub async fn tick_chunks(self: &Arc<Self>) {
         let scheduled_ticks_start = Instant::now();
-        self.get_tick_data().await;
+        self.calculate_tick_data().await;
         let allocate_end = scheduled_ticks_start.elapsed();
         for scheduled_tick in &self.tick_data.lock().await.block_ticks {
             let block = self.get_block(&scheduled_tick.position).await;
@@ -807,9 +807,8 @@ impl World {
         log::info!("Block Entities took {:?}", block_entities_start.elapsed());
     }
 
-    // Gets random ticks, block ticks and fluid ticks
-    pub async fn get_tick_data(&self) {
-        let start = Instant::now();
+    /// Calculate Block-, Fluid- and Randomticks and write into the `tick_data` field
+    pub async fn calculate_tick_data(&self) {
         let random_tick_speed = {
             let lock = self.level_info.read().await;
             lock.game_rules.random_tick_speed
@@ -821,7 +820,6 @@ impl World {
         ticks
             .cloned_chunks
             .extend(self.level.loaded_chunks.iter().map(|x| x.value().clone()));
-        let _cloning_end = start.elapsed();
         let TickData {
             block_ticks,
             fluid_ticks,
@@ -838,9 +836,6 @@ impl World {
 
             let chunk_x_base = chunk.x * 16;
             let chunk_z_base = chunk.z * 16;
-
-            let mut section_blocks: Vec<(BlockPos, u16)> =
-                Vec::with_capacity(chunk.section.sections.len());
             for i in 0..chunk.section.sections.len() {
                 for _ in 0..random_tick_speed {
                     let r = rng.random::<u32>();
@@ -859,18 +854,14 @@ impl World {
                         .get_block_absolute_y(x_offset as usize, random_pos.0.y, z_offset as usize)
                         .unwrap_or(Block::AIR.default_state.id);
 
-                    section_blocks.push((random_pos, block_id));
-                }
-            }
-
-            for (random_pos, block_id) in section_blocks {
-                if has_random_ticks(block_id) {
-                    random_ticks.push(ScheduledTick {
-                        position: random_pos,
-                        delay: 0,
-                        priority: TickPriority::Normal,
-                        value: (),
-                    });
+                    if has_random_ticks(block_id) {
+                        random_ticks.push(ScheduledTick {
+                            position: random_pos,
+                            delay: 0,
+                            priority: TickPriority::Normal,
+                            value: (),
+                        });
+                    }
                 }
             }
 
