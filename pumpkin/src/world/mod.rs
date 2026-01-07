@@ -2,7 +2,6 @@ use std::num::NonZeroU32;
 use std::pin::Pin;
 use std::sync::Weak;
 use std::sync::atomic::Ordering::Relaxed;
-use std::time::{Duration, Instant};
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -685,9 +684,7 @@ impl World {
     }
 
     pub async fn tick_chunks(self: &Arc<Self>) {
-        let scheduled_ticks_start = Instant::now();
         self.calculate_tick_data().await;
-        let allocate_end = scheduled_ticks_start.elapsed();
         for scheduled_tick in &self.tick_data.lock().await.block_ticks {
             let block = self.get_block(&scheduled_tick.position).await;
             if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
@@ -701,7 +698,6 @@ impl World {
             }
         }
 
-        let block_ticks_end = scheduled_ticks_start.elapsed() - allocate_end;
         for scheduled_tick in &self.tick_data.lock().await.fluid_ticks {
             let fluid = self.get_fluid(&scheduled_tick.position).await;
             if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid) {
@@ -710,7 +706,6 @@ impl World {
                     .await;
             }
         }
-        let fluid_ticks_end = scheduled_ticks_start.elapsed() - block_ticks_end - allocate_end;
 
         for scheduled_tick in &self.tick_data.lock().await.random_ticks {
             let block = self.get_block(&scheduled_tick.position).await;
@@ -724,20 +719,6 @@ impl World {
                     .await;
             }
         }
-        let random_ticks_end =
-            scheduled_ticks_start.elapsed() - block_ticks_end - fluid_ticks_end - allocate_end;
-        let scheduled_ticks_end = scheduled_ticks_start.elapsed();
-
-        log::info!(
-            "Scheduled Ticks took {:?}, allocate {:?}, block_ticks {:?}, fluid_ticks {:?}, random_ticks {:?}",
-            scheduled_ticks_end,
-            allocate_end,
-            block_ticks_end,
-            fluid_ticks_end,
-            random_ticks_end
-        );
-
-        let spawn_entity_clock_start = tokio::time::Instant::now();
 
         let mut spawning_chunks_map = HashMap::new();
         // TODO use FixedPlayerDistanceChunkTracker
@@ -762,9 +743,6 @@ impl World {
         let mut spawning_chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)> =
             spawning_chunks_map.into_iter().collect();
 
-        let get_chunks_clock = spawn_entity_clock_start.elapsed();
-        log::info!("spawning chunks size {}", spawning_chunks.len());
-
         let mut spawn_state =
             SpawnState::new(spawning_chunks.len() as i32, &self.entities, self).await; // TODO store it
 
@@ -782,29 +760,15 @@ impl World {
 
         spawning_chunks.shuffle(&mut rng());
 
-        // TODO i think it can be multithread
         for (pos, chunk) in &spawning_chunks {
             self.tick_spawning_chunk(pos, chunk, &spawn_list, &mut spawn_state)
                 .await;
         }
-        log::trace!(
-            "Spawning entity took {:?}, getting chunks {:?}, spawning chunks: {}, avg {:?} per chunk",
-            spawn_entity_clock_start.elapsed(),
-            get_chunks_clock,
-            spawning_chunks.len(),
-            spawn_entity_clock_start
-                .elapsed()
-                .checked_div(spawning_chunks.len() as u32)
-                .unwrap_or(Duration::new(0, 0))
-        );
 
-        let block_entities_start = Instant::now();
         for block_entity in &self.tick_data.lock().await.block_entities {
             let world: Arc<dyn SimpleWorld> = self.clone();
             block_entity.tick(world).await;
         }
-
-        log::info!("Block Entities took {:?}", block_entities_start.elapsed());
     }
 
     /// Calculate Block-, Fluid- and Randomticks and write into the `tick_data` field

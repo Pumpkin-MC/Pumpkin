@@ -61,8 +61,34 @@ type HashMapType<K, V> = FxHashMap<K, V>;
 type HashSetType<K> = FxHashSet<K>;
 type ChunkPos = Vector2<i32>;
 type ChunkLevel = HashMapType<ChunkPos, i8>;
-/// HashMap containing pending writes and a notify to wake tasks up when the chunk has been saved
-type IOLock = Arc<tokio::sync::Mutex<HashMapType<ChunkPos, Arc<CancellationToken>>>>;
+
+#[derive(Debug, Clone)]
+struct PendingWrites {
+    pending: Arc<tokio::sync::Mutex<HashMapType<ChunkPos, PendingWriteEntry>>>,
+}
+
+impl PendingWrites {
+    fn new() -> Self {
+        Self {
+            pending: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PendingWriteEntry {
+    token: Arc<CancellationToken>,
+    count: usize,
+}
+
+impl PendingWriteEntry {
+    fn new() -> Self {
+        Self {
+            token: Arc::new(CancellationToken::new()),
+            count: 1,
+        }
+    }
+}
 
 pub struct HeapNode(i8, ChunkPos);
 impl PartialEq for HeapNode {
@@ -1355,7 +1381,7 @@ pub struct GenerationSchedule {
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
     unload_chunks: HashSetType<ChunkPos>,
 
-    io_lock: IOLock,
+    pending_writes: PendingWrites,
     running_task_count: u16,
     recv_chunk: crossfire::MRx<(ChunkPos, RecvChunk)>,
     io_read: crossfire::MTx<ChunkPos>,
@@ -1366,7 +1392,7 @@ pub struct GenerationSchedule {
 
 impl GenerationSchedule {
     pub fn create(
-        oi_read_thread_count: usize,
+        io_read_thread_count: usize,
         gen_thread_count: usize,
         level: Arc<Level>,
         level_channel: Arc<LevelChannel>,
@@ -1375,17 +1401,16 @@ impl GenerationSchedule {
     ) {
         let tracker = &level.chunk_system_tasks;
         let (send_chunk, recv_chunk) = crossfire::mpmc::unbounded_blocking();
-        let (send_read_io, recv_read_io) =
-            crossfire::mpmc::bounded_tx_blocking_rx_async(oi_read_thread_count + 2);
+        let (send_read_io, recv_read_io) = crossfire::mpmc::unbounded_async();
         let (send_write_io, recv_write_io) = crossfire::spsc::unbounded_async();
-        let (send_gen, recv_gen) = crossfire::mpmc::bounded_blocking(gen_thread_count + 5);
-        let io_lock: IOLock = Arc::new(tokio::sync::Mutex::new(HashMapType::default()));
-        for _ in 0..oi_read_thread_count {
+        let (send_gen, recv_gen) = crossfire::mpmc::unbounded_blocking();
+        let pending_writes: PendingWrites = PendingWrites::new();
+        for _ in 0..io_read_thread_count {
             tracker.spawn(Self::io_read_work(
                 recv_read_io.clone(),
                 send_chunk.clone(),
                 level.clone(),
-                io_lock.clone(),
+                pending_writes.clone(),
             ));
         }
         for i in 0..gen_thread_count {
@@ -1402,11 +1427,21 @@ impl GenerationSchedule {
             );
         }
 
-        tracker.spawn(Self::io_write_work(
-            recv_write_io,
-            level.clone(),
-            io_lock.clone(),
-        ));
+        let builder = thread::Builder::new().name(String::from("Write Thread"));
+        let level_clone = level.clone();
+        let pending_writes_clone = pending_writes.clone();
+        thread_tracker.push(
+            // write has to get its own thread because otherwise there are little "gc pauses" where a single thread takes 6x more time on slow hardware
+            builder
+                .spawn(move || {
+                    let rt = Builder::new_current_thread().enable_all().build().unwrap();
+                    rt.block_on(async move {
+                        // this is just a hack... spawning a new thread and then only running one task in async on it is a bit pointless
+                        Self::io_write_work(recv_write_io, level_clone, pending_writes_clone).await;
+                    });
+                })
+                .unwrap(),
+        );
 
         let builder = thread::Builder::new().name("Schedule Thread".to_string());
         thread_tracker.push(
@@ -1422,7 +1457,7 @@ impl GenerationSchedule {
                             send_level: level_channel,
                             public_chunk_map: level.loaded_chunks.clone(),
                             unload_chunks: HashSetType::default(),
-                            io_lock,
+                            pending_writes,
                             running_task_count: 0,
                             recv_chunk,
                             io_read: send_read_io,
@@ -1599,7 +1634,7 @@ impl GenerationSchedule {
         recv: crossfire::MAsyncRx<ChunkPos>,
         send: crossfire::MTx<(ChunkPos, RecvChunk)>,
         level: Arc<Level>,
-        lock: IOLock,
+        lock: PendingWrites,
     ) {
         log::info!("io read thread start");
         use crate::biome::hash_seed;
@@ -1610,12 +1645,12 @@ impl GenerationSchedule {
             // debug!("io read thread receive chunk pos {pos:?}");
             loop {
                 let notify = {
-                    let pending_writes = lock.lock().await;
+                    let pending_writes = lock.pending.lock().await;
                     pending_writes.get(&pos).cloned()
                 };
                 match notify {
                     Some(n) => {
-                        n.cancelled().await;
+                        n.token.cancelled().await;
                     }
                     None => break,
                 }
@@ -1674,10 +1709,15 @@ impl GenerationSchedule {
         log::info!("io read thread stop");
     }
 
-    async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
+    async fn io_write_work(
+        recv: AsyncRx<Vec<(ChunkPos, Chunk)>>,
+        level: Arc<Level>,
+        lock: PendingWrites,
+    ) {
         log::info!("io write thread start",);
+
         while let Ok(data) = recv.recv().await {
-            // debug!("io write thread receive chunks size {}", data.len());
+            //log::info!("io write thread receive chunks size {}", data.len());
             let mut vec = Vec::with_capacity(data.len());
             for (pos, chunk) in data {
                 match chunk {
@@ -1698,11 +1738,15 @@ impl GenerationSchedule {
                 .unwrap();
 
             {
-                let mut data = lock.lock().await;
+                let mut data = lock.pending.lock().await;
                 for pos in &positions {
-                    if let Entry::Occupied(entry) = data.entry(*pos) {
-                        let n = entry.remove();
-                        n.cancel();
+                    if let Entry::Occupied(mut entry) = data.entry(*pos) {
+                        let e = entry.get_mut();
+                        e.count -= 1;
+                        if e.count == 0 {
+                            let n = entry.remove();
+                            n.token.cancel();
+                        }
                     } else {
                         panic!("Position {:?} not in lock map!", pos);
                     }
@@ -1794,18 +1838,20 @@ impl GenerationSchedule {
         if chunks.is_empty() {
             return;
         }
-        let mut data = self.io_lock.lock().await;
+        let mut data = self.pending_writes.pending.lock().await;
         for (pos, _chunk) in &chunks {
             if data.contains_key(pos) {
                 continue;
             }
-            data.insert(*pos, Arc::new(CancellationToken::new()));
+            data.entry(*pos)
+                .and_modify(|it| it.count += 1)
+                .or_insert(PendingWriteEntry::new());
         }
         drop(data);
         self.io_write.send(chunks).expect("io write thread stop");
     }
 
-    async fn save_all_chunk(&self, save_proto_chunk: bool) {
+    async fn save_all_chunks(&self, save_proto_chunk: bool) {
         let mut chunks = Vec::with_capacity(self.chunk_map.len());
         for (pos, chunk) in &self.chunk_map {
             if let Some(chunk) = &chunk.chunk {
@@ -1825,12 +1871,14 @@ impl GenerationSchedule {
         if chunks.is_empty() {
             return;
         }
-        let mut data = self.io_lock.lock().await;
+        let mut data = self.pending_writes.pending.lock().await;
         for (pos, _chunk) in &chunks {
             if data.contains_key(pos) {
                 continue;
             }
-            data.insert(*pos, Arc::new(CancellationToken::new()));
+            data.entry(*pos)
+                .and_modify(|it| it.count += 1)
+                .or_insert(PendingWriteEntry::new());
         }
         drop(data);
         self.io_write.send(chunks).expect("io write thread stop");
@@ -1974,7 +2022,7 @@ impl GenerationSchedule {
             }
             if level.should_save.load(Relaxed) {
                 // log::debug!("save all chunk signal");
-                self.save_all_chunk(false).await;
+                self.save_all_chunks(false).await;
                 level.should_save.store(false, Relaxed);
             }
             if level.shut_down_chunk_system.load(Relaxed) {
@@ -2122,7 +2170,7 @@ impl GenerationSchedule {
             self.receive_chunk(pos, data);
         }
         log::info!("saving all chunks");
-        self.save_all_chunk(true).await;
+        self.save_all_chunks(true).await;
         log::info!("there are {} chunks to write", self.io_write.len());
         log::info!(
             "schedule thread stop id: {:?} name: {}",
