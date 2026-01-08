@@ -12,6 +12,7 @@ use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, Sub
 use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
+use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 use crate::generation::height_limit::HeightLimitView;
@@ -1717,8 +1718,9 @@ impl GenerationSchedule {
         log::info!("io write thread start",);
 
         while let Ok(data) = recv.recv().await {
-            //log::info!("io write thread receive chunks size {}", data.len());
             let mut vec = Vec::with_capacity(data.len());
+            log::info!("io write thread receive chunks size {}", data.len());
+            let start = Instant::now();
             for (pos, chunk) in data {
                 match chunk {
                     Chunk::Level(chunk) => vec.push((pos, chunk)),
@@ -1752,6 +1754,7 @@ impl GenerationSchedule {
                     }
                 }
             }
+            log::info!("Competed write in {:?}", start.elapsed());
         }
         log::info!(
             "io write thread stop id: {:?} name: {}",
