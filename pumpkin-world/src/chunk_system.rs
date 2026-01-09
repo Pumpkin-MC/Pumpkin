@@ -2086,16 +2086,15 @@ impl GenerationSchedule {
 
             if self.queue.is_empty() {
                 // debug!("the queue is empty. thread sleep");
-                'out: while self.running_task_count > 0 {
+                while self.running_task_count > 0 && self.queue.is_empty() {
                     let (pos, data) = self.recv_chunk.recv().expect("recv_chunk stop");
                     self.receive_chunk(pos, data);
-                    if !self.queue.is_empty() || self.resort_work(self.send_level.get()) {
-                        break 'out;
-                    }
+                    self.resort_work(self.send_level.get());
                 }
                 if self.queue.is_empty() {
                     // debug!("no work to do. thread sleep");
-                    debug_assert!(self.running_task_count > 0 || self.debug_check());
+                    debug_assert!(self.debug_check());
+                    debug_assert_eq!(self.running_task_count, 0);
                     self.resort_work(self.send_level.wait_and_get(&level));
                 }
             }
