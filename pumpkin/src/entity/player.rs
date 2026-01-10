@@ -685,7 +685,7 @@ impl Player {
         true
     }
 
-    pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32)> {
+    pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32, f32)> {
         let respawn_point = self.respawn_point.load()?;
 
         let block = self.world().get_block(&respawn_point.position).await;
@@ -694,13 +694,13 @@ impl Player {
             && block.has_tag(&tag::Block::MINECRAFT_BEDS)
         {
             // TODO: calculate respawn position
-            Some((respawn_point.position.to_f64(), respawn_point.yaw))
+            Some((respawn_point.position.to_f64(), respawn_point.yaw, 0.0))
         } else if respawn_point.dimension == Dimension::THE_NETHER
             && block == &Block::RESPAWN_ANCHOR
         {
             // TODO: calculate respawn position
             // TODO: check if there is fuel for respawn
-            Some((respawn_point.position.to_f64(), respawn_point.yaw))
+            Some((respawn_point.position.to_f64(), respawn_point.yaw, 0.0))
         } else {
             self.client
                 .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
@@ -1254,8 +1254,8 @@ impl Player {
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.clone();
-        let yaw = yaw.unwrap_or(new_world.level_info.read().await.spawn_angle);
-        let pitch = pitch.unwrap_or(10.0);
+        let yaw = yaw.unwrap_or(new_world.level_info.read().await.spawn_yaw);
+        let pitch = pitch.unwrap_or(new_world.level_info.read().await.spawn_pitch);
 
         send_cancellable! {{
             PlayerChangeWorldEvent {

@@ -1427,8 +1427,7 @@ impl World {
                 f64::from(pos_y),
                 f64::from(info.spawn_z) + 0.5,
             );
-            let yaw = info.spawn_angle;
-            (position, yaw, 0.0) // Pitch
+            (position, info.spawn_yaw, info.spawn_pitch)
         };
 
         let velocity = player.living_entity.entity.velocity.load();
@@ -1815,8 +1814,7 @@ impl World {
         }
 
         // Teleport
-        let pitch = 0.0;
-        let (position, yaw) = if let Some(respawn) = player.get_respawn_point().await {
+        let (position, yaw, pitch) = if let Some(respawn) = player.get_respawn_point().await {
             respawn
         } else {
             let top = self
@@ -1829,7 +1827,8 @@ impl World {
                     (top + 1).into(),
                     f64::from(info.spawn_z) + 0.5,
                 ),
-                info.spawn_angle,
+                info.spawn_yaw,
+                info.spawn_pitch,
             )
         };
 
