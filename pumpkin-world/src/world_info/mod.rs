@@ -86,6 +86,7 @@ pub struct LevelData {
     #[serde(alias = "SpawnAngle")]
     pub spawn_yaw: f32,
     // The Pitch rotation of the world spawn.
+    #[serde(default)]
     pub spawn_pitch: f32,
     #[serde(rename = "Version")]
     pub world_version: WorldVersion,
