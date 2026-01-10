@@ -310,7 +310,9 @@ impl BlockBehaviour for CommandBlock {
             .await;
 
             let block = args.world.get_block(args.position).await;
-            if block == &Block::REPEATING_COMMAND_BLOCK {
+            let is_auto = command_entity.auto.load(Ordering::Relaxed);
+            let can_run = command_entity.powered.load(Ordering::Relaxed) || is_auto;
+            if block == &Block::REPEATING_COMMAND_BLOCK && can_run {
                 args.world
                     .schedule_block_tick(block, *args.position, 1, TickPriority::Normal)
                     .await;

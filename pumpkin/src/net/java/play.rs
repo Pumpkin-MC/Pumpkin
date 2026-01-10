@@ -704,6 +704,7 @@ impl JavaClient {
                 )))
                 .await;
 
+            // The 0x4 flag means always active
             if command.flags & 0x4 != 0 && block_type != Block::CHAIN_COMMAND_BLOCK {
                 player
                     .world()
