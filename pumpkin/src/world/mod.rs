@@ -1620,6 +1620,8 @@ impl World {
         }
         player.send_client_information();
 
+        player.send_abilities_update().await;
+
         // Sync selected slot
         player
             .enqueue_set_held_item_packet(&CSetSelectedSlot::new(
