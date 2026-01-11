@@ -229,8 +229,8 @@ impl TripwireHookBlock {
             }
         }
 
-        let future_attached = can_attach & (j > 1);
-        let future_powered = wire_attached & future_attached;
+        let future_attached = can_attach && (j > 1);
+        let future_powered = wire_attached && future_attached;
         let mut future_hook_state = TripwireHookProperties::default(&Block::TRIPWIRE_HOOK);
         future_hook_state.attached = future_attached;
         future_hook_state.powered = future_powered;
