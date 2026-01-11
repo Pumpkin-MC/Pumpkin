@@ -288,7 +288,6 @@ impl Server {
         .unwrap()
     }
 
-    #[expect(clippy::if_then_some_else_none)]
     /// Adds a new player to the server.
     ///
     /// This function takes an `Arc<Client>` representing the connected client and performs the following actions:

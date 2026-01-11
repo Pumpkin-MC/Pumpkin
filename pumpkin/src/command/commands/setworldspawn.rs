@@ -31,32 +31,17 @@ impl CommandExecutor for NoArgsWorldSpawnExecutor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(block_pos) = sender.position() else {
-                let level_info_guard = server.level_info.read().await;
-                let x = level_info_guard.spawn_x.to_string();
-                let y = level_info_guard.spawn_y.to_string();
-                let z = level_info_guard.spawn_z.to_string();
-                let yaw = level_info_guard.spawn_yaw.to_string();
-                let pitch = level_info_guard.spawn_pitch.to_string();
-                let world_version = level_info_guard.world_version.name.clone(); // TODO Level name instead
-                drop(level_info_guard);
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.setworldspawn.success",
-                        [
-                            TextComponent::text(x),
-                            TextComponent::text(y),
-                            TextComponent::text(z),
-                            TextComponent::text(yaw),
-                            TextComponent::text(pitch),
-                            TextComponent::text(world_version),
-                        ],
-                    ))
-                    .await;
-
-                return Ok(());
+            let Some(player) = sender.as_player() else {
+                if sender.is_console() {
+                    return Err(CommandError::CommandFailed(TextComponent::text(
+                        "You must specify a Position!",
+                    )));
+                }
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    "Failed to get Sender as Player!",
+                )));
             };
-
+            let block_pos = player.position();
             setworldspawn(sender, server, block_pos.to_block_pos(), 0.0, 0.0).await
         })
     }
@@ -134,8 +119,6 @@ async fn setworldspawn(
     level_info_guard.spawn_yaw = yaw;
     level_info_guard.spawn_pitch = pitch;
 
-    let world_name = level_info_guard.world_version.name.clone();
-
     drop(level_info_guard);
 
     sender
@@ -147,7 +130,7 @@ async fn setworldspawn(
                 TextComponent::text(block_pos.0.z.to_string()),
                 TextComponent::text(yaw.to_string()),
                 TextComponent::text(pitch.to_string()),
-                TextComponent::text(world_name),
+                TextComponent::text(world.dimension.minecraft_name),
             ],
         ))
         .await;

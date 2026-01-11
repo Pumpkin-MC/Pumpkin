@@ -57,6 +57,8 @@ use pumpkin_protocol::bedrock::client::chunk_radius_update::CChunkRadiusUpdate;
 use pumpkin_protocol::bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate;
 use pumpkin_protocol::bedrock::client::start_game::CStartGame;
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
+
+use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
@@ -660,7 +662,7 @@ impl World {
         let mut weather = self.weather.lock().await;
         weather.tick_weather(self).await;
 
-        if self.should_skip_night().await {
+        if self.should_skip_night().await && level_time.is_night() {
             let time = level_time.time_of_day + 24000;
             level_time.set_time(time - time % 24000);
             level_time.send_time(self).await;
@@ -1636,6 +1638,28 @@ impl World {
         // Sends initial time
         player.send_time(self).await;
 
+        let (spawn_block_pos, yaw, pitch) = {
+            let level_info_lock = self.level_info.read().await;
+            (
+                BlockPos::new(
+                    level_info_lock.spawn_x,
+                    level_info_lock.spawn_y,
+                    level_info_lock.spawn_z,
+                ),
+                level_info_lock.spawn_yaw,
+                level_info_lock.spawn_pitch,
+            )
+        };
+
+        client
+            .send_packet_now(&CPlayerSpawnPosition::new(
+                spawn_block_pos,
+                yaw,
+                pitch,
+                self.dimension.minecraft_name.to_owned(),
+            ))
+            .await;
+
         // Send initial weather state
         let weather = self.weather.lock().await;
         if weather.raining {
@@ -1858,7 +1882,7 @@ impl World {
         drop(players);
 
         // TODO: sleep ratio
-        sleeping_player_count == player_count
+        sleeping_player_count == player_count && player_count != 0
     }
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks

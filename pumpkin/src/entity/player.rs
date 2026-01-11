@@ -664,6 +664,7 @@ impl Player {
         dimension: Dimension,
         block_pos: BlockPos,
         yaw: f32,
+        pitch: f32,
     ) -> bool {
         if let Some(respawn_point) = self.respawn_point.load()
             && dimension == respawn_point.dimension
@@ -680,7 +681,12 @@ impl Player {
         }));
 
         self.client
-            .send_packet_now(&CPlayerSpawnPosition::new(block_pos, yaw))
+            .send_packet_now(&CPlayerSpawnPosition::new(
+                block_pos,
+                yaw,
+                pitch,
+                dimension.minecraft_name.to_owned(),
+            ))
             .await;
         true
     }
@@ -1086,6 +1092,8 @@ impl Player {
         )
     }
 
+    /// Returns the player's rotation.
+    /// Yaw then Pitch
     pub fn rotation(&self) -> (f32, f32) {
         (
             self.living_entity.entity.yaw.load(),
