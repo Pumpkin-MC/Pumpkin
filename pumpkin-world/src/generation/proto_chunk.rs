@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 
 use pumpkin_data::dimension::Dimension;
@@ -7,7 +7,7 @@ use pumpkin_data::tag;
 use pumpkin_data::{
     Block, BlockState, block_properties::blocks_movement, chunk::Biome, tag::Taggable,
 };
-use pumpkin_util::math::block_box::BlockBox;
+use pumpkin_util::random::{RandomImpl, get_carver_seed};
 use pumpkin_util::{
     HeightMap,
     math::{position::BlockPos, vector3::Vector3},
@@ -37,7 +37,7 @@ use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
 use crate::generation::structure::placement::StructurePlacementCalculator;
 use crate::generation::structure::structures::StructureInstance;
-use crate::generation::structure::{STRUCTURE_SETS, STRUCTURES, Structure};
+use crate::generation::structure::{STRUCTURE_SETS, STRUCTURES, StructureKeys, WeightedEntry};
 use crate::{
     BlockStateId, ProtoNoiseRouters,
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier},
@@ -49,6 +49,11 @@ use crate::{
 
 pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk;
+    fn get_center_chunk(&self) -> &ProtoChunk;
+
+    fn get_chunk_mut(&mut self, chunk_x: i32, chunk_z: i32) -> Option<&mut ProtoChunk>;
+    fn get_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk>;
+
     fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState;
     fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState);
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState);
@@ -134,8 +139,7 @@ pub struct ProtoChunk {
     flat_ocean_floor_height_map: Box<[i16]>,
     pub flat_motion_blocking_height_map: Box<[i16]>,
     pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
-    // may want to use chunk status
-    structure_starts: HashMap<Structure, StructureInstance>,
+    structure_starts: HashMap<StructureKeys, StructureInstance>,
 
     // Height of the chunk for indexing
     height: u16,
@@ -463,7 +467,8 @@ impl ProtoChunk {
             let blocks_movement = blocks_movement(block_state, block);
             if blocks_movement {
                 self.maybe_update_ocean_floor_height_map(local_x, pos.y, local_z);
-            } else if blocks_movement || block_state.is_liquid() {
+            }
+            if blocks_movement || block_state.is_liquid() {
                 self.maybe_update_motion_blocking_height_map(local_x, pos.y, local_z);
                 if !block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
                     {
@@ -634,8 +639,6 @@ impl ProtoChunk {
                                 dimension,
                             )
                         };
-                        //dbg!("Populating biome: {:?} -> {:?}", biome_pos, biome);
-
                         let index = self.local_biome_pos_to_biome_index(
                             x,
                             start_biome_y + y - biome_coords::from_block(min_y as i32),
@@ -906,96 +909,221 @@ impl ProtoChunk {
         block_registry: &dyn BlockRegistryExt,
         random_config: &GlobalRandomConfig,
     ) {
-        let chunk = cache.get_center_chunk_mut();
-        debug_assert_eq!(chunk.stage, StagedChunkEnum::Surface);
-        let min_y = chunk.bottom_y();
-        let height = chunk.height();
+        let (center_x, center_z, min_y, height, biomes_in_chunk) = {
+            let chunk = cache.get_center_chunk();
+            let mut biomes = HashSet::new();
+            // bad
+            for biome in chunk.flat_biome_map.clone() {
+                biomes.insert(biome);
+            }
 
-        let bottom_section = section_coords::block_to_section(min_y) as i32;
-        let block_pos = BlockPos(Vector3::new(
-            section_coords::section_to_block(chunk.x),
-            bottom_section,
-            section_coords::section_to_block(chunk.z),
-        ));
+            (chunk.x, chunk.z, chunk.bottom_y(), chunk.height(), biomes)
+        };
 
+        let block_pos = BlockPos::new(
+            section_coords::section_to_block(center_x),
+            section_coords::block_to_section(min_y) as i32,
+            section_coords::section_to_block(center_z),
+        );
         let population_seed =
             Xoroshiro::get_population_seed(random_config.seed, block_pos.0.x, block_pos.0.z);
 
-        let _chunk_box = chunk.get_block_box_for_chunk();
-        for (_structure_config, instance) in chunk.structure_starts.clone() {
-            dbg!("generating");
-            match instance {
-                StructureInstance::Start(pos, _stype) => {
-                    // Use the collector directly to place blocks
-                    pos.collector
-                        .generate_in_chunk(chunk, random_config.seed as i64);
-                }
-                StructureInstance::Reference(_start_block_pos) => {}
-            }
-        }
-        // TODO: This needs to be different depending on what biomes are in the chunk -> affects the
-        // random
-        for (name, feature) in PLACED_FEATURES.iter() {
-            // TODO: Properly set index and step
-            let decorator_seed = get_decorator_seed(population_seed, 0, 0);
+        const MAX_STEPS: usize = 11;
+
+        for step in 0..MAX_STEPS {
+            let decorator_seed = get_decorator_seed(population_seed, 0, step as u64);
             let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
-            feature.generate(
-                cache,
-                block_registry,
-                min_y,
-                height,
-                name,
-                &mut random,
-                block_pos,
-            );
-        }
-        let chunk = cache.get_center_chunk_mut();
-        chunk.stage = StagedChunkEnum::Features;
-    }
 
-    pub fn set_structure_starts(&mut self, random_config: &GlobalRandomConfig) {
-        for (_set_name, set) in STRUCTURE_SETS.iter() {
-            let calculator = StructurePlacementCalculator {
-                seed: random_config.seed as i64,
-            };
+            let mut tasks = Vec::new();
 
-            if !set.placement.should_generate(calculator, self.x, self.z) {
-                continue;
-            }
-            if set.structures.len() == 1
-                && let Some(structure_entry) = set.structures.first()
             {
-                let position = structure_entry.structure.try_generate(
-                    random_config.seed as i64,
-                    self.x,
-                    self.z,
-                    self,
-                );
+                let center_chunk = cache.get_center_chunk();
+                for (id, instance) in &center_chunk.structure_starts {
+                    // Check if this structure belongs to the current step
+                    if let Some(s) = STRUCTURES.get(id)
+                        && s.step.ordinal() != step
+                    {
+                        continue;
+                    }
 
-                if let Some(pos) = position
-                    && let Some(structure_config) = STRUCTURES.get(&structure_entry.structure)
-                {
-                    self.structure_starts.insert(
-                        structure_config.clone(),
-                        StructureInstance::Start(pos, structure_entry.structure.clone()),
+                    match instance {
+                        StructureInstance::Start(pos) => {
+                            tasks.push(pos.collector.clone());
+                        }
+                        StructureInstance::Reference(origin_pos) => {
+                            let origin_chunk_x = origin_pos.0.x >> 4;
+                            let origin_chunk_z = origin_pos.0.z >> 4;
+
+                            if let Some(neighbor) = cache.get_chunk(origin_chunk_x, origin_chunk_z)
+                                && let Some(StructureInstance::Start(pos)) =
+                                    neighbor.structure_starts.get(id)
+                            {
+                                tasks.push(pos.collector.clone());
+                            }
+                        }
+                    }
+                }
+            }
+
+            let chunk = cache.get_center_chunk_mut();
+            for collector_arc in tasks {
+                let mut collector = collector_arc.lock().unwrap();
+                collector.generate_in_chunk(chunk, &mut random, random_config.seed as i64);
+            }
+
+            let mut features_to_run = HashSet::new();
+            for biome in &biomes_in_chunk {
+                if let Some(features_at_step) = biome.features.get(step) {
+                    for feature_id in *features_at_step {
+                        features_to_run
+                            .insert(feature_id.strip_prefix("minecraft:").unwrap_or(feature_id));
+                    }
+                }
+            }
+            // let mut sorted_features: Vec<_> = features_to_run.into_iter().collect();
+            // sorted_features.sort_by_key(|f| f.registry_index());
+
+            for (p, feature_id) in features_to_run.into_iter().enumerate() {
+                if let Some(feature) = PLACED_FEATURES.get(feature_id) {
+                    let decorator_seed = get_decorator_seed(population_seed, p as u64, step as u64);
+                    let mut random =
+                        RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
+
+                    feature.generate(
+                        cache,
+                        block_registry,
+                        min_y,
+                        height,
+                        feature_id,
+                        &mut random,
+                        block_pos,
                     );
                 }
             }
-            // TODO add weight
+        }
+
+        cache.get_center_chunk_mut().stage = StagedChunkEnum::Features;
+    }
+
+    pub fn set_structure_starts(
+        &mut self,
+        random_config: &GlobalRandomConfig,
+        settings: &GenerationSettings,
+    ) {
+        let seed = random_config.seed;
+        let calculator = StructurePlacementCalculator::new(seed as i64);
+
+        for (_set_name, set) in STRUCTURE_SETS.iter() {
+            if !set.placement.should_generate(&calculator, self.x, self.z) {
+                continue;
+            }
+
+            if set.structures.len() == 1 {
+                if let Some(entry) = set.structures.first() {
+                    self.try_set_structure_start(settings.sea_level, entry, random_config);
+                }
+                continue;
+            }
+
+            let mut candidates = set.structures.clone();
+            let mut random: RandomGenerator =
+                RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed));
+            let carver_seed = get_carver_seed(&mut random, seed, self.x, self.z);
+            let mut random: RandomGenerator =
+                RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
+
+            let mut total_weight: u32 = candidates.iter().map(|e| e.weight).sum();
+
+            while !candidates.is_empty() {
+                let mut roll = random.next_bounded_i32(total_weight as i32);
+                let mut selected_idx = 0;
+
+                for (i, entry) in candidates.iter().enumerate() {
+                    roll -= entry.weight as i32;
+                    if roll < 0 {
+                        selected_idx = i;
+                        break;
+                    }
+                }
+
+                let selected_entry = &candidates[selected_idx];
+
+                if self.try_set_structure_start(settings.sea_level, selected_entry, random_config) {
+                    break;
+                }
+
+                let failed_entry = candidates.remove(selected_idx);
+                total_weight -= failed_entry.weight;
+            }
         }
         self.stage = StagedChunkEnum::StructureStart;
     }
 
-    pub fn set_structure_references(&mut self) {
-        self.stage = StagedChunkEnum::StructureReferences;
+    fn try_set_structure_start(
+        &mut self,
+        sea_level: i32,
+        entry: &WeightedEntry,
+        random_config: &GlobalRandomConfig,
+    ) -> bool {
+        if let Some(structure) = STRUCTURES.get(&entry.structure) {
+            let position =
+                entry
+                    .structure
+                    .try_generate(structure, random_config.seed as i64, self, sea_level);
+
+            if let Some(pos) = position {
+                self.structure_starts
+                    .insert(entry.structure.clone(), StructureInstance::Start(pos));
+                return true;
+            }
+        }
+        false
     }
 
-    fn get_block_box_for_chunk(&self) -> BlockBox {
-        let x = start_block_x(self.x);
-        let z = start_block_z(self.z);
-        let bottom = self.bottom_y() as i32 + 1;
-        let top = self.top_y() as i32;
-        BlockBox::new(x, bottom, z, x + 15, top, z + 15)
+    pub fn set_structure_references<T: GenerationCache>(cache: &mut T) {
+        let (center_x, center_z) = {
+            let chunk = cache.get_center_chunk();
+            (chunk.x, chunk.z)
+        };
+
+        let start_block_x = chunk_pos::start_block_x(center_x);
+        let start_block_z = chunk_pos::start_block_z(center_z);
+        let end_block_x = start_block_x + 15;
+        let end_block_z = start_block_z + 15;
+
+        let radius = 8;
+        let mut references_to_add = Vec::new();
+
+        for x in (center_x - radius)..=(center_x + radius) {
+            for z in (center_z - radius)..=(center_z + radius) {
+                if let Some(neighbor_chunk) = cache.get_chunk(x, z) {
+                    for (structure_key, instance) in &neighbor_chunk.structure_starts {
+                        if let StructureInstance::Start(start_data) = instance {
+                            let bbox = start_data.get_bounding_box();
+                            if bbox.intersects_raw_xz(
+                                start_block_x,
+                                start_block_z,
+                                end_block_x,
+                                end_block_z,
+                            ) {
+                                references_to_add
+                                    .push((structure_key.clone(), start_data.start_pos));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let center_chunk = cache.get_center_chunk_mut();
+        for (key, pos) in references_to_add {
+            center_chunk
+                .structure_starts
+                .entry(key)
+                .or_insert(StructureInstance::Reference(pos));
+        }
+
+        center_chunk.stage = StagedChunkEnum::StructureReferences;
     }
 
     fn start_cell_x(&self, horizontal_cell_block_count: u8) -> i32 {

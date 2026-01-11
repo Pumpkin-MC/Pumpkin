@@ -10,9 +10,11 @@ use args::ConsumedArgs;
 
 use dispatcher::CommandError;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::translation::Locale;
+use pumpkin_world::block::entities::BlockEntity;
+use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 
 pub mod args;
 pub mod client_suggestions;
@@ -24,6 +26,7 @@ pub enum CommandSender {
     Rcon(Arc<tokio::sync::Mutex<Vec<String>>>),
     Console,
     Player(Arc<Player>),
+    CommandBlock(Arc<dyn BlockEntity>, Arc<World>),
 }
 
 impl fmt::Display for CommandSender {
@@ -35,6 +38,7 @@ impl fmt::Display for CommandSender {
                 Self::Console => "Server",
                 Self::Rcon(_) => "Rcon",
                 Self::Player(p) => &p.gameprofile.name,
+                Self::CommandBlock(..) => "@",
             }
         )
     }
@@ -46,6 +50,26 @@ impl CommandSender {
             Self::Console => log::info!("{}", text.to_pretty_console()),
             Self::Player(c) => c.send_system_message(&text).await,
             Self::Rcon(s) => s.lock().await.push(text.to_pretty_console()),
+            Self::CommandBlock(block_entity, _) => {
+                let command_entity: &CommandBlockEntity =
+                    block_entity.as_any().downcast_ref().unwrap();
+                let mut last_output = command_entity.last_output.lock().await;
+
+                let now = time::OffsetDateTime::now_local().unwrap();
+                let format = time::macros::format_description!("[hour]:[minute]:[second]");
+                let timestamp = now.format(&format).unwrap();
+
+                *last_output = format!("[{}] {}", timestamp, text.get_text());
+            }
+        }
+    }
+
+    pub fn set_success_count(&self, count: u32) {
+        if let Self::CommandBlock(c, _) = self {
+            let block: &CommandBlockEntity = c.as_any().downcast_ref().unwrap();
+            block
+                .success_count
+                .store(count, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
@@ -72,6 +96,7 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => PermissionLvl::Four,
             Self::Player(p) => p.permission_lvl.load(),
+            Self::CommandBlock(..) => PermissionLvl::Two,
         }
     }
 
@@ -80,6 +105,7 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => true,
             Self::Player(p) => p.permission_lvl.load().ge(&lvl),
+            Self::CommandBlock(..) => PermissionLvl::Two >= lvl,
         }
     }
 
@@ -88,6 +114,17 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
             Self::Player(p) => p.has_permission(node).await,
+            Self::CommandBlock(..) => {
+                let perm_reg = crate::PERMISSION_REGISTRY.read().await;
+                let Some(p) = perm_reg.get_permission(node) else {
+                    return false;
+                };
+                match p.default {
+                    PermissionDefault::Allow => true,
+                    PermissionDefault::Deny => false,
+                    PermissionDefault::Op(o) => o <= PermissionLvl::Two,
+                }
+            }
         }
     }
 
@@ -96,6 +133,7 @@ impl CommandSender {
         match self {
             Self::Console | Self::Rcon(..) => None,
             Self::Player(p) => Some(p.living_entity.entity.pos.load()),
+            Self::CommandBlock(c, _) => Some(c.get_position().to_centered_f64()),
         }
     }
 
@@ -105,12 +143,13 @@ impl CommandSender {
             // TODO: maybe return first world when console
             Self::Console | Self::Rcon(..) => None,
             Self::Player(p) => Some(p.living_entity.entity.world.clone()),
+            Self::CommandBlock(_, w) => Some(w.clone()),
         }
     }
 
     pub async fn get_locale(&self) -> Locale {
         match self {
-            Self::Console | Self::Rcon(..) => Locale::EnUs, // Default locale for console and RCON
+            Self::CommandBlock(..) | Self::Console | Self::Rcon(..) => Locale::EnUs, // Default locale for console and RCON
             Self::Player(player) => {
                 Locale::from_str(&player.config.read().await.locale).unwrap_or(Locale::EnUs)
             }

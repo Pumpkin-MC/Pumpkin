@@ -67,6 +67,7 @@ use crate::block::blocks::redstone::tripwire::TripwireBlock;
 use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
 use crate::block::blocks::signs::SignBlock;
 use crate::block::blocks::slabs::SlabBlock;
+use crate::block::blocks::snow::LayeredSnowBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
 use crate::block::blocks::stairs::StairBlock;
 use crate::block::blocks::tnt::TNTBlock;
@@ -224,6 +225,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(EndRodBlock);
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
+    manager.register(LayeredSnowBlock);
 
     manager.register(FallingBlock);
 

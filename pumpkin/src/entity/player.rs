@@ -1027,16 +1027,15 @@ impl Player {
         }
     }
 
-    #[expect(clippy::cast_precision_loss)]
     pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
         // TODO: Swimming, gliding...
         if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
-            let delta = (delta_pos.horizontal_length() * 100.0).round() as i32;
-            if delta > 0 {
+            let delta = (delta_pos.horizontal_length() * 100.0).round() as f32;
+            if delta > 0.0 {
                 if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
-                    self.add_exhaustion(0.1 * delta as f32 * 0.01).await;
+                    self.add_exhaustion(0.1 * delta * 0.01).await;
                 } else {
-                    self.add_exhaustion(0.0 * delta as f32 * 0.01).await;
+                    self.add_exhaustion(0.0 * delta * 0.01).await;
                 }
             }
         }

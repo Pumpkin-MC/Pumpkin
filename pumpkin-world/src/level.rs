@@ -293,18 +293,22 @@ impl Level {
         self.shut_down_chunk_system.store(true, Ordering::Relaxed);
         self.level_channel.notify();
 
-        {
+        let handles: Vec<_> = {
             let mut lock = self.thread_tracker.lock().unwrap();
-            log::info!("Wait {} jobs stop", lock.len());
-            while let Some(i) = lock.pop() {
-                log::info!(
-                    "Waiting Thread {:?} {} stop",
-                    i.thread().id(),
-                    i.thread().name().unwrap_or("unknown")
-                );
-                i.join().unwrap();
+            log::info!("Shutting down {} jobs", lock.len());
+            lock.drain(..).collect()
+        };
+
+        for handle in handles {
+            log::info!(
+                "Waiting for thread {:?} ({}) to stop",
+                handle.thread().id(),
+                handle.thread().name().unwrap_or("unknown")
+            );
+
+            if let Err(e) = handle.join() {
+                log::error!("Thread panicked during execution: {:?}", e);
             }
-            log::info!("All Thread stop");
         }
 
         log::info!("Wait chunk system tasks stop");

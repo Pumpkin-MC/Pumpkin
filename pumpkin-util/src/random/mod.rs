@@ -62,10 +62,10 @@ macro_rules! population_seed_fn {
 
 // TODO: Write unit test for this
 #[inline]
-pub fn get_decorator_seed(population_seed: u64, index: usize, step: usize) -> u64 {
+pub fn get_decorator_seed(population_seed: u64, index: u64, step: u64) -> u64 {
     population_seed
-        .wrapping_add(index as u64)
-        .wrapping_add(10_000u64.wrapping_mul(step as u64))
+        .wrapping_add(index)
+        .wrapping_add(10_000u64.wrapping_mul(step))
 }
 
 #[inline]

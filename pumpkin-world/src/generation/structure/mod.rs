@@ -11,14 +11,17 @@ use crate::{
         structure::{
             placement::StructurePlacement,
             structures::{
-                StructureGenerator, StructurePosition, buried_treasure::BuriedTreasureGenerator,
-                nether_fortress::NetherFortressGenerator, swamp_hut::SwampHutGenerator,
+                StructureGenerator, StructureGeneratorContext, StructurePosition,
+                buried_treasure::BuriedTreasureGenerator, create_chunk_random,
+                stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
             },
         },
     },
 };
 
+pub mod piece;
 pub mod placement;
+pub mod shiftable_piece;
 pub mod structures;
 
 #[derive(Deserialize)]
@@ -27,49 +30,49 @@ pub struct StructureSet {
     pub structures: Vec<WeightedEntry>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct WeightedEntry {
     pub structure: StructureKeys,
     pub weight: u32,
 }
 
-#[derive(Deserialize, Clone)]
-pub enum StructureType {
-    #[serde(rename = "minecraft:buried_treasure")]
-    BuriedTreasure(BuriedTreasureGenerator),
-    #[serde(rename = "minecraft:desert_pyramid")]
-    DesertPyramid,
-    #[serde(rename = "minecraft:end_city")]
-    EndCity,
-    #[serde(rename = "minecraft:fortress")]
-    NetherFortress(NetherFortressGenerator),
-    #[serde(rename = "minecraft:igloo")]
-    Igloo,
-    #[serde(rename = "minecraft:jigsaw")]
-    Jigsaw,
-    #[serde(rename = "minecraft:jungle_temple")]
-    JungleTemple,
-    #[serde(rename = "minecraft:mineshaft")]
-    Mineshaft,
-    #[serde(rename = "minecraft:nether_fossil")]
-    NetherFossil,
-    #[serde(rename = "minecraft:ocean_monument")]
-    OceanMonument,
-    #[serde(rename = "minecraft:ocean_ruin")]
-    OceanRuin,
-    #[serde(rename = "minecraft:ruined_portal")]
-    RuinedPortal,
-    #[serde(rename = "minecraft:shipwreck")]
-    Shipwreck,
-    #[serde(rename = "minecraft:stronghold")]
-    Stronghold,
-    #[serde(rename = "minecraft:swamp_hut")]
-    SwampHut(SwampHutGenerator),
-    #[serde(rename = "minecraft:woodland_mansion")]
-    WoodlandMansion,
-}
+// #[derive(Deserialize)]
+// pub enum StructureType {
+//     #[serde(rename = "minecraft:buried_treasure")]
+//     BuriedTreasure(BuriedTreasureGenerator),
+//     #[serde(rename = "minecraft:desert_pyramid")]
+//     DesertPyramid,
+//     #[serde(rename = "minecraft:end_city")]
+//     EndCity,
+//     #[serde(rename = "minecraft:fortress")]
+//     NetherFortress(NetherFortressGenerator),
+//     #[serde(rename = "minecraft:igloo")]
+//     Igloo,
+//     #[serde(rename = "minecraft:jigsaw")]
+//     Jigsaw,
+//     #[serde(rename = "minecraft:jungle_temple")]
+//     JungleTemple,
+//     #[serde(rename = "minecraft:mineshaft")]
+//     Mineshaft,
+//     #[serde(rename = "minecraft:nether_fossil")]
+//     NetherFossil,
+//     #[serde(rename = "minecraft:ocean_monument")]
+//     OceanMonument,
+//     #[serde(rename = "minecraft:ocean_ruin")]
+//     OceanRuin,
+//     #[serde(rename = "minecraft:ruined_portal")]
+//     RuinedPortal,
+//     #[serde(rename = "minecraft:shipwreck")]
+//     Shipwreck,
+//     #[serde(rename = "minecraft:stronghold")]
+//     Stronghold,
+//     #[serde(rename = "minecraft:swamp_hut")]
+//     SwampHut(SwampHutGenerator),
+//     #[serde(rename = "minecraft:woodland_mansion")]
+//     WoodlandMansion,
+// }
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum StructureKeys {
     #[serde(rename = "minecraft:pillager_outpost")]
     PillagerOutpost,
@@ -147,44 +150,49 @@ pub struct EmptyStruct {}
 impl StructureKeys {
     pub fn try_generate(
         &self,
+        structure: &Structure,
         seed: i64,
-        chunk_x: i32,
-        chunk_z: i32,
-        chunk_ref_for_biomes: &ProtoChunk,
+        chunk: &ProtoChunk,
+        sea_level: i32,
     ) -> Option<StructurePosition> {
+        let random = create_chunk_random(seed, chunk.x, chunk.z);
+        let context = StructureGeneratorContext {
+            seed,
+            chunk_x: chunk.x,
+            chunk_z: chunk.z,
+            random,
+            sea_level,
+            min_y: chunk.bottom_y() as i32,
+        };
         let structure_pos = match self {
-            StructureKeys::BuriedTreasure => BuriedTreasureGenerator::get_structure_position(
-                &BuriedTreasureGenerator,
-                seed,
-                chunk_x,
-                chunk_z,
-            ),
-            StructureKeys::Fortress => NetherFortressGenerator::get_structure_position(
-                &NetherFortressGenerator,
-                seed,
-                chunk_x,
-                chunk_z,
-            ),
-            StructureKeys::SwampHut => SwampHutGenerator::get_structure_position(
-                &SwampHutGenerator,
-                seed,
-                chunk_x,
-                chunk_z,
-            ),
+            StructureKeys::BuriedTreasure => {
+                BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
+            }
+            // StructureKeys::Fortress => {
+            //     NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
+            // }
+            StructureKeys::SwampHut => {
+                SwampHutGenerator::get_structure_position(&SwampHutGenerator, context)
+            }
+            StructureKeys::Stronghold => {
+                StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
+            }
+            // StructureKeys::DesertPyramid => DesertTempleGenerator::get_structure_position(
+            //     &DesertTempleGenerator,
+            //    context
+            // ),
             // TODO
             _ => None,
         };
 
-        if let Some(pos) = structure_pos
-            && let Some(structure_data) = STRUCTURES.get(self)
-        {
+        if let Some(pos) = structure_pos {
             // Get the biome at the structure's starting position
-            let current_biome = chunk_ref_for_biomes.get_biome(
+            let current_biome = chunk.get_biome(
                 biome_coords::from_block(pos.start_pos.0.x),
                 biome_coords::from_block(pos.start_pos.0.y),
                 biome_coords::from_block(pos.start_pos.0.z),
             );
-            let biomes = Biome::get_tag_values(&structure_data.biomes).unwrap();
+            let biomes = Biome::get_tag_values(&structure.biomes).unwrap();
             // Check if the biome is allowed for this structure
             if biomes.contains(&current_biome.registry_id) {
                 return Some(pos);
@@ -195,17 +203,32 @@ impl StructureKeys {
     }
 }
 
-pub fn generate_structure_pieces(
-    structure_pos: &StructurePosition,
-    chunk: &mut ProtoChunk,
-    seed: i64,
-) {
-    structure_pos.collector.generate_in_chunk(chunk, seed);
-}
-
 #[derive(Deserialize, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Structure {
-    biomes: String,
+    pub biomes: String,
+    pub step: GenerationStep,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GenerationStep {
+    RawGeneration,
+    Lakes,
+    LocalModifications,
+    UndergroundStructures,
+    SurfaceStructures,
+    Strongholds,
+    UndergroundOres,
+    UndergroundDecoration,
+    FluidSprings,
+    VegetalDecoration,
+    TopLayerModification,
+}
+
+impl GenerationStep {
+    pub fn ordinal(&self) -> usize {
+        *self as usize
+    }
 }
 
 pub static STRUCTURES: LazyLock<HashMap<StructureKeys, Structure>> = LazyLock::new(

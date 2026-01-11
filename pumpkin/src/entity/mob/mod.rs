@@ -66,16 +66,16 @@ pub trait Mob: EntityBase + Send + Sync {
         rand::rng()
     }
 
-    fn get_max_look_yaw_change(&self) -> i32 {
-        10
+    fn get_max_look_yaw_change(&self) -> f32 {
+        10.0
     }
 
-    fn get_max_look_pitch_change(&self) -> i32 {
-        40
+    fn get_max_look_pitch_change(&self) -> f32 {
+        40.0
     }
 
-    fn get_max_head_rotation(&self) -> i32 {
-        75
+    fn get_max_head_rotation(&self) -> f32 {
+        75.0
     }
 
     fn get_mob_entity(&self) -> &MobEntity;

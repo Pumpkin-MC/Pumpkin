@@ -44,6 +44,7 @@ pub mod redstone;
 pub mod signs;
 pub mod skull_block;
 pub mod slabs;
+pub mod snow;
 pub mod spawner;
 pub mod stairs;
 pub mod tnt;

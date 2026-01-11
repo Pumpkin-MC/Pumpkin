@@ -1,204 +1,240 @@
+use std::sync::Arc;
+
 use pumpkin_data::Block;
-use pumpkin_util::{
-    HeightMap,
-    math::{
-        block_box::BlockBox,
-        position::BlockPos,
-        vector3::{Axis, Vector3},
-    },
-};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
 use crate::{
     ProtoChunk,
     generation::{
         positions::chunk_pos::{get_center_x, get_center_z},
-        structure::structures::{
-            StructureGenerator, StructurePiece, StructurePiecesCollector, StructurePosition, fill,
-            fill_downwards,
+        structure::{
+            piece::StructurePieceType,
+            shiftable_piece::ShiftableStructurePiece,
+            structures::{
+                StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
+                StructurePiecesCollector, StructurePosition,
+            },
         },
     },
 };
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 pub struct SwampHutGenerator;
 
 impl StructureGenerator for SwampHutGenerator {
     fn get_structure_position(
         &self,
-        _seed: i64,
-        chunk_x: i32,
-        chunk_z: i32,
+        mut context: StructureGeneratorContext,
     ) -> Option<StructurePosition> {
-        let x = get_center_x(chunk_x);
-        let z = get_center_z(chunk_z);
-
-        // TODO: random axis
-        let bounding_box = BlockBox::create_box(x, 64, z, Axis::X, 7, 7, 9);
+        let x = get_center_x(context.chunk_x);
+        let z = get_center_z(context.chunk_z);
 
         let mut collector = StructurePiecesCollector::default();
-        collector.add_piece(Box::new(SwampHutPiece { bounding_box }));
+        collector.add_piece(Box::new(SwampHutPiece {
+            shiftable_structure_piece: ShiftableStructurePiece::new(
+                StructurePieceType::SwampHut,
+                x,
+                64,
+                z,
+                7,
+                7,
+                9,
+                StructurePiece::get_random_horizontal_direction(&mut context.random).get_axis(),
+            ),
+        }));
 
         Some(StructurePosition {
             start_pos: BlockPos::new(x, 64, z),
-            collector: collector.into(),
+            collector: Arc::new(collector.into()),
         })
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SwampHutPiece {
-    bounding_box: BlockBox,
+    shiftable_structure_piece: ShiftableStructurePiece,
 }
 
-impl StructurePiece for SwampHutPiece {
-    fn bounding_box(&self) -> &BlockBox {
-        &self.bounding_box
+impl StructurePieceBase for SwampHutPiece {
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new(self.clone())
     }
 
-    fn place(&self, chunk: &mut ProtoChunk, _seed: i64) {
-        let min = self.bounding_box.min;
-        let origin_x = min.x;
-        let origin_z = min.z;
-
-        // Vanilla uses adjustToAverageHeight.
-        let surface_y = chunk.get_top_y(&HeightMap::OceanFloorWg, origin_x + 3, origin_z + 3);
-        let origin_y = surface_y + 1;
-
-        let spruce_planks = &Block::SPRUCE_PLANKS.default_state;
-        let oak_log = &Block::OAK_LOG.default_state;
-        let oak_fence = &Block::OAK_FENCE.default_state;
-        let air = &Block::AIR.default_state;
-
-        // 1. THE FLOOR
-        fill(
-            origin_x + 1,
-            origin_y + 1,
-            origin_z + 1,
-            origin_x + 5,
-            origin_y + 1,
-            origin_z + 7,
-            spruce_planks,
-            chunk,
-        );
-
-        // 2. THE CEILING
-        fill(
-            origin_x + 1,
-            origin_y + 4,
-            origin_z + 2,
-            origin_x + 5,
-            origin_y + 4,
-            origin_z + 7,
-            spruce_planks,
-            chunk,
-        );
-
-        // 3. THE ENTRANCE PLATFORM
-        fill(
-            origin_x + 2,
-            origin_y + 1,
-            origin_z,
-            origin_x + 4,
-            origin_y + 1,
-            origin_z,
-            spruce_planks,
-            chunk,
-        );
-
-        // Front Wall
-        fill(
-            origin_x + 2,
-            origin_y + 2,
-            origin_z + 2,
-            origin_x + 3,
-            origin_y + 3,
-            origin_z + 2,
-            spruce_planks,
-            chunk,
-        );
-        // Left Wall
-        fill(
-            origin_x + 1,
-            origin_y + 2,
-            origin_z + 3,
-            origin_x + 1,
-            origin_y + 3,
-            origin_z + 6,
-            spruce_planks,
-            chunk,
-        );
-        // Right Wall
-        fill(
-            origin_x + 5,
-            origin_y + 2,
-            origin_z + 3,
-            origin_x + 5,
-            origin_y + 3,
-            origin_z + 6,
-            spruce_planks,
-            chunk,
-        );
-        // Back Wall
-        fill(
-            origin_x + 2,
-            origin_y + 2,
-            origin_z + 7,
-            origin_x + 4,
-            origin_y + 3,
-            origin_z + 7,
-            spruce_planks,
-            chunk,
-        );
-
-        // 5. THE LOGS
-        let logs = [(1, 2), (5, 2), (1, 7), (5, 7)];
-        for (lx, lz) in logs {
-            fill(
-                origin_x + lx,
-                origin_y,
-                origin_z + lz,
-                origin_x + lx,
-                origin_y + 3,
-                origin_z + lz,
-                oak_log,
-                chunk,
-            );
-            fill_downwards(origin_x + lx, origin_y - 1, origin_z + lz, oak_log, chunk);
+    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
+        if !self
+            .shiftable_structure_piece
+            .adjust_to_average_height(chunk)
+        {
+            return;
         }
 
-        // Placed at Y=2 (feet level) or Y=3 (eye level)
-        let y_floor = origin_y + 2;
-        let y_eye = origin_y + 3;
+        let box_limit = self.shiftable_structure_piece.piece.bounding_box;
+        let p = &self.shiftable_structure_piece.piece;
 
-        chunk.set_block_state(
-            &Vector3::new(origin_x + 3, y_floor, origin_z + 6),
-            Block::CRAFTING_TABLE.default_state,
+        let spruce_planks = Block::SPRUCE_PLANKS.default_state;
+        let oak_log = Block::OAK_LOG.default_state;
+        let oak_fence = Block::OAK_FENCE.default_state;
+        let air = Block::AIR.default_state;
+
+        p.fill_with_outline(
+            chunk,
+            &box_limit,
+            false,
+            1,
+            1,
+            1,
+            5,
+            1,
+            7,
+            spruce_planks,
+            spruce_planks,
         );
-        chunk.set_block_state(
-            &Vector3::new(origin_x + 4, y_floor, origin_z + 6),
-            Block::CAULDRON.default_state,
+        p.fill_with_outline(
+            chunk,
+            &box_limit,
+            false,
+            1,
+            4,
+            2,
+            5,
+            4,
+            7,
+            spruce_planks,
+            spruce_planks,
         );
-        chunk.set_block_state(
-            &Vector3::new(origin_x + 1, y_eye, origin_z + 5),
+        p.fill_with_outline(
+            chunk,
+            &box_limit,
+            false,
+            2,
+            1,
+            0,
+            4,
+            1,
+            0,
+            spruce_planks,
+            spruce_planks,
+        );
+
+        p.fill_with_outline(
+            chunk,
+            &box_limit,
+            false,
+            2,
+            2,
+            2,
+            3,
+            3,
+            2,
+            spruce_planks,
+            spruce_planks,
+        );
+        p.fill_with_outline(
+            chunk,
+            &box_limit,
+            false,
+            1,
+            2,
+            3,
+            1,
+            3,
+            6,
+            spruce_planks,
+            spruce_planks,
+        );
+        p.fill_with_outline(
+            chunk,
+            &box_limit,
+            false,
+            5,
+            2,
+            3,
+            5,
+            3,
+            6,
+            spruce_planks,
+            spruce_planks,
+        );
+        p.fill_with_outline(
+            chunk,
+            &box_limit,
+            false,
+            2,
+            2,
+            7,
+            4,
+            3,
+            7,
+            spruce_planks,
+            spruce_planks,
+        );
+
+        p.fill_with_outline(chunk, &box_limit, false, 1, 0, 2, 1, 3, 2, oak_log, oak_log);
+        p.fill_with_outline(chunk, &box_limit, false, 5, 0, 2, 5, 3, 2, oak_log, oak_log);
+        p.fill_with_outline(chunk, &box_limit, false, 1, 0, 7, 1, 3, 7, oak_log, oak_log);
+        p.fill_with_outline(chunk, &box_limit, false, 5, 0, 7, 5, 3, 7, oak_log, oak_log);
+
+        p.add_block(chunk, oak_fence, 2, 3, 2, &box_limit);
+        p.add_block(chunk, oak_fence, 3, 3, 7, &box_limit);
+        p.add_block(chunk, air, 1, 3, 4, &box_limit);
+        p.add_block(chunk, air, 5, 3, 4, &box_limit);
+        p.add_block(chunk, air, 5, 3, 5, &box_limit);
+        p.add_block(
+            chunk,
             Block::POTTED_RED_MUSHROOM.default_state,
+            1,
+            3,
+            5,
+            &box_limit,
         );
+        p.add_block(
+            chunk,
+            Block::CRAFTING_TABLE.default_state,
+            3,
+            2,
+            6,
+            &box_limit,
+        );
+        p.add_block(chunk, Block::CAULDRON.default_state, 4, 2, 6, &box_limit);
+        p.add_block(chunk, oak_fence, 1, 2, 1, &box_limit);
+        p.add_block(chunk, oak_fence, 5, 2, 1, &box_limit);
 
-        // Fences & Gaps
-        chunk.set_block_state(&Vector3::new(origin_x + 2, y_eye, origin_z + 2), oak_fence); // Above the door
-        chunk.set_block_state(&Vector3::new(origin_x + 3, y_eye, origin_z + 7), oak_fence); // Back window
-        chunk.set_block_state(
-            &Vector3::new(origin_x + 1, y_floor, origin_z + 1),
-            oak_fence,
-        ); // Balcony left
-        chunk.set_block_state(
-            &Vector3::new(origin_x + 5, y_floor, origin_z + 1),
-            oak_fence,
-        ); // Balcony right
+        // let stairs_n = Block::SPRUCE_STAIRS.default_state.with("facing", "north");
+        // let stairs_e = Block::SPRUCE_STAIRS.default_state.with("facing", "east");
+        // let stairs_w = Block::SPRUCE_STAIRS.default_state.with("facing", "west");
+        // let stairs_s = Block::SPRUCE_STAIRS.default_state.with("facing", "south");
 
-        // Clear window air (Java: addBlock AIR at 1, 3, 4 and 5, 3, 4/5)
-        chunk.set_block_state(&Vector3::new(origin_x + 1, y_eye, origin_z + 4), air);
-        chunk.set_block_state(&Vector3::new(origin_x + 5, y_eye, origin_z + 4), air);
-        chunk.set_block_state(&Vector3::new(origin_x + 5, y_eye, origin_z + 5), air);
+        // p.fill_with_outline(chunk, &box_limit, false, 0, 4, 1, 6, 4, 1, &stairs_n, &stairs_n);
+        // p.fill_with_outline(chunk, &box_limit, false, 0, 4, 2, 0, 4, 7, &stairs_e, &stairs_e);
+        // p.fill_with_outline(chunk, &box_limit, false, 6, 4, 2, 6, 4, 7, &stairs_w, &stairs_w);
+        // p.fill_with_outline(chunk, &box_limit, false, 0, 4, 8, 6, 4, 8, &stairs_s, &stairs_s);
+
+        // p.add_block(chunk, &stairs_n.with("shape", "outer_right"), 0, 4, 1, &box_limit);
+        // p.add_block(chunk, &stairs_n.with("shape", "outer_left"), 6, 4, 1, &box_limit);
+        // p.add_block(chunk, &stairs_s.with("shape", "outer_left"), 0, 4, 8, &box_limit);
+        // p.add_block(chunk, &stairs_s.with("shape", "outer_right"), 6, 4, 8, &box_limit);
+
+        for i in [2, 7] {
+            for j in [1, 5] {
+                p.fill_downwards(chunk, oak_log, j, -1, i, &box_limit);
+            }
+        }
+
+        // if !self.has_witch {
+        //     let world_coords = p.get_world_coords(2, 2, 5);
+        //     if box_limit.contains(world_coords.0, world_coords.1, world_coords.2) {
+        //         self.has_witch = true;
+        //         // TODO: chunk.add_entity(Witch, world_coords)
+        //     }
+        // }
+        // TODO: self.spawn_cat(chunk, &box_limit);
+    }
+    fn get_structure_piece(&self) -> &super::StructurePiece {
+        &self.shiftable_structure_piece.piece
+    }
+
+    fn get_structure_piece_mut(&mut self) -> &mut super::StructurePiece {
+        &mut self.shiftable_structure_piece.piece
     }
 }
