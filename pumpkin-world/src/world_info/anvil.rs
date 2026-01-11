@@ -236,7 +236,8 @@ mod test {
             spawn_x: 160,
             spawn_y: 70,
             spawn_z: 160,
-            spawn_angle: 0.0,
+            spawn_yaw: 0.0,
+            spawn_pitch: 0.0,
             level_version: 19133,
             world_version: WorldVersion {
                 name: "1.21.4".to_string(),

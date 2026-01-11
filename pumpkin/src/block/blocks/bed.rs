@@ -238,6 +238,7 @@ impl BlockBehaviour for BedBlock {
                     args.world.dimension,
                     bed_head_pos,
                     args.player.get_entity().yaw.load(),
+                    args.player.get_entity().pitch.load(),
                 )
                 .await
             {

@@ -83,7 +83,11 @@ pub struct LevelData {
     // The Z coordinate of the world spawn.
     pub spawn_z: i32,
     // The Yaw rotation of the world spawn.
-    pub spawn_angle: f32,
+    #[serde(alias = "SpawnAngle")]
+    pub spawn_yaw: f32,
+    // The Pitch rotation of the world spawn.
+    #[serde(default)]
+    pub spawn_pitch: f32,
     #[serde(rename = "Version")]
     pub world_version: WorldVersion,
     #[serde(rename = "version")]
@@ -243,7 +247,8 @@ impl LevelData {
             spawn_x: 0,
             spawn_y: 200,
             spawn_z: 0,
-            spawn_angle: 0.0,
+            spawn_yaw: 0.0,
+            spawn_pitch: 0.0,
             world_version: Default::default(),
             level_version: MAXIMUM_SUPPORTED_LEVEL_VERSION,
         }

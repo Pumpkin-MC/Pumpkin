@@ -1930,6 +1930,7 @@ impl JavaClient {
             )
             .await
         {
+            log::error!("Cannot place block!");
             return Ok(false);
         }
 
@@ -1953,6 +1954,7 @@ impl JavaClient {
             let player_box = player.1.living_entity.entity.bounding_box.load();
             for shape in &shapes {
                 if shape.at_pos(final_block_pos).intersects(&player_box) {
+                    log::error!("Player in the way of block placement!");
                     return Ok(false);
                 }
             }

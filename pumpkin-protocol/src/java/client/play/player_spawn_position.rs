@@ -7,12 +7,19 @@ use pumpkin_util::math::position::BlockPos;
 #[derive(Serialize)]
 #[packet(PLAY_SET_DEFAULT_SPAWN_POSITION)]
 pub struct CPlayerSpawnPosition {
+    pub dimension_name: String,
     pub location: BlockPos,
-    pub angle: f32,
+    pub yaw: f32,
+    pub pitch: f32,
 }
 
 impl CPlayerSpawnPosition {
-    pub fn new(location: BlockPos, angle: f32) -> Self {
-        Self { location, angle }
+    pub fn new(location: BlockPos, yaw: f32, pitch: f32, dimension_name: String) -> Self {
+        Self {
+            location,
+            yaw,
+            pitch,
+            dimension_name,
+        }
     }
 }
