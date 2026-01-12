@@ -15,6 +15,7 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_world::dimension::into_level;
+use tokio::runtime::Builder;
 
 use crate::command::CommandSender;
 use pumpkin_macros::send_cancellable;
@@ -34,13 +35,13 @@ use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, Worl
 use rand::seq::{IndexedRandom, IteratorRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
-use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
+use std::{fs, thread};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
 use tokio::sync::{Mutex, RwLock};
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
 mod connection_cache;
@@ -107,6 +108,7 @@ pub struct Server {
     // Gets unlocked when dropped
     // TODO: Make this a trait
     _locker: Arc<Option<AnvilLevelLocker>>,
+    write_thread: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
 impl Server {
@@ -207,7 +209,10 @@ impl Server {
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info: level_info.clone(),
             _locker: Arc::new(locker),
+            write_thread: Mutex::new(None),
         };
+
+        let mut join_set = JoinSet::new();
 
         let server = Arc::new(server);
         let weak = Arc::downgrade(&server);
@@ -221,6 +226,7 @@ impl Server {
                 world_path.clone(),
                 block_registry.clone(),
                 seed,
+                &mut join_set,
             ),
             level_info.clone(),
             Dimension::OVERWORLD,
@@ -235,6 +241,7 @@ impl Server {
                 world_path.clone(),
                 block_registry.clone(),
                 seed,
+                &mut join_set,
             ),
             level_info.clone(),
             Dimension::THE_NETHER,
@@ -249,12 +256,27 @@ impl Server {
                 world_path,
                 block_registry.clone(),
                 seed,
+                &mut join_set,
             ),
             level_info,
             Dimension::THE_END,
             block_registry,
             weak,
         );
+
+        let join_handle = thread::Builder::new()
+            .name(String::from("Writer Thread"))
+            .spawn(move || {
+                Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async { while join_set.join_next().await.is_some() {} });
+            })
+            .expect("Failed to start Writer Thread!");
+
+        *server.write_thread.lock().await = Some(join_handle);
+
         *server
             .worlds
             .try_write()
@@ -416,13 +438,25 @@ impl Server {
         self.tasks.wait().await;
         log::debug!("Done awaiting tasks for server");
 
-        log::info!("Starting worlds");
+        log::info!("Shutting down worlds");
         for world in self.worlds.read().await.iter() {
+            log::info!("Shutting down {:?}", world.dimension.minecraft_name);
             world.shutdown().await;
         }
+
+        log::info!("Shutting down Writer Thread");
+        self.write_thread
+            .lock()
+            .await
+            .take()
+            .expect("Writer Thread was never initialized!")
+            .join()
+            .expect("Writer Thread panicked during execution!");
+
+        log::info!("Writer Thread stopped!");
+
         let level_data = self.level_info.read().await;
         // then lets save the world info
-
         if let Err(err) = self
             .world_info_writer
             .write_world_info(&level_data, &self.basic_config.get_world_path())

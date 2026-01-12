@@ -32,17 +32,18 @@ use std::{
     },
     thread,
 };
-// use tokio::runtime::Handle;
+use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tokio::{
     select,
     sync::{
-        Notify, RwLock,
+        RwLock,
         mpsc::{self, UnboundedReceiver},
         oneshot,
     },
     task::JoinHandle,
 };
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 pub type SyncChunk = Arc<RwLock<ChunkData>>;
@@ -82,7 +83,7 @@ pub struct Level {
     tasks: TaskTracker,
     pub chunk_system_tasks: TaskTracker,
     /// Notification that interrupts tasks for shutdown
-    pub shutdown_notifier: Notify,
+    pub shutdown_notifier: CancellationToken,
     pub is_shutting_down: AtomicBool,
 
     pub shut_down_chunk_system: AtomicBool,
@@ -124,6 +125,7 @@ impl Level {
         block_registry: Arc<dyn BlockRegistryExt>,
         seed: i64,
         dimension: Dimension,
+        join_set: &mut JoinSet<()>,
     ) -> Arc<Self> {
         // If we are using an already existing world we want to read the seed from the level.dat, If not we want to check if there is a seed in the config, if not lets create a random one
         let region_folder = root_folder.join("region");
@@ -182,7 +184,7 @@ impl Level {
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
             chunk_system_tasks: TaskTracker::new(),
-            shutdown_notifier: Notify::new(),
+            shutdown_notifier: CancellationToken::new(),
             is_shutting_down: AtomicBool::new(false),
             shut_down_chunk_system: AtomicBool::new(false),
             should_save: AtomicBool::new(false),
@@ -203,6 +205,7 @@ impl Level {
             level_channel,
             listener,
             level_ref.thread_tracker.lock().unwrap().as_mut(),
+            join_set,
         );
 
         // let mut tracker = level_ref.thread_tracker.lock().unwrap();
@@ -275,10 +278,10 @@ impl Level {
         log::info!("Saving level...");
 
         self.is_shutting_down.store(true, Ordering::Relaxed);
-        self.shutdown_notifier.notify_waiters();
+        self.shutdown_notifier.cancel();
 
         self.tasks.close();
-        log::debug!("Awaiting level tasks");
+        log::info!("Awaiting level tasks");
         #[cfg(feature = "tokio_taskdump")]
         match tokio::time::timeout(std::time::Duration::from_secs(30), self.tasks.wait()).await {
             Ok(guard) => guard,
@@ -288,7 +291,7 @@ impl Level {
             }
         };
         self.tasks.wait().await;
-        log::debug!("Done awaiting level chunk tasks");
+        log::info!("Done awaiting level chunk tasks");
 
         self.shut_down_chunk_system.store(true, Ordering::Relaxed);
         self.level_channel.notify();
@@ -298,6 +301,9 @@ impl Level {
             log::info!("Shutting down {} jobs", lock.len());
             lock.drain(..).collect()
         };
+
+        log::info!("Wait chunk system tasks stop");
+        self.chunk_system_tasks.close();
 
         for handle in handles {
             log::info!(
@@ -311,8 +317,6 @@ impl Level {
             }
         }
 
-        log::info!("Wait chunk system tasks stop");
-        self.chunk_system_tasks.close();
         #[cfg(feature = "tokio_taskdump")]
         match tokio::time::timeout(std::time::Duration::from_secs(30), self.tasks.wait()).await {
             Ok(guard) => guard,
@@ -564,7 +568,7 @@ impl Level {
         let level = self.clone();
 
         self.spawn_task(async move {
-            let cancel_notifier = level.shutdown_notifier.notified();
+            let cancel_notifier = level.shutdown_notifier.cancelled();
 
             let fetch_task = async {
                 let mut to_fetch = Vec::new();

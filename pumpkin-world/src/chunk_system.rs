@@ -13,6 +13,7 @@ use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
 use std::time::Instant;
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::generation::height_limit::HeightLimitView;
@@ -1433,6 +1434,7 @@ impl GenerationSchedule {
         level_channel: Arc<LevelChannel>,
         listener: Arc<ChunkListener>,
         thread_tracker: &mut Vec<JoinHandle<()>>,
+        join_set: &mut JoinSet<()>,
     ) {
         let tracker = &level.chunk_system_tasks;
         let (send_chunk, recv_chunk) = crossfire::mpmc::unbounded_blocking();
@@ -1462,21 +1464,13 @@ impl GenerationSchedule {
             );
         }
 
-        let builder = thread::Builder::new().name(String::from("Write Thread"));
         let level_clone = level.clone();
         let pending_writes_clone = pending_writes.clone();
-        thread_tracker.push(
-            // write has to get its own thread because otherwise there are little "gc pauses" where a single thread takes 6x more time on slow hardware
-            builder
-                .spawn(move || {
-                    let rt = Builder::new_current_thread().enable_all().build().unwrap();
-                    rt.block_on(async move {
-                        // this is just a hack... spawning a new thread and then only running one task in async on it is a bit pointless
-                        Self::io_write_work(recv_write_io, level_clone, pending_writes_clone).await;
-                    });
-                })
-                .unwrap(),
-        );
+        join_set.spawn(Self::io_write_work(
+            recv_write_io,
+            level_clone,
+            pending_writes_clone,
+        ));
 
         let builder = thread::Builder::new().name("Schedule Thread".to_string());
         thread_tracker.push(
@@ -1749,7 +1743,7 @@ impl GenerationSchedule {
         level: Arc<Level>,
         lock: PendingWrites,
     ) {
-        log::info!("io write thread start",);
+        log::info!("io write thread start");
 
         while let Ok(data) = recv.recv().await {
             let mut vec = Vec::with_capacity(data.len());
@@ -1788,13 +1782,9 @@ impl GenerationSchedule {
                     }
                 }
             }
-            log::info!("Competed write in {:?}", start.elapsed());
+            log::info!("Completed write in {:?}", start.elapsed());
         }
-        log::info!(
-            "io write thread stop id: {:?} name: {}",
-            thread::current().id(),
-            thread::current().name().unwrap_or("unknown")
-        );
+        log::info!("io write task stop");
     }
 
     fn generation_work(
@@ -1802,15 +1792,12 @@ impl GenerationSchedule {
         send: crossfire::MTx<(ChunkPos, RecvChunk)>,
         level: Arc<Level>,
     ) {
-        log::info!(
-            "generation thread start id: {:?} name: {}",
-            thread::current().id(),
-            thread::current().name().unwrap_or("unknown")
-        );
+        log::info!("{:?} - generation thread start", thread::current().name());
 
         let settings = gen_settings_from_dimension(&level.world_gen.dimension);
+        log::info!("Waiting for initial generation request!");
         while let Ok((pos, mut cache, stage)) = recv.recv() {
-            // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
+            log::info!("generation thread received chunk pos {pos:?} to stage {stage:?}");
             cache.advance(
                 stage,
                 level.block_registry.as_ref(),
@@ -1821,13 +1808,14 @@ impl GenerationSchedule {
                 level.world_gen.dimension,
             );
             if send.send((pos, RecvChunk::Generation(cache))).is_err() {
+                log::error!("Send of generated chunk failed, stopping thread!");
                 break;
             }
+            log::info!("Waiting for new generation request!");
         }
         log::info!(
-            "generation thread stop id: {:?} name: {}",
-            thread::current().id(),
-            thread::current().name().unwrap_or("unknown")
+            "{:?} - generation thread stop",
+            thread::current().name().unwrap_or("Unknown")
         );
     }
 
@@ -2045,26 +2033,22 @@ impl GenerationSchedule {
     }
 
     async fn work(mut self, level: Arc<Level>) {
-        log::info!(
-            "schedule thread start id: {:?} name: {}",
-            thread::current().id(),
-            thread::current().name().unwrap_or("unknown")
-        );
+        log::info!("schedule thread start");
         // let mut clock = Instant::now();
         loop {
+            if level.shut_down_chunk_system.load(Relaxed) {
+                log::info!("shut down signal");
+                break;
+            }
             if level.should_unload.load(Relaxed) {
-                // log::debug!("unload chunk signal");
+                log::info!("unload chunk signal");
                 self.unload_chunk().await;
                 level.should_unload.store(false, Relaxed);
             }
             if level.should_save.load(Relaxed) {
-                // log::debug!("save all chunk signal");
+                log::info!("save all chunk signal");
                 self.save_all_chunks(false).await;
                 level.should_save.store(false, Relaxed);
-            }
-            if level.shut_down_chunk_system.load(Relaxed) {
-                // log::debug!("shut down signal");
-                break;
             }
 
             'out2: while let Some(task) = self.queue.pop() {
@@ -2180,7 +2164,7 @@ impl GenerationSchedule {
                         self.running_task_count += 1;
                         self.generate
                             .send((node.pos, cache, node.stage))
-                            .expect("generate thread close unexpectedly");
+                            .expect("generate thread closed unexpectedly");
                     }
                 }
             }
@@ -2200,19 +2184,18 @@ impl GenerationSchedule {
                 }
             }
         }
-        log::info!("waiting all generation task finished");
+        log::info!("Waiting for all generation tasks to be finished");
         while self.running_task_count > 0 {
             let (pos, data) = self.recv_chunk.recv().expect("recv_chunk stop");
             self.receive_chunk(pos, data);
         }
         log::info!("saving all chunks");
-        self.save_all_chunks(true).await;
-        log::info!("there are {} chunks to write", self.io_write.len());
         log::info!(
-            "schedule thread stop id: {:?} name: {}",
-            thread::current().id(),
-            thread::current().name().unwrap_or("unknown")
+            "there are {} chunks to write for final save",
+            self.io_write.len()
         );
+        self.save_all_chunks(true).await;
+        log::info!("schedule thread stop id");
     }
 
     fn debug_check(&self) -> bool {
