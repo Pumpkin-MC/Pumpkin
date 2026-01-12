@@ -24,13 +24,14 @@ impl LevelTime {
         }
     }
 
-    pub fn tick_time(&mut self, advance_time: bool) {
+    pub fn tick_time(&mut self, advance_time: bool, advance_weather: bool) {
         self.world_age += 1;
-        if !advance_time {
-            return;
+        if advance_weather {
+            self.rain_time += 1;
         }
-        self.time_of_day += 1;
-        self.rain_time += 1;
+        if advance_time {
+            self.time_of_day += 1;
+        }
     }
 
     pub async fn send_time(&self, world: &World) {
