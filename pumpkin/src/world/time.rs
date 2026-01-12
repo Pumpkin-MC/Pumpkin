@@ -24,8 +24,11 @@ impl LevelTime {
         }
     }
 
-    pub fn tick_time(&mut self) {
+    pub fn tick_time(&mut self, advance_time: bool) {
         self.world_age += 1;
+        if !advance_time {
+            return;
+        }
         self.time_of_day += 1;
         self.rain_time += 1;
     }

@@ -646,9 +646,7 @@ impl World {
     async fn tick_environment(&self) {
         let mut level_time = self.level_time.lock().await;
         let advance_time = { self.level_info.read().await.game_rules.advance_time };
-        if advance_time {
-            level_time.tick_time();
-        }
+        level_time.tick_time(advance_time);
 
         // Auto-save logic
         if level_time.world_age % 100 == 0 {
