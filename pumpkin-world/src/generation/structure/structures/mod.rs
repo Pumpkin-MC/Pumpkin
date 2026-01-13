@@ -274,10 +274,8 @@ impl StructurePiece {
         for current_y in (end_y..=start_y).rev() {
             // We bypass add_block here because add_block transforms X/Z again.
             // We use the already-transformed world X/Z but iterate Y manually.
-            let current_pos = Vector3::new(world_pos.x, current_y, world_pos.z);
-
-            if box_limit.contains_pos(&current_pos) {
-                chunk.set_block_state(&current_pos, state);
+            if box_limit.contains(world_pos.x, current_y, world_pos.z) {
+                chunk.set_block_state(world_pos.x, current_y, world_pos.z, state);
             }
         }
     }
@@ -344,7 +342,7 @@ impl StructurePiece {
         // }
 
         // World interaction
-        world.set_block_state(&block_pos, block);
+        world.set_block_state(block_pos.x, block_pos.y, block_pos.z, block);
 
         // let fluid_state = world.get_fluid_state(&block_pos);
         // if !fluid_state.is_empty() {

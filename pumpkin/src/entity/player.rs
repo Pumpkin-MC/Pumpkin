@@ -12,6 +12,8 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use log::warn;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
@@ -55,7 +57,7 @@ use pumpkin_protocol::java::client::play::{
     CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetEquipment,
     CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
     CSubtitle, CSystemChatMessage, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
-    CUpdateTime, GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CUpdateTime, GameEvent, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_util::math::{
@@ -69,7 +71,6 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
-use pumpkin_world::entity::entity_data_flags::SLEEPING_POS_ID;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 
@@ -726,7 +727,7 @@ impl Player {
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
         self.get_entity()
             .send_meta_data(&[Metadata::new(
-                SLEEPING_POS_ID,
+                TrackedData::DATA_SLEEPING_POSITION,
                 MetaDataType::OptionalBlockPos,
                 Some(bed_head_pos),
             )])
@@ -777,7 +778,7 @@ impl Player {
         self.living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                SLEEPING_POS_ID,
+                TrackedData::DATA_SLEEPING_POSITION,
                 MetaDataType::OptionalBlockPos,
                 None::<BlockPos>,
             )])
@@ -1543,24 +1544,23 @@ impl Player {
     }
 
     /// Send the player's skin layers and used hand to all players.
-    pub fn send_client_information(&self) {
-        //let config = self.config.read().await;
-        // TODO
-        // self.living_entity
-        //     .entity
-        //     .send_meta_data(&[
-        //         Metadata::new(
-        //             DATA_PLAYER_MODE_CUSTOMISATION,
-        //             MetaDataType::Byte,
-        //             config.skin_parts,
-        //         ),
-        //         Metadata::new(
-        //             DATA_PLAYER_MAIN_HAND,
-        //             MetaDataType::Byte,
-        //             config.main_hand as u8,
-        //         ),
-        //     ])
-        //     .await;
+    pub async fn send_client_information(&self) {
+        let config = self.config.read().await;
+        self.living_entity
+            .entity
+            .send_meta_data(&[
+                Metadata::new(
+                    TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
+                    MetaDataType::Byte,
+                    config.skin_parts,
+                ),
+                // Metadata::new(
+                //     TrackedData::DATA_MAIN_ARM_ID,
+                //     MetaDataType::Arm,
+                //     VarInt(config.main_hand as u8 as i32),
+                // ),
+            ])
+            .await;
     }
 
     pub async fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {

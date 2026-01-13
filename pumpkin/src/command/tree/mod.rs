@@ -1,6 +1,6 @@
 use super::{CommandExecutor, args::ArgumentConsumer};
 use crate::command::CommandSender;
-use std::{collections::VecDeque, fmt::Debug, sync::Arc};
+use std::{borrow::Cow, collections::VecDeque, fmt::Debug, sync::Arc};
 
 pub mod builder;
 pub mod format;
@@ -59,7 +59,7 @@ pub struct CommandTree {
     pub nodes: Vec<Node>,
     pub children: Vec<usize>,
     pub names: Vec<String>,
-    pub description: String,
+    pub description: Cow<'static, str>,
 }
 
 impl CommandTree {

@@ -489,6 +489,7 @@ impl BedrockClient {
         packet: RawPacket,
     ) -> Result<(), Error> {
         let payload = &mut Cursor::new(&packet.payload);
+        log::error!("packet id {}", packet.id);
         match packet.id {
             SRequestNetworkSettings::PACKET_ID => {
                 self.handle_request_network_settings(SRequestNetworkSettings::read(payload)?)
@@ -497,8 +498,12 @@ impl BedrockClient {
             SLogin::PACKET_ID => {
                 self.handle_login(SLogin::read(payload)?, server).await;
             }
-            SClientCacheStatus::PACKET_ID | SResourcePackResponse::PACKET_ID => {
+            SClientCacheStatus::PACKET_ID => {
                 // TODO
+            }
+            SResourcePackResponse::PACKET_ID => {
+                self.handle_resource_pack_response(SResourcePackResponse::read(payload)?)
+                    .await;
             }
             _ => {
                 self.handle_play_packet(self.player.lock().await.as_ref().unwrap(), server, packet)

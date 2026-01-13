@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
 use serde::Deserialize;
 
@@ -28,14 +30,14 @@ impl HeightProvider {
 pub struct VeryBiasedToBottomHeightProvider {
     min_inclusive: YOffset,
     max_inclusive: YOffset,
-    inner: Option<u32>,
+    inner: Option<NonZeroU32>,
 }
 
 impl VeryBiasedToBottomHeightProvider {
     pub fn get(&self, random: &mut RandomGenerator, min_y: i8, height: u16) -> i32 {
         let min = self.min_inclusive.get_y(min_y as i16, height);
         let max = self.max_inclusive.get_y(min_y as i16, height);
-        let inner = self.inner.unwrap_or(1) as i32;
+        let inner = self.inner.map(|i| i.get()).unwrap_or(1) as i32;
 
         let min_rnd = random.next_inbetween_i32(min + inner, max);
         let max_rnd = random.next_inbetween_i32(min, min_rnd - 1);

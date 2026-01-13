@@ -5,6 +5,7 @@ pub mod dye;
 pub mod egg;
 pub mod end_crystal;
 pub mod ender_eye;
+pub mod firework_rocket;
 pub mod glowing_ink_sac;
 pub mod hoe;
 pub mod honeycomb;
@@ -22,6 +23,7 @@ pub mod wind_charge;
 
 use crate::item::items::armor_stand::ArmorStandItem;
 use crate::item::items::end_crystal::EndCrystalItem;
+use crate::item::items::firework_rocket::FireworkRocketItem;
 use crate::item::items::minecart::MinecartItem;
 use crate::item::items::name_tag::NameTagItem;
 use crate::item::items::spawn_egg::SpawnEggItem;
@@ -69,6 +71,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(EnderEyeItem);
     manager.register(FireChargeItem);
     manager.register(DyeItem);
+    manager.register(FireworkRocketItem);
     manager.register(InkSacItem);
     manager.register(GlowingInkSacItem);
     manager.register(ArmorStandItem);

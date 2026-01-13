@@ -30,6 +30,7 @@ mod game_rules;
 mod item;
 pub mod loot;
 mod message_type;
+mod meta_data_type;
 mod noise_parameter;
 mod noise_router;
 mod packet;
@@ -44,6 +45,7 @@ mod sound;
 mod sound_category;
 mod spawn_egg;
 mod tag;
+mod tracked_data;
 mod world_event;
 
 pub const OUT_DIR: &str = "src/generated";
@@ -60,6 +62,8 @@ pub fn main() {
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),
         (sound::build, "sound.rs"),
+        (meta_data_type::build, "meta_data_type.rs"),
+        (tracked_data::build, "tracked_data.rs"),
         (chunk_status::build, "chunk_status.rs"),
         (game_event::build, "game_event.rs"),
         (game_rules::build, "game_rules.rs"),

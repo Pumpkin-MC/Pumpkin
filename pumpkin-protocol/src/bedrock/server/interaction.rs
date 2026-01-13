@@ -5,30 +5,13 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::{codec::var_ulong::VarULong, serial::PacketRead};
 
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 #[packet(33)]
 pub struct SInteraction {
     // https://mojang.github.io/bedrock-protocol-docs/html/InteractPacket.html
     pub action: Action,
     pub target_runtime_id: VarULong,
-    pub position: Vector3<f32>,
-}
-
-impl PacketRead for SInteraction {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let action = Action::read(reader)?;
-        let target_runtime_id = VarULong::read(reader)?;
-        let mut position = Vector3::default();
-
-        if matches!(action, Action::InteractUpdate | Action::StopRiding) {
-            position = Vector3::read(reader)?;
-        }
-        Ok(Self {
-            action,
-            target_runtime_id,
-            position,
-        })
-    }
+    pub position: Option<Vector3<f32>>,
 }
 
 #[derive(Debug)]

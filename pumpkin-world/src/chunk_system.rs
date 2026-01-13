@@ -1028,7 +1028,7 @@ impl GenerationCache for Cache {
                 );
             }
             Chunk::Proto(data) => {
-                data.set_block_state(pos, block_state);
+                data.set_block_state(pos.x, pos.y, pos.z, block_state);
             }
         }
     }
@@ -1745,7 +1745,7 @@ impl GenerationSchedule {
         send: crossfire::MTx<(ChunkPos, RecvChunk)>,
         level: Arc<Level>,
     ) {
-        log::info!(
+        log::debug!(
             "generation thread start id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")
@@ -1767,7 +1767,7 @@ impl GenerationSchedule {
                 break;
             }
         }
-        log::info!(
+        log::debug!(
             "generation thread stop id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")

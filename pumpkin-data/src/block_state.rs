@@ -35,7 +35,6 @@ pub enum PistonBehavior {
     PushOnly,
 }
 
-// Add your methods here
 impl BlockState {
     pub const fn is_air(&self) -> bool {
         self.state_flags & IS_AIR != 0

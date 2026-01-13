@@ -8,10 +8,10 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::damage::DamageType;
+use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CTakeItemEntity, MetaDataType, Metadata},
+    java::client::play::{CTakeItemEntity, Metadata},
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -349,7 +349,7 @@ impl EntityBase for ItemEntity {
         Box::pin(async {
             self.entity
                 .send_meta_data(&[Metadata::new(
-                    8,
+                    TrackedData::DATA_STACK,
                     MetaDataType::ItemStack,
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )])
