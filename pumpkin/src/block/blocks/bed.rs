@@ -17,7 +17,8 @@ use pumpkin_world::world::BlockFlags;
 use crate::block::BlockFuture;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
+    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
+    PlacedArgs,
 };
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
@@ -140,6 +141,36 @@ impl BlockBehaviour for BedBlock {
                     },
                 )
                 .await;
+        })
+    }
+
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if args.moved {
+                return;
+            }
+
+            let bed_props = BedProperties::from_state_id(args.old_state_id, args.block);
+            let other_half_pos = if bed_props.part == BedPart::Head {
+                args.position
+                    .offset(bed_props.facing.opposite().to_offset())
+            } else {
+                args.position.offset(bed_props.facing.to_offset())
+            };
+
+            let (other_block, other_state) = args.world.get_block_and_state(&other_half_pos).await;
+            if other_block == args.block {
+                let other_props = BedProperties::from_state_id(other_state.id, other_block);
+                if other_props.part != bed_props.part {
+                    args.world
+                        .set_block_state(
+                            &other_half_pos,
+                            Block::AIR.default_state.id,
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                }
+            }
         })
     }
 
