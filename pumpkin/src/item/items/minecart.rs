@@ -7,11 +7,11 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{
-    BlockProperties, PoweredRailLikeProperties, RailLikeProperties,
+    BlockProperties as _, PoweredRailLikeProperties, RailLikeProperties,
 };
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::Taggable as _;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;

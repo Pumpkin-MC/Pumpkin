@@ -1,14 +1,14 @@
 use pumpkin_data::BlockDirection;
-use pumpkin_data::HorizontalFacingExt;
+use pumpkin_data::HorizontalFacingExt as _;
 use pumpkin_data::block_properties::Axis;
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::BlockProperties as _;
 use pumpkin_data::block_properties::DoorHinge;
 use pumpkin_data::block_properties::DoubleBlockHalf;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::RegistryKey;
-use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::Taggable as _;
 use pumpkin_data::tag::get_tag_values;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block_from_tag;

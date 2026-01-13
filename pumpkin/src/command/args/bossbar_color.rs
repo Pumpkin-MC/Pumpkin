@@ -62,7 +62,7 @@ impl ArgumentConsumer for BossbarColorArgumentConsumer {
             let colors = ["blue", "green", "pink", "purple", "red", "white", "yellow"];
             let suggestions: Vec<CommandSuggestion> = colors
                 .iter()
-                .map(|color| CommandSuggestion::new((*color).to_string(), None))
+                .map(|color| CommandSuggestion::new((*color).to_owned(), None))
                 .collect();
             Ok(Some(suggestions))
         })
@@ -81,7 +81,7 @@ impl<'a> FindArg<'a> for BossbarColorArgumentConsumer {
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::BossbarColor(data)) => Ok(data),
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

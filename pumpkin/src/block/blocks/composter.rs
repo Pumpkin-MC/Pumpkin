@@ -10,7 +10,7 @@ use crate::{
 };
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, ComposterLikeProperties, EnumVariants, Integer0To8},
+    block_properties::{BlockProperties as _, ComposterLikeProperties, EnumVariants as _, Integer0To8},
     composter_increase_chance::get_composter_increase_chance_from_item_id,
     entity::EntityType,
     item::Item,
@@ -19,7 +19,7 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, item::ItemStack, tick::TickPriority, world::BlockFlags};
-use rand::Rng;
+use rand::Rng as _;
 use uuid::Uuid;
 
 #[pumpkin_block("minecraft:composter")]

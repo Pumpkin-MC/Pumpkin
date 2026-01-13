@@ -19,7 +19,7 @@ impl JavaClient {
                 std::cmp::Ordering::Less => {
                     self.kick(TextComponent::translate(
                         "multiplayer.disconnect.outdated_client",
-                        [TextComponent::text(CURRENT_MC_VERSION.to_string())],
+                        [TextComponent::text(CURRENT_MC_VERSION.to_owned())],
                     ))
                     .await;
                 }
@@ -27,7 +27,7 @@ impl JavaClient {
                 std::cmp::Ordering::Greater => {
                     self.kick(TextComponent::translate(
                         "multiplayer.disconnect.incompatible",
-                        [TextComponent::text(CURRENT_MC_VERSION.to_string())],
+                        [TextComponent::text(CURRENT_MC_VERSION.to_owned())],
                     ))
                     .await;
                 }

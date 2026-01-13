@@ -1,15 +1,15 @@
 use pumpkin_data::block_properties::{
-    BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
+    BlockProperties as _, CactusLikeProperties, EnumVariants as _, Integer0To15,
 };
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::Taggable as _;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
-use rand::Rng;
+use rand::Rng as _;
 
 use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,

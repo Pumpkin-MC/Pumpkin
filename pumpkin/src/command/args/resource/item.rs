@@ -58,19 +58,19 @@ impl<'a> FindArg<'a> for ItemArgumentConsumer {
                             if name.starts_with("minecraft:") {
                                 Err(CommandError::CommandFailed(TextComponent::translate(
                                     "argument.item.id.invalid",
-                                    [TextComponent::text((*name).to_string())],
+                                    [TextComponent::text((*name).to_owned())],
                                 )))
                             } else {
                                 Err(CommandError::CommandFailed(TextComponent::translate(
                                     "argument.item.id.invalid",
-                                    [TextComponent::text("minecraft:".to_string() + *name)],
+                                    [TextComponent::text("minecraft:".to_owned() + *name)],
                                 )))
                             }
                         },
                         |item| Ok((*name, item)),
                     )
             }
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

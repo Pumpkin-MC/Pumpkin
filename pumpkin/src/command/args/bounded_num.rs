@@ -69,12 +69,12 @@ impl<'a, T: 'static + ToFromNumber> FindArg<'a> for BoundedNumArgumentConsumer<T
         match args.get(name) {
             Some(Arg::Num(data)) => match data {
                 Ok(num) => T::from_number(num).map_or_else(
-                    || Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+                    || Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
                     |x| Ok(Ok(x)),
                 ),
                 Err(err) => Ok(Err(*err)),
             },
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }
@@ -116,7 +116,7 @@ pub enum Number {
 
 impl Number {
     #[must_use]
-    pub fn qualifier(&self) -> &'static str {
+    pub const fn qualifier(&self) -> &'static str {
         match self {
             Self::F64(_) | Self::F32(_) => "Float",
             Self::I32(_) | Self::I64(_) => "Integer",

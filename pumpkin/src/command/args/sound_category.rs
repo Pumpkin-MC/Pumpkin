@@ -68,7 +68,7 @@ impl ArgumentConsumer for SoundCategoryArgumentConsumer {
             ];
             let suggestions: Vec<CommandSuggestion> = categories
                 .iter()
-                .map(|cat| CommandSuggestion::new((*cat).to_string(), None))
+                .map(|cat| CommandSuggestion::new((*cat).to_owned(), None))
                 .collect();
             Ok(Some(suggestions))
         })
@@ -87,7 +87,7 @@ impl<'a> FindArg<'a> for SoundCategoryArgumentConsumer {
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::SoundCategory(data)) => Ok(data),
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

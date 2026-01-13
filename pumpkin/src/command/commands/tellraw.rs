@@ -1,7 +1,7 @@
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{
-        Arg, ConsumedArgs, FindArg, players::PlayersArgumentConsumer,
+        Arg, ConsumedArgs, FindArg as _, players::PlayersArgumentConsumer,
         textcomponent::TextComponentArgConsumer,
     },
     tree::{CommandTree, builder::argument},

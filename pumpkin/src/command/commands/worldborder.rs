@@ -9,7 +9,7 @@ use pumpkin_util::{
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{
-        ConsumedArgs, DefaultNameArgConsumer, FindArgDefaultName,
+        ConsumedArgs, DefaultNameArgConsumer as _, FindArgDefaultName as _,
         bounded_num::BoundedNumArgumentConsumer, position_2d::Position2DArgumentConsumer,
     },
     tree::{
@@ -24,25 +24,25 @@ const DESCRIPTION: &str = "Worldborder command.";
 
 const NOTHING_CHANGED_EXCEPTION: &str = "commands.worldborder.set.failed.nochange";
 
-fn distance_consumer() -> BoundedNumArgumentConsumer<f64> {
+const fn distance_consumer() -> BoundedNumArgumentConsumer<f64> {
     BoundedNumArgumentConsumer::new().min(0.0).name("distance")
 }
 
-fn time_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn time_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name("time")
 }
 
-fn damage_per_block_consumer() -> BoundedNumArgumentConsumer<f32> {
+const fn damage_per_block_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new()
         .min(0.0)
         .name("damage_per_block")
 }
 
-fn damage_buffer_consumer() -> BoundedNumArgumentConsumer<f32> {
+const fn damage_buffer_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new().min(0.0).name("buffer")
 }
 
-fn warning_distance_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn warning_distance_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name("distance")
 }
 

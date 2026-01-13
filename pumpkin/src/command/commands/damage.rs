@@ -7,7 +7,7 @@ use pumpkin_util::text::{
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{
-        Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
+        Arg, ConsumedArgs, FindArg as _, bounded_num::BoundedNumArgumentConsumer,
         entity::EntityArgumentConsumer, position_3d::Position3DArgumentConsumer,
         resource::damage_type::DamageTypeArgumentConsumer,
     },
@@ -27,7 +27,7 @@ const ARG_LOCATION: &str = "location";
 const ARG_ENTITY: &str = "entity";
 const ARG_CAUSE: &str = "cause";
 
-fn amount_consumer() -> BoundedNumArgumentConsumer<f32> {
+const fn amount_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new().name(ARG_AMOUNT).min(0.0)
 }
 

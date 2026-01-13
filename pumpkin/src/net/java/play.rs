@@ -1,7 +1,7 @@
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_util::{Hand, PermissionLvl};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
-use rsa::signature::Verifier;
+use rsa::signature::Verifier as _;
 use sha1::Sha1;
 use std::num::NonZeroU8;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
-use crate::entity::EntityBase;
+use crate::entity::EntityBase as _;
 use crate::entity::player::{ChatMode, ChatSession, Player};
 use crate::error::PumpkinError;
 use crate::net::PlayerConfig;
@@ -25,7 +25,7 @@ use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
-    BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
+    BlockProperties as _, CommandBlockLikeProperties, WaterLikeProperties,
 };
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::item::Item;
@@ -33,7 +33,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
-use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
+use pumpkin_inventory::screen_handler::{InventoryPlayer as _, ScreenHandler as _};
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
@@ -213,11 +213,11 @@ impl JavaClient {
         }
     }
 
-    fn clamp_horizontal(pos: f64) -> f64 {
+    const fn clamp_horizontal(pos: f64) -> f64 {
         pos.clamp(-3.0E7, 3.0E7)
     }
 
-    fn clamp_vertical(pos: f64) -> f64 {
+    const fn clamp_vertical(pos: f64) -> f64 {
         pos.clamp(-2.0E7, 2.0E7)
     }
 

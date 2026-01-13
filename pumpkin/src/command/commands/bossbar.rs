@@ -5,7 +5,7 @@ use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource_location::ResourceLocationArgumentConsumer;
 
-use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
+use crate::command::args::{ConsumedArgs, FindArg as _, FindArgDefaultName as _};
 
 use crate::command::args::textcomponent::TextComponentArgConsumer;
 use crate::command::tree::CommandTree;
@@ -61,8 +61,7 @@ impl CommandExecutor for AddExecuter {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let mut namespace = non_autocomplete_consumer()
-                .find_arg_default_name(args)?
-                .to_string();
+                .find_arg_default_name(args)?.to_owned();
             if !namespace.contains(':') {
                 namespace = format!("minecraft:{namespace}");
             }
@@ -111,8 +110,7 @@ impl CommandExecutor for GetExecuter {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let namespace = autocomplete_consumer()
-                .find_arg_default_name(args)?
-                .to_string();
+                .find_arg_default_name(args)?.to_owned();
 
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
                 handle_bossbar_error(
@@ -251,8 +249,7 @@ impl CommandExecutor for RemoveExecuter {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let namespace = autocomplete_consumer()
-                .find_arg_default_name(args)?
-                .to_string();
+                .find_arg_default_name(args)?.to_owned();
 
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
                 handle_bossbar_error(
@@ -308,7 +305,7 @@ impl CommandExecutor for SetExecuter {
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(namespace) else {
                 handle_bossbar_error(
                     sender,
-                    BossbarUpdateError::InvalidResourceLocation(namespace.to_string()),
+                    BossbarUpdateError::InvalidResourceLocation(namespace.to_owned()),
                 )
                 .await;
                 return Ok(());
@@ -321,7 +318,7 @@ impl CommandExecutor for SetExecuter {
                         .bossbars
                         .lock()
                         .await
-                        .update_color(server, namespace.to_string(), color.clone())
+                        .update_color(server, namespace.to_owned(), color.clone())
                         .await
                     {
                         Ok(()) => {}
@@ -335,7 +332,7 @@ impl CommandExecutor for SetExecuter {
                             "commands.bossbar.set.color.success",
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
-                                namespace.to_string(),
+                                namespace.to_owned(),
                             )],
                         ))
                         .await;
@@ -360,7 +357,7 @@ impl CommandExecutor for SetExecuter {
                         .await
                         .update_health(
                             server,
-                            namespace.to_string(),
+                            namespace.to_owned(),
                             max_value as u32,
                             bossbar.value,
                         )
@@ -379,7 +376,7 @@ impl CommandExecutor for SetExecuter {
                             [
                                 bossbar_prefix(
                                     bossbar.bossbar_data.title.clone(),
-                                    namespace.to_string(),
+                                    namespace.to_owned(),
                                 ),
                                 TextComponent::text(max_value.to_string()),
                             ],
@@ -406,7 +403,7 @@ impl CommandExecutor for SetExecuter {
                     sender
                         .send_message(TextComponent::translate(
                             "commands.bossbar.set.name.success",
-                            [bossbar_prefix(text_component, namespace.to_string())],
+                            [bossbar_prefix(text_component, namespace.to_owned())],
                         ))
                         .await;
                     Ok(())
@@ -417,7 +414,7 @@ impl CommandExecutor for SetExecuter {
                             .bossbars
                             .lock()
                             .await
-                            .update_players(server, namespace.to_string(), vec![])
+                            .update_players(server, namespace.to_owned(), vec![])
                             .await
                         {
                             Ok(()) => {}
@@ -431,7 +428,7 @@ impl CommandExecutor for SetExecuter {
                                 "commands.bossbar.set.players.success.none",
                                 [bossbar_prefix(
                                     bossbar.bossbar_data.title.clone(),
-                                    namespace.to_string(),
+                                    namespace.to_owned(),
                                 )],
                             ))
                             .await;
@@ -448,7 +445,7 @@ impl CommandExecutor for SetExecuter {
                         .bossbars
                         .lock()
                         .await
-                        .update_players(server, namespace.to_string(), players)
+                        .update_players(server, namespace.to_owned(), players)
                         .await
                     {
                         Ok(()) => {}
@@ -469,7 +466,7 @@ impl CommandExecutor for SetExecuter {
                             [
                                 bossbar_prefix(
                                     bossbar.bossbar_data.title.clone(),
-                                    namespace.to_string(),
+                                    namespace.to_owned(),
                                 ),
                                 TextComponent::text(count.to_string()),
                                 TextComponent::text(player_names.join(", ").clone()),
@@ -484,7 +481,7 @@ impl CommandExecutor for SetExecuter {
                         .bossbars
                         .lock()
                         .await
-                        .update_division(server, namespace.to_string(), style.clone())
+                        .update_division(server, namespace.to_owned(), style.clone())
                         .await
                     {
                         Ok(()) => {}
@@ -498,7 +495,7 @@ impl CommandExecutor for SetExecuter {
                             "commands.bossbar.set.style.success",
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
-                                namespace.to_string(),
+                                namespace.to_owned(),
                             )],
                         ))
                         .await;
@@ -521,7 +518,7 @@ impl CommandExecutor for SetExecuter {
                         .bossbars
                         .lock()
                         .await
-                        .update_health(server, namespace.to_string(), bossbar.max, value as u32)
+                        .update_health(server, namespace.to_owned(), bossbar.max, value as u32)
                         .await
                     {
                         Ok(()) => {}
@@ -537,7 +534,7 @@ impl CommandExecutor for SetExecuter {
                             [
                                 bossbar_prefix(
                                     bossbar.bossbar_data.title.clone(),
-                                    namespace.to_string(),
+                                    namespace.to_owned(),
                                 ),
                                 TextComponent::text(value.to_string()),
                             ],
@@ -552,7 +549,7 @@ impl CommandExecutor for SetExecuter {
                         .bossbars
                         .lock()
                         .await
-                        .update_visibility(server, namespace.to_string(), visibility)
+                        .update_visibility(server, namespace.to_owned(), visibility)
                         .await
                     {
                         Ok(()) => {}
@@ -573,7 +570,7 @@ impl CommandExecutor for SetExecuter {
                             state,
                             [bossbar_prefix(
                                 bossbar.bossbar_data.title.clone(),
-                                namespace.to_string(),
+                                namespace.to_owned(),
                             )],
                         ))
                         .await;
@@ -584,11 +581,11 @@ impl CommandExecutor for SetExecuter {
     }
 }
 
-fn max_value_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn max_value_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name("max")
 }
 
-fn value_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn value_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().min(0).name("value")
 }
 
@@ -691,7 +688,7 @@ async fn handle_bossbar_error(sender: &CommandSender, error: BossbarUpdateError<
             .await;
         }
         BossbarUpdateError::NoChanges(value, variation) => {
-            let mut key = "commands.bossbar.set.".to_string();
+            let mut key = "commands.bossbar.set.".to_owned();
             key.push_str(value);
             key.push_str(".unchanged");
             if let Some(variation) = variation {

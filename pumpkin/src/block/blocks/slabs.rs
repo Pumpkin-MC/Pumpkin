@@ -1,5 +1,5 @@
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::BlockProperties as _;
 use pumpkin_data::block_properties::SlabType;
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::tag::get_tag_values;

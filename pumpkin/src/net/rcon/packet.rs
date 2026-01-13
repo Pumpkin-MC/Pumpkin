@@ -1,11 +1,11 @@
 use std::{
-    io::{BufRead, Cursor},
+    io::{BufRead as _, Cursor},
     string::FromUtf8Error,
 };
 
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut as _, BytesMut};
 use thiserror::Error;
-use tokio::io::AsyncReadExt;
+use tokio::io::AsyncReadExt as _;
 
 /// Client -> Server
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

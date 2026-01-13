@@ -1,10 +1,10 @@
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
-    BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties,
+    BlockProperties as _, EnumVariants as _, Integer0To3, NetherWartLikeProperties,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
-use rand::Rng;
+use rand::Rng as _;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;

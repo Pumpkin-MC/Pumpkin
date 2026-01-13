@@ -2,7 +2,7 @@ use pumpkin_util::text::TextComponent;
 
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
-    args::{ConsumedArgs, FindArg, time::TimeArgumentConsumer},
+    args::{ConsumedArgs, FindArg as _, time::TimeArgumentConsumer},
     tree::{
         CommandTree,
         builder::{argument, literal},

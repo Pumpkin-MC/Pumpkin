@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockDirection, BlockState, HorizontalFacingExt,
-    block_properties::{BlockProperties, EnumVariants, HorizontalFacing, Integer1To4},
+    Block, BlockDirection, BlockState, HorizontalFacingExt as _,
+    block_properties::{BlockProperties as _, EnumVariants as _, HorizontalFacing, Integer1To4},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;

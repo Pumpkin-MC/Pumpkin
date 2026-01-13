@@ -9,7 +9,7 @@ use pumpkin_protocol::bedrock::{
     client::raknet::connection::{CConnectedPong, CConnectionRequestAccepted},
     server::raknet::connection::{SConnectedPing, SConnectionRequest, SNewIncomingConnection},
 };
-use pumpkin_protocol::{codec::u24, serial::PacketRead};
+use pumpkin_protocol::{codec::u24, serial::PacketRead as _};
 
 use crate::net::bedrock::BedrockClient;
 
@@ -40,7 +40,7 @@ impl BedrockClient {
         .await;
     }
 
-    pub fn handle_new_incoming_connection(&self, _packet: &SNewIncomingConnection) {
+    pub const fn handle_new_incoming_connection(&self, _packet: &SNewIncomingConnection) {
         // self.connection_state.store(ConnectionState::Login);
     }
 

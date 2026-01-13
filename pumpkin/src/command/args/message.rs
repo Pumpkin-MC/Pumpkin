@@ -38,7 +38,7 @@ impl ArgumentConsumer for MsgArgConsumer {
         let first_word_opt = args.pop();
 
         let mut msg = match first_word_opt {
-            Some(word) => word.to_string(),
+            Some(word) => word.to_owned(),
             None => return Box::pin(async { None }),
         };
 
@@ -63,7 +63,7 @@ impl<'a> FindArg<'a> for MsgArgConsumer {
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::Msg(data)) => Ok(data),
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

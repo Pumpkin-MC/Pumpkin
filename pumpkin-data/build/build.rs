@@ -50,7 +50,10 @@ pub const OUT_DIR: &str = "src/generated";
 
 pub fn main() {
     if let Err(e) = fs::create_dir_all(OUT_DIR) {
-        eprintln!("Failed to create output directory {}: {}", OUT_DIR, e);
+        println!(
+            "cargo:warning=Failed to create output directory {}: {}",
+            OUT_DIR, e
+        );
     }
 
     type BuilderFn = fn() -> TokenStream;

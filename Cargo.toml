@@ -16,6 +16,7 @@ members = [
 [workspace.package]
 version = "0.1.0-dev+1.21.11"
 edition = "2024"
+rust-version = "1.89"
 
 [profile.release]
 lto = true
@@ -110,3 +111,41 @@ time = "0.3"
 tokio-util = "0.7.18"
 toml = "0.9"
 ureq = "3.1.4"
+
+[workspace.lints.clippy]
+# Base lint groups
+all = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+cargo = { level = "allow", priority = -1 }
+
+# Restriction lints (warn level)
+absolute_paths = "warn"
+allow_attributes = "warn"
+arithmetic_side_effects = "warn"
+as_conversions = "warn"
+error_impl_error = "warn"
+expect_used = "warn"
+field_scoped_visibility_modifiers = "warn"
+indexing_slicing = "warn"
+infinite_loop = "warn"
+large_include_file = "warn"
+mod_module_files = "warn"
+panic = "warn"
+panic_in_result_fn = "warn"
+redundant_type_annotations = "warn"
+return_and_then = "warn"
+str_to_string = "warn"
+verbose_file_reads = "warn"
+use_debug = "warn"
+unwrap_used = "warn"
+unwrap_in_result = "warn"
+unused_trait_names = "warn"
+unused_result_ok = "warn"
+
+# Promote specific lints to deny
+empty_enum_variants_with_brackets = "deny"
+separated_literal_suffix = "deny"
+non_zero_suggestions = "deny"
+string_lit_chars_any = "deny"
+print_stderr = "deny"

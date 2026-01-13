@@ -1,5 +1,5 @@
 use crate::block::{BlockBehaviour, BlockFuture, OnPlaceArgs};
-use pumpkin_data::block_properties::{BlockProperties, LecternLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties as _, LecternLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 

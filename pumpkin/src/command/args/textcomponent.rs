@@ -53,7 +53,7 @@ impl FindArg<'_> for TextComponentArgConsumer {
     fn find_arg(args: &super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::TextComponent(data)) => Ok(data.clone()),
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

@@ -5,7 +5,7 @@ use crate::block::{
 use crate::world::World;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::HorizontalFacing;
-use pumpkin_data::block_properties::{BlockProperties, LadderLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties as _, LadderLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;

@@ -1,10 +1,10 @@
-use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalAxis};
+use pumpkin_data::block_properties::{BlockProperties as _, EnumVariants, HorizontalAxis};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
-use rand::Rng;
+use rand::Rng as _;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 

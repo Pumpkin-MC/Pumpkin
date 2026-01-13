@@ -6,14 +6,14 @@ use std::{
     net::{IpAddr, SocketAddr},
 };
 
-use bytes::{BufMut, BytesMut};
-use hmac::{Hmac, KeyInit, Mac};
+use bytes::{BufMut as _, BytesMut};
+use hmac::{Hmac, KeyInit as _, Mac as _};
 use pumpkin_config::networking::proxy::VelocityConfig;
 use pumpkin_protocol::{
     Property, java::client::login::CLoginPluginRequest, java::server::login::SLoginPluginResponse,
     ser::NetworkReadExt,
 };
-use rand::Rng;
+use rand::Rng as _;
 use sha2::Sha256;
 use thiserror::Error;
 

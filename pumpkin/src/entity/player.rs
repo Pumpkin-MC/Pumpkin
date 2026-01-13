@@ -2,7 +2,7 @@ use core::f32;
 use std::collections::{BinaryHeap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::num::NonZeroU8;
-use std::ops::AddAssign;
+use std::ops::AddAssign as _;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
@@ -32,7 +32,7 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::Taggable as _;
 use pumpkin_data::{Block, BlockState, tag};
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
@@ -512,11 +512,11 @@ impl Player {
         self.client.spawn_task(task)
     }
 
-    pub fn inventory(&self) -> &Arc<PlayerInventory> {
+    pub const fn inventory(&self) -> &Arc<PlayerInventory> {
         &self.inventory
     }
 
-    pub fn ender_chest_inventory(&self) -> &Arc<EnderChestInventory> {
+    pub const fn ender_chest_inventory(&self) -> &Arc<EnderChestInventory> {
         &self.ender_chest_inventory
     }
 
@@ -606,7 +606,7 @@ impl Player {
         // Only reduce attack damage if in cooldown
         // TODO: Enchantments are reduced in the same way, just without the square.
         if attack_cooldown_progress < 1.0 {
-            damage_multiplier = 0.2 + attack_cooldown_progress.powi(2) * 0.8;
+            damage_multiplier = attack_cooldown_progress.powi(2).mul_add(0.8, 0.2);
         }
         // Modify the added damage based on the multiplier.
         let mut damage = base_damage + add_damage * damage_multiplier;
@@ -1065,7 +1065,7 @@ impl Player {
         self.living_entity.entity.entity_id
     }
 
-    pub fn world(&self) -> &Arc<World> {
+    pub const fn world(&self) -> &Arc<World> {
         &self.living_entity.entity.world
     }
 
@@ -1511,7 +1511,7 @@ impl Player {
     }
 
     /// Send the player's skin layers and used hand to all players.
-    pub fn send_client_information(&self) {
+    pub const fn send_client_information(&self) {
         //let config = self.config.read().await;
         // TODO
         // self.living_entity
@@ -1550,7 +1550,7 @@ impl Player {
                 .has_effect(&StatusEffect::CONDUIT_POWER)
                 .await
         {
-            speed *= 1.0 + (self.get_haste_amplifier().await + 1) as f32 * 0.2;
+            speed *= ((self.get_haste_amplifier().await + 1) as f32).mul_add(0.2, 1.0);
         }
         // Fatigue
         if let Some(fatigue) = self
@@ -1627,9 +1627,9 @@ impl Player {
         let l = 0.02 * rand::random::<f64>();
 
         let velocity = Vector3::new(
-            -yaw_sin * pitch_cos * 0.3 + horizontal_offset.cos() * l,
-            -pitch_sin * 0.3 + 0.1 + (rand::random::<f64>() - rand::random::<f64>()) * 0.1,
-            yaw_cos * pitch_cos * 0.3 + horizontal_offset.sin() * l,
+            (-yaw_sin * pitch_cos).mul_add(0.3, horizontal_offset.cos() * l),
+            (rand::random::<f64>() - rand::random::<f64>()).mul_add(0.1, (-pitch_sin).mul_add(0.3, 0.1)),
+            (yaw_cos * pitch_cos).mul_add(0.3, horizontal_offset.sin() * l),
         );
 
         // TODO: Merge stacks together
@@ -2503,7 +2503,7 @@ impl Default for Abilities {
 }
 
 impl Abilities {
-    pub fn set_for_gamemode(&mut self, gamemode: GameMode) {
+    pub const fn set_for_gamemode(&mut self, gamemode: GameMode) {
         match gamemode {
             GameMode::Creative => {
                 // self.flying = false; // Start not flying
@@ -2581,7 +2581,7 @@ impl Default for ChatSession {
 
 impl ChatSession {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         session_id: Uuid,
         expires_at: i64,
         public_key: Box<[u8]>,

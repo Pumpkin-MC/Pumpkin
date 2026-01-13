@@ -8,11 +8,11 @@ use pumpkin_world::item::ItemStack;
 use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds};
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource::item::ItemArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArg, FindArgDefaultName};
+use crate::command::args::{ConsumedArgs, FindArg as _, FindArgDefaultName as _};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
-use crate::entity::EntityBase;
+use crate::entity::EntityBase as _;
 
 const NAMES: [&str; 1] = ["give"];
 
@@ -20,7 +20,7 @@ const DESCRIPTION: &str = "Give items to player(s).";
 
 const ARG_ITEM: &str = "item";
 
-fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("count")
         .min(1)
@@ -93,7 +93,7 @@ impl CommandExecutor for Executor {
                             .add_child(item.translated_name())
                             .add_child(TextComponent::text("]"))
                             .hover_event(HoverEvent::ShowItem {
-                                id: item_name.to_string().into(),
+                                id: item_name.to_owned().into(),
                                 count: Some(item_count),
                             }),
                         targets[0].get_display_name().await,
@@ -108,7 +108,7 @@ impl CommandExecutor for Executor {
                             .add_child(item.translated_name())
                             .add_child(TextComponent::text("]"))
                             .hover_event(HoverEvent::ShowItem {
-                                id: item_name.to_string().into(),
+                                id: item_name.to_owned().into(),
                                 count: Some(item_count),
                             }),
                         TextComponent::text(targets.len().to_string()),

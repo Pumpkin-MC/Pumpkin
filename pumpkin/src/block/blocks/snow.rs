@@ -1,4 +1,4 @@
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::BlockProperties as _;
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{Integer1To8, SnowLikeProperties},

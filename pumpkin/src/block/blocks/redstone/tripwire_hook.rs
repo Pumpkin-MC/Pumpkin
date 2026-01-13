@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection,
-    block_properties::BlockProperties,
+    block_properties::BlockProperties as _,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
@@ -12,7 +12,7 @@ use pumpkin_world::{
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::{Rng, rng};
+use rand::{Rng as _, rng};
 
 use crate::{
     block::{
@@ -342,7 +342,7 @@ impl TripwireHookBlock {
                 .await;
             // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_ATTACH, pos);
         } else if !attached && detached {
-            let pitch = 1.2 / (rng().random::<f32>() * 0.2 + 0.9);
+            let pitch = 1.2 / rng().random::<f32>().mul_add(0.2, 0.9);
             world
                 .play_sound_raw(Sound::BlockTripwireDetach as u16, cat, &pos, 0.4, pitch)
                 .await;

@@ -3,7 +3,7 @@ use std::{collections::HashMap, pin::Pin};
 
 use pumpkin_data::{
     Block, BlockDirection,
-    fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
+    fluid::{EnumVariants as _, Falling, Fluid, FluidProperties as _, Level},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockId, BlockStateId, world::BlockFlags};

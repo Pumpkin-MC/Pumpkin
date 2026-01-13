@@ -37,9 +37,9 @@ impl ItemEntity {
     pub async fn new(entity: Entity, item_stack: ItemStack) -> Self {
         entity
             .set_velocity(Vector3::new(
-                rand::random::<f64>() * 0.2 - 0.1,
+                rand::random::<f64>().mul_add(0.2, -0.1),
                 0.2,
-                rand::random::<f64>() * 0.2 - 0.1,
+                rand::random::<f64>().mul_add(0.2, -0.1),
             ))
             .await;
         entity.yaw.store(rand::random::<f32>() * 360.0);

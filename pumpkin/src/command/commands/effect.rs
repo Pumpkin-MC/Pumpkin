@@ -3,12 +3,12 @@ use crate::command::args::bool::BoolArgConsumer;
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::resource::effect::EffectTypeArgumentConsumer;
-use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
+use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName as _};
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandResult, CommandSender};
-use crate::entity::EntityBase;
+use crate::entity::EntityBase as _;
 use pumpkin_data::potion::Effect;
 use pumpkin_util::text::color::{Color, NamedColor};
 
@@ -114,7 +114,7 @@ impl CommandExecutor for GiveExecutor {
                 }
             }
 
-            let translation_name = TextComponent::translate(effect.translation_key.to_string(), []);
+            let translation_name = TextComponent::translate(effect.translation_key.to_owned(), []);
 
             if failed == targets.len() {
                 sender

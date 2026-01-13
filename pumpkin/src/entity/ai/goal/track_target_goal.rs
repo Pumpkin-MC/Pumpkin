@@ -4,7 +4,7 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::{EntityBase, mob::MobEntity};
-use rand::Rng;
+use rand::Rng as _;
 use std::sync::Arc;
 
 const UNSET: i32 = 0;
@@ -44,7 +44,7 @@ impl TrackTargetGoal {
     }
 
     // TODO: get from entity attribute
-    pub fn get_follow_range(_mob: &MobEntity) -> f32 {
+    pub const fn get_follow_range(_mob: &MobEntity) -> f32 {
         1.0
     }
 

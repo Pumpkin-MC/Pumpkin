@@ -5,7 +5,7 @@ use pumpkin_data::biome::Spawner;
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
 use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
 use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
-use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::Taggable as _;
 use pumpkin_data::tag::WorldgenBiome::MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::GameMode;
@@ -15,8 +15,8 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
-use rand::seq::IndexedRandom;
-use rand::{Rng, rng};
+use rand::seq::IndexedRandom as _;
+use rand::{Rng as _, rng};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt;
@@ -226,7 +226,7 @@ impl SpawnState {
         }
     }
     #[inline]
-    fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
+    const fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
         self.mob_category_counts.0[category.id]
             < category.max * self.spawnable_chunk_count / MAGIC_NUMBER
     }

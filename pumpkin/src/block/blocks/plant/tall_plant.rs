@@ -1,6 +1,6 @@
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
-    BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
+    BlockProperties as _, DoubleBlockHalf, TallSeagrassLikeProperties,
 };
 use pumpkin_world::BlockStateId;
 

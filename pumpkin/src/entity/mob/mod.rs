@@ -55,7 +55,7 @@ impl MobEntity {
         }
     }
 
-    pub fn set_attacking(&self, _attacking: bool) {
+    pub const fn set_attacking(&self, _attacking: bool) {
         // TODO: set to data tracker
     }
 }

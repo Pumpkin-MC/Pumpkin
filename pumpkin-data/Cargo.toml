@@ -3,6 +3,10 @@ name = "pumpkin-data"
 version.workspace = true
 edition.workspace = true
 build = "build/build.rs"
+rust-version.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 phf = { workspace = true, features = ["macros"] }

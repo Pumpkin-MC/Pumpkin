@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::{
-    BlockProperties, EastWireConnection, EnumVariants, Integer0To15, NorthWireConnection,
+    BlockProperties as _, EastWireConnection, EnumVariants as _, Integer0To15, NorthWireConnection,
     ObserverLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties,
     SouthWireConnection, WestWireConnection,
 };
-use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt};
+use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt as _};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -252,7 +252,7 @@ async fn on_use(wire: RedstoneWireProperties, world: &Arc<World>, block_pos: &Bl
 }
 
 #[must_use]
-pub fn make_cross(power: Integer0To15) -> RedstoneWireProperties {
+pub const fn make_cross(power: Integer0To15) -> RedstoneWireProperties {
     RedstoneWireProperties {
         north: NorthWireConnection::Side,
         south: SouthWireConnection::Side,
@@ -428,7 +428,7 @@ impl WireConnection {
         self == Self::None
     }
 
-    fn to_north(self) -> NorthWireConnection {
+    const fn to_north(self) -> NorthWireConnection {
         match self {
             Self::Up => NorthWireConnection::Up,
             Self::Side => NorthWireConnection::Side,
@@ -436,7 +436,7 @@ impl WireConnection {
         }
     }
 
-    fn to_south(self) -> SouthWireConnection {
+    const fn to_south(self) -> SouthWireConnection {
         match self {
             Self::Up => SouthWireConnection::Up,
             Self::Side => SouthWireConnection::Side,
@@ -444,7 +444,7 @@ impl WireConnection {
         }
     }
 
-    fn to_east(self) -> EastWireConnection {
+    const fn to_east(self) -> EastWireConnection {
         match self {
             Self::Up => EastWireConnection::Up,
             Self::Side => EastWireConnection::Side,
@@ -452,7 +452,7 @@ impl WireConnection {
         }
     }
 
-    fn to_west(self) -> WestWireConnection {
+    const fn to_west(self) -> WestWireConnection {
         match self {
             Self::Up => WestWireConnection::Up,
             Self::Side => WestWireConnection::Side,

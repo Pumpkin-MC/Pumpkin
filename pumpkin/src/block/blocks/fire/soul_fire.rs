@@ -1,4 +1,4 @@
-use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::Taggable as _;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;

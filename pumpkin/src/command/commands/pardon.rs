@@ -4,7 +4,7 @@ use crate::{
         args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::{SaveJSONConfiguration, banned_player_data::BANNED_PLAYER_LIST},
+    data::{SaveJSONConfiguration as _, banned_player_data::BANNED_PLAYER_LIST},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -27,7 +27,7 @@ impl CommandExecutor for Executor {
             let Some(Arg::Simple(target)) = args.get(&ARG_TARGET) else {
                 return Err(InvalidConsumption(Some(ARG_TARGET.into())));
             };
-            let target = (*target).to_string();
+            let target = (*target).to_owned();
 
             let mut lock = BANNED_PLAYER_LIST.write().await;
 

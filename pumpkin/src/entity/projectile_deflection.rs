@@ -14,7 +14,7 @@ impl ProjectileDeflectionType {
         match self {
             Self::None => {}
             Self::Simple => {
-                let vel = 170.0 + rand::random::<f32>() * 20.0;
+                let vel = rand::random::<f32>().mul_add(20.0, 170.0);
 
                 let current_velocity = projectile
                     .get_entity()

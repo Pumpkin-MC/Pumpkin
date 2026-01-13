@@ -3,8 +3,8 @@ use crate::block::{
     OnPlaceArgs, OnScheduledTickArgs,
 };
 use crate::world::World;
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::tag::Taggable;
+use pumpkin_data::block_properties::BlockProperties as _;
+use pumpkin_data::tag::Taggable as _;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;

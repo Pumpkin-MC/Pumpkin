@@ -3,7 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::{
     Block, BlockDirection,
     dimension::Dimension,
-    fluid::{Falling, Fluid, FluidProperties, Level},
+    fluid::{Falling, Fluid, FluidProperties as _, Level},
     world::WorldEvent,
 };
 use pumpkin_macros::pumpkin_block;

@@ -7,7 +7,7 @@ use pumpkin_util::{
     random::{RandomGenerator, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::item::ItemStack;
-use rand::Rng;
+use rand::Rng as _;
 
 #[derive(Default)]
 pub struct LootContextParameters {

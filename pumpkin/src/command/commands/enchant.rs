@@ -3,7 +3,7 @@ use pumpkin_util::text::TextComponent;
 use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds};
 use crate::command::args::entities::EntitiesArgumentConsumer;
 use crate::command::args::resource::enchantment::EnchantmentArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArgDefaultName};
+use crate::command::args::{ConsumedArgs, FindArgDefaultName as _};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::argument_default_name;
 use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
@@ -146,7 +146,7 @@ impl CommandExecutor for Executor {
     }
 }
 
-fn enchantment_level_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn enchantment_level_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("level")
         .min(0)

@@ -1,4 +1,4 @@
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::BlockProperties as _;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::BlockStateId;

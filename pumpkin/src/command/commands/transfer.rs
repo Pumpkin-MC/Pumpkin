@@ -7,7 +7,7 @@ use crate::command::CommandResult;
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::simple::SimpleArgConsumer;
-use crate::command::args::{Arg, FindArgDefaultName};
+use crate::command::args::{Arg, FindArgDefaultName as _};
 use crate::command::dispatcher::CommandError::{InvalidConsumption, InvalidRequirement};
 use crate::command::tree::builder::{argument, argument_default_name, require};
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
@@ -20,7 +20,7 @@ const ARG_HOSTNAME: &str = "hostname";
 
 const ARG_PLAYERS: &str = "players";
 
-fn port_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn port_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("port")
         .min(1)

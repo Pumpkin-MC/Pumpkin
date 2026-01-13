@@ -24,9 +24,9 @@ impl CommandExecutor for Executor {
             let plugins = PLUGIN_MANAGER.active_plugins().await;
 
             let message_text = if plugins.is_empty() {
-                "There are no loaded plugins.".to_string()
+                "There are no loaded plugins.".to_owned()
             } else if plugins.len() == 1 {
-                "There is 1 plugin loaded:\n".to_string()
+                "There is 1 plugin loaded:\n".to_owned()
             } else {
                 format!("There are {} plugins loaded:\n", plugins.len())
             };
@@ -34,7 +34,7 @@ impl CommandExecutor for Executor {
 
             for (i, metadata) in plugins.clone().into_iter().enumerate() {
                 let fmt = if i == plugins.len() - 1 {
-                    metadata.name.to_string()
+                    metadata.name.to_owned()
                 } else {
                     format!("{}, ", metadata.name)
                 };

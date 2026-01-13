@@ -122,15 +122,15 @@ impl GoalSelector {
         }
     }
 
-    pub fn disable_control(&mut self, control: Controls) {
+    pub const fn disable_control(&mut self, control: Controls) {
         self.disabled_controls.set(control, true);
     }
 
-    pub fn enable_control(&mut self, control: Controls) {
+    pub const fn enable_control(&mut self, control: Controls) {
         self.disabled_controls.set(control, false);
     }
 
-    pub fn set_control_enabled(&mut self, control: Controls, enabled: bool) {
+    pub const fn set_control_enabled(&mut self, control: Controls, enabled: bool) {
         self.disabled_controls.set(control, !enabled);
     }
 

@@ -1,5 +1,5 @@
 use super::{Controls, Goal};
-use crate::entity::EntityBase;
+use crate::entity::EntityBase as _;
 use crate::entity::ai::goal::GoalFuture;
 use crate::entity::ai::path::NavigatorGoal;
 use crate::entity::mob::Mob;

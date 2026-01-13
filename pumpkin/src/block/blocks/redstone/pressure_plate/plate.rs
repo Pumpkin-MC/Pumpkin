@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
-    block_properties::BlockProperties,
+    block_properties::BlockProperties as _,
     tag::{RegistryKey, get_tag_values},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};

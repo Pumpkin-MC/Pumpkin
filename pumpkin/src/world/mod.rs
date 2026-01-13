@@ -41,7 +41,7 @@ use pumpkin_config::BasicConfiguration;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
-use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
+use pumpkin_data::fluid::{Falling, FluidProperties as _, FluidState};
 use pumpkin_data::{
     Block,
     entity::{EntityStatus, EntityType},
@@ -51,7 +51,7 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState};
-use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_inventory::screen_handler::InventoryPlayer as _;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::chunk_radius_update::CChunkRadiusUpdate;
 use pumpkin_protocol::bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate;
@@ -103,19 +103,19 @@ use pumpkin_util::{
 };
 use pumpkin_util::{
     math::{position::chunk_section_from_pos, vector2::Vector2},
-    random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
+    random::{RandomImpl as _, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::chunk::palette::BlockPalette;
 use pumpkin_world::world::{GetBlockError, WorldFuture};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
+    chunk::io::Dirtiable as _, inventory::Inventory, item::ItemStack, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
-use rand::seq::SliceRandom;
-use rand::{Rng, rng};
+use rand::seq::SliceRandom as _;
+use rand::{Rng as _, rng};
 use scoreboard::Scoreboard;
 use time::LevelTime;
 use tokio::sync::Mutex;
@@ -1247,7 +1247,7 @@ impl World {
                 yaw: 0.0,
                 level_settings,
                 level_id: String::new(),
-                level_name: "Pumpkin world".to_string(),
+                level_name: "Pumpkin world".to_owned(),
                 premium_world_template_id: String::new(),
                 is_trial: false,
                 rewind_history_size: VarInt(40),
@@ -1260,7 +1260,7 @@ impl World {
                 enable_itemstack_net_manager: false,
                 // TODO Make this description better!
                 // This gets send from the client to mojang for telemetry
-                server_version: "Pumpkin Rust Server".to_string(),
+                server_version: "Pumpkin Rust Server".to_owned(),
 
                 compound_id: 10,
                 compound_len: VarUInt(0),
@@ -1314,7 +1314,7 @@ impl World {
                         default_min_value: 0.0,
                         default_max_value: f32::MAX,
                         default_value: 0.1,
-                        name: "minecraft:movement".to_string(),
+                        name: "minecraft:movement".to_owned(),
                         modifiers_list_size: VarUInt(0),
                     }],
                     player_tick: VarULong(0),
@@ -2491,7 +2491,7 @@ impl World {
         };
         let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
         if section_index >= chunk.light_engine.block_light.len() {
-            return Err("Invalid section index".to_string());
+            return Err("Invalid section index".to_owned());
         }
         let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
         chunk.light_engine.block_light[section_index + 1].set(
@@ -2774,9 +2774,9 @@ impl World {
         let mut rng = Xoroshiro::from_seed(get_seed());
 
         // TODO: Use world random here: world.random.nextDouble()
-        let x = x.floor() + rng.next_f64() * spawn_area + half_width;
-        let y = y.floor() + rng.next_f64() * spawn_area;
-        let z = z.floor() + rng.next_f64() * spawn_area + half_width;
+        let x = rng.next_f64().mul_add(spawn_area, x.floor()) + half_width;
+        let y = rng.next_f64().mul_add(spawn_area, y.floor());
+        let z = rng.next_f64().mul_add(spawn_area, z.floor()) + half_width;
 
         while !stack.is_empty() {
             let item = stack.split((rng.next_bounded_i32(21) + 10) as u8);

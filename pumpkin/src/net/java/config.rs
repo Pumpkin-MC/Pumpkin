@@ -62,7 +62,7 @@ impl JavaClient {
         {
             log::debug!("Got a client brand");
             match str::from_utf8(&plugin_message.data) {
-                Ok(brand) => *self.brand.lock().await = Some(brand.to_string()),
+                Ok(brand) => *self.brand.lock().await = Some(brand.to_owned()),
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
             }
         }
