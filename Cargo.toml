@@ -22,6 +22,7 @@ rust-version = "1.89"
 lto = true
 strip = "debuginfo"
 codegen-units = 1
+panic = "abort"
 
 [profile.bench]
 debug = true
@@ -32,6 +33,7 @@ debug = true
 
 [profile.dev]
 debug = "line-tables-only"
+panic = "abort"
 
 [workspace.dependencies]
 log = "*"
