@@ -1463,14 +1463,25 @@ impl Player {
         self.set_client_loaded(false);
         let block_pos = self.position().to_block_pos();
 
-        for item in &self.inventory().main_inventory {
-            let mut lock = item.lock().await;
+        let keep_inventory = {
             self.world()
-                .drop_stack(
-                    &block_pos,
-                    mem::replace(&mut *lock, ItemStack::EMPTY.clone()),
-                )
-                .await;
+                .level_info
+                .read()
+                .await
+                .game_rules
+                .keep_inventory
+        };
+
+        if !keep_inventory {
+            for item in &self.inventory().main_inventory {
+                let mut lock = item.lock().await;
+                self.world()
+                    .drop_stack(
+                        &block_pos,
+                        mem::replace(&mut *lock, ItemStack::EMPTY.clone()),
+                    )
+                    .await;
+            }
         }
 
         self.client
