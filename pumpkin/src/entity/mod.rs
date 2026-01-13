@@ -9,6 +9,8 @@ use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
@@ -22,7 +24,7 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
-        CUpdateEntityRot, MetaDataType, Metadata,
+        CUpdateEntityRot, Metadata,
     },
     ser::serializer::Serializer,
 };
@@ -37,7 +39,6 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_world::entity::entity_data_flags::DATA_POSE;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
@@ -443,7 +444,7 @@ impl Entity {
     /// Sets a custom name for the entity, typically used with nametags
     pub async fn set_custom_name(&self, name: TextComponent) {
         self.send_meta_data(&[Metadata::new(
-            2,
+            TrackedData::DATA_CUSTOM_NAME,
             MetaDataType::OptionalTextComponent,
             Some(name),
         )])
@@ -499,16 +500,15 @@ impl Entity {
 
     /// Returns entity rotation as vector
     pub fn rotation(&self) -> Vector3<f32> {
-        // Convert degrees to radians if necessary
-        let yaw_rad = self.yaw.load().to_radians();
         let pitch_rad = self.pitch.load().to_radians();
+        let yaw_rad = -self.yaw.load().to_radians();
 
-        Vector3::new(
-            yaw_rad.cos() * pitch_rad.cos(),
-            pitch_rad.sin(),
-            yaw_rad.sin() * pitch_rad.cos(),
-        )
-        .normalize()
+        let cos_yaw = yaw_rad.cos();
+        let sin_yaw = yaw_rad.sin();
+        let cos_pitch = pitch_rad.cos();
+        let sin_pitch = pitch_rad.sin();
+
+        Vector3::new(sin_yaw * cos_pitch, -sin_pitch, cos_yaw * cos_pitch)
     }
 
     /// Changes this entity's pitch and yaw to look at target
@@ -1602,8 +1602,12 @@ impl Entity {
         } else {
             b &= !(1 << index);
         }
-        self.send_meta_data(&[Metadata::new(0, MetaDataType::Byte, b)])
-            .await;
+        self.send_meta_data(&[Metadata::new(
+            TrackedData::DATA_FLAGS,
+            MetaDataType::Byte,
+            b,
+        )])
+        .await;
     }
 
     /// Plays sound at this entity's position with the entity's sound category
@@ -1631,7 +1635,7 @@ impl Entity {
         self.pose.store(pose);
         let pose = pose as i32;
         self.send_meta_data(&[Metadata::new(
-            DATA_POSE,
+            TrackedData::DATA_POSE,
             MetaDataType::EntityPose,
             VarInt(pose),
         )])

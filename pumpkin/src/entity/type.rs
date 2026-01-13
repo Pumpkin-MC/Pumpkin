@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityType, MobCategory};
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -8,6 +8,7 @@ use crate::{
     entity::{
         Entity, EntityBase,
         decoration::{end_crystal::EndCrystalEntity, painting::PaintingEntity},
+        living::LivingEntity,
         mob::zombie::Zombie,
     },
     world::World,
@@ -25,8 +26,14 @@ pub async fn from_type(
         id if id == EntityType::ZOMBIE.id => Zombie::make(entity).await,
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
-        // TODO
-        _ => Arc::new(entity), // Fallback Entity
+        // Fallback Entity
+        _ => {
+            if entity_type.category == &MobCategory::MISC {
+                Arc::new(entity)
+            } else {
+                Arc::new(LivingEntity::new(entity))
+            }
+        }
     };
 
     mob

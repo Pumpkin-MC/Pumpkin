@@ -1,4 +1,3 @@
-use std::num::NonZeroU32;
 use std::pin::Pin;
 use std::sync::Weak;
 use std::sync::atomic::Ordering::Relaxed;
@@ -36,6 +35,7 @@ use crate::{
 };
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use border::Worldborder;
+use bytes::BufMut;
 use crossbeam::queue::SegQueue;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
@@ -44,6 +44,8 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
+use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
     Block,
     entity::{EntityStatus, EntityType},
@@ -55,10 +57,9 @@ use pumpkin_data::{
 use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
-use pumpkin_protocol::bedrock::client::chunk_radius_update::CChunkRadiusUpdate;
-use pumpkin_protocol::bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate;
 use pumpkin_protocol::bedrock::client::start_game::CStartGame;
-use pumpkin_protocol::bedrock::frame_set::FrameSet;
+use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
+use pumpkin_protocol::ser::serializer::Serializer;
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
@@ -121,6 +122,7 @@ use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng, rng};
 use scoreboard::Scoreboard;
+use serde::Serialize;
 use time::LevelTime;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
@@ -563,40 +565,41 @@ impl World {
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         let start = tokio::time::Instant::now();
 
+        // 1. Block & Environment
         self.flush_block_updates().await;
-        // tick block entities
         self.flush_synced_block_events().await;
-
         self.tick_environment().await;
+        let env_done = start.elapsed();
 
+        // 2. Chunks
         let chunk_start = tokio::time::Instant::now();
-        // log::debug!("Ticking chunks");
         self.tick_chunks().await;
         let chunk_elapsed = chunk_start.elapsed();
 
+        // 3. Players
+        let player_start = tokio::time::Instant::now();
         let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
-
-        // log::debug!("Ticking players");
-        // player ticks
-        for player in players_to_tick {
+        let player_count = players_to_tick.len();
+        for player in &players_to_tick {
             player.tick(server).await;
         }
+        let player_elapsed = player_start.elapsed();
 
+        // 4. Entities & Collision
+        let entity_start = tokio::time::Instant::now();
         let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
+        let entity_count = entities_to_tick.len();
 
-        // log::debug!("Ticking entities");
-        // Entity ticks
         for entity in entities_to_tick {
             entity.get_entity().age.fetch_add(1, Relaxed);
-
             entity.tick(entity.clone(), server).await;
-            for player in self.players.read().await.values() {
+
+            for player in &players_to_tick {
                 if player
                     .living_entity
                     .entity
                     .bounding_box
                     .load()
-                    // This is vanilla, but TODO: change this when is in a vehicle
                     .expand(1.0, 0.5, 1.0)
                     .intersects(&entity.get_entity().bounding_box.load())
                 {
@@ -605,14 +608,22 @@ impl World {
                 }
             }
         }
+        let entity_elapsed = entity_start.elapsed();
 
         self.level.chunk_loading.lock().unwrap().send_change();
 
-        if start.elapsed().as_millis() > 50 {
+        // 5. Detailed Slow Tick Logging
+        let total_elapsed = start.elapsed();
+        if total_elapsed.as_millis() > 50 {
             log::warn!(
-                "Slow Tick: Total {:?} | Chunks {:?}",
-                start.elapsed(),
+                "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?} | Env: {:?}",
+                total_elapsed.as_millis(),
                 chunk_elapsed,
+                player_count,
+                player_elapsed,
+                entity_count,
+                entity_elapsed,
+                env_done
             );
         }
     }
@@ -1301,10 +1312,10 @@ impl World {
                 yaw: 0.0,
                 level_settings,
                 level_id: String::new(),
-                level_name: "Pumpkin world".to_string(),
+                level_name: "World".to_string(),
                 premium_world_template_id: String::new(),
                 is_trial: false,
-                rewind_history_size: VarInt(40),
+                rewind_history_size: VarInt(0),
                 server_authoritative_block_breaking: false,
                 current_level_time: self.level_time.lock().await.world_age as _,
                 enchantment_seed: VarInt(0),
@@ -1325,16 +1336,10 @@ impl World {
                 // TODO The client needs extra biome data for this
                 enable_clientside_generation: false,
                 blocknetwork_ids_are_hashed: false,
-                tick_death_system_enabled: false,
-                server_auth_sounds: false,
+                disable_client_sounds: false,
             })
             .await;
-        client
-            .send_game_packet(&CChunkRadiusUpdate {
-                chunk_radius: VarInt(player.config.read().await.view_distance.get().into()),
-            })
-            .await;
-        chunker::update_position(&player).await;
+        // chunker::update_position(&player).await;
         client
             .send_game_packet(&CreativeContent {
                 groups: &[Group {
@@ -1346,48 +1351,29 @@ impl World {
             })
             .await;
 
-        let mut frame_set = FrameSet::default();
         client
-            .write_game_packet_to_set(
-                &CNetworkChunkPublisherUpdate::new(
-                    BlockPos::new(0, 100, 0),
-                    NonZeroU32::from(player.config.read().await.view_distance).into(),
-                ),
-                &mut frame_set,
-            )
+            .send_game_packet(&CUpdateAttributes {
+                runtime_id: VarULong(runtime_id),
+                attributes: vec![Attribute {
+                    min_value: 0.0,
+                    max_value: f32::MAX,
+                    current_value: 0.1,
+                    default_min_value: 0.0,
+                    default_max_value: f32::MAX,
+                    default_value: 0.1,
+                    name: "minecraft:movement".to_string(),
+                    modifiers_list_size: VarUInt(0),
+                }],
+                player_tick: VarULong(0),
+            })
             .await;
-
-        client
-            .write_game_packet_to_set(
-                &CUpdateAttributes {
-                    runtime_id: VarULong(runtime_id),
-                    attributes: vec![Attribute {
-                        min_value: 0.0,
-                        max_value: f32::MAX,
-                        current_value: 0.1,
-                        default_min_value: 0.0,
-                        default_max_value: f32::MAX,
-                        default_value: 0.1,
-                        name: "minecraft:movement".to_string(),
-                        modifiers_list_size: VarUInt(0),
-                    }],
-                    player_tick: VarULong(0),
-                },
-                &mut frame_set,
-            )
-            .await;
-
-        client
-            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
-            .await;
-        client.send_frame_set(frame_set, 0x84).await;
-
+        player.send_abilities_update().await;
         {
             let mut abilities = player.abilities.lock().await;
             abilities.set_for_gamemode(player.gamemode.load());
         };
 
-        player.send_abilities_update().await;
+        client.send_game_packet(&CPlayStatus::PlayerSpawn).await;
     }
 
     #[expect(clippy::too_many_lines)]
@@ -1607,36 +1593,29 @@ impl World {
                 ))
                 .await;
             {
-                // TODO
-                // let config = existing_player.config.read().await;
-                // let mut buf = Vec::new();
-                // for meta in [
-                //     Metadata::new(
-                //         DATA_PLAYER_MODE_CUSTOMISATION,
-                //         MetaDataType::Byte,
-                //         config.skin_parts,
-                //     ),
-                //     Metadata::new(
-                //         DATA_PLAYER_MAIN_HAND,
-                //         MetaDataType::Byte,
-                //         config.main_hand as u8,
-                //     ),
-                // ] {
-                //     let mut serializer_buf = Vec::new();
+                let config = existing_player.config.read().await;
+                let mut buf = Vec::new();
+                {
+                    let meta = Metadata::new(
+                        TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
+                        MetaDataType::Byte,
+                        config.skin_parts,
+                    );
+                    let mut serializer_buf = Vec::new();
 
-                //     let mut serializer = Serializer::new(&mut serializer_buf);
-                //     meta.serialize(&mut serializer).unwrap();
-                //     buf.extend(serializer_buf);
-                // }
-                // drop(config);
-                // // END
-                // buf.put_u8(255);
-                // client
-                //     .enqueue_packet(&CSetEntityMetadata::new(
-                //         existing_player.get_entity().entity_id.into(),
-                //         buf.into(),
-                //     ))
-                //     .await;
+                    let mut serializer = Serializer::new(&mut serializer_buf);
+                    meta.serialize(&mut serializer).unwrap();
+                    buf.extend(serializer_buf);
+                };
+                drop(config);
+                // END
+                buf.put_u8(255);
+                client
+                    .enqueue_packet(&CSetEntityMetadata::new(
+                        existing_player.get_entity().entity_id.into(),
+                        buf.into(),
+                    ))
+                    .await;
             };
 
             {
@@ -1671,7 +1650,7 @@ impl World {
                     .await;
             }
         }
-        player.send_client_information();
+        player.send_client_information().await;
 
         // Sync selected slot
         player
@@ -1789,7 +1768,7 @@ impl World {
             ),
         )
         .await;
-        player.send_client_information();
+        player.send_client_information().await;
 
         chunker::update_position(player).await;
         // Update commands

@@ -6,10 +6,11 @@ use std::{
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use pumpkin_util::math::vector3::Vector3;
 
+pub mod firework_rocket;
 pub mod wind_charge;
 
 pub struct ThrownItemEntity {
-    entity: Entity,
+    pub entity: Entity,
 }
 
 impl ThrownItemEntity {

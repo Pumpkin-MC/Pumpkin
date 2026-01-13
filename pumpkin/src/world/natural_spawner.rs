@@ -14,6 +14,8 @@ use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomImpl, get_seed};
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use rand::seq::IndexedRandom;
 use rand::{Rng, rng};
@@ -131,7 +133,7 @@ impl LocalMobCapCalculator {
 }
 
 #[derive(Debug)]
-struct PointCharge(Vector3<f64>, f64); // pos charge
+struct PointCharge(Vector3<f64>, f64);
 
 impl PointCharge {
     fn get_potential_change(&self, pos: &BlockPos) -> f64 {
@@ -296,13 +298,23 @@ pub fn get_filtered_spawning_categories(
     spawn_enemies: bool,
     spawn_passives: bool,
 ) -> Vec<&'static MobCategory> {
-    let mut ret = Vec::with_capacity(8);
+    let mut ret = Vec::with_capacity(MobCategory::SPAWNING_CATEGORIES.len());
     for category in MobCategory::SPAWNING_CATEGORIES {
-        if (spawn_friendlies || !category.is_friendly)
-            && (spawn_enemies || category.is_friendly)
-            && (spawn_passives || !category.is_persistent)
-            && state.can_spawn_for_category_global(category)
-        {
+        let is_type_allowed = if category.is_friendly {
+            spawn_friendlies
+        } else {
+            spawn_enemies
+        };
+
+        if !is_type_allowed {
+            continue;
+        }
+
+        if category.is_persistent && !spawn_passives {
+            continue;
+        }
+
+        if state.can_spawn_for_category_global(category) {
             ret.push(category);
         }
     }
@@ -323,7 +335,6 @@ pub async fn spawn_for_chunk(
             .await
         {
             let random_pos = get_random_pos_within(world.min_y, chunk_pos, chunk).await;
-            // debug!("try random pos: {:?}", random_pos);
             if random_pos.0.y > world.min_y {
                 spawn_category_for_position(category, world, random_pos, chunk_pos, spawn_state)
                     .await;
@@ -336,8 +347,10 @@ pub async fn get_random_pos_within(
     chunk_pos: &Vector2<i32>,
     chunk: &Arc<RwLock<ChunkData>>,
 ) -> BlockPos {
-    let x = (chunk_pos.x << 4) + rng().random_range(0..16);
-    let z = (chunk_pos.y << 4) + rng().random_range(0..16);
+    let mut rng = Xoroshiro::from_seed(get_seed());
+
+    let x = (chunk_pos.x << 4) + rng.next_bounded_i32(16);
+    let z = (chunk_pos.y << 4) + rng.next_bounded_i32(16);
     let temp_y =
         chunk
             .read()
@@ -345,7 +358,7 @@ pub async fn get_random_pos_within(
             .heightmap
             .get_height(ChunkHeightmapType::WorldSurface, x, z, min_y)
             + 1;
-    let y = rng().random_range(min_y..=temp_y);
+    let y = rng.next_inbetween_i32(min_y, temp_y);
     BlockPos::new(x, y, z)
 }
 
@@ -365,8 +378,6 @@ pub async fn spawn_category_for_position(
         let mut new_z = new_pos.0.z;
         let mut random_group_size = (rng().random::<f32>() * 4.).ceil() as i32;
         let mut inc = 0;
-        #[expect(unused_variables)]
-        let group_size = 0;
         'outer: while inc < random_group_size {
             new_x += rng().random_range(0..6) - rng().random_range(0..6);
             new_z += rng().random_range(0..6) - rng().random_range(0..6);
@@ -379,12 +390,10 @@ pub async fn spawn_category_for_position(
                 world,
                 chunk_pos,
             ) {
-                // debug!("{new_pos:?} failed, too near to player or spawn point dst: {player_distance}");
                 inc += 1;
                 continue;
             }
             let Some(spawner) = get_random_spawn_mob_at(world, category, &new_pos).await else {
-                // debug!("{new_pos:?} failed, no random spawn mob at category: {category:?}");
                 break 'outer;
             };
             random_group_size = rng().random_range(spawner.min_count..=spawner.max_count);
@@ -399,12 +408,10 @@ pub async fn spawn_category_for_position(
             )
             .await
             {
-                // debug!("{new_pos:?} failed, not valid spawn position");
                 inc += 1;
                 continue;
             }
             if !spawn_state.can_spawn(entity_type, &new_pos, world).await {
-                // debug!("{new_pos:?} failed, can't spawn at");
                 inc += 1;
                 continue;
             }

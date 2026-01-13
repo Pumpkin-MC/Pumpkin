@@ -1059,7 +1059,7 @@ impl GenerationCache for Cache {
                 );
             }
             Chunk::Proto(data) => {
-                data.set_block_state(pos, block_state);
+                data.set_block_state(pos.x, pos.y, pos.z, block_state);
             }
         }
     }

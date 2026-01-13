@@ -43,6 +43,14 @@ pub mod sound {
 }
 
 #[rustfmt::skip]
+#[path = "generated/tracked_data.rs"]
+pub mod tracked_data;
+
+#[rustfmt::skip]
+#[path = "generated/meta_data_type.rs"]
+pub mod meta_data_type;
+
+#[rustfmt::skip]
 #[path = "generated/noise_parameter.rs"]
 pub mod noise_parameter;
 

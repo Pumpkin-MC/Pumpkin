@@ -1,8 +1,6 @@
 use pumpkin_util::math::{floor_log2, smallest_encompassing_power_of_two};
 
 pub mod block_pos {
-    use pumpkin_util::math::vector3::Vector3;
-
     use super::{
         BIT_SHIFT_X, BIT_SHIFT_Z, BITS_X, BITS_Y, BITS_Z, SIZE_BITS_X, SIZE_BITS_Y, SIZE_BITS_Z,
     };
@@ -23,12 +21,12 @@ pub mod block_pos {
     }
 
     #[inline]
-    pub const fn packed(vec: &Vector3<i32>) -> i64 {
+    pub const fn packed(x: i64, y: i64, z: i64) -> i64 {
         let mut result = 0i64;
         // Need to go to i64 first to conserve sign
-        result |= (vec.x as i64 & BITS_X as i64) << BIT_SHIFT_X;
-        result |= (vec.z as i64 & BITS_Z as i64) << BIT_SHIFT_Z;
-        result |= vec.y as i64 & BITS_Y as i64;
+        result |= (x & BITS_X as i64) << BIT_SHIFT_X;
+        result |= (z & BITS_Z as i64) << BIT_SHIFT_Z;
+        result |= y & BITS_Y as i64;
         result
     }
 }
@@ -107,8 +105,6 @@ pub const MIN_HEIGHT_CELL: i32 = MIN_HEIGHT << 4;
 
 #[cfg(test)]
 mod test {
-    use pumpkin_util::math::vector3::Vector3;
-
     use super::{block_pos, chunk_pos};
 
     #[test]
@@ -123,21 +119,19 @@ mod test {
 
     #[test]
     fn test_block_packing() {
-        let pos = Vector3::new(-30000000, 120, 30000000);
-        let packed = block_pos::packed(&pos);
+        let packed = block_pos::packed(-30000000, 120, 30000000);
         assert_eq!(packed, -8246337085439999880i64);
-        assert_eq!(pos.x, block_pos::unpack_x(packed));
-        assert_eq!(pos.y, block_pos::unpack_y(packed));
-        assert_eq!(pos.z, block_pos::unpack_z(packed));
+        assert_eq!(-30000000, block_pos::unpack_x(packed));
+        assert_eq!(120, block_pos::unpack_y(packed));
+        assert_eq!(30000000, block_pos::unpack_z(packed));
 
         for x in -10..=10 {
             for y in -10..=10 {
                 for z in -10..=10 {
-                    let pos = Vector3::new(x * 1000000, y * 10, z * 1000000);
-                    let packed = block_pos::packed(&pos);
-                    assert_eq!(pos.x, block_pos::unpack_x(packed));
-                    assert_eq!(pos.y, block_pos::unpack_y(packed));
-                    assert_eq!(pos.z, block_pos::unpack_z(packed));
+                    let packed = block_pos::packed(x * 1000000, y * 10, z * 1000000);
+                    assert_eq!(x * 1000000, block_pos::unpack_x(packed) as i64);
+                    assert_eq!(y * 10, block_pos::unpack_y(packed) as i64);
+                    assert_eq!(z * 1000000, block_pos::unpack_z(packed) as i64);
                 }
             }
         }

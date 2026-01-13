@@ -27,11 +27,8 @@ impl BlockBehaviour for GrindstoneBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            WallMountedBlock::can_place_at(self, args.block_accessor, args.position, args.direction)
-                .await
-        })
+    fn can_place_at<'a>(&'a self, _args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move { true })
     }
 
     fn get_state_for_neighbor_update<'a>(

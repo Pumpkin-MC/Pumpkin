@@ -28,12 +28,14 @@ pub trait ItemBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
+    #[expect(clippy::too_many_arguments)]
     fn use_on_block<'a>(
         &'a self,
         _item: &'a mut ItemStack,
         _player: &'a Player,
         _location: BlockPos,
         _face: BlockDirection,
+        _cursor_pos: Vector3<f32>,
         _block: &'a Block,
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {

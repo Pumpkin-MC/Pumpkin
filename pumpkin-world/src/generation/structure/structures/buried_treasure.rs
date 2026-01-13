@@ -96,7 +96,12 @@ impl StructurePieceBase for BuriedTreasurePiece {
                         || Self::is_liquid(down_offset_state.to_block()))
                         && dir != BlockDirection::Up
                     {
-                        chunk.set_block_state(&offset_pos.0, down_raw_state.to_state());
+                        chunk.set_block_state(
+                            offset_pos.0.x,
+                            offset_pos.0.y,
+                            offset_pos.0.z,
+                            down_raw_state.to_state(),
+                        );
                         continue;
                     }
 
@@ -105,12 +110,12 @@ impl StructurePieceBase for BuriedTreasurePiece {
                     } else {
                         state.to_state()
                     };
-                    chunk.set_block_state(&offset_pos.0, state1);
+                    chunk.set_block_state(offset_pos.0.x, offset_pos.0.y, offset_pos.0.z, state1);
                 }
 
                 // Place the Chest
                 // TODO: Add loot table logic here (requires seed)
-                chunk.set_block_state(&pos.0, Block::CHEST.default_state);
+                chunk.set_block_state(pos.0.x, pos.0.y, pos.0.z, Block::CHEST.default_state);
                 return;
             }
             pos = pos.down();

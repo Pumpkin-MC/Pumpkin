@@ -3,9 +3,9 @@ use crate::block::{
     OnScheduledTickArgs,
 };
 use crate::world::World;
-use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::{BlockProperties, LadderLikeProperties};
+use pumpkin_data::{BlockDirection, HorizontalFacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -25,11 +25,12 @@ impl BlockBehaviour for LadderBlock {
     }
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
+            let props = LadderLikeProperties::from_state_id(args.state.id, args.block);
+
             args.block_accessor
                 .get_block_state(&args.use_item_on.unwrap().position)
                 .await
-                .is_side_solid(args.direction.opposite())
-                && args.direction.is_horizontal()
+                .is_side_solid(props.facing.opposite().to_block_direction())
         })
     }
 

@@ -1,4 +1,6 @@
+use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_util::Hand;
@@ -31,7 +33,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CDamageEvent, CSetEquipment, MetaDataType, Metadata},
+    java::client::play::{CDamageEvent, CSetEquipment, Metadata},
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
@@ -78,10 +80,10 @@ pub struct LivingEntity {
 }
 
 impl LivingEntity {
-    const USING_ITEM_FLAG: i32 = 1;
-    const OFF_HAND_ACTIVE_FLAG: i32 = 2;
+    const USING_ITEM_FLAG: u8 = 1;
+    const OFF_HAND_ACTIVE_FLAG: u8 = 2;
     #[expect(dead_code)]
-    const USING_RIPTIDE_FLAG: i32 = 4;
+    const USING_RIPTIDE_FLAG: u8 = 4;
 
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
@@ -160,8 +162,8 @@ impl LivingEntity {
             .await;
     }
 
-    async fn set_living_flag(&self, flag: i32, value: bool) {
-        let index = flag as u8;
+    async fn set_living_flag(&self, flag: u8, value: bool) {
+        let index = flag;
         let mut b = self.livings_flags.load(Ordering::Relaxed);
         if value {
             b |= index;
@@ -170,7 +172,11 @@ impl LivingEntity {
         }
         self.livings_flags.store(b, Ordering::Relaxed);
         self.entity
-            .send_meta_data(&[Metadata::new(8, MetaDataType::Byte, b)])
+            .send_meta_data(&[Metadata::new(
+                TrackedData::DATA_LIVING_FLAGS,
+                MetaDataType::Byte,
+                b,
+            )])
             .await;
     }
 
@@ -191,7 +197,11 @@ impl LivingEntity {
         self.health.store(health.max(0.0));
         // tell everyone entities health changed
         self.entity
-            .send_meta_data(&[Metadata::new(9, MetaDataType::Float, health)])
+            .send_meta_data(&[Metadata::new(
+                TrackedData::DATA_HEALTH,
+                MetaDataType::Float,
+                health,
+            )])
             .await;
     }
 

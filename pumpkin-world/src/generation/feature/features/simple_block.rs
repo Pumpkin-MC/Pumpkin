@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::Block;
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use serde::Deserialize;
 
@@ -25,7 +25,7 @@ impl SimpleBlockFeature {
         let state = self.to_place.get(random, pos);
         let block = Block::from_state_id(state.id);
         let block_accessor: &dyn BlockAccessor = chunk;
-        if !block_registry.can_place_at(block, block_accessor, &pos, BlockDirection::Up) {
+        if !block_registry.can_place_at(block, state, block_accessor, &pos) {
             return false;
         }
 
