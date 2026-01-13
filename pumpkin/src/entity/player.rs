@@ -1511,24 +1511,32 @@ impl Player {
     }
 
     /// Send the player's skin layers and used hand to all players.
-    pub fn send_client_information(&self) {
-        //let config = self.config.read().await;
-        // TODO
-        // self.living_entity
-        //     .entity
-        //     .send_meta_data(&[
-        //         Metadata::new(
-        //             DATA_PLAYER_MODE_CUSTOMISATION,
-        //             MetaDataType::Byte,
-        //             config.skin_parts,
-        //         ),
-        //         Metadata::new(
-        //             DATA_PLAYER_MAIN_HAND,
-        //             MetaDataType::Byte,
-        //             config.main_hand as u8,
-        //         ),
-        //     ])
-        //     .await;
+    pub async fn send_client_information(&self) {
+        let config = self.config.read().await;
+
+        // skin layers, index 16
+        self.living_entity
+            .entity
+            .send_meta_data(&[
+                Metadata::new(
+                    16,
+                    MetaDataType::Byte,
+                    config.skin_parts,
+                )
+            ])
+            .await;
+
+        // main arm (type 38), index 15
+        self.living_entity
+            .entity
+            .send_meta_data(&[
+                Metadata::new(
+                    15,
+                    MetaDataType::HumanoidArm,
+                    VarInt(config.main_hand as i32),
+                )
+            ])
+            .await;
     }
 
     pub async fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {
