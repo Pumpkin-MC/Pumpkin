@@ -27,6 +27,7 @@ pub struct SyncedRegistry {
 
 // Probably not optimal
 impl SyncedRegistry {
+    #[must_use] 
     pub fn get_jukebox_song(&self, song_key: &str) -> Option<JukeboxSong> {
         let jukebox_registry = self
             .registries
@@ -37,6 +38,7 @@ impl SyncedRegistry {
         serde_json::from_value(song_value.clone()).ok()
     }
 
+    #[must_use] 
     pub fn get_jukebox_song_index(&self, song_key: &str) -> Option<usize> {
         let jukebox_registry = self
             .registries
@@ -47,6 +49,7 @@ impl SyncedRegistry {
 }
 
 impl Registry {
+    #[must_use] 
     pub fn get_synced() -> Vec<Self> {
         let mut synced_registries = Vec::new();
 
@@ -71,7 +74,7 @@ impl Registry {
                 ));
             }
 
-            synced_registries.push(Registry {
+            synced_registries.push(Self {
                 registry_id,
                 registry_entries,
             });

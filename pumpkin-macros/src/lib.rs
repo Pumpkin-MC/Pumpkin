@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site, proc_macro_error};
 use quote::quote;
-use syn::spanned::Spanned;
+use syn::spanned::Spanned as _;
 use syn::{self, Attribute, DeriveInput, LitStr, Type, parse_quote};
 use syn::{Block, Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
 
@@ -44,7 +44,7 @@ pub fn cancellable(_args: TokenStream, input: TokenStream) -> TokenStream {
             if fields
                 .named
                 .iter()
-                .any(|f| f.ident.as_ref().map(|i| i == "cancelled").unwrap_or(false))
+                .any(|f| f.ident.as_ref().is_some_and(|i| i == "cancelled"))
             {
                 abort!(fields.span(), "Struct already has a `cancelled` field");
             }
@@ -122,9 +122,11 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
         }
     }
 
-    let event = match event_expr {
-        Some(e) => e,
-        None => abort_call_site!("Event expression must be specified"),
+    let Some(event) = event_expr else {
+        abort_call_site!(
+            "Event expression must
+  be specified"
+        )
     };
 
     // Construct the if/else logic
@@ -170,16 +172,13 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     let arg_lit = parse_macro_input!(args as LitStr);
     let arg_value = arg_lit.value();
 
-    let (namespace, id) = match arg_value.split_once(':') {
-        Some(pair) => pair,
-        None => {
-            return syn::Error::new(
-                arg_lit.span(),
-                "Expected format \"namespace:id\" (e.g. \"minecraft:stone\")",
-            )
-            .to_compile_error()
-            .into();
-        }
+    let Some((namespace, id)) = arg_value.split_once(':') else {
+        return syn::Error::new(
+            arg_lit.span(),
+            "Expected format \"namespace:id\" (e.g. \"minecraft:stone\")",
+        )
+        .to_compile_error()
+        .into();
     };
 
     let ast = parse_macro_input!(item as DeriveInput);
@@ -212,9 +211,8 @@ pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStre
     let full_tag = arg_lit.value();
 
     // Efficient splitting
-    let namespace = match full_tag.split_once(':') {
-        Some((ns, _)) => ns,
-        None => abort!(arg_lit.span(), "Expected format 'namespace:path'"),
+    let Some((namespace, _)) = full_tag.split_once(':') else {
+        abort!(arg_lit.span(), "Expected format 'namespace:path'")
     };
 
     quote! {
@@ -489,7 +487,7 @@ fn check_serial_attributes(attrs: &[Attribute]) -> (bool, bool) {
     let mut is_big_endian = false;
     let mut no_prefix = false;
 
-    for attr in attrs.iter() {
+    for attr in attrs {
         if attr.path().is_ident("serial") {
             let _ = attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("big_endian") {
@@ -512,8 +510,7 @@ fn is_vec(ty: &Type) -> bool {
             .segments
             .iter()
             .last()
-            .map(|segment| segment.ident == "Vec")
-            .unwrap_or(false)
+            .is_some_and(|segment| segment.ident == "Vec")
     } else {
         false
     }

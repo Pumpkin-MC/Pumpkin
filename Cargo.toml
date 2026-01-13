@@ -112,6 +112,9 @@ tokio-util = "0.7.18"
 toml = "0.9"
 ureq = "3.1.4"
 
+[workspace.lints.rust]
+unused_labels = "allow"
+
 [workspace.lints.clippy]
 # Base lint groups
 all = { level = "warn", priority = -1 }

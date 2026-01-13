@@ -11,7 +11,8 @@ pub struct Op {
 }
 
 impl Op {
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         uuid: Uuid,
         name: String,
         level: PermissionLvl,

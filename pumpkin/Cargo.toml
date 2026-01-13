@@ -91,7 +91,6 @@ tokio-util = { workspace = true, features = ["rt"] }
 
 flate2.workspace = true
 console-subscriber = { workspace = true, optional = true }
-signature.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 

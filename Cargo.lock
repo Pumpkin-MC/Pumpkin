@@ -2121,7 +2121,6 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2 0.11.0-rc.3",
- "signature 2.2.0",
  "simplelog",
  "tempfile",
  "thiserror",
@@ -2190,7 +2189,6 @@ name = "pumpkin-macros"
 version = "0.1.0-dev+1.21.11"
 dependencies = [
  "proc-macro-error2",
- "proc-macro2",
  "quote",
  "syn",
 ]

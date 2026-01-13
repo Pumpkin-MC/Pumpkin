@@ -122,7 +122,7 @@ impl<W: Write> Serializer<W> {
                     return Err(Error::SerdeError(
                         "Invalid state: already handled root component!".to_string(),
                     ));
-                } else {
+                }
                     if tag != COMPOUND_ID {
                         return Err(Error::SerdeError(format!(
                             "Invalid state: root is not a `Compound`! ({tag})"
@@ -133,9 +133,9 @@ impl<W: Write> Serializer<W> {
                     if let Some(root_name) = root_name {
                         NbtTag::String(root_name.clone()).serialize_data(&mut self.output)?;
                     }
-                }
+
             }
-        };
+        }
         Ok(())
     }
 }
