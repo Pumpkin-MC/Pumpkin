@@ -7,8 +7,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-Dwarnings"
-  CARGO_BUILD_RUSTFLAGS: "-Dwarnings -C target-cpu=generic"
+  RUSTFLAGS: "-Dwarnings -Ctarget-cpu=generic"
 
 jobs:
   format:
