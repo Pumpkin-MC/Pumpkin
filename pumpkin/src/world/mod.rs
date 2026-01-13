@@ -1617,7 +1617,7 @@ impl World {
                     .await;
             }
         }
-        player.send_client_information();
+        player.send_client_information().await;
 
         // Sync selected slot
         player
@@ -1735,7 +1735,7 @@ impl World {
             ),
         )
         .await;
-        player.send_client_information();
+        player.send_client_information().await;
 
         chunker::update_position(player).await;
         // Update commands
