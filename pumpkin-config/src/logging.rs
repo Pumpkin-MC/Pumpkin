@@ -17,7 +17,7 @@ impl Default for LoggingConfig {
             threads: true,
             color: true,
             timestamp: true,
-            file: "latest.log".to_string(),
+            file: "latest.log".to_owned(),
         }
     }
 }

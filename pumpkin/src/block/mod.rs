@@ -8,7 +8,7 @@ use pumpkin_world::BlockStateId;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::Player;
 use crate::world::World;
-use crate::world::loot::{LootContextParameters, LootTableExt};
+use crate::world::loot::{LootContextParameters, LootTableExt as _};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -384,7 +384,7 @@ pub async fn calc_block_breaking(
     player.get_mining_speed(block).await / hardness / i
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum BlockIsReplacing {
     Itself(BlockStateId),
     Water(Integer0To15),

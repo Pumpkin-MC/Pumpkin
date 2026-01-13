@@ -59,7 +59,7 @@ impl<'a> FindArg<'a> for ParticleArgumentConsumer {
     fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::Particle(data)) => Ok(data),
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

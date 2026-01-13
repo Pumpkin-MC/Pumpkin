@@ -10,7 +10,7 @@ pub struct ChatConfig {
 impl Default for ChatConfig {
     fn default() -> Self {
         Self {
-            format: "<{DISPLAYNAME}> {MESSAGE}".to_string(),
+            format: "<{DISPLAYNAME}> {MESSAGE}".to_owned(),
         }
     }
 }

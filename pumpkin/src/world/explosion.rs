@@ -17,7 +17,7 @@ pub struct Explosion {
 }
 impl Explosion {
     #[must_use]
-    pub fn new(power: f32, pos: Vector3<f64>) -> Self {
+    pub const fn new(power: f32, pos: Vector3<f64>) -> Self {
         Self { power, pos }
     }
     async fn get_blocks_to_destroy(
@@ -46,7 +46,7 @@ impl Explosion {
                     let mut pos_y = self.pos.y + 0.0625;
                     let mut pos_z = self.pos.z;
 
-                    let mut h = self.power * (0.7 + rand::random::<f32>() * 0.6);
+                    let mut h = self.power * rand::random::<f32>().mul_add(0.6, 0.7);
                     while h > 0.0 {
                         let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
                         let (block, state) = world.get_block_and_state(&block_pos).await;

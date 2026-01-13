@@ -14,7 +14,7 @@ impl Default for CompressionConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            info: Default::default(),
+            info: CompressionInfo::default(),
         }
     }
 }

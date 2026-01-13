@@ -5,7 +5,7 @@ use pumpkin_protocol::java::client::play::{
 use crate::{
     command::{
         CommandSender,
-        args::{ConsumeResult, SplitSingleWhitespaceIncludingEmptyParts, SuggestResult},
+        args::{ConsumeResult, SplitSingleWhitespaceIncludingEmptyParts as _, SuggestResult},
         dispatcher::CommandError,
         tree::{CommandTree, RawArgs},
     },
@@ -84,7 +84,7 @@ impl<'a> FindArg<'a> for CommandTreeArgumentConsumer {
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::CommandTree(tree)) => Ok(tree),
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

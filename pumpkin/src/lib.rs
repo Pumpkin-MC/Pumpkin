@@ -18,8 +18,8 @@ use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use rustyline_async::{Readline, ReadlineEvent};
 use std::collections::HashMap;
-use std::io::{Cursor, IsTerminal, stdin};
-use std::str::FromStr;
+use std::io::{Cursor, IsTerminal as _, stdin};
+use std::str::FromStr as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -74,19 +74,19 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             config.set_time_level(LevelFilter::Off);
         }
 
-        if !advanced_config.logging.color {
+        if advanced_config.logging.color {
+            // We are technically logging to a file-like object.
+            config.set_write_log_enable_colors(true);
+        } else {
             for level in Level::iter() {
                 config.set_level_color(level, None);
             }
-        } else {
-            // We are technically logging to a file-like object.
-            config.set_write_log_enable_colors(true);
         }
 
-        if !advanced_config.logging.threads {
-            config.set_thread_level(LevelFilter::Off);
-        } else {
+        if advanced_config.logging.threads {
             config.set_thread_level(LevelFilter::Info);
+        } else {
+            config.set_thread_level(LevelFilter::Off);
         }
 
         let level = std::env::var("RUST_LOG")
@@ -138,9 +138,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         None
     };
 
-    if LOGGER_IMPL.set(logger).is_err() {
-        panic!("Failed to set logger. already initialized");
-    }
+    assert!(LOGGER_IMPL.set(logger).is_ok(), "Failed to set logger. already initialized");
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
@@ -274,7 +272,7 @@ impl PumpkinServer {
         PLUGIN_MANAGER.set_server(self.server.clone()).await;
         if let Err(err) = PLUGIN_MANAGER.load_plugins().await {
             log::error!("{err}");
-        };
+        }
     }
 
     pub async fn unload_plugins(&self) {
@@ -348,7 +346,7 @@ impl PumpkinServer {
 
         select! {
             // Branch for TCP connections (Java Edition)
-            tcp_result = resolve_some(self.tcp_listener.as_ref(), |listener| listener.accept()) => {
+            tcp_result = resolve_some(self.tcp_listener.as_ref(), tokio::net::TcpListener::accept) => {
                 match tcp_result {
                     Ok((connection, client_addr)) => {
                         if let Err(e) = connection.set_nodelay(true) {
@@ -473,11 +471,11 @@ async fn setup_stdin_console(server: Arc<Server>) {
                 }
             } else {
                 break;
-            };
+            }
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 log::warn!("Console command was not terminated with a newline");
             }
-            rt.block_on(tx.send(line.trim().to_string()))
+            rt.block_on(tx.send(line.trim().to_owned()))
                 .expect("Failed to send command to server");
         }
     });

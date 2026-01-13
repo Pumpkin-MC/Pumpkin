@@ -1,17 +1,17 @@
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::text::TextComponent;
-use rand::{Rng, rng};
+use rand::{Rng as _, rng};
 
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{
-        Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
+        Arg, ConsumedArgs, FindArg as _, bounded_num::BoundedNumArgumentConsumer,
         players::PlayersArgumentConsumer, position_3d::Position3DArgumentConsumer,
         sound::SoundArgumentConsumer, sound_category::SoundCategoryArgumentConsumer,
     },
     tree::{CommandTree, builder::argument},
 };
-use crate::entity::EntityBase;
+use crate::entity::EntityBase as _;
 
 /// Command: playsound <sound> [<source>] [<targets>] [<pos>] [<volume>] [<pitch>] [<minVolume>]
 ///
@@ -34,13 +34,13 @@ const ARG_PITCH: &str = "pitch";
 const ARG_MIN_VOLUME: &str = "minVolume";
 
 // Volume must be >= 0, no upper limit
-fn volume_consumer() -> BoundedNumArgumentConsumer<f32> {
+const fn volume_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new().name(ARG_VOLUME).min(0.0)
 }
 
 // Pitch must be between 0.0 and 2.0
 // Values below 0.5 are treated as 0.5
-fn pitch_consumer() -> BoundedNumArgumentConsumer<f32> {
+const fn pitch_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new()
         .name(ARG_PITCH)
         .min(0.0)
@@ -49,7 +49,7 @@ fn pitch_consumer() -> BoundedNumArgumentConsumer<f32> {
 
 // Minimum volume must be between 0.0 and 1.0
 // Controls the volume for players outside normal hearing range
-fn min_volume_consumer() -> BoundedNumArgumentConsumer<f32> {
+const fn min_volume_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new()
         .name(ARG_MIN_VOLUME)
         .min(0.0)

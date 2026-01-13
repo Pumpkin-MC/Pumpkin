@@ -1,4 +1,4 @@
-use crate::command::args::GetCloned;
+use crate::command::args::GetCloned as _;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions};
@@ -30,7 +30,7 @@ pub struct CustomBossbar {
 impl CustomBossbar {
     #[deny(clippy::new_without_default)]
     #[must_use]
-    pub fn new(namespace: String, bossbar_data: Bossbar) -> Self {
+    pub const fn new(namespace: String, bossbar_data: Bossbar) -> Self {
         Self {
             namespace,
             bossbar_data,
@@ -261,7 +261,7 @@ impl CustomBossbars {
             return Ok(());
         }
         Err(BossbarUpdateError::InvalidResourceLocation(
-            resource_location.to_string(),
+            resource_location.to_owned(),
         ))
     }
 

@@ -5,22 +5,22 @@ use crate::{
         BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs,
         OnPlaceArgs, PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
     },
-    entity::{EntityBase, player::Player},
+    entity::{EntityBase as _, player::Player},
     world::World,
 };
 use pumpkin_data::{
-    block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
+    block_properties::{BlockProperties as _, ChiseledBookshelfLikeProperties, HorizontalFacing},
     item::Item,
     sound::{Sound, SoundCategory},
     tag,
-    tag::Taggable,
+    tag::Taggable as _,
 };
-use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_inventory::screen_handler::InventoryPlayer as _;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_world::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
-    inventory::Inventory, item::ItemStack,
+    inventory::Inventory as _, item::ItemStack,
 };
 use tokio::sync::Mutex;
 
@@ -240,7 +240,7 @@ impl ChiseledBookshelfBlock {
         }
     }
 
-    fn is_slot_used(properties: ChiseledBookshelfLikeProperties, slot: i8) -> bool {
+    const fn is_slot_used(properties: ChiseledBookshelfLikeProperties, slot: i8) -> bool {
         match slot {
             0 => properties.slot_0_occupied,
             1 => properties.slot_1_occupied,

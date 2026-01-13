@@ -130,14 +130,14 @@ impl Default for BasicConfiguration {
             hardcore: false,
             online_mode: true,
             encryption: true,
-            motd: "A blazingly fast Pumpkin server!".to_string(),
+            motd: "A blazingly fast Pumpkin server!".to_owned(),
             tps: 20.0,
             default_gamemode: GameMode::Survival,
             force_gamemode: false,
             scrub_ips: true,
             use_favicon: true,
-            favicon_path: "icon.png".to_string(),
-            default_level_name: "world".to_string(),
+            favicon_path: "icon.png".to_owned(),
+            default_level_name: "world".to_owned(),
             allow_chat_reports: false,
             white_list: false,
             enforce_whitelist: false,
@@ -146,12 +146,14 @@ impl Default for BasicConfiguration {
 }
 
 impl BasicConfiguration {
+    #[must_use] 
     pub fn get_world_path(&self) -> PathBuf {
         PathBuf::from(&self.default_level_name)
     }
 }
 
 pub trait LoadConfiguration {
+    #[must_use] 
     fn load(config_dir: &Path) -> Self
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
@@ -209,6 +211,7 @@ pub trait LoadConfiguration {
         config
     }
 
+    #[must_use] 
     fn merge_with_default_toml(parsed_toml: toml::Value) -> (Self, bool)
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
@@ -219,7 +222,7 @@ pub trait LoadConfiguration {
             toml::Value::try_from(default_config).expect("Failed to parse default config");
 
         let (merged_value, changed) =
-            Self::merge_toml_values(default_toml_value, parsed_toml.clone());
+            Self::merge_toml_values(default_toml_value, parsed_toml);
 
         let config = merged_value
             .try_into()
@@ -228,6 +231,7 @@ pub trait LoadConfiguration {
         (config, changed)
     }
 
+    #[must_use] 
     fn merge_toml_values(base: toml::Value, overlay: toml::Value) -> (toml::Value, bool) {
         match (base, overlay) {
             (toml::Value::Table(mut base_table), toml::Value::Table(overlay_table)) => {
@@ -269,7 +273,7 @@ impl LoadConfiguration for AdvancedConfiguration {
     }
 
     fn validate(&self) {
-        self.resource_pack.validate()
+        self.resource_pack.validate();
     }
 }
 
@@ -294,13 +298,13 @@ impl LoadConfiguration for BasicConfiguration {
             assert!(
                 self.encryption,
                 "When online mode is enabled, encryption must be enabled"
-            )
+            );
         }
         if self.allow_chat_reports {
             assert!(
                 self.online_mode,
                 "When allow_chat_reports is enabled, online_mode must be enabled"
-            )
+            );
         }
     }
 }

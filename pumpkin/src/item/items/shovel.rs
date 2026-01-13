@@ -4,14 +4,14 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties as _, CampfireLikeProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
-use rand::{Rng, rng};
+use rand::{Rng as _, rng};
 
 pub struct ShovelItem;
 

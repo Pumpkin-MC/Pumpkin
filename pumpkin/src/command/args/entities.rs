@@ -43,7 +43,7 @@ pub enum ComparableValueCondition<T> {
     Between(T, T),
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EntityFilterSort {
     Arbitrary,
     Nearest,
@@ -97,9 +97,9 @@ impl FromStr for EntityFilter {
             "limit" => {
                 let limit = value
                     .parse::<usize>()
-                    .map_err(|_| "Invalid limit value".to_string())?;
+                    .map_err(|_| "Invalid limit value".to_owned())?;
                 if negate {
-                    return Err("Negation of limit is not allowed".to_string());
+                    return Err("Negation of limit is not allowed".to_owned());
                 }
                 Ok(Self::Limit(limit))
             }
@@ -112,7 +112,7 @@ impl FromStr for EntityFilter {
                     _ => return Err(format!("Invalid sort type {value}")),
                 };
                 if negate {
-                    return Err("Negation of sort is not allowed".to_string());
+                    return Err("Negation of sort is not allowed".to_owned());
                 }
                 Ok(Self::Sort(sort))
             }
@@ -210,7 +210,7 @@ impl FromStr for TargetSelector {
             }
             // parse conditions
             if body[1].as_bytes()[body[1].len() - 1] != b']' {
-                return Err("Target selector must end with ]".to_string());
+                return Err("Target selector must end with ]".to_owned());
             }
             let conditions: Vec<_> = body[1][..body[1].len() - 1]
                 .split(',')
@@ -223,7 +223,7 @@ impl FromStr for TargetSelector {
         } else if let Ok(uuid) = Uuid::parse_str(arg) {
             Ok(Self::new(EntitySelectorType::Uuid(uuid)))
         } else {
-            Ok(Self::new(EntitySelectorType::NamedPlayer(arg.to_string())))
+            Ok(Self::new(EntitySelectorType::NamedPlayer(arg.to_owned())))
         }
     }
 }
@@ -287,7 +287,7 @@ impl<'a> FindArg<'a> for EntitiesArgumentConsumer {
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::Entities(data)) => Ok(data),
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

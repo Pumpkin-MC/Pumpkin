@@ -7,8 +7,8 @@ use crate::block::{
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 
-use pumpkin_data::FacingExt;
-use pumpkin_data::block_properties::{BlockProperties, Facing};
+use pumpkin_data::FacingExt as _;
+use pumpkin_data::block_properties::{BlockProperties as _, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_3x3;
@@ -58,7 +58,7 @@ pub struct DropperBlock;
 type DispenserLikeProperties = pumpkin_data::block_properties::DispenserLikeProperties;
 
 fn triangle<R: Rng>(rng: &mut R, min: f64, max: f64) -> f64 {
-    min + (rng.random::<f64>() - rng.random::<f64>()) * max
+    (rng.random::<f64>() - rng.random::<f64>()).mul_add(max, min)
 }
 
 const fn to_normal(facing: Facing) -> Vector3<f64> {
@@ -207,7 +207,7 @@ impl BlockBehaviour for DropperBlock {
                         &EntityType::ITEM,
                         false,
                     );
-                    let rd = rng().random::<f64>() * 0.1 + 0.2;
+                    let rd = rng().random::<f64>().mul_add(0.1, 0.2);
                     let velocity = Vector3::new(
                         triangle(&mut rng(), facing.x * rd, 0.017_227_5 * 6.),
                         triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),

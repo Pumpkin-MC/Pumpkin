@@ -13,7 +13,7 @@ mod track_target_goal;
 pub mod zombie_attack_goal;
 
 #[must_use]
-pub fn to_goal_ticks(server_ticks: i32) -> i32 {
+pub const fn to_goal_ticks(server_ticks: i32) -> i32 {
     -(-server_ticks).div_euclid(2)
 }
 
@@ -83,7 +83,7 @@ impl Controls {
         Self::default()
     }
 
-    pub fn set(&mut self, control: Self, val: bool) {
+    pub const fn set(&mut self, control: Self, val: bool) {
         if val {
             self.0 |= control.0;
         } else {
@@ -92,7 +92,7 @@ impl Controls {
     }
 
     #[must_use]
-    pub fn get(&self, control: Self) -> bool {
+    pub const fn get(&self, control: Self) -> bool {
         self.0 & control.0 != 0
     }
 

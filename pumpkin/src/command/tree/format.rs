@@ -1,6 +1,6 @@
 use crate::command::tree::{CommandTree, Node, NodeType};
 use std::collections::VecDeque;
-use std::fmt::{Display, Formatter, Write};
+use std::fmt::{Display, Formatter, Write as _};
 
 trait IsVisible {
     /// whether node should be printed in help command/usage hint

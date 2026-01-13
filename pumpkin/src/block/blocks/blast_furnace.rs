@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    block_properties::{BlockProperties, FurnaceLikeProperties},
+    block_properties::{BlockProperties as _, FurnaceLikeProperties},
     screen::WindowType,
 };
 use pumpkin_inventory::{

@@ -5,8 +5,8 @@ use crate::block::{
     OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
 };
 use pumpkin_data::{
-    Block, FacingExt,
-    block_properties::{BlockProperties, ObserverLikeProperties},
+    Block, FacingExt as _,
+    block_properties::{BlockProperties as _, ObserverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;

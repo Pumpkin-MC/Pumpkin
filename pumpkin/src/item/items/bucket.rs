@@ -15,7 +15,7 @@ use pumpkin_util::{
     GameMode,
     math::{position::BlockPos, vector3::Vector3},
 };
-use pumpkin_world::{inventory::Inventory, item::ItemStack, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{inventory::Inventory as _, item::ItemStack, tick::TickPriority, world::BlockFlags};
 
 use crate::world::World;
 
@@ -68,13 +68,12 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
 }
 
 fn waterlogged_check(block: &Block, state: u16) -> Option<bool> {
-    block.properties(state).and_then(|properties| {
-        properties
-            .to_props()
-            .into_iter()
-            .find(|p| p.0 == "waterlogged")
-            .map(|(_, value)| value == "true")
-    })
+    let properties = block.properties(state)?;
+    properties
+                .to_props()
+                .into_iter()
+                .find(|p| p.0 == "waterlogged")
+                .map(|(_, value)| value == "true")
 }
 
 fn set_waterlogged(block: &Block, state: u16, waterlogged: bool) -> u16 {
@@ -243,7 +242,7 @@ impl ItemBehaviour for FilledBucketItem {
                         SoundCategory::Blocks,
                         &player.position(),
                         0.5,
-                        2.6 + (rand::random::<f32>() - rand::random::<f32>()) * 0.8,
+                        (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.8, 2.6),
                     )
                     .await;
                 return;

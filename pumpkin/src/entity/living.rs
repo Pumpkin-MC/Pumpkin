@@ -12,10 +12,10 @@ use std::sync::atomic::{
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::{Entity, NBTStorage};
-use super::{EntityBase, NBTStorageInit};
+use super::{EntityBase, NBTStorageInit as _};
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
-use crate::world::loot::{LootContextParameters, LootTableExt};
+use crate::world::loot::{LootContextParameters, LootTableExt as _};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::Block;
 use pumpkin_data::damage::DeathMessageType;
@@ -386,7 +386,7 @@ impl LivingEntity {
         let levitation = self.get_effect(&StatusEffect::LEVITATION).await;
 
         if let Some(lev) = levitation {
-            velo.y += (0.05 * f64::from(lev.amplifier + 1) - velo.y) * 0.2;
+            velo.y += 0.05f64.mul_add(f64::from(lev.amplifier + 1), -velo.y) * 0.2;
         } else {
             velo.y -= self.get_effective_gravity(&caller).await;
 
@@ -718,7 +718,7 @@ impl LivingEntity {
         }
     }
 
-    fn get_fall_sound(distance: i32) -> Sound {
+    const fn get_fall_sound(distance: i32) -> Sound {
         if distance > 4 {
             Sound::EntityGenericBigFall
         } else {

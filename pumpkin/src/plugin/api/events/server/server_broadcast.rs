@@ -23,7 +23,7 @@ impl ServerBroadcastEvent {
     /// # Returns
     /// A new instance of `ServerBroadcastEvent`.
     #[must_use]
-    pub fn new(message: TextComponent, sender: TextComponent) -> Self {
+    pub const fn new(message: TextComponent, sender: TextComponent) -> Self {
         Self {
             message,
             sender,

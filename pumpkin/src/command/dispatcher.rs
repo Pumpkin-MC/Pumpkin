@@ -251,7 +251,7 @@ impl CommandDispatcher {
 
         let Some(permission) = self.permissions.get(key) else {
             return Err(CommandFailed(TextComponent::text(
-                "Permission for Command not found".to_string(),
+                "Permission for Command not found".to_owned(),
             )));
         };
 

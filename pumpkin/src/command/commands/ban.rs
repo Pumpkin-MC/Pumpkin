@@ -1,5 +1,5 @@
 use crate::command::CommandResult;
-use crate::entity::EntityBase;
+use crate::entity::EntityBase as _;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
@@ -7,7 +7,7 @@ use crate::{
         tree::{CommandTree, builder::argument},
     },
     data::{
-        SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry,
+        SaveJSONConfiguration as _, banlist_serializer::BannedPlayerEntry,
         banned_player_data::BANNED_PLAYER_LIST,
     },
     entity::player::Player,
@@ -69,7 +69,7 @@ impl CommandExecutor for ReasonExecutor {
 async fn ban_player(sender: &CommandSender, player: &Player, reason: Option<String>) {
     let mut banned_players = BANNED_PLAYER_LIST.write().await;
 
-    let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
+    let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_owned());
     let profile = &player.gameprofile;
 
     if banned_players.get_entry(&player.gameprofile).is_some() {

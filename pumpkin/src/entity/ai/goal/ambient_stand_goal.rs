@@ -1,6 +1,6 @@
 use super::{Controls, Goal};
 use crate::entity::{ai::goal::GoalFuture, mob::Mob};
-use rand::Rng;
+use rand::Rng as _;
 
 pub struct AmbientStandGoal {
     goal_control: Controls,
@@ -8,7 +8,7 @@ pub struct AmbientStandGoal {
 }
 
 impl AmbientStandGoal {
-    fn reset_cooldown(&mut self) {
+    const fn reset_cooldown(&mut self) {
         // TODO: should be: this.cooldown = -entity.getMinAmbientStandDelay();
         // TODO: implement when Horses are implemented
         self.cooldown = 0;

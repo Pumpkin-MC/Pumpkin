@@ -11,13 +11,13 @@ use crate::{
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, CakeLikeProperties, EnumVariants, Integer0To6},
+    block_properties::{BlockProperties as _, CakeLikeProperties, EnumVariants as _, Integer0To6},
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::world::BlockFlags;
-use rand::{Rng, rng};
+use rand::{Rng as _, rng};
 
 #[pumpkin_block("minecraft:cake")]
 pub struct CakeBlock;

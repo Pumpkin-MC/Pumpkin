@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, WallTorchLikeProperties},
+    block_properties::{BlockProperties as _, WallTorchLikeProperties},
 };
 use pumpkin_world::BlockStateId;
 

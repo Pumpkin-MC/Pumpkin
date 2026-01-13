@@ -59,8 +59,8 @@ impl BedrockClient {
             Err(error) => {
                 log::warn!("Bedrock login failed: {error}");
                 let message = match error {
-                    LoginError::InvalidUsername => "Your username is invalid.".to_string(),
-                    _ => "Failed to log in. The data sent by your client was invalid.".to_string(),
+                    LoginError::InvalidUsername => "Your username is invalid.".to_owned(),
+                    _ => "Failed to log in. The data sent by your client was invalid.".to_owned(),
                 };
                 self.kick(DisconnectReason::LoginPacketNoRequest, message)
                     .await;
@@ -117,7 +117,7 @@ impl BedrockClient {
                 false,
                 VarUInt(0),
                 VarUInt(0),
-                CURRENT_BEDROCK_MC_VERSION.to_string(),
+                CURRENT_BEDROCK_MC_VERSION.to_owned(),
                 Experiments {
                     names_size: 0,
                     experiments_ever_toggled: false,

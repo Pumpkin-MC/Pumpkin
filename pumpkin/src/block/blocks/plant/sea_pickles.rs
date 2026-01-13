@@ -5,17 +5,17 @@ use crate::block::{
     UseWithItemArgs,
 };
 use crate::block::{BlockFuture, BlockIsReplacing};
-use crate::entity::EntityBase;
-use pumpkin_data::block_properties::{BlockProperties, Integer1To4};
+use crate::entity::EntityBase as _;
+use pumpkin_data::block_properties::{BlockProperties as _, Integer1To4};
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::Taggable as _;
 use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::BlockFlags;
-use rand::Rng;
+use rand::Rng as _;
 
 type SeaPickleProperties = pumpkin_data::block_properties::SeaPickleLikeProperties;
 

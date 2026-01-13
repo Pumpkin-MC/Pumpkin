@@ -4,7 +4,7 @@ use crate::entity::{ai::goal::ParentHandle, mob::Mob};
 use crate::world::World;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use rand::Rng;
+use rand::Rng as _;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -110,7 +110,7 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
         self.target_pos.up()
     }
 
-    fn should_reset_path(&self) -> bool {
+    const fn should_reset_path(&self) -> bool {
         self.trying_time % 40 == 0
     }
 

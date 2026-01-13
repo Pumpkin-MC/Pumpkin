@@ -3,7 +3,7 @@ use std::sync::{Arc, atomic::Ordering};
 use log::warn;
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
+    block_properties::{BlockProperties as _, CommandBlockLikeProperties, Facing},
 };
 use pumpkin_util::{
     GameMode, PermissionLvl,
@@ -55,7 +55,7 @@ impl CommandBlock {
     }
 
     /// Convert a [Facing] into a [Vector3] one block forward in the direction of `facing`
-    fn facing_to_offset(facing: Facing) -> Vector3<i32> {
+    const fn facing_to_offset(facing: Facing) -> Vector3<i32> {
         match facing {
             Facing::North => Vector3::new(0, 0, -1),
             Facing::South => Vector3::new(0, 0, 1),
@@ -149,7 +149,7 @@ impl CommandBlock {
         } else {
             if command == "Searge" && command_entity.track_output.load(Ordering::Relaxed) {
                 let mut last_output = command_entity.last_output.lock().await;
-                *last_output = "#itzlipofutzli".to_string();
+                *last_output = "#itzlipofutzli".to_owned();
                 return;
             }
 

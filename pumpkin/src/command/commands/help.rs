@@ -1,11 +1,11 @@
-use futures::StreamExt;
+use futures::StreamExt as _;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::color::{Color, NamedColor};
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
 use crate::command::args::command::CommandTreeArgumentConsumer;
-use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
+use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName as _};
 use crate::command::dispatcher::CommandError::InvalidConsumption;
 use crate::command::tree::builder::{argument, argument_default_name};
 use crate::command::tree::{Command, CommandTree};
@@ -19,7 +19,7 @@ const ARG_COMMAND: &str = "command";
 
 const COMMANDS_PER_PAGE: i32 = 7;
 
-fn page_number_consumer() -> BoundedNumArgumentConsumer<i32> {
+const fn page_number_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new().name("page").min(1)
 }
 

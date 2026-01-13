@@ -1,4 +1,4 @@
-use std::{net::IpAddr, str::FromStr};
+use std::{net::IpAddr, str::FromStr as _};
 
 use crate::{
     command::{
@@ -7,7 +7,7 @@ use crate::{
         tree::{CommandTree, builder::argument},
     },
     data::{
-        SaveJSONConfiguration, banlist_serializer::BannedIpEntry, banned_ip_data::BANNED_IP_LIST,
+        SaveJSONConfiguration as _, banlist_serializer::BannedIpEntry, banned_ip_data::BANNED_IP_LIST,
     },
     net::DisconnectReason,
     server::Server,
@@ -79,7 +79,7 @@ impl CommandExecutor for ReasonExecutor {
 }
 
 async fn ban_ip(sender: &CommandSender, server: &Server, target: &str, reason: Option<String>) {
-    let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
+    let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_owned());
 
     let Some(target_ip) = parse_ip(target, server).await else {
         sender

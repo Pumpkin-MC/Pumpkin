@@ -15,7 +15,7 @@ use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
-use rand::{Rng, rng};
+use rand::{Rng as _, rng};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
@@ -139,7 +139,7 @@ impl Stepping for DestroyEggGoal {
                     SoundCategory::Hostile,
                     &pos_f64,
                     0.7,
-                    0.9 + random * 0.2,
+                    random.mul_add(0.2, 0.9),
                 )
                 .await;
         })
@@ -158,7 +158,7 @@ impl Stepping for DestroyEggGoal {
                     SoundCategory::Blocks,
                     &pos_f64,
                     0.7,
-                    0.9 + random * 0.2,
+                    random.mul_add(0.2, 0.9),
                 )
                 .await;
         })

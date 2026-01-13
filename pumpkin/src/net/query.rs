@@ -10,7 +10,7 @@ use pumpkin_protocol::query::{
     CBasicStatus, CFullStatus, CHandshake, PacketType, RawQueryPacket, SHandshake, SStatusRequest,
 };
 use pumpkin_world::CURRENT_MC_VERSION;
-use rand::Rng;
+use rand::Rng as _;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 
 use crate::{PLUGIN_MANAGER, SHOULD_STOP, STOP_INTERRUPT, server::Server};
@@ -141,7 +141,7 @@ async fn handle_packet(
                             .active_plugins()
                             .await
                             .into_iter()
-                            .map(|meta| meta.name.to_string())
+                            .map(|meta| meta.name.to_owned())
                             .reduce(|acc, name| format!("{acc}, {name}"))
                             .unwrap_or_default();
 

@@ -1,12 +1,12 @@
 use crate::entity::item::ItemEntity;
 use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
-use bytes::BufMut;
+use bytes::BufMut as _;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::{EnumVariants, Integer0To15};
+use pumpkin_data::block_properties::{EnumVariants as _, Integer0To15};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection};
@@ -40,7 +40,6 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_world::entity::entity_data_flags::DATA_POSE;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::f32::consts::PI;
 use std::pin::Pin;
 use std::sync::{
     Arc,
@@ -248,7 +247,7 @@ pub enum RemovalReason {
 
 impl RemovalReason {
     #[must_use]
-    pub fn should_destroy(&self) -> bool {
+    pub const fn should_destroy(&self) -> bool {
         match self {
             Self::Killed | Self::Discarded => true,
             Self::UnloadedToChunk | Self::UnloadedWithPlayer | Self::ChangedDimension => false,
@@ -256,7 +255,7 @@ impl RemovalReason {
     }
 
     #[must_use]
-    pub fn should_save(&self) -> bool {
+    pub const fn should_save(&self) -> bool {
         match self {
             Self::Killed | Self::Discarded | Self::UnloadedWithPlayer | Self::ChangedDimension => {
                 false
@@ -516,8 +515,8 @@ impl Entity {
         let position = self.pos.load();
         let delta = target.sub(&position);
         let root = delta.x.hypot(delta.z);
-        let pitch = wrap_degrees(-delta.y.atan2(root) as f32 * 180.0 / PI);
-        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32 * 180.0 / PI) - 90.0);
+        let pitch = wrap_degrees((-delta.y.atan2(root) as f32).to_degrees());
+        let yaw = wrap_degrees((delta.z.atan2(delta.x) as f32).to_degrees() - 90.0);
         self.pitch.store(pitch);
         self.yaw.store(yaw);
     }
@@ -1148,9 +1147,9 @@ impl Entity {
         let cos = yaw.cos();
 
         Vector3::new(
-            input.x * cos - input.z * sin,
+            input.x.mul_add(cos, -(input.z * sin)),
             input.y,
-            input.z * cos + input.x * sin,
+            input.z.mul_add(cos, input.x * sin),
         )
     }
 
@@ -1276,7 +1275,7 @@ impl Entity {
             }
         }
 
-        let amplitude = rand::random::<f64>() * 0.2 + 0.1;
+        let amplitude = rand::random::<f64>().mul_add(0.2, 0.1);
 
         let axis = direction.to_axis().into();
 

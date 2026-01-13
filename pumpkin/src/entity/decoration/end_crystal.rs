@@ -10,7 +10,7 @@ pub struct EndCrystalEntity {
 }
 
 impl EndCrystalEntity {
-    pub fn new(entity: Entity) -> Self {
+    pub const fn new(entity: Entity) -> Self {
         Self { entity }
     }
 }

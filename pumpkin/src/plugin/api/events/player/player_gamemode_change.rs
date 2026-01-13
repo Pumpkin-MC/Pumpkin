@@ -32,7 +32,7 @@ impl PlayerGamemodeChangeEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerGamemodeChangeEvent`.
-    pub fn new(player: Arc<Player>, previous_gamemode: GameMode, new_gamemode: GameMode) -> Self {
+    pub const fn new(player: Arc<Player>, previous_gamemode: GameMode, new_gamemode: GameMode) -> Self {
         Self {
             player,
             previous_gamemode,

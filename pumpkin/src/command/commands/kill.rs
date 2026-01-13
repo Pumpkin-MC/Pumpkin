@@ -5,7 +5,7 @@ use crate::command::args::{Arg, ConsumedArgs};
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, require};
 use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
-use crate::entity::EntityBase;
+use crate::entity::EntityBase as _;
 use crate::server::Server;
 use CommandError::InvalidConsumption;
 

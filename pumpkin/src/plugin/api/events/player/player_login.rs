@@ -30,7 +30,7 @@ impl PlayerLoginEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerLoginEvent`.
-    pub fn new(player: Arc<Player>, kick_message: TextComponent) -> Self {
+    pub const fn new(player: Arc<Player>, kick_message: TextComponent) -> Self {
         Self {
             player,
             kick_message,

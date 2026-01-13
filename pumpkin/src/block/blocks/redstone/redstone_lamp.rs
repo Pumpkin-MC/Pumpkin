@@ -1,5 +1,5 @@
 use crate::block::{BlockFuture, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs};
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::BlockProperties as _;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 

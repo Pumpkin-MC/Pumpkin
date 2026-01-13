@@ -66,7 +66,7 @@ impl ArgumentConsumer for BossbarStyleArgumentConsumer {
             ];
             let suggestions: Vec<CommandSuggestion> = styles
                 .iter()
-                .map(|style| CommandSuggestion::new((*style).to_string(), None))
+                .map(|style| CommandSuggestion::new((*style).to_owned(), None))
                 .collect();
             Ok(Some(suggestions))
         })
@@ -85,7 +85,7 @@ impl<'a> FindArg<'a> for BossbarStyleArgumentConsumer {
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::BossbarStyle(data)) => Ok(data),
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

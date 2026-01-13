@@ -36,10 +36,14 @@ pub fn plugin_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     .to_string();
 
-    PLUGIN_METHODS
-        .lock()
-        .unwrap()
-        .insert(fn_name.to_string(), method);
+    match PLUGIN_METHODS.lock() {
+        Ok(mut plugins) => {
+            plugins.insert(fn_name.to_string(), method);
+        }
+        Err(_err) => {
+            println!("Failed to lock PLUGIN_METHODS");
+        }
+    }
 
     TokenStream::new()
 }

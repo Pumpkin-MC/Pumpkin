@@ -14,8 +14,9 @@ pub struct NbtCompound {
 }
 
 impl NbtCompound {
-    pub fn new() -> NbtCompound {
-        NbtCompound {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
             child_tags: Vec::new(),
         }
     }
@@ -43,7 +44,7 @@ impl NbtCompound {
             }
 
             let len = reader.get_u16_be()?;
-            reader.skip_bytes(len as i64)?;
+            reader.skip_bytes(i64::from(len))?;
 
             NbtTag::skip_data(reader, tag_id)?;
         }
@@ -53,8 +54,8 @@ impl NbtCompound {
 
     pub fn deserialize_content<R: Read + Seek>(
         reader: &mut NbtReadHelper<R>,
-    ) -> Result<NbtCompound, Error> {
-        let mut compound = NbtCompound::new();
+    ) -> Result<Self, Error> {
+        let mut compound = Self::new();
 
         loop {
             let tag_id = match reader.get_u8_be() {
@@ -95,12 +96,13 @@ impl NbtCompound {
         Ok(())
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.child_tags.is_empty()
     }
 
     pub fn put(&mut self, name: &str, value: impl Into<NbtTag>) {
-        let name = name.to_string();
+        let name = name.to_owned();
         if !self.child_tags.iter().any(|(key, _)| key == &name) {
             self.child_tags.push((name, value.into()));
         }
@@ -119,7 +121,7 @@ impl NbtCompound {
     }
 
     pub fn put_bool(&mut self, name: &str, value: bool) {
-        self.put(name, NbtTag::Byte(if value { 1 } else { 0 }));
+        self.put(name, NbtTag::Byte(i8::from(value)));
     }
 
     pub fn put_short(&mut self, name: &str, value: i16) {
@@ -141,15 +143,17 @@ impl NbtCompound {
         self.put(name, NbtTag::Double(value));
     }
 
-    pub fn put_component(&mut self, name: &str, value: NbtCompound) {
+    pub fn put_component(&mut self, name: &str, value: Self) {
         self.put(name, NbtTag::Compound(value));
     }
 
+    #[must_use]
     pub fn get_byte(&self, name: &str) -> Option<i8> {
-        self.get(name).and_then(|tag| tag.extract_byte())
+        self.get(name).and_then(super::tag::NbtTag::extract_byte)
     }
 
     #[inline]
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<&NbtTag> {
         self.child_tags
             .iter()
@@ -157,46 +161,57 @@ impl NbtCompound {
             .map(|r| &r.1)
     }
 
+    #[must_use]
     pub fn get_short(&self, name: &str) -> Option<i16> {
         self.get(name).and_then(|tag| tag.extract_short())
     }
 
+    #[must_use]
     pub fn get_int(&self, name: &str) -> Option<i32> {
         self.get(name).and_then(|tag| tag.extract_int())
     }
 
+    #[must_use]
     pub fn get_long(&self, name: &str) -> Option<i64> {
         self.get(name).and_then(|tag| tag.extract_long())
     }
 
+    #[must_use]
     pub fn get_float(&self, name: &str) -> Option<f32> {
         self.get(name).and_then(|tag| tag.extract_float())
     }
 
+    #[must_use]
     pub fn get_double(&self, name: &str) -> Option<f64> {
         self.get(name).and_then(|tag| tag.extract_double())
     }
 
+    #[must_use]
     pub fn get_bool(&self, name: &str) -> Option<bool> {
         self.get(name).and_then(|tag| tag.extract_bool())
     }
 
+    #[must_use]
     pub fn get_string(&self, name: &str) -> Option<&str> {
         self.get(name).and_then(|tag| tag.extract_string())
     }
 
+    #[must_use]
     pub fn get_list(&self, name: &str) -> Option<&[NbtTag]> {
         self.get(name).and_then(|tag| tag.extract_list())
     }
 
+    #[must_use]
     pub fn get_compound(&self, name: &str) -> Option<&NbtCompound> {
         self.get(name).and_then(|tag| tag.extract_compound())
     }
 
+    #[must_use]
     pub fn get_int_array(&self, name: &str) -> Option<&[i32]> {
         self.get(name).and_then(|tag| tag.extract_int_array())
     }
 
+    #[must_use]
     pub fn get_long_array(&self, name: &str) -> Option<&[i64]> {
         self.get(name).and_then(|tag| tag.extract_long_array())
     }

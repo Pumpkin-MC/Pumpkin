@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::str::FromStr as _;
 
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::Difficulty;
@@ -54,7 +54,7 @@ impl ArgumentConsumer for DifficultyArgumentConsumer {
             let difficulties = ["easy", "normal", "hard", "peaceful"];
             let suggestions: Vec<CommandSuggestion> = difficulties
                 .iter()
-                .map(|difficulty| CommandSuggestion::new((*difficulty).to_string(), None))
+                .map(|difficulty| CommandSuggestion::new((*difficulty).to_owned(), None))
                 .collect();
             Ok(Some(suggestions))
         })
@@ -73,7 +73,7 @@ impl<'a> FindArg<'a> for DifficultyArgumentConsumer {
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
             Some(Arg::Difficulty(data)) => Ok(*data),
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

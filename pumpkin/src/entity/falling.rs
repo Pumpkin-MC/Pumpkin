@@ -18,7 +18,7 @@ pub struct FallingEntity {
 }
 
 impl FallingEntity {
-    pub fn new(entity: Entity, block_state_id: BlockStateId) -> Self {
+    pub const fn new(entity: Entity, block_state_id: BlockStateId) -> Self {
         Self {
             entity,
             block_state_id,

@@ -9,7 +9,7 @@ pub struct WhitelistEntry {
 
 impl WhitelistEntry {
     #[must_use]
-    pub fn new(uuid: Uuid, name: String) -> Self {
+    pub const fn new(uuid: Uuid, name: String) -> Self {
         Self { uuid, name }
     }
 }

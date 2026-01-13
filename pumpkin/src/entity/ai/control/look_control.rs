@@ -3,7 +3,6 @@ use crate::entity::ai::control::Control;
 use crate::entity::mob::{Mob, MobEntity};
 use pumpkin_util::math::clamp_angle;
 use pumpkin_util::math::vector3::Vector3;
-use std::f32::consts::PI;
 use std::sync::Arc;
 
 // Please keep the atomic values out of here!!!
@@ -49,7 +48,7 @@ impl LookControl {
         );
     }
 
-    pub fn look_at_with_range(
+    pub const fn look_at_with_range(
         &mut self,
         x: f64,
         y: f64,
@@ -96,7 +95,7 @@ impl LookControl {
         self.clamp_head_yaw(mob).await;
     }
 
-    fn should_stay_horizontal() -> bool {
+    const fn should_stay_horizontal() -> bool {
         true
     }
 
@@ -120,11 +119,11 @@ impl LookControl {
         let d = position.x - mob_position.x;
         let e = position.y - mob.living_entity.entity.get_eye_y();
         let f = position.z - mob_position.z;
-        let g = (d * d + f * f).sqrt();
+        let g = d.hypot(f);
         if e.abs() <= 1.0E-5 && g.abs() <= 1.0E-5 {
             None
         } else {
-            Some(-(e.atan2(g) as f32 * 180.0 / PI))
+            Some(-(e.atan2(g) as f32).to_degrees())
         }
     }
 
@@ -136,7 +135,7 @@ impl LookControl {
         if e.abs() <= 1.0E-5 && d.abs() <= 1.0E-5 {
             None
         } else {
-            Some(e.atan2(d) as f32 * 180.0 / PI - 90.0)
+            Some((e.atan2(d) as f32).to_degrees() - 90.0)
         }
     }
 }

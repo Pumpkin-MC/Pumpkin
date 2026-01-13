@@ -143,7 +143,7 @@ where
 type HandlerMap = HashMap<&'static str, Vec<Box<dyn DynEventHandler>>>;
 
 /// Plugin loading state
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PluginState {
     Loading,
     Loaded,
@@ -228,7 +228,7 @@ impl PluginManager {
             plugins
                 .iter()
                 .filter(|p| p.is_active)
-                .map(|p| p.metadata.name.to_string())
+                .map(|p| p.metadata.name.to_owned())
                 .collect()
         };
 
@@ -329,7 +329,7 @@ impl PluginManager {
                 self.plugin_states
                     .write()
                     .await
-                    .insert(metadata.name.to_string(), PluginState::Loading);
+                    .insert(metadata.name.to_owned(), PluginState::Loading);
 
                 let self_ref = self
                     .self_ref
@@ -376,7 +376,7 @@ impl PluginManager {
                 // Spawn async task for plugin initialization
                 let self_ref_clone = Arc::clone(&self_ref);
                 let state_notify = Arc::clone(&self.state_notify);
-                let plugin_name = metadata.name.to_string();
+                let plugin_name = metadata.name.to_owned();
                 let loader_clone = loader.clone();
 
                 let task = tokio::spawn(async move {
@@ -479,7 +479,7 @@ impl PluginManager {
                     }
                 }
             }
-            return Err(ManagerError::PluginNotFound(plugin_name.to_string()));
+            return Err(ManagerError::PluginNotFound(plugin_name.to_owned()));
         }
     }
 
@@ -529,7 +529,7 @@ impl PluginManager {
             plugins
                 .iter()
                 .position(|p| p.metadata.name == name)
-                .ok_or_else(|| ManagerError::PluginNotFound(name.to_string()))?
+                .ok_or_else(|| ManagerError::PluginNotFound(name.to_owned()))?
         };
 
         let mut plugin = {

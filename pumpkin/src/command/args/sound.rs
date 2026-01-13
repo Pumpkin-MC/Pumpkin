@@ -61,7 +61,7 @@ impl<'a> FindArg<'a> for SoundArgumentConsumer {
                     Result::Ok,
                 )
             }
-            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_owned()))),
         }
     }
 }

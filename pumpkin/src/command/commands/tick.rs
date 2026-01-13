@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{
-        ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer, time::TimeArgumentConsumer,
+        ConsumedArgs, FindArg as _, bounded_num::BoundedNumArgumentConsumer, time::TimeArgumentConsumer,
     },
     dispatcher::CommandError,
     tree::{
@@ -24,14 +24,14 @@ fn nanos_to_millis_string(nanos: i64) -> String {
     format!("{:.2}", nanos as f64 / 1_000_000.0)
 }
 
-fn rate_consumer() -> BoundedNumArgumentConsumer<f32> {
+const fn rate_consumer() -> BoundedNumArgumentConsumer<f32> {
     BoundedNumArgumentConsumer::new()
         .name("rate")
         .min(1.0)
         .max(10000.0)
 }
 
-fn time_consumer() -> TimeArgumentConsumer {
+const fn time_consumer() -> TimeArgumentConsumer {
     TimeArgumentConsumer
 }
 

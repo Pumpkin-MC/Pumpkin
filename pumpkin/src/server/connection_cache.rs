@@ -9,7 +9,7 @@ use pumpkin_protocol::{
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
 use pumpkin_world::CURRENT_MC_VERSION;
-use std::{fs::File, io::Read, path::Path};
+use std::{fs::File, io::Read as _, path::Path};
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
 
@@ -126,7 +126,7 @@ impl CachedStatus {
                         || format!("other error: {e}; using default."),
                         |io_err| {
                             if io_err.kind() == std::io::ErrorKind::NotFound {
-                                "not found; using default.".to_string()
+                                "not found; using default.".to_owned()
                             } else {
                                 format!("I/O error: {io_err}; using default.")
                             }

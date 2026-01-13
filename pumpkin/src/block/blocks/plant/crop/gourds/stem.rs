@@ -6,10 +6,10 @@ use crate::block::{
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{
-        BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties, WheatLikeProperties,
+        BlockProperties as _, EnumVariants as _, Integer0To7, WallTorchLikeProperties, WheatLikeProperties,
     },
     tag,
-    tag::Taggable,
+    tag::Taggable as _,
 };
 use pumpkin_util::{
     math::position::BlockPos,
@@ -19,7 +19,7 @@ use pumpkin_world::{
     BlockStateId,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::Rng;
+use rand::Rng as _;
 
 type StemProperties = WheatLikeProperties;
 type AttachedStemProperties = WallTorchLikeProperties;

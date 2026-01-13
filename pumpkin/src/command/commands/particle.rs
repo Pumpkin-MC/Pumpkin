@@ -3,7 +3,7 @@ use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{
-        ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
+        ConsumedArgs, FindArg as _, bounded_num::BoundedNumArgumentConsumer,
         position_3d::Position3DArgumentConsumer, resource::particle::ParticleArgumentConsumer,
     },
     tree::{CommandTree, builder::argument},

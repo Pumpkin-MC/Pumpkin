@@ -2,7 +2,10 @@
 name = "pumpkin-world"
 version.workspace = true
 edition.workspace = true
-rust-version = "1.89"
+rust-version.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 pumpkin-nbt.workspace = true

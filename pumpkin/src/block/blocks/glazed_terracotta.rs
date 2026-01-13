@@ -1,5 +1,5 @@
 use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnPlaceArgs};
-use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties as _, WallTorchLikeProperties};
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_world::BlockStateId;
 

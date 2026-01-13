@@ -28,7 +28,7 @@ impl PlayerJoinEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerJoinEvent`.
-    pub fn new(player: Arc<Player>, join_message: TextComponent) -> Self {
+    pub const fn new(player: Arc<Player>, join_message: TextComponent) -> Self {
         Self {
             player,
             join_message,

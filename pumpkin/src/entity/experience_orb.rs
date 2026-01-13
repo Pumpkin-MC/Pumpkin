@@ -45,7 +45,7 @@ impl ExperienceOrbEntity {
         }
     }
 
-    fn round_to_orb_size(value: u32) -> u32 {
+    const fn round_to_orb_size(value: u32) -> u32 {
         if value >= 2477 {
             2477
         } else if value >= 1237 {

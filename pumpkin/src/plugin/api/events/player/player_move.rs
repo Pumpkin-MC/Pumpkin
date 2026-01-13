@@ -34,7 +34,7 @@ impl PlayerMoveEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerMoveEvent`.
-    pub fn new(player: Arc<Player>, from: Vector3<f64>, to: Vector3<f64>) -> Self {
+    pub const fn new(player: Arc<Player>, from: Vector3<f64>, to: Vector3<f64>) -> Self {
         Self {
             player,
             from,

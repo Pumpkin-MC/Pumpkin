@@ -31,7 +31,7 @@ impl PlayerChatEvent {
     ///
     /// # Returns
     /// A new instance of `PlayerChatEvent`.
-    pub fn new(player: Arc<Player>, message: String, recipients: Vec<Arc<Player>>) -> Self {
+    pub const fn new(player: Arc<Player>, message: String, recipients: Vec<Arc<Player>>) -> Self {
         Self {
             player,
             message,

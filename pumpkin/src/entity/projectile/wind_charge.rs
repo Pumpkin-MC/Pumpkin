@@ -27,7 +27,7 @@ pub struct WindChargeEntity {
 
 impl WindChargeEntity {
     #[must_use]
-    pub fn new(thrown_item_entity: ThrownItemEntity) -> Self {
+    pub const fn new(thrown_item_entity: ThrownItemEntity) -> Self {
         Self {
             deflect_cooldown: AtomicU8::new(DEFAULT_DEFLECT_COOLDOWN),
             thrown_item_entity,

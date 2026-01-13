@@ -28,7 +28,7 @@ impl Scoreboard {
         }
         world
             .broadcast_packet_all(&CUpdateObjectives::new(
-                objective.name.to_string(),
+                objective.name.to_owned(),
                 pumpkin_protocol::java::client::play::Mode::Add,
                 objective.display_name,
                 objective.render_type,
@@ -38,7 +38,7 @@ impl Scoreboard {
         world
             .broadcast_packet_all(&CDisplayObjective::new(
                 ScoreboardDisplaySlot::Sidebar,
-                objective.name.to_string(),
+                objective.name.to_owned(),
             ))
             .await;
     }
@@ -53,8 +53,8 @@ impl Scoreboard {
         }
         world
             .broadcast_packet_all(&CUpdateScore::new(
-                score.entity_name.to_string(),
-                score.objective_name.to_string(),
+                score.entity_name.to_owned(),
+                score.objective_name.to_owned(),
                 score.value,
                 score.display_name,
                 score.number_format,

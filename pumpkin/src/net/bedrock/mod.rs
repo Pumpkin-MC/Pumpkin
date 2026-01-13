@@ -41,8 +41,8 @@ use pumpkin_protocol::{
         },
     },
     codec::u24,
-    packet::Packet,
-    serial::PacketRead,
+    packet::Packet as _,
+    serial::PacketRead as _,
 };
 use std::net::SocketAddr;
 use tokio::{
@@ -423,7 +423,7 @@ impl BedrockClient {
         Ok(())
     }
 
-    fn handle_ack(_ack: &Ack) {}
+    const fn handle_ack(_ack: &Ack) {}
 
     async fn handle_frame_set(self: &Arc<Self>, server: &Arc<Server>, frame_set: FrameSet) {
         // TODO: Send all ACKs in short intervals in batches

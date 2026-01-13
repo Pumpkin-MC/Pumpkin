@@ -13,7 +13,7 @@ pub enum ChunkConfig {
 
 impl Default for ChunkConfig {
     fn default() -> Self {
-        Self::Anvil(Default::default())
+        Self::Anvil(AnvilChunkConfig::default())
     }
 }
 
@@ -41,9 +41,9 @@ impl Default for ChunkCompression {
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
 pub enum Compression {
-    /// GZip Compression
+    /// `GZip` Compression
     GZip,
-    /// ZLib Compression
+    /// `ZLib` Compression
     ZLib,
     /// LZ4 Compression (since 24w04a)
     LZ4,

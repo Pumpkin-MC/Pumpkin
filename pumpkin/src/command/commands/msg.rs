@@ -4,7 +4,7 @@ use pumpkin_util::text::TextComponent;
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{
-        Arg, ConsumedArgs, FindArgDefaultName, message::MsgArgConsumer,
+        Arg, ConsumedArgs, FindArgDefaultName as _, message::MsgArgConsumer,
         players::PlayersArgumentConsumer,
     },
     tree::{
@@ -12,7 +12,7 @@ use crate::command::{
         builder::{argument, argument_default_name},
     },
 };
-use crate::entity::EntityBase;
+use crate::entity::EntityBase as _;
 use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 3] = ["msg", "tell", "w"];

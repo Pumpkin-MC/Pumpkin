@@ -30,7 +30,7 @@ use pumpkin_util::{
 
 use crate::{
     command::CommandSender,
-    entity::{EntityBase, player::Player},
+    entity::{EntityBase as _, player::Player},
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent},
     server::{Server, seasonal_events},
@@ -47,7 +47,7 @@ impl BedrockClient {
         if chunk_radius.0 < 1 {
             self.kick(
                 DisconnectReason::Kicked,
-                "Cannot have zero or negative view distance!".to_string(),
+                "Cannot have zero or negative view distance!".to_owned(),
             )
             .await;
             return;

@@ -17,7 +17,7 @@ use crate::{
 use pumpkin_protocol::{ClientPacket, Property};
 use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
 use serde::Deserialize;
-use sha1::Digest;
+use sha1::Digest as _;
 use sha2::Sha256;
 use tokio::task::JoinHandle;
 
@@ -74,7 +74,7 @@ pub struct PlayerConfig {
 impl Default for PlayerConfig {
     fn default() -> Self {
         Self {
-            locale: "en_us".to_string(),
+            locale: "en_us".to_owned(),
             view_distance: NonZeroU8::new(16).unwrap(),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,

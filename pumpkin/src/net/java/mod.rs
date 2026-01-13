@@ -14,7 +14,7 @@ use pumpkin_protocol::java::server::play::{
     SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::{
-    ClientPacket, ConnectionState, PacketDecodeError, RawPacket, ServerPacket,
+    ClientPacket, ConnectionState, PacketDecodeError, RawPacket, ServerPacket as _,
     codec::var_int::VarInt,
     java::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect, play::CPlayDisconnect},
@@ -33,8 +33,8 @@ use pumpkin_protocol::{
             status::{SStatusPingRequest, SStatusRequest},
         },
     },
-    packet::Packet,
-    ser::{NetworkWriteExt, ReadingError, WritingError},
+    packet::Packet as _,
+    ser::{NetworkWriteExt as _, ReadingError, WritingError},
 };
 use pumpkin_util::text::TextComponent;
 use tokio::sync::Notify;

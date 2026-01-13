@@ -7,7 +7,7 @@ use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, JukeboxLikeProperties},
+    block_properties::{BlockProperties as _, JukeboxLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_registry::SYNCED_REGISTRIES;
