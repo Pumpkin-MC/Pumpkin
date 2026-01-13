@@ -299,7 +299,13 @@ impl PlayerInventory {
                 player
                     .enqueue_slot_set_packet(&CSetPlayerInventory::new(
                         (room_for_stack as i32).into(),
-                        &stack.clone().into(),
+                        &self
+                            .get_stack(room_for_stack as usize)
+                            .await
+                            .lock()
+                            .await
+                            .clone()
+                            .into(),
                     ))
                     .await;
             }
