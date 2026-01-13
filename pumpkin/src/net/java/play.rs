@@ -1104,7 +1104,7 @@ impl JavaClient {
                     player.gameprofile.name,
                     self.id,
                 );
-                player.send_client_information();
+                player.send_client_information().await;
             }
         } else {
             self.kick(TextComponent::text("Invalid hand or chat type"))
