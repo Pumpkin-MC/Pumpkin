@@ -1419,7 +1419,7 @@ pub struct GenerationSchedule {
 
     pending_writes: PendingWrites,
     running_task_count: u16,
-    recv_chunk: crossfire::MRx<(ChunkPos, RecvChunk)>,
+    recv_chunk: crossfire::MAsyncRx<(ChunkPos, RecvChunk)>,
     io_read: crossfire::MTx<ChunkPos>,
     io_write: crossfire::Tx<Vec<(ChunkPos, Chunk)>>,
     generate: crossfire::MTx<(ChunkPos, Cache, StagedChunkEnum)>,
@@ -1437,7 +1437,7 @@ impl GenerationSchedule {
         join_set: &mut JoinSet<()>,
     ) {
         let tracker = &level.chunk_system_tasks;
-        let (send_chunk, recv_chunk) = crossfire::mpmc::unbounded_blocking();
+        let (send_chunk, recv_chunk) = crossfire::mpmc::unbounded_async();
         let (send_read_io, recv_read_io) = crossfire::mpmc::unbounded_async();
         let (send_write_io, recv_write_io) = crossfire::spsc::unbounded_async();
         let (send_gen, recv_gen) = crossfire::mpmc::unbounded_blocking();
@@ -2172,7 +2172,7 @@ impl GenerationSchedule {
             if self.queue.is_empty() {
                 // debug!("the queue is empty. thread sleep");
                 while self.running_task_count > 0 && self.queue.is_empty() {
-                    let (pos, data) = self.recv_chunk.recv().expect("recv_chunk stop");
+                    let (pos, data) = self.recv_chunk.recv().await.expect("recv_chunk stop");
                     self.receive_chunk(pos, data);
                     self.resort_work(self.send_level.get());
                 }
@@ -2186,7 +2186,7 @@ impl GenerationSchedule {
         }
         log::info!("Waiting for all generation tasks to be finished");
         while self.running_task_count > 0 {
-            let (pos, data) = self.recv_chunk.recv().expect("recv_chunk stop");
+            let (pos, data) = self.recv_chunk.recv().await.expect("recv_chunk stop");
             self.receive_chunk(pos, data);
         }
         log::info!("saving all chunks");
