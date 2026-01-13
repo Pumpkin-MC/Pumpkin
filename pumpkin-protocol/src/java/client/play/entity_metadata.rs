@@ -77,4 +77,5 @@ pub enum MetaDataType {
     Vector3f = 34,
     QuaternionF = 35,
     Profile = 36,
+    HumanoidArm = 38,
 }
