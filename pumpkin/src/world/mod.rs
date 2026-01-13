@@ -56,7 +56,6 @@ use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::start_game::CStartGame;
-use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::ser::serializer::Serializer;
