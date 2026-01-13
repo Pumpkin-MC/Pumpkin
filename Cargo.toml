@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "pumpkin-api-macros",
     "pumpkin-config",
