@@ -16,9 +16,11 @@ members = [
 [workspace.package]
 version = "0.1.0-dev+1.21.11"
 edition = "2024"
+rust-version = "1.89"
 
 [profile.release]
 lto = true
+strip = "debuginfo"
 codegen-units = 1
 
 [profile.bench]
@@ -28,60 +30,60 @@ debug = true
 inherits = "release"
 debug = true
 
+[profile.dev]
+debug = "line-tables-only"
+
 [workspace.dependencies]
-log = "0.4"
-tokio = { version = "1.49", default-features = false }
-syn = { version = "2.0", default-features = false, features=["printing"] }
-
-
-thiserror = "2.0"
-
-bytes = "1.11"
+log = "*"
+tokio = { version = "*", default-features = false }
+syn = { version = "*", default-features = false, features = ["printing"] }
+thiserror = "*"
+bytes = { version = "*", default-features = false }
 
 # Concurrency/Parallelism and Synchronization
-futures = { version = "0.3", default-features = false, features = ["executor"] }
-rayon = "1.11"
-crossbeam = "0.8"
+futures = { version = "*", default-features = false, features = ["executor"] }
+rayon = "*"
+crossbeam = "*"
 
-uuid = { version = "1.19", features = ["serde", "v3", "v4"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+uuid = { version = "*", features = ["serde", "v3", "v4"] }
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
 
-tempfile = { version = "3.24.0", default-features = false }
-proc-macro-error2 = "2"
-aes = "0.8"
-async-compression = "0.4.37"
-base64 = "0.22.1"
-bitflags = "2.10.0"
-cesu8 = "1.1"
-cfb8 = "0.8"
-colored = "3.0"
-console-subscriber = { version = "0.5.0", default-features = false }
-crc-fast = "1.9.0"
-criterion = { version = "0.8", default-features = false }
-crossbeam-utils = "0.8.21"
-crossfire = "2.1.10"
-dashmap = "6.1"
-ecdsa = "0.16.9"
-enum_dispatch = "0.3.13"
-env_logger = "0.11.8"
-flate2 = "1.1.8"
-heck = "0.5"
-hmac = "=0.13.0-rc.3"
-indexmap = "2.13"
-itertools = "0.14.0"
-libloading = "0.8"
-lru = "0.16.3"
-lz4-java-wrc = "0.2.0"
-md5 = "0.8"
-num-bigint = "0.4"
-num-derive = "0.4"
-num-traits = "0.2"
-num_cpus = "1.17.0"
-p384 = "0.13.1"
-phf = "0.13.1"
-pkcs8 = "=0.11.0-rc.8"
-proc-macro2 = "1.0"
+tempfile = { version = "*", default-features = false }
+proc-macro-error2 = { version = "*", default-features = false }
+aes = "*"
+async-compression = "*"
+base64 = "*"
+bitflags = "*"
+cesu8 = "*"
+cfb8 = "*"
+colored = "*"
+console-subscriber = { version = "*", default-features = false }
+crc-fast = { version = "*", features = ["std"], default-features = false }
+criterion = { version = "*", default-features = false }
+crossbeam-utils = { version = "*", default-features = false }
+crossfire = "*"
+dashmap = "*"
+ecdsa = { version = "*", default-features = false }
+enum_dispatch = "*"
+env_logger = { version = "*", default-features = false }
+flate2 = { version = "*", features = ["any_impl", "miniz_oxide"], default-features = false }
+heck = "*"
+hmac = ">=0.13.0-rc.3"
+indexmap = "*"
+itertools = { version = "*", features = ["use_alloc"], default-features = false }
+libloading = "*"
+lru = { version = "*", default-features = false }
+lz4-java-wrc = { version = "*", features = ["lz4_flex"], default-features = false }
+md5 = { version = "*", default-features = false }
+num-bigint = { version = "*", default-features = false }
+num-derive = "*"
+num-traits = "*"
+num_cpus = "*"
+p384 = { version = "*", features = ["pkcs8", "std"], default-features = false }
+phf = { version = "*", default-features = false }
+pkcs8 = ">=0.11.0-rc.8"
+proc-macro2 = { version = "*", default-features = false }
 pumpkin-config = { path = "pumpkin-config" }
 pumpkin-data = { path = "pumpkin-data" }
 pumpkin-inventory = { path = "pumpkin-inventory" }
@@ -91,22 +93,22 @@ pumpkin-protocol = { path = "pumpkin-protocol" }
 pumpkin-registry = { path = "pumpkin-registry" }
 pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
-quote = "1.0"
+quote = "*"
 rand = { git = "https://github.com/rust-random/rand"}
-rsa = "=0.10.0-rc.10"
-rustc-hash = "2.1.1"
-rustyline-async = "0.4.7"
-ruzstd = "0.8.2"
-serde_json5 = "0.2.1"
-sha1 = "=0.11.0-rc.3"
-sha2 = "=0.11.0-rc.3"
-signature = "2.2.0"
-simplelog = "0.12.2"
-slotmap = "1.1"
-take_mut = "0.2.2"
-temp-dir = "0.1.16"
-thread_local = "1.1.9"
-time = "0.3"
-tokio-util = "0.7.18"
-toml = "0.9"
-ureq = "3.1.4"
+rsa = ">=0.10.0-rc.12"
+rustc-hash = "*"
+rustyline-async = "*"
+ruzstd = "*"
+serde_json5 = "*"
+sha1 = ">=0.11.0-rc.3"
+sha2 = ">=0.11.0-rc.3"
+signature = "*"
+simplelog = "*"
+slotmap = "*"
+take_mut = "*"
+temp-dir = "*"
+thread_local = "*"
+time = "*"
+tokio-util = "*"
+toml = "*"
+ureq = "*"

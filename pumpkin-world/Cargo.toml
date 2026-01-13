@@ -2,7 +2,7 @@
 name = "pumpkin-world"
 version.workspace = true
 edition.workspace = true
-rust-version = "1.89"
+rust-version.workspace = true
 
 [dependencies]
 pumpkin-nbt.workspace = true
@@ -17,8 +17,6 @@ bytes.workspace = true
 tokio = { workspace = true, features = [
     "macros",
     "rt-multi-thread",
-    "sync",
-    "io-std",
     "signal",
     "fs",
     "io-util",
@@ -58,12 +56,12 @@ slotmap.workspace = true
 crossfire.workspace = true
 
 [dev-dependencies]
-criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
+criterion = { workspace = true}
 temp-dir.workspace = true
 # Print log info inside tests when needed
 env_logger.workspace = true
 # Allows us to modify the config
-pumpkin-config = { workspace = true, features = ["test_helper"] }
+pumpkin-config = { workspace = true}
 # Deserialize NaN and Inf
 serde_json5.workspace = true
 
