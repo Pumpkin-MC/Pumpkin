@@ -1,6 +1,7 @@
 use core::f32;
 use std::collections::{BinaryHeap, HashSet, VecDeque};
 use std::f64::consts::TAU;
+use std::mem;
 use std::num::NonZeroU8;
 use std::ops::AddAssign;
 use std::sync::Arc;
@@ -1460,6 +1461,18 @@ impl Player {
 
     async fn handle_killed(&self, death_msg: TextComponent) {
         self.set_client_loaded(false);
+        let block_pos = self.position().to_block_pos();
+
+        for item in &self.inventory().main_inventory {
+            let mut lock = item.lock().await;
+            self.world()
+                .drop_stack(
+                    &block_pos,
+                    mem::replace(&mut *lock, ItemStack::EMPTY.clone()),
+                )
+                .await;
+        }
+
         self.client
             .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
             .await;

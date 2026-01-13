@@ -133,7 +133,8 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         damage_type: DamageType,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            self.damage_with_context(caller, amount, damage_type, None, None, None)
+            caller
+                .damage_with_context(caller, amount, damage_type, None, None, None)
                 .await
         })
     }
@@ -156,16 +157,17 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     fn damage_with_context<'a>(
         &'a self,
-        _caller: &'a dyn EntityBase,
-        _amount: f32,
-        _damage_type: DamageType,
-        _position: Option<Vector3<f64>>,
-        _source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
+        caller: &'a dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&'a dyn EntityBase>,
+        cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async {
-            // Just do nothing
-            false
+        Box::pin(async move {
+            caller
+                .damage_with_context(caller, amount, damage_type, position, source, cause)
+                .await
         })
     }
 
@@ -222,8 +224,8 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     /// Kills the Entity.
     fn kill<'a>(&'a self, caller: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            if let Some(living) = self.get_living_entity() {
-                living
+            if self.get_living_entity().is_some() {
+                caller
                     .damage(caller, f32::MAX, DamageType::GENERIC_KILL)
                     .await;
             } else {

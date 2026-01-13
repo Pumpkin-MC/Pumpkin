@@ -108,6 +108,7 @@ use pumpkin_util::{
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::chunk::palette::BlockPalette;
+use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldFuture};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, block::entities::BlockEntity,
@@ -1841,9 +1842,11 @@ impl World {
 
         player.hunger_manager.restart();
 
-        let info = &self.level_info.read().await;
+        let info = self.level_info.read().await;
+
         if !info.game_rules.keep_inventory {
             player.set_experience(0, 0.0, 0).await;
+            player.inventory.clear().await;
         }
 
         // Teleport
