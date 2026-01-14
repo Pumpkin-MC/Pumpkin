@@ -306,9 +306,9 @@ impl BlockRegistryExt for BlockRegistry {
     fn can_place_at(
         &self,
         block: &pumpkin_data::Block,
+        state: &BlockState,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
-        face: BlockDirection,
     ) -> bool {
         futures::executor::block_on(async move {
             self.can_place_at(
@@ -317,8 +317,8 @@ impl BlockRegistryExt for BlockRegistry {
                 block_accessor,
                 None,
                 block,
+                state,
                 block_pos,
-                face,
                 None,
             )
             .await
@@ -493,8 +493,8 @@ impl BlockRegistry {
         block_accessor: &dyn BlockAccessor,
         player: Option<&Player>,
         block: &Block,
+        state: &BlockState,
         position: &BlockPos,
-        direction: BlockDirection,
         use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -505,8 +505,8 @@ impl BlockRegistry {
                     world,
                     block_accessor,
                     block,
+                    state,
                     position,
-                    direction,
                     player,
                     use_item_on,
                 })

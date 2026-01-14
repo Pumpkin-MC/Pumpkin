@@ -1999,8 +1999,8 @@ impl JavaClient {
                 world.as_ref(),
                 Some(player),
                 block,
+                block.default_state,
                 &final_block_pos,
-                final_face,
                 Some(&use_item_on),
             )
             .await

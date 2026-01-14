@@ -14,6 +14,8 @@ use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
 use tokio::sync::Mutex;
 
+pub mod drowned;
+pub mod skeleton;
 pub mod zombie;
 
 pub struct MobEntity {

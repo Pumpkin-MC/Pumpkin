@@ -19,11 +19,11 @@ use rand::{Rng, rng};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
-pub struct Zombie {
-    mob_entity: MobEntity,
+pub struct ZombieEntity {
+    pub mob_entity: MobEntity,
 }
 
-impl Zombie {
+impl ZombieEntity {
     pub async fn make(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let zombie = Self { mob_entity };
@@ -55,9 +55,9 @@ impl Zombie {
     }
 }
 
-impl NBTStorage for Zombie {}
+impl NBTStorage for ZombieEntity {}
 
-impl Mob for Zombie {
+impl Mob for ZombieEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

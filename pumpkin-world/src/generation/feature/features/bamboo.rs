@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockState,
     block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1},
     tag,
     tag::Taggable,
@@ -32,7 +32,8 @@ impl BambooFeature {
     ) -> bool {
         let mut i = 0;
         if chunk.is_air(&pos.0) {
-            if block_registry.can_place_at(&Block::BAMBOO, chunk, &pos, BlockDirection::Up) {
+            if block_registry.can_place_at(&Block::BAMBOO, Block::BAMBOO.default_state, chunk, &pos)
+            {
                 let height = random.next_bounded_i32(12) + 5;
                 if random.next_f32() < self.probability {
                     let rnd = random.next_bounded_i32(4) + 1;

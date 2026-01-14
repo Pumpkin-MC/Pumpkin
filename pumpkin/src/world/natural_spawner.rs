@@ -8,12 +8,16 @@ use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::WorldgenBiome::MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS;
 use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomImpl, get_seed};
+use pumpkin_world::chunk::io::Dirtiable;
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use rand::seq::IndexedRandom;
 use rand::{Rng, rng};
@@ -40,8 +44,8 @@ impl MobCounts {
     }
 }
 
+#[derive(Default)]
 pub struct LocalMobCapCalculator {
-    world: Arc<World>,
     player_mob_counts: HashMap<i32, MobCounts>,
     players_near_chunk: HashMap<Vector2<i32>, Vec<i32>>,
 }
@@ -57,14 +61,6 @@ impl fmt::Debug for LocalMobCapCalculator {
 }
 
 impl LocalMobCapCalculator {
-    pub fn new(world: &Arc<World>) -> Self {
-        Self {
-            world: world.clone(), // can anybody get rid of this clone?
-            player_mob_counts: HashMap::new(),
-            players_near_chunk: HashMap::new(),
-        }
-    }
-
     const fn calc_distance(chunk_pos: Vector2<i32>, player_pos: &Vector3<f64>) -> f64 {
         let dx = ((chunk_pos.x << 4) + 8) as f64 - player_pos.x;
         let dy = ((chunk_pos.y << 4) + 8) as f64 - player_pos.z;
@@ -77,10 +73,7 @@ impl LocalMobCapCalculator {
         chunk_pos: &Vector2<i32>,
     ) -> &'b Vec<i32> {
         match players_near_chunk.entry(*chunk_pos) {
-            Entry::Occupied(value) => {
-                // debug!("chunk {chunk_pos:?} near player {:?}", value.get());
-                value.into_mut()
-            }
+            Entry::Occupied(value) => value.into_mut(),
             Entry::Vacant(entry) => {
                 let mut players = Vec::new();
                 for (_uuid, player) in world.players.read().await.iter() {
@@ -91,14 +84,17 @@ impl LocalMobCapCalculator {
                         players.push(player.entity_id());
                     }
                 }
-                // debug!("chunk {chunk_pos:?} near player {:?}", players);
                 entry.insert(players)
             }
         }
     }
-    pub async fn add_mob(&mut self, chunk_pos: &Vector2<i32>, category: &'static MobCategory) {
-        let players =
-            Self::get_players_near(&mut self.players_near_chunk, &self.world, chunk_pos).await;
+    pub async fn add_mob(
+        &mut self,
+        chunk_pos: &Vector2<i32>,
+        world: &Arc<World>,
+        category: &'static MobCategory,
+    ) {
+        let players = Self::get_players_near(&mut self.players_near_chunk, world, chunk_pos).await;
         for player in players {
             self.player_mob_counts
                 .entry(*player)
@@ -113,10 +109,10 @@ impl LocalMobCapCalculator {
     pub async fn can_spawn(
         &mut self,
         category: &'static MobCategory,
+        world: &Arc<World>,
         chunk_pos: &Vector2<i32>,
     ) -> bool {
-        let players =
-            Self::get_players_near(&mut self.players_near_chunk, &self.world, chunk_pos).await;
+        let players = Self::get_players_near(&mut self.players_near_chunk, world, chunk_pos).await;
         for player in players {
             if let Some(count) = self.player_mob_counts.get(player) {
                 if count.can_spawn(category) {
@@ -131,7 +127,7 @@ impl LocalMobCapCalculator {
 }
 
 #[derive(Debug)]
-struct PointCharge(Vector3<f64>, f64); // pos charge
+struct PointCharge(Vector3<f64>, f64);
 
 impl PointCharge {
     fn get_potential_change(&self, pos: &BlockPos) -> f64 {
@@ -193,7 +189,7 @@ impl SpawnState {
         world: &Arc<World>,
     ) -> Self {
         let mut potential = PotentialCalculator::default();
-        let mut local_mob_cap = LocalMobCapCalculator::new(world);
+        let mut local_mob_cap = LocalMobCapCalculator::default();
         let mut counter = MobCounts::default();
         for entity in entities.read().await.values() {
             let entity = entity.get_entity();
@@ -209,7 +205,7 @@ impl SpawnState {
             }
             if entity_type.mob {
                 local_mob_cap
-                    .add_mob(&entity.chunk_pos.load(), entity_type.category)
+                    .add_mob(&entity.chunk_pos.load(), world, entity_type.category)
                     .await;
             }
             counter.add(entity_type.category);
@@ -232,11 +228,12 @@ impl SpawnState {
     }
     async fn can_spawn_for_category_local(
         &mut self,
+        world: &Arc<World>,
         category: &'static MobCategory,
         chunk_pos: &Vector2<i32>,
     ) -> bool {
         self.local_mob_cap_calculator
-            .can_spawn(category, chunk_pos)
+            .can_spawn(category, world, chunk_pos)
             .await
     }
     async fn can_spawn(
@@ -283,6 +280,7 @@ impl SpawnState {
         self.local_mob_cap_calculator
             .add_mob(
                 &Vector2::<i32>::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)),
+                world,
                 entity_type.category,
             )
             .await;
@@ -296,13 +294,23 @@ pub fn get_filtered_spawning_categories(
     spawn_enemies: bool,
     spawn_passives: bool,
 ) -> Vec<&'static MobCategory> {
-    let mut ret = Vec::with_capacity(8);
+    let mut ret = Vec::with_capacity(MobCategory::SPAWNING_CATEGORIES.len());
     for category in MobCategory::SPAWNING_CATEGORIES {
-        if (spawn_friendlies || !category.is_friendly)
-            && (spawn_enemies || category.is_friendly)
-            && (spawn_passives || !category.is_persistent)
-            && state.can_spawn_for_category_global(category)
-        {
+        let is_type_allowed = if category.is_friendly {
+            spawn_friendlies
+        } else {
+            spawn_enemies
+        };
+
+        if !is_type_allowed {
+            continue;
+        }
+
+        if category.is_persistent && !spawn_passives {
+            continue;
+        }
+
+        if state.can_spawn_for_category_global(category) {
             ret.push(category);
         }
     }
@@ -319,11 +327,10 @@ pub async fn spawn_for_chunk(
     // debug!("spawn for chunk {:?}", chunk_pos);
     for category in spawn_list {
         if spawn_state
-            .can_spawn_for_category_local(category, chunk_pos)
+            .can_spawn_for_category_local(world, category, chunk_pos)
             .await
         {
             let random_pos = get_random_pos_within(world.min_y, chunk_pos, chunk).await;
-            // debug!("try random pos: {:?}", random_pos);
             if random_pos.0.y > world.min_y {
                 spawn_category_for_position(category, world, random_pos, chunk_pos, spawn_state)
                     .await;
@@ -336,8 +343,10 @@ pub async fn get_random_pos_within(
     chunk_pos: &Vector2<i32>,
     chunk: &Arc<RwLock<ChunkData>>,
 ) -> BlockPos {
-    let x = (chunk_pos.x << 4) + rng().random_range(0..16);
-    let z = (chunk_pos.y << 4) + rng().random_range(0..16);
+    let mut rng = Xoroshiro::from_seed(get_seed());
+
+    let x = (chunk_pos.x << 4) + rng.next_bounded_i32(16);
+    let z = (chunk_pos.y << 4) + rng.next_bounded_i32(16);
     let temp_y =
         chunk
             .read()
@@ -345,7 +354,7 @@ pub async fn get_random_pos_within(
             .heightmap
             .get_height(ChunkHeightmapType::WorldSurface, x, z, min_y)
             + 1;
-    let y = rng().random_range(min_y..=temp_y);
+    let y = rng.next_inbetween_i32(min_y, temp_y);
     BlockPos::new(x, y, z)
 }
 
@@ -358,33 +367,34 @@ pub async fn spawn_category_for_position(
 ) {
     // TODO StructureManager structureManager = level.structureManager();
     // TODO blockState.isRedstoneConductor(chunk, pos) is true then return
+    let mut batch_buffer = vec![];
     let mut spawn_cluster_size = 0;
     let mut new_pos = pos;
+    let player_positions: Vec<_> = world
+        .players
+        .read()
+        .await
+        .values()
+        .map(|p| p.position())
+        .collect();
     for _ in 0..3 {
         let mut new_x = new_pos.0.x;
         let mut new_z = new_pos.0.z;
+
         let mut random_group_size = (rng().random::<f32>() * 4.).ceil() as i32;
         let mut inc = 0;
-        #[expect(unused_variables)]
-        let group_size = 0;
+
         'outer: while inc < random_group_size {
             new_x += rng().random_range(0..6) - rng().random_range(0..6);
             new_z += rng().random_range(0..6) - rng().random_range(0..6);
             new_pos = BlockPos::new(new_x, new_pos.0.y, new_z);
             let new_pos_center = new_pos.to_centered_f64();
-            let player_distance = get_nearest_player(&new_pos_center, world).await;
-            if !is_right_distance_to_player_and_spawn_point(
-                &new_pos,
-                player_distance,
-                world,
-                chunk_pos,
-            ) {
-                // debug!("{new_pos:?} failed, too near to player or spawn point dst: {player_distance}");
+            let player_distance = get_nearest_player(&new_pos_center, &player_positions);
+            if !is_right_distance_to_player_and_spawn_point(&new_pos, player_distance, chunk_pos) {
                 inc += 1;
                 continue;
             }
             let Some(spawner) = get_random_spawn_mob_at(world, category, &new_pos).await else {
-                // debug!("{new_pos:?} failed, no random spawn mob at category: {category:?}");
                 break 'outer;
             };
             random_group_size = rng().random_range(spawner.min_count..=spawner.max_count);
@@ -399,12 +409,10 @@ pub async fn spawn_category_for_position(
             )
             .await
             {
-                // debug!("{new_pos:?} failed, not valid spawn position");
                 inc += 1;
                 continue;
             }
             if !spawn_state.can_spawn(entity_type, &new_pos, world).await {
-                // debug!("{new_pos:?} failed, can't spawn at");
                 inc += 1;
                 continue;
             }
@@ -416,7 +424,7 @@ pub async fn spawn_category_for_position(
             // TODO spawnGroupData = mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), EntitySpawnReason.NATURAL, spawnGroupData);
             spawn_cluster_size += 1;
             //group_size += 1;
-            world.spawn_entity(entity).await;
+            batch_buffer.push(entity);
             spawn_state.after_spawn(entity_type, &new_pos, world).await;
             if spawn_cluster_size >= entity_type.limit_per_chunk {
                 return;
@@ -426,25 +434,59 @@ pub async fn spawn_category_for_position(
             inc += 1;
         }
     }
-}
 
-pub async fn get_nearest_player(pos: &Vector3<f64>, world: &Arc<World>) -> f64 {
-    let mut dst = f64::MAX;
-    for (_uuid, player) in world.players.read().await.iter() {
-        if player.gamemode.load() == GameMode::Spectator {
-            continue;
+    // Spawn in batch
+    if !batch_buffer.is_empty() {
+        let mut prepared_data = Vec::with_capacity(batch_buffer.len());
+
+        for entity in &batch_buffer {
+            entity.init_data_tracker().await;
+            let base_entity = entity.get_entity();
+            let packet = base_entity.create_spawn_packet();
+            let mut nbt = NbtCompound::new();
+            entity.write_nbt(&mut nbt).await;
+            prepared_data.push((base_entity.entity_uuid, nbt, packet));
         }
-        let cur_dst = player.position().squared_distance_to_vec(*pos);
-        if cur_dst < dst {
-            dst = cur_dst;
+        {
+            let chunk_handle = world.level.get_entity_chunk(*chunk_pos).await;
+            let mut chunk_lock = chunk_handle.write().await;
+            let mut entities_lock = world.entities.write().await;
+
+            for (uuid, nbt, _) in &prepared_data {
+                let entity_ref = batch_buffer
+                    .iter()
+                    .find(|e| e.get_entity().entity_uuid == *uuid)
+                    .unwrap();
+
+                entities_lock.insert(*uuid, entity_ref.clone());
+                chunk_lock.data.insert(*uuid, nbt.clone());
+            }
+            chunk_lock.mark_dirty(true);
+        };
+
+        for (_, _, packet) in prepared_data {
+            world.broadcast_packet_all(&packet).await;
         }
     }
-    dst
 }
+
+#[must_use]
+pub fn get_nearest_player(pos: &Vector3<f64>, player_positions: &[Vector3<f64>]) -> f64 {
+    let mut min_dst_sq = f64::MAX;
+
+    for player_pos in player_positions {
+        let cur_dst_sq = player_pos.squared_distance_to_vec(*pos);
+        if cur_dst_sq < min_dst_sq {
+            min_dst_sq = cur_dst_sq;
+        }
+    }
+    min_dst_sq
+}
+
+#[must_use]
 pub fn is_right_distance_to_player_and_spawn_point(
     pos: &BlockPos,
     distance: f64,
-    _world: &Arc<World>,
     chunk_pos: &Vector2<i32>,
 ) -> bool {
     if distance <= 24. * 24. {

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
@@ -7,7 +7,7 @@ use quote::{format_ident, quote};
 pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/meta_data_type.json");
 
-    let handlers_map: HashMap<String, i32> =
+    let handlers_map: BTreeMap<String, i32> =
         serde_json::from_str(&fs::read_to_string("../assets/meta_data_type.json").unwrap())
             .expect("Failed to parse meta_data_type.json");
 
