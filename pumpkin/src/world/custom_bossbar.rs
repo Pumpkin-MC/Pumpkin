@@ -28,7 +28,6 @@ pub struct CustomBossbar {
 }
 
 impl CustomBossbar {
-    #[deny(clippy::new_without_default)]
     #[must_use]
     pub const fn new(namespace: String, bossbar_data: Bossbar) -> Self {
         Self {
