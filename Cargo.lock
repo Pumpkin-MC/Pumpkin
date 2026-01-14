@@ -2158,6 +2158,7 @@ name = "pumpkin-data"
 version = "0.1.0-dev+1.21.11"
 dependencies = [
  "crc-fast",
+ "criterion",
  "heck",
  "phf",
  "proc-macro2",
