@@ -96,11 +96,12 @@ impl LivingEntity {
 
         // TODO: Extract default MOVEMENT_SPEED Entity Attribute
         let default_movement_speed = 0.25;
+        let health = entity.entity_type.max_health.unwrap_or(20.0);
         Self {
             entity,
             hurt_cooldown: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
-            health: AtomicCell::new(20.0),
+            health: AtomicCell::new(health),
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),

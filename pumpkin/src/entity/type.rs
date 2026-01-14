@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::entity::{EntityType, MobCategory};
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -28,10 +28,10 @@ pub async fn from_type(
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
         // Fallback Entity
         _ => {
-            if entity_type.category == &MobCategory::MISC {
-                Arc::new(entity)
-            } else {
+            if entity_type.max_health.is_some() {
                 Arc::new(LivingEntity::new(entity))
+            } else {
+                Arc::new(entity)
             }
         }
     };
