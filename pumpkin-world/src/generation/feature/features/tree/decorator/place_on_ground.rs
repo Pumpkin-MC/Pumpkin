@@ -76,7 +76,10 @@ impl PlaceOnGroundTreeDecorator {
 
         // TODO
         if (up_state.to_state().is_air() || up_state.to_block() == &Block::VINE)
-            && state.to_state().is_full_cube() && !GenerationCache::get_block_state(chunk, &pos.down().0).to_block().has_tag(&MINECRAFT_LEAVES)
+            && state.to_state().is_full_cube() 
+            && !GenerationCache::get_block_state(chunk, &pos.down().0)
+                .to_block()
+                .has_tag(&MINECRAFT_LEAVES)
         {
             chunk.set_block_state(&pos.0, self.block_state_provider.get(random, pos));
         }
