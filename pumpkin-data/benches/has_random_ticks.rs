@@ -16,7 +16,20 @@ fn run_all<F: Fn(u16) -> bool>(f: F) -> u32 {
     black_box(acc)
 }
 
+fn assert_same_outputs() {
+    for id in 0..=MAX_ID {
+        let a = has_random_ticks(id);
+        let b = has_random_ticks_matches(id);
+        if a != b {
+            println!("Mismatch at id={}: bitset={}, matches={}", id, a, b);
+            println!("has_random_ticks_matches was compiled for 1.21.11!");
+        }
+    }
+}
+
 pub fn bench_has_random_ticks(c: &mut Criterion) {
+    assert_same_outputs();
+
     c.bench_function("has_random_ticks/bitset", |b| {
         b.iter(|| run_all(has_random_ticks))
     });
