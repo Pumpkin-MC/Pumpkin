@@ -1,14 +1,14 @@
+use super::TreeDecorator;
+use crate::generation::block_state_provider::BlockStateProvider;
+use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::Block;
+use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
+use pumpkin_data::tag::Taggable;
 use pumpkin_util::{
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
-use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
-use pumpkin_data::tag::Taggable;
-use super::TreeDecorator;
-use crate::generation::block_state_provider::BlockStateProvider;
-use crate::generation::proto_chunk::GenerationCache;
 
 #[derive(Deserialize)]
 pub struct PlaceOnGroundTreeDecorator {
@@ -76,7 +76,7 @@ impl PlaceOnGroundTreeDecorator {
 
         // TODO
         if (up_state.to_state().is_air() || up_state.to_block() == &Block::VINE)
-            && state.to_state().is_full_cube() 
+            && state.to_state().is_full_cube()
             && !GenerationCache::get_block_state(chunk, &pos.down().0)
                 .to_block()
                 .has_tag(&MINECRAFT_LEAVES)
