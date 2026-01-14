@@ -4,7 +4,8 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 use serde::Deserialize;
-
+use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
+use pumpkin_data::tag::Taggable;
 use super::TreeDecorator;
 use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::proto_chunk::GenerationCache;
@@ -75,7 +76,7 @@ impl PlaceOnGroundTreeDecorator {
 
         // TODO
         if (up_state.to_state().is_air() || up_state.to_block() == &Block::VINE)
-            && state.to_state().is_full_cube()
+            && state.to_state().is_full_cube() && !GenerationCache::get_block_state(chunk, &pos.down().0).to_block().has_tag(&MINECRAFT_LEAVES)
         {
             chunk.set_block_state(&pos.0, self.block_state_provider.get(random, pos));
         }
