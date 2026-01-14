@@ -1,8 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, pin::Pin, sync::Arc};
 
 use pumpkin_config::world::LevelConfig;
 use pumpkin_data::dimension::Dimension;
-use tokio::task::JoinSet;
 
 use crate::{level::Level, world::BlockRegistryExt};
 
@@ -12,7 +11,7 @@ pub fn into_level(
     mut base_directory: PathBuf,
     block_registry: Arc<dyn BlockRegistryExt>,
     seed: i64,
-    join_set: &mut JoinSet<()>,
+    write_futures: &mut Vec<Pin<Box<dyn Future<Output = ()> + Send + 'static>>>,
 ) -> Arc<Level> {
     if dimension == Dimension::OVERWORLD {
     } else if dimension == Dimension::THE_NETHER {
@@ -26,6 +25,6 @@ pub fn into_level(
         block_registry,
         seed,
         dimension,
-        join_set,
+        write_futures,
     )
 }

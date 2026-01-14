@@ -13,7 +13,6 @@ use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
 use std::time::Instant;
-use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::generation::height_limit::HeightLimitView;
@@ -1434,7 +1433,7 @@ impl GenerationSchedule {
         level_channel: Arc<LevelChannel>,
         listener: Arc<ChunkListener>,
         thread_tracker: &mut Vec<JoinHandle<()>>,
-        join_set: &mut JoinSet<()>,
+        write_futures: &mut Vec<Pin<Box<dyn Future<Output = ()> + Send + 'static>>>,
     ) {
         let tracker = &level.chunk_system_tasks;
         let (send_chunk, recv_chunk) = crossfire::mpmc::unbounded_async();
@@ -1466,11 +1465,11 @@ impl GenerationSchedule {
 
         let level_clone = level.clone();
         let pending_writes_clone = pending_writes.clone();
-        join_set.spawn(Self::io_write_work(
+        write_futures.push(Box::pin(Self::io_write_work(
             recv_write_io,
             level_clone,
             pending_writes_clone,
-        ));
+        )));
 
         let builder = thread::Builder::new().name("Schedule Thread".to_string());
         thread_tracker.push(
@@ -1798,6 +1797,7 @@ impl GenerationSchedule {
         log::info!("Waiting for initial generation request!");
         while let Ok((pos, mut cache, stage)) = recv.recv() {
             log::info!("generation thread received chunk pos {pos:?} to stage {stage:?}");
+            let start = Instant::now();
             cache.advance(
                 stage,
                 level.block_registry.as_ref(),
@@ -1806,6 +1806,10 @@ impl GenerationSchedule {
                 &level.world_gen.terrain_cache,
                 &level.world_gen.base_router,
                 level.world_gen.dimension,
+            );
+            log::info!(
+                "generation of {pos:?} to stage {stage:?} took {:?}",
+                start.elapsed()
             );
             if send.send((pos, RecvChunk::Generation(cache))).is_err() {
                 log::error!("Send of generated chunk failed, stopping thread!");

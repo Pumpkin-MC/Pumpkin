@@ -51,7 +51,7 @@ use std::{
 use tokio::signal::ctrl_c;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
-use tokio::sync::RwLock;
+use tokio::{runtime::Builder, sync::RwLock};
 
 use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
@@ -96,82 +96,90 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
 // runtime with a channel! See `Level::fetch_chunks` as an example!
-#[tokio::main]
-async fn main() {
+fn main() {
     #[cfg(feature = "console-subscriber")]
     console_subscriber::init();
-    let time = Instant::now();
+    let runtime = Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(num_cpus::get() / 2)
+        .build()
+        .expect("Failed to create tokio runtime to start the server!");
+    runtime.block_on(async move {
+        let time = Instant::now();
 
-    let exec_dir = std::env::current_dir().unwrap();
-    let config_dir = exec_dir.join("config");
+        let exec_dir = std::env::current_dir().unwrap();
+        let config_dir = exec_dir.join("config");
 
-    let basic_config = BasicConfiguration::load(&config_dir);
-    let advanced_config = AdvancedConfiguration::load(&config_dir);
+        let basic_config = BasicConfiguration::load(&config_dir);
+        let advanced_config = AdvancedConfiguration::load(&config_dir);
 
-    pumpkin::init_logger(&advanced_config);
+        pumpkin::init_logger(&advanced_config);
 
-    if let Some((logger_impl, level)) = pumpkin::LOGGER_IMPL.wait() {
-        log::set_logger(logger_impl).unwrap();
-        log::set_max_level(*level);
-    }
-
-    let default_panic = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        default_panic(info);
-        // TODO: Gracefully exit?
-        // We need to abide by the panic rules here.
-        std::process::exit(1);
-    }));
-    log::info!("Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",);
-
-    log::debug!(
-        "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
-        std::env::consts::FAMILY,
-        std::env::consts::OS,
-        std::env::consts::ARCH,
-        if cfg!(debug_assertions) {
-            "Debug"
-        } else {
-            "Release"
+        if let Some((logger_impl, level)) = pumpkin::LOGGER_IMPL.wait() {
+            log::set_logger(logger_impl).unwrap();
+            log::set_max_level(*level);
         }
-    );
 
-    log::warn!("Pumpkin is currently under heavy development!");
-    log::info!("Report issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
-    log::info!("Join our Discord for community support: https://discord.com/invite/wT8XjrjKkf");
+        let default_panic = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            default_panic(info);
+            // TODO: Gracefully exit?
+            // We need to abide by the panic rules here.
+            std::process::exit(1);
+        }));
+        log::info!(
+            "Starting Pumpkin {CARGO_PKG_VERSION} Minecraft (Protocol {CURRENT_MC_PROTOCOL})",
+        );
 
-    tokio::spawn(async {
-        setup_sighandler()
-            .await
-            .expect("Unable to setup signal handlers");
+        log::debug!(
+            "Build info: FAMILY: \"{}\", OS: \"{}\", ARCH: \"{}\", BUILD: \"{}\"",
+            std::env::consts::FAMILY,
+            std::env::consts::OS,
+            std::env::consts::ARCH,
+            if cfg!(debug_assertions) {
+                "Debug"
+            } else {
+                "Release"
+            }
+        );
+
+        log::warn!("Pumpkin is currently under heavy development!");
+        log::info!("Report issues on https://github.com/Pumpkin-MC/Pumpkin/issues");
+        log::info!("Join our Discord for community support: https://discord.com/invite/wT8XjrjKkf");
+
+        tokio::spawn(async {
+            setup_sighandler()
+                .await
+                .expect("Unable to setup signal handlers");
+        });
+
+        let pumpkin_server = PumpkinServer::new(basic_config, advanced_config).await;
+        pumpkin_server.init_plugins().await;
+
+        log::info!("Started server; took {}ms", time.elapsed().as_millis());
+        let basic_config = &pumpkin_server.server.basic_config;
+        log::info!(
+            "Server is now running. Connect using port: {}{}{}",
+            if basic_config.java_edition {
+                format!("Java Edition: {}", basic_config.java_edition_address)
+            } else {
+                String::new()
+            },
+            if basic_config.java_edition && basic_config.bedrock_edition {
+                " | " // Separator if both are enabled
+            } else {
+                ""
+            },
+            if basic_config.bedrock_edition {
+                format!("Bedrock Edition: {}", basic_config.bedrock_edition_address)
+            } else {
+                String::new()
+            }
+        );
+
+        pumpkin_server.start().await;
+        log::info!("The server has stopped.");
     });
-
-    let pumpkin_server = PumpkinServer::new(basic_config, advanced_config).await;
-    pumpkin_server.init_plugins().await;
-
-    log::info!("Started server; took {}ms", time.elapsed().as_millis());
-    let basic_config = &pumpkin_server.server.basic_config;
-    log::info!(
-        "Server is now running. Connect using port: {}{}{}",
-        if basic_config.java_edition {
-            format!("Java Edition: {}", basic_config.java_edition_address)
-        } else {
-            String::new()
-        },
-        if basic_config.java_edition && basic_config.bedrock_edition {
-            " | " // Separator if both are enabled
-        } else {
-            ""
-        },
-        if basic_config.bedrock_edition {
-            format!("Bedrock Edition: {}", basic_config.bedrock_edition_address)
-        } else {
-            String::new()
-        }
-    );
-
-    pumpkin_server.start().await;
-    log::info!("The server has stopped.");
 }
 
 fn handle_interrupt() {

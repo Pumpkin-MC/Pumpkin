@@ -43,6 +43,7 @@ tokio = { workspace = true, features = [
 ] }
 thiserror.workspace = true
 futures.workspace = true
+num_cpus.workspace = true
 
 # config
 serde.workspace = true

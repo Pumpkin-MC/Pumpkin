@@ -36,6 +36,7 @@ use rand::seq::{IndexedRandom, IteratorRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
 use std::net::IpAddr;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{fs, thread};
@@ -212,7 +213,7 @@ impl Server {
             write_thread: Mutex::new(None),
         };
 
-        let mut join_set = JoinSet::new();
+        let mut write_futures: Vec<Pin<Box<dyn Future<Output = ()> + Send + 'static>>> = Vec::new();
 
         let server = Arc::new(server);
         let weak = Arc::downgrade(&server);
@@ -226,7 +227,7 @@ impl Server {
                 world_path.clone(),
                 block_registry.clone(),
                 seed,
-                &mut join_set,
+                &mut write_futures,
             ),
             level_info.clone(),
             Dimension::OVERWORLD,
@@ -241,7 +242,7 @@ impl Server {
                 world_path.clone(),
                 block_registry.clone(),
                 seed,
-                &mut join_set,
+                &mut write_futures,
             ),
             level_info.clone(),
             Dimension::THE_NETHER,
@@ -256,7 +257,7 @@ impl Server {
                 world_path,
                 block_registry.clone(),
                 seed,
-                &mut join_set,
+                &mut write_futures,
             ),
             level_info,
             Dimension::THE_END,
@@ -271,7 +272,15 @@ impl Server {
                     .enable_all()
                     .build()
                     .unwrap()
-                    .block_on(async { while join_set.join_next().await.is_some() {} });
+                    .block_on(async {
+                        let mut join_set = JoinSet::new();
+
+                        for future in write_futures {
+                            join_set.spawn(future);
+                        }
+
+                        while join_set.join_next().await.is_some() {}
+                    });
             })
             .expect("Failed to start Writer Thread!");
 

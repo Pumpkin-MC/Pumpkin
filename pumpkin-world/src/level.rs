@@ -22,6 +22,8 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
+use std::ops::Div;
+use std::pin::Pin;
 use std::sync::Mutex;
 use std::{
     collections::HashMap,
@@ -32,7 +34,6 @@ use std::{
     },
     thread,
 };
-use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tokio::{
     select,
@@ -125,7 +126,7 @@ impl Level {
         block_registry: Arc<dyn BlockRegistryExt>,
         seed: i64,
         dimension: Dimension,
-        join_set: &mut JoinSet<()>,
+        write_futures: &mut Vec<Pin<Box<dyn Future<Output = ()> + Send + 'static>>>,
     ) -> Arc<Self> {
         // If we are using an already existing world we want to read the seed from the level.dat, If not we want to check if there is a seed in the config, if not lets create a random one
         let region_folder = root_folder.join("region");
@@ -196,7 +197,7 @@ impl Level {
             chunk_listener: listener.clone(),
         });
 
-        let num_threads = num_cpus::get().saturating_sub(2).max(1);
+        let num_threads = (3 * num_cpus::get()).div(12).max(1);
 
         GenerationSchedule::create(
             4,
@@ -205,12 +206,12 @@ impl Level {
             level_channel,
             listener,
             level_ref.thread_tracker.lock().unwrap().as_mut(),
-            join_set,
+            write_futures,
         );
 
         // let mut tracker = level_ref.thread_tracker.lock().unwrap();
         // Entity Chunks
-        for thread_id in 0..(num_threads / 2).max(1) {
+        for thread_id in 0..1 {
             let level_clone = level_ref.clone();
             let pending_clone = pending_entity_generations.clone();
             let rx = gen_entity_request_rx.clone();
