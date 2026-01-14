@@ -10,7 +10,6 @@ use pumpkin_world::item::ItemStack;
 use std::any::Any;
 use std::array::from_fn;
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -300,7 +299,13 @@ impl PlayerInventory {
                 player
                     .enqueue_slot_set_packet(&CSetPlayerInventory::new(
                         (room_for_stack as i32).into(),
-                        &self.get_stack(room_for_stack as usize).await.lock().await.clone().into()
+                        &self
+                            .get_stack(room_for_stack as usize)
+                            .await
+                            .lock()
+                            .await
+                            .clone()
+                            .into(),
                     ))
                     .await;
             }
