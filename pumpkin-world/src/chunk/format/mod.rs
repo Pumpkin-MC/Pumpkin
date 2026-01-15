@@ -299,9 +299,11 @@ impl ChunkEntityData {
                         | (uuid[3] as u128),
                 ),
                 None => {
-                    println!(
+                    log::error!(
                         "Entity in chunk {},{} is missing UUID: {:?}",
-                        position.x, position.y, entity_nbt
+                        position.x,
+                        position.y,
+                        entity_nbt
                     );
                     continue;
                 }

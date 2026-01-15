@@ -2103,6 +2103,7 @@ dependencies = [
  "libloading",
  "log",
  "num-bigint",
+ "num_cpus",
  "pkcs8 0.11.0-rc.8",
  "pumpkin-config",
  "pumpkin-data",
