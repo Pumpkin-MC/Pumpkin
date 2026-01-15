@@ -344,6 +344,14 @@ pub trait FlowingFluid: Send + Sync {
         Box::pin(async move {
             let block_state_id = world.get_block_state_id(block_pos).await;
 
+            let is_fluid_state_id = fluid
+                .states
+                .iter()
+                .any(|state| state.block_state_id == block_state_id);
+            if !is_fluid_state_id {
+                return;
+            }
+
             let props = FlowingFluidProperties::from_state_id(block_state_id, fluid);
             let drop_off = self.get_level_decrease_per_block(world);
 
