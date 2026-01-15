@@ -803,8 +803,8 @@ impl World {
 
             let chunk = chunk.downgrade();
 
-            let chunk_x_base = chunk.x * 16;
-            let chunk_z_base = chunk.z * 16;
+            let chunk_base_x = chunk.x * 16;
+            let chunk_base_z = chunk.z * 16;
             for i in 0..chunk.section.sections.len() {
                 for _ in 0..random_tick_speed {
                     let r = rng.random::<u32>();
@@ -813,9 +813,9 @@ impl World {
                     let z_offset = (r >> 8 & 0xF) as i32;
 
                     let random_pos = BlockPos::new(
-                        chunk_x_base + x_offset,
+                        chunk_base_x + x_offset,
                         i as i32 * 16 + y_offset,
-                        chunk_z_base + z_offset,
+                        chunk_base_z + z_offset,
                     );
 
                     let block_id = chunk
