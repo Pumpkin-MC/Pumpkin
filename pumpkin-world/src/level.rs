@@ -764,9 +764,7 @@ impl Level {
         delay: u8,
         priority: TickPriority,
     ) {
-        let chunk = self
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let mut chunk = chunk.write().await;
         chunk.block_ticks.schedule_tick(
             &ScheduledTick {
@@ -787,9 +785,7 @@ impl Level {
         delay: u8,
         priority: TickPriority,
     ) {
-        let chunk = self
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let mut chunk = chunk.write().await;
         chunk.fluid_ticks.schedule_tick(
             &ScheduledTick {
@@ -808,9 +804,7 @@ impl Level {
         block_pos: &BlockPos,
         block: &Block,
     ) -> bool {
-        let chunk = self
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let chunk = chunk.read().await;
         chunk.block_ticks.is_scheduled(*block_pos, block)
     }
@@ -820,9 +814,7 @@ impl Level {
         block_pos: &BlockPos,
         fluid: &Fluid,
     ) -> bool {
-        let chunk = self
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let chunk = chunk.read().await;
         chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
     }

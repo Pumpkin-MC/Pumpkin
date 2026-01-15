@@ -242,10 +242,7 @@ impl World {
         // First lets see if the entity was saved on an other chunk, and if the current chunk does not match we remove it
         // Otherwise we just update the nbt data
         let base_entity = entity.get_entity();
-        let (current_chunk_coordinate, _) = base_entity
-            .block_pos
-            .load()
-            .chunk_and_chunk_relative_position();
+        let current_chunk_coordinate = base_entity.block_pos.load().chunk_position();
         let mut nbt = NbtCompound::new();
         entity.write_nbt(&mut nbt).await;
         if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load() {
@@ -269,8 +266,7 @@ impl World {
     }
 
     async fn remove_entity_data(&self, entity: &Entity) {
-        let (current_chunk_coordinate, _) =
-            entity.block_pos.load().chunk_and_chunk_relative_position();
+        let current_chunk_coordinate = entity.block_pos.load().chunk_position();
         if let Some(old_chunk) = entity.first_loaded_chunk_position.load() {
             let old_chunk = old_chunk.to_vec2_i32();
             let chunk = self.level.get_entity_chunk(old_chunk).await;
@@ -357,7 +353,7 @@ impl World {
     pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         let current_players = self.players.read().await;
 
-        for (_, player) in current_players.iter() {
+        for player in current_players.values() {
             player.client.enqueue_packet(packet).await;
         }
     }
@@ -384,7 +380,7 @@ impl World {
     ) {
         let current_players = self.players.read().await;
 
-        for (_, player) in current_players.iter() {
+        for player in current_players.values() {
             match &player.client {
                 ClientPlatform::Java(client) => client.enqueue_packet(je_packet).await,
                 ClientPlatform::Bedrock(client) => client.send_game_packet(be_packet).await,
@@ -569,7 +565,6 @@ impl World {
         self.flush_block_updates().await;
         self.flush_synced_block_events().await;
         self.tick_environment().await;
-        let env_done = start.elapsed();
 
         // 2. Chunks
         let chunk_start = tokio::time::Instant::now();
@@ -616,14 +611,13 @@ impl World {
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
             log::warn!(
-                "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?} | Env: {:?}",
+                "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?}",
                 total_elapsed.as_millis(),
                 chunk_elapsed,
                 player_count,
                 player_elapsed,
                 entity_count,
                 entity_elapsed,
-                env_done
             );
         }
     }
@@ -1897,6 +1891,7 @@ impl World {
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
+    #[expect(clippy::too_many_lines)]
     fn spawn_world_entity_chunks(
         self: &Arc<Self>,
         player: Arc<Player>,
@@ -1950,6 +1945,7 @@ impl World {
                     let mut ids = Vec::new();
                     // Remove all the entities from the world
                     let mut entities = world.entities.write().await;
+
                     for (uuid, entity_nbt) in &chunk.read().await.data {
                         let Some(id) = entity_nbt.get_string("id") else {
                             log::warn!("Entity has no ID");
@@ -1971,8 +1967,30 @@ impl World {
                         entities.remove(&base_entity.entity_uuid);
                         ids.push(VarInt(base_entity.entity_id));
 
-                        world.save_entity(uuid, &entity).await;
+                        let mut nbt = NbtCompound::new();
+                        entity.write_nbt(&mut nbt).await;
+                        if let Some(old_chunk) = base_entity.first_loaded_chunk_position.load() {
+                            let old_chunk = old_chunk.to_vec2_i32();
+                            let chunk = world.level.get_entity_chunk(old_chunk).await;
+                            let mut chunk = chunk.write().await;
+                            chunk.mark_dirty(true);
+                            let base_entity = entity.get_entity();
+                            let current_chunk_coordinate =
+                                base_entity.block_pos.load().chunk_position();
+
+                            if old_chunk == current_chunk_coordinate {
+                                chunk.data.insert(*uuid, nbt);
+                                return;
+                            }
+
+                            // The chunk has changed, lets remove the entity from the old chunk
+                            chunk.data.remove(uuid);
+                        }
+                        let mut chunk = chunk.write().await;
+                        chunk.data.insert(*uuid, nbt);
+                        chunk.mark_dirty(true);
                     }
+
                     if !ids.is_empty() {
                         player
                             .client
@@ -2322,17 +2340,15 @@ impl World {
             .await;
         entity.init_data_tracker().await;
 
-        let (chunk_coordinate, _) = base_entity
-            .block_pos
-            .load()
-            .chunk_and_chunk_relative_position();
+        let chunk_coordinate = base_entity.block_pos.load().chunk_position();
         let chunk = self.level.get_entity_chunk(chunk_coordinate).await;
-        let mut chunk = chunk.write().await;
-        let mut nbt = NbtCompound::new();
-        entity.write_nbt(&mut nbt).await;
-        chunk.data.insert(base_entity.entity_uuid, nbt);
-        chunk.mark_dirty(true);
-        drop(chunk);
+        {
+            let mut chunk = chunk.write().await;
+            let mut nbt = NbtCompound::new();
+            entity.write_nbt(&mut nbt).await;
+            chunk.data.insert(base_entity.entity_uuid, nbt);
+            chunk.mark_dirty(true);
+        };
 
         let mut current_entities = self.entities.write().await;
         current_entities.insert(base_entity.entity_uuid, entity);
@@ -3070,10 +3086,7 @@ impl World {
     }
 
     pub async fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
-        let chunk = self
-            .level
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.level.get_chunk(block_pos.chunk_position()).await;
         let chunk: tokio::sync::RwLockReadGuard<ChunkData> = chunk.read().await;
 
         chunk.block_entities.get(block_pos).cloned()
@@ -3081,10 +3094,7 @@ impl World {
 
     pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
-        let chunk = self
-            .level
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.level.get_chunk(block_pos.chunk_position()).await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
@@ -3104,10 +3114,7 @@ impl World {
     }
 
     pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
-        let chunk = self
-            .level
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.level.get_chunk(block_pos.chunk_position()).await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         chunk.block_entities.remove(block_pos);
         chunk.mark_dirty(true);
@@ -3115,10 +3122,7 @@ impl World {
 
     pub async fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
-        let chunk = self
-            .level
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.level.get_chunk(block_pos.chunk_position()).await;
         let mut chunk: tokio::sync::RwLockWriteGuard<ChunkData> = chunk.write().await;
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
