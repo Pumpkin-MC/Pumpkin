@@ -2,7 +2,7 @@
 name = "pumpkin-inventory"
 version.workspace = true
 edition.workspace = true
-rust-version = "1.87"
+rust-version.workspace = true
 
 [dependencies]
 pumpkin-protocol.workspace = true
