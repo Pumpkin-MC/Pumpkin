@@ -262,7 +262,7 @@ impl ProtoChunk {
 
         for z in 0..16 {
             for x in 0..16 {
-                let motion_blocking_height = chunk_data.heightmap.get_height(
+                let motion_blocking_height = chunk_data.heightmap.get(
                     ChunkHeightmapType::MotionBlocking,
                     x,
                     z,
@@ -271,7 +271,7 @@ impl ProtoChunk {
                 let index = ((z << 4) + x) as usize;
                 proto_chunk.flat_motion_blocking_height_map[index] = motion_blocking_height as i16;
 
-                let motion_blocking_no_leaves_height = chunk_data.heightmap.get_height(
+                let motion_blocking_no_leaves_height = chunk_data.heightmap.get(
                     ChunkHeightmapType::MotionBlockingNoLeaves,
                     x,
                     z,
@@ -280,7 +280,7 @@ impl ProtoChunk {
                 proto_chunk.flat_motion_blocking_no_leaves_height_map[index] =
                     motion_blocking_no_leaves_height as i16;
 
-                let world_surface_height = chunk_data.heightmap.get_height(
+                let world_surface_height = chunk_data.heightmap.get(
                     ChunkHeightmapType::WorldSurface,
                     x,
                     z,

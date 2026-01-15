@@ -1098,7 +1098,7 @@ impl World {
             let delta = Vector3::new(rand_value & 15, rand_value >> 16 & 15, rand_value >> 8 & 15);
             let random_pos = Vector3::new(
                 chunk_pos.x << 4,
-                chunk.read().await.heightmap.get_height(
+                chunk.read().await.heightmap.get(
                     MotionBlocking,
                     chunk_pos.x << 4,
                     chunk_pos.y << 4,

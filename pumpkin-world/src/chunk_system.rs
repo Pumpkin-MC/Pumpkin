@@ -45,7 +45,6 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData;
 use crate::chunk_system::Chunk::Proto;
 use crate::chunk_system::StagedChunkEnum::{Biomes, Empty, Features, Full, Noise, Surface};
-use crate::generation::biome_coords;
 use crossfire::AsyncRx;
 use pumpkin_data::chunk::ChunkStatus;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -787,16 +786,16 @@ impl Chunk {
 
         let total_sections = dimension.height as usize / 16;
         let mut sections = ChunkSections::new(
-            (0..total_sections).map(|_| SubChunk::default()).collect(),
+            vec![SubChunk::default(); total_sections].into_boxed_slice(),
             dimension.min_y,
         );
 
-        let proto_biome_height = biome_coords::from_block(proto_chunk.height());
-        let biome_min_y = biome_coords::from_block(dimension.min_y);
+        let proto_biome_height = (dimension.height / 4) as usize;
+        let biome_min_y = dimension.min_y / 4;
 
         for y_offset in 0..proto_biome_height {
-            let section_index = y_offset as usize / 4;
-            let relative_y = y_offset as usize % 4;
+            let section_index = y_offset / 4;
+            let relative_biome_y = y_offset % 4;
 
             if let Some(section) = sections.sections.get_mut(section_index) {
                 let absolute_biome_y = biome_min_y + y_offset as i32;
@@ -804,7 +803,7 @@ impl Chunk {
                 for z in 0..4 {
                     for x in 0..4 {
                         let biome = proto_chunk.get_biome(x as i32, absolute_biome_y, z as i32);
-                        section.biomes.set(x, relative_y, z, biome.id);
+                        section.biomes.set(x, relative_biome_y, z, biome.id);
                     }
                 }
             }
@@ -1054,7 +1053,7 @@ impl GenerationCache for Cache {
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
                 let chunk = data.blocking_read();
-                chunk.heightmap.get_height(
+                chunk.heightmap.get(
                     ChunkHeightmapType::MotionBlocking,
                     x,
                     z,
@@ -1073,7 +1072,7 @@ impl GenerationCache for Cache {
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
                 let chunk = data.blocking_read();
-                chunk.heightmap.get_height(
+                chunk.heightmap.get(
                     ChunkHeightmapType::MotionBlockingNoLeaves,
                     x,
                     z,
@@ -1092,12 +1091,9 @@ impl GenerationCache for Cache {
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
                 let chunk = data.blocking_read();
-                chunk.heightmap.get_height(
-                    ChunkHeightmapType::WorldSurface,
-                    x,
-                    z,
-                    chunk.section.min_y,
-                ) // can we return this?
+                chunk
+                    .heightmap
+                    .get(ChunkHeightmapType::WorldSurface, x, z, chunk.section.min_y) // can we return this?
             }
             Chunk::Proto(data) => data.top_block_height_exclusive(x, z),
         }

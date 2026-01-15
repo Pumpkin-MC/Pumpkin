@@ -218,7 +218,7 @@ impl ChunkHeightmaps {
         data[packed_array_idx] = data[packed_array_idx].bitand(mask).bitor(height);
     }
 
-    pub fn get_height(&self, heightmap: ChunkHeightmapType, x: i32, z: i32, min_y: i32) -> i32 {
+    pub fn get(&self, heightmap: ChunkHeightmapType, x: i32, z: i32, min_y: i32) -> i32 {
         let local_x = (x & 15) as usize;
         let local_z = (z & 15) as usize;
 
@@ -261,7 +261,7 @@ impl ChunkHeightmaps {
                 let mut row = format!("{z:3}");
                 row.push_str(
                     &(0..16)
-                        .map(|x| format!("{:4}", self.get_height(_type, x, z, min_y)))
+                        .map(|x| format!("{:4}", self.get(_type, x, z, min_y)))
                         .collect::<String>(),
                 );
                 row
