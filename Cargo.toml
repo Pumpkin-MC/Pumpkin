@@ -29,6 +29,7 @@ debug = true
 [profile.profiling]
 inherits = "release"
 debug = true
+strip = false
 
 [profile.dev]
 debug = "line-tables-only"
