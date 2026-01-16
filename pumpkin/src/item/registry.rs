@@ -5,6 +5,7 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -32,19 +33,21 @@ impl ItemRegistry {
         }
     }
 
+    #[expect(clippy::too_many_arguments)]
     pub async fn use_on_block(
         &self,
         stack: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         face: BlockDirection,
+        cursor_pos: Vector3<f32>,
         block: &Block,
         server: &Server,
     ) {
         let pumpkin_item = self.get_pumpkin_item(stack.item);
         if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item
-                .use_on_block(stack, player, location, face, block, server)
+                .use_on_block(stack, player, location, face, cursor_pos, block, server)
                 .await;
         }
     }

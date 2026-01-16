@@ -168,12 +168,17 @@ pub fn get_translation_text<P: Into<Cow<'static, str>>>(
     }
 
     let (substitutions, indices) = reorder_substitutions(&translation, with);
+
+    // i32 since displacement can be negative. Casting from usize to i32 is safe in this context
+    // since it is unreasonable for the length of `range` or `substitution` to exceed 2147483647
+    // (i.e. i32::MAX).
     let mut displacement = 0i32;
     for (idx, &range) in indices.iter().enumerate() {
         let sub_idx = idx.clamp(0, substitutions.len() - 1);
         let substitution = substitutions[sub_idx].clone().get_text(locale);
         translation.replace_range(
-            range.start + displacement as usize..=range.end + displacement as usize,
+            (range.start as i32 + displacement) as usize
+                ..=(range.end as i32 + displacement) as usize,
             &substitution,
         );
         displacement += substitution.len() as i32 - range.len() as i32;

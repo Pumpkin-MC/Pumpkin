@@ -45,7 +45,7 @@ impl TrackTargetGoal {
 
     // TODO: get from entity attribute
     pub fn get_follow_range(_mob: &MobEntity) -> f32 {
-        1.0
+        32.0
     }
 
     fn can_navigate_to_entity(&mut self, mob: &dyn Mob, _target: &LivingEntity) -> bool {

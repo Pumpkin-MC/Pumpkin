@@ -22,7 +22,7 @@ fn abs_max(a: f64, b: f64) -> f64 {
 }
 
 fn to_long(value: f64) -> i64 {
-    ((value * 0.5 + 0.5) * MAX_15_BIT_VALUE).round() as i64
+    (((value * 0.5 + 0.5) * MAX_15_BIT_VALUE).round() as i64).clamp(0, 32766)
 }
 
 impl Serialize for Velocity {

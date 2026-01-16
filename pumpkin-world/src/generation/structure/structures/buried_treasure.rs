@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::{
     HeightMap,
     math::{block_box::BlockBox, position::BlockPos},
+    random::RandomGenerator,
 };
 use serde::Deserialize;
 
@@ -9,59 +12,61 @@ use crate::{
     ProtoChunk,
     generation::{
         positions::chunk_pos::{get_center_x, get_center_z},
-        structure::structures::{
-            StructureGenerator, StructurePiece, StructurePiecesCollector, StructurePosition,
+        structure::{
+            piece::StructurePieceType,
+            structures::{
+                StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
+                StructurePiecesCollector, StructurePosition,
+            },
         },
     },
 };
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 pub struct BuriedTreasureGenerator;
 
 impl StructureGenerator for BuriedTreasureGenerator {
     fn get_structure_position(
         &self,
-        _seed: i64,
-        chunk_x: i32,
-        chunk_z: i32,
+        context: StructureGeneratorContext,
     ) -> Option<StructurePosition> {
-        let x = get_center_x(chunk_x);
-        let z = get_center_z(chunk_z);
+        let x = get_center_x(context.chunk_x);
+        let z = get_center_z(context.chunk_z);
 
         let bounding_box = BlockBox::new(x, -64, z, x, 320, z);
 
         let mut collector = StructurePiecesCollector::default();
 
         collector.add_piece(Box::new(BuriedTreasurePiece {
-            target_x: x,
-            target_z: z,
-            bounding_box,
+            piece: StructurePiece::new(StructurePieceType::BuriedTreasure, bounding_box, 0),
         }));
 
         Some(StructurePosition {
             start_pos: BlockPos::new(x, 90, z),
-            collector: collector.into(),
+            collector: Arc::new(collector.into()),
         })
     }
 }
 
-/// The Logic for actually placing the chest
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BuriedTreasurePiece {
-    target_x: i32,
-    target_z: i32,
-    bounding_box: BlockBox,
+    piece: StructurePiece,
 }
 
-impl StructurePiece for BuriedTreasurePiece {
-    fn bounding_box(&self) -> &BlockBox {
-        &self.bounding_box
+impl StructurePieceBase for BuriedTreasurePiece {
+    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
+        Box::new((*self).clone())
     }
 
-    fn place(&self, chunk: &mut ProtoChunk, _seed: i64) {
-        let y = chunk.get_top_y(&HeightMap::OceanFloorWg, self.target_x, self.target_z);
+    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
+        let boundingbox = self.bounding_box();
+        let y = chunk.get_top_y(
+            &HeightMap::OceanFloorWg,
+            boundingbox.min.x,
+            boundingbox.min.z,
+        );
 
-        let mut pos = BlockPos::new(self.target_x, y, self.target_z);
+        let mut pos = BlockPos::new(boundingbox.min.x, y, boundingbox.min.z);
         let bottom_y = chunk.bottom_y() as i32;
 
         for _ in (bottom_y..=y).rev() {
@@ -91,7 +96,12 @@ impl StructurePiece for BuriedTreasurePiece {
                         || Self::is_liquid(down_offset_state.to_block()))
                         && dir != BlockDirection::Up
                     {
-                        chunk.set_block_state(&offset_pos.0, down_raw_state.to_state());
+                        chunk.set_block_state(
+                            offset_pos.0.x,
+                            offset_pos.0.y,
+                            offset_pos.0.z,
+                            down_raw_state.to_state(),
+                        );
                         continue;
                     }
 
@@ -100,16 +110,24 @@ impl StructurePiece for BuriedTreasurePiece {
                     } else {
                         state.to_state()
                     };
-                    chunk.set_block_state(&offset_pos.0, state1);
+                    chunk.set_block_state(offset_pos.0.x, offset_pos.0.y, offset_pos.0.z, state1);
                 }
 
                 // Place the Chest
                 // TODO: Add loot table logic here (requires seed)
-                chunk.set_block_state(&pos.0, Block::CHEST.default_state);
+                chunk.set_block_state(pos.0.x, pos.0.y, pos.0.z, Block::CHEST.default_state);
                 return;
             }
             pos = pos.down();
         }
+    }
+
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece
+    }
+
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece
     }
 }
 

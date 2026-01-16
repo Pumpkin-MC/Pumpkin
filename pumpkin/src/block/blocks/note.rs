@@ -33,7 +33,7 @@ impl NoteBlock {
         }
     }
     fn get_note_pitch(note: u16) -> f32 {
-        2.0f64.powf((f64::from(note) - 12.0) / 12.0) as f32
+        2.0f32.powf((f32::from(note) - 12.0) / 12.0)
     }
 
     async fn get_state_with_instrument(

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, HorizontalFacingExt,
     block_properties::BlockProperties,
     sound::{Sound, SoundCategory},
 };
@@ -45,7 +45,14 @@ impl BlockBehaviour for TripwireHookBlock {
 
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
-            Self::can_place_at(args.block_accessor, args.position, args.direction).await
+            let props = TripwireHookProperties::from_state_id(args.state.id, args.block);
+
+            Self::can_place_at(
+                args.block_accessor,
+                args.position,
+                props.facing.to_block_direction(),
+            )
+            .await
         })
     }
 
@@ -229,8 +236,8 @@ impl TripwireHookBlock {
             }
         }
 
-        let future_attached = can_attach & (j > 1);
-        let future_powered = wire_attached & future_attached;
+        let future_attached = can_attach && (j > 1);
+        let future_powered = wire_attached && future_attached;
         let mut future_hook_state = TripwireHookProperties::default(&Block::TRIPWIRE_HOOK);
         future_hook_state.attached = future_attached;
         future_hook_state.powered = future_powered;

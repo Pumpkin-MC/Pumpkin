@@ -66,12 +66,9 @@ mod test {
     use crate::{
         GENERATION_SETTINGS, GeneratorSetting, GlobalRandomConfig, ProtoChunk,
         chunk::palette::BIOME_NETWORK_MAX_BITS,
-        generation::{
-            noise::router::{
-                multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
-                proto_noise_router::ProtoNoiseRouters,
-            },
-            proto_chunk::TerrainCache,
+        generation::noise::router::{
+            multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+            proto_noise_router::ProtoNoiseRouters,
         },
     };
 
@@ -109,7 +106,7 @@ mod test {
         let surface_settings = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let _terrain_cache = TerrainCache::from_random(&random_config);
+        //let _terrain_cache = TerrainCache::from_random(&random_config);
         let default_block = surface_settings.default_block.get_state();
 
         for data in expected_data.into_iter() {

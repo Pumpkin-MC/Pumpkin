@@ -1,14 +1,14 @@
 use super::{Mob, MobEntity};
-use crate::entity::ai::goal::look_around_goal::LookAroundGoal;
-use crate::entity::ai::goal::move_to_target_pos_goal::MoveToTargetPos;
-use crate::entity::ai::goal::step_and_destroy_block_goal::{
+use crate::entity::ai::goal::look_around::LookAroundGoal;
+use crate::entity::ai::goal::move_to_target_pos::MoveToTargetPos;
+use crate::entity::ai::goal::step_and_destroy_block::{
     StepAndDestroyBlockGoal, Stepping, SteppingFuture,
 };
-use crate::entity::ai::goal::zombie_attack_goal::ZombieAttackGoal;
+use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};
 use crate::entity::{
     Entity, NBTStorage,
-    ai::goal::{active_target_goal::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
+    ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
 use crate::world::World;
 use pumpkin_data::Block;
@@ -19,11 +19,11 @@ use rand::{Rng, rng};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
-pub struct Zombie {
-    mob_entity: MobEntity,
+pub struct ZombieEntity {
+    pub mob_entity: MobEntity,
 }
 
-impl Zombie {
+impl ZombieEntity {
     pub async fn make(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let zombie = Self { mob_entity };
@@ -55,9 +55,9 @@ impl Zombie {
     }
 }
 
-impl NBTStorage for Zombie {}
+impl NBTStorage for ZombieEntity {}
 
-impl Mob for Zombie {
+impl Mob for ZombieEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

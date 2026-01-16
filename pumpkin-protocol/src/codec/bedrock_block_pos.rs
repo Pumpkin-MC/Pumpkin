@@ -10,6 +10,14 @@ use crate::{
 /// Bedrocks Writes and Reads BlockPos types in Packets differently
 pub struct NetworkPos(pub BlockPos);
 
+impl NetworkPos {
+    pub fn write_signed<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarInt(self.0.0.x).write(writer)?;
+        VarInt(self.0.0.y).write(writer)?;
+        VarInt(self.0.0.z).write(writer)
+    }
+}
+
 impl PacketWrite for NetworkPos {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarInt(self.0.0.x).write(writer)?;

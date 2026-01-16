@@ -24,7 +24,6 @@ pumpkin-inventory.workspace = true
 pumpkin-world.workspace = true
 pumpkin-data.workspace = true
 pumpkin-protocol.workspace = true
-pumpkin-registry.workspace = true
 pumpkin-macros.workspace = true
 
 log.workspace = true

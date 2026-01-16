@@ -1,13 +1,15 @@
-use pumpkin_data::Block;
-use pumpkin_util::{
-    math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
-    random::{RandomGenerator, RandomImpl},
-};
-use serde::Deserialize;
-
 use super::TreeDecorator;
 use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::proto_chunk::GenerationCache;
+use pumpkin_data::{
+    Block,
+    tag::{Block::MINECRAFT_LEAVES, Taggable},
+};
+use pumpkin_util::{
+    math::{block_box::BlockBox, position::BlockPos},
+    random::{RandomGenerator, RandomImpl},
+};
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct PlaceOnGroundTreeDecorator {
@@ -27,10 +29,10 @@ impl PlaceOnGroundTreeDecorator {
     ) {
         let list = TreeDecorator::get_leaf_litter_positions(root_positions, log_positions);
 
-        if list.is_empty() {
+        let Some(pos) = list.first() else {
             return;
-        }
-        let pos = list.first().unwrap();
+        };
+
         let i = pos.0.y;
         let mut j = pos.0.x;
         let mut k = pos.0.x;
@@ -47,17 +49,14 @@ impl PlaceOnGroundTreeDecorator {
             m = m.max(block_pos_2.0.z);
         }
 
-        let block_box = BoundingBox::new(
-            Vector3::new(j as f64, i as f64, l as f64),
-            Vector3::new(k as f64, i as f64, m as f64),
-        )
-        .expand(self.radius as f64, self.height as f64, self.radius as f64);
+        let block_box =
+            BlockBox::new(j, i, l, k, i, m).expand(self.radius, self.height, self.radius);
 
         for _n in 0..self.tries {
             let pos = BlockPos::new(
-                random.next_inbetween_i32(block_box.min.x as i32, block_box.max.x as i32),
-                random.next_inbetween_i32(block_box.min.y as i32, block_box.max.y as i32),
-                random.next_inbetween_i32(block_box.min.z as i32, block_box.max.z as i32),
+                random.next_inbetween_i32(block_box.min.x, block_box.max.x),
+                random.next_inbetween_i32(block_box.min.y, block_box.max.y),
+                random.next_inbetween_i32(block_box.min.z, block_box.max.z),
             );
             self.generate_decoration(chunk, pos, random);
         }
@@ -70,14 +69,15 @@ impl PlaceOnGroundTreeDecorator {
         random: &mut RandomGenerator,
     ) {
         let state = GenerationCache::get_block_state(chunk, &pos.0);
-        let pos = pos.up();
-        let up_state = GenerationCache::get_block_state(chunk, &pos.0);
-
+        let up_pos = pos.up();
+        let up_state = GenerationCache::get_block_state(chunk, &up_pos.0);
         // TODO
         if (up_state.to_state().is_air() || up_state.to_block() == &Block::VINE)
             && state.to_state().is_full_cube()
+            && !state.to_block().has_tag(&MINECRAFT_LEAVES)
+        // TODO: using heightmap seems not to work
         {
-            chunk.set_block_state(&pos.0, self.block_state_provider.get(random, pos));
+            chunk.set_block_state(&up_pos.0, self.block_state_provider.get(random, up_pos));
         }
     }
 }

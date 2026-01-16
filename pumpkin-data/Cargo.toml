@@ -13,6 +13,8 @@ serde.workspace = true
 crc-fast.workspace = true
 
 [build-dependencies]
+indexmap = { workspace = true, features = ["serde"] }
+
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 

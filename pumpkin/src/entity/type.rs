@@ -7,8 +7,11 @@ use uuid::Uuid;
 use crate::{
     entity::{
         Entity, EntityBase,
-        decoration::{end_crystal::EndCrystalEntity, painting::PaintingEntity},
-        mob::zombie::Zombie,
+        decoration::{
+            armor_stand::ArmorStandEntity, end_crystal::EndCrystalEntity, painting::PaintingEntity,
+        },
+        living::LivingEntity,
+        mob::{drowned::DrownedEntity, zombie::ZombieEntity},
     },
     world::World,
 };
@@ -22,11 +25,19 @@ pub async fn from_type(
     let entity = Entity::new(uuid, world.clone(), position, entity_type, false);
 
     let mob: Arc<dyn EntityBase> = match entity_type.id {
-        id if id == EntityType::ZOMBIE.id => Zombie::make(entity).await,
+        id if id == EntityType::ZOMBIE.id => ZombieEntity::make(entity).await,
+        id if id == EntityType::DROWNED.id => DrownedEntity::make(entity).await,
+        id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
-        // TODO
-        _ => Arc::new(entity), // Fallback Entity
+        // Fallback Entity
+        _ => {
+            if entity_type.max_health.is_some() {
+                Arc::new(LivingEntity::new(entity))
+            } else {
+                Arc::new(entity)
+            }
+        }
     };
 
     mob

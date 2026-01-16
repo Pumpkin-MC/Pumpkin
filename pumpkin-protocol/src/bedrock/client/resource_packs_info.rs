@@ -1,8 +1,10 @@
+use std::io::{Error, Write};
+
 use crate::serial::PacketWrite;
 use pumpkin_macros::packet;
 
-#[derive(PacketWrite)]
 #[packet(6)]
+/// https://mojang.github.io/bedrock-protocol-docs/html/ResourcePacksInfoPacket.html
 pub struct CResourcePacksInfo {
     resource_pack_required: bool,
     has_addon_packs: bool,
@@ -12,6 +14,20 @@ pub struct CResourcePacksInfo {
     world_template_version: String,
     resource_packs_size: u16,
     resource_packs: Vec<ResourcePack>,
+}
+
+impl PacketWrite for CResourcePacksInfo {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.resource_pack_required.write(writer)?;
+        self.has_addon_packs.write(writer)?;
+        self.has_scripts.write(writer)?;
+        self.is_vibrant_visuals_force_disabled.write(writer)?;
+        self.world_template_id.write(writer)?;
+        self.world_template_version.write(writer)?;
+        self.resource_packs_size.write(writer)?;
+        self.resource_packs.write(writer)?;
+        Ok(())
+    }
 }
 
 #[derive(PacketWrite)]

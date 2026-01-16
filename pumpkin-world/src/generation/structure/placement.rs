@@ -19,12 +19,12 @@ pub struct StructurePlacement {
 impl StructurePlacement {
     pub fn should_generate(
         &self,
-        calculator: StructurePlacementCalculator,
+        calculator: &StructurePlacementCalculator,
         chunk_x: i32,
         chunk_z: i32,
     ) -> bool {
         self.r#type
-            .is_start_chunk(&calculator, chunk_x, chunk_z, self.salt)
+            .is_start_chunk(calculator, chunk_x, chunk_z, self.salt)
             && self.apply_frequency_reduction(calculator.seed, chunk_x, chunk_z)
         // TODO: add exclusion_zone, only used for pillager_outposts
     }
@@ -100,7 +100,7 @@ pub enum StructurePlacementType {
     #[serde(rename = "minecraft:random_spread")]
     RandomSpread(RandomSpreadStructurePlacement),
     #[serde(rename = "minecraft:concentric_rings")]
-    ConcentricRings,
+    ConcentricRings(ConcentricRingsStructurePlacement),
 }
 
 impl StructurePlacementType {
@@ -115,7 +115,10 @@ impl StructurePlacementType {
             StructurePlacementType::RandomSpread(placement) => {
                 placement.is_start_chunk(calculator, chunk_x, chunk_z, salt)
             }
-            StructurePlacementType::ConcentricRings => false, // TODO, This is needed for Stronghold, since it is placed in rings
+            // This is needed for Stronghold, since it is placed in rings
+            StructurePlacementType::ConcentricRings(placement) => {
+                placement.is_start_chunk(calculator, chunk_x, chunk_z, salt)
+            }
         }
     }
 }
@@ -125,6 +128,45 @@ pub struct RandomSpreadStructurePlacement {
     spacing: i32,
     separation: i32,
     spread_type: Option<SpreadType>,
+}
+
+#[derive(Deserialize)]
+pub struct ConcentricRingsStructurePlacement {
+    spread: i32,
+    distance: i32,
+    count: i32,
+    preferred_biomes: String,
+}
+
+impl ConcentricRingsStructurePlacement {
+    pub fn is_start_chunk(
+        &self,
+        _calculator: &StructurePlacementCalculator,
+        chunk_x: i32,
+        chunk_z: i32,
+        salt: u32,
+    ) -> bool {
+        // TODO: this is entirely wrong, but the original logic is too complex for now
+        let x = (chunk_x << 4) as f64;
+        let z = (chunk_z << 4) as f64;
+        let distance_sq = x * x + z * z;
+        let distance = distance_sq.sqrt();
+
+        let ring_width = 1000.0;
+        let ring_gap = 2000.0;
+
+        let in_ring = (distance % (ring_width + ring_gap)) < ring_width;
+
+        if !in_ring {
+            return false;
+        }
+
+        let seed = (chunk_x as i64).wrapping_mul(341873128712)
+            ^ (chunk_z as i64).wrapping_mul(132897987541)
+            ^ (salt as i64);
+
+        (seed.abs() % 400) == 0
+    }
 }
 
 #[derive(Deserialize)]
@@ -172,6 +214,12 @@ impl RandomSpreadStructurePlacement {
 
 pub struct StructurePlacementCalculator {
     pub seed: i64,
+}
+
+impl StructurePlacementCalculator {
+    pub fn new(seed: i64) -> Self {
+        Self { seed }
+    }
 }
 
 #[cfg(test)]

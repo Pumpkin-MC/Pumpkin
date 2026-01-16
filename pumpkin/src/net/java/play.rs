@@ -5,7 +5,7 @@ use rsa::signature::Verifier;
 use sha1::Sha1;
 use std::num::NonZeroU8;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
@@ -24,7 +24,9 @@ use crate::plugin::player::player_interact_event::{InteractAction, PlayerInterac
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
-use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
+use pumpkin_data::block_properties::{
+    BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
+};
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -621,8 +623,17 @@ impl JavaClient {
     //     // TODO: Implement and merge any redundant code with pick_item_from_block
     // }
 
-    pub async fn handle_set_command_block(&self, player: &Arc<Player>, command: SSetCommandBlock) {
-        // TODO: check things
+    pub async fn handle_set_command_block(
+        &self,
+        player: &Arc<Player>,
+        mut command: SSetCommandBlock,
+    ) {
+        if !player.is_creative() {
+            return;
+        }
+        if player.permission_lvl.load() < PermissionLvl::Two {
+            return;
+        }
         let pos = command.pos;
         if let Some(block_entity) = player.world().get_block_entity(&pos).await {
             if block_entity.resource_location() != CommandBlockEntity::ID {
@@ -638,11 +649,73 @@ impl JavaClient {
                 return;
             };
 
-            let _block_state = match command_block_mode {
+            let block = player.world().get_block(&pos).await;
+            let old_state_id = player.world().get_block_state_id(&pos).await;
+            let mut props = CommandBlockLikeProperties::from_state_id(old_state_id, block);
+
+            let block_type = match command_block_mode {
                 CommandBlockMode::Chain => Block::CHAIN_COMMAND_BLOCK,
                 CommandBlockMode::Repeating => Block::REPEATING_COMMAND_BLOCK,
                 CommandBlockMode::Impulse => Block::COMMAND_BLOCK,
             };
+
+            let old_command_block: &CommandBlockEntity =
+                block_entity.as_any().downcast_ref().unwrap();
+
+            props.conditional = command.flags & 0x2 != 0;
+
+            let new_state_id = props.to_state_id(&block_type);
+            player
+                .world()
+                .set_block_state(
+                    &command.pos,
+                    new_state_id,
+                    BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                )
+                .await;
+
+            if command.command.starts_with('/') {
+                command.command.remove(0);
+            }
+
+            let command_block = CommandBlockEntity {
+                position: pos,
+                powered: old_command_block.powered.load(Ordering::SeqCst).into(),
+                condition_met: old_command_block
+                    .condition_met
+                    .load(Ordering::SeqCst)
+                    .into(),
+                auto: (command.flags & 0x4 != 0).into(),
+                dirty: old_command_block.dirty.load(Ordering::SeqCst).into(),
+                command: Mutex::new(command.command.clone()),
+                last_output: old_command_block.last_output.lock().await.clone().into(),
+                track_output: (command.flags & 0x1 != 0).into(),
+                success_count: AtomicU32::new(0),
+            };
+            player
+                .world()
+                .add_block_entity(Arc::new(command_block))
+                .await;
+
+            player
+                .send_system_message(&TextComponent::text(format!(
+                    "Command set: {}",
+                    command.command
+                )))
+                .await;
+
+            // The 0x4 flag means always active
+            if command.flags & 0x4 != 0 && block_type != Block::CHAIN_COMMAND_BLOCK {
+                player
+                    .world()
+                    .schedule_block_tick(
+                        &block_type,
+                        pos,
+                        1,
+                        pumpkin_world::tick::TickPriority::Normal,
+                    )
+                    .await;
+            }
         }
     }
 
@@ -1031,7 +1104,7 @@ impl JavaClient {
                     player.gameprofile.name,
                     self.id,
                 );
-                player.send_client_information();
+                player.send_client_information().await;
             }
         } else {
             self.kick(TextComponent::text("Invalid hand or chat type"))
@@ -1453,7 +1526,9 @@ impl JavaClient {
 
         server
             .item_registry
-            .use_on_block(&mut stack, player, position, face, block, server)
+            .use_on_block(
+                &mut stack, player, position, face, cursor_pos, block, server,
+            )
             .await;
 
         // Check if the item is a block, because not every item can be placed :D
@@ -1924,8 +1999,8 @@ impl JavaClient {
                 world.as_ref(),
                 Some(player),
                 block,
+                block.default_state,
                 &final_block_pos,
-                final_face,
                 Some(&use_item_on),
             )
             .await
@@ -1961,6 +2036,11 @@ impl JavaClient {
         let _replaced_id = world
             .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
             .await;
+        self.send_packet_now(&CBlockUpdate::new(
+            final_block_pos,
+            VarInt(i32::from(new_state)),
+        ))
+        .await;
 
         server
             .block_registry

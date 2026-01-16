@@ -1,5 +1,5 @@
 use super::{Controls, Goal, to_goal_ticks};
-use crate::entity::ai::goal::move_to_target_pos_goal::{MoveToTargetPos, MoveToTargetPosGoal};
+use crate::entity::ai::goal::move_to_target_pos::{MoveToTargetPos, MoveToTargetPosGoal};
 use crate::entity::ai::goal::{GoalFuture, ParentHandle};
 use crate::entity::mob::Mob;
 use crate::world::World;

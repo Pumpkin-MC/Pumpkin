@@ -168,16 +168,8 @@ impl ToTokens for UniformLootNumberProvider {
 }
 
 impl UniformLootNumberProvider {
-    pub fn get_min(&self) -> f32 {
-        self.min
-    }
-
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
         random.next_f32() * (self.max - self.min) + self.min
-    }
-
-    pub fn get_max(&self) -> f32 {
-        self.max
     }
 }
 
@@ -204,28 +196,10 @@ impl ToTokens for LootNumberProviderTypes {
 }
 
 impl LootNumberProviderTypes {
-    pub fn get_min(&self) -> f32 {
-        match self {
-            LootNumberProviderTypes::Object(int_provider) => match int_provider {
-                LootNumberProviderTypesProvider::Uniform(uniform) => uniform.get_min(),
-            },
-            LootNumberProviderTypes::Constant(i) => *i,
-        }
-    }
-
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
         match self {
             LootNumberProviderTypes::Object(int_provider) => match int_provider {
                 LootNumberProviderTypesProvider::Uniform(uniform) => uniform.get(random),
-            },
-            LootNumberProviderTypes::Constant(i) => *i,
-        }
-    }
-
-    pub fn get_max(&self) -> f32 {
-        match self {
-            LootNumberProviderTypes::Object(int_provider) => match int_provider {
-                LootNumberProviderTypesProvider::Uniform(uniform) => uniform.get_max(),
             },
             LootNumberProviderTypes::Constant(i) => *i,
         }

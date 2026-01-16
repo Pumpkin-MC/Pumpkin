@@ -10,6 +10,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use uuid::Uuid;
 
@@ -28,6 +29,7 @@ impl ItemBehaviour for EndCrystalItem {
         player: &'a Player,
         location: BlockPos,
         _face: BlockDirection,
+        _cursor_pos: Vector3<f32>,
         _block: &'a Block,
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {

@@ -224,8 +224,8 @@ impl BlockBehaviour for FireBlock {
                     world: Some(args.world),
                     block_accessor: args.world,
                     block: &Block::FIRE,
+                    state: Block::FIRE.default_state,
                     position: args.position,
-                    direction: BlockDirection::Up,
                     player: None,
                     use_item_on: None,
                 })
@@ -275,8 +275,8 @@ impl BlockBehaviour for FireBlock {
                     world: Some(world),
                     block_accessor: world.as_ref(),
                     block,
+                    state: block.default_state,
                     position: pos,
-                    direction: BlockDirection::Up,
                     player: None,
                     use_item_on: None,
                 })

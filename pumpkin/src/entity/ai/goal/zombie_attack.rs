@@ -1,6 +1,6 @@
 use super::{Controls, Goal};
 use crate::entity::ai::goal::GoalFuture;
-use crate::entity::ai::goal::melee_attack_goal::MeleeAttackGoal;
+use crate::entity::ai::goal::melee_attack::MeleeAttackGoal;
 use crate::entity::mob::Mob;
 
 pub struct ZombieAttackGoal {

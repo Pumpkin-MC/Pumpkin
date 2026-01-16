@@ -43,7 +43,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
-        _ => todo!(),
+        _ => None,
     }
 }
 // Also Pumpkin\pumpkin-protocol\src\codec\data_component.rs
