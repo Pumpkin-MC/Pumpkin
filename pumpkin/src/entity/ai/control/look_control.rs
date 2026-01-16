@@ -44,8 +44,8 @@ impl LookControl {
             x,
             y,
             z,
-            mob.get_max_look_yaw_change() as f32,
-            mob.get_max_look_pitch_change() as f32,
+            mob.get_max_look_yaw_change(),
+            mob.get_max_look_pitch_change(),
         );
     }
 
@@ -105,7 +105,7 @@ impl LookControl {
         let navigator = mob_entity.navigator.lock().await;
         if !navigator.is_idle() {
             let entity = &mob_entity.living_entity.entity;
-            let max_head_rotation = mob.get_max_head_rotation() as f32;
+            let max_head_rotation = mob.get_max_head_rotation();
             entity.head_yaw.store(clamp_angle(
                 entity.head_yaw.load(),
                 entity.body_yaw.load(),

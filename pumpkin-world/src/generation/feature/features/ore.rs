@@ -1,5 +1,4 @@
 use core::f32;
-use std::collections::HashSet;
 
 use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_util::{
@@ -84,7 +83,8 @@ impl OreFeature {
         vertical_size: i32,
     ) -> bool {
         let mut placed_blocks_count = 0;
-        let mut bit_set = HashSet::new();
+        let bitset_size = (horizontal_size * vertical_size * horizontal_size) as usize;
+        let mut bit_set = vec![false; bitset_size];
         let mut mutable_pos = BlockPos::ZERO;
         let j = self.size;
         let mut ds = vec![0.0; (j * 4) as usize];
@@ -151,6 +151,8 @@ impl OreFeature {
                     if u_val * u_val + w_val * w_val >= 1.0 {
                         continue;
                     }
+                    let base_idx = (t_val - x_bound) + (v_val - y_bound) * horizontal_size;
+
                     for aa_val in p_bound..=s_bound {
                         let ab_val = (aa_val as f64 + 0.5 - h_val) / d_val;
                         if u_val * u_val + w_val * w_val + ab_val * ab_val >= 1.0 {
@@ -160,14 +162,13 @@ impl OreFeature {
                             continue;
                         }
 
-                        let ac = (t_val - x_bound)
-                            + (v_val - y_bound) * horizontal_size
-                            + (aa_val - z_bound) * horizontal_size * vertical_size;
+                        let ac = (base_idx + (aa_val - z_bound) * horizontal_size * vertical_size)
+                            as usize;
 
-                        if bit_set.contains(&ac) {
+                        if bit_set[ac] {
                             continue;
                         }
-                        bit_set.insert(ac);
+                        bit_set[ac] = true;
 
                         mutable_pos.0.x = t_val;
                         mutable_pos.0.y = v_val;
@@ -177,12 +178,13 @@ impl OreFeature {
                         //     continue;
                         // }
 
-                        let ad = t_val;
-                        let ae = v_val;
-                        let af = aa_val;
+                        // let ad = t_val;
+                        // let ae = v_val;
+                        // let af = aa_val;
+                        // TODO: using a section would be faster
 
-                        let block_state =
-                            GenerationCache::get_block_state(chunk, &Vector3::new(ad, ae, af));
+                        let pos_vec = Vector3::new(t_val, v_val, aa_val);
+                        let block_state = GenerationCache::get_block_state(chunk, &pos_vec);
 
                         for target in &self.targets {
                             if self.should_place(
@@ -192,10 +194,7 @@ impl OreFeature {
                                 target,
                                 &mut mutable_pos,
                             ) {
-                                chunk.set_block_state(
-                                    &Vector3::new(ad, ae, af),
-                                    target.state.get_state(),
-                                );
+                                chunk.set_block_state(&pos_vec, target.state.get_state());
                                 placed_blocks_count += 1;
                                 break; // Equivalent to 'continue block11;'
                             }

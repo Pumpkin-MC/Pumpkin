@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{BlockProperties, FurnaceLikeProperties};
+use pumpkin_data::{
+    block_properties::{BlockProperties, FurnaceLikeProperties},
+    screen::WindowType,
+};
 use pumpkin_inventory::{
-    furnace::furnace_screen_handler::FurnaceScreenHandler,
+    furnace_like::furnace_like_screen_handler::FurnaceLikeScreenHandler,
     player::player_inventory::PlayerInventory,
     screen_handler::{BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
 };
@@ -42,11 +45,12 @@ impl ScreenHandlerFactory for FurnaceScreenFactory {
         _player: &'a dyn InventoryPlayer,
     ) -> BoxFuture<'a, Option<SharedScreenHandler>> {
         Box::pin(async move {
-            let concrete_handler = FurnaceScreenHandler::new(
+            let concrete_handler = FurnaceLikeScreenHandler::new(
                 sync_id,
                 player_inventory,
                 self.inventory.clone(),
                 self.block_entity.clone(),
+                WindowType::Furnace,
             )
             .await;
 

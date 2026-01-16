@@ -230,8 +230,8 @@ pub struct CanPlaceAtArgs<'a> {
     pub world: Option<&'a World>,
     pub block_accessor: &'a dyn BlockAccessor,
     pub block: &'a Block,
+    pub state: &'a BlockState,
     pub position: &'a BlockPos,
-    pub direction: BlockDirection,
     pub player: Option<&'a Player>,
     pub use_item_on: Option<&'a SUseItemOn>,
 }
@@ -384,7 +384,7 @@ pub async fn calc_block_breaking(
     player.get_mining_speed(block).await / hardness / i
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum BlockIsReplacing {
     Itself(BlockStateId),
     Water(Integer0To15),

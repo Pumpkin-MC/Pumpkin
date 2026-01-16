@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockDirection, tag, tag::Taggable};
+use pumpkin_data::{Block, tag, tag::Taggable};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -47,7 +47,7 @@ impl NetherForestVegetationFeature {
             let nether_block = Block::from_state_id(nether_state.id);
             if !chunk.is_air(&pos.0)
                 || pos.0.y <= chunk.bottom_y() as i32
-                || block_registry.can_place_at(nether_block, chunk, &pos, BlockDirection::Up)
+                || block_registry.can_place_at(nether_block, nether_state, chunk, &pos)
             {
                 continue;
             }

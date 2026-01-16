@@ -1,6 +1,10 @@
-use std::{fs, path::Path, path::PathBuf, sync::Arc};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::{Arc, OnceLock},
+};
 
-use crate::command::client_suggestions;
+use crate::{LoggerOption, command::client_suggestions};
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
@@ -28,6 +32,7 @@ pub struct Context {
     pub handlers: Arc<RwLock<HandlerMap>>,
     pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<RwLock<PermissionManager>>,
+    pub logger: Arc<OnceLock<LoggerOption>>,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -46,6 +51,7 @@ impl Context {
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
         permission_manager: Arc<RwLock<PermissionManager>>,
+        logger: Arc<OnceLock<LoggerOption>>,
     ) -> Self {
         Self {
             metadata,
@@ -53,6 +59,7 @@ impl Context {
             handlers,
             plugin_manager,
             permission_manager,
+            logger,
         }
     }
 
@@ -280,5 +287,17 @@ impl Context {
 
         // Return true if any new plugins were loaded
         after_count > before_count
+    }
+
+    /// Initializes logging via the log crate for the plugin.
+    pub fn init_log(&self) {
+        let logger_arc = self.logger.clone();
+
+        let static_logger = Box::leak(Box::new(logger_arc));
+
+        if let Some(Some((logger_impl, level))) = static_logger.get() {
+            log::set_logger(logger_impl).unwrap();
+            log::set_max_level(*level);
+        }
     }
 }

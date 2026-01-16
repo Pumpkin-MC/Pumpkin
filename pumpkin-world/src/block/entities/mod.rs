@@ -13,10 +13,13 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use sign::SignBlockEntity;
 
+use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity;
+use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
+use crate::block::entities::smoker::SmokerBlockEntity;
 use crate::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
     block::entities::dropper::DropperBlockEntity, inventory::Inventory, world::SimpleWorld,
@@ -24,6 +27,7 @@ use crate::{
 
 pub mod barrel;
 pub mod bed;
+pub mod blasting_furnace;
 pub mod chest;
 pub mod chiseled_bookshelf;
 pub mod command_block;
@@ -32,11 +36,13 @@ pub mod dropper;
 pub mod end_portal;
 pub mod ender_chest;
 pub mod furnace;
+pub mod furnace_like_block_entity;
 pub mod hopper;
 pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
 pub mod sign;
+pub mod smoker;
 
 //TODO: We need a mark_dirty for chests
 pub trait BlockEntity: Send + Sync {
@@ -76,9 +82,12 @@ pub trait BlockEntity: Send + Sync {
             })
             .unwrap() as u32
     }
+
+    /// Obtain NBT data for sending to the client in [ChunkData](crate::chunk::ChunkData)
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         None
     }
+
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
     }
@@ -143,6 +152,11 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             ChiseledBookshelfBlockEntity,
         >(nbt)),
         FurnaceBlockEntity::ID => Arc::new(block_entity_from_generic::<FurnaceBlockEntity>(nbt)),
+        CommandBlockEntity::ID => Arc::new(block_entity_from_generic::<CommandBlockEntity>(nbt)),
+        BlastingFurnaceBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<BlastingFurnaceBlockEntity>(nbt))
+        }
+        SmokerBlockEntity::ID => Arc::new(block_entity_from_generic::<SmokerBlockEntity>(nbt)),
         _ => return None,
     })
 }

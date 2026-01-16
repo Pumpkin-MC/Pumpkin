@@ -3,10 +3,10 @@ use std::sync::Arc;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
@@ -17,7 +17,8 @@ use pumpkin_world::world::BlockFlags;
 use crate::block::BlockFuture;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
+    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
+    PlacedArgs,
 };
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
@@ -143,7 +144,37 @@ impl BlockBehaviour for BedBlock {
         })
     }
 
-    #[allow(clippy::too_many_lines)]
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if args.moved {
+                return;
+            }
+
+            let bed_props = BedProperties::from_state_id(args.old_state_id, args.block);
+            let other_half_pos = if bed_props.part == BedPart::Head {
+                args.position
+                    .offset(bed_props.facing.opposite().to_offset())
+            } else {
+                args.position.offset(bed_props.facing.to_offset())
+            };
+
+            let (other_block, other_state) = args.world.get_block_and_state(&other_half_pos).await;
+            if other_block == args.block {
+                let other_props = BedProperties::from_state_id(other_state.id, other_block);
+                if other_props.part != bed_props.part {
+                    args.world
+                        .set_block_state(
+                            &other_half_pos,
+                            Block::AIR.default_state.id,
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                }
+            }
+        })
+    }
+
+    #[expect(clippy::too_many_lines)]
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position).await;
@@ -163,7 +194,7 @@ impl BlockBehaviour for BedBlock {
             };
 
             // Explode if not in the overworld
-            if args.world.dimension_type != VanillaDimensionType::Overworld {
+            if args.world.dimension != Dimension::OVERWORLD {
                 args.world
                     .break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS)
                     .await;
@@ -235,9 +266,10 @@ impl BlockBehaviour for BedBlock {
             if args
                 .player
                 .set_respawn_point(
-                    args.world.dimension_type,
+                    args.world.dimension,
                     bed_head_pos,
                     args.player.get_entity().yaw.load(),
+                    args.player.get_entity().pitch.load(),
                 )
                 .await
             {

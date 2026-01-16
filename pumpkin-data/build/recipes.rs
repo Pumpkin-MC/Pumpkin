@@ -424,6 +424,48 @@ pub(crate) fn build() -> TokenStream {
             Smoking(CookingRecipe),
             CampfireCooking(CookingRecipe),
         }
+        #[derive(Clone, Debug)]
+        pub enum CookingRecipeKind {
+            Blasting,
+            Smelting,
+            Smoking,
+            CampfireCooking,
+        }
+
+        impl From<&CookingRecipeType> for CookingRecipeKind {
+            fn from(recipe_type: &CookingRecipeType) -> Self {
+                match recipe_type {
+                    CookingRecipeType::Blasting(_) => CookingRecipeKind::Blasting,
+                    CookingRecipeType::Smelting(_) => CookingRecipeKind::Smelting,
+                    CookingRecipeType::Smoking(_) => CookingRecipeKind::Smoking,
+                    CookingRecipeType::CampfireCooking(_) => CookingRecipeKind::CampfireCooking,
+                }
+            }
+        }
+
+        impl From<CookingRecipeType> for CookingRecipeKind {
+            fn from(recipe_type: CookingRecipeType) -> Self {
+                match recipe_type {
+                    CookingRecipeType::Blasting(_) => CookingRecipeKind::Blasting,
+                    CookingRecipeType::Smelting(_) => CookingRecipeKind::Smelting,
+                    CookingRecipeType::Smoking(_) => CookingRecipeKind::Smoking,
+                    CookingRecipeType::CampfireCooking(_) => CookingRecipeKind::CampfireCooking,
+                }
+            }
+        }
+
+        impl CookingRecipeKind {
+            pub fn to_type(self, recipe: CookingRecipe) -> CookingRecipeType {
+                match self {
+                    CookingRecipeKind::Blasting => CookingRecipeType::Blasting(recipe),
+                    CookingRecipeKind::Smelting => CookingRecipeType::Smelting(recipe),
+                    CookingRecipeKind::Smoking => CookingRecipeType::Smoking(recipe),
+                    CookingRecipeKind::CampfireCooking => CookingRecipeType::CampfireCooking(recipe),
+                }
+            }
+        }
+
+
 
         #[derive(Clone, Debug)]
         pub struct RecipeResultStruct {
@@ -472,5 +514,23 @@ pub(crate) fn build() -> TokenStream {
         pub static RECIPES_COOKING: &[CookingRecipeType] = &[
             #(#cooking_recipes ),*
         ];
+
+        pub fn get_cooking_recipe_with_ingredient(ingredient: &Item, recipe_type: CookingRecipeKind) -> Option<&'static CookingRecipe> {
+            RECIPES_COOKING.iter().find_map(|recipe| {
+                match (recipe, &recipe_type) {
+                    (CookingRecipeType::Blasting(cooking_recipe), CookingRecipeKind::Blasting) |
+                    (CookingRecipeType::Smelting(cooking_recipe), CookingRecipeKind::Smelting) |
+                    (CookingRecipeType::Smoking(cooking_recipe), CookingRecipeKind::Smoking) |
+                    (CookingRecipeType::CampfireCooking(cooking_recipe), CookingRecipeKind::CampfireCooking) => {
+                        if cooking_recipe.ingredient.match_item(ingredient) {
+                            Some(cooking_recipe)
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None
+                }
+            })
+        }
     }
 }

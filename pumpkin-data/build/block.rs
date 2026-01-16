@@ -279,8 +279,9 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 #[inline]
+                #[allow(clippy::manual_range_patterns)]
                 fn handles_block_id(block_id: u16) -> bool where Self: Sized {
-                    [#(#block_ids),*].contains(&block_id)
+                    matches!(block_id, #(#block_ids)|*)
                 }
 
                 fn to_state_id(&self, block: &Block) -> u16 {
@@ -291,14 +292,22 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn from_state_id(state_id: u16, block: &Block) -> Self {
-                    if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
-                    }
-                    if state_id >= block.states[0].id && state_id <= block.states.last().unwrap().id {
-                        let index = state_id - block.states[0].id;
-                        Self::from_index(index)
+                    debug_assert!(
+                        Self::handles_block_id(block.id),
+                        "{} is not a valid block for {}", &block.name, #struct_name
+                    );
+
+                    let min_id = block.states[0].id;
+                    let max_id = block.states.last().map(|s| s.id).unwrap_or(min_id);
+
+                    if (min_id..=max_id).contains(&state_id) {
+                        Self::from_index(state_id - min_id)
                     } else {
+                        #[cfg(debug_assertions)]
                         panic!("State ID {} does not exist for {}", state_id, &block.name);
+
+                        #[cfg(not(debug_assertions))]
+                        Self::from_index(0)
                     }
                 }
 
@@ -313,8 +322,10 @@ impl ToTokens for BlockPropertyStruct {
                    vec![ #(#to_props_entries),* ]
                 }
 
+                #[allow(clippy::manual_range_patterns)]
                 fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
-                    if ![#(#block_ids),*].contains(&block.id) {
+                    #[cfg(debug_assertions)]
+                    if !matches!(block.id, #(#block_ids)|*) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
@@ -638,7 +649,7 @@ pub(crate) fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../assets/properties.json").unwrap())
             .expect("Failed to parse properties.json");
 
-    let generated_prop_map: std::collections::HashMap<i32, &GeneratedProperty> =
+    let generated_prop_map: std::collections::BTreeMap<i32, &GeneratedProperty> =
         generated_properties
             .iter()
             .map(|p| (p.hash_key, p))

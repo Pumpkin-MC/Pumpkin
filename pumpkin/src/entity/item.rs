@@ -8,10 +8,10 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::damage::DamageType;
+use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CTakeItemEntity, MetaDataType, Metadata},
+    java::client::play::{CTakeItemEntity, Metadata},
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
@@ -324,18 +324,9 @@ impl EntityBase for ItemEntity {
             entity.update_fluid_state(&caller).await;
 
             let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
-
-
-            || entity.touching_water.load(Ordering::SeqCst)
-
-
-            || entity.touching_lava.load(Ordering::SeqCst)
-
-
-            //|| entity.velocity.load().sub(&original_velo).length_squared() > 0.01;
-
-
-            || entity.velocity.load() != original_velo;
+                || entity.touching_water.load(Ordering::SeqCst)
+                || entity.touching_lava.load(Ordering::SeqCst)
+                || entity.velocity.load().sub(&original_velo).length_squared() > 0.01;
 
             if velocity_dirty {
                 entity.send_pos_rot().await;
@@ -349,7 +340,7 @@ impl EntityBase for ItemEntity {
         Box::pin(async {
             self.entity
                 .send_meta_data(&[Metadata::new(
-                    8,
+                    TrackedData::DATA_STACK,
                     MetaDataType::ItemStack,
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )])
@@ -359,7 +350,7 @@ impl EntityBase for ItemEntity {
 
     fn damage_with_context<'a>(
         &'a self,
-        _caller: Arc<dyn EntityBase>,
+        _caller: &'a dyn EntityBase,
         amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
@@ -376,12 +367,12 @@ impl EntityBase for ItemEntity {
         })
     }
 
-    fn damage(
-        &self,
-        _caller: Arc<dyn EntityBase>,
+    fn damage<'a>(
+        &'a self,
+        _caller: &'a dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
-    ) -> EntityBaseFuture<'_, bool> {
+    ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async { false })
     }
 

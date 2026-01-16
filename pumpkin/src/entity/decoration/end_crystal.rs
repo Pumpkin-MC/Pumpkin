@@ -1,9 +1,8 @@
 use core::f32;
-use std::sync::Arc;
 
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
-use pumpkin_data::damage::DamageType;
-use pumpkin_protocol::java::client::play::{MetaDataType, Metadata};
+use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 
 pub struct EndCrystalEntity {
@@ -19,7 +18,11 @@ impl EndCrystalEntity {
 impl EndCrystalEntity {
     pub async fn set_show_bottom(&self, show_bottom: bool) {
         self.entity
-            .send_meta_data(&[Metadata::new(9, MetaDataType::Boolean, show_bottom)])
+            .send_meta_data(&[Metadata::new(
+                TrackedData::DATA_SHOW_BOTTOM,
+                MetaDataType::Boolean,
+                show_bottom,
+            )])
             .await;
     }
 }
@@ -37,7 +40,7 @@ impl EntityBase for EndCrystalEntity {
 
     fn damage_with_context<'a>(
         &'a self,
-        _caller: Arc<dyn EntityBase>,
+        _caller: &'a dyn EntityBase,
         _amount: f32,
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,

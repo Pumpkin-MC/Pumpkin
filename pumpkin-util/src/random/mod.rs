@@ -62,24 +62,22 @@ macro_rules! population_seed_fn {
 
 // TODO: Write unit test for this
 #[inline]
-pub fn get_decorator_seed(population_seed: u64, index: usize, step: usize) -> u64 {
+pub fn get_decorator_seed(population_seed: u64, index: u64, step: u64) -> u64 {
     population_seed
-        .wrapping_add(index as u64)
-        .wrapping_add(10_000u64.wrapping_mul(step as u64))
+        .wrapping_add(index)
+        .wrapping_add(10_000u64.wrapping_mul(step))
 }
 
 #[inline]
-pub fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: i32) -> u64 {
-    let region_x_long: u64 = region_x as u64;
-    let region_z_long: u64 = region_z as u64;
-    let salt_long: u64 = salt as u64;
-    region_x_long
-        .wrapping_mul(341873128712)
-        .wrapping_add(region_z_long.wrapping_mul(132897987541))
-        .wrapping_add(world_seed)
-        .wrapping_add(salt_long)
-}
+pub fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: u32) -> u64 {
+    let x_part = (region_x as i64).wrapping_mul(341873128712) as u64;
+    let z_part = (region_z as i64).wrapping_mul(132897987541) as u64;
 
+    world_seed
+        .wrapping_add(x_part)
+        .wrapping_add(z_part)
+        .wrapping_add(salt as i64 as u64)
+}
 #[inline]
 pub fn get_carver_seed(
     random: &mut RandomGenerator,
@@ -152,7 +150,15 @@ pub fn hash_block_pos(x: i32, y: i32, z: i32) -> i64 {
 #[cfg(test)]
 mod tests {
 
+    use crate::random::get_region_seed;
+
     use super::hash_block_pos;
+
+    #[test]
+    fn region_seed() {
+        let seed = get_region_seed(12345612, 1, 1, 14357620);
+        assert_eq!(seed, 474797819485)
+    }
 
     #[test]
     fn block_position_hash() {

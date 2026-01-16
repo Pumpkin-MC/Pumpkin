@@ -1,6 +1,7 @@
 use core::f32;
 use std::collections::{BinaryHeap, HashSet, VecDeque};
 use std::f64::consts::TAU;
+use std::mem;
 use std::num::NonZeroU8;
 use std::ops::AddAssign;
 use std::sync::Arc;
@@ -10,6 +11,9 @@ use std::time::{Duration, Instant};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use log::warn;
+use pumpkin_data::dimension::Dimension;
+use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
@@ -52,11 +56,10 @@ use pumpkin_protocol::java::client::play::{
     CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
     CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetEquipment,
     CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime,
-    GameEvent, MetaDataType, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CSubtitle, CSystemChatMessage, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
+    CUpdateTime, GameEvent, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -68,7 +71,6 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
-use pumpkin_world::entity::entity_data_flags::SLEEPING_POS_ID;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 
@@ -97,7 +99,7 @@ use pumpkin_world::chunk_system::ChunkLoading;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
-pub const DATA_VERSION: i32 = 4556; // 1.21.10
+pub const DATA_VERSION: i32 = 4671; // 1.21.11
 
 enum BatchState {
     Initial,
@@ -183,40 +185,77 @@ impl ChunkManager {
         level: &Arc<Level>,
     ) {
         view_distance += 1;
-        let mut lock = level.chunk_loading.lock().unwrap();
-        lock.add_ticket(
-            center,
-            ChunkLoading::get_level_from_view_distance(view_distance),
-        );
-        lock.remove_ticket(
-            self.center,
-            ChunkLoading::get_level_from_view_distance(self.view_distance),
-        );
-        lock.send_change();
-        drop(lock);
-        let view_distance = i32::from(view_distance);
-        self.chunk_sent
-            .retain(|pos| (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance);
+        let old_center = self.center;
+        let old_view_distance = self.view_distance;
+
+        {
+            let mut lock = level.chunk_loading.lock().unwrap();
+            lock.add_ticket(
+                center,
+                ChunkLoading::get_level_from_view_distance(view_distance),
+            );
+
+            if old_center != center || old_view_distance != view_distance {
+                lock.remove_ticket(
+                    old_center,
+                    ChunkLoading::get_level_from_view_distance(old_view_distance),
+                );
+            }
+            lock.send_change();
+        };
+
+        let view_distance_i32 = i32::from(view_distance);
+
+        let mut chunks_to_watch = Vec::new();
+        let mut chunks_to_unwatch = Vec::new();
+
+        for pos in &self.chunk_sent {
+            if (pos.x - center.x).abs().max((pos.y - center.y).abs()) > view_distance_i32 {
+                chunks_to_unwatch.push(*pos);
+            }
+        }
+
+        let level_clone = level.clone();
+        let chunks_to_unwatch_clone = chunks_to_unwatch.clone();
+        tokio::spawn(async move {
+            level_clone
+                .mark_chunks_as_not_watched(&chunks_to_unwatch_clone)
+                .await;
+        });
+
+        self.chunk_sent.retain(|pos| {
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
+        });
+
         let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
         for node in &self.chunk_queue {
             let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
-            if dst <= view_distance {
+            if dst <= view_distance_i32 {
                 new_queue.push(HeapNode(dst, node.1, node.2.clone()));
             }
         }
+
         self.chunk_queue = new_queue;
         self.center = center;
-        self.view_distance = view_distance as u8;
-        for dx in (-view_distance)..=view_distance {
-            for dy in (-view_distance)..=view_distance {
+        self.view_distance = view_distance;
+
+        for dx in (-view_distance_i32)..=view_distance_i32 {
+            for dy in (-view_distance_i32)..=view_distance_i32 {
                 let new_pos = center.add_raw(dx, dy);
-                if !self.chunk_sent.contains(&new_pos)
-                    && let Some(chunk) = level.loaded_chunks.get(&new_pos)
-                {
-                    self.push_chunk(new_pos, chunk.value().clone());
+                if !self.chunk_sent.contains(&new_pos) {
+                    chunks_to_watch.push(new_pos);
+                    if let Some(chunk) = level.loaded_chunks.get(&new_pos) {
+                        self.push_chunk(new_pos, chunk.value().clone());
+                    }
                 }
             }
         }
+        let level_clone = level.clone();
+        tokio::spawn(async move {
+            level_clone
+                .mark_chunks_as_newly_watched(&chunks_to_watch)
+                .await;
+        });
     }
 
     pub fn clean_up(&mut self, level: &Arc<Level>) {
@@ -621,7 +660,7 @@ impl Player {
 
         if !victim
             .damage_with_context(
-                victim.clone(),
+                &*victim,
                 damage as f32,
                 DamageType::PLAYER_ATTACK,
                 None,
@@ -661,9 +700,10 @@ impl Player {
 
     pub async fn set_respawn_point(
         &self,
-        dimension: VanillaDimensionType,
+        dimension: Dimension,
         block_pos: BlockPos,
         yaw: f32,
+        pitch: f32,
     ) -> bool {
         if let Some(respawn_point) = self.respawn_point.load()
             && dimension == respawn_point.dimension
@@ -680,27 +720,32 @@ impl Player {
         }));
 
         self.client
-            .send_packet_now(&CPlayerSpawnPosition::new(block_pos, yaw))
+            .send_packet_now(&CPlayerSpawnPosition::new(
+                block_pos,
+                yaw,
+                pitch,
+                dimension.minecraft_name.to_owned(),
+            ))
             .await;
         true
     }
 
-    pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32)> {
+    pub async fn get_respawn_point(&self) -> Option<(Vector3<f64>, f32, f32)> {
         let respawn_point = self.respawn_point.load()?;
 
         let block = self.world().get_block(&respawn_point.position).await;
 
-        if respawn_point.dimension == VanillaDimensionType::Overworld
+        if respawn_point.dimension == Dimension::OVERWORLD
             && block.has_tag(&tag::Block::MINECRAFT_BEDS)
         {
             // TODO: calculate respawn position
-            Some((respawn_point.position.to_f64(), respawn_point.yaw))
-        } else if respawn_point.dimension == VanillaDimensionType::TheNether
+            Some((respawn_point.position.to_f64(), respawn_point.yaw, 0.0))
+        } else if respawn_point.dimension == Dimension::THE_NETHER
             && block == &Block::RESPAWN_ANCHOR
         {
             // TODO: calculate respawn position
             // TODO: check if there is fuel for respawn
-            Some((respawn_point.position.to_f64(), respawn_point.yaw))
+            Some((respawn_point.position.to_f64(), respawn_point.yaw, 0.0))
         } else {
             self.client
                 .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
@@ -719,7 +764,7 @@ impl Player {
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
         self.get_entity()
             .send_meta_data(&[Metadata::new(
-                SLEEPING_POS_ID,
+                TrackedData::DATA_SLEEPING_POSITION,
                 MetaDataType::OptionalBlockPos,
                 Some(bed_head_pos),
             )])
@@ -770,7 +815,7 @@ impl Player {
         self.living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                SLEEPING_POS_ID,
+                TrackedData::DATA_SLEEPING_POSITION,
                 MetaDataType::OptionalBlockPos,
                 None::<BlockPos>,
             )])
@@ -792,6 +837,12 @@ impl Player {
             TitleMode::SubTitle => self.client.enqueue_packet(&CSubtitle::new(text)).await,
             TitleMode::ActionBar => self.client.enqueue_packet(&CActionBar::new(text)).await,
         }
+    }
+
+    pub async fn send_title_animation(&self, fade_in: i32, stay: i32, fade_out: i32) {
+        self.client
+            .enqueue_packet(&CTitleAnimation::new(fade_in, stay, fade_out))
+            .await;
     }
 
     pub async fn spawn_particle(
@@ -854,7 +905,7 @@ impl Player {
     }
 
     // TODO Abstract the chunk sending
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         self.current_screen_handler
             .lock()
@@ -868,11 +919,10 @@ impl Player {
         //     return;
         // }
 
-        if self.packet_sequence.load(Ordering::Relaxed) > -1 {
+        let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+        if seq != -1 {
             self.client
-                .enqueue_packet(&CAcknowledgeBlockChange::new(
-                    self.packet_sequence.swap(-1, Ordering::Relaxed).into(),
-                ))
+                .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
                 .await;
         }
         {
@@ -1021,16 +1071,15 @@ impl Player {
         }
     }
 
-    #[expect(clippy::cast_precision_loss)]
     pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
         // TODO: Swimming, gliding...
         if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
-            let delta = (delta_pos.horizontal_length() * 100.0).round() as i32;
-            if delta > 0 {
+            let delta = (delta_pos.horizontal_length() * 100.0).round() as f32;
+            if delta > 0.0 {
                 if self.living_entity.entity.sprinting.load(Ordering::Relaxed) {
-                    self.add_exhaustion(0.1 * delta as f32 * 0.01).await;
+                    self.add_exhaustion(0.1 * delta * 0.01).await;
                 } else {
-                    self.add_exhaustion(0.0 * delta as f32 * 0.01).await;
+                    self.add_exhaustion(0.0 * delta * 0.01).await;
                 }
             }
         }
@@ -1069,11 +1118,7 @@ impl Player {
     }
 
     pub fn eye_position(&self) -> Vector3<f64> {
-        let eye_height = if self.living_entity.entity.pose.load() == EntityPose::Crouching {
-            1.27
-        } else {
-            f64::from(self.living_entity.entity.standing_eye_height)
-        };
+        let eye_height = f64::from(self.living_entity.entity.entity_dimension.load().eye_height);
         Vector3::new(
             self.living_entity.entity.pos.load().x,
             self.living_entity.entity.pos.load().y + eye_height,
@@ -1081,6 +1126,8 @@ impl Player {
         )
     }
 
+    /// Returns the player's rotation.
+    /// Yaw then Pitch
     pub fn rotation(&self) -> (f32, f32) {
         (
             self.living_entity.entity.yaw.load(),
@@ -1249,8 +1296,8 @@ impl Player {
         pitch: Option<f32>,
     ) {
         let current_world = self.living_entity.entity.world.clone();
-        let yaw = yaw.unwrap_or(new_world.level_info.read().await.spawn_angle);
-        let pitch = pitch.unwrap_or(10.0);
+        let yaw = yaw.unwrap_or(new_world.level_info.read().await.spawn_yaw);
+        let pitch = pitch.unwrap_or(new_world.level_info.read().await.spawn_pitch);
 
         send_cancellable! {{
             PlayerChangeWorldEvent {
@@ -1286,7 +1333,7 @@ impl Player {
                 self.chunk_manager.lock().await.change_world(&current_world.level, &new_world.level);
 
                 let last_pos = self.living_entity.entity.last_pos.load();
-                let death_dimension = self.world().dimension_type.resource_location();
+                let death_dimension = ResourceLocation::from(self.world().dimension.minecraft_name);
                 let death_location = BlockPos(Vector3::new(
                     last_pos.x.round() as i32,
                     last_pos.y.round() as i32,
@@ -1294,8 +1341,8 @@ impl Player {
                 ));
                 self.client
                     .send_packet_now(&CRespawn::new(
-                        (new_world.dimension_type as u8).into(),
-                        new_world.dimension_type.resource_location(),
+                        (new_world.dimension.id).into(),
+                        ResourceLocation::from(new_world.dimension.minecraft_name),
                         biome::hash_seed(new_world.level.seed.0), // seed
                         self.gamemode.load() as u8,
                         self.gamemode.load() as i8,
@@ -1374,7 +1421,7 @@ impl Player {
         let d = self.block_interaction_range() + additional_range;
         let box_pos = BoundingBox::from_block(position);
         let entity_pos = self.living_entity.entity.pos.load();
-        let standing_eye_height = self.living_entity.entity.standing_eye_height;
+        let standing_eye_height = self.living_entity.entity.entity_dimension.load().eye_height;
         box_pos.squared_magnitude(Vector3 {
             x: entity_pos.x,
             y: entity_pos.y + f64::from(standing_eye_height),
@@ -1447,6 +1494,29 @@ impl Player {
 
     async fn handle_killed(&self, death_msg: TextComponent) {
         self.set_client_loaded(false);
+        let block_pos = self.position().to_block_pos();
+
+        let keep_inventory = {
+            self.world()
+                .level_info
+                .read()
+                .await
+                .game_rules
+                .keep_inventory
+        };
+
+        if !keep_inventory {
+            for item in &self.inventory().main_inventory {
+                let mut lock = item.lock().await;
+                self.world()
+                    .drop_stack(
+                        &block_pos,
+                        mem::replace(&mut *lock, ItemStack::EMPTY.clone()),
+                    )
+                    .await;
+            }
+        }
+
         self.client
             .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
             .await;
@@ -1506,24 +1576,23 @@ impl Player {
     }
 
     /// Send the player's skin layers and used hand to all players.
-    pub fn send_client_information(&self) {
-        //let config = self.config.read().await;
-        // TODO
-        // self.living_entity
-        //     .entity
-        //     .send_meta_data(&[
-        //         Metadata::new(
-        //             DATA_PLAYER_MODE_CUSTOMISATION,
-        //             MetaDataType::Byte,
-        //             config.skin_parts,
-        //         ),
-        //         Metadata::new(
-        //             DATA_PLAYER_MAIN_HAND,
-        //             MetaDataType::Byte,
-        //             config.main_hand as u8,
-        //         ),
-        //     ])
-        //     .await;
+    pub async fn send_client_information(&self) {
+        let config = self.config.read().await;
+        self.living_entity
+            .entity
+            .send_meta_data(&[
+                Metadata::new(
+                    TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
+                    MetaDataType::Byte,
+                    config.skin_parts,
+                ),
+                // Metadata::new(
+                //     TrackedData::DATA_MAIN_ARM_ID,
+                //     MetaDataType::Arm,
+                //     VarInt(config.main_hand as u8 as i32),
+                // ),
+            ])
+            .await;
     }
 
     pub async fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {
@@ -2111,7 +2180,7 @@ impl NBTStorage for Player {
 
             nbt.put_string(
                 "Dimension",
-                self.world().dimension_type.resource_location().to_string(),
+                ResourceLocation::from(self.world().dimension.minecraft_name).to_string(),
             );
         })
     }
@@ -2307,7 +2376,7 @@ impl NBTStorageInit for EnderChestInventory {}
 impl EntityBase for Player {
     fn damage_with_context<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -2525,7 +2594,7 @@ impl Abilities {
 /// Represents the player's respawn point.
 #[derive(Copy, Debug, Clone, PartialEq)]
 pub struct RespawnPoint {
-    pub dimension: VanillaDimensionType,
+    pub dimension: Dimension,
     pub position: BlockPos,
     pub yaw: f32,
     pub force: bool,

@@ -77,7 +77,9 @@ pub const fn smallest_encompassing_power_of_two(value: u32) -> u32 {
 #[inline]
 pub fn floor_div<T: PrimInt + Zero + One>(x: T, y: T) -> T {
     let div = x / y;
-    if (x ^ y) < T::zero() && div * y != x {
+    let rem = x % y;
+
+    if (x ^ y) < T::zero() && rem != T::zero() {
         div - T::one()
     } else {
         div
@@ -137,7 +139,7 @@ pub fn lerp2(delta_x: f64, delta_y: f64, x0y0: f64, x1y0: f64, x0y1: f64, x1y1: 
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub fn lerp3(
     delta_x: f64,
     delta_y: f64,

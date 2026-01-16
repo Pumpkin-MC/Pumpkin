@@ -4,7 +4,7 @@ pub mod double;
 pub mod drag_handler;
 pub mod entity_equipment;
 mod error;
-pub mod furnace;
+pub mod furnace_like;
 pub mod generic_container_screen_handler;
 pub mod player;
 pub mod screen_handler;

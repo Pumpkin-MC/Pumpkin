@@ -2,10 +2,10 @@
 
 # Pumpkin
 
-![CI](https://github.com/Snowiiii/Pumpkin/actions/workflows/rust.yml/badge.svg)
+![CI](https://github.com/Pumpkin-MC/Pumpkin/actions/workflows/rust.yml/badge.svg)
 [![Discord](https://img.shields.io/discord/1268592337445978193.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/wT8XjrjKkf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![Current version)](https://img.shields.io/badge/current_version-1.21.10-blue)
+![Current version)](https://img.shields.io/badge/current_version-1.21.11-blue)
 
 </div>
 

@@ -1,7 +1,7 @@
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalAxis};
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_registry::VanillaDimensionType;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::Rng;
@@ -172,10 +172,9 @@ impl BlockBehaviour for FireBlock {
                 return;
             }
 
-            let dimension = args.world.dimension_type;
+            let dimension = args.world.dimension;
             // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
-            if (dimension == VanillaDimensionType::Overworld
-                || dimension == VanillaDimensionType::TheNether)
+            if (dimension == Dimension::OVERWORLD || dimension == Dimension::THE_NETHER)
                 && let Some(portal) =
                     NetherPortal::get_new_portal(args.world, args.position, HorizontalAxis::X).await
             {
@@ -225,8 +224,8 @@ impl BlockBehaviour for FireBlock {
                     world: Some(args.world),
                     block_accessor: args.world,
                     block: &Block::FIRE,
+                    state: Block::FIRE.default_state,
                     position: args.position,
-                    direction: BlockDirection::Up,
                     player: None,
                     use_item_on: None,
                 })
@@ -258,7 +257,7 @@ impl BlockBehaviour for FireBlock {
         })
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let (world, block, pos) = (args.world, args.block, args.position);
@@ -276,8 +275,8 @@ impl BlockBehaviour for FireBlock {
                     world: Some(world),
                     block_accessor: world.as_ref(),
                     block,
+                    state: block.default_state,
                     position: pos,
-                    direction: BlockDirection::Up,
                     player: None,
                     use_item_on: None,
                 })

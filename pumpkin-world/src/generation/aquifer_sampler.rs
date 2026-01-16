@@ -1,7 +1,7 @@
 use enum_dispatch::enum_dispatch;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{
-    math::{clamped_map, floor_div, vector3::Vector3},
+    math::{clamped_map, floor_div},
     random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
 
@@ -170,7 +170,7 @@ impl WorldAquiferSampler {
                     let index =
                         packed_position_index!(offset_x, offset_y, offset_z, size_y, size_z);
                     packed_positions[index as usize] =
-                        block_pos::packed(&Vector3::new(rand_x, rand_y, rand_z));
+                        block_pos::packed(rand_x as i64, rand_y as i64, rand_z as i64);
                 }
             }
         }
@@ -196,30 +196,31 @@ impl WorldAquiferSampler {
     }
 
     fn random_positions_for_pos(&self, x: i32, y: i32, z: i32) -> [i64; 12] {
-        // (x, y - 1, z) to (x + 1, y + 1, z + 1)
-        // y values are contiguous in packed array:
-        // ($local_x * $dim_z + $local_z) * $dim_y + $local_y
+        let sy = self.size_y;
+        let syz = self.size_y * self.size_z;
 
-        let x0z0_index = self.packed_position_index(x, y - 1, z);
-        let x0z1_index = x0z0_index + self.size_y;
-        let x1z0_index = x0z0_index + self.size_y * self.size_z;
-        let x1z1_index = x1z0_index + self.size_y;
-        // Remove bounds checks on subsequent indexes
-        assert!(x1z1_index + 2 < self.packed_positions.len());
+        let i00 = self.packed_position_index(x, y - 1, z);
+        let i01 = i00 + sy;
+        let i10 = i00 + syz;
+        let i11 = i10 + sy;
+
+        assert!(i11 + 2 < self.packed_positions.len(), "Index out of bounds");
+
+        let p = &self.packed_positions;
 
         [
-            self.packed_positions[x1z1_index + 2],
-            self.packed_positions[x1z0_index + 2],
-            self.packed_positions[x0z1_index + 2],
-            self.packed_positions[x0z0_index + 2],
-            self.packed_positions[x1z1_index + 1],
-            self.packed_positions[x1z0_index + 1],
-            self.packed_positions[x0z1_index + 1],
-            self.packed_positions[x0z0_index + 1],
-            self.packed_positions[x1z1_index],
-            self.packed_positions[x1z0_index],
-            self.packed_positions[x0z1_index],
-            self.packed_positions[x0z0_index],
+            p[i11 + 2],
+            p[i10 + 2],
+            p[i01 + 2],
+            p[i00 + 2],
+            p[i11 + 1],
+            p[i10 + 1],
+            p[i01 + 1],
+            p[i00 + 1],
+            p[i11],
+            p[i10],
+            p[i01],
+            p[i00],
         ]
     }
 
@@ -288,20 +289,22 @@ impl WorldAquiferSampler {
         let local_z = local_xz!(z);
 
         let index = self.packed_position_index(local_x, local_y, local_z);
-        let entry = &mut self.levels[index];
+        if let Some(ref level) = self.levels[index] {
+            return level;
+        }
 
-        let fluid_level = &self.fluid_level_sampler;
-        entry.get_or_insert_with(|| {
-            Self::get_fluid_level(
-                fluid_level,
-                x,
-                y,
-                z,
-                router,
-                height_estimator,
-                sample_options,
-            )
-        })
+        let sampled = Self::get_fluid_level(
+            &self.fluid_level_sampler,
+            x,
+            y,
+            z,
+            router,
+            height_estimator,
+            sample_options,
+        );
+
+        self.levels[index] = Some(sampled);
+        self.levels[index].as_ref().unwrap()
     }
 
     fn get_fluid_level(
@@ -372,7 +375,7 @@ impl WorldAquiferSampler {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn get_fluid_block_y(
         block_x: i32,
         block_y: i32,
@@ -446,7 +449,6 @@ impl WorldAquiferSampler {
         surface_height_estimate.min(local_height)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn get_fluid_block_state(
         block_x: i32,
         block_y: i32,
@@ -686,7 +688,7 @@ pub trait AquiferSamplerImpl {
 
 #[cfg(test)]
 mod random_positions_and_hypot {
-    use std::{mem, sync::LazyLock};
+    use std::sync::LazyLock;
 
     use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
 
@@ -694,10 +696,7 @@ mod random_positions_and_hypot {
         block::RawBlockState,
         generation::{
             GlobalRandomConfig, biome_coords,
-            chunk_noise::{
-                BlockStateSampler, ChainedBlockStateSampler, ChunkNoiseGenerator, LAVA_BLOCK,
-                WATER_BLOCK,
-            },
+            chunk_noise::{BlockStateSampler, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
             noise::router::{
                 chunk_density_function::{ChunkNoiseFunctionSampleOptions, SampleAction},
                 chunk_noise_router::ChunkNoiseRouter,
@@ -756,20 +755,14 @@ mod random_positions_and_hypot {
         );
         let options =
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
-        let sampler = match noise.state_sampler {
-            BlockStateSampler::Chained(chained) => chained,
-            _ => unreachable!(),
-        };
-        let mut samplers = sampler.samplers;
+        let mut samplers_vec = noise.state_sampler.samplers.into_vec();
+        let first_sampler = samplers_vec.remove(0);
 
-        let mut dummy_sampler =
-            BlockStateSampler::Chained(ChainedBlockStateSampler::new(Box::new([])));
-        mem::swap(&mut dummy_sampler, &mut samplers[0]);
-
-        let sampler = match dummy_sampler {
-            BlockStateSampler::Aquifer(aquifer) => aquifer,
-            _ => unreachable!(),
+        let sampler = match first_sampler {
+            BlockStateSampler::Aquifer(a) => a,
+            _ => panic!("Expected Aquifer"),
         };
+
         let aquifer = match sampler {
             AquiferSampler::Aquifer(aquifer) => aquifer,
             _ => unreachable!(),

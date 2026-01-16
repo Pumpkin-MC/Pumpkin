@@ -233,6 +233,17 @@ impl<T: Math + Copy> Add for Vector3<T> {
     }
 }
 
+impl<T: Math + Copy> Sub for Vector3<T> {
+    type Output = Vector3<T>;
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+            z: self.z - rhs.z,
+        }
+    }
+}
+
 impl<T: Math + Copy> AddAssign for Vector3<T> {
     fn add_assign(&mut self, other: Self) {
         self.x += other.x;
@@ -271,6 +282,16 @@ impl<T> From<Vector3<T>> for (T, T, T) {
 
 impl<T: Math + Copy + Into<f64>> Vector3<T> {
     pub fn to_f64(&self) -> Vector3<f64> {
+        Vector3 {
+            x: self.x.into(),
+            y: self.y.into(),
+            z: self.z.into(),
+        }
+    }
+}
+
+impl<T: Math + Copy + Into<f32>> Vector3<T> {
+    pub fn to_f32(&self) -> Vector3<f32> {
         Vector3 {
             x: self.x.into(),
             y: self.y.into(),

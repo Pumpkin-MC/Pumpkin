@@ -37,7 +37,6 @@ impl BlockBehaviour for StairBlock {
                     0.5..1.0 => BlockHalf::Top,
 
                     // This cannot happen normally
-                    #[allow(clippy::match_same_arms)]
                     _ => BlockHalf::Bottom,
                 },
             };

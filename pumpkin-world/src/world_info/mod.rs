@@ -11,7 +11,7 @@ pub mod anvil;
 
 // Constraint: disk biome palette serialization changed in 1.21.5
 pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4435; // 1.21.9
-pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4556; // 1.21.10
+pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4671; // 1.21.11
 
 pub const MINIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19132; // 1.21.9
 pub const MAXIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19133; // 1.21.9
@@ -83,7 +83,11 @@ pub struct LevelData {
     // The Z coordinate of the world spawn.
     pub spawn_z: i32,
     // The Yaw rotation of the world spawn.
-    pub spawn_angle: f32,
+    #[serde(alias = "SpawnAngle")]
+    pub spawn_yaw: f32,
+    // The Pitch rotation of the world spawn.
+    #[serde(default)]
+    pub spawn_pitch: f32,
     #[serde(rename = "Version")]
     pub world_version: WorldVersion,
     #[serde(rename = "version")]
@@ -243,7 +247,8 @@ impl LevelData {
             spawn_x: 0,
             spawn_y: 200,
             spawn_z: 0,
-            spawn_angle: 0.0,
+            spawn_yaw: 0.0,
+            spawn_pitch: 0.0,
             world_version: Default::default(),
             level_version: MAXIMUM_SUPPORTED_LEVEL_VERSION,
         }

@@ -1,34 +1,6 @@
 {
   "canyon": {
     "config": {
-      "lava_level": {
-        "above_bottom": 8
-      },
-      "debug_settings": {
-        "water_state": {
-          "Properties": {
-            "waterlogged": "false",
-            "lit": "false",
-            "candles": "1"
-          },
-          "Name": "minecraft:candle"
-        },
-        "lava_state": {
-          "Name": "minecraft:orange_stained_glass"
-        },
-        "barrier_state": {
-          "Name": "minecraft:glass"
-        },
-        "air_state": {
-          "Properties": {
-            "powered": "false",
-            "facing": "north",
-            "face": "wall"
-          },
-          "Name": "minecraft:warped_button"
-        }
-      },
-      "replaceable": "#minecraft:overworld_carver_replaceables",
       "probability": 0.01,
       "y": {
         "min_inclusive": {
@@ -40,41 +12,18 @@
         "type": "minecraft:uniform"
       },
       "yScale": 3.0,
-      "vertical_rotation": {
-        "min_inclusive": -0.125,
-        "max_exclusive": 0.125,
-        "type": "minecraft:uniform"
-      },
-      "shape": {
-        "horizontal_radius_factor": {
-          "min_inclusive": 0.75,
-          "max_exclusive": 1.0,
-          "type": "minecraft:uniform"
-        },
-        "vertical_radius_default_factor": 1.0,
-        "vertical_radius_center_factor": 0.0,
-        "distance_factor": {
-          "min_inclusive": 0.75,
-          "max_exclusive": 1.0,
-          "type": "minecraft:uniform"
-        },
-        "thickness": {
-          "min": 0.0,
-          "max": 6.0,
-          "plateau": 2.0,
-          "type": "minecraft:trapezoid"
-        },
-        "width_smoothness": 3
-      }
-    },
-    "type": "minecraft:canyon"
-  },
-  "cave": {
-    "config": {
       "lava_level": {
         "above_bottom": 8
       },
       "debug_settings": {
+        "air_state": {
+          "Properties": {
+            "powered": "false",
+            "facing": "north",
+            "face": "wall"
+          },
+          "Name": "minecraft:warped_button"
+        },
         "water_state": {
           "Properties": {
             "waterlogged": "false",
@@ -88,17 +37,40 @@
         },
         "barrier_state": {
           "Name": "minecraft:glass"
-        },
-        "air_state": {
-          "Properties": {
-            "powered": "false",
-            "facing": "north",
-            "face": "wall"
-          },
-          "Name": "minecraft:crimson_button"
         }
       },
       "replaceable": "#minecraft:overworld_carver_replaceables",
+      "vertical_rotation": {
+        "min_inclusive": -0.125,
+        "max_exclusive": 0.125,
+        "type": "minecraft:uniform"
+      },
+      "shape": {
+        "distance_factor": {
+          "min_inclusive": 0.75,
+          "max_exclusive": 1.0,
+          "type": "minecraft:uniform"
+        },
+        "thickness": {
+          "min": 0.0,
+          "max": 6.0,
+          "plateau": 2.0,
+          "type": "minecraft:trapezoid"
+        },
+        "width_smoothness": 3,
+        "horizontal_radius_factor": {
+          "min_inclusive": 0.75,
+          "max_exclusive": 1.0,
+          "type": "minecraft:uniform"
+        },
+        "vertical_radius_default_factor": 1.0,
+        "vertical_radius_center_factor": 0.0
+      }
+    },
+    "type": "minecraft:canyon"
+  },
+  "cave": {
+    "config": {
       "probability": 0.15,
       "y": {
         "min_inclusive": {
@@ -114,6 +86,34 @@
         "max_exclusive": 0.9,
         "type": "minecraft:uniform"
       },
+      "lava_level": {
+        "above_bottom": 8
+      },
+      "debug_settings": {
+        "air_state": {
+          "Properties": {
+            "powered": "false",
+            "facing": "north",
+            "face": "wall"
+          },
+          "Name": "minecraft:crimson_button"
+        },
+        "water_state": {
+          "Properties": {
+            "waterlogged": "false",
+            "lit": "false",
+            "candles": "1"
+          },
+          "Name": "minecraft:candle"
+        },
+        "lava_state": {
+          "Name": "minecraft:orange_stained_glass"
+        },
+        "barrier_state": {
+          "Name": "minecraft:glass"
+        }
+      },
+      "replaceable": "#minecraft:overworld_carver_replaceables",
       "horizontal_radius_multiplier": {
         "min_inclusive": 0.7,
         "max_exclusive": 1.4,
@@ -134,34 +134,6 @@
   },
   "cave_extra_underground": {
     "config": {
-      "lava_level": {
-        "above_bottom": 8
-      },
-      "debug_settings": {
-        "water_state": {
-          "Properties": {
-            "waterlogged": "false",
-            "lit": "false",
-            "candles": "1"
-          },
-          "Name": "minecraft:candle"
-        },
-        "lava_state": {
-          "Name": "minecraft:orange_stained_glass"
-        },
-        "barrier_state": {
-          "Name": "minecraft:glass"
-        },
-        "air_state": {
-          "Properties": {
-            "powered": "false",
-            "facing": "north",
-            "face": "wall"
-          },
-          "Name": "minecraft:oak_button"
-        }
-      },
-      "replaceable": "#minecraft:overworld_carver_replaceables",
       "probability": 0.07,
       "y": {
         "min_inclusive": {
@@ -177,6 +149,34 @@
         "max_exclusive": 0.9,
         "type": "minecraft:uniform"
       },
+      "lava_level": {
+        "above_bottom": 8
+      },
+      "debug_settings": {
+        "air_state": {
+          "Properties": {
+            "powered": "false",
+            "facing": "north",
+            "face": "wall"
+          },
+          "Name": "minecraft:oak_button"
+        },
+        "water_state": {
+          "Properties": {
+            "waterlogged": "false",
+            "lit": "false",
+            "candles": "1"
+          },
+          "Name": "minecraft:candle"
+        },
+        "lava_state": {
+          "Name": "minecraft:orange_stained_glass"
+        },
+        "barrier_state": {
+          "Name": "minecraft:glass"
+        }
+      },
+      "replaceable": "#minecraft:overworld_carver_replaceables",
       "horizontal_radius_multiplier": {
         "min_inclusive": 0.7,
         "max_exclusive": 1.4,
@@ -197,10 +197,6 @@
   },
   "nether_cave": {
     "config": {
-      "lava_level": {
-        "above_bottom": 10
-      },
-      "replaceable": "#minecraft:nether_carver_replaceables",
       "probability": 0.2,
       "y": {
         "min_inclusive": {
@@ -212,6 +208,10 @@
         "type": "minecraft:uniform"
       },
       "yScale": 0.5,
+      "lava_level": {
+        "above_bottom": 10
+      },
+      "replaceable": "#minecraft:nether_carver_replaceables",
       "horizontal_radius_multiplier": 1.0,
       "vertical_radius_multiplier": 1.0,
       "floor_level": -0.7

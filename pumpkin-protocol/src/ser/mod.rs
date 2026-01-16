@@ -98,22 +98,8 @@ macro_rules! get_number_be {
 }
 
 impl<R: Read> NetworkReadExt for R {
-    //TODO: Macroize this
-    fn get_i8(&mut self) -> Result<i8, ReadingError> {
-        let mut buf = [0u8];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(buf[0] as i8)
-    }
-
-    fn get_u8(&mut self) -> Result<u8, ReadingError> {
-        let mut buf = [0u8];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(buf[0])
-    }
+    get_number_be!(get_u8, u8);
+    get_number_be!(get_i8, i8);
 
     get_number_be!(get_i16_be, i16);
     get_number_be!(get_u16_be, u16);
@@ -137,25 +123,17 @@ impl<R: Read> NetworkReadExt for R {
     fn read_remaining_to_boxed_slice(&mut self, bound: usize) -> Result<Box<[u8]>, ReadingError> {
         let mut return_buf = Vec::new();
 
-        // TODO: We can probably remove the temp buffer somehow
-        let mut temp_buf = [0; 1024];
-        loop {
-            let bytes_read = self
-                .read(&mut temp_buf)
-                .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
+        // Take one extra byte to check for exceeding bound
+        self.take(bound as u64 + 1)
+            .read_to_end(&mut return_buf)
+            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
 
-            if bytes_read == 0 {
-                break;
-            }
-
-            if return_buf.len() + bytes_read > bound {
-                return Err(ReadingError::TooLarge(
-                    "Read remaining too long".to_string(),
-                ));
-            }
-
-            return_buf.extend(&temp_buf[..bytes_read]);
+        if return_buf.len() > bound {
+            return Err(ReadingError::TooLarge(
+                "Read remaining too long".to_string(),
+            ));
         }
+
         Ok(return_buf.into_boxed_slice())
     }
 

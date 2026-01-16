@@ -7,12 +7,17 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::{GameMode, math::position::BlockPos};
-use pumpkin_world::{item::ItemStack, world::BlockFlags};
+use pumpkin_world::{
+    BlockStateId,
+    item::ItemStack,
+    tick::TickPriority,
+    world::{BlockAccessor, BlockFlags},
+};
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, NormalUseArgs, UseWithItemArgs, blocks::cake::CakeBlock,
-        registry::BlockActionResult,
+        BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs,
+        OnScheduledTickArgs, UseWithItemArgs, blocks::cake::CakeBlock, registry::BlockActionResult,
     },
     entity::player::Player,
     world::World,
@@ -119,4 +124,33 @@ impl BlockBehaviour for CandleCakeBlock {
             Self::consume_and_drop_candle(args.block, args.player, args.position, args.world).await
         })
     }
+
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if !can_place_at(args.world.as_ref(), args.position).await {
+                args.world
+                    .break_block(args.position, None, BlockFlags::empty())
+                    .await;
+            }
+        })
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if !can_place_at(args.world, args.position).await {
+                args.world
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
+                    .await;
+            }
+            args.state_id
+        })
+    }
+}
+
+async fn can_place_at(world: &dyn BlockAccessor, position: &BlockPos) -> bool {
+    let state = world.get_block_state(&position.down()).await;
+    state.is_solid()
 }

@@ -14,6 +14,8 @@ use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
 use tokio::sync::Mutex;
 
+pub mod drowned;
+pub mod skeleton;
 pub mod zombie;
 
 pub struct MobEntity {
@@ -66,16 +68,16 @@ pub trait Mob: EntityBase + Send + Sync {
         rand::rng()
     }
 
-    fn get_max_look_yaw_change(&self) -> i32 {
-        10
+    fn get_max_look_yaw_change(&self) -> f32 {
+        10.0
     }
 
-    fn get_max_look_pitch_change(&self) -> i32 {
-        40
+    fn get_max_look_pitch_change(&self) -> f32 {
+        40.0
     }
 
-    fn get_max_head_rotation(&self) -> i32 {
-        75
+    fn get_max_head_rotation(&self) -> f32 {
+        75.0
     }
 
     fn get_mob_entity(&self) -> &MobEntity;
@@ -126,7 +128,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn damage_with_context<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
@@ -158,7 +160,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 const DEFAULT_PATHFINDING_FAVOR: f32 = 0.0;
 
 pub trait PathAwareEntity: Mob + Send + Sync {

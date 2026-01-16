@@ -28,13 +28,11 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
     #[derive(Deserialize)]
     #[serde(rename_all = "PascalCase")]
     struct LevelData {
-        #[allow(dead_code)]
         data_version: i32,
     }
     #[derive(Deserialize)]
     #[serde(rename_all = "PascalCase")]
     struct LevelDat {
-        #[allow(dead_code)]
         data: LevelData,
     }
 
@@ -203,27 +201,8 @@ mod test {
             difficulty: Difficulty::Normal,
             difficulty_locked: false,
             game_rules: GameRuleRegistry {
-                announce_advancements: true,
                 block_explosion_drop_decay: true,
                 command_block_output: true,
-                command_modification_block_limit: 32768,
-                disable_elytra_movement_check: false,
-                disable_player_movement_check: false,
-                disable_raids: false,
-                do_daylight_cycle: true,
-                do_entity_drops: true,
-                do_fire_tick: true,
-                do_immediate_respawn: false,
-                do_insomnia: true,
-                do_limited_crafting: false,
-                do_mob_loot: true,
-                do_mob_spawning: true,
-                do_patrol_spawning: true,
-                do_tile_drops: true,
-                do_trader_spawning: true,
-                do_vines_spread: true,
-                do_warden_spawning: true,
-                do_weather_cycle: true,
                 drowning_damage: true,
                 ender_pearls_vanish_on_death: true,
                 fall_damage: true,
@@ -234,12 +213,9 @@ mod test {
                 keep_inventory: false,
                 lava_source_conversion: false,
                 log_admin_commands: true,
-                max_command_chain_length: 65536,
-                max_command_fork_count: 65536,
                 max_entity_cramming: 24,
                 mob_explosion_drop_decay: true,
                 mob_griefing: true,
-                natural_regeneration: true,
                 players_nether_portal_creative_delay: 0,
                 players_nether_portal_default_delay: 80,
                 players_sleeping_percentage: 100,
@@ -248,8 +224,6 @@ mod test {
                 reduced_debug_info: false,
                 send_command_feedback: true,
                 show_death_messages: true,
-                snow_accumulation_height: 1,
-                spawn_radius: 10,
                 spectators_generate_chunks: true,
                 tnt_explosion_drop_decay: false,
                 universal_anger: false,
@@ -262,7 +236,8 @@ mod test {
             spawn_x: 160,
             spawn_y: 70,
             spawn_z: 160,
-            spawn_angle: 0.0,
+            spawn_yaw: 0.0,
+            spawn_pitch: 0.0,
             level_version: 19133,
             world_version: WorldVersion {
                 name: "1.21.4".to_string(),

@@ -1,9 +1,8 @@
 use crate::block::blocks::anvil::AnvilBlock;
-use crate::block::blocks::bamboo::BambooBlock;
+
 use crate::block::blocks::barrel::BarrelBlock;
 use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::bed::BedBlock;
-use crate::block::blocks::cactus::CactusBlock;
 use crate::block::blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
 use crate::block::blocks::carved_pumpkin::CarvedPumpkinBlock;
 use crate::block::blocks::chests::ChestBlock;
@@ -30,7 +29,12 @@ use crate::block::blocks::note::NoteBlock;
 use crate::block::blocks::piston::piston::PistonBlock;
 use crate::block::blocks::piston::piston_extension::PistonExtensionBlock;
 use crate::block::blocks::piston::piston_head::PistonHeadBlock;
+use crate::block::blocks::plant::bamboo::BambooBlock;
+use crate::block::blocks::plant::bamboo_sapling::BambooSaplingBlock;
 use crate::block::blocks::plant::bush::BushBlock;
+use crate::block::blocks::plant::cactus::CactusBlock;
+use crate::block::blocks::plant::crop::nether_wart::NetherWartBlock;
+use crate::block::blocks::plant::crop::sweet_berry_bush::SweetBerryBushBlock;
 use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
 use crate::block::blocks::plant::flower::FlowerBlock;
 use crate::block::blocks::plant::flowerbed::FlowerbedBlock;
@@ -39,6 +43,7 @@ use crate::block::blocks::plant::lily_pad::LilyPadBlock;
 use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
 use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
+use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
@@ -62,9 +67,9 @@ use crate::block::blocks::redstone::tripwire::TripwireBlock;
 use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
 use crate::block::blocks::signs::SignBlock;
 use crate::block::blocks::slabs::SlabBlock;
+use crate::block::blocks::snow::LayeredSnowBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
 use crate::block::blocks::stairs::StairBlock;
-use crate::block::blocks::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::blocks::torches::TorchBlock;
 use crate::block::blocks::trapdoor::TrapDoorBlock;
@@ -103,7 +108,6 @@ use crate::block::blocks::plant::crop::carrot::CarrotBlock;
 use crate::block::blocks::plant::crop::potatoes::PotatoBlock;
 use crate::block::blocks::plant::crop::torch_flower::TorchFlowerBlock;
 use crate::block::blocks::plant::crop::wheat::WheatBlock;
-use crate::block::blocks::plant::nether_wart::NetherWartBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
@@ -135,7 +139,7 @@ use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
 
 #[must_use]
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 pub fn default_registry() -> Arc<BlockRegistry> {
     let mut manager = BlockRegistry::default();
 
@@ -168,6 +172,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(JukeboxBlock);
     manager.register(LogBlock);
     manager.register(BambooBlock);
+    manager.register(BambooSaplingBlock);
     manager.register(BannerBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
@@ -184,6 +189,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BeetrootBlock);
     manager.register(TorchFlowerBlock);
     manager.register(CarrotBlock);
+    manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
     manager.register(NetherWartBlock);
     manager.register(WheatBlock);
@@ -219,6 +225,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(EndRodBlock);
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
+    manager.register(LayeredSnowBlock);
 
     manager.register(FallingBlock);
 
@@ -299,9 +306,9 @@ impl BlockRegistryExt for BlockRegistry {
     fn can_place_at(
         &self,
         block: &pumpkin_data::Block,
+        state: &BlockState,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
-        face: BlockDirection,
     ) -> bool {
         futures::executor::block_on(async move {
             self.can_place_at(
@@ -310,8 +317,8 @@ impl BlockRegistryExt for BlockRegistry {
                 block_accessor,
                 None,
                 block,
+                state,
                 block_pos,
-                face,
                 None,
             )
             .await
@@ -432,7 +439,7 @@ impl BlockRegistry {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn use_with_item(
         &self,
         block: &Block,
@@ -478,7 +485,7 @@ impl BlockRegistry {
         BlockActionResult::Pass
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn can_place_at(
         &self,
         server: Option<&Server>,
@@ -486,8 +493,8 @@ impl BlockRegistry {
         block_accessor: &dyn BlockAccessor,
         player: Option<&Player>,
         block: &Block,
+        state: &BlockState,
         position: &BlockPos,
-        direction: BlockDirection,
         use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block);
@@ -498,8 +505,8 @@ impl BlockRegistry {
                     world,
                     block_accessor,
                     block,
+                    state,
                     position,
-                    direction,
                     player,
                     use_item_on,
                 })
@@ -508,7 +515,7 @@ impl BlockRegistry {
         true
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn can_update_at(
         &self,
         world: &World,
@@ -536,7 +543,7 @@ impl BlockRegistry {
         false
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn on_place(
         &self,
         server: &Server,
@@ -685,21 +692,21 @@ impl BlockRegistry {
         block: &Block,
         flags: BlockFlags,
     ) {
-        let state = world.get_block_state(position).await;
+        let state_id = world.get_block_state_id(position).await;
         for direction in BlockDirection::all() {
             let neighbor_pos = position.offset(direction.to_offset());
-            let neighbor_state = world.get_block_state(&neighbor_pos).await;
+            let neighbor_state_id = world.get_block_state_id(&neighbor_pos).await;
             let pumpkin_block = self.get_pumpkin_block(block);
             if let Some(pumpkin_block) = pumpkin_block {
                 let new_state = pumpkin_block
                     .get_state_for_neighbor_update(GetStateForNeighborUpdateArgs {
                         world,
                         block,
-                        state_id: state.id,
+                        state_id,
                         position,
                         direction: direction.opposite(),
                         neighbor_position: &neighbor_pos,
-                        neighbor_state_id: neighbor_state.id,
+                        neighbor_state_id,
                     })
                     .await;
                 world.set_block_state(&neighbor_pos, new_state, flags).await;
@@ -729,7 +736,7 @@ impl BlockRegistry {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn get_state_for_neighbor_update(
         &self,
         world: &Arc<World>,

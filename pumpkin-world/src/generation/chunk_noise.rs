@@ -1,5 +1,5 @@
 use pumpkin_data::{Block, BlockState};
-use pumpkin_util::math::{floor_div, floor_mod, vector2::Vector2};
+use pumpkin_util::math::{floor_div, floor_mod};
 
 use crate::generation::section_coords;
 
@@ -32,7 +32,6 @@ pub const CHUNK_DIM: u8 = 16;
 pub enum BlockStateSampler {
     Aquifer(AquiferSampler),
     Ore(OreVeinSampler),
-    Chained(ChainedBlockStateSampler),
 }
 
 impl BlockStateSampler {
@@ -46,7 +45,6 @@ impl BlockStateSampler {
         match self {
             Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
             Self::Ore(ore) => ore.sample(router, pos, sample_options),
-            Self::Chained(chained) => chained.sample(router, pos, sample_options, height_estimator),
         }
     }
 }
@@ -67,11 +65,12 @@ impl ChainedBlockStateSampler {
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
-        self.samplers
-            .iter_mut()
-            .map(|sampler| sampler.sample(router, pos, sample_options, height_estimator))
-            .find(|state| state.is_some())
-            .unwrap_or(None)
+        for sampler in self.samplers.iter_mut() {
+            if let Some(state) = sampler.sample(router, pos, sample_options, height_estimator) {
+                return Some(state);
+            }
+        }
+        None
     }
 }
 
@@ -140,7 +139,7 @@ impl IndexToNoisePos for ChunkIndexMapper {
 }
 
 pub struct ChunkNoiseGenerator<'a> {
-    pub state_sampler: BlockStateSampler,
+    pub state_sampler: ChainedBlockStateSampler,
     generation_shape: &'a GenerationShapeConfig,
     start_cell_pos_x: i32,
     start_cell_pos_z: i32,
@@ -155,7 +154,7 @@ pub struct ChunkNoiseGenerator<'a> {
 }
 
 impl<'a> ChunkNoiseGenerator<'a> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         noise_router_base: &'a ProtoNoiseRouter,
         random_config: &GlobalRandomConfig,
@@ -176,10 +175,6 @@ impl<'a> ChunkNoiseGenerator<'a> {
             generation_shape.horizontal_cell_block_count() as i32,
         );
 
-        let biome_pos = Vector2::new(
-            biome_coords::from_block(start_block_x),
-            biome_coords::from_block(start_block_z),
-        );
         let horizontal_biome_end = biome_coords::from_block(
             horizontal_cell_count * generation_shape.horizontal_cell_block_count() as usize,
         );
@@ -199,8 +194,8 @@ impl<'a> ChunkNoiseGenerator<'a> {
             vertical_cell_block_count as usize,
             vertical_cell_count,
             horizontal_cell_count,
-            biome_pos.x,
-            biome_pos.y,
+            biome_coords::from_block(start_block_x),
+            biome_coords::from_block(start_block_z),
             horizontal_biome_end,
         );
 
@@ -219,20 +214,16 @@ impl<'a> ChunkNoiseGenerator<'a> {
             AquiferSampler::SeaLevel(SeaLevelAquiferSampler::new(level_sampler))
         };
 
-        let state_sampler = if ore_veins {
+        let samplers: Box<[BlockStateSampler]> = if ore_veins {
             let ore_sampler = OreVeinSampler::new(random_config.ore_random_deriver.clone());
-            let samplers: Box<[BlockStateSampler]> = Box::new([
+            Box::new([
                 BlockStateSampler::Aquifer(aquifer_sampler),
                 BlockStateSampler::Ore(ore_sampler),
-            ]);
-
-            BlockStateSampler::Chained(ChainedBlockStateSampler::new(samplers))
+            ])
         } else {
-            let samplers: Box<[BlockStateSampler]> =
-                Box::new([BlockStateSampler::Aquifer(aquifer_sampler)]);
-
-            BlockStateSampler::Chained(ChainedBlockStateSampler::new(samplers))
+            Box::new([BlockStateSampler::Aquifer(aquifer_sampler)])
         };
+        let state_sampler = ChainedBlockStateSampler::new(samplers);
 
         let router = ChunkNoiseRouter::generate(noise_router_base, &builder_options);
 
@@ -258,8 +249,8 @@ impl<'a> ChunkNoiseGenerator<'a> {
     }
 
     #[inline]
-    pub fn sample_end_density(&mut self, cell_x: u8) {
-        self.sample_density(false, self.start_cell_pos_x + cell_x as i32 + 1);
+    pub fn sample_end_density(&mut self, cell_x: i32) {
+        self.sample_density(false, self.start_cell_pos_x + cell_x + 1);
     }
 
     fn sample_density(&mut self, start: bool, current_x: i32) {
@@ -330,17 +321,14 @@ impl<'a> ChunkNoiseGenerator<'a> {
         self.router.swap_buffers();
     }
 
-    pub fn on_sampled_cell_corners(&mut self, cell_x: u8, cell_y: u16, cell_z: u8) {
+    pub fn on_sampled_cell_corners(&mut self, cell_x: i32, cell_y: i32, cell_z: i32) {
         self.router
             .on_sampled_cell_corners(cell_y as usize, cell_z as usize);
         self.cache_fill_unique_id += 1;
 
-        let start_x =
-            (self.start_cell_pos_x + cell_x as i32) * self.horizontal_cell_block_count() as i32;
-        let start_y =
-            (cell_y as i32 + self.minimum_cell_y) * self.vertical_cell_block_count() as i32;
-        let start_z =
-            (self.start_cell_pos_z + cell_z as i32) * self.horizontal_cell_block_count() as i32;
+        let start_x = (self.start_cell_pos_x + cell_x) * self.horizontal_cell_block_count() as i32;
+        let start_y = (cell_y + self.minimum_cell_y) * self.vertical_cell_block_count() as i32;
+        let start_z = (self.start_cell_pos_z + cell_z) * self.horizontal_cell_block_count() as i32;
 
         let mapper = ChunkIndexMapper {
             start_x,

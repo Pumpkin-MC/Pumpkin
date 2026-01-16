@@ -37,8 +37,8 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The number of bytes in a sector (4 KiB)
 const SECTOR_BYTES: usize = 4096;
 
-// 1.21.10
-pub const WORLD_DATA_VERSION: i32 = 4556;
+// 1.21.11
+pub const WORLD_DATA_VERSION: i32 = 4671;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -201,7 +201,7 @@ impl Compression {
     }
 
     /// Returns Ok when a compression is found otherwise an Err
-    #[allow(clippy::result_unit_err)]
+    #[expect(clippy::result_unit_err)]
     pub fn from_byte(byte: u8) -> Result<Option<Self>, ()> {
         match byte {
             Self::GZIP_ID => Ok(Some(Self::GZip)),

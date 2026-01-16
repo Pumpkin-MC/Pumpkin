@@ -47,8 +47,8 @@
           "content"
         ],
         "style": {
-          "italic": true,
-          "color": "gray"
+          "color": "gray",
+          "italic": true
         }
       },
       "narration": {
@@ -70,8 +70,8 @@
           "content"
         ],
         "style": {
-          "italic": true,
-          "color": "gray"
+          "color": "gray",
+          "italic": true
         }
       },
       "narration": {

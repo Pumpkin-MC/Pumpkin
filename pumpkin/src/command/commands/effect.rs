@@ -67,13 +67,13 @@ impl CommandExecutor for GiveExecutor {
                 Time::Infinite => -1,
             };
 
-            let amplifier: i32 = match self.1 {
+            let amplifier: u8 = match self.1 {
                 Amplifier::Base => 0,
                 Amplifier::Specified => BoundedNumArgumentConsumer::new()
                     .name("amplifier")
                     .min(0)
                     .max(255)
-                    .find_arg_default_name(args)??,
+                    .find_arg_default_name(args)?? as u8,
             };
 
             let mut hide_particles = self.2;
@@ -96,7 +96,7 @@ impl CommandExecutor for GiveExecutor {
                         .await
                         .unwrap()
                         .amplifier
-                        > amplifier as u8
+                        > amplifier
                 {
                     failed += 1;
                 } else {
@@ -104,7 +104,7 @@ impl CommandExecutor for GiveExecutor {
                         .add_effect(Effect {
                             effect_type: effect,
                             duration: second,
-                            amplifier: amplifier as u8,
+                            amplifier,
                             ambient: false, //this is not a beacon effect
                             show_particles: hide_particles,
                             show_icon: true,
@@ -258,7 +258,6 @@ impl CommandExecutor for ClearExecutor {
     }
 }
 
-#[allow(clippy::redundant_closure_for_method_calls)]
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(

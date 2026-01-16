@@ -16,6 +16,7 @@ mod chunk_status;
 mod composter_increase_chance;
 mod damage_type;
 mod data_component;
+mod dimension;
 mod effect;
 mod enchantments;
 mod entity_pose;
@@ -29,6 +30,7 @@ mod game_rules;
 mod item;
 pub mod loot;
 mod message_type;
+mod meta_data_type;
 mod noise_parameter;
 mod noise_router;
 mod packet;
@@ -37,12 +39,14 @@ mod potion;
 mod potion_brewing;
 mod recipe_remainder;
 mod recipes;
+mod registry;
 mod scoreboard_slot;
 mod screen;
 mod sound;
 mod sound_category;
 mod spawn_egg;
 mod tag;
+mod tracked_data;
 mod world_event;
 
 pub const OUT_DIR: &str = "src/generated";
@@ -59,9 +63,13 @@ pub fn main() {
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),
         (sound::build, "sound.rs"),
+        (meta_data_type::build, "meta_data_type.rs"),
+        (tracked_data::build, "tracked_data.rs"),
         (chunk_status::build, "chunk_status.rs"),
         (game_event::build, "game_event.rs"),
         (game_rules::build, "game_rules.rs"),
+        (registry::build, "registry.rs"),
+        (dimension::build, "dimension.rs"),
         (sound_category::build, "sound_category.rs"),
         (entity_pose::build, "entity_pose.rs"),
         (scoreboard_slot::build, "scoreboard_slot.rs"),

@@ -1,8 +1,7 @@
-use pumpkin_data::chunk::Biome;
+use pumpkin_data::{chunk::Biome, dimension::Dimension};
 
 use crate::{
     biome::BiomeSupplier,
-    dimension::Dimension,
     generation::{
         biome_coords, noise::router::multi_noise_sampler::MultiNoiseSampler, section_coords,
     },

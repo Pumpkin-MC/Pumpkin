@@ -13,17 +13,18 @@ use crate::{command::dispatcher::CommandDispatcher, entity::player::Player, worl
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
+use pumpkin_data::dimension::Dimension;
+use pumpkin_data::registry::Registry;
+use pumpkin_world::dimension::into_level;
 
 use crate::command::CommandSender;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::CChangeDifficulty;
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
-use pumpkin_registry::{Registry, VanillaDimensionType};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::dimension::Dimension;
 use pumpkin_world::lock::LevelLocker;
 use pumpkin_world::lock::anvil::AnvilLevelLocker;
 use pumpkin_world::world_info::anvil::{
@@ -72,7 +73,7 @@ pub struct Server {
     /// Manages multiple worlds within the server.
     pub worlds: RwLock<Vec<Arc<World>>>,
     /// All the dimensions that exist on the server.
-    pub dimensions: Vec<VanillaDimensionType>,
+    pub dimensions: Vec<Dimension>,
     /// Caches game registries for efficient access.
     pub cached_registry: Vec<Registry>,
     /// Assigns unique IDs to containers.
@@ -109,8 +110,7 @@ pub struct Server {
 }
 
 impl Server {
-    #[allow(clippy::new_without_default)]
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     #[must_use]
     pub async fn new(
         basic_config: BasicConfiguration,
@@ -183,10 +183,9 @@ impl Server {
             container_id: 0.into(),
             worlds: RwLock::new(vec![]),
             dimensions: vec![
-                VanillaDimensionType::Overworld,
-                VanillaDimensionType::OverworldCaves,
-                VanillaDimensionType::TheNether,
-                VanillaDimensionType::TheEnd,
+                Dimension::OVERWORLD,
+                Dimension::THE_NETHER,
+                Dimension::THE_END,
             ],
             command_dispatcher,
             block_registry: block_registry.clone(),
@@ -216,35 +215,43 @@ impl Server {
 
         log::info!("Loading Overworld: {seed}");
         let overworld = World::load(
-            Dimension::Overworld.into_level(
+            into_level(
+                Dimension::OVERWORLD,
                 level_config,
                 world_path.clone(),
                 block_registry.clone(),
                 seed,
             ),
             level_info.clone(),
-            VanillaDimensionType::Overworld,
+            Dimension::OVERWORLD,
             block_registry.clone(),
             weak.clone(),
         );
         log::info!("Loading Nether: {seed}");
         let nether = World::load(
-            Dimension::Nether.into_level(
+            into_level(
+                Dimension::THE_NETHER,
                 level_config,
                 world_path.clone(),
                 block_registry.clone(),
                 seed,
             ),
             level_info.clone(),
-            VanillaDimensionType::TheNether,
+            Dimension::THE_NETHER,
             block_registry.clone(),
             weak.clone(),
         );
         log::info!("Loading End: {seed}");
         let end = World::load(
-            Dimension::End.into_level(level_config, world_path, block_registry.clone(), seed),
+            into_level(
+                Dimension::THE_END,
+                level_config,
+                world_path,
+                block_registry.clone(),
+                seed,
+            ),
             level_info,
-            VanillaDimensionType::TheEnd,
+            Dimension::THE_END,
             block_registry,
             weak,
         );
@@ -267,20 +274,20 @@ impl Server {
         self.tasks.spawn(task)
     }
 
-    pub async fn get_world_from_dimension(&self, dimension: VanillaDimensionType) -> Arc<World> {
+    pub async fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
         // TODO: this is really bad
         let world_guard = self.worlds.read().await;
-        match dimension {
-            VanillaDimensionType::Overworld => world_guard.first(),
-            VanillaDimensionType::OverworldCaves => todo!(),
-            VanillaDimensionType::TheEnd => world_guard.get(2),
-            VanillaDimensionType::TheNether => world_guard.get(1),
+        if dimension == &Dimension::OVERWORLD {
+            world_guard.first()
+        } else if dimension == &Dimension::THE_NETHER {
+            world_guard.get(1)
+        } else {
+            world_guard.get(2)
         }
         .cloned()
         .unwrap()
     }
 
-    #[allow(clippy::if_then_some_else_none)]
     /// Adds a new player to the server.
     ///
     /// This function takes an `Arc<Client>` representing the connected client and performs the following actions:
@@ -316,9 +323,7 @@ impl Server {
 
         let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
             if let Some(dimension_key) = data.get_string("Dimension") {
-                if let Some(dimension) =
-                    VanillaDimensionType::from_resource_location_string(dimension_key)
-                {
+                if let Some(dimension) = Dimension::from_name(dimension_key) {
                     let world = self.get_world_from_dimension(dimension).await;
                     (world, Some(data))
                 } else {
@@ -375,6 +380,7 @@ impl Server {
             PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone()).await;
+                #[expect(clippy::if_then_some_else_none)]
                 if world
                     .add_player(player.gameprofile.id, player.clone())
                     .await.is_ok() {
@@ -710,8 +716,8 @@ impl Server {
         *self.tick_times_nanos.lock().await
     }
 
-    #[allow(clippy::too_many_lines)]
-    #[allow(clippy::option_if_let_else)]
+    #[expect(clippy::too_many_lines)]
+    #[expect(clippy::option_if_let_else)]
     pub async fn select_entities(
         &self,
         target_selector: &TargetSelector,

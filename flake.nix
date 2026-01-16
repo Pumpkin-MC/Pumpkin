@@ -56,7 +56,6 @@
                 ./pumpkin-macros
                 ./pumpkin-nbt
                 ./pumpkin-protocol
-                ./pumpkin-registry
                 ./pumpkin-util
                 ./pumpkin-world
               ];

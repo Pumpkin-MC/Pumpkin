@@ -5,6 +5,8 @@ pub use difficulty::Difficulty;
 pub use gamemode::GameMode;
 pub use permission::PermissionLvl;
 
+use crate::math::vector3::Axis;
+
 pub mod biome;
 pub mod difficulty;
 pub mod gamemode;
@@ -83,6 +85,26 @@ pub enum ProfileAction {
     UsingBannedSkin,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum BlockDirection {
+    Down = 0,
+    Up,
+    North,
+    South,
+    West,
+    East,
+}
+
+impl BlockDirection {
+    pub fn get_axis(&self) -> Axis {
+        match self {
+            BlockDirection::Up | BlockDirection::Down => Axis::Y,
+            BlockDirection::North | BlockDirection::South => Axis::Z,
+            BlockDirection::East | BlockDirection::West => Axis::X,
+        }
+    }
+}
+
 /// Takes a mutable reference of an index and returns a mutable "slice" where we can mutate both at
 /// the same time
 pub struct MutableSplitSlice<'a, T> {
@@ -112,7 +134,7 @@ impl<'a, T> MutableSplitSlice<'a, T> {
 impl<T> Index<usize> for MutableSplitSlice<'_, T> {
     type Output = T;
 
-    #[allow(clippy::comparison_chain)]
+    #[expect(clippy::comparison_chain)]
     fn index(&self, index: usize) -> &Self::Output {
         if index < self.start.len() {
             &self.start[index]
@@ -132,7 +154,7 @@ pub struct DoublePerlinNoiseParametersCodec {
 }
 
 impl<T> IndexMut<usize> for MutableSplitSlice<'_, T> {
-    #[allow(clippy::comparison_chain)]
+    #[expect(clippy::comparison_chain)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         if index < self.start.len() {
             &mut self.start[index]
