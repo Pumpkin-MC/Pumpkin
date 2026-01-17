@@ -110,10 +110,7 @@ async fn main() {
 
     pumpkin::init_logger(&advanced_config);
 
-    if let Some((logger_impl, level)) = pumpkin::LOGGER_IMPL.wait() {
-        log::set_logger(logger_impl).unwrap();
-        log::set_max_level(*level);
-    }
+    // Logger is now handled by tracing subscriber with LogTracer bridge
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {

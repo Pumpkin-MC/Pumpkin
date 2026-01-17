@@ -1,13 +1,11 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
-use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
 use crate::net::DisconnectReason;
 use crate::net::bedrock::BedrockClient;
 use crate::net::java::JavaClient;
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
-use log::{Level, LevelFilter};
 use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
@@ -21,14 +19,17 @@ use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal, stdin};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
-use tokio::sync::{Mutex, Notify, RwLock};
+use tokio::sync::{Mutex as TokioMutex, Notify, RwLock};
 use tokio::time::sleep;
 use tokio_util::task::TaskTracker;
+use tracing::Level;
+use tracing_log::LogTracer;
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 pub mod block;
 pub mod command;
@@ -54,13 +55,102 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
-pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter)>;
+#[derive(Clone)]
+struct ReadlineCoordinatedWriter {
+    readline_ref: Arc<std::sync::Mutex<Option<Readline>>>,
+}
+
+impl ReadlineCoordinatedWriter {
+    fn new(readline_ref: Arc<std::sync::Mutex<Option<Readline>>>) -> Self {
+        Self { readline_ref }
+    }
+}
+
+impl std::io::Write for ReadlineCoordinatedWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let result = std::io::Write::write(&mut std::io::stdout(), buf)?;
+
+        if let Ok(mut rl_guard) = self.readline_ref.try_lock() {
+            if let Some(ref mut rl) = *rl_guard {
+                let _ = rl.flush();
+            }
+        }
+
+        Ok(result)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        std::io::Write::flush(&mut std::io::stdout())?;
+
+        if let Ok(mut rl_guard) = self.readline_ref.try_lock() {
+            if let Some(ref mut rl) = *rl_guard {
+                let _ = rl.flush();
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub type LoggerOption = Option<Arc<std::sync::Mutex<Option<Readline>>>>;
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
-    use simplelog::{ConfigBuilder, SharedLogger, SimpleLogger, WriteLogger};
+    let level = std::env::var("RUST_LOG")
+        .ok()
+        .as_deref()
+        .map(Level::from_str)
+        .and_then(Result::ok)
+        .unwrap_or(Level::INFO);
 
+    if advanced_config.logging.enabled {
+        let rl = if advanced_config.commands.use_tty && stdin().is_terminal() {
+            match Readline::new("$ ".to_owned()) {
+                Ok((rl, _stdout)) => Some(rl),
+                Err(e) => {
+                    eprintln!("Failed to init Readline: {e}");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let rl_storage = Arc::new(Mutex::new(rl));
+        let coordinated_writer = ReadlineCoordinatedWriter::new(rl_storage.clone());
+        let console_layer = fmt::Layer::default()
+            .with_writer(move || coordinated_writer.clone())
+            .with_ansi(advanced_config.logging.color)
+            .with_thread_ids(advanced_config.logging.threads)
+            .with_target(true)
+            .with_filter(EnvFilter::from_default_env().add_directive(level.into()));
+
+        let subscriber = tracing_subscriber::registry().with(console_layer);
+
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("Failed to set tracing subscriber");
+
+        LogTracer::init().expect("Failed to set LogTracer");
+
+        if LOGGER_IMPL.set(Some(rl_storage)).is_err() {
+            panic!("Failed to set logger. Already initialized");
+        }
+    } else {
+        let subscriber = tracing_subscriber::registry()
+            .with(fmt::Layer::default().with_filter(tracing_subscriber::filter::LevelFilter::OFF));
+
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("Failed to set tracing subscriber");
+
+        LogTracer::init().expect("Failed to set LogTracer");
+
+        if LOGGER_IMPL.set(None).is_err() {
+            panic!("Failed to set logger. Already initialized");
+        }
+    }
+
+    /* Old implementation
     let logger = if advanced_config.logging.enabled {
         let mut config = ConfigBuilder::new();
 
@@ -141,6 +231,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     if LOGGER_IMPL.set(logger).is_err() {
         panic!("Failed to set logger. already initialized");
     }
+    */
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
@@ -179,11 +270,27 @@ impl PumpkinServer {
 
         let mut ticker = Ticker::new();
 
-        if server.advanced_config.commands.use_console
-            && let Some((wrapper, _)) = LOGGER_IMPL.wait()
-        {
-            if let Some(rl) = wrapper.take_readline() {
-                setup_console(rl, server.clone());
+        if server.advanced_config.commands.use_console {
+            if let Some(rl_storage) = LOGGER_IMPL.wait() {
+                if let Ok(mut rl_guard) = rl_storage.lock() {
+                    if let Some(rl) = rl_guard.take() {
+                        setup_console(rl, server.clone(), rl_storage.clone());
+                    } else {
+                        if server.advanced_config.commands.use_tty {
+                            log::warn!(
+                                "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                            );
+                        }
+                        setup_stdin_console(server.clone()).await;
+                    }
+                } else {
+                    if server.advanced_config.commands.use_tty {
+                        log::warn!(
+                            "Failed to acquire readline lock; falling back to simple logger"
+                        );
+                    }
+                    setup_stdin_console(server.clone()).await;
+                }
             } else {
                 if server.advanced_config.commands.use_tty {
                     log::warn!(
@@ -288,7 +395,8 @@ impl PumpkinServer {
     pub async fn start(&self) {
         let tasks = Arc::new(TaskTracker::new());
         let mut master_client_id: u64 = 0;
-        let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
+        let bedrock_clients: Arc<TokioMutex<HashMap<SocketAddr, Arc<BedrockClient>>>> =
+            Arc::new(TokioMutex::new(HashMap::new()));
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
@@ -331,10 +439,12 @@ impl PumpkinServer {
         log::info!("Completed save!");
 
         // Explicitly drop the line reader to return the terminal to the original state.
-        if let Some((wrapper, _)) = LOGGER_IMPL.wait()
-            && let Some(rl) = wrapper.take_readline()
-        {
-            let _ = rl;
+        if let Some(rl_storage) = LOGGER_IMPL.wait() {
+            if let Ok(mut rl_guard) = rl_storage.lock() {
+                if let Some(rl) = rl_guard.take() {
+                    let _ = rl;
+                }
+            }
         }
     }
 
@@ -342,7 +452,7 @@ impl PumpkinServer {
         &self,
         master_client_id_counter: &mut u64,
         tasks: &Arc<TaskTracker>,
-        bedrock_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
+        bedrock_clients: &Arc<TokioMutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
     ) -> bool {
         let mut udp_buf = [0; 1496]; // Buffer for UDP receive
 
@@ -499,11 +609,17 @@ async fn setup_stdin_console(server: Arc<Server>) {
     });
 }
 
-fn setup_console(rl: Readline, server: Arc<Server>) {
+fn setup_console(mut rl: Readline, server: Arc<Server>, rl_storage: Arc<Mutex<Option<Readline>>>) {
     // This needs to be async, or it will hog a thread.
     server.clone().spawn_task(async move {
-        let mut rl = rl;
+        log::debug!("Starting console commands task");
+
         while !SHOULD_STOP.load(Ordering::Relaxed) {
+            if let Err(e) = rl.flush() {
+                log::error!("Failed to flush readline: {e}");
+                break;
+            }
+
             let t1 = rl.readline();
             let t2 = STOP_INTERRUPT.notified();
 
@@ -512,7 +628,10 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
                 () = t2 => None,
             };
 
-            let Some(result) = result else { break };
+            let Some(result) = result else {
+                log::debug!("Readline interrupted by stop signal");
+                break;
+            };
 
             match result {
                 Ok(ReadlineEvent::Line(line)) => {
@@ -530,18 +649,22 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
                     }}
                 }
                 Ok(ReadlineEvent::Interrupted) => {
+                    log::info!("Console interrupted (Ctrl+C)");
                     stop_server();
                     break;
                 }
-                err => {
+                Err(e) => {
                     log::error!("Console command loop failed!");
-                    log::error!("{err:?}");
+                    log::error!("Error: {e:?}");
                     break;
+                }
+                other => {
+                    log::warn!("Unexpected readline event: {other:?}");
                 }
             }
         }
-        if let Some((wrapper, _)) = LOGGER_IMPL.wait() {
-            wrapper.return_readline(rl);
+        if let Ok(mut storage_guard) = rl_storage.lock() {
+            *storage_guard = Some(rl);
         }
 
         log::debug!("Stopped console commands task");
