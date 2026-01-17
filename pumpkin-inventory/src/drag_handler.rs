@@ -1,4 +1,9 @@
-/*
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
+use crate::{Container, ItemStack, error::InventoryError};
+use crate::container_click::MouseDragType;
+
 #[derive(Debug, Default)]
 pub struct DragHandler(RwLock<HashMap<u64, Arc<Mutex<Drag>>>>);
 
@@ -6,6 +11,7 @@ impl DragHandler {
     pub fn new() -> Self {
         Self(RwLock::new(HashMap::new()))
     }
+
     pub async fn new_drag(
         &self,
         container_id: u64,
@@ -84,10 +90,14 @@ impl DragHandler {
                     if carried_item.item_count != 0 {
                         carried_item.item_count -= 1;
                         if let Some(stack) = &mut slots[slot] {
-                            // TODO: Check for stack max here
-                            if stack.item_count + 1 < stack.item.components.max_stack_size {
+                            // Get the max stack size for this item
+                            let max_stack_size = stack.get_max_stack_size();
+                            
+                            // Only add to the stack if it won't exceed the maximum
+                            if stack.item_count < max_stack_size {
                                 stack.item_count += 1;
                             } else {
+                                // Stack is full, return item to cursor
                                 carried_item.item_count += 1;
                             }
                         } else {
@@ -104,25 +114,40 @@ impl DragHandler {
                 }
             }
             MouseDragType::Left => {
-                // TODO: Handle dragging a stack with a greater amount than the item allows as max unstackable.
-                // In that specific case, follow `MouseDragType::Right` behaviours instead!
-
                 let changing_slots = drag.possibly_changing_slots(&slots, carried_item.item.id);
                 let amount_of_slots = changing_slots.len();
-                let (amount_per_slot, remainder) = if amount_of_slots == 0 {
-                    // TODO: please work lol
-                    (1, 0)
+                
+                // Handle edge case where no slots are available
+                let (amount_per_slot, mut remainder) = if amount_of_slots == 0 {
+                    (0, carried_item.item_count)
                 } else {
                     (
                         carried_item.item_count.div_euclid(amount_of_slots as u8),
                         carried_item.item_count.rem_euclid(amount_of_slots as u8),
                     )
                 };
+
+                // Distribute items to slots, respecting max stack size
                 changing_slots.into_iter().for_each(|slot| {
                     if let Some(stack) = slots[slot].as_mut() {
                         debug_assert!(stack.item.id == carried_item.item.id);
-                        // TODO: Handle max stack size
-                        stack.item_count += amount_per_slot;
+                        
+                        let max_stack_size = stack.get_max_stack_size();
+                        let available_space = max_stack_size.saturating_sub(stack.item_count);
+                        let to_add = amount_per_slot.min(available_space);
+                        
+                        stack.item_count += to_add;
+                        
+                        // If we couldn't add all items, add the difference to remainder
+                        if to_add < amount_per_slot {
+                            remainder += amount_per_slot - to_add;
+                        }
+                    } else {
+                        // Empty slot, create new stack
+                        *slots[slot] = Some(ItemStack {
+                            item: carried_item.item.clone(),
+                            item_count: amount_per_slot,
+                        });
                     }
                 });
 
@@ -136,6 +161,7 @@ impl DragHandler {
         Ok(())
     }
 }
+
 #[derive(Debug)]
 struct Drag {
     player: i32,
@@ -168,4 +194,3 @@ impl Drag {
             .collect()
     }
 }
- */

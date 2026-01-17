@@ -2,7 +2,7 @@ use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component::DataComponent::Enchantments;
 use pumpkin_data::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
-    MaxStackSizeImpl, ToolImpl, get, get_mut, read_data,
+    MaxStackSizeImpl, MaxDamageImpl, ToolImpl, get, get_mut, read_data,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
@@ -122,8 +122,62 @@ impl ItemStack {
         }
     }
 
+    /// Checks if this item can take damage (has durability).
+    ///
+    /// # Returns
+    /// `true` if the item has a max damage component, `false` otherwise.
+    pub fn is_damageable(&self) -> bool {
+        self.get_data_component::<MaxDamageImpl>().is_some()
+    }
+
+    /// Checks if this item is currently damaged.
+    ///
+    /// # Returns
+    /// `true` if the item has taken any damage, `false` otherwise.
+    pub fn is_damaged(&self) -> bool {
+        // Check if item has damage in its patch (modified components)
+        for (id, component) in &self.patch {
+            if matches!(id, DataComponent::Damage) {
+                if component.is_some() {
+                    // If damage component exists, item is damaged
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Checks if this item can be stacked with others.
+    ///
+    /// Items are stackable if:
+    /// - Their max stack size is greater than 1
+    /// - They are not damageable, OR they are damageable but not damaged
+    ///
+    /// # Returns
+    /// `true` if the item can be stacked, `false` otherwise.
+    ///
+    /// # Examples
+    /// ```ignore
+    /// // Dirt stacks to 64
+    /// let dirt = ItemStack::new(1, &Item::DIRT);
+    /// assert!(dirt.is_stackable());
+    ///
+    /// // Diamond sword doesn't stack (max_stack_size = 1)
+    /// let sword = ItemStack::new(1, &Item::DIAMOND_SWORD);
+    /// assert!(!sword.is_stackable());
+    /// ```
     pub fn is_stackable(&self) -> bool {
-        self.get_max_stack_size() > 1 // TODO: && (!this.isDamageable() || !this.isDamaged());
+        // Items with max stack size of 1 are never stackable
+        if self.get_max_stack_size() <= 1 {
+            return false;
+        }
+        
+        // Damageable items are not stackable if they are damaged
+        if self.is_damageable() && self.is_damaged() {
+            return false;
+        }
+        
+        true
     }
 
     pub fn is_empty(&self) -> bool {
