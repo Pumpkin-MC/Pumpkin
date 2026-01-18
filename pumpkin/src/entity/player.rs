@@ -37,6 +37,7 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState, tag};
+use pumpkin_data::fluid::Fluid;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -410,6 +411,8 @@ pub struct Player {
     pub last_sent_health: AtomicI32,
     pub last_sent_food: AtomicU8,
     pub last_food_saturation: AtomicBool,
+    pub air_supply: AtomicI32,
+    pub drowning_tick: AtomicI32,
     /// The player's permission level.
     pub permission_lvl: AtomicCell<PermissionLvl>,
     /// Whether the client has reported that it has loaded.
@@ -527,6 +530,8 @@ impl Player {
             last_sent_health: AtomicI32::new(-1),
             last_sent_food: AtomicU8::new(0),
             last_food_saturation: AtomicBool::new(true),
+            air_supply: AtomicI32::new(300),
+            drowning_tick: AtomicI32::new(0),
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
@@ -1013,6 +1018,8 @@ impl Player {
         self.living_entity.tick(self.clone(), server).await;
         self.hunger_manager.tick(self).await;
 
+        self.tick_drowning().await;
+
         // experience handling
         self.tick_experience().await;
         self.tick_health().await;
@@ -1477,6 +1484,96 @@ impl Player {
                 .store(saturation == 0.0, Ordering::Relaxed);
             self.send_health().await;
         }
+    }
+
+    async fn is_eye_in_water(&self) -> bool {
+        let e = &self.living_entity.entity;
+        let pos = e.pos.load();
+
+        let eye_y = pos.y + f64::from(e.entity_dimension.load().eye_height);
+
+        let bp = BlockPos::new(
+            pos.x.floor() as i32,
+            eye_y.floor() as i32,
+            pos.z.floor() as i32,
+        );
+
+        let (fluid, state) = self.world().get_fluid_and_fluid_state(&bp).await;
+
+        if fluid.id != Fluid::WATER.id && fluid.id != Fluid::FLOWING_WATER.id {
+            return false;
+        }
+
+        let frac = if state.is_still {
+            1.0
+        } else {
+            ((8 - state.level).clamp(0, 8) as f64) / 8.0
+        };
+
+        let surface_y = (bp.0.y as f64) + frac;
+
+        surface_y > eye_y
+    }
+
+    async fn tick_drowning(&self) {
+        let mode = self.gamemode.load();
+
+        if matches!(mode, GameMode::Creative | GameMode::Spectator) {
+            if self.air_supply.swap(300, Ordering::Relaxed) != 300 {
+                self.sync_air(300).await;
+            }
+            self.drowning_tick.store(0, Ordering::Relaxed);
+            return;
+        }
+
+        if !self.world().level_info.read().await.game_rules.drowning_damage {
+            return;
+        }
+
+        if self.living_entity.has_effect(&StatusEffect::WATER_BREATHING).await {
+            if self.air_supply.swap(300, Ordering::Relaxed) != 300 {
+                self.sync_air(300).await;
+            }
+            self.drowning_tick.store(0, Ordering::Relaxed);
+            return;
+        }
+
+        if self.is_eye_in_water().await {
+            let prev = self.air_supply.fetch_sub(1, Ordering::Relaxed);
+            let new_air = (prev - 1).max(0);
+            if new_air != prev {
+                self.sync_air(new_air).await;
+            }
+
+            if new_air <= 0 {
+                let t = self.drowning_tick.fetch_add(1, Ordering::Relaxed) + 1;
+
+                if t >= 20 {
+                    self.drowning_tick.store(0, Ordering::Relaxed);
+                    self.living_entity.damage(self, 2.0, DamageType::DROWN).await;
+                }
+            }
+        } else {
+            let prev = self.air_supply.load(Ordering::Relaxed);
+            let new_air = (prev + 4).min(300);
+            if new_air != prev {
+                self.air_supply.store(new_air, Ordering::Relaxed);
+                self.sync_air(new_air).await;
+            }
+            self.drowning_tick.store(0, Ordering::Relaxed);
+        }
+    }
+
+    async fn sync_air(&self, air: i32) {
+        let air = air.clamp(0, 300);
+
+        self.living_entity
+            .entity
+            .send_meta_data(&[Metadata::new(
+                TrackedData::DATA_AIR,
+                MetaDataType::Integer,
+                VarInt(air),
+            )]).await;
     }
 
     pub async fn set_health(&self, health: f32) {
