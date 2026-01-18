@@ -28,3 +28,10 @@ quote.workspace = true
 syn.workspace = true
 
 rayon.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "has_random_ticks"
+harness = false
