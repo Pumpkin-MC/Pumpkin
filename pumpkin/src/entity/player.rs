@@ -1519,8 +1519,11 @@ impl Player {
         let mode = self.gamemode.load();
 
         if matches!(mode, GameMode::Creative | GameMode::Spectator) {
-            if self.air_supply.swap(300, Ordering::Relaxed) != 300 {
-                self.sync_air(300).await;
+            let prev = self.air_supply.load(Ordering::Relaxed);
+            let new_air = (prev + 4).min(300);
+            if new_air != prev {
+                self.air_supply.store(new_air, Ordering::Relaxed);
+                self.sync_air(new_air).await;
             }
             self.drowning_tick.store(0, Ordering::Relaxed);
             return;
