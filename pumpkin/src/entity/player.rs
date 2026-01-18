@@ -1628,6 +1628,10 @@ impl Player {
             }
         }
 
+        // Reset air supply on death
+        self.air_supply.store(300, Ordering::Relaxed);
+        self.sync_air(300).await;
+
         self.client
             .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
             .await;
