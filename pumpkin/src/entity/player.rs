@@ -33,11 +33,11 @@ use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockState, tag};
-use pumpkin_data::fluid::Fluid;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -1507,10 +1507,10 @@ impl Player {
         let frac = if state.is_still {
             1.0
         } else {
-            ((8 - state.level).clamp(0, 8) as f64) / 8.0
+            f64::from((8 - state.level).clamp(0, 8)) / 8.0
         };
 
-        let surface_y = (bp.0.y as f64) + frac;
+        let surface_y = f64::from(bp.0.y) + frac;
 
         surface_y > eye_y
     }
@@ -1526,11 +1526,22 @@ impl Player {
             return;
         }
 
-        if !self.world().level_info.read().await.game_rules.drowning_damage {
+        if !self
+            .world()
+            .level_info
+            .read()
+            .await
+            .game_rules
+            .drowning_damage
+        {
             return;
         }
 
-        if self.living_entity.has_effect(&StatusEffect::WATER_BREATHING).await {
+        if self
+            .living_entity
+            .has_effect(&StatusEffect::WATER_BREATHING)
+            .await
+        {
             if self.air_supply.swap(300, Ordering::Relaxed) != 300 {
                 self.sync_air(300).await;
             }
@@ -1550,7 +1561,9 @@ impl Player {
 
                 if t >= 20 {
                     self.drowning_tick.store(0, Ordering::Relaxed);
-                    self.living_entity.damage(self, 2.0, DamageType::DROWN).await;
+                    self.living_entity
+                        .damage(self, 2.0, DamageType::DROWN)
+                        .await;
                 }
             }
         } else {
@@ -1573,7 +1586,8 @@ impl Player {
                 TrackedData::DATA_AIR,
                 MetaDataType::Integer,
                 VarInt(air),
-            )]).await;
+            )])
+            .await;
     }
 
     pub async fn set_health(&self, health: f32) {
