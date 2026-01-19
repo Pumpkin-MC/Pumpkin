@@ -1549,6 +1549,11 @@ impl Player {
                 };
                 self.send_abilities_update().await;
 
+                if gamemode == GameMode::Creative {
+                    self.get_entity().extinguish();
+                    self.get_entity().set_on_fire(false).await;
+                }
+
                 self.living_entity.entity.invulnerable.store(
                     matches!(gamemode, GameMode::Creative | GameMode::Spectator),
                     Ordering::Relaxed,
