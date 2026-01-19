@@ -8,9 +8,9 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::{OakDoorLikeProperties, PaleOakWoodLikeProperties};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::GameMode;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
@@ -40,8 +40,7 @@ impl ItemBehaviour for AxeItem {
             // First we try to strip the block. by getting his equivalent and applying it the axis.
 
             // If there is a strip equivalent.
-            let mut changed = false;
-            if replacement_block != 0 {
+            let changed = if replacement_block != 0 {
                 let new_block = &Block::from_id(replacement_block);
                 let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_LOGS) {
                     let log_information = world.get_block_state_id(&location).await;
@@ -79,8 +78,10 @@ impl ItemBehaviour for AxeItem {
                 world
                     .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
-                changed = true;
-            }
+                true
+            } else {
+                false
+            };
 
             if changed && player.gamemode.load() != GameMode::Creative {
                 item.damage_item_with_context(1, false);

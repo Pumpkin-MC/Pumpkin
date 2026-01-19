@@ -176,7 +176,7 @@ impl ItemStack {
             let chance = 0.6 + (0.4 / (unbreaking_level as f32 + 1.0));
             rand::random::<f32>() < chance
         } else {
-            rand::random::<u32>() % (unbreaking_level as u32 + 1) == 0
+            rand::random::<u32>().is_multiple_of(unbreaking_level as u32 + 1)
         }
     }
 

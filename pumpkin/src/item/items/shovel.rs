@@ -8,9 +8,9 @@ use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::GameMode;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
@@ -36,9 +36,8 @@ impl ItemBehaviour for ShovelItem {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
-            let mut changed = false;
             // Yes, Minecraft does hardcode these
-            if (block == &Block::GRASS_BLOCK
+            let mut changed = if (block == &Block::GRASS_BLOCK
                 || block == &Block::DIRT
                 || block == &Block::COARSE_DIRT
                 || block == &Block::ROOTED_DIRT
@@ -54,8 +53,10 @@ impl ItemBehaviour for ShovelItem {
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
-                changed = true;
-            }
+                true
+            } else {
+                false
+            };
             if block == &Block::CAMPFIRE || block == &Block::SOUL_CAMPFIRE {
                 let mut campfire_props = CampfireLikeProperties::from_state_id(
                     world.get_block_state(&location).await.id,

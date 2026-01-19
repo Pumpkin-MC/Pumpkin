@@ -1313,7 +1313,7 @@ impl JavaClient {
                                 .block_registry
                                 .broken(world, block, player, &position, server, broken_state)
                                 .await;
-                            player.apply_tool_damage_for_block_break(&broken_state).await;
+                            player.apply_tool_damage_for_block_break(broken_state).await;
                         } else {
                             player.mining.store(true, Ordering::Relaxed);
                             *player.mining_pos.lock().await = position;
@@ -1382,7 +1382,7 @@ impl JavaClient {
                         .block_registry
                         .broken(world, block, player, &location, server, state)
                         .await;
-                    player.apply_tool_damage_for_block_break(&state).await;
+                    player.apply_tool_damage_for_block_break(state).await;
 
                     self.update_sequence(player, player_action.sequence.0);
                 }

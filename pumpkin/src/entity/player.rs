@@ -718,7 +718,10 @@ impl Player {
     }
 
     pub async fn damage_held_item(&self, amount: i32) -> bool {
-        if matches!(self.gamemode.load(), GameMode::Creative | GameMode::Spectator) {
+        if matches!(
+            self.gamemode.load(),
+            GameMode::Creative | GameMode::Spectator
+        ) {
             return false;
         }
 
@@ -740,7 +743,10 @@ impl Player {
     }
 
     pub async fn apply_tool_damage_for_block_break(&self, state: &BlockState) {
-        if matches!(self.gamemode.load(), GameMode::Creative | GameMode::Spectator) {
+        if matches!(
+            self.gamemode.load(),
+            GameMode::Creative | GameMode::Spectator
+        ) {
             return;
         }
 
@@ -753,8 +759,7 @@ impl Player {
             let stack = stack.lock().await;
             stack
                 .get_data_component::<ToolImpl>()
-                .map(|tool| tool.damage_per_block as i32)
-                .unwrap_or(0)
+                .map_or(0, |tool| tool.damage_per_block as i32)
         };
 
         if damage > 0 {
@@ -2015,19 +2020,21 @@ impl Player {
 
         let selected_slot = self.inventory.get_selected_slot() as usize;
         let main_hand = self.inventory.get_stack(selected_slot).await;
-        if {
+        let main_hand_eligible = {
             let stack = main_hand.lock().await;
             stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
-        } {
+        };
+        if main_hand_eligible {
             candidates.push((selected_slot, EquipmentSlot::MAIN_HAND, main_hand));
         }
 
         let offhand_slot = PlayerInventory::OFF_HAND_SLOT;
         let off_hand = self.inventory.get_stack(offhand_slot).await;
-        if {
+        let off_hand_eligible = {
             let stack = off_hand.lock().await;
             stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
-        } {
+        };
+        if off_hand_eligible {
             candidates.push((offhand_slot, EquipmentSlot::OFF_HAND, off_hand));
         }
 
