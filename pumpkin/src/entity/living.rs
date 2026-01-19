@@ -272,7 +272,9 @@ impl LivingEntity {
     }
 
     pub async fn is_in_prevents_fall_damage(&self) -> bool {
-        let (prevents, block) = self.is_in_any(Self::PREVENT_FALL_DAMAGE_BLOCKS.as_ref()).await;
+        let (prevents, block) = self
+            .is_in_any(Self::PREVENT_FALL_DAMAGE_BLOCKS.as_ref())
+            .await;
 
         if block == &Block::SCAFFOLDING && self.entity.sneaking.load(Ordering::Relaxed) {
             return true;
@@ -292,16 +294,16 @@ impl LivingEntity {
                 let block_pos = BlockPos(pos);
                 let block = world.get_block(&block_pos).await;
 
-                if Self::PREVENT_AREA_FALL_DAMAGE_BLOCKS.contains(&block)
-                {
+                if Self::PREVENT_AREA_FALL_DAMAGE_BLOCKS.contains(&block) {
                     let block_center = Vector3::new(
                         f64::from(block_pos.0.x) + 0.5,
                         f64::from(block_pos.0.y) + 0.5,
                         f64::from(block_pos.0.z) + 0.5,
                     );
                     let distance = entity_pos.squared_distance_to_vec(block_center);
-                    
-                    return distance.sqrt() <= Self::FALL_DAMAGE_SAFE_DISTANCE * Self::FALL_DAMAGE_SAFE_DISTANCE;
+
+                    return distance.sqrt()
+                        <= Self::FALL_DAMAGE_SAFE_DISTANCE * Self::FALL_DAMAGE_SAFE_DISTANCE;
                 }
             }
         }
