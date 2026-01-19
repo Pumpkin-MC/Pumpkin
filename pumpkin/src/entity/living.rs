@@ -281,7 +281,7 @@ impl LivingEntity {
         prevents
     }
 
-    pub async fn is_arround_prevents_fall_damage(&self) -> bool {
+    pub async fn is_around_prevents_fall_damage(&self) -> bool {
         let world = &self.entity.world;
         let block_pos = self.entity.block_pos.load().down();
         let entity_pos = self.entity.pos.load();
@@ -758,7 +758,7 @@ impl LivingEntity {
             if fall_distance <= 0.0
                 || dont_damage
                 || self.is_in_prevents_fall_damage().await
-                || self.is_arround_prevents_fall_damage().await
+                || self.is_around_prevents_fall_damage().await
             {
                 return;
             }
@@ -780,7 +780,7 @@ impl LivingEntity {
             }
         } else if height_difference < 0.0 {
             let new_fall_distance = if !self.is_in_prevents_fall_damage().await
-                && !self.is_arround_prevents_fall_damage().await
+                && !self.is_around_prevents_fall_damage().await
             {
                 let distance = self.fall_distance.load();
                 distance - (height_difference as f32)
