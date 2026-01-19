@@ -26,7 +26,7 @@ impl ItemMetadata for FlintAndSteelItem {
 impl ItemBehaviour for FlintAndSteelItem {
     fn use_on_block<'a>(
         &'a self,
-        _item: &'a mut ItemStack,
+        item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         face: BlockDirection,
@@ -35,7 +35,7 @@ impl ItemBehaviour for FlintAndSteelItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            Ignition::ignite_block(
+            let ignited = Ignition::ignite_block(
                 |world: Arc<World>, pos: BlockPos, new_state_id: u16| async move {
                     world
                         .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
@@ -47,6 +47,10 @@ impl ItemBehaviour for FlintAndSteelItem {
                 block,
             )
             .await;
+
+            if ignited && player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                item.damage_item_with_context(1, false);
+            }
         })
     }
 

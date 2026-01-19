@@ -9,6 +9,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::GameMode;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::pin::Pin;
@@ -26,7 +27,7 @@ impl ItemMetadata for HoeItem {
 impl ItemBehaviour for HoeItem {
     fn use_on_block<'a>(
         &'a self,
-        _item: &'a mut ItemStack,
+        item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         face: BlockDirection,
@@ -44,11 +45,13 @@ impl ItemBehaviour for HoeItem {
             {
                 let mut future_block = block;
                 let world = player.world();
+                let mut changed = false;
 
                 //Only rooted can be right-clicked on the bottom of the block
                 if face == BlockDirection::Down {
                     if block == &Block::ROOTED_DIRT {
                         future_block = &Block::DIRT;
+                        changed = true;
                     }
                 } else {
                     // grass, dirt && dirt path become farmland
@@ -58,10 +61,12 @@ impl ItemBehaviour for HoeItem {
                         && world.get_block_state(&location.up()).await.is_air()
                     {
                         future_block = &Block::FARMLAND;
+                        changed = true;
                     }
                     //Coarse dirt and rooted dirt become dirt
                     else if block == &Block::COARSE_DIRT || block == &Block::ROOTED_DIRT {
                         future_block = &Block::DIRT;
+                        changed = true;
                     }
                 }
 
@@ -95,6 +100,10 @@ impl ItemBehaviour for HoeItem {
                         ItemEntity::new(entity, ItemStack::new(1, &Item::HANGING_ROOTS)).await,
                     );
                     world.spawn_entity(item_entity).await;
+                }
+
+                if changed && player.gamemode.load() != GameMode::Creative {
+                    item.damage_item_with_context(1, false);
                 }
             }
         })

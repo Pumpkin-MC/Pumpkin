@@ -1,8 +1,8 @@
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component::DataComponent::Enchantments;
 use pumpkin_data::data_component_impl::{
-    BlocksAttacksImpl, ConsumableImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
-    MaxStackSizeImpl, ToolImpl, get, get_mut, read_data,
+    BlocksAttacksImpl, ConsumableImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
+    MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, get, get_mut, read_data,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::recipes::RecipeResultStruct;
@@ -102,6 +102,122 @@ impl ItemStack {
         } else {
             1
         }
+    }
+
+    pub fn get_max_damage(&self) -> Option<i32> {
+        self.get_data_component::<MaxDamageImpl>()
+            .map(|value| value.max_damage)
+    }
+
+    pub fn get_damage(&self) -> i32 {
+        self.get_data_component::<DamageImpl>()
+            .map(|value| value.damage)
+            .unwrap_or(0)
+    }
+
+    pub fn get_enchantment_level(&self, enchantment: &'static Enchantment) -> i32 {
+        let Some(data) = self.get_data_component::<EnchantmentsImpl>() else {
+            return 0;
+        };
+        for (enc, level) in data.enchantment.iter() {
+            if *enc == enchantment {
+                return *level;
+            }
+        }
+        0
+    }
+
+    pub fn is_unbreakable(&self) -> bool {
+        self.get_data_component::<UnbreakableImpl>().is_some()
+    }
+
+    pub fn set_damage(&mut self, damage: i32) {
+        let damage = damage.max(0);
+        if damage == 0 {
+            self.patch.retain(|(id, _)| *id != DataComponent::Damage);
+            return;
+        }
+
+        for (id, component) in self.patch.iter_mut() {
+            if *id == DataComponent::Damage {
+                *component = Some(DamageImpl { damage }.to_dyn());
+                return;
+            }
+        }
+
+        self.patch
+            .push((DataComponent::Damage, Some(DamageImpl { damage }.to_dyn())));
+    }
+
+    pub fn is_damageable(&self) -> bool {
+        self.get_max_damage().unwrap_or(0) > 0
+    }
+
+    pub fn repair_item(&mut self, amount: i32) -> i32 {
+        if amount <= 0 {
+            return 0;
+        }
+        let damage = self.get_damage();
+        if damage <= 0 {
+            return 0;
+        }
+        let repaired = amount.min(damage);
+        self.set_damage(damage - repaired);
+        repaired
+    }
+
+    fn should_apply_durability_damage(&self, is_armor: bool) -> bool {
+        let unbreaking_level = self.get_enchantment_level(&Enchantment::UNBREAKING);
+        if unbreaking_level <= 0 {
+            return true;
+        }
+
+        if is_armor {
+            let chance = 0.6 + (0.4 / (unbreaking_level as f32 + 1.0));
+            rand::random::<f32>() < chance
+        } else {
+            rand::random::<u32>() % (unbreaking_level as u32 + 1) == 0
+        }
+    }
+
+    pub fn damage_item_with_context(&mut self, amount: i32, is_armor: bool) -> bool {
+        if amount <= 0 || !self.is_damageable() || self.is_unbreakable() {
+            return false;
+        }
+
+        let max_damage = self.get_max_damage().unwrap_or(0);
+        if max_damage <= 0 {
+            return false;
+        }
+
+        let mut applied = 0;
+        for _ in 0..amount {
+            if self.should_apply_durability_damage(is_armor) {
+                applied += 1;
+            }
+        }
+
+        if applied <= 0 {
+            return false;
+        }
+
+        let new_damage = self.get_damage().saturating_add(applied);
+        if new_damage >= max_damage {
+            if self.item_count > 1 {
+                self.item_count = self.item_count.saturating_sub(1);
+                self.set_damage(0);
+            } else {
+                *self = ItemStack::EMPTY.clone();
+            }
+            return true;
+        }
+
+        self.set_damage(new_damage);
+        true
+    }
+
+    pub fn damage_item(&mut self, amount: i32) -> bool {
+        self.damage_item_with_context(amount, false)
     }
 
     pub fn get_max_use_time(&self) -> i32 {

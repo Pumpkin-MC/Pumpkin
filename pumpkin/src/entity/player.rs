@@ -30,13 +30,13 @@ use uuid::Uuid;
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl};
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockState, tag};
+use pumpkin_data::{Block, BlockState, Enchantment, tag};
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -694,7 +694,72 @@ impl Player {
             }
         }
 
+        self.damage_held_item(1).await;
+
         if config.swing {}
+    }
+
+    pub async fn sync_hand_slot(&self, slot_index: usize, stack: ItemStack) {
+        self.enqueue_slot_set_packet(&CSetPlayerInventory::new(
+            (slot_index as i32).into(),
+            &ItemStackSerializer::from(stack.clone()),
+        ))
+        .await;
+
+        if slot_index == self.inventory.get_selected_slot() as usize {
+            self.living_entity
+                .send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack)])
+                .await;
+        } else if slot_index == PlayerInventory::OFF_HAND_SLOT {
+            self.living_entity
+                .send_equipment_changes(&[(EquipmentSlot::OFF_HAND, stack)])
+                .await;
+        }
+    }
+
+    pub async fn damage_held_item(&self, amount: i32) -> bool {
+        if matches!(self.gamemode.load(), GameMode::Creative | GameMode::Spectator) {
+            return false;
+        }
+
+        let slot_index = self.inventory.get_selected_slot() as usize;
+        let stack_arc = self.inventory.held_item();
+        let updated = {
+            let mut stack = stack_arc.lock().await;
+            stack
+                .damage_item_with_context(amount, false)
+                .then_some(stack.clone())
+        };
+
+        if let Some(updated_stack) = updated {
+            self.sync_hand_slot(slot_index, updated_stack).await;
+            return true;
+        }
+
+        false
+    }
+
+    pub async fn apply_tool_damage_for_block_break(&self, state: &BlockState) {
+        if matches!(self.gamemode.load(), GameMode::Creative | GameMode::Spectator) {
+            return;
+        }
+
+        if state.hardness <= 0.0 {
+            return;
+        }
+
+        let damage = {
+            let stack = self.inventory.held_item();
+            let stack = stack.lock().await;
+            stack
+                .get_data_component::<ToolImpl>()
+                .map(|tool| tool.damage_per_block as i32)
+                .unwrap_or(0)
+        };
+
+        if damage > 0 {
+            self.damage_held_item(damage).await;
+        }
     }
 
     pub async fn set_respawn_point(
@@ -1939,6 +2004,78 @@ impl Player {
         let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
         let progress = experience::progress_in_level(new_points, new_level);
         self.set_experience(new_level, progress, new_points).await;
+    }
+
+    pub async fn apply_mending_from_xp(&self, mut xp: i32) -> i32 {
+        if xp <= 0 {
+            return xp;
+        }
+
+        let mut candidates: Vec<(usize, EquipmentSlot, Arc<Mutex<ItemStack>>)> = Vec::new();
+
+        let selected_slot = self.inventory.get_selected_slot() as usize;
+        let main_hand = self.inventory.get_stack(selected_slot).await;
+        if {
+            let stack = main_hand.lock().await;
+            stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
+        } {
+            candidates.push((selected_slot, EquipmentSlot::MAIN_HAND, main_hand));
+        }
+
+        let offhand_slot = PlayerInventory::OFF_HAND_SLOT;
+        let off_hand = self.inventory.get_stack(offhand_slot).await;
+        if {
+            let stack = off_hand.lock().await;
+            stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
+        } {
+            candidates.push((offhand_slot, EquipmentSlot::OFF_HAND, off_hand));
+        }
+
+        for (slot_index, slot) in self.inventory.equipment_slots.iter() {
+            if !slot.is_armor_slot() {
+                continue;
+            }
+            let stack = self.inventory.get_stack(*slot_index).await;
+            let eligible = {
+                let stack = stack.lock().await;
+                stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
+            };
+            if eligible {
+                candidates.push((*slot_index, slot.clone(), stack));
+            }
+        }
+
+        if candidates.is_empty() {
+            return xp;
+        }
+
+        let idx = rand::random::<u32>() as usize % candidates.len();
+        let (slot_index, equipment_slot, stack) = candidates.swap_remove(idx);
+
+        let (updated_stack, repaired) = {
+            let mut stack = stack.lock().await;
+            let repaired = stack.repair_item(xp.saturating_mul(2));
+            (stack.clone(), repaired)
+        };
+
+        if repaired <= 0 {
+            return xp;
+        }
+
+        let xp_used = (repaired + 1) / 2;
+        xp = xp.saturating_sub(xp_used);
+
+        self.enqueue_slot_set_packet(&CSetPlayerInventory::new(
+            (slot_index as i32).into(),
+            &ItemStackSerializer::from(updated_stack.clone()),
+        ))
+        .await;
+
+        self.living_entity
+            .send_equipment_changes(&[(equipment_slot, updated_stack)])
+            .await;
+
+        xp
     }
 
     pub fn increment_screen_handler_sync_id(&self) {

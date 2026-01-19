@@ -10,6 +10,7 @@ use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::GameMode;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use rand::{Rng, rng};
@@ -25,7 +26,7 @@ impl ItemMetadata for ShovelItem {
 impl ItemBehaviour for ShovelItem {
     fn use_on_block<'a>(
         &'a self,
-        _item: &'a mut ItemStack,
+        item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         face: BlockDirection,
@@ -35,6 +36,7 @@ impl ItemBehaviour for ShovelItem {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
+            let mut changed = false;
             // Yes, Minecraft does hardcode these
             if (block == &Block::GRASS_BLOCK
                 || block == &Block::DIRT
@@ -52,6 +54,7 @@ impl ItemBehaviour for ShovelItem {
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
+                changed = true;
             }
             if block == &Block::CAMPFIRE || block == &Block::SOUL_CAMPFIRE {
                 let mut campfire_props = CampfireLikeProperties::from_state_id(
@@ -82,7 +85,12 @@ impl ItemBehaviour for ShovelItem {
                             seed,
                         )
                         .await;
+                    changed = true;
                 }
+            }
+
+            if changed && player.gamemode.load() != GameMode::Creative {
+                item.damage_item_with_context(1, false);
             }
         })
     }

@@ -43,6 +43,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
+        Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -150,6 +151,20 @@ impl DataComponentImpl for DamageImpl {
 }
 #[derive(Clone, Hash, PartialEq)]
 pub struct UnbreakableImpl;
+impl UnbreakableImpl {
+    fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
+impl DataComponentImpl for UnbreakableImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
+    fn get_hash(&self) -> i32 {
+        0
+    }
+    default_impl!(Unbreakable);
+}
 #[derive(Clone, Hash, PartialEq)]
 pub struct CustomNameImpl {
     // TODO make TextComponent const
