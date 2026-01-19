@@ -237,6 +237,12 @@ impl LivingEntity {
         effects.get(&effect).cloned()
     }
 
+    pub async fn is_in_any(&self, blocks: &[&Block]) -> (bool, &Block) {
+        let block_pos = self.entity.block_pos.load();
+        let block = self.entity.world.get_block(&block_pos).await;
+        (blocks.contains(&block), block)
+    }
+
     // Check if the entity is in water
     pub async fn is_in_water(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
@@ -247,6 +253,25 @@ impl LivingEntity {
     pub async fn is_in_powder_snow(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
         self.entity.world.get_block(&block_pos).await == &Block::POWDER_SNOW
+    }
+
+    pub async fn is_in_prevents_fall_damage(&self) -> bool {
+        let (prevents, block) = self
+            .is_in_any(&[
+                &Block::VINE,
+                &Block::COBWEB,
+                &Block::LADDER,
+                &Block::WATER,
+                &Block::POWDER_SNOW,
+                &Block::SLIME_BLOCK,
+            ])
+            .await;
+
+        if block == &Block::SCAFFOLDING && self.entity.sneaking.load(Ordering::Relaxed) {
+            return true;
+        }
+
+        prevents
     }
 
     async fn get_effective_gravity(&self, caller: &Arc<dyn EntityBase>) -> f64 {
@@ -697,8 +722,7 @@ impl LivingEntity {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance <= 0.0
                 || dont_damage
-                || self.is_in_water().await
-                || self.is_in_powder_snow().await
+                || self.is_in_prevents_fall_damage().await
             {
                 return;
             }
@@ -719,8 +743,7 @@ impl LivingEntity {
                 self.handle_fall_damage(fall_distance, 1.0).await;
             }
         } else if height_difference < 0.0 {
-            let new_fall_distance = if !self.is_in_water().await && !self.is_in_powder_snow().await
-            {
+            let new_fall_distance = if !self.is_in_prevents_fall_damage().await {
                 let distance = self.fall_distance.load();
                 distance - (height_difference as f32)
             } else {
