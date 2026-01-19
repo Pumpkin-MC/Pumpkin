@@ -87,6 +87,22 @@ impl LivingEntity {
     #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: u8 = 4;
 
+    const PREVENT_FALL_DAMAGE_BLOCKS: [&'static Block; 6] = [
+        &Block::VINE,
+        &Block::COBWEB,
+        &Block::LADDER,
+        &Block::WATER,
+        &Block::POWDER_SNOW,
+        &Block::SLIME_BLOCK,
+    ];
+    const PREVENT_AREA_FALL_DAMAGE_BLOCKS: [&'static Block; 4] = [
+        &Block::COBWEB,
+        &Block::SLIME_BLOCK,
+        &Block::LADDER,
+        &Block::POWDER_SNOW,
+    ];
+    const FALL_DAMAGE_SAFE_DISTANCE: f64 = 1.3;
+
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -256,22 +272,41 @@ impl LivingEntity {
     }
 
     pub async fn is_in_prevents_fall_damage(&self) -> bool {
-        let (prevents, block) = self
-            .is_in_any(&[
-                &Block::VINE,
-                &Block::COBWEB,
-                &Block::LADDER,
-                &Block::WATER,
-                &Block::POWDER_SNOW,
-                &Block::SLIME_BLOCK,
-            ])
-            .await;
+        let (prevents, block) = self.is_in_any(Self::PREVENT_FALL_DAMAGE_BLOCKS.as_ref()).await;
 
         if block == &Block::SCAFFOLDING && self.entity.sneaking.load(Ordering::Relaxed) {
             return true;
         }
 
         prevents
+    }
+
+    pub async fn is_arround_prevents_fall_damage(&self) -> bool {
+        let world = &self.entity.world;
+        let block_pos = self.entity.block_pos.load().down();
+        let entity_pos = self.entity.pos.load();
+
+        for x in -1..=1 {
+            for z in -1..=1 {
+                let pos = Vector3::new(block_pos.0.x + x, block_pos.0.y, block_pos.0.z + z);
+                let block_pos = BlockPos(pos);
+                let block = world.get_block(&block_pos).await;
+
+                if Self::PREVENT_AREA_FALL_DAMAGE_BLOCKS.contains(&block)
+                {
+                    let block_center = Vector3::new(
+                        f64::from(block_pos.0.x) + 0.5,
+                        f64::from(block_pos.0.y) + 0.5,
+                        f64::from(block_pos.0.z) + 0.5,
+                    );
+                    let distance = entity_pos.squared_distance_to_vec(block_center);
+                    
+                    return distance.sqrt() <= Self::FALL_DAMAGE_SAFE_DISTANCE * Self::FALL_DAMAGE_SAFE_DISTANCE;
+                }
+            }
+        }
+
+        false
     }
 
     async fn get_effective_gravity(&self, caller: &Arc<dyn EntityBase>) -> f64 {
@@ -723,6 +758,7 @@ impl LivingEntity {
             if fall_distance <= 0.0
                 || dont_damage
                 || self.is_in_prevents_fall_damage().await
+                || self.is_arround_prevents_fall_damage().await
             {
                 return;
             }
@@ -743,7 +779,9 @@ impl LivingEntity {
                 self.handle_fall_damage(fall_distance, 1.0).await;
             }
         } else if height_difference < 0.0 {
-            let new_fall_distance = if !self.is_in_prevents_fall_damage().await {
+            let new_fall_distance = if !self.is_in_prevents_fall_damage().await
+                && !self.is_arround_prevents_fall_damage().await
+            {
                 let distance = self.fall_distance.load();
                 distance - (height_difference as f32)
             } else {
