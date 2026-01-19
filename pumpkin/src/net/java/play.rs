@@ -1723,12 +1723,15 @@ impl JavaClient {
         }
         drop(held);
 
+        let item_for_use = {
+            let held = item_in_hand.lock().await;
+            held.item
+        };
+
         send_cancellable! {{
             event;
             'after: {
-                let held = item_in_hand.lock().await;
-                let item = held.item;
-                server.item_registry.on_use(item, player).await;
+                server.item_registry.on_use(item_for_use, player).await;
             }
         }}
     }
