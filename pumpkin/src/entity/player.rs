@@ -1498,19 +1498,31 @@ impl Player {
             pos.z.floor() as i32,
         );
 
-        let (fluid, state) = self.world().get_fluid_and_fluid_state(&bp).await;
+        let world = self.world();
+        let (fluid, state) = world.get_fluid_and_fluid_state(&bp).await;
 
         if fluid.id != Fluid::WATER.id && fluid.id != Fluid::FLOWING_WATER.id {
             return false;
         }
 
-        let frac = if state.is_still {
-            1.0
-        } else {
-            f64::from((8 - state.level).clamp(0, 8)) / 8.0
-        };
+        let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
+        let (fluid_above, _) = world.get_fluid_and_fluid_state(&above).await;
 
-        let surface_y = f64::from(bp.0.y) + frac;
+        let surface_y = if fluid_above.id == fluid.id {
+            f64::from(bp.0.y as f32 + 1.0)
+        } else {
+            let height: f32 = if state.is_still {
+                1.0
+            } else {
+                let lvl = i32::from(state.level);
+                if lvl >= 8 {
+                    1.0
+                } else {
+                    ((8 - lvl).clamp(1, 8) as f32) / 8.0
+                }
+            };
+            f64::from(bp.0.y as f32 + height)
+        };
 
         surface_y > eye_y
     }
