@@ -263,12 +263,13 @@ pub trait ScreenHandler: Send + Sync {
                 let index = slot.get_index();
 
                 if let Some(hash_map) = table.get(&ComparableInventory(inventory.clone()))
-                    && let Some(other_index) = hash_map.get(&index) {
-                        self.get_behaviour_mut().tracked_stacks[i] =
-                            other_behaviour.tracked_stacks[*other_index].clone();
-                        self.get_behaviour_mut().previous_tracked_stacks[i] =
-                            other_behaviour.previous_tracked_stacks[*other_index].clone();
-                    }
+                    && let Some(other_index) = hash_map.get(&index)
+                {
+                    self.get_behaviour_mut().tracked_stacks[i] =
+                        other_behaviour.tracked_stacks[*other_index].clone();
+                    self.get_behaviour_mut().previous_tracked_stacks[i] =
+                        other_behaviour.previous_tracked_stacks[*other_index].clone();
+                }
             }
         })
     }
@@ -384,17 +385,18 @@ pub trait ScreenHandler: Send + Sync {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
             if !behaviour.disable_sync
-                && let Some(old_value) = behaviour.tracked_property_values.get(idx as usize) {
-                    let old_value = *old_value;
-                    if old_value != value {
-                        behaviour
-                            .tracked_property_values
-                            .insert(idx as usize, value);
-                        if let Some(ref sync_handler) = behaviour.sync_handler {
-                            sync_handler.update_property(behaviour, idx, value).await;
-                        }
+                && let Some(old_value) = behaviour.tracked_property_values.get(idx as usize)
+            {
+                let old_value = *old_value;
+                if old_value != value {
+                    behaviour
+                        .tracked_property_values
+                        .insert(idx as usize, value);
+                    if let Some(ref sync_handler) = behaviour.sync_handler {
+                        sync_handler.update_property(behaviour, idx, value).await;
                     }
                 }
+            }
         })
     }
 

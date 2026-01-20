@@ -147,10 +147,11 @@ impl TrackedStack {
         if let Some(stack) = &self.received_stack {
             return stack.are_equal(actual_stack);
         } else if let Some(hash) = &self.received_hash
-            && hash.hash_equals(actual_stack) {
-                self.received_stack = Some(actual_stack.clone());
-                return true;
-            }
+            && hash.hash_equals(actual_stack)
+        {
+            self.received_stack = Some(actual_stack.clone());
+            return true;
+        }
 
         false
     }
