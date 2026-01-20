@@ -249,7 +249,10 @@ impl LivingEntity {
     pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
         let block_pos = self.entity.block_pos.load();
         let block = self.entity.world.get_block(&block_pos).await;
-        (block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING), block)
+        (
+            block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING),
+            block,
+        )
     }
 
     // Check if the entity is in water
@@ -273,6 +276,18 @@ impl LivingEntity {
 
         if block == &Block::WATER {
             return true;
+        }
+
+        if self.entity.entity_type == &EntityType::PLAYER {
+            if block == &Block::END_GATEWAY || block == &Block::END_PORTAL {
+                return true;
+            }
+
+            if block == &Block::NETHER_PORTAL {
+                let level_info = self.entity.world.level_info.read().await;
+
+                return level_info.game_rules.players_nether_portal_default_delay == 0;
+            }
         }
 
         prevents
