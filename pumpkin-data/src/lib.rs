@@ -9,6 +9,10 @@ pub mod item;
 pub mod packet;
 
 #[rustfmt::skip]
+#[path = "generated/registry.rs"]
+pub mod registry;
+
+#[rustfmt::skip]
 #[path = "generated/screen.rs"]
 pub mod screen;
 
@@ -41,6 +45,14 @@ pub mod sound {
     pub use crate::sound_category::*;
     pub use crate::sound_enum::*;
 }
+
+#[rustfmt::skip]
+#[path = "generated/tracked_data.rs"]
+pub mod tracked_data;
+
+#[rustfmt::skip]
+#[path = "generated/meta_data_type.rs"]
+pub mod meta_data_type;
 
 #[rustfmt::skip]
 #[path = "generated/noise_parameter.rs"]

@@ -121,9 +121,9 @@ pub trait BlockRegistryExt: Send + Sync {
     fn can_place_at(
         &self,
         block: &Block,
+        state: &BlockState,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
-        face: BlockDirection,
     ) -> bool;
 }
 
@@ -137,6 +137,11 @@ pub trait BlockAccessor: Send + Sync {
         &'a self,
         position: &'a BlockPos,
     ) -> Pin<Box<dyn Future<Output = &'static BlockState> + Send + 'a>>;
+
+    fn get_block_state_id<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = BlockStateId> + Send + 'a>>;
 
     fn get_block_and_state<'a>(
         &'a self,

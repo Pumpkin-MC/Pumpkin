@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use super::CommandExecutor;
@@ -19,7 +20,7 @@ impl CommandTree {
     #[must_use]
     pub fn new(
         names: impl IntoIterator<Item: Into<String>>,
-        description: impl Into<String>,
+        description: impl Into<Cow<'static, str>>,
     ) -> Self {
         let names_vec = names.into_iter().map(Into::into).collect();
 

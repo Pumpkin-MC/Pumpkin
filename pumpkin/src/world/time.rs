@@ -1,7 +1,5 @@
 use pumpkin_protocol::{bedrock::client::set_time::CSetTime, java::client::play::CUpdateTime};
 
-use crate::net::ClientPlatform;
-
 use super::World;
 
 pub struct LevelTime {
@@ -26,28 +24,23 @@ impl LevelTime {
         }
     }
 
-    pub const fn tick_time(&mut self) {
+    pub fn tick_time(&mut self, advance_time: bool, advance_weather: bool) {
         self.world_age += 1;
-        self.time_of_day += 1;
-        self.rain_time += 1;
+        if advance_weather {
+            self.rain_time += 1;
+        }
+        if advance_time {
+            self.time_of_day += 1;
+        }
     }
 
     pub async fn send_time(&self, world: &World) {
-        let current_players = world.players.read().await;
-        for player in current_players.values() {
-            match &player.client {
-                ClientPlatform::Java(java_client) => {
-                    java_client
-                        .enqueue_packet(&CUpdateTime::new(self.world_age, self.time_of_day, true))
-                        .await;
-                }
-                ClientPlatform::Bedrock(bedrock_client) => {
-                    bedrock_client
-                        .send_game_packet(&CSetTime::new(self.time_of_day as _))
-                        .await;
-                }
-            }
-        }
+        world
+            .broadcast_editioned(
+                &CUpdateTime::new(self.world_age, self.time_of_day, true),
+                &CSetTime::new(self.time_of_day as _),
+            )
+            .await;
     }
 
     pub const fn add_time(&mut self, time: i64) {
@@ -71,5 +64,10 @@ impl LevelTime {
     #[must_use]
     pub const fn query_day(&self) -> i64 {
         self.time_of_day / 24000
+    }
+
+    #[must_use]
+    pub fn is_night(&self) -> bool {
+        (self.time_of_day % 24000) >= 12000 && (self.time_of_day % 24000) <= 23999
     }
 }

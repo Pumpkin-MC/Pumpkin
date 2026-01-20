@@ -4,6 +4,7 @@ use crate::{
     server::Server,
 };
 use pumpkin_config::networking::compression::CompressionInfo;
+use pumpkin_protocol::bedrock::server::resource_pack_response::SResourcePackResponse;
 use pumpkin_protocol::{
     bedrock::{
         client::{
@@ -48,12 +49,14 @@ struct CertificateChainPayload {
 
 impl BedrockClient {
     pub async fn handle_request_network_settings(&self, _packet: SRequestNetworkSettings) {
+        log::debug!("Bedrock: Sending Network settings");
         self.send_game_packet(&CNetworkSettings::new(0, 0, false, 0, 0.0))
             .await;
         self.set_compression(CompressionInfo::default()).await;
     }
 
     pub async fn handle_login(self: &Arc<Self>, packet: SLogin, server: &Server) -> Option<()> {
+        log::debug!("Bedrock: handle login");
         match self.try_handle_login(packet, server).await {
             Ok(()) => Some(()),
             Err(error) => {
@@ -104,25 +107,10 @@ impl BedrockClient {
                 false,
                 false,
                 false,
-                false,
+                true,
                 uuid::Uuid::default(),
                 String::new(),
                 Vec::new(),
-            ),
-            &mut frame_set,
-        )
-        .await;
-        self.write_game_packet_to_set(
-            &CResourcePackStackPacket::new(
-                false,
-                VarUInt(0),
-                VarUInt(0),
-                CURRENT_BEDROCK_MC_VERSION.to_owned(),
-                Experiments {
-                    names_size: 0,
-                    experiments_ever_toggled: false,
-                },
-                false,
             ),
             &mut frame_set,
         )
@@ -141,5 +129,29 @@ impl BedrockClient {
         }
 
         Ok(())
+    }
+
+    pub async fn handle_resource_pack_response(&self, packet: SResourcePackResponse) {
+        // TODO: Add all
+        if packet.response == SResourcePackResponse::STATUS_HAVE_ALL_PACKS {
+            log::debug!("Bedrock: STATUS_HAVE_ALL_PACKS");
+            let mut frame_set = FrameSet::default();
+
+            self.write_game_packet_to_set(
+                &CResourcePackStackPacket::new(
+                    false,
+                    VarUInt(0),
+                    CURRENT_BEDROCK_MC_VERSION.to_string(),
+                    Experiments {
+                        names_size: 0,
+                        experiments_ever_toggled: false,
+                    },
+                    false,
+                ),
+                &mut frame_set,
+            )
+            .await;
+            self.send_frame_set(frame_set, 0x84).await;
+        }
     }
 }

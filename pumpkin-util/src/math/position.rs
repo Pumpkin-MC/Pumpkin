@@ -226,21 +226,28 @@ impl BlockPos {
     }
 
     pub fn chunk_and_chunk_relative_position(&self) -> (Vector2<i32>, Vector3<i32>) {
-        let (z_chunk, z_rem) = self.0.z.div_rem_euclid(&16);
-        let (x_chunk, x_rem) = self.0.x.div_rem_euclid(&16);
-        (
-            Vector2 {
-                x: x_chunk,
-                y: z_chunk,
-            },
-            // Since we divide by 16, remnant can never exceed u8
-            Vector3 {
-                x: x_rem,
-                z: z_rem,
-                y: self.0.y,
-            },
-        )
+        (self.chunk_position(), self.chunk_relative_position())
     }
+
+    pub fn chunk_position(&self) -> Vector2<i32> {
+        let z_chunk = self.0.z.div_euclid(16);
+        let x_chunk = self.0.x.div_euclid(16);
+        Vector2 {
+            x: x_chunk,
+            y: z_chunk,
+        }
+    }
+
+    pub fn chunk_relative_position(&self) -> Vector3<i32> {
+        let z_chunk = self.0.z.rem_euclid(16);
+        let x_chunk = self.0.x.rem_euclid(16);
+        Vector3 {
+            x: x_chunk,
+            y: self.0.y,
+            z: z_chunk,
+        }
+    }
+
     pub fn section_relative_position(&self) -> Vector3<i32> {
         let (_z_chunk, z_rem) = self.0.z.div_rem_euclid(&16);
         let (_x_chunk, x_rem) = self.0.x.div_rem_euclid(&16);

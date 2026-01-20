@@ -1,5 +1,5 @@
 use std::{
-    num::{NonZero, NonZeroU32},
+    num::{NonZero, NonZeroI32},
     sync::Arc,
 };
 
@@ -8,7 +8,6 @@ use pumpkin_protocol::{
     bedrock::{
         client::{
             chunk_radius_update::CChunkRadiusUpdate, container_open::CContainerOpen,
-            network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
             set_actor_motion::CSetActorMotion,
         },
         server::{
@@ -20,7 +19,9 @@ use pumpkin_protocol::{
             text::SText,
         },
     },
-    codec::{bedrock_block_pos::NetworkPos, var_long::VarLong, var_ulong::VarULong},
+    codec::{
+        bedrock_block_pos::NetworkPos, var_int::VarInt, var_long::VarLong, var_ulong::VarULong,
+    },
     java::client::play::CSystemChatMessage,
 };
 use pumpkin_util::{
@@ -34,7 +35,7 @@ use crate::{
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent},
     server::{Server, seasonal_events},
-    world::chunker,
+    world::chunker::{self},
 };
 
 impl BedrockClient {
@@ -52,29 +53,30 @@ impl BedrockClient {
             .await;
             return;
         }
+        let server = player.world().server.upgrade().unwrap();
 
-        self.send_game_packet(&CChunkRadiusUpdate { chunk_radius })
-            .await;
+        let view_distance =
+            chunk_radius.clamp(2, NonZeroI32::from(server.basic_config.view_distance).get());
+
+        self.send_game_packet(&CChunkRadiusUpdate {
+            chunk_radius: VarInt(view_distance),
+        })
+        .await;
 
         let old_view_distance = {
             let mut config = player.config.write().await;
             let old_view_distance = config.view_distance;
-            config.view_distance = NonZero::new(chunk_radius.0 as u8).unwrap();
+            config.view_distance = NonZero::new(view_distance as u8).unwrap();
             old_view_distance
         };
 
-        if old_view_distance.get() != chunk_radius.0 as u8 {
+        if old_view_distance.get() != view_distance as u8 {
             log::debug!(
                 "Player {} updated their render distance: {} -> {}.",
                 player.gameprofile.name,
                 old_view_distance,
-                chunk_radius.0
+                view_distance
             );
-            self.send_game_packet(&CNetworkChunkPublisherUpdate::new(
-                player.get_entity().block_pos.load(),
-                chunk_radius.0 as u32,
-            ))
-            .await;
             chunker::update_position(player).await;
         }
     }
@@ -83,17 +85,6 @@ impl BedrockClient {
         if !player.has_client_loaded() {
             return;
         }
-        let config = player.config.read().await;
-        let view_distance = config.view_distance;
-        self.send_game_packet(&CNetworkChunkPublisherUpdate::new(
-            BlockPos::new(
-                packet.position.x.floor() as i32,
-                packet.position.y.floor() as i32,
-                packet.position.z.floor() as i32,
-            ),
-            NonZeroU32::from(view_distance).into(),
-        ))
-        .await;
         let new_pos = packet.position.to_f64();
         let old_pos = player.position();
 
@@ -140,7 +131,7 @@ impl BedrockClient {
             self.send_game_packet(&CContainerOpen {
                 container_id: 0,
                 container_type: 0xff,
-                position: NetworkPos(packet.position.to_block_pos()),
+                position: NetworkPos(BlockPos::ZERO),
                 target_entity_id: VarLong(-1),
             })
             .await;

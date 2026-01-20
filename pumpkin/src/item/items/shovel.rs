@@ -9,6 +9,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use rand::{Rng as _, rng};
@@ -28,6 +29,7 @@ impl ItemBehaviour for ShovelItem {
         player: &'a Player,
         location: BlockPos,
         face: BlockDirection,
+        _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {

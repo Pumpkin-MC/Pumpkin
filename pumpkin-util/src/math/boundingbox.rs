@@ -61,6 +61,14 @@ impl BoundingBox {
         }
     }
 
+    pub fn expand_all(&self, value: f64) -> Self {
+        self.expand(value, value, value)
+    }
+
+    pub fn contract_all(&self, value: f64) -> Self {
+        self.expand_all(-value)
+    }
+
     pub fn offset(&self, other: Self) -> Self {
         Self {
             min: self.min.add(&other.min),
@@ -207,4 +215,15 @@ impl BoundingBox {
 pub struct EntityDimensions {
     pub width: f32,
     pub height: f32,
+    pub eye_height: f32,
+}
+
+impl EntityDimensions {
+    pub fn new(width: f32, height: f32, eye_height: f32) -> Self {
+        Self {
+            width,
+            height,
+            eye_height,
+        }
+    }
 }

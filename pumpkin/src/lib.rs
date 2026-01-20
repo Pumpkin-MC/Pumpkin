@@ -1,7 +1,7 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
-use crate::logging::{GzipRollingLogger, ReadlineLogWrapper};
+use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
 use crate::net::DisconnectReason;
 use crate::net::bedrock::BedrockClient;
 use crate::net::java::JavaClient;
@@ -16,7 +16,9 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::ConnectionState::Play;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
-use rustyline_async::{Readline, ReadlineEvent};
+use rustyline::Editor;
+use rustyline::history::FileHistory;
+use rustyline::{Config, error::ReadlineError};
 use std::collections::HashMap;
 use std::io::{Cursor, IsTerminal as _, stdin};
 use std::str::FromStr as _;
@@ -81,6 +83,8 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             for level in Level::iter() {
                 config.set_level_color(level, None);
             }
+        } else {
+            config.set_write_log_enable_colors(true);
         }
 
         if advanced_config.logging.threads {
@@ -117,11 +121,25 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
                 )
             };
 
-        let (logger, rl): (Box<dyn SharedLogger + 'static>, _) = if advanced_config.commands.use_tty
-            && stdin().is_terminal()
-        {
-            match Readline::new("$ ".to_owned()) {
-                Ok((rl, stdout)) => (WriteLogger::new(level, config.build(), stdout), Some(rl)),
+        let (logger, rl): (
+            Box<dyn SharedLogger + 'static>,
+            Option<Editor<PumpkinCommandCompleter, FileHistory>>,
+        ) = if advanced_config.commands.use_tty && stdin().is_terminal() {
+            let rl_config = Config::builder()
+                .auto_add_history(true)
+                .completion_type(rustyline::CompletionType::List)
+                .edit_mode(rustyline::EditMode::Emacs)
+                .build();
+            let helper = PumpkinCommandCompleter::new();
+
+            match Editor::with_config(rl_config) {
+                Ok(mut rl) => {
+                    rl.set_helper(Some(helper));
+                    (
+                        WriteLogger::new(level, config.build(), std::io::stdout()),
+                        Some(rl),
+                    )
+                }
                 Err(e) => {
                     log::warn!(
                         "Failed to initialize console input ({e}); falling back to simple logger"
@@ -328,7 +346,6 @@ impl PumpkinServer {
 
         log::info!("Completed save!");
 
-        // Explicitly drop the line reader to return the terminal to the original state.
         if let Some((wrapper, _)) = LOGGER_IMPL.wait()
             && let Some(rl) = wrapper.take_readline()
         {
@@ -497,43 +514,38 @@ async fn setup_stdin_console(server: Arc<Server>) {
     });
 }
 
-fn setup_console(rl: Readline, server: Arc<Server>) {
-    // This needs to be async, or it will hog a thread.
-    server.clone().spawn_task(async move {
-        let mut rl = rl;
+fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: Arc<Server>) {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+
+    if let Some(helper) = rl.helper_mut() {
+        if let Ok(mut server_lock) = helper.server.write() {
+            *server_lock = Some(server.clone());
+        }
+        let _ = helper.rt.set(tokio::runtime::Handle::current());
+    }
+
+    std::thread::spawn(move || {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
-            let t1 = rl.readline();
-            let t2 = STOP_INTERRUPT.notified();
-
-            let result = select! {
-                line = t1 => Some(line),
-                () = t2 => None,
-            };
-
-            let Some(result) = result else { break };
-
-            match result {
-                Ok(ReadlineEvent::Line(line)) => {
-                    send_cancellable! {{
-                        ServerCommandEvent::new(line.clone());
-
-                        'after: {
-                            let dispatcher = server.command_dispatcher.read().await;
-
-                            dispatcher
-                                .handle_command(&command::CommandSender::Console, &server, &line)
-                                .await;
-                            rl.add_history_entry(line).unwrap();
-                        }
-                    }}
+            let readline = rl.readline("$ ");
+            match readline {
+                Ok(line) => {
+                    let _ = rl.add_history_entry(line.clone());
+                    if tx.blocking_send(line).is_err() {
+                        break;
+                    }
                 }
-                Ok(ReadlineEvent::Interrupted) => {
+                Err(ReadlineError::Interrupted) => {
+                    log::info!("CTRL-C");
                     stop_server();
                     break;
                 }
-                err => {
-                    log::error!("Console command loop failed!");
-                    log::error!("{err:?}");
+                Err(ReadlineError::Eof) => {
+                    log::info!("CTRL-D");
+                    stop_server();
+                    break;
+                }
+                Err(err) => {
+                    log::error!("Error reading console input: {err}");
                     break;
                 }
             }
@@ -541,7 +553,34 @@ fn setup_console(rl: Readline, server: Arc<Server>) {
         if let Some((wrapper, _)) = LOGGER_IMPL.wait() {
             wrapper.return_readline(rl);
         }
+    });
 
+    server.clone().spawn_task(async move {
+        while !SHOULD_STOP.load(Ordering::Relaxed) {
+            let t1 = rx.recv();
+            let t2 = STOP_INTERRUPT.notified();
+
+            let result = select! {
+                line = t1 => line,
+                () = t2 => None,
+            };
+
+            if let Some(line) = result {
+                send_cancellable! {{
+                    ServerCommandEvent::new(line.clone());
+
+                    'after: {
+                        let dispatcher = server.command_dispatcher.read().await;
+
+                        dispatcher
+                            .handle_command(&command::CommandSender::Console, &server, &line)
+                            .await;
+                    }
+                }}
+            } else {
+                break;
+            }
+        }
         log::debug!("Stopped console commands task");
     });
 }

@@ -1,8 +1,11 @@
+use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
+use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
@@ -12,7 +15,8 @@ use std::sync::atomic::{
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 
 use super::{Entity, NBTStorage};
-use super::{EntityBase, NBTStorageInit as _};
+use super::{EntityBase, NBTStorageInit};
+use crate::block::OnLandedUponArgs;
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt as _};
@@ -31,7 +35,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CHurtAnimation, CTakeItemEntity};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CDamageEvent, CSetEquipment, MetaDataType, Metadata},
+    java::client::play::{CDamageEvent, CSetEquipment, Metadata},
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
@@ -78,10 +82,10 @@ pub struct LivingEntity {
 }
 
 impl LivingEntity {
-    const USING_ITEM_FLAG: i32 = 1;
-    const OFF_HAND_ACTIVE_FLAG: i32 = 2;
+    const USING_ITEM_FLAG: u8 = 1;
+    const OFF_HAND_ACTIVE_FLAG: u8 = 2;
     #[expect(dead_code)]
-    const USING_RIPTIDE_FLAG: i32 = 4;
+    const USING_RIPTIDE_FLAG: u8 = 4;
 
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
@@ -91,14 +95,14 @@ impl LivingEntity {
         } else {
             0.8
         };
-
         // TODO: Extract default MOVEMENT_SPEED Entity Attribute
         let default_movement_speed = 0.25;
+        let health = entity.entity_type.max_health.unwrap_or(20.0);
         Self {
             entity,
             hurt_cooldown: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
-            health: AtomicCell::new(20.0),
+            health: AtomicCell::new(health),
             fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),
@@ -160,8 +164,8 @@ impl LivingEntity {
             .await;
     }
 
-    async fn set_living_flag(&self, flag: i32, value: bool) {
-        let index = flag as u8;
+    async fn set_living_flag(&self, flag: u8, value: bool) {
+        let index = flag;
         let mut b = self.livings_flags.load(Ordering::Relaxed);
         if value {
             b |= index;
@@ -170,7 +174,11 @@ impl LivingEntity {
         }
         self.livings_flags.store(b, Ordering::Relaxed);
         self.entity
-            .send_meta_data(&[Metadata::new(8, MetaDataType::Byte, b)])
+            .send_meta_data(&[Metadata::new(
+                TrackedData::DATA_LIVING_FLAGS,
+                MetaDataType::Byte,
+                b,
+            )])
             .await;
     }
 
@@ -191,7 +199,11 @@ impl LivingEntity {
         self.health.store(health.max(0.0));
         // tell everyone entities health changed
         self.entity
-            .send_meta_data(&[Metadata::new(9, MetaDataType::Float, health)])
+            .send_meta_data(&[Metadata::new(
+                TrackedData::DATA_HEALTH,
+                MetaDataType::Float,
+                health,
+            )])
             .await;
     }
 
@@ -350,8 +362,8 @@ impl LivingEntity {
                     .slipperiness,
             );
 
-            let speed =
-                self.movement_speed.load() * 0.216 / (slipperiness * slipperiness * slipperiness);
+            let speed = self.movement_speed.load() * 0.216_000_02
+                / (slipperiness * slipperiness * slipperiness);
 
             (speed, slipperiness * 0.91)
         } else {
@@ -627,7 +639,7 @@ impl LivingEntity {
     }
 
     pub fn get_swim_height(&self) -> f64 {
-        let eye_height = self.entity.standing_eye_height;
+        let eye_height = self.entity.entity_dimension.load().eye_height;
 
         if self.entity.entity_type == &EntityType::BREEZE {
             f64::from(eye_height)
@@ -674,7 +686,7 @@ impl LivingEntity {
         strength
     }
 
-    pub async fn update_fall_distance(
+    pub async fn fall(
         &self,
         caller: Arc<dyn EntityBase>,
         height_difference: f64,
@@ -690,19 +702,21 @@ impl LivingEntity {
             {
                 return;
             }
-
-            let safe_fall_distance = 3.0;
-            let mut damage = fall_distance - safe_fall_distance;
-            damage = damage.ceil();
-
-            // TODO: Play block fall sound
-            if damage > 0.0 {
-                let check_damage = self.damage(&*caller, damage, DamageType::FALL).await; // Fall
-                if check_damage {
-                    self.entity
-                        .play_sound(Self::get_fall_sound(fall_distance as i32))
-                        .await;
-                }
+            let world = &self.entity.world;
+            let block = world
+                .get_block(&self.entity.get_pos_with_y_offset(0.2).await.0)
+                .await;
+            let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
+            if let Some(pumpkin_block) = pumpkin_block {
+                pumpkin_block
+                    .on_landed_upon(OnLandedUponArgs {
+                        world,
+                        fall_distance,
+                        entity: caller.as_ref(),
+                    })
+                    .await;
+            } else {
+                self.handle_fall_damage(fall_distance, 1.0).await;
             }
         } else if height_difference < 0.0 {
             let new_fall_distance = if !self.is_in_water().await && !self.is_in_powder_snow().await
@@ -712,13 +726,33 @@ impl LivingEntity {
             } else {
                 0f32
             };
-
-            // Reset fall distance if is in water or powder_snow
             self.fall_distance.store(new_fall_distance);
         }
     }
 
+<<<<<<< HEAD
     const fn get_fall_sound(distance: i32) -> Sound {
+||||||| 60d65f1f
+    fn get_fall_sound(distance: i32) -> Sound {
+=======
+    pub async fn handle_fall_damage(&self, fall_distance: f32, damage_per_distance: f32) {
+        // TODO: use attributes
+        let safe_fall_distance = 3.0;
+        let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
+
+        let damage = (unsafe_fall_distance * damage_per_distance).floor();
+        if damage > 0.0 {
+            let check_damage = self.damage(self, damage, DamageType::FALL).await; // Fall
+            if check_damage {
+                self.entity
+                    .play_sound(Self::get_fall_sound(fall_distance as i32))
+                    .await;
+            }
+        }
+    }
+
+    fn get_fall_sound(distance: i32) -> Sound {
+>>>>>>> upstream/master
         if distance > 4 {
             Sound::EntityGenericBigFall
         } else {
@@ -798,9 +832,21 @@ impl LivingEntity {
             self.drop_loot(params).await;
             self.entity.pose.store(EntityPose::Dying);
 
-            let level_info = world.level_info.read().await;
-            let game_rules = &level_info.game_rules;
-            if self.entity.entity_type == &EntityType::PLAYER && game_rules.show_death_messages {
+            let block_pos = self.entity.block_pos.load();
+
+            for slot in self.equipment_slots.values() {
+                let item = {
+                    let lock = self.entity_equipment.lock().await;
+                    let equipment = lock.get(slot);
+                    let mut item_lock = equipment.lock().await;
+                    mem::replace(&mut *item_lock, ItemStack::EMPTY.clone())
+                };
+                world.drop_stack(&block_pos, item).await;
+            }
+
+            let show_death_messages =
+                { world.level_info.read().await.game_rules.show_death_messages };
+            if self.entity.entity_type == &EntityType::PLAYER && show_death_messages {
                 //TODO: KillCredit
                 let death_message =
                     Self::get_death_message(&*dyn_self, damage_type, source, cause).await;
@@ -1054,6 +1100,14 @@ impl EntityBase for LivingEntity {
         })
     }
 
+    fn tick_in_void<'a>(&'a self, dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            dyn_self
+                .damage(dyn_self, 4.0, DamageType::OUT_OF_WORLD)
+                .await;
+        })
+    }
+
     fn get_gravity(&self) -> f64 {
         const GRAVITY: f64 = 0.08;
         GRAVITY
@@ -1106,7 +1160,7 @@ impl EntityBase for LivingEntity {
             }
             if self.health.load() <= 0.0 {
                 let time = self.death_time.fetch_add(1, Relaxed);
-                if time == 20 {
+                if time >= 20 && self.entity.is_alive() {
                     // Spawn Death particles
                     self.entity
                         .world

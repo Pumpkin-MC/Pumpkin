@@ -138,8 +138,13 @@ impl BlockBehaviour for ButtonBlock {
 
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
-            WallMountedBlock::can_place_at(self, args.block_accessor, args.position, args.direction)
-                .await
+            WallMountedBlock::can_place_at(
+                self,
+                args.block_accessor,
+                args.position,
+                self.get_direction(args.state.id, args.block),
+            )
+            .await
         })
     }
 

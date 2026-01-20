@@ -100,6 +100,13 @@ impl BlockBox {
         }
     }
 
+    pub fn expand(&self, x: i32, y: i32, z: i32) -> Self {
+        Self {
+            min: Vector3::new(self.min.x - x, self.min.y - y, self.min.z - z),
+            max: Vector3::new(self.max.x + x, self.max.y + y, self.max.z + z),
+        }
+    }
+
     pub fn move_pos(&mut self, dx: i32, dy: i32, dz: i32) {
         self.min.x += dx;
         self.min.y += dy;

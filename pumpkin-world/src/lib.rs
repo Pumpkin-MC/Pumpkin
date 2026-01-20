@@ -9,7 +9,6 @@ pub mod chunk_system;
 pub mod cylindrical_chunk_iterator;
 pub mod data;
 pub mod dimension;
-pub mod entity;
 pub mod generation;
 pub mod inventory;
 pub mod item;
@@ -23,7 +22,8 @@ pub type BlockId = u16;
 pub type BlockStateId = u16;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.11";
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.111";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.32";
+pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 898;
 
 #[macro_export]
 macro_rules! global_path {

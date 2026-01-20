@@ -241,7 +241,7 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
                 self,
                 args.world,
                 *args.position,
-                BlockState::from_id(args.old_state_id).id,
+                args.old_state_id,
                 args.block,
             )
             .await;

@@ -15,6 +15,7 @@ use pumpkin_data::tag::Taggable as _;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::item::ItemStack;
@@ -35,6 +36,7 @@ impl ItemBehaviour for HoneyCombItem {
         player: &'a Player,
         location: BlockPos,
         _face: BlockDirection,
+        _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {

@@ -30,7 +30,7 @@ impl CommandExecutor for Executor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let entity = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
+            let entity_type = SummonableEntitiesArgumentConsumer::find_arg(args, ARG_ENTITY)?;
             let pos = Position3DArgumentConsumer::find_arg(args, ARG_POS);
             let (world, pos) = match sender {
                 CommandSender::Console | CommandSender::Rcon(_) => {
@@ -60,14 +60,11 @@ impl CommandExecutor for Executor {
                     (w.clone(), c.get_position().to_centered_f64())
                 }
             };
-            let mob = from_type(entity, pos, &world, Uuid::new_v4()).await;
-            world.spawn_entity(mob).await;
-
+            let entity = from_type(entity_type, pos, &world, Uuid::new_v4()).await;
+            let name = entity.get_display_name().await;
+            world.spawn_entity(entity).await;
             sender
-                .send_message(TextComponent::translate(
-                    "commands.summon.success",
-                    [TextComponent::text(format!("{entity:?}"))],
-                ))
+                .send_message(TextComponent::translate("commands.summon.success", [name]))
                 .await;
 
             Ok(())

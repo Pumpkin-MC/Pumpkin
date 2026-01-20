@@ -56,8 +56,8 @@ impl FireBlockBase {
                     world: Some(world),
                     block_accessor: world.as_ref(),
                     block: &Block::SOUL_FIRE,
+                    state: Block::SOUL_FIRE.default_state,
                     position: block_pos,
-                    direction: BlockDirection::Up,
                     player: None,
                     use_item_on: None,
                 })
@@ -69,8 +69,8 @@ impl FireBlockBase {
                     world: Some(world),
                     block_accessor: world.as_ref(),
                     block: &Block::FIRE,
+                    state: Block::FIRE.default_state,
                     position: block_pos,
-                    direction: BlockDirection::Up,
                     player: None,
                     use_item_on: None,
                 })

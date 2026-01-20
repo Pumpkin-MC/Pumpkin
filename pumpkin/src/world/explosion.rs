@@ -81,7 +81,7 @@ impl Explosion {
             if state.is_air() {
                 continue;
             }
-            let pumpkin_block = world.block_registry.get_pumpkin_block(block);
+            let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
             world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;
 

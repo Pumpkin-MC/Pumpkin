@@ -99,6 +99,14 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
+    fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(living) = args.entity.get_living_entity() {
+                living.handle_fall_damage(args.fall_distance, 1.0).await;
+            }
+        })
+    }
+
     fn broken<'a>(&'a self, _args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -230,8 +238,8 @@ pub struct CanPlaceAtArgs<'a> {
     pub world: Option<&'a World>,
     pub block_accessor: &'a dyn BlockAccessor,
     pub block: &'a Block,
+    pub state: &'a BlockState,
     pub position: &'a BlockPos,
-    pub direction: BlockDirection,
     pub player: Option<&'a Player>,
     pub use_item_on: Option<&'a SUseItemOn>,
 }
@@ -262,6 +270,12 @@ pub struct PlayerPlacedArgs<'a> {
     pub position: &'a BlockPos,
     pub direction: BlockDirection,
     pub player: &'a Player,
+}
+
+pub struct OnLandedUponArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub fall_distance: f32,
+    pub entity: &'a dyn EntityBase,
 }
 
 pub struct BrokenArgs<'a> {

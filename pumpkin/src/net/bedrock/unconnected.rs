@@ -7,7 +7,7 @@ use pumpkin_protocol::bedrock::{
 use tokio::net::UdpSocket;
 
 use crate::{net::bedrock::BedrockClient, server::Server};
-use pumpkin_world::CURRENT_BEDROCK_MC_VERSION;
+use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 
 impl BedrockClient {
     pub async fn handle_unconnected_ping(
@@ -31,7 +31,7 @@ impl BedrockClient {
             edition: "MCPE",
             // TODO The default motd is to long to be displayed completely
             motd_line_1: "Pumpkin Server",
-            protocol_version: 827,
+            protocol_version: CURRENT_BEDROCK_MC_PROTOCOL,
             version_name: CURRENT_BEDROCK_MC_VERSION,
             player_count,
             // A large number looks wreird on the client worlds window

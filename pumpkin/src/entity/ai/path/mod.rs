@@ -75,7 +75,7 @@ impl Navigator {
 
             // Now let's move
             entity.entity.set_pos(goal.current_progress);
-            entity.entity.send_pos().await;
+            //entity.entity.send_pos().await;
         }
     }
 

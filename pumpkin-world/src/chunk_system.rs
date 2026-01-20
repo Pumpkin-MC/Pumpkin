@@ -19,7 +19,7 @@ use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
 use crate::generation::settings::{GenerationSettings, gen_settings_from_dimension};
 use crate::level::{Level, SyncChunk};
 use crate::world::{BlockAccessor, BlockRegistryExt};
-use crate::{GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
+use crate::{BlockStateId, GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
 use crossbeam::channel::{Receiver, Sender};
 use dashmap::DashMap;
 use itertools::Itertools;
@@ -45,7 +45,6 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData;
 use crate::chunk_system::Chunk::Proto;
 use crate::chunk_system::StagedChunkEnum::{Biomes, Empty, Features, Full, Noise, Surface};
-use crate::generation::biome_coords;
 use crossfire::AsyncRx;
 use pumpkin_data::chunk::ChunkStatus;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -787,16 +786,16 @@ impl Chunk {
 
         let total_sections = dimension.height as usize / 16;
         let mut sections = ChunkSections::new(
-            (0..total_sections).map(|_| SubChunk::default()).collect(),
+            vec![SubChunk::default(); total_sections].into_boxed_slice(),
             dimension.min_y,
         );
 
-        let proto_biome_height = biome_coords::from_block(proto_chunk.height());
-        let biome_min_y = biome_coords::from_block(dimension.min_y);
+        let proto_biome_height = (dimension.height / 4) as usize;
+        let biome_min_y = dimension.min_y / 4;
 
         for y_offset in 0..proto_biome_height {
-            let section_index = y_offset as usize / 4;
-            let relative_y = y_offset as usize % 4;
+            let section_index = y_offset / 4;
+            let relative_biome_y = y_offset % 4;
 
             if let Some(section) = sections.sections.get_mut(section_index) {
                 let absolute_biome_y = biome_min_y + y_offset as i32;
@@ -804,7 +803,7 @@ impl Chunk {
                 for z in 0..4 {
                     for x in 0..4 {
                         let biome = proto_chunk.get_biome(x as i32, absolute_biome_y, z as i32);
-                        section.biomes.set(x, relative_y, z, biome.id);
+                        section.biomes.set(x, relative_biome_y, z, biome.id);
                     }
                 }
             }
@@ -897,6 +896,13 @@ impl BlockAccessor for Cache {
         position: &'a BlockPos,
     ) -> Pin<Box<dyn Future<Output = &'static BlockState> + Send + 'a>> {
         Box::pin(async move { GenerationCache::get_block_state(self, &position.0).to_state() })
+    }
+
+    fn get_block_state_id<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = BlockStateId> + Send + 'a>> {
+        Box::pin(async move { GenerationCache::get_block_state(self, &position.0).0 })
     }
 
     fn get_block_and_state<'a>(
@@ -1028,7 +1034,7 @@ impl GenerationCache for Cache {
                 );
             }
             Chunk::Proto(data) => {
-                data.set_block_state(pos, block_state);
+                data.set_block_state(pos.x, pos.y, pos.z, block_state);
             }
         }
     }
@@ -1054,7 +1060,7 @@ impl GenerationCache for Cache {
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
                 let chunk = data.blocking_read();
-                chunk.heightmap.get_height(
+                chunk.heightmap.get(
                     ChunkHeightmapType::MotionBlocking,
                     x,
                     z,
@@ -1073,7 +1079,7 @@ impl GenerationCache for Cache {
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
                 let chunk = data.blocking_read();
-                chunk.heightmap.get_height(
+                chunk.heightmap.get(
                     ChunkHeightmapType::MotionBlockingNoLeaves,
                     x,
                     z,
@@ -1092,12 +1098,9 @@ impl GenerationCache for Cache {
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
                 let chunk = data.blocking_read();
-                chunk.heightmap.get_height(
-                    ChunkHeightmapType::WorldSurface,
-                    x,
-                    z,
-                    chunk.section.min_y,
-                ) // can we return this?
+                chunk
+                    .heightmap
+                    .get(ChunkHeightmapType::WorldSurface, x, z, chunk.section.min_y) // can we return this?
             }
             Chunk::Proto(data) => data.top_block_height_exclusive(x, z),
         }
@@ -1628,7 +1631,7 @@ impl GenerationSchedule {
         level: Arc<Level>,
         lock: IOLock,
     ) {
-        log::info!("io read thread start");
+        log::debug!("io read thread start");
         use crate::biome::hash_seed;
         let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
         let dimension = &level.world_gen.dimension;
@@ -1691,7 +1694,7 @@ impl GenerationSchedule {
                 break;
             }
         }
-        log::info!("io read thread stop");
+        log::debug!("io read thread stop");
     }
 
     async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
@@ -1745,7 +1748,7 @@ impl GenerationSchedule {
         send: crossfire::MTx<(ChunkPos, RecvChunk)>,
         level: Arc<Level>,
     ) {
-        log::info!(
+        log::debug!(
             "generation thread start id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")
@@ -1767,7 +1770,7 @@ impl GenerationSchedule {
                 break;
             }
         }
-        log::info!(
+        log::debug!(
             "generation thread stop id: {:?} name: {}",
             thread::current().id(),
             thread::current().name().unwrap_or("unknown")

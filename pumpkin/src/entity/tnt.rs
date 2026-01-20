@@ -1,11 +1,8 @@
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
 use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
-use pumpkin_data::Block;
-use pumpkin_protocol::{
-    codec::var_int::VarInt,
-    java::client::play::{MetaDataType, Metadata},
-};
+use pumpkin_data::{Block, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 use pumpkin_util::math::vector3::Vector3;
 use std::{
     f64::consts::TAU,
@@ -88,12 +85,12 @@ impl EntityBase for TNTEntity {
             self.entity
                 .send_meta_data(&[
                     Metadata::new(
-                        8,
+                        TrackedData::DATA_FUSE,
                         MetaDataType::Integer,
                         VarInt(self.fuse.load(Relaxed) as i32),
                     ),
                     Metadata::new(
-                        9,
+                        TrackedData::DATA_BLOCK_STATE,
                         MetaDataType::BlockState,
                         VarInt(i32::from(Block::TNT.default_state.id)),
                     ),

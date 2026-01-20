@@ -113,6 +113,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
                             &EntityDimensions {
                                 width: entity_type.dimension[0],
                                 height: entity_type.dimension[1],
+                                eye_height: entity_type.eye_height,
                             },
                         ))
                         .await

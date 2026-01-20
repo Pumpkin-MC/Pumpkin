@@ -309,7 +309,7 @@ impl Level {
         };
 
         for handle in handles {
-            log::info!(
+            log::debug!(
                 "Waiting for thread {:?} ({}) to stop",
                 handle.thread().id(),
                 handle.thread().name().unwrap_or("unknown")
@@ -598,30 +598,31 @@ impl Level {
     }
 
     pub async fn get_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
-        // Already loaded?
+        // Check if already in memory
         if let Some(chunk) = self.loaded_chunks.get(&pos) {
+            return chunk.clone();
+        }
+
+        log::debug!("Missing Chunk {pos:?}. Fetching.");
+        let clock = Instant::now();
+        let recv = self.chunk_listener.add_single_chunk_listener(pos);
+
+        {
+            let mut lock = self.chunk_loading.lock().unwrap();
+            lock.add_ticket(pos, 31);
+            lock.send_change();
+        }
+
+        let ret = if let Some(chunk) = self.loaded_chunks.get(&pos) {
             chunk.clone()
         } else {
-            log::debug!("Missing Chunk {pos:?}. Fetching.");
-            let clock = Instant::now();
-            let recv = self.chunk_listener.add_single_chunk_listener(pos);
-            {
-                let mut lock = self.chunk_loading.lock().unwrap();
-                lock.add_force_ticket(pos);
-                lock.send_change();
-            }
+            recv.await
+                .expect("Chunk listener dropped without sending chunk")
+        };
 
-            let ret = if let Some(chunk) = self.loaded_chunks.get(&pos) {
-                // try again here. otherwise deadlock
-                chunk.clone()
-            } else {
-                recv.await.unwrap()
-            };
-            let mut lock = self.chunk_loading.lock().unwrap();
-            lock.remove_force_ticket(pos);
-            log::debug!("Chunk {pos:?} received after {:?}.", Instant::now() - clock);
-            ret
-        }
+        log::debug!("Chunk {pos:?} received after {:?}.", Instant::now() - clock);
+
+        ret
     }
 
     async fn load_single_entity_chunk(
@@ -844,9 +845,7 @@ impl Level {
         delay: u8,
         priority: TickPriority,
     ) {
-        let chunk = self
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let mut chunk = chunk.write().await;
         chunk.block_ticks.schedule_tick(
             &ScheduledTick {
@@ -867,9 +866,7 @@ impl Level {
         delay: u8,
         priority: TickPriority,
     ) {
-        let chunk = self
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let mut chunk = chunk.write().await;
         chunk.fluid_ticks.schedule_tick(
             &ScheduledTick {
@@ -888,9 +885,7 @@ impl Level {
         block_pos: &BlockPos,
         block: &Block,
     ) -> bool {
-        let chunk = self
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let chunk = chunk.read().await;
         chunk.block_ticks.is_scheduled(*block_pos, block)
     }
@@ -900,9 +895,7 @@ impl Level {
         block_pos: &BlockPos,
         fluid: &Fluid,
     ) -> bool {
-        let chunk = self
-            .get_chunk(block_pos.chunk_and_chunk_relative_position().0)
-            .await;
+        let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let chunk = chunk.read().await;
         chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
     }

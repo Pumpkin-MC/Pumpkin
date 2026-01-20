@@ -9,6 +9,8 @@ use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::{EnumVariants as _, Integer0To15};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
@@ -22,7 +24,7 @@ use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CSetEntityMetadata, CSpawnEntity,
-        CUpdateEntityRot, MetaDataType, Metadata,
+        CUpdateEntityRot, Metadata,
     },
     ser::serializer::Serializer,
 };
@@ -37,7 +39,6 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_world::entity::entity_data_flags::DATA_POSE;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::pin::Pin;
@@ -59,6 +60,7 @@ pub mod hunger;
 pub mod item;
 pub mod living;
 pub mod mob;
+pub mod passive;
 pub mod player;
 pub mod projectile;
 pub mod projectile_deflection;
@@ -124,6 +126,10 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         0.0
     }
 
+    fn tick_in_void<'a>(&'a self, _dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move { self.get_entity().remove().await })
+    }
+
     /// Returns if damage was successful or not
     fn damage<'a>(
         &'a self,
@@ -132,7 +138,8 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         damage_type: DamageType,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            self.damage_with_context(caller, amount, damage_type, None, None, None)
+            caller
+                .damage_with_context(caller, amount, damage_type, None, None, None)
                 .await
         })
     }
@@ -155,16 +162,17 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     fn damage_with_context<'a>(
         &'a self,
-        _caller: &'a dyn EntityBase,
-        _amount: f32,
-        _damage_type: DamageType,
-        _position: Option<Vector3<f64>>,
-        _source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
+        caller: &'a dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&'a dyn EntityBase>,
+        cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async {
-            // Just do nothing
-            false
+        Box::pin(async move {
+            caller
+                .damage_with_context(caller, amount, damage_type, position, source, cause)
+                .await
         })
     }
 
@@ -221,8 +229,8 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     /// Kills the Entity.
     fn kill<'a>(&'a self, caller: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            if let Some(living) = self.get_living_entity() {
-                living
+            if self.get_living_entity().is_some() {
+                caller
                     .damage(caller, f32::MAX, DamageType::GENERIC_KILL)
                     .await;
             } else {
@@ -317,14 +325,12 @@ pub struct Entity {
     pub body_yaw: AtomicCell<f32>,
     /// The entity's pitch rotation (vertical rotation) ↑ ↓
     pub pitch: AtomicCell<f32>,
-    /// The height of the entity's eyes from the ground.
-    pub standing_eye_height: f32,
     /// The entity's current pose (e.g., standing, sitting, swimming).
     pub pose: AtomicCell<EntityPose>,
     /// The bounding box of an entity (hitbox)
     pub bounding_box: AtomicCell<BoundingBox>,
     ///The size (width and height) of the bounding box
-    pub bounding_box_size: AtomicCell<EntityDimensions>,
+    pub entity_dimension: AtomicCell<EntityDimensions>,
     /// Whether this entity is invulnerable to all damage
     pub invulnerable: AtomicBool,
     /// List of damage types this entity is immune to
@@ -374,6 +380,7 @@ impl Entity {
         let bounding_box_size = EntityDimensions {
             width: entity_type.dimension[0],
             height: entity_type.dimension[1],
+            eye_height: entity_type.eye_height,
         };
 
         Self {
@@ -404,7 +411,6 @@ impl Entity {
             body_yaw: AtomicCell::new(0.0),
             pitch: AtomicCell::new(0.0),
             velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
-            standing_eye_height: entity_type.eye_height,
             pose: AtomicCell::new(EntityPose::Standing),
             first_loaded_chunk_position: AtomicCell::new(None),
             bounding_box: AtomicCell::new(BoundingBox::new_from_pos(
@@ -413,7 +419,7 @@ impl Entity {
                 position.z,
                 &bounding_box_size,
             )),
-            bounding_box_size: AtomicCell::new(bounding_box_size),
+            entity_dimension: AtomicCell::new(bounding_box_size),
             invulnerable: AtomicBool::new(invulnerable),
             damage_immunities: Vec::new(),
             data: AtomicI32::new(0),
@@ -442,7 +448,7 @@ impl Entity {
     /// Sets a custom name for the entity, typically used with nametags
     pub async fn set_custom_name(&self, name: TextComponent) {
         self.send_meta_data(&[Metadata::new(
-            2,
+            TrackedData::DATA_CUSTOM_NAME,
             MetaDataType::OptionalTextComponent,
             Some(name),
         )])
@@ -456,6 +462,19 @@ impl Entity {
             .await;
     }
 
+    #[must_use]
+    pub fn get_entity_dimensions(pose: EntityPose) -> EntityDimensions {
+        match pose {
+            EntityPose::Sleeping => EntityDimensions::new(0.2, 0.2, 0.2),
+            EntityPose::FallFlying | EntityPose::Swimming | EntityPose::SpinAttack => {
+                EntityDimensions::new(0.6, 0.6, 0.4)
+            }
+            EntityPose::Crouching => EntityDimensions::new(0.6, 1.5, 1.27),
+            EntityPose::Dying => EntityDimensions::new(0.2, 0.2, 1.62),
+            _ => EntityDimensions::new(0.6, 1.8, 1.62),
+        }
+    }
+
     /// Updates the entity's position, block position, and chunk position.
     ///
     /// This function calculates the new position, block position, and chunk position based on the provided coordinates. If any of these values change, the corresponding fields are updated.
@@ -467,7 +486,7 @@ impl Entity {
                 new_position.x,
                 new_position.y,
                 new_position.z,
-                &self.bounding_box_size.load(),
+                &self.entity_dimension.load(),
             ));
 
             let floor_x = new_position.x.floor() as i32;
@@ -498,16 +517,15 @@ impl Entity {
 
     /// Returns entity rotation as vector
     pub fn rotation(&self) -> Vector3<f32> {
-        // Convert degrees to radians if necessary
-        let yaw_rad = self.yaw.load().to_radians();
         let pitch_rad = self.pitch.load().to_radians();
+        let yaw_rad = -self.yaw.load().to_radians();
 
-        Vector3::new(
-            yaw_rad.cos() * pitch_rad.cos(),
-            pitch_rad.sin(),
-            yaw_rad.sin() * pitch_rad.cos(),
-        )
-        .normalize()
+        let cos_yaw = yaw_rad.cos();
+        let sin_yaw = yaw_rad.sin();
+        let cos_pitch = pitch_rad.cos();
+        let sin_pitch = pitch_rad.sin();
+
+        Vector3::new(sin_yaw * cos_pitch, -sin_pitch, cos_yaw * cos_pitch)
     }
 
     /// Changes this entity's pitch and yaw to look at target
@@ -788,58 +806,46 @@ impl Entity {
         */
     }
 
-    // Returns whether the entity's eye level is in a wall
-
     async fn tick_block_collisions(&self, caller: &Arc<dyn EntityBase>, server: &Server) -> bool {
         let bounding_box = self.bounding_box.load();
-
-        let mut suffocating = false;
-
         let aabb = bounding_box.expand(-0.001, -0.001, -0.001);
 
         let min = aabb.min_block_pos();
-
         let max = aabb.max_block_pos();
 
+        let eye_height = f64::from(self.entity_dimension.load().eye_height);
         let mut eye_level_box = aabb;
-
-        let eye_height = f64::from(self.standing_eye_height);
-
         eye_level_box.min.y += eye_height;
-
         eye_level_box.max.y = eye_level_box.min.y;
 
-        for x in min.0.x..=max.0.x {
-            for y in min.0.y..=max.0.y {
-                for z in min.0.z..=max.0.z {
-                    let pos = BlockPos::new(x, y, z);
+        let mut suffocating = false;
+        let pos_iter = BlockPos::iterate(min, max);
 
-                    let (block, state) = self.world.get_block_and_state(&pos).await;
+        for pos in pos_iter {
+            let (block, state) = self.world.get_block_and_state(&pos).await;
+            if state.is_air() {
+                continue;
+            }
 
-                    let collided = World::check_outline(
-                        &bounding_box,
-                        pos,
-                        state,
-                        !suffocating && state.is_solid(),
-                        |collision_shape: &BoundingBox| {
-                            suffocating = collision_shape.intersects(&eye_level_box);
-                        },
-                    );
+            let check_suffocation = !suffocating && state.is_solid();
 
-                    if collided {
-                        self.world
-                            .block_registry
-                            .on_entity_collision(
-                                block,
-                                &self.world,
-                                caller.as_ref(),
-                                &pos,
-                                state,
-                                server,
-                            )
-                            .await;
+            let collided = World::check_outline(
+                &bounding_box,
+                pos,
+                state,
+                check_suffocation,
+                |collision_shape: &BoundingBox| {
+                    if collision_shape.intersects(&eye_level_box) {
+                        suffocating = true;
                     }
-                }
+                },
+            );
+
+            if collided {
+                self.world
+                    .block_registry
+                    .on_entity_collision(block, &self.world, caller.as_ref(), &pos, state, server)
+                    .await;
             }
         }
 
@@ -1225,7 +1231,7 @@ impl Entity {
 
         if let Some(living) = caller.get_living_entity() {
             living
-                .update_fall_distance(
+                .fall(
                     caller.clone(),
                     final_move.y,
                     self.on_ground.load(Ordering::SeqCst),
@@ -1397,11 +1403,11 @@ impl Entity {
         )
     }
     pub fn width(&self) -> f32 {
-        self.bounding_box_size.load().width
+        self.entity_dimension.load().width
     }
 
     pub fn height(&self) -> f32 {
-        self.bounding_box_size.load().height
+        self.entity_dimension.load().height
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
@@ -1601,8 +1607,12 @@ impl Entity {
         } else {
             b &= !(1 << index);
         }
-        self.send_meta_data(&[Metadata::new(0, MetaDataType::Byte, b)])
-            .await;
+        self.send_meta_data(&[Metadata::new(
+            TrackedData::DATA_FLAGS,
+            MetaDataType::Byte,
+            b,
+        )])
+        .await;
     }
 
     /// Plays sound at this entity's position with the entity's sound category
@@ -1627,14 +1637,22 @@ impl Entity {
     }
 
     pub async fn set_pose(&self, pose: EntityPose) {
-        self.pose.store(pose);
-        let pose = pose as i32;
-        self.send_meta_data(&[Metadata::new(
-            DATA_POSE,
-            MetaDataType::EntityPose,
-            VarInt(pose),
-        )])
-        .await;
+        let dimension = Self::get_entity_dimensions(pose);
+        let position = self.pos.load();
+        let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
+        if self.world.is_space_empty(aabb.contract_all(1.0E-7)).await {
+            self.pose.store(pose);
+            let dimension = Self::get_entity_dimensions(pose);
+            self.bounding_box.store(aabb);
+            self.entity_dimension.store(dimension);
+            let pose = pose as i32;
+            self.send_meta_data(&[Metadata::new(
+                TrackedData::DATA_POSE,
+                MetaDataType::EntityPose,
+                VarInt(pose),
+            )])
+            .await;
+        }
     }
 
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
@@ -1728,7 +1746,7 @@ impl Entity {
     }
 
     pub fn get_eye_y(&self) -> f64 {
-        self.pos.load().y + f64::from(self.standing_eye_height)
+        self.pos.load().y + f64::from(self.entity_dimension.load().eye_height)
     }
 
     pub fn is_removed(&self) -> bool {
@@ -1750,10 +1768,7 @@ impl Entity {
 
     pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
         if self.pos.load().y < f64::from(self.world.dimension.min_y) - 64.0 {
-            // Tick out of world damage
-            dyn_self
-                .damage(dyn_self, 4.0, DamageType::OUT_OF_WORLD)
-                .await;
+            dyn_self.tick_in_void(dyn_self).await;
         }
     }
 

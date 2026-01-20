@@ -67,7 +67,7 @@ impl BlockBehaviour for ComparatorBlock {
                 self,
                 args.world,
                 *args.position,
-                BlockState::from_id(args.state_id).id,
+                args.state_id,
                 args.block,
             )
             .await;
@@ -254,7 +254,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
             let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
 
             // Note: .get_comparator_output is assumed to be an async method returning Option<u8>
-            if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(source_block)
+            if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(source_block.id)
                 && let Some(level) = pumpkin_block
                     .get_comparator_output(GetComparatorOutputArgs {
                         world,
@@ -276,7 +276,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                     .get_attached_itemframe_level(world, facing, source_pos)
                     .await;
                 let block_level = if let Some(pumpkin_block) =
-                    world.block_registry.get_pumpkin_block(source_block)
+                    world.block_registry.get_pumpkin_block(source_block.id)
                 {
                     pumpkin_block
                         .get_comparator_output(GetComparatorOutputArgs {

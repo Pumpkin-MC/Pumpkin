@@ -1,6 +1,6 @@
 use super::{Controls, Goal};
 use crate::entity::ai::goal::GoalFuture;
-use crate::entity::ai::goal::melee_attack_goal::MeleeAttackGoal;
+use crate::entity::ai::goal::melee_attack::MeleeAttackGoal;
 use crate::entity::mob::Mob;
 
 pub struct ZombieAttackGoal {
@@ -37,8 +37,7 @@ impl Goal for ZombieAttackGoal {
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             self.melee_attack_goal.stop(mob).await;
-            // Assuming set_attacking is synchronous
-            mob.get_mob_entity().set_attacking(false);
+            mob.get_mob_entity().set_attacking(false).await;
         })
     }
 
@@ -46,14 +45,12 @@ impl Goal for ZombieAttackGoal {
         Box::pin(async {
             self.melee_attack_goal.tick(mob).await;
             self.ticks += 1;
-
-            // Note: Accessing cooldown/get_max_cooldown is assumed synchronous.
             if self.ticks >= 5
-                && self.melee_attack_goal.cooldown < self.melee_attack_goal.get_max_cooldown()
+                && self.melee_attack_goal.cooldown < self.melee_attack_goal.get_max_cooldown() / 2
             {
-                mob.get_mob_entity().set_attacking(true);
+                mob.get_mob_entity().set_attacking(true).await;
             } else {
-                mob.get_mob_entity().set_attacking(false);
+                mob.get_mob_entity().set_attacking(false).await;
             }
         })
     }

@@ -15,9 +15,11 @@ use pumpkin_world::block::entities::bed::BedBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
+use crate::block::OnLandedUponArgs;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
+    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
+    PlacedArgs,
 };
 use crate::entity::{Entity, EntityBase as _};
 use crate::world::World;
@@ -85,6 +87,16 @@ impl BlockBehaviour for BedBlock {
         })
     }
 
+    fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(living) = args.entity.get_living_entity() {
+                living
+                    .handle_fall_damage(args.fall_distance * 0.5, 1.0)
+                    .await;
+            }
+        })
+    }
+
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut bed_props = BedProperties::default(args.block);
@@ -140,6 +152,36 @@ impl BlockBehaviour for BedBlock {
                     },
                 )
                 .await;
+        })
+    }
+
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if args.moved {
+                return;
+            }
+
+            let bed_props = BedProperties::from_state_id(args.old_state_id, args.block);
+            let other_half_pos = if bed_props.part == BedPart::Head {
+                args.position
+                    .offset(bed_props.facing.opposite().to_offset())
+            } else {
+                args.position.offset(bed_props.facing.to_offset())
+            };
+
+            let (other_block, other_state) = args.world.get_block_and_state(&other_half_pos).await;
+            if other_block == args.block {
+                let other_props = BedProperties::from_state_id(other_state.id, other_block);
+                if other_props.part != bed_props.part {
+                    args.world
+                        .set_block_state(
+                            &other_half_pos,
+                            Block::AIR.default_state.id,
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                }
+            }
         })
     }
 
@@ -238,6 +280,7 @@ impl BlockBehaviour for BedBlock {
                     args.world.dimension,
                     bed_head_pos,
                     args.player.get_entity().yaw.load(),
+                    args.player.get_entity().pitch.load(),
                 )
                 .await
             {

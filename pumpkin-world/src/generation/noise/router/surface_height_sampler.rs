@@ -68,33 +68,43 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
         let biome_aligned_z = biome_coords::to_block(biome_coords::from_block(block_z));
 
         let packed_column = chunk_pos::packed(biome_aligned_x as u64, biome_aligned_z as u64);
-        if let Some(estimate) = self.cache.get(&packed_column) {
-            *estimate
-        } else {
-            let estimate = self.calculate_height_estimate(biome_aligned_x, biome_aligned_z);
-            self.cache.insert(packed_column, estimate);
-            estimate
+        if let Some(&estimate) = self.cache.get(&packed_column) {
+            return estimate;
         }
+
+        let estimate = self.calculate_height_estimate(biome_aligned_x, biome_aligned_z);
+        self.cache.insert(packed_column, estimate);
+        estimate
     }
 
     fn calculate_height_estimate(&mut self, aligned_x: i32, aligned_z: i32) -> i32 {
-        for y in (self.minimum_y..=self.maximum_y)
-            .rev()
-            .step_by(self.y_level_step_count)
-        {
-            let pos = UnblendedNoisePos::new(aligned_x, y, aligned_z);
-            let density_sample = ChunkNoiseFunctionComponent::sample_from_stack(
+        let mut low = self.minimum_y;
+        let mut high = self.maximum_y;
+        let mut result = i32::MAX;
+
+        let sample_options =
+            ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
+
+        while low <= high {
+            let mid = low + ((high - low) / 2);
+            let stepped_mid = mid - (mid % self.y_level_step_count as i32);
+
+            let pos = UnblendedNoisePos::new(aligned_x, stepped_mid, aligned_z);
+            let density = ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut self.component_stack,
                 &pos,
-                &ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0),
+                &sample_options,
             );
 
-            if density_sample > Self::NOTCHIAN_SAMPLE_CUTOFF {
-                return y;
+            if density > Self::NOTCHIAN_SAMPLE_CUTOFF {
+                result = stepped_mid;
+                low = stepped_mid + self.y_level_step_count as i32;
+            } else {
+                high = stepped_mid - self.y_level_step_count as i32;
             }
         }
 
-        i32::MAX
+        result
     }
 
     pub fn generate(

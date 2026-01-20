@@ -77,7 +77,9 @@ pub const fn smallest_encompassing_power_of_two(value: u32) -> u32 {
 #[inline]
 pub fn floor_div<T: PrimInt + Zero + One>(x: T, y: T) -> T {
     let div = x / y;
-    if (x ^ y) < T::zero() && div * y != x {
+    let rem = x % y;
+
+    if (x ^ y) < T::zero() && rem != T::zero() {
         div - T::one()
     } else {
         div

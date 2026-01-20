@@ -324,7 +324,7 @@ impl JavaClient {
 
                 if !player.abilities.lock().await.flying {
                     player.living_entity
-                        .update_fall_distance(
+                        .fall(
                             player.clone(),
                             height_difference,
                             packet.collision & FLAG_ON_GROUND != 0,
@@ -449,7 +449,7 @@ impl JavaClient {
                     .await;
                 if !player.abilities.lock().await.flying {
                     player.living_entity
-                        .update_fall_distance(
+                        .fall(
                             player.clone(),
                             height_difference,
                             (packet.collision & FLAG_ON_GROUND) != 0,
@@ -1104,7 +1104,7 @@ impl JavaClient {
                     player.gameprofile.name,
                     self.id,
                 );
-                player.send_client_information();
+                player.send_client_information().await;
             }
         } else {
             self.kick(TextComponent::text("Invalid hand or chat type"))
@@ -1526,7 +1526,9 @@ impl JavaClient {
 
         server
             .item_registry
-            .use_on_block(&mut stack, player, position, face, block, server)
+            .use_on_block(
+                &mut stack, player, position, face, cursor_pos, block, server,
+            )
             .await;
 
         // Check if the item is a block, because not every item can be placed :D
@@ -1997,8 +1999,8 @@ impl JavaClient {
                 world.as_ref(),
                 Some(player),
                 block,
+                block.default_state,
                 &final_block_pos,
-                final_face,
                 Some(&use_item_on),
             )
             .await
@@ -2034,6 +2036,11 @@ impl JavaClient {
         let _replaced_id = world
             .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
             .await;
+        self.send_packet_now(&CBlockUpdate::new(
+            final_block_pos,
+            VarInt(i32::from(new_state)),
+        ))
+        .await;
 
         server
             .block_registry

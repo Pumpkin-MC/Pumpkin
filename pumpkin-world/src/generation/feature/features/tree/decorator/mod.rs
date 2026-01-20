@@ -78,18 +78,18 @@ impl TreeDecorator {
         root_positions: &[BlockPos],
         log_positions: &[BlockPos],
     ) -> Vec<BlockPos> {
-        let mut list = Vec::new();
         if root_positions.is_empty() {
-            list.extend_from_slice(log_positions);
-        } else if !log_positions.is_empty()
-            && root_positions.first().unwrap().0.y == log_positions.first().unwrap().0.y
-        {
-            list.extend_from_slice(log_positions);
-            list.extend_from_slice(root_positions);
-        } else {
-            list.extend_from_slice(root_positions);
+            return log_positions.to_vec();
         }
 
-        list
+        if let (Some(root), Some(log)) = (root_positions.first(), log_positions.first())
+            && root.0.y == log.0.y
+        {
+            let mut list = Vec::with_capacity(root_positions.len() + log_positions.len());
+            list.extend_from_slice(log_positions);
+            list.extend_from_slice(root_positions);
+            return list;
+        }
+        root_positions.to_vec()
     }
 }

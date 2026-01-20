@@ -6,15 +6,22 @@ use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
+use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
 use tokio::sync::Mutex;
 
+pub mod creeper;
+pub mod drowned;
+pub mod skeleton;
 pub mod zombie;
+pub mod zombie_villager;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
@@ -25,9 +32,16 @@ pub struct MobEntity {
     pub look_control: Mutex<LookControl>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
+    mob_flags: AtomicU8,
 }
 
 impl MobEntity {
+    #[expect(dead_code)]
+    const AI_DISABLED_FLAG: u8 = 1;
+    #[expect(dead_code)]
+    const LEFT_HANDED_FLAG: u8 = 2;
+    const ATTACKING_FLAG: u8 = 4;
+
     #[must_use]
     pub fn new(entity: Entity) -> Self {
         Self {
@@ -39,6 +53,7 @@ impl MobEntity {
             look_control: Mutex::new(LookControl::default()),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
+            mob_flags: AtomicU8::new(0),
         }
     }
     pub fn is_in_position_target_range(&self) -> bool {
@@ -55,8 +70,27 @@ impl MobEntity {
         }
     }
 
-    pub const fn set_attacking(&self, _attacking: bool) {
-        // TODO: set to data tracker
+    pub async fn set_attacking(&self, attacking: bool) {
+        self.set_mob_flag(Self::ATTACKING_FLAG, attacking).await;
+    }
+
+    async fn set_mob_flag(&self, flag: u8, value: bool) {
+        let index = flag;
+        let mut b = self.mob_flags.load(Ordering::Relaxed);
+        if value {
+            b |= index;
+        } else {
+            b &= !index;
+        }
+        self.mob_flags.store(b, Ordering::Relaxed);
+        self.living_entity
+            .entity
+            .send_meta_data(&[Metadata::new(
+                TrackedData::DATA_MOB_FLAGS,
+                MetaDataType::Byte,
+                b,
+            )])
+            .await;
     }
 }
 

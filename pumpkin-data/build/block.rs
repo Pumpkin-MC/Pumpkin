@@ -11,7 +11,10 @@ use std::{
 };
 use syn::{Ident, LitInt, LitStr};
 
-use crate::loot::LootTableStruct;
+use crate::{
+    bitsets::{Bitset, gen_u16_bitset},
+    loot::LootTableStruct,
+};
 
 // Takes an array of tuples containing indices paired with values,Add commentMore actions
 // Outputs an array with the values in the appropriate index, gaps filled with None
@@ -279,8 +282,9 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 #[inline]
+                #[allow(clippy::manual_range_patterns)]
                 fn handles_block_id(block_id: u16) -> bool where Self: Sized {
-                    [#(#block_ids),*].contains(&block_id)
+                    matches!(block_id, #(#block_ids)|*)
                 }
 
                 fn to_state_id(&self, block: &Block) -> u16 {
@@ -291,14 +295,22 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 fn from_state_id(state_id: u16, block: &Block) -> Self {
-                    if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
-                    }
-                    if state_id >= block.states[0].id && state_id <= block.states.last().unwrap().id {
-                        let index = state_id - block.states[0].id;
-                        Self::from_index(index)
+                    debug_assert!(
+                        Self::handles_block_id(block.id),
+                        "{} is not a valid block for {}", &block.name, #struct_name
+                    );
+
+                    let min_id = block.states[0].id;
+                    let max_id = block.states.last().map(|s| s.id).unwrap_or(min_id);
+
+                    if (min_id..=max_id).contains(&state_id) {
+                        Self::from_index(state_id - min_id)
                     } else {
+                        #[cfg(debug_assertions)]
                         panic!("State ID {} does not exist for {}", state_id, &block.name);
+
+                        #[cfg(not(debug_assertions))]
+                        Self::from_index(0)
                     }
                 }
 
@@ -313,8 +325,10 @@ impl ToTokens for BlockPropertyStruct {
                    vec![ #(#to_props_entries),* ]
                 }
 
+                #[allow(clippy::manual_range_patterns)]
                 fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
-                    if ![#(#block_ids),*].contains(&block.id) {
+                    #[cfg(debug_assertions)]
+                    if !matches!(block.id, #(#block_ids)|*) {
                         panic!("{} is not a valid block for {}", &block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
@@ -803,8 +817,6 @@ pub(crate) fn build() -> TokenStream {
         .iter()
         .map(|shape| shape.to_token_stream());
 
-    let random_tick_state_ids = quote! { #(#random_tick_states)|* };
-
     let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
     let properties = property_enums.values().map(|prop| prop.to_token_stream());
 
@@ -839,6 +851,18 @@ pub(crate) fn build() -> TokenStream {
 
     assert_eq!(max_state_id, max_state_id_2);
 
+    let Bitset {
+        items,
+        mod_ident,
+        contains_ident,
+    } = &gen_u16_bitset(
+        "RANDOM_TICKS",
+        &random_tick_states
+            .iter()
+            .map(|it| it.base10_parse().unwrap())
+            .collect::<Vec<u16>>(),
+    );
+
     quote! {
         use crate::{BlockState, Block, CollisionShape, blocks::Flammable};
         use crate::block_state::PistonBehavior;
@@ -848,6 +872,8 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::math::vector3::Vector3;
         use std::collections::BTreeMap;
         use phf;
+
+        #items
 
         #[derive(Clone, Copy, Debug)]
         pub struct BlockProperty {
@@ -882,8 +908,9 @@ pub(crate) fn build() -> TokenStream {
             #(#block_entity_types),*
         ];
 
+        #[inline(always)]
         pub fn has_random_ticks(state_id: u16) -> bool {
-            matches!(state_id, #random_tick_state_ids)
+            #mod_ident::#contains_ident(state_id)
         }
 
         pub fn blocks_movement(block_state: &BlockState, block: &Block) -> bool {
