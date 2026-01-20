@@ -146,12 +146,11 @@ impl TrackedStack {
     pub fn is_in_sync(&mut self, actual_stack: &ItemStack) -> bool {
         if let Some(stack) = &self.received_stack {
             return stack.are_equal(actual_stack);
-        } else if let Some(hash) = &self.received_hash {
-            if hash.hash_equals(actual_stack) {
+        } else if let Some(hash) = &self.received_hash
+            && hash.hash_equals(actual_stack) {
                 self.received_stack = Some(actual_stack.clone());
                 return true;
             }
-        }
 
         false
     }
