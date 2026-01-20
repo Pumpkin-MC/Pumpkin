@@ -1,5 +1,6 @@
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -87,19 +88,11 @@ impl LivingEntity {
     #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: u8 = 4;
 
-    const PREVENT_FALL_DAMAGE_BLOCKS: [&'static Block; 6] = [
-        &Block::VINE,
-        &Block::COBWEB,
-        &Block::LADDER,
-        &Block::WATER,
-        &Block::POWDER_SNOW,
-        &Block::SLIME_BLOCK,
-    ];
     const PREVENT_AREA_FALL_DAMAGE_BLOCKS: [&'static Block; 4] = [
         &Block::COBWEB,
-        &Block::SLIME_BLOCK,
         &Block::LADDER,
         &Block::POWDER_SNOW,
+        &Block::SLIME_BLOCK,
     ];
     const FALL_DAMAGE_SAFE_DISTANCE: f64 = 1.3;
 
@@ -253,10 +246,10 @@ impl LivingEntity {
         effects.get(&effect).cloned()
     }
 
-    pub async fn is_in_any(&self, blocks: &[&Block]) -> (bool, &Block) {
+    pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
         let block_pos = self.entity.block_pos.load();
         let block = self.entity.world.get_block(&block_pos).await;
-        (blocks.contains(&block), block)
+        (block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING), block)
     }
 
     // Check if the entity is in water
@@ -271,40 +264,52 @@ impl LivingEntity {
         self.entity.world.get_block(&block_pos).await == &Block::POWDER_SNOW
     }
 
-    pub async fn is_in_prevents_fall_damage(&self) -> bool {
-        let (prevents, block) = self
-            .is_in_any(Self::PREVENT_FALL_DAMAGE_BLOCKS.as_ref())
-            .await;
+    pub async fn should_prevent_fall_damage(&self) -> bool {
+        let (prevents, block) = self.is_in_fall_damage_resetting().await;
 
-        if block == &Block::SCAFFOLDING && self.entity.sneaking.load(Ordering::Relaxed) {
+        if block == &Block::SCAFFOLDING && !self.entity.sneaking.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        if block == &Block::WATER {
             return true;
         }
 
         prevents
     }
 
-    pub async fn is_around_prevents_fall_damage(&self) -> bool {
+    pub async fn should_prevent_fall_damage_in_area(&self) -> bool {
         let world = &self.entity.world;
         let block_pos = self.entity.block_pos.load().down();
         let entity_pos = self.entity.pos.load();
 
-        for x in -1..=1 {
-            for z in -1..=1 {
-                let pos = Vector3::new(block_pos.0.x + x, block_pos.0.y, block_pos.0.z + z);
-                let block_pos = BlockPos(pos);
-                let block = world.get_block(&block_pos).await;
+        let min = BlockPos(Vector3::new(
+            block_pos.0.x - 1,
+            block_pos.0.y,
+            block_pos.0.z - 1,
+        ));
+        let max = BlockPos(Vector3::new(
+            block_pos.0.x + 1,
+            block_pos.0.y,
+            block_pos.0.z + 1,
+        ));
+        let pos_iter = BlockPos::iterate(min, max);
 
-                if Self::PREVENT_AREA_FALL_DAMAGE_BLOCKS.contains(&block) {
-                    let block_center = Vector3::new(
-                        f64::from(block_pos.0.x) + 0.5,
-                        f64::from(block_pos.0.y) + 0.5,
-                        f64::from(block_pos.0.z) + 0.5,
-                    );
-                    let distance = entity_pos.squared_distance_to_vec(block_center);
+        // FIXME: it seems the java server checks all blocks around with a raycast and check if miss or hit,
+        // then added to a collision checker to handle in the tick handler
+        for pos in pos_iter {
+            let block = world.get_block(&pos).await;
 
-                    return distance.sqrt()
-                        <= Self::FALL_DAMAGE_SAFE_DISTANCE * Self::FALL_DAMAGE_SAFE_DISTANCE;
-                }
+            if Self::PREVENT_AREA_FALL_DAMAGE_BLOCKS.contains(&block) {
+                let block_center = Vector3::new(
+                    f64::from(pos.0.x) + 0.5,
+                    f64::from(pos.0.y) + 0.5,
+                    f64::from(pos.0.z) + 0.5,
+                );
+                let distance = entity_pos.squared_distance_to_vec(block_center);
+
+                return distance.sqrt()
+                    <= Self::FALL_DAMAGE_SAFE_DISTANCE * Self::FALL_DAMAGE_SAFE_DISTANCE;
             }
         }
 
@@ -759,8 +764,8 @@ impl LivingEntity {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance <= 0.0
                 || dont_damage
-                || self.is_in_prevents_fall_damage().await
-                || self.is_around_prevents_fall_damage().await
+                || self.should_prevent_fall_damage().await
+                || self.should_prevent_fall_damage_in_area().await
             {
                 return;
             }
@@ -781,8 +786,8 @@ impl LivingEntity {
                 self.handle_fall_damage(fall_distance, 1.0).await;
             }
         } else if height_difference < 0.0 {
-            let new_fall_distance = if !self.is_in_prevents_fall_damage().await
-                && !self.is_around_prevents_fall_damage().await
+            let new_fall_distance = if !self.should_prevent_fall_damage().await
+                && !self.should_prevent_fall_damage_in_area().await
             {
                 let distance = self.fall_distance.load();
                 distance - (height_difference as f32)
