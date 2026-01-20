@@ -185,6 +185,8 @@ pub(crate) fn build() -> TokenStream {
         });
     }
     quote! {
+        use crate::tag::Taggable;
+        use crate::tag::RegistryKey;
         use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
         use std::hash::Hash;
@@ -221,6 +223,24 @@ pub(crate) fn build() -> TokenStream {
         }
 
         impl Eq for EntityType {}
+
+        impl Taggable for EntityType {
+            #[inline]
+            fn tag_key() -> RegistryKey {
+                RegistryKey::Block
+            }
+
+            #[inline]
+            fn registry_key(&self) -> &str {
+                self.resource_name
+            }
+
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id
+            }
+        }
+
 
         #[derive(Debug)]
         pub struct SpawnRestriction {

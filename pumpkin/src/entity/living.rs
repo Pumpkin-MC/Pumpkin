@@ -331,6 +331,12 @@ impl LivingEntity {
         false
     }
 
+    pub fn is_immune_to_fall_damage(&self) -> bool {
+        self.entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_FALL_DAMAGE_IMMUNE)
+    }
+
     async fn get_effective_gravity(&self, caller: &Arc<dyn EntityBase>) -> f64 {
         let final_gravity = caller.get_gravity();
 
@@ -781,6 +787,7 @@ impl LivingEntity {
                 || dont_damage
                 || self.should_prevent_fall_damage().await
                 || self.should_prevent_fall_damage_in_area().await
+                || self.is_immune_to_fall_damage()
             {
                 return;
             }
@@ -814,6 +821,10 @@ impl LivingEntity {
     }
 
     pub async fn handle_fall_damage(&self, fall_distance: f32, damage_per_distance: f32) {
+        if self.is_immune_to_fall_damage() {
+            return;
+        }
+
         // TODO: use attributes
         let safe_fall_distance = 3.0;
         let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
