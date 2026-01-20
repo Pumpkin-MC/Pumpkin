@@ -22,6 +22,7 @@ pub struct CSpawnEntity {
 
 impl CSpawnEntity {
     #[expect(clippy::too_many_arguments)]
+    #[must_use] 
     pub fn new(
         entity_id: VarInt,
         entity_uuid: uuid::Uuid,

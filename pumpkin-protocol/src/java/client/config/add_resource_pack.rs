@@ -17,7 +17,8 @@ pub struct CConfigAddResourcePack<'a> {
 }
 
 impl<'a> CConfigAddResourcePack<'a> {
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         uuid: &'a uuid::Uuid,
         url: &'a str,
         hash: &'a str,

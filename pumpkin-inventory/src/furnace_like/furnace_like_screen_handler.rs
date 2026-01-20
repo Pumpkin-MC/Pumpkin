@@ -43,7 +43,7 @@ impl FurnaceLikeScreenHandler {
                 Box::pin(async move {
                     if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
                         sync_handler
-                            .update_property(screen_handler, property as i32, value)
+                            .update_property(screen_handler, i32::from(property), value)
                             .await;
                     }
                 })

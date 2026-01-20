@@ -44,7 +44,7 @@ impl TrackTargetGoal {
     }
 
     // TODO: get from entity attribute
-    pub fn get_follow_range(_mob: &MobEntity) -> f32 {
+    pub const fn get_follow_range(_mob: &MobEntity) -> f32 {
         32.0
     }
 

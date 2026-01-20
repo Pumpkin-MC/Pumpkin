@@ -33,7 +33,7 @@ impl ToTokens for EnumCreator {
         });
     }
 }
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/tags.json");
     println!("cargo:rerun-if-changed=../assets/blocks.json");
     println!("cargo:rerun-if-changed=../assets/items.json");
@@ -72,8 +72,8 @@ pub(crate) fn build() -> TokenStream {
             .expect("Failed to parse entities.json");
 
     let registry_key_enum = EnumCreator {
-        name: "RegistryKey".to_string(),
-        value: tags.keys().map(|key| key.to_string()).collect(),
+        name: "RegistryKey".to_owned(),
+        value: tags.keys().cloned().collect(),
     }
     .to_token_stream();
 
@@ -84,7 +84,7 @@ pub(crate) fn build() -> TokenStream {
     let mut match_arms_tags_all = Vec::new();
     let mut tag_identifiers = Vec::new();
 
-    for (key, tag_map) in tags.into_iter() {
+    for (key, tag_map) in tags {
         let key_pascal = format_ident!("{}", key.to_pascal_case());
         let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
 
@@ -105,7 +105,7 @@ pub(crate) fn build() -> TokenStream {
                 let tag_values_array = values.iter().map(|v| quote! { #v }).collect::<Vec<_>>();
                 let tag_id_array = match &key {
                     t if t == "worldgen/biome" => values.iter().map(|v| {
-                        let id = biomes.get(v).unwrap().id as u16;
+                        let id = u16::from(biomes.get(v).unwrap().id);
                         quote! { #id }
                     }).collect::<Vec<_>>(),
                     t if t == "fluid" => values.iter().map(|v| {
@@ -121,7 +121,7 @@ pub(crate) fn build() -> TokenStream {
                         quote! { #id }
                     }).collect::<Vec<_>>(),
                     t if t == "enchantment" => values.iter().map(|v| {
-                        let id = enchantments.get(&("minecraft:".to_string() + v)).unwrap().id as u16;
+                        let id = u16::from(enchantments.get(&("minecraft:".to_owned() + v)).unwrap().id);
                         quote! { #id }
                     }).collect::<Vec<_>>(),
                     t if t == "entity_type" => values.iter().map(|v| {
@@ -130,7 +130,7 @@ pub(crate) fn build() -> TokenStream {
                     }).collect::<Vec<_>>(),
                     _ => Vec::new(),
                 };
-                let mapped_name = format_ident!("{}", tag_name.replace(":", "_").replace("/", "_").to_uppercase());
+                let mapped_name = format_ident!("{}", tag_name.replace([':', '/'], "_").to_uppercase());
                 quote! {
                     pub const #mapped_name: Tag = (&[#(#tag_values_array),*], &[#(#tag_id_array),*]);
                 }
@@ -141,7 +141,7 @@ pub(crate) fn build() -> TokenStream {
             .map(|(tag_name, _values)| {
                 let mapped_name = format_ident!(
                     "{}",
-                    tag_name.replace(":", "_").replace("/", "_").to_uppercase()
+                    tag_name.replace([':', '/'], "_").to_uppercase()
                 );
                 quote! {
                     #tag_name => &#key_pascal::#mapped_name

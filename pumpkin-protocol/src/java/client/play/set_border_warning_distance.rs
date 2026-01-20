@@ -11,7 +11,8 @@ pub struct CSetBorderWarningDistance {
 }
 
 impl CSetBorderWarningDistance {
-    pub fn new(warning_blocks: VarInt) -> Self {
+    #[must_use] 
+    pub const fn new(warning_blocks: VarInt) -> Self {
         Self { warning_blocks }
     }
 }

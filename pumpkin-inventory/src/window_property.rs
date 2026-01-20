@@ -8,7 +8,7 @@ pub struct WindowProperty<T: WindowPropertyTrait> {
 }
 
 impl<T: WindowPropertyTrait> WindowProperty<T> {
-    pub fn new(window_property: T, value: i16) -> Self {
+    pub const fn new(window_property: T, value: i16) -> Self {
         Self {
             window_property,
             value,
@@ -36,14 +36,14 @@ pub enum EnchantmentTable {
 // TODO: No more magic numbers
 impl WindowPropertyTrait for EnchantmentTable {
     fn to_id(self) -> i16 {
-        use EnchantmentTable::*;
+        use EnchantmentTable::{LevelRequirement, EnchantmentSeed, EnchantmentId, EnchantmentLevel};
 
-        (match self {
+        i16::from(match self {
             LevelRequirement { slot } => slot,
             EnchantmentSeed => 3,
             EnchantmentId { slot } => 4 + slot,
             EnchantmentLevel { slot } => 7 + slot,
-        }) as i16
+        } )
     }
 }
 pub enum Beacon {

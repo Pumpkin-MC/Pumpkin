@@ -57,7 +57,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                         let _byte_len = seq
                             .next_element::<VarInt>()?
                             .ok_or(de::Error::custom("No data len VarInt!"))?;
-                        patch.push((id, Some(deserialize(id, &mut seq)?)))
+                        patch.push((id, Some(deserialize(id, &mut seq)?)));
                     }
                     for _ in 0..num_components_to_remove {
                         let id = seq
@@ -68,7 +68,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                             .map_err(|_| de::Error::custom("Unknown component id VarInt!"))?;
                         let id = DataComponent::try_from_id(id)
                             .ok_or(de::Error::custom("Unknown component id VarInt!"))?;
-                        patch.push((id, None))
+                        patch.push((id, None));
                     }
 
                     let item_id: u16 = item_id
@@ -131,6 +131,7 @@ impl Serialize for ItemStackSerializer<'_> {
 }
 
 impl ItemStackSerializer<'_> {
+    #[must_use] 
     pub fn to_stack(self) -> ItemStack {
         self.0.into_owned()
     }
@@ -165,6 +166,7 @@ pub struct ItemStackHash {
 }
 
 impl OptionalItemStackHash {
+    #[must_use] 
     pub fn hash_equals(&self, other: &ItemStack) -> bool {
         if let Some(hash) = &self.0 {
             if hash.item_id != other.item.id.into() || hash.count != other.item_count.into() {
@@ -193,11 +195,10 @@ impl OptionalItemStackHash {
                     let checksum = data.get_hash();
                     for (id, hash) in &hash.components.added {
                         if id == &VarInt::from(other_id.to_id()) {
-                            if hash != &checksum {
-                                return false;
-                            } else {
+                            if hash == &checksum {
                                 break;
                             }
+                            return false;
                         }
                     }
                 } else if !hash

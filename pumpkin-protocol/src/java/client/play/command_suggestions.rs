@@ -15,7 +15,8 @@ pub struct CCommandSuggestions {
 }
 
 impl CCommandSuggestions {
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         id: VarInt,
         start: VarInt,
         length: VarInt,
@@ -37,7 +38,8 @@ pub struct CommandSuggestion {
 }
 
 impl CommandSuggestion {
-    pub fn new(suggestion: String, tooltip: Option<TextComponent>) -> Self {
+    #[must_use] 
+    pub const fn new(suggestion: String, tooltip: Option<TextComponent>) -> Self {
         Self {
             suggestion,
             tooltip,

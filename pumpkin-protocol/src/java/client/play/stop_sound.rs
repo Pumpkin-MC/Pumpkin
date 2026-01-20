@@ -14,7 +14,8 @@ pub struct CStopSound {
 }
 
 impl CStopSound {
-    pub fn new(sound_id: Option<ResourceLocation>, category: Option<SoundCategory>) -> Self {
+    #[must_use] 
+    pub const fn new(sound_id: Option<ResourceLocation>, category: Option<SoundCategory>) -> Self {
         Self { sound_id, category }
     }
 }

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::io::{Seek, SeekFrom};
 
-use crate::*;
+use crate::{io, Error, Write, NbtTag, END_ID, LIST_ID, INT_ARRAY_ID, LONG_ARRAY_ID, BYTE_ARRAY_ID, INT_ID, LONG_ID, BYTE_ID, COMPOUND_ID, get_nbt_string};
 use io::Read;
 use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, forward_to_deserialize_any};
@@ -13,7 +13,7 @@ thread_local! {
 }
 
 pub(super) fn take_curr_visitor_seq_list_id() -> Option<u8> {
-    CURR_VISITOR_LIST_TYPE.with(|cell| cell.take())
+    CURR_VISITOR_LIST_TYPE.with(std::cell::RefCell::take)
 }
 
 pub(super) fn set_curr_visitor_seq_list_id(tag: Option<u8>) {
@@ -27,7 +27,7 @@ pub struct NbtReadHelper<R: Read + Seek> {
 }
 
 impl<R: Read + Seek> NbtReadHelper<R> {
-    pub fn new(r: R) -> Self {
+    pub const fn new(r: R) -> Self {
         Self { reader: r }
     }
 }
@@ -84,8 +84,8 @@ pub struct Deserializer<R: Read + Seek> {
 }
 
 impl<R: Read + Seek> Deserializer<R> {
-    pub fn new(input: R, is_named: bool) -> Self {
-        Deserializer {
+    pub const fn new(input: R, is_named: bool) -> Self {
+        Self {
             input: NbtReadHelper { reader: input },
             tag_to_deserialize_stack: None,
             in_list: false,
@@ -116,7 +116,7 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
 
     fn deserialize_ignored_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         let Some(tag) = self.tag_to_deserialize_stack else {
-            return Err(Error::SerdeError("Ignoring nothing!".to_string()));
+            return Err(Error::SerdeError("Ignoring nothing!".to_owned()));
         };
 
         NbtTag::skip_data(&mut self.input, tag)?;
@@ -126,13 +126,13 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
     fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         let Some(tag_to_deserialize) = self.tag_to_deserialize_stack else {
             return Err(Error::SerdeError(
-                "The top level must be a component (e.g. a struct)".to_string(),
+                "The top level must be a component (e.g. a struct)".to_owned(),
             ));
         };
 
         match tag_to_deserialize {
             END_ID => Err(Error::SerdeError(
-                "Trying to deserialize an END tag!".to_string(),
+                "Trying to deserialize an END tag!".to_owned(),
             )),
             LIST_ID | INT_ARRAY_ID | LONG_ARRAY_ID | BYTE_ARRAY_ID => {
                 let list_type = match tag_to_deserialize {
@@ -181,7 +181,7 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
             visitor.visit_u8::<Error>(value)
         } else {
             Err(Error::UnsupportedType(
-                "u8; NBT only supports signed values".to_string(),
+                "u8; NBT only supports signed values".to_owned(),
             ))
         }
     }
@@ -230,8 +230,7 @@ impl<'de, R: Read + Seek> de::Deserializer<'de> for &mut Deserializer<R> {
         if let Some(tag_id) = self.tag_to_deserialize_stack {
             if tag_id != COMPOUND_ID {
                 return Err(Error::SerdeError(format!(
-                    "Trying to deserialize a map without a compound ID (id {})",
-                    tag_id
+                    "Trying to deserialize a map without a compound ID (id {tag_id})"
                 )));
             }
         } else {

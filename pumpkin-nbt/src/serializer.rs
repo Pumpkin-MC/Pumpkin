@@ -16,7 +16,7 @@ pub struct WriteAdaptor<W: Write> {
 }
 
 impl<W: Write> WriteAdaptor<W> {
-    pub fn new(w: W) -> Self {
+    pub const fn new(w: W) -> Self {
         Self { writer: w }
     }
 }
@@ -57,7 +57,7 @@ pub struct Serializer<W: Write> {
 }
 
 impl<W: Write> Serializer<W> {
-    pub fn new(output: W, name: Option<String>) -> Self {
+    pub const fn new(output: W, name: Option<String>) -> Self {
         Self {
             output: WriteAdaptor::new(output),
             state: State::Root(name),
@@ -120,7 +120,7 @@ impl<W: Write> Serializer<W> {
             State::Root(root_name) => {
                 if self.handled_root {
                     return Err(Error::SerdeError(
-                        "Invalid state: already handled root component!".to_string(),
+                        "Invalid state: already handled root component!".to_owned(),
                     ));
                 }
                 if tag != COMPOUND_ID {
@@ -170,7 +170,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     type SerializeStructVariant = Impossible<(), Error>;
 
     fn serialize_bool(self, v: bool) -> Result<()> {
-        self.serialize_i8(v as i8)?;
+        self.serialize_i8(i8::from(v))?;
         Ok(())
     }
 
@@ -199,15 +199,12 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     }
 
     fn serialize_u8(self, v: u8) -> Result<()> {
-        match self.state {
-            State::Named(_) => Err(Error::UnsupportedType(
-                "u8; NBT only supports signed values".to_string(),
-            )),
-            _ => {
-                self.parse_state(BYTE_ID)?;
-                self.output.write_u8_be(v)?;
-                Ok(())
-            }
+        if let State::Named(_) = self.state { Err(Error::UnsupportedType(
+            "u8; NBT only supports signed values".to_owned(),
+        )) } else {
+            self.parse_state(BYTE_ID)?;
+            self.output.write_u8_be(v)?;
+            Ok(())
         }
     }
 
@@ -236,16 +233,16 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     }
 
     fn serialize_char(self, _v: char) -> Result<()> {
-        Err(Error::UnsupportedType("char".to_string()))
+        Err(Error::UnsupportedType("char".to_owned()))
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
         self.parse_state(STRING_ID)?;
 
         if self.state == State::MapKey {
-            self.state = State::Named(v.to_string());
+            self.state = State::Named(v.to_owned());
         } else {
-            NbtTag::String(v.to_string()).serialize_data(&mut self.output)?;
+            NbtTag::String(v.to_owned()).serialize_data(&mut self.output)?;
         }
 
         Ok(())
@@ -279,7 +276,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<()> {
-        Err(Error::UnsupportedType("unit struct".to_string()))
+        Err(Error::UnsupportedType("unit struct".to_owned()))
     }
 
     fn serialize_unit_variant(
@@ -297,7 +294,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         _name: &'static str,
         _value: &T,
     ) -> Result<()> {
-        Err(Error::UnsupportedType("newtype struct".to_string()))
+        Err(Error::UnsupportedType("newtype struct".to_owned()))
     }
 
     fn serialize_newtype_variant<T: ?Sized + Serialize>(
@@ -310,7 +307,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         if name == NBT_ARRAY_TAG {
             let name = match self.state {
                 State::Named(ref name) => name.clone(),
-                _ => return Err(Error::SerdeError("Invalid `Serializer` state!".to_string())),
+                _ => return Err(Error::SerdeError("Invalid `Serializer` state!".to_owned())),
             };
 
             self.state = State::Array {
@@ -318,7 +315,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
                 array_type: variant,
             };
         } else {
-            return Err(Error::UnsupportedType("newtype variant".to_string()));
+            return Err(Error::UnsupportedType("newtype variant".to_owned()));
         }
         value.serialize(self)?;
 
@@ -328,42 +325,39 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
         let Some(len) = len else {
             return Err(Error::SerdeError(
-                "The length of the sequence must be known first!".to_string(),
+                "The length of the sequence must be known first!".to_owned(),
             ));
         };
         if len > i32::MAX as usize {
             return Err(Error::LargeLength(len));
         }
 
-        match &mut self.state {
-            State::Array { array_type, .. } => {
-                let (id, expected_tag) = match *array_type {
-                    NBT_BYTE_ARRAY_TAG => (BYTE_ARRAY_ID, BYTE_ID),
-                    NBT_INT_ARRAY_TAG => (INT_ARRAY_ID, INT_ID),
-                    NBT_LONG_ARRAY_TAG => (LONG_ARRAY_ID, LONG_ID),
-                    _ => {
-                        return Err(Error::SerdeError(
-                            "Array supports only `byte`, `int`, and `long`".to_string(),
-                        ));
-                    }
-                };
-
-                self.parse_state(id)?;
-                self.output.write_i32_be(len as i32)?;
-
-                // We can mark anything as an NBT array list, so mark as needed to be checked.
-                self.expected_list_tag = expected_tag;
-                self.state = State::CheckedListElement;
-            }
-            _ => {
-                self.parse_state(LIST_ID)?;
-                self.state = State::FirstListElement { len: len as i32 };
-                if len == 0 {
-                    // If we have no elements, the `FirstListElement` state will never be invoked, so
-                    // write the (unknown) list type and length here.
-                    self.output.write_u8_be(END_ID)?;
-                    self.output.write_i32_be(0)?;
+        if let State::Array { array_type, .. } = &mut self.state {
+            let (id, expected_tag) = match *array_type {
+                NBT_BYTE_ARRAY_TAG => (BYTE_ARRAY_ID, BYTE_ID),
+                NBT_INT_ARRAY_TAG => (INT_ARRAY_ID, INT_ID),
+                NBT_LONG_ARRAY_TAG => (LONG_ARRAY_ID, LONG_ID),
+                _ => {
+                    return Err(Error::SerdeError(
+                        "Array supports only `byte`, `int`, and `long`".to_owned(),
+                    ));
                 }
+            };
+
+            self.parse_state(id)?;
+            self.output.write_i32_be(len as i32)?;
+
+            // We can mark anything as an NBT array list, so mark as needed to be checked.
+            self.expected_list_tag = expected_tag;
+            self.state = State::CheckedListElement;
+        } else {
+            self.parse_state(LIST_ID)?;
+            self.state = State::FirstListElement { len: len as i32 };
+            if len == 0 {
+                // If we have no elements, the `FirstListElement` state will never be invoked, so
+                // write the (unknown) list type and length here.
+                self.output.write_u8_be(END_ID)?;
+                self.output.write_i32_be(0)?;
             }
         }
 
@@ -379,7 +373,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleStruct> {
-        Err(Error::UnsupportedType("tuple struct".to_string()))
+        Err(Error::UnsupportedType("tuple struct".to_owned()))
     }
 
     fn serialize_tuple_variant(
@@ -389,7 +383,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
-        Err(Error::UnsupportedType("tuple variant".to_string()))
+        Err(Error::UnsupportedType("tuple variant".to_owned()))
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
@@ -409,7 +403,7 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant> {
-        Err(Error::UnsupportedType("struct variant".to_string()))
+        Err(Error::UnsupportedType("struct variant".to_owned()))
     }
 
     fn is_human_readable(&self) -> bool {
@@ -459,7 +453,7 @@ impl<W: Write> ser::SerializeStruct for &mut Serializer<W> {
         key: &'static str,
         value: &T,
     ) -> Result<()> {
-        self.state = State::Named(key.to_string());
+        self.state = State::Named(key.to_owned());
         value.serialize(&mut **self)
     }
 

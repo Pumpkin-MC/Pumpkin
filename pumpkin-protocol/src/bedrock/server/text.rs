@@ -22,7 +22,8 @@ pub struct SText {
 }
 
 impl SText {
-    pub fn new(message: String, player_name: String) -> Self {
+    #[must_use] 
+    pub const fn new(message: String, player_name: String) -> Self {
         Self {
             r#type: TextPacketType::Chat,
             localize: false,
@@ -35,7 +36,8 @@ impl SText {
         }
     }
 
-    pub fn system_message(message: String) -> Self {
+    #[must_use] 
+    pub const fn system_message(message: String) -> Self {
         Self {
             r#type: TextPacketType::SystemMessage,
             localize: false,

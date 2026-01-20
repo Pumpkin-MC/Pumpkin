@@ -15,7 +15,8 @@ pub struct CSetContainerContent<'a> {
 }
 
 impl<'a> CSetContainerContent<'a> {
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         window_id: VarInt,
         state_id: VarInt,
         slots: &'a [ItemStackSerializer],

@@ -87,7 +87,7 @@ enum SplineRepr {
         #[serde(rename(deserialize = "locationFunction"))]
         location_function: Box<DensityFunctionRepr>,
         locations: Box<[HashableF32]>,
-        values: Box<[SplineRepr]>,
+        values: Box<[Self]>,
         derivatives: Box<[HashableF32]>,
     },
     #[serde(rename(deserialize = "fixed"))]
@@ -460,7 +460,7 @@ enum DensityFunctionRepr {
     BlendAlpha,
     BlendOffset,
     BlendDensity {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
     },
     EndIslands,
     Noise {
@@ -477,11 +477,11 @@ enum DensityFunctionRepr {
     },
     ShiftedNoise {
         #[serde(rename(deserialize = "shiftX"))]
-        shift_x: Box<DensityFunctionRepr>,
+        shift_x: Box<Self>,
         #[serde(rename(deserialize = "shiftY"))]
-        shift_y: Box<DensityFunctionRepr>,
+        shift_y: Box<Self>,
         #[serde(rename(deserialize = "shiftZ"))]
-        shift_z: Box<DensityFunctionRepr>,
+        shift_z: Box<Self>,
         #[serde(flatten)]
         data: ShiftedNoiseData,
     },
@@ -491,7 +491,7 @@ enum DensityFunctionRepr {
     },
     #[serde(rename(deserialize = "WeirdScaledSampler"))]
     WeirdScaled {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(flatten)]
         data: WeirdScaledData,
     },
@@ -499,7 +499,7 @@ enum DensityFunctionRepr {
     #[serde(rename(deserialize = "Wrapping"))]
     Wrapper {
         #[serde(rename(deserialize = "wrapped"))]
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(rename(deserialize = "type"))]
         wrapper: WrapperType,
     },
@@ -514,34 +514,34 @@ enum DensityFunctionRepr {
     },
     #[serde(rename(deserialize = "BinaryOperation"))]
     Binary {
-        argument1: Box<DensityFunctionRepr>,
-        argument2: Box<DensityFunctionRepr>,
+        argument1: Box<Self>,
+        argument2: Box<Self>,
         #[serde(flatten)]
         data: BinaryData,
     },
     #[serde(rename(deserialize = "LinearOperation"))]
     Linear {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(flatten)]
         data: LinearData,
     },
     #[serde(rename(deserialize = "UnaryOperation"))]
     Unary {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(flatten)]
         data: UnaryData,
     },
     Clamp {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(flatten)]
         data: ClampData,
     },
     RangeChoice {
-        input: Box<DensityFunctionRepr>,
+        input: Box<Self>,
         #[serde(rename(deserialize = "whenInRange"))]
-        when_in_range: Box<DensityFunctionRepr>,
+        when_in_range: Box<Self>,
         #[serde(rename(deserialize = "whenOutOfRange"))]
-        when_out_range: Box<DensityFunctionRepr>,
+        when_out_range: Box<Self>,
         #[serde(flatten)]
         data: RangeChoiceData,
     },
@@ -721,8 +721,8 @@ impl DensityFunctionRepr {
                 }
             }
             Self::ClampedYGradient { data } => {
-                let from_y = data.from_y as f64;
-                let to_y = data.to_y as f64;
+                let from_y = f64::from(data.from_y);
+                let to_y = f64::from(data.to_y);
                 let from_value = &data.from_value;
                 let to_value = &data.to_value;
 
@@ -997,7 +997,7 @@ macro_rules! fix_final_density {
     }};
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/density_function.json");
 
     let mut reprs: NoiseRouterReprs =

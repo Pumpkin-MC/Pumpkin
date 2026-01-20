@@ -81,7 +81,7 @@ impl ToTokens for ItemComponents {
                     damage: #damage_lit,
                 }),
             });
-        };
+        }
 
         if let Some(md) = self.max_damage {
             let max_damage_lit = LitInt::new(&md.to_string(), Span::call_site());
@@ -90,7 +90,7 @@ impl ToTokens for ItemComponents {
                     max_damage: #max_damage_lit,
                 }),
             });
-        };
+        }
 
         if let Some(modifiers) = &self.attribute_modifiers {
             let modifier_code = modifiers.iter().map(|modifier| {
@@ -122,7 +122,7 @@ impl ToTokens for ItemComponents {
                     attribute_modifiers: Cow::Borrowed(&[#(#modifier_code),*])
                 }),
             });
-        };
+        }
 
         if let Some(tool) = &self.tool {
             let rules_code = tool.rules.iter().map(|rule| {
@@ -140,7 +140,7 @@ impl ToTokens for ItemComponents {
                     } else if let TagType::Tag(str) = t {
                         let ident = format_ident!(
                             "{}",
-                            str.replace(":", "_").replace("/", "_").to_uppercase()
+                            str.replace([':', '/'], "_").to_uppercase()
                         );
                         block_array = quote! {
                             Tag(&tag::Block::#ident)
@@ -168,19 +168,13 @@ impl ToTokens for ItemComponents {
                 } else {
                     unreachable!();
                 }
-                let speed = match rule.speed {
-                    Some(speed) => {
-                        quote! { Some(#speed) }
-                    }
-                    None => quote! { None },
-                };
-                let correct_for_drops = match rule.correct_for_drops {
-                    Some(correct_for_drops) => {
-                        let correct_for_drops = LitBool::new(correct_for_drops, Span::call_site());
-                        quote! { Some(#correct_for_drops) }
-                    }
-                    None => quote! { None },
-                };
+                let speed = if let Some(speed) = rule.speed {
+                    quote! { Some(#speed) }
+                } else { quote! { None } };
+                let correct_for_drops = if let Some(correct_for_drops) = rule.correct_for_drops {
+                    let correct_for_drops = LitBool::new(correct_for_drops, Span::call_site());
+                    quote! { Some(#correct_for_drops) }
+                } else { quote! { None } };
                 quote! {
                     ToolRule {
                         blocks: #block_array,
@@ -208,7 +202,7 @@ impl ToTokens for ItemComponents {
                 damage_per_block: #damage_per_block,
                 can_destroy_blocks_in_creative: #can_destroy_blocks_in_creative
             }), });
-        };
+        }
 
         if let Some(food) = &self.food {
             let nutrition = LitInt::new(&food.nutrition.to_string(), Span::call_site());
@@ -222,7 +216,7 @@ impl ToTokens for ItemComponents {
                 saturation: #saturation,
                 can_always_eat: #can_always_eat,
             }), });
-        };
+        }
 
         if let Some(consumable) = &self.consumable {
             let consume_seconds = LitFloat::new(
@@ -233,15 +227,15 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (Consumable, &ConsumableImpl {
                 consume_seconds: #consume_seconds,
             }), });
-        };
+        }
 
         if self.blocks_attacks.is_some() {
             tokens.extend(quote! { (BlocksAttacks, &BlocksAttacksImpl), });
-        };
+        }
 
         if self.death_protection.is_some() {
             tokens.extend(quote! { (DeathProtection, &DeathProtectionImpl), });
-        };
+        }
 
         if let Some(equippable) = &self.equippable {
             let slot = match equippable.slot.as_str() {
@@ -298,7 +292,7 @@ impl ToTokens for ItemComponents {
                                 TagType::Tag(tag) => {
                                     let ident = format_ident!(
                                         "{}",
-                                        tag.replace(":", "_").replace("/", "_").to_uppercase()
+                                        tag.replace([':', '/'], "_").to_uppercase()
                                     );
                                     quote! { EntityTypeOrTag::Tag(&crate::tag::EntityType::#ident) }
                                 }
@@ -339,19 +333,19 @@ impl ToTokens for ItemComponents {
                 can_be_sheared: #can_be_sheared,
                 shearing_sound: #shearing_sound
             }), });
-        };
+        }
     }
 }
 
-fn return_1u32() -> u32 {
+const fn return_1u32() -> u32 {
     1
 }
 
-fn return_1f32() -> f32 {
+const fn return_1f32() -> f32 {
     1.
 }
 
-fn return_true() -> bool {
+const fn return_true() -> bool {
     true
 }
 #[derive(Deserialize)]
@@ -365,7 +359,7 @@ pub struct ToolComponent {
     can_destroy_blocks_in_creative: bool,
 }
 
-fn return_false() -> bool {
+const fn return_false() -> bool {
     false
 }
 
@@ -394,7 +388,7 @@ pub struct Modifier {
     pub slot: AttributeModifierSlot,
 }
 
-fn _true() -> bool {
+const fn _true() -> bool {
     true
 }
 
@@ -433,7 +427,7 @@ pub struct EquippableComponent {
     pub shearing_sound: Option<String>,
 }
 
-#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 #[expect(clippy::enum_variant_names)]
 pub enum Operation {
@@ -442,7 +436,7 @@ pub enum Operation {
     AddMultipliedTotal,
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/items.json");
 
     let items: BTreeMap<String, Item> =

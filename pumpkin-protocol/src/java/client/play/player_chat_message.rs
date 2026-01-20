@@ -32,7 +32,8 @@ pub struct CPlayerChatMessage {
 
 impl CPlayerChatMessage {
     #[expect(clippy::too_many_arguments)]
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         global_index: VarInt,
         sender: uuid::Uuid,
         index: VarInt,

@@ -31,7 +31,7 @@ impl PropertyCollectionData {
         self.fluid_names.push(fluid_name);
     }
 
-    pub fn from_mappings(variant_mappings: Vec<PropertyVariantMapping>) -> Self {
+    pub const fn from_mappings(variant_mappings: Vec<PropertyVariantMapping>) -> Self {
         Self {
             variant_mappings,
             fluid_names: Vec::new(),
@@ -57,7 +57,7 @@ impl ToTokens for PropertyStruct {
         let values_index = (0..self.values.len() as u16).collect::<Vec<_>>();
 
         let ident_values = self.values.iter().map(|value| {
-            let value_str = if value.chars().all(|c| c.is_numeric()) {
+            let value_str = if value.chars().all(char::is_numeric) {
                 format!("L{value}")
             } else {
                 value.clone()
@@ -69,7 +69,7 @@ impl ToTokens for PropertyStruct {
         let values_3 = ident_values.clone();
 
         let from_values = self.values.iter().map(|value| {
-            let value_str = if value.chars().all(|c| c.is_numeric()) {
+            let value_str = if value.chars().all(char::is_numeric) {
                 format!("L{value}")
             } else {
                 value.clone()
@@ -80,7 +80,7 @@ impl ToTokens for PropertyStruct {
             }
         });
         let to_values = self.values.iter().map(|value| {
-            let value_str = if value.chars().all(|c| c.is_numeric()) {
+            let value_str = if value.chars().all(char::is_numeric) {
                 format!("L{value}")
             } else {
                 value.clone()
@@ -330,15 +330,15 @@ pub struct Fluid {
     can_convert_to_source: bool,
 }
 
-fn default_flow_speed() -> u32 {
+const fn default_flow_speed() -> u32 {
     5 // Default to water's speed
 }
 
-fn default_flow_distance() -> u32 {
+const fn default_flow_distance() -> u32 {
     4 // Default to water's distance
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/fluids.json");
 
     let fluids: Vec<Fluid> =
@@ -512,12 +512,10 @@ pub(crate) fn build() -> TokenStream {
                 .entry(renamed_property.clone())
                 .or_insert_with(|| property.values.clone());
 
-            if expected_values != &property.values {
-                panic!(
-                    "Enum overlap for '{}' ({:?} vs {:?})",
-                    property.name, &property.values, expected_values
-                );
-            };
+            assert!(expected_values == &property.values, 
+                "Enum overlap for '{}' ({:?} vs {:?})",
+                property.name, &property.values, expected_values
+            );
 
             property_mapping.push(PropertyVariantMapping {
                 original_name: property.name.clone(),
@@ -591,8 +589,8 @@ pub(crate) fn build() -> TokenStream {
         });
     }
 
-    let fluid_props = fluid_properties.iter().map(|prop| prop.to_token_stream());
-    let properties = property_enums.values().map(|prop| prop.to_token_stream());
+    let fluid_props = fluid_properties.iter().map(quote::ToTokens::to_token_stream);
+    let properties = property_enums.values().map(quote::ToTokens::to_token_stream);
 
     quote! {
         use std::hash::{Hash, Hasher};

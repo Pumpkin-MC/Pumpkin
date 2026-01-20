@@ -76,7 +76,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
 }
 
 /// Encoder: Server -> Client
-/// Supports ZLib endecoding/compression
+/// Supports `ZLib` endecoding/compression
 /// Supports Aes128 Encryption
 pub struct UDPNetworkEncoder {
     // compression and compression threshold
@@ -90,16 +90,17 @@ impl Default for UDPNetworkEncoder {
 }
 
 impl UDPNetworkEncoder {
-    pub fn new() -> Self {
+    #[must_use] 
+    pub const fn new() -> Self {
         Self { compression: None }
     }
 
-    pub fn set_compression(&mut self, compression_info: (CompressionThreshold, CompressionLevel)) {
+    pub const fn set_compression(&mut self, compression_info: (CompressionThreshold, CompressionLevel)) {
         self.compression = Some(compression_info);
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
-    pub fn set_encryption(&mut self, _key: &[u8; 16]) {
+    pub const fn set_encryption(&mut self, _key: &[u8; 16]) {
         // if matches!(self.writer, EncryptionWriter::Encrypt(_)) {
         //     panic!("Cannot upgrade a stream that already has a cipher!");
         // }
@@ -128,7 +129,7 @@ impl UDPNetworkEncoder {
         // Gamepacket ID (10 bits) << 4 (offset by 2 bits for target + 2 bits for sender)
         // SubClient Sender ID (2 bits) << 2 (offset by 2 bits for target)
         // SubClient Target ID (2 bits)
-        let header_value: u32 = packet_id as u32
+        let header_value: u32 = u32::from(packet_id)
             | ((sub_client_sender as u32) << 10)
             | ((sub_client_target as u32) << 12);
 

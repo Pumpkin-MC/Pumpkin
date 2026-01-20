@@ -32,7 +32,7 @@ impl ServerPacket for SLoginCookieResponse {
         let payload_length = read.get_var_int()?;
         let length = payload_length.0 as usize;
         if length > MAX_COOKIE_LENGTH {
-            return Err(ReadingError::TooLarge("SLoginCookieResponse".to_string()));
+            return Err(ReadingError::TooLarge("SLoginCookieResponse".to_owned()));
         }
 
         let payload = read.read_boxed_slice(length)?;

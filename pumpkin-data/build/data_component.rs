@@ -4,7 +4,7 @@ use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use std::fs;
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/data_component.json");
 
     let data_component: BTreeMap<String, u8> =
@@ -22,7 +22,7 @@ pub(crate) fn build() -> TokenStream {
         let strip_name = raw_name
             .strip_prefix("minecraft:")
             .unwrap()
-            .replace("/", "_");
+            .replace('/', "_");
         let pascal_case = format_ident!("{}", strip_name.to_pascal_case());
 
         // Enum variant

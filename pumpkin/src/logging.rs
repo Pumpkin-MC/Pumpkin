@@ -236,7 +236,7 @@ impl ReadlineLogWrapper {
             .map_or_else(|_| None, |mut result| result.take())
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub(crate) fn return_readline(&self, rl: Editor<PumpkinCommandCompleter, FileHistory>) {
         if let Ok(mut result) = self.readline.lock() {
             let _ = result.insert(rl);
@@ -303,7 +303,7 @@ impl Hinter for PumpkinCommandCompleter {
             }
 
             if let Some(stripped) = first.strip_prefix(last_word) {
-                return Some(stripped.to_string());
+                return Some(stripped.to_owned());
             }
         }
         None

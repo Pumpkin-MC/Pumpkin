@@ -27,8 +27,9 @@ impl VarUInt {
     /// The maximum number of bytes a `VarUInt` can occupy.
     const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
-    /// Returns the exact number of bytes this VarUInt will write when
+    /// Returns the exact number of bytes this `VarUInt` will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
+    #[must_use] 
     pub fn written_size(&self) -> usize {
         (32 - self.0.leading_zeros() as usize).max(1).div_ceil(7)
     }
@@ -56,10 +57,10 @@ impl VarUInt {
             let byte = read.get_u8()?;
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarUInt(val));
+                return Ok(Self(val));
             }
         }
-        Err(ReadingError::TooLarge("VarUInt".to_string()))
+        Err(ReadingError::TooLarge("VarUInt".to_owned()))
     }
 }
 
@@ -69,17 +70,17 @@ impl VarUInt {
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.read_u8().await.map_err(|err| {
                 if i == 0 && matches!(err.kind(), ErrorKind::UnexpectedEof) {
-                    ReadingError::CleanEOF("VarInt".to_string())
+                    ReadingError::CleanEOF("VarInt".to_owned())
                 } else {
                     ReadingError::Incomplete(err.to_string())
                 }
             })?;
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarUInt(val));
+                return Ok(Self(val));
             }
         }
-        Err(ReadingError::TooLarge("VarUInt".to_string()))
+        Err(ReadingError::TooLarge("VarUInt".to_owned()))
     }
 
     pub async fn encode_async(
@@ -207,7 +208,7 @@ impl PacketRead for VarUInt {
             let byte = u8::read(reader)?;
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarUInt(val));
+                return Ok(Self(val));
             }
         }
         Err(Error::new(ErrorKind::InvalidData, ""))

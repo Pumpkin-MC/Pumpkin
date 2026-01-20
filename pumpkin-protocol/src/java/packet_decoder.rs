@@ -68,7 +68,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
 }
 
 /// Decoder: Client -> Server
-/// Supports ZLib decoding/decompression
+/// Supports `ZLib` decoding/decompression
 /// Supports Aes128 Encryption
 pub struct TCPNetworkDecoder<R: AsyncRead + Unpin> {
     reader: DecryptionReader<R>,
@@ -76,14 +76,14 @@ pub struct TCPNetworkDecoder<R: AsyncRead + Unpin> {
 }
 
 impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
-    pub fn new(reader: R) -> Self {
+    pub const fn new(reader: R) -> Self {
         Self {
             reader: DecryptionReader::None(reader),
             compression: None,
         }
     }
 
-    pub fn set_compression(&mut self, threshold: CompressionThreshold) {
+    pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
     }
 
@@ -107,7 +107,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         let packet_len = packet_len.0 as u64;
 
         if !(0..=MAX_PACKET_SIZE).contains(&packet_len) {
-            Err(PacketDecodeError::OutOfBounds)?
+            Err(PacketDecodeError::OutOfBounds)?;
         }
 
         let mut bounded_reader = (&mut self.reader).take(packet_len);
@@ -118,7 +118,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             let decompressed_length = decompressed_length.0 as usize;
 
             if !(0..=MAX_PACKET_DATA_SIZE).contains(&decompressed_length) {
-                Err(PacketDecodeError::TooLong)?
+                Err(PacketDecodeError::TooLong)?;
             }
 
             if decompressed_length > 0 {
@@ -126,7 +126,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             } else {
                 // Validate that we are not less than the compression threshold
                 if raw_packet_length > threshold as u64 {
-                    Err(PacketDecodeError::NotCompressed)?
+                    Err(PacketDecodeError::NotCompressed)?;
                 }
 
                 DecompressionReader::None(bounded_reader)

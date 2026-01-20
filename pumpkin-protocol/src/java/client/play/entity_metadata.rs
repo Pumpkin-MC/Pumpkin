@@ -14,7 +14,8 @@ pub struct CSetEntityMetadata {
 }
 
 impl CSetEntityMetadata {
-    pub fn new(entity_id: VarInt, metadata: Box<[u8]>) -> Self {
+    #[must_use] 
+    pub const fn new(entity_id: VarInt, metadata: Box<[u8]>) -> Self {
         Self {
             entity_id,
             metadata,
@@ -30,7 +31,7 @@ pub struct Metadata<T> {
 }
 
 impl<T> Metadata<T> {
-    pub fn new(index: u8, r#type: MetaDataType, value: T) -> Self {
+    pub const fn new(index: u8, r#type: MetaDataType, value: T) -> Self {
         Self {
             index,
             r#type: VarInt(r#type as i32),

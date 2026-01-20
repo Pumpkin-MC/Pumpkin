@@ -15,7 +15,8 @@ pub struct CTakeItemEntity {
 }
 
 impl CTakeItemEntity {
-    pub fn new(entity_id: VarInt, collector_entity_id: VarInt, stack_amount: VarInt) -> Self {
+    #[must_use] 
+    pub const fn new(entity_id: VarInt, collector_entity_id: VarInt, stack_amount: VarInt) -> Self {
         Self {
             entity_id,
             collector_entity_id,

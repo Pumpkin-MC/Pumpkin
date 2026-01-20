@@ -5,7 +5,7 @@ use quote::quote;
 
 use crate::array_to_tokenstream;
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/game_event.json");
 
     let game_events: Vec<String> =

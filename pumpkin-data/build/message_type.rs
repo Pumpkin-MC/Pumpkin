@@ -24,7 +24,7 @@ pub struct RawChatType {
 //     parameters: Vec<String>,
 // }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/message_type.json");
 
     let json: BTreeMap<String, RawChatType> =
@@ -32,7 +32,7 @@ pub(crate) fn build() -> TokenStream {
             .expect("Failed to parse message_type.json");
     let mut variants = TokenStream::new();
 
-    for (name, typee) in json.iter() {
+    for (name, typee) in &json {
         let i = typee.id as u8;
         let name = format_ident!("{}", name.to_uppercase());
         variants.extend([quote! {

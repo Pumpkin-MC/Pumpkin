@@ -75,7 +75,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
 }
 
 /// Decoder: Client -> Server
-/// Supports ZLib decoding/decompression
+/// Supports `ZLib` decoding/decompression
 /// Supports Aes128 Encryption
 pub struct UDPNetworkDecoder {
     compression: Option<CompressionThreshold>,
@@ -88,16 +88,17 @@ impl Default for UDPNetworkDecoder {
 }
 
 impl UDPNetworkDecoder {
-    pub fn new() -> Self {
+    #[must_use] 
+    pub const fn new() -> Self {
         Self { compression: None }
     }
 
-    pub fn set_compression(&mut self, threshold: CompressionThreshold) {
+    pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
-    pub fn set_encryption(&mut self, _key: &[u8; 16]) {
+    pub const fn set_encryption(&mut self, _key: &[u8; 16]) {
         // if matches!(self.reader, DecryptionReader::Decrypt(_)) {
         //     panic!("Cannot upgrade a stream that already has a cipher!");
         // }
@@ -161,7 +162,7 @@ impl UDPNetworkDecoder {
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
         Ok(RawPacket {
-            id: gamepacket_id as i32,
+            id: i32::from(gamepacket_id),
             payload: payload.into(),
         })
     }

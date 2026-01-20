@@ -18,7 +18,8 @@ pub struct CExplosion {
 }
 
 impl CExplosion {
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         center: Vector3<f64>,
         radius: f32,
         block_count: i32,

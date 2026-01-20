@@ -134,7 +134,7 @@ impl<T: PacketRead, const N: usize> PacketRead for [T; N] {
 impl PacketRead for String {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let vec = Vec::read(reader)?;
-        Ok(unsafe { String::from_utf8_unchecked(vec) })
+        Ok(unsafe { Self::from_utf8_unchecked(vec) })
     }
 }
 
@@ -143,7 +143,7 @@ impl PacketRead for Vec<u8> {
         #[expect(clippy::uninit_vec)]
         {
             let len = VarUInt::read(reader)?.0 as _;
-            let mut buf = Vec::with_capacity(len);
+            let mut buf = Self::with_capacity(len);
             unsafe {
                 buf.set_len(len);
             }
@@ -178,7 +178,7 @@ impl PacketRead for SocketAddr {
             4 => {
                 let ip = u32::read_be(reader)?;
                 let port = u16::read_be(reader)?;
-                Ok(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from(ip), port)))
+                Ok(Self::V4(SocketAddrV4::new(Ipv4Addr::from(ip), port)))
             }
             6 => {
                 // Addr family
@@ -192,7 +192,7 @@ impl PacketRead for SocketAddr {
 
                 let scope_id = u32::read_be(reader)?;
 
-                Ok(SocketAddr::V6(SocketAddrV6::new(
+                Ok(Self::V6(SocketAddrV6::new(
                     ip, port, flowinfo, scope_id,
                 )))
             }
@@ -205,7 +205,7 @@ impl PacketRead for Uuid {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let mut bytes = [0; 16];
         reader.read_exact(&mut bytes)?;
-        Ok(Uuid::from_bytes(bytes))
+        Ok(Self::from_bytes(bytes))
     }
 }
 

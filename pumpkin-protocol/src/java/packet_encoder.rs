@@ -77,7 +77,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
 }
 
 /// Encoder: Server -> Client
-/// Supports ZLib endecoding/compression
+/// Supports `ZLib` endecoding/compression
 /// Supports Aes128 Encryption
 pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
     writer: EncryptionWriter<W>,
@@ -86,14 +86,14 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
 }
 
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
-    pub fn new(writer: W) -> Self {
+    pub const fn new(writer: W) -> Self {
         Self {
             writer: EncryptionWriter::None(writer),
             compression: None,
         }
     }
 
-    pub fn set_compression(&mut self, compression_info: (CompressionThreshold, CompressionLevel)) {
+    pub const fn set_compression(&mut self, compression_info: (CompressionThreshold, CompressionLevel)) {
         self.compression = Some(compression_info);
     }
 
@@ -114,20 +114,20 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     ///
     /// **Uncompressed:**
     /// |-----------------------|
-    /// | Packet Length (VarInt)|
+    /// | Packet Length (`VarInt`)|
     /// |-----------------------|
-    /// | Packet ID (VarInt)    |
+    /// | Packet ID (`VarInt`)    |
     /// |-----------------------|
     /// | Data (Byte Array)     |
     /// |-----------------------|
     ///
     /// **Compressed:**
     /// |------------------------|
-    /// | Packet Length (VarInt) |
+    /// | Packet Length (`VarInt`) |
     /// |------------------------|
-    /// | Data Length (VarInt)   |
+    /// | Data Length (`VarInt`)   |
     /// |------------------------|
-    /// | Packet ID (VarInt)     |
+    /// | Packet ID (`VarInt`)     |
     /// |------------------------|
     /// | Data (Byte Array)      |
     /// |------------------------|

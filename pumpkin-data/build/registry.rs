@@ -4,7 +4,7 @@ use quote::quote;
 use serde_json::Value;
 use std::fs;
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/synced_registries.json");
 
     let json_str = fs::read_to_string("../assets/synced_registries.json")
@@ -20,7 +20,7 @@ pub(crate) fn build() -> TokenStream {
 
     if let Some(chat_type) = chat_type {
         chat_type.insert(
-            "raw".to_string(),
+            "raw".to_owned(),
             serde_json::json!({
                 "chat": {
                     "translation_key": "%s",

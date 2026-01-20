@@ -16,13 +16,14 @@ pub struct CMultiBlockUpdate {
 }
 
 impl CMultiBlockUpdate {
+    #[must_use] 
     pub fn new(positions_to_state_ids: Vec<(BlockPos, u16)>) -> Self {
         let chunk_section = chunk_section_from_pos(&positions_to_state_ids[0].0);
         Self {
             chunk_section,
             positions_to_state_ids: positions_to_state_ids
                 .into_iter()
-                .map(|(position, state_id)| (pack_local_chunk_section(&position), state_id as i32))
+                .map(|(position, state_id)| (pack_local_chunk_section(&position), i32::from(state_id)))
                 .collect(),
         }
     }

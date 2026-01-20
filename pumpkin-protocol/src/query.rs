@@ -45,7 +45,7 @@ impl RawQueryPacket {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct SHandshake {
     pub session_id: i32,
 }
@@ -58,7 +58,7 @@ impl SHandshake {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct SStatusRequest {
     pub session_id: i32,
     pub challenge_token: i32,

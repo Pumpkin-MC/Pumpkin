@@ -33,7 +33,7 @@ impl ServerPacket for SConfigCookieResponse {
 
         let payload_length = read.get_var_int()?.0 as usize;
         if payload_length > MAX_COOKIE_LENGTH {
-            return Err(ReadingError::TooLarge("SConfigCookieResponse".to_string()));
+            return Err(ReadingError::TooLarge("SConfigCookieResponse".to_owned()));
         }
 
         let payload = read.read_boxed_slice(payload_length)?;

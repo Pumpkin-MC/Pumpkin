@@ -10,7 +10,8 @@ pub struct CTickingState {
 }
 
 impl CTickingState {
-    pub fn new(tick_rate: f32, is_frozen: bool) -> Self {
+    #[must_use] 
+    pub const fn new(tick_rate: f32, is_frozen: bool) -> Self {
         Self {
             tick_rate,
             is_frozen,

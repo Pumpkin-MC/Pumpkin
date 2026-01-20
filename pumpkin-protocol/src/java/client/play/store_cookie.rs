@@ -13,7 +13,8 @@ pub struct CStoreCookie<'a> {
 }
 
 impl<'a> CStoreCookie<'a> {
-    pub fn new(key: &'a ResourceLocation, payload: &'a [u8]) -> Self {
+    #[must_use] 
+    pub const fn new(key: &'a ResourceLocation, payload: &'a [u8]) -> Self {
         Self { key, payload }
     }
 }

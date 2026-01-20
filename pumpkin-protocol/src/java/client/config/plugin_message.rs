@@ -13,7 +13,8 @@ pub struct CPluginMessage<'a> {
 }
 
 impl<'a> CPluginMessage<'a> {
-    pub fn new(channel: &'a str, data: &'a [u8]) -> Self {
+    #[must_use] 
+    pub const fn new(channel: &'a str, data: &'a [u8]) -> Self {
         Self { channel, data }
     }
 }

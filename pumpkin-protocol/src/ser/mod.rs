@@ -130,7 +130,7 @@ impl<R: Read> NetworkReadExt for R {
 
         if return_buf.len() > bound {
             return Err(ReadingError::TooLarge(
-                "Read remaining too long".to_string(),
+                "Read remaining too long".to_owned(),
             ));
         }
 
@@ -160,7 +160,7 @@ impl<R: Read> NetworkReadExt for R {
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError> {
         let size = self.get_var_uint()?.0 as usize;
         if size > bound {
-            return Err(ReadingError::TooLarge("string".to_string()));
+            return Err(ReadingError::TooLarge("string".to_owned()));
         }
 
         let data = self.read_boxed_slice(size)?;
@@ -173,12 +173,12 @@ impl<R: Read> NetworkReadExt for R {
 
     fn get_resource_location(&mut self) -> Result<ResourceLocation, ReadingError> {
         let resource_location = self.get_string_bounded(ResourceLocation::MAX_SIZE.get())?;
-        match resource_location.split_once(":") {
+        match resource_location.split_once(':') {
             Some((namespace, path)) => Ok(ResourceLocation {
-                namespace: namespace.to_string(),
-                path: path.to_string(),
+                namespace: namespace.to_owned(),
+                path: path.to_owned(),
             }),
-            None => Err(ReadingError::Incomplete("ResourceLocation".to_string())),
+            None => Err(ReadingError::Incomplete("ResourceLocation".to_owned())),
         }
     }
 

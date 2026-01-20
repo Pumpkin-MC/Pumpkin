@@ -74,7 +74,7 @@ pub struct PlayerConfig {
 impl Default for PlayerConfig {
     fn default() -> Self {
         Self {
-            locale: "en_us".to_string(),
+            locale: "en_us".to_owned(),
             view_distance: NonZeroU8::new(8).unwrap(),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,

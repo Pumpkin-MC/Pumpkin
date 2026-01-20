@@ -4,7 +4,7 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/chunk_status.json");
 
     let chunk_status: Vec<String> =
@@ -13,7 +13,7 @@ pub(crate) fn build() -> TokenStream {
     let variants: Vec<TokenStream> = chunk_status
         .into_iter()
         .map(|status| {
-            let full_name = format!("minecraft:{}", status);
+            let full_name = format!("minecraft:{status}");
             let name = format_ident!("{}", status.to_pascal_case());
 
             quote! {

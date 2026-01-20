@@ -141,7 +141,7 @@ impl BedrockClient {
                 &CResourcePackStackPacket::new(
                     false,
                     VarUInt(0),
-                    CURRENT_BEDROCK_MC_VERSION.to_string(),
+                    CURRENT_BEDROCK_MC_VERSION.to_owned(),
                     Experiments {
                         names_size: 0,
                         experiments_ever_toggled: false,

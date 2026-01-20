@@ -7,7 +7,7 @@ use crate::{
     serial::PacketWrite,
 };
 
-/// Bedrocks Writes and Reads BlockPos types in Packets differently
+/// Bedrocks Writes and Reads `BlockPos` types in Packets differently
 pub struct NetworkPos(pub BlockPos);
 
 impl NetworkPos {

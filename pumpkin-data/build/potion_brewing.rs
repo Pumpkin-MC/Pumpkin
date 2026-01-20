@@ -71,7 +71,7 @@ impl Recipes {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/potion_brewing.json");
 
     let json: PotionBrewing =
@@ -81,7 +81,7 @@ pub(crate) fn build() -> TokenStream {
     let item_recipes_tokens: Vec<TokenStream> = json
         .item_recipes
         .into_iter()
-        .map(|recipe| recipe.get_tokens_item())
+        .map(Recipes::get_tokens_item)
         .collect();
     let item_len = item_recipes_tokens.len();
 
@@ -89,7 +89,7 @@ pub(crate) fn build() -> TokenStream {
     let potion_recipes_tokens: Vec<TokenStream> = json
         .potion_recipes
         .into_iter()
-        .map(|recipe| recipe.get_tokens_potion())
+        .map(Recipes::get_tokens_potion)
         .collect();
     let potion_len = potion_recipes_tokens.len();
 

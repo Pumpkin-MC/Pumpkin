@@ -163,57 +163,68 @@ impl NbtCompound {
 
     #[must_use]
     pub fn get_short(&self, name: &str) -> Option<i16> {
-        self.get(name).and_then(|tag| tag.extract_short())
+        let tag = self.get(name)?;
+        tag.extract_short()
     }
 
     #[must_use]
     pub fn get_int(&self, name: &str) -> Option<i32> {
-        self.get(name).and_then(|tag| tag.extract_int())
+        let tag = self.get(name)?;
+        tag.extract_int()
     }
 
     #[must_use]
     pub fn get_long(&self, name: &str) -> Option<i64> {
-        self.get(name).and_then(|tag| tag.extract_long())
+        let tag = self.get(name)?;
+        tag.extract_long()
     }
 
     #[must_use]
     pub fn get_float(&self, name: &str) -> Option<f32> {
-        self.get(name).and_then(|tag| tag.extract_float())
+        let tag = self.get(name)?;
+        tag.extract_float()
     }
 
     #[must_use]
     pub fn get_double(&self, name: &str) -> Option<f64> {
-        self.get(name).and_then(|tag| tag.extract_double())
+        let tag = self.get(name)?;
+        tag.extract_double()
     }
 
     #[must_use]
     pub fn get_bool(&self, name: &str) -> Option<bool> {
-        self.get(name).and_then(|tag| tag.extract_bool())
+        let tag = self.get(name)?;
+        tag.extract_bool()
     }
 
     #[must_use]
     pub fn get_string(&self, name: &str) -> Option<&str> {
-        self.get(name).and_then(|tag| tag.extract_string())
+        let tag = self.get(name)?;
+        tag.extract_string()
     }
 
     #[must_use]
     pub fn get_list(&self, name: &str) -> Option<&[NbtTag]> {
-        self.get(name).and_then(|tag| tag.extract_list())
+        let tag = self.get(name)?;
+        tag.extract_list()
     }
 
     #[must_use]
-    pub fn get_compound(&self, name: &str) -> Option<&NbtCompound> {
-        self.get(name).and_then(|tag| tag.extract_compound())
+    pub fn get_compound(&self, name: &str) -> Option<&Self> {
+        let tag = self.get(name)?;
+        tag.extract_compound()
     }
 
     #[must_use]
     pub fn get_int_array(&self, name: &str) -> Option<&[i32]> {
-        self.get(name).and_then(|tag| tag.extract_int_array())
+        let tag = self.get(name)?;
+        tag.extract_int_array()
     }
 
     #[must_use]
     pub fn get_long_array(&self, name: &str) -> Option<&[i64]> {
-        self.get(name).and_then(|tag| tag.extract_long_array())
+        let tag = self.get(name)?;
+        tag.extract_long_array()
     }
 }
 
@@ -225,7 +236,7 @@ impl From<Nbt> for NbtCompound {
 
 impl FromIterator<(String, NbtTag)> for NbtCompound {
     fn from_iter<T: IntoIterator<Item = (String, NbtTag)>>(iter: T) -> Self {
-        let mut compound = NbtCompound::new();
+        let mut compound = Self::new();
         for (key, value) in iter {
             compound.put(&key, value);
         }
@@ -244,13 +255,13 @@ impl IntoIterator for NbtCompound {
 
 impl Extend<(String, NbtTag)> for NbtCompound {
     fn extend<T: IntoIterator<Item = (String, NbtTag)>>(&mut self, iter: T) {
-        self.child_tags.extend(iter)
+        self.child_tags.extend(iter);
     }
 }
 
 // Rust's AsRef is currently not reflexive so we need to implement it manually
-impl AsRef<NbtCompound> for NbtCompound {
-    fn as_ref(&self) -> &NbtCompound {
+impl AsRef<Self> for NbtCompound {
+    fn as_ref(&self) -> &Self {
         self
     }
 }
@@ -295,11 +306,11 @@ impl<'de> Deserialize<'de> for NbtCompound {
 
 impl From<NbtCompound> for NbtTag {
     fn from(value: NbtCompound) -> Self {
-        NbtTag::Compound(value)
+        Self::Compound(value)
     }
 }
 
-/// SNBT display implementation for NbtCompound
+/// SNBT display implementation for `NbtCompound`
 impl Display for NbtCompound {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("{")?;
@@ -316,16 +327,16 @@ impl Display for NbtCompound {
 impl Display for NbtTag {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            NbtTag::End => Ok(()),
-            NbtTag::Byte(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::Short(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::Int(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::Long(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::Float(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::Double(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::String(value) => f.write_fmt(format_args!("\"{value}\"")),
-            NbtTag::Compound(value) => f.write_fmt(format_args!("{value}")),
-            NbtTag::ByteArray(value) => {
+            Self::End => Ok(()),
+            Self::Byte(value) => f.write_fmt(format_args!("{value}")),
+            Self::Short(value) => f.write_fmt(format_args!("{value}")),
+            Self::Int(value) => f.write_fmt(format_args!("{value}")),
+            Self::Long(value) => f.write_fmt(format_args!("{value}")),
+            Self::Float(value) => f.write_fmt(format_args!("{value}")),
+            Self::Double(value) => f.write_fmt(format_args!("{value}")),
+            Self::String(value) => f.write_fmt(format_args!("\"{value}\"")),
+            Self::Compound(value) => f.write_fmt(format_args!("{value}")),
+            Self::ByteArray(value) => {
                 f.write_str("[B; ")?;
                 for (i, byte) in value.iter().enumerate() {
                     if i > 0 {
@@ -335,7 +346,7 @@ impl Display for NbtTag {
                 }
                 f.write_str("]")
             }
-            NbtTag::List(value) => {
+            Self::List(value) => {
                 f.write_str("[")?;
                 for (i, tag) in value.iter().enumerate() {
                     if i > 0 {
@@ -345,7 +356,7 @@ impl Display for NbtTag {
                 }
                 f.write_str("]")
             }
-            NbtTag::IntArray(value) => {
+            Self::IntArray(value) => {
                 f.write_str("[I; ")?;
                 for (i, int) in value.iter().enumerate() {
                     if i > 0 {
@@ -355,7 +366,7 @@ impl Display for NbtTag {
                 }
                 f.write_str("]")
             }
-            NbtTag::LongArray(value) => {
+            Self::LongArray(value) => {
                 f.write_str("[L; ")?;
                 for (i, long) in value.iter().enumerate() {
                     if i > 0 {

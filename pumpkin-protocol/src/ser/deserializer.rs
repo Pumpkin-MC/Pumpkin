@@ -17,7 +17,7 @@ impl de::Error for ReadingError {
 }
 
 impl<R: Read> Deserializer<R> {
-    pub fn new(read: R) -> Self {
+    pub const fn new(read: R) -> Self {
         Self { inner: read }
     }
 }

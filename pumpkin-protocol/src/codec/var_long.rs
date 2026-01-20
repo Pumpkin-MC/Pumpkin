@@ -46,34 +46,34 @@ impl VarLong {
             let byte = read.get_u8()?;
             val |= (i64::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarLong(val));
+                return Ok(Self(val));
             }
         }
-        Err(ReadingError::TooLarge("VarLong".to_string()))
+        Err(ReadingError::TooLarge("VarLong".to_owned()))
     }
 }
 
 impl From<i64> for VarLong {
     fn from(value: i64) -> Self {
-        VarLong(value)
+        Self(value)
     }
 }
 
 impl From<u32> for VarLong {
     fn from(value: u32) -> Self {
-        VarLong(value as i64)
+        Self(i64::from(value))
     }
 }
 
 impl From<u8> for VarLong {
     fn from(value: u8) -> Self {
-        VarLong(value as i64)
+        Self(i64::from(value))
     }
 }
 
 impl From<usize> for VarLong {
     fn from(value: usize) -> Self {
-        VarLong(value as i64)
+        Self(value as i64)
     }
 }
 

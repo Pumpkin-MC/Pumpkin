@@ -27,7 +27,7 @@ impl ServerPacket for SInteract {
         let entity_id = read.get_var_int()?;
         let r#type = read.get_var_int()?;
         let action = ActionType::try_from(r#type.0)
-            .map_err(|_| ReadingError::Message("invalid action type".to_string()))?;
+            .map_err(|_| ReadingError::Message("invalid action type".to_owned()))?;
         let target_position: Option<Vector3<f32>> = match action {
             ActionType::Interact => None,
             ActionType::Attack => None,

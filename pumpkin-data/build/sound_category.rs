@@ -6,7 +6,7 @@ use quote::{format_ident, quote};
 
 use crate::array_to_tokenstream;
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/sound_category.json");
 
     let sound_categories: Vec<String> =

@@ -15,7 +15,7 @@ pub struct BlockState {
     pub collision_shapes: &'static [u16],
     pub outline_shapes: &'static [u16],
     pub opacity: u8,
-    /// u16::MAX is used as None
+    /// `u16::MAX` is used as None
     pub block_entity_type: u16,
 }
 
@@ -36,35 +36,43 @@ pub enum PistonBehavior {
 }
 
 impl BlockState {
+    #[must_use] 
     pub const fn is_air(&self) -> bool {
         self.state_flags & IS_AIR != 0
     }
 
+    #[must_use] 
     pub const fn burnable(&self) -> bool {
         self.state_flags & BURNABLE != 0
     }
 
+    #[must_use] 
     pub const fn tool_required(&self) -> bool {
         self.state_flags & TOOL_REQUIRED != 0
     }
 
+    #[must_use] 
     pub const fn sided_transparency(&self) -> bool {
         self.state_flags & SIDED_TRANSPARENCY != 0
     }
 
+    #[must_use] 
     pub const fn replaceable(&self) -> bool {
         self.state_flags & REPLACEABLE != 0
     }
 
+    #[must_use] 
     pub const fn is_liquid(&self) -> bool {
         self.state_flags & IS_LIQUID != 0
     }
 
     /// Returns the legacy value for whether a block is solid.
+    #[must_use] 
     pub const fn is_solid(&self) -> bool {
         self.state_flags & IS_SOLID != 0
     }
 
+    #[must_use] 
     pub const fn is_full_cube(&self) -> bool {
         self.state_flags & IS_FULL_CUBE != 0
     }
@@ -72,15 +80,18 @@ impl BlockState {
     /// Returns whether the block is solid.
     /// Solid blocks conduct redstone and block redstone wire.
     /// Non-solid blocks don't allow redstone wire on top to propagate their signal downwards in java.
+    #[must_use] 
     pub const fn is_solid_block(&self) -> bool {
         self.state_flags & IS_SOLID_BLOCK != 0
     }
 
+    #[must_use] 
     pub const fn has_random_ticks(&self) -> bool {
         self.state_flags & HAS_RANDOM_TICKS != 0
     }
 
-    ///isSideSolidFullSquare() in Java!
+    ///`isSideSolidFullSquare()` in Java!
+    #[must_use] 
     pub const fn is_side_solid(&self, side: BlockDirection) -> bool {
         match side {
             BlockDirection::Down => self.side_flags & DOWN_SIDE_SOLID != 0,
@@ -94,6 +105,7 @@ impl BlockState {
 
     ///isSideSolid(..., Direction.UP, SideShapeType.CENTER) in Java!
     ///Only valid for UP and DOWN sides
+    #[must_use] 
     pub const fn is_center_solid(&self, side: BlockDirection) -> bool {
         match side {
             BlockDirection::Down => self.side_flags & DOWN_CENTER_SOLID != 0,
@@ -102,6 +114,7 @@ impl BlockState {
         }
     }
 
+    #[must_use] 
     pub fn get_block_collision_shapes(&self) -> Vec<CollisionShape> {
         self.collision_shapes
             .iter()
@@ -109,6 +122,7 @@ impl BlockState {
             .collect()
     }
 
+    #[must_use] 
     pub fn get_block_outline_shapes(&self) -> Option<Vec<CollisionShape>> {
         let mut shapes: Vec<CollisionShape> = self
             .outline_shapes

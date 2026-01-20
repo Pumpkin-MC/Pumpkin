@@ -10,7 +10,8 @@ pub struct CRemovePlayerInfo<'a> {
 }
 
 impl<'a> CRemovePlayerInfo<'a> {
-    pub fn new(players: &'a [uuid::Uuid]) -> Self {
+    #[must_use] 
+    pub const fn new(players: &'a [uuid::Uuid]) -> Self {
         Self { players }
     }
 }

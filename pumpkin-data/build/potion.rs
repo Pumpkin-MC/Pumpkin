@@ -49,7 +49,7 @@ impl Effect {
     }
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/potion.json");
 
     let potions: BTreeMap<String, Potion> =
@@ -59,11 +59,11 @@ pub(crate) fn build() -> TokenStream {
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
 
-    for (name, potion) in potions.into_iter() {
+    for (name, potion) in potions {
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let id = potion.id;
         let slots = potion.effects;
-        let slots = slots.iter().map(|slot| slot.to_tokens());
+        let slots = slots.iter().map(Effect::to_tokens);
 
         variants.extend([quote! {
             pub const #format_name: Self = Self {

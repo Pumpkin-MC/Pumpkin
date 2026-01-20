@@ -15,7 +15,8 @@ pub struct CUpdateMobEffect {
 }
 
 impl CUpdateMobEffect {
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         entity_id: VarInt,
         effect_id: VarInt,
         amplifier: VarInt,

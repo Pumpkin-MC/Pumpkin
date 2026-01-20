@@ -31,6 +31,7 @@ impl PlayerScreenHandler {
         EquipmentSlot::FEET,
     ];
 
+    #[must_use] 
     pub fn is_in_hotbar(slot: u8) -> bool {
         (36..=45).contains(&slot)
     }
@@ -47,7 +48,7 @@ impl PlayerScreenHandler {
         let crafting_inventory: Arc<dyn RecipeInputInventory> =
             Arc::new(CraftingInventory::new(2, 2));
 
-        let mut player_screen_handler = PlayerScreenHandler {
+        let mut player_screen_handler = Self {
             behaviour: ScreenHandlerBehaviour::new(sync_id, window_type),
             crafting_inventory: crafting_inventory.clone(),
         };

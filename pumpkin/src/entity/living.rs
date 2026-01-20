@@ -746,7 +746,7 @@ impl LivingEntity {
         }
     }
 
-    fn get_fall_sound(distance: i32) -> Sound {
+    const fn get_fall_sound(distance: i32) -> Sound {
         if distance > 4 {
             Sound::EntityGenericBigFall
         } else {

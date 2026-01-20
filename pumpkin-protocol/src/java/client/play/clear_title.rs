@@ -9,6 +9,7 @@ pub struct CClearTitle {
 }
 
 impl CClearTitle {
+    #[must_use] 
     pub const fn new(reset: bool) -> Self {
         Self { reset }
     }

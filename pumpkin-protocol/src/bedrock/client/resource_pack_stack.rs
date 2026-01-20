@@ -6,7 +6,7 @@ use crate::{
 
 #[derive(PacketWrite)]
 #[packet(7)]
-/// https://mojang.github.io/bedrock-protocol-docs/html/ResourcePackStackPacket.html
+/// <https://mojang.github.io/bedrock-protocol-docs/html/ResourcePackStackPacket.html>
 pub struct CResourcePackStackPacket {
     resource_pack_required: bool,
     addons_list_size: VarUInt,
@@ -17,7 +17,8 @@ pub struct CResourcePackStackPacket {
 }
 
 impl CResourcePackStackPacket {
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         resource_pack_required: bool,
         addons_list_size: VarUInt,
         game_version: String,

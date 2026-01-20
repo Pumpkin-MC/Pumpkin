@@ -12,7 +12,7 @@ struct Attributes {
     default_value: f64,
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/attributes.json");
 
     let attributes: BTreeMap<String, Attributes> =

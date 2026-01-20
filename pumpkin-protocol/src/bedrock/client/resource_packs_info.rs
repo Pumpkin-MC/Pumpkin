@@ -4,7 +4,7 @@ use crate::serial::PacketWrite;
 use pumpkin_macros::packet;
 
 #[packet(6)]
-/// https://mojang.github.io/bedrock-protocol-docs/html/ResourcePacksInfoPacket.html
+/// <https://mojang.github.io/bedrock-protocol-docs/html/ResourcePacksInfoPacket.html>
 pub struct CResourcePacksInfo {
     resource_pack_required: bool,
     has_addon_packs: bool,
@@ -45,7 +45,8 @@ pub struct ResourcePack {
 }
 
 impl CResourcePacksInfo {
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         resource_pack_required: bool,
         has_addon_packs: bool,
         has_scripts: bool,

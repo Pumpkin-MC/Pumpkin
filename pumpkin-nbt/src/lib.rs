@@ -59,13 +59,13 @@ pub enum Error {
 
 impl ser::Error for Error {
     fn custom<T: Display>(msg: T) -> Self {
-        Error::SerdeError(msg.to_string())
+        Self::SerdeError(msg.to_string())
     }
 }
 
 impl de::Error for Error {
     fn custom<T: Display>(msg: T) -> Self {
-        Error::SerdeError(msg.to_string())
+        Self::SerdeError(msg.to_string())
     }
 }
 
@@ -76,45 +76,47 @@ pub struct Nbt {
 }
 
 impl Nbt {
-    pub fn new(name: String, tag: NbtCompound) -> Self {
-        Nbt {
+    #[must_use] 
+    pub const fn new(name: String, tag: NbtCompound) -> Self {
+        Self {
             name,
             root_tag: tag,
         }
     }
 
-    pub fn read<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error> {
+    pub fn read<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Self, Error> {
         let tag_type_id = reader.get_u8_be()?;
 
         if tag_type_id != COMPOUND_ID {
             return Err(Error::NoRootCompound(tag_type_id));
         }
 
-        Ok(Nbt {
+        Ok(Self {
             name: get_nbt_string(reader)?,
             root_tag: NbtCompound::deserialize_content(reader)?,
         })
     }
 
     /// Reads an NBT tag that doesn't contain the name of the root `Compound`.
-    pub fn read_unnamed<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Nbt, Error> {
+    pub fn read_unnamed<R: Read + Seek>(reader: &mut NbtReadHelper<R>) -> Result<Self, Error> {
         let tag_type_id = reader.get_u8_be()?;
 
         if tag_type_id != COMPOUND_ID {
             return Err(Error::NoRootCompound(tag_type_id));
         }
 
-        Ok(Nbt {
+        Ok(Self {
             name: String::new(),
             root_tag: NbtCompound::deserialize_content(reader)?,
         })
     }
 
+    #[must_use] 
     pub fn write(&self) -> Bytes {
         let mut bytes = Vec::new();
         let mut writer = WriteAdaptor::new(&mut bytes);
         writer.write_u8_be(COMPOUND_ID).unwrap();
-        NbtTag::String(self.name.to_string())
+        NbtTag::String(self.name.clone())
             .serialize_data(&mut writer)
             .unwrap();
         self.root_tag.serialize_content(&mut writer).unwrap();
@@ -128,6 +130,7 @@ impl Nbt {
     }
 
     /// Writes an NBT tag without a root `Compound` name.
+    #[must_use] 
     pub fn write_unnamed(&self) -> Bytes {
         let mut bytes = Vec::new();
         let mut writer = WriteAdaptor::new(&mut bytes);
@@ -154,14 +157,14 @@ impl Deref for Nbt {
 
 impl From<NbtCompound> for Nbt {
     fn from(value: NbtCompound) -> Self {
-        Nbt::new(String::new(), value)
+        Self::new(String::new(), value)
     }
 }
 
 impl<T> AsRef<T> for Nbt
 where
     T: ?Sized,
-    <Nbt as Deref>::Target: AsRef<T>,
+    <Self as Deref>::Target: AsRef<T>,
 {
     fn as_ref(&self) -> &T {
         self.deref().as_ref()

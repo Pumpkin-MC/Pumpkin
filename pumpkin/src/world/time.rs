@@ -24,7 +24,7 @@ impl LevelTime {
         }
     }
 
-    pub fn tick_time(&mut self, advance_time: bool, advance_weather: bool) {
+    pub const fn tick_time(&mut self, advance_time: bool, advance_weather: bool) {
         self.world_age += 1;
         if advance_weather {
             self.rain_time += 1;
@@ -67,7 +67,7 @@ impl LevelTime {
     }
 
     #[must_use]
-    pub fn is_night(&self) -> bool {
+    pub const fn is_night(&self) -> bool {
         (self.time_of_day % 24000) >= 12000 && (self.time_of_day % 24000) <= 23999
     }
 }

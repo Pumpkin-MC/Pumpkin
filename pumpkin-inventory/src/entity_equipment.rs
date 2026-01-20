@@ -17,6 +17,7 @@ impl Default for EntityEquipment {
 }
 
 impl EntityEquipment {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             equipment: HashMap::new(),
@@ -32,6 +33,7 @@ impl EntityEquipment {
             .clone()
     }
 
+    #[must_use] 
     pub fn get(&self, slot: &EquipmentSlot) -> Arc<Mutex<ItemStack>> {
         self.equipment
             .get(slot)

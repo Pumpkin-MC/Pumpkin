@@ -10,7 +10,8 @@ pub struct CPlayServerLinks<'a> {
 }
 
 impl<'a> CPlayServerLinks<'a> {
-    pub fn new(links: &'a [Link<'a>]) -> Self {
+    #[must_use] 
+    pub const fn new(links: &'a [Link<'a>]) -> Self {
         Self { links }
     }
 }

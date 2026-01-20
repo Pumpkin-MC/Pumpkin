@@ -11,7 +11,8 @@ pub struct CRemoveMobEffect {
 }
 
 impl CRemoveMobEffect {
-    pub fn new(entity_id: VarInt, effect_id: VarInt) -> Self {
+    #[must_use] 
+    pub const fn new(entity_id: VarInt, effect_id: VarInt) -> Self {
         Self {
             entity_id,
             effect_id,

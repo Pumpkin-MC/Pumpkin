@@ -3,7 +3,7 @@ use std::fs;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/tracked_data.json");
 
     let mut handlers: Vec<(String, u8)> =

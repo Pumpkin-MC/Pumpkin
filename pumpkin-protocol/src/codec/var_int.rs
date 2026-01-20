@@ -28,9 +28,10 @@ impl VarInt {
     /// The maximum number of bytes a `VarInt` can occupy.
     const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
-    /// Returns the exact number of bytes this VarInt will write when
+    /// Returns the exact number of bytes this `VarInt` will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
-    pub fn written_size(&self) -> usize {
+    #[must_use] 
+    pub const fn written_size(&self) -> usize {
         match self.0 {
             0 => 1,
             n => (31 - n.leading_zeros() as usize) / 7 + 1,
@@ -57,10 +58,10 @@ impl VarInt {
             let byte = read.get_u8()?;
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarInt(val));
+                return Ok(Self(val));
             }
         }
-        Err(ReadingError::TooLarge("VarInt".to_string()))
+        Err(ReadingError::TooLarge("VarInt".to_owned()))
     }
 }
 
@@ -70,17 +71,17 @@ impl VarInt {
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.read_u8().await.map_err(|err| {
                 if i == 0 && matches!(err.kind(), ErrorKind::UnexpectedEof) {
-                    ReadingError::CleanEOF("VarInt".to_string())
+                    ReadingError::CleanEOF("VarInt".to_owned())
                 } else {
                     ReadingError::Incomplete(err.to_string())
                 }
             })?;
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarInt(val));
+                return Ok(Self(val));
             }
         }
-        Err(ReadingError::TooLarge("VarInt".to_string()))
+        Err(ReadingError::TooLarge("VarInt".to_owned()))
     }
 
     pub async fn encode_async(
@@ -220,7 +221,7 @@ impl PacketRead for VarInt {
             let byte = u8::read(read)?;
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(VarInt((val >> 1) ^ (val << 31)));
+                return Ok(Self((val >> 1) ^ (val << 31)));
             }
         }
         Err(Error::new(ErrorKind::InvalidData, ""))

@@ -11,6 +11,6 @@ pub struct SPlayerPositionRotation {
     pub position: Vector3<f64>,
     pub yaw: f32,
     pub pitch: f32,
-    /// bit 0: [FLAG_ON_GROUND], bit 1: [FLAG_IN_WALL]
+    /// bit 0: [`FLAG_ON_GROUND`], bit 1: [`FLAG_IN_WALL`]
     pub collision: u8,
 }

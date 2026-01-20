@@ -276,8 +276,8 @@ impl ResultSlot {
         let input_width = bottom_x + 1 - top_x;
         let input_height = bottom_y + 1 - top_y;
 
-        if let Some(cached_recipe) = self.recipe_cache.load() {
-            if let Some(result) = recipe_matches(
+        if let Some(cached_recipe) = self.recipe_cache.load()
+            && let Some(result) = recipe_matches(
                 cached_recipe,
                 input_height,
                 input_width,
@@ -290,7 +290,6 @@ impl ResultSlot {
             {
                 return Some((result, cached_recipe));
             }
-        }
 
         for recipe in RECIPES_CRAFTING {
             if let Some(result) = recipe_matches(
@@ -316,8 +315,7 @@ impl ResultSlot {
         let result = self
             .match_recipe()
             .await
-            .map(|x| ItemStack::from(x.0))
-            .unwrap_or(ItemStack::EMPTY.clone());
+            .map_or(ItemStack::EMPTY.clone(), |x| ItemStack::from(x.0));
         *self.result.lock().await = result.clone();
         result
     }
@@ -490,7 +488,7 @@ impl CraftingTableScreenHandler {
         let crafting_inventory: Arc<dyn RecipeInputInventory> =
             Arc::new(CraftingInventory::new(3, 3));
 
-        let mut crafting_table_handler = CraftingTableScreenHandler {
+        let mut crafting_table_handler = Self {
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(WindowType::Crafting)),
             crafting_inventory: crafting_inventory.clone(),
         };

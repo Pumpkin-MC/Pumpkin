@@ -15,7 +15,8 @@ pub struct CSetBlockDestroyStage {
 }
 
 impl CSetBlockDestroyStage {
-    pub fn new(entity_id: VarInt, location: BlockPos, destroy_stage: i8) -> Self {
+    #[must_use] 
+    pub const fn new(entity_id: VarInt, location: BlockPos, destroy_stage: i8) -> Self {
         Self {
             entity_id,
             location,

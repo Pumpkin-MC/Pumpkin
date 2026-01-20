@@ -11,7 +11,7 @@ pub struct Packets {
     clientbound: BTreeMap<String, Vec<String>>,
 }
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/packets.json");
 
     let packets: Packets =
@@ -35,7 +35,7 @@ pub(crate) fn build() -> TokenStream {
     )
 }
 
-pub(crate) fn parse_packets(packets: BTreeMap<String, Vec<String>>) -> proc_macro2::TokenStream {
+pub fn parse_packets(packets: BTreeMap<String, Vec<String>>) -> proc_macro2::TokenStream {
     let mut consts = TokenStream::new();
 
     for packet in packets {
@@ -43,7 +43,7 @@ pub(crate) fn parse_packets(packets: BTreeMap<String, Vec<String>>) -> proc_macr
 
         for (id, packet_name) in packet.1.iter().enumerate() {
             let packet_id = id as i32;
-            let packet_name = packet_name.replace("/", "_");
+            let packet_name = packet_name.replace('/', "_");
             let name = format!("{phase}_{packet_name}").to_uppercase();
             let name = format_ident!("{}", name);
             consts.extend([quote! {

@@ -13,7 +13,8 @@ pub struct CSetBorderLerpSize {
 }
 
 impl CSetBorderLerpSize {
-    pub fn new(old_diameter: f64, new_diameter: f64, speed: VarLong) -> Self {
+    #[must_use] 
+    pub const fn new(old_diameter: f64, new_diameter: f64, speed: VarLong) -> Self {
         Self {
             old_diameter,
             new_diameter,

@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use pumpkin_util::DoublePerlinNoiseParametersCodec;
 use quote::{format_ident, quote};
 
-pub(crate) fn build() -> TokenStream {
+pub fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/noise_parameters.json");
 
     let json: BTreeMap<String, DoublePerlinNoiseParametersCodec> =
@@ -13,7 +13,7 @@ pub(crate) fn build() -> TokenStream {
     let mut variants = TokenStream::new();
     let mut match_variants = TokenStream::new();
 
-    for (name, parameter) in json.iter() {
+    for (name, parameter) in &json {
         let raw_name = format!("minecraft:{name}");
         let simple_id = name;
         let name = format_ident!("{}", name.to_uppercase());

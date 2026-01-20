@@ -25,7 +25,7 @@ impl ServerPacket for SHandShake {
             next_state: read
                 .get_var_int()?
                 .try_into()
-                .map_err(|_| ReadingError::Message("Invalid status".to_string()))?,
+                .map_err(|_| ReadingError::Message("Invalid status".to_owned()))?,
         })
     }
 }

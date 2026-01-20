@@ -60,7 +60,7 @@ impl PlayerInventory {
     pub async fn off_hand_item(&self) -> Arc<Mutex<ItemStack>> {
         let slot = self
             .equipment_slots
-            .get(&PlayerInventory::OFF_HAND_SLOT)
+            .get(&Self::OFF_HAND_SLOT)
             .unwrap();
         self.entity_equipment.lock().await.get(slot)
     }
@@ -68,7 +68,7 @@ impl PlayerInventory {
     pub async fn swap_item(&self) -> (ItemStack, ItemStack) {
         let slot = self
             .equipment_slots
-            .get(&PlayerInventory::OFF_HAND_SLOT)
+            .get(&Self::OFF_HAND_SLOT)
             .unwrap();
         let mut equipment = self.entity_equipment.lock().await;
         let binding = self.held_item();
@@ -78,7 +78,8 @@ impl PlayerInventory {
         (main_hand_item.clone(), off_hand_item)
     }
 
-    pub fn is_valid_hotbar_index(slot: usize) -> bool {
+    #[must_use] 
+    pub const fn is_valid_hotbar_index(slot: usize) -> bool {
         slot < Self::HOTBAR_SIZE
     }
 
@@ -144,7 +145,7 @@ impl PlayerInventory {
                 .await,
             stack,
         ) {
-            self.get_selected_slot() as i16
+            i16::from(self.get_selected_slot())
         } else if self.can_stack_add_more(
             &*self.get_stack(Self::OFF_HAND_SLOT).await.lock().await,
             stack,
@@ -298,7 +299,7 @@ impl PlayerInventory {
             {
                 player
                     .enqueue_slot_set_packet(&CSetPlayerInventory::new(
-                        (room_for_stack as i32).into(),
+                        i32::from(room_for_stack).into(),
                         &self
                             .get_stack(room_for_stack as usize)
                             .await
@@ -316,7 +317,7 @@ impl PlayerInventory {
 impl Clearable for PlayerInventory {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for item in self.main_inventory.iter() {
+            for item in &self.main_inventory {
                 *item.lock().await = ItemStack::EMPTY.clone();
             }
 
@@ -332,7 +333,7 @@ impl Inventory for PlayerInventory {
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for item in self.main_inventory.iter() {
+            for item in &self.main_inventory {
                 if !item.lock().await.is_empty() {
                     return false;
                 }
