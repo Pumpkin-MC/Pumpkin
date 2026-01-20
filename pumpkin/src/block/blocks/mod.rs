@@ -29,6 +29,7 @@ pub mod furnace;
 pub mod glass_panes;
 pub mod glazed_terracotta;
 pub mod grindstone;
+pub mod hay;
 pub mod iron_bars;
 pub mod jukebox;
 pub mod ladder;

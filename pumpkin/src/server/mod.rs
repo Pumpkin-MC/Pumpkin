@@ -14,6 +14,7 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::registry::Registry;
 use pumpkin_world::dimension::into_level;
 
 use crate::command::CommandSender;
@@ -21,7 +22,6 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::CChangeDifficulty;
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
-use pumpkin_registry::Registry;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;

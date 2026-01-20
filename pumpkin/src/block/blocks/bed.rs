@@ -15,6 +15,7 @@ use pumpkin_world::block::entities::bed::BedBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
+use crate::block::OnLandedUponArgs;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
@@ -83,6 +84,16 @@ impl BlockBehaviour for BedBlock {
                         .replaceable();
             }
             false
+        })
+    }
+
+    fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(living) = args.entity.get_living_entity() {
+                living
+                    .handle_fall_damage(args.fall_distance * 0.5, 1.0)
+                    .await;
+            }
         })
     }
 

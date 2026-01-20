@@ -4,7 +4,7 @@ use pumpkin_util::{
         LootCondition, LootFunctionNumberProvider, LootFunctionTypes, LootPoolEntry,
         LootPoolEntryTypes, LootTable,
     },
-    random::{RandomGenerator, xoroshiro128::Xoroshiro},
+    random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
@@ -23,32 +23,56 @@ pub trait LootTableExt {
 impl LootTableExt for LootTable {
     fn get_loot(&self, params: LootContextParameters) -> Vec<ItemStack> {
         let mut stacks = Vec::new();
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
 
         if let Some(pools) = self.pools {
             for pool in pools {
                 if let Some(conditions) = pool.conditions
                     && !conditions.iter().all(|cond| cond.is_fulfilled(&params))
                 {
-                    return stacks;
+                    continue;
                 }
 
-                // TODO
-                let rolls = pool
-                    .rolls
-                    .get(&mut RandomGenerator::Xoroshiro(Xoroshiro::from_seed(123)))
-                    .round()
-                    + pool.bonus_rolls.floor(); // TODO: multiply by luck
+                let rolls = pool.rolls.get(&mut random).round() as i32;
 
-                for _ in 0..(rolls as i32) {
+                for _ in 0..rolls {
+                    let mut total_weight = 0;
+                    let mut valid_entries = Vec::new();
+
                     for entry in pool.entries {
-                        if let Some(loot) = entry.get_loot(&params) {
-                            stacks.extend(loot);
+                        if entry
+                            .conditions
+                            .as_ref()
+                            .is_none_or(|c| c.iter().all(|cond| cond.is_fulfilled(&params)))
+                        {
+                            let w = 1; // TODO: weight
+                            total_weight += w;
+                            valid_entries.push((entry, w));
+                        }
+                    }
+
+                    if total_weight == 0 || valid_entries.is_empty() {
+                        continue;
+                    }
+
+                    let mut r = random.next_bounded_i32(total_weight);
+
+                    for (entry, weight) in valid_entries {
+                        r -= weight;
+                        if r < 0 {
+                            if let Some(loot) = entry.get_loot(&params) {
+                                for stack in loot {
+                                    if stack.item_count > 0 {
+                                        stacks.push(stack);
+                                    }
+                                }
+                            }
+                            break;
                         }
                     }
                 }
             }
         }
-
         stacks
     }
 }
@@ -145,12 +169,14 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
             Self::LootTable => todo!(),
             Self::Dynamic => todo!(),
             Self::Tag => todo!(),
-            Self::Alternatives(alternative_entry) => alternative_entry
-                .children
-                .iter()
-                .filter_map(|entry| entry.get_loot(params))
-                .flatten()
-                .collect(),
+            Self::Alternatives(alternative_entry) => {
+                for entry in alternative_entry.children {
+                    if let Some(loot) = entry.get_loot(params) {
+                        return loot;
+                    }
+                }
+                Vec::new()
+            }
             Self::Sequence => todo!(),
             Self::Group => todo!(),
         }
@@ -209,7 +235,7 @@ impl LootFunctionNumberProviderExt for LootFunctionNumberProvider {
     fn generate(&self) -> f32 {
         match self {
             Self::Constant { value } => *value,
-            Self::Uniform { min, max } => rand::rng().random_range(*min..=*max),
+            Self::Uniform { min, max } => rand::random::<f32>() * (max - min) + min,
             Self::Binomial { n, p } => (0..n.floor() as u32).fold(0.0, |c, _| {
                 if rand::rng().random_bool(f64::from(*p)) {
                     c + 1.0

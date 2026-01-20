@@ -1,6 +1,6 @@
 use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::ai::goal::GoalFuture;
-use crate::entity::ai::goal::track_target_goal::TrackTargetGoal;
+use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;

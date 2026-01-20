@@ -109,28 +109,31 @@ impl CommandDispatcher {
                 .await
             {
                 Err(InvalidConsumption(s)) => {
-                    log::trace!(
+                    log::debug!(
                         "Error while parsing command \"{cmd}\": {s:?} was consumed, but couldn't be parsed"
                     );
                     return Vec::new();
                 }
                 Err(InvalidRequirement) => {
-                    log::trace!(
+                    log::debug!(
                         "Error while parsing command \"{cmd}\": a requirement that was expected was not met."
                     );
                     return Vec::new();
                 }
                 Err(PermissionDenied) => {
-                    log::trace!("Permission denied for command \"{cmd}\"");
+                    log::debug!("Permission denied for command \"{cmd}\"");
                     return Vec::new();
                 }
                 Err(CommandFailed(_)) => {
+                    log::debug!("Command failed");
                     return Vec::new();
                 }
                 Ok(Some(new_suggestions)) => {
                     suggestions.extend(new_suggestions);
                 }
-                Ok(None) => {}
+                Ok(None) => {
+                    log::debug!("Command none");
+                }
             }
         }
 

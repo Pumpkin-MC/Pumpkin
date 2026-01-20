@@ -170,7 +170,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 compressor
-                    .flush()
+                    .shutdown()
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 debug_assert!(!compressed_buf.is_empty());

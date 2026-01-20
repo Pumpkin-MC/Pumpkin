@@ -7,7 +7,6 @@ members = [
     "pumpkin-inventory",
     "pumpkin-macros/",
     "pumpkin-protocol/",
-    "pumpkin-registry/",
     "pumpkin-world",
     "pumpkin/",
     "pumpkin-data",
@@ -61,7 +60,7 @@ base64 = "0.22.1"
 bitflags = "2.10.0"
 cesu8 = "1.1"
 cfb8 = "0.8"
-colored = "3.0"
+colored = "3.1"
 console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = "1.9.0"
 criterion = { version = "0.8", default-features = false }
@@ -94,14 +93,13 @@ pumpkin-inventory = { path = "pumpkin-inventory" }
 pumpkin-macros = { path = "pumpkin-macros" }
 pumpkin-nbt = { path = "pumpkin-nbt" }
 pumpkin-protocol = { path = "pumpkin-protocol" }
-pumpkin-registry = { path = "pumpkin-registry" }
 pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
 rand = { git = "https://github.com/rust-random/rand"}
-rsa = "=0.10.0-rc.10"
+rsa = "=0.10.0-rc.12"
 rustc-hash = "2.1.1"
-rustyline-async = "0.4.7"
+rustyline = "17.0.2"
 ruzstd = "0.8.2"
 serde_json5 = "0.2.1"
 sha1 = "=0.11.0-rc.3"

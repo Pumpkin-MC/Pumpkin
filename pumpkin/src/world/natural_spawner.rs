@@ -567,6 +567,7 @@ pub async fn is_valid_spawn_position_for_type(
             &EntityDimensions {
                 width: entity_type.dimension[0],
                 height: entity_type.dimension[1],
+                eye_height: entity_type.eye_height,
             },
         ))
         .await
