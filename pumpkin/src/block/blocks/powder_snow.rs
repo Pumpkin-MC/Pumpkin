@@ -10,7 +10,7 @@ impl BlockBehaviour for PowderSnowBlock {
     fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if let Some(living) = args.entity.get_living_entity()
-                && !(args.fall_distance < 4.0)
+                && (args.fall_distance.partial_cmp(&4.0) != Some(std::cmp::Ordering::Less))
             {
                 let sound = if args.fall_distance < 7.0 {
                     Sound::EntityGenericSmallFall
