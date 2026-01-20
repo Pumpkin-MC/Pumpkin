@@ -61,7 +61,8 @@ impl CommandExecutor for AddExecuter {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let mut namespace = non_autocomplete_consumer()
-                .find_arg_default_name(args)?.to_owned();
+                .find_arg_default_name(args)?
+                .to_owned();
             if !namespace.contains(':') {
                 namespace = format!("minecraft:{namespace}");
             }
@@ -110,7 +111,8 @@ impl CommandExecutor for GetExecuter {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let namespace = autocomplete_consumer()
-                .find_arg_default_name(args)?.to_owned();
+                .find_arg_default_name(args)?
+                .to_owned();
 
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
                 handle_bossbar_error(
@@ -249,7 +251,8 @@ impl CommandExecutor for RemoveExecuter {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let namespace = autocomplete_consumer()
-                .find_arg_default_name(args)?.to_owned();
+                .find_arg_default_name(args)?
+                .to_owned();
 
             let Some(bossbar) = server.bossbars.lock().await.get_bossbar(&namespace) else {
                 handle_bossbar_error(

@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties as _, EnumVariants as _, Integer0To3, NetherWartLikeProperties},
+    block_properties::{
+        BlockProperties as _, EnumVariants as _, Integer0To3, NetherWartLikeProperties,
+    },
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;

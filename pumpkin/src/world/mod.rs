@@ -1257,13 +1257,7 @@ impl World {
                 yaw: 0.0,
                 level_settings,
                 level_id: String::new(),
-<<<<<<< HEAD
-                level_name: "Pumpkin world".to_owned(),
-||||||| 60d65f1f
-                level_name: "Pumpkin world".to_string(),
-=======
                 level_name: "World".to_string(),
->>>>>>> upstream/master
                 premium_world_template_id: String::new(),
                 is_trial: false,
                 rewind_history_size: VarInt(0),
@@ -1318,63 +1312,7 @@ impl World {
                 player_tick: VarULong(0),
             })
             .await;
-<<<<<<< HEAD
-
-        client
-            .write_game_packet_to_set(
-                &CUpdateAttributes {
-                    runtime_id: VarULong(runtime_id),
-                    attributes: vec![Attribute {
-                        min_value: 0.0,
-                        max_value: f32::MAX,
-                        current_value: 0.1,
-                        default_min_value: 0.0,
-                        default_max_value: f32::MAX,
-                        default_value: 0.1,
-                        name: "minecraft:movement".to_owned(),
-                        modifiers_list_size: VarUInt(0),
-                    }],
-                    player_tick: VarULong(0),
-                },
-                &mut frame_set,
-            )
-            .await;
-
-        client
-            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
-            .await;
-        client.send_frame_set(frame_set, 0x84).await;
-
-||||||| 60d65f1f
-
-        client
-            .write_game_packet_to_set(
-                &CUpdateAttributes {
-                    runtime_id: VarULong(runtime_id),
-                    attributes: vec![Attribute {
-                        min_value: 0.0,
-                        max_value: f32::MAX,
-                        current_value: 0.1,
-                        default_min_value: 0.0,
-                        default_max_value: f32::MAX,
-                        default_value: 0.1,
-                        name: "minecraft:movement".to_string(),
-                        modifiers_list_size: VarUInt(0),
-                    }],
-                    player_tick: VarULong(0),
-                },
-                &mut frame_set,
-            )
-            .await;
-
-        client
-            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
-            .await;
-        client.send_frame_set(frame_set, 0x84).await;
-
-=======
         player.send_abilities_update().await;
->>>>>>> upstream/master
         {
             let mut abilities = player.abilities.lock().await;
             abilities.set_for_gamemode(player.gamemode.load());

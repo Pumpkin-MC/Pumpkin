@@ -11,7 +11,7 @@ pub struct Op {
 }
 
 impl Op {
-    #[must_use] 
+    #[must_use]
     pub const fn new(
         uuid: Uuid,
         name: String,

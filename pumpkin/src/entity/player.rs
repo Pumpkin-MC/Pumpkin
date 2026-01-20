@@ -1691,7 +1691,8 @@ impl Player {
 
         let velocity = Vector3::new(
             (-yaw_sin * pitch_cos).mul_add(0.3, horizontal_offset.cos() * l),
-            (rand::random::<f64>() - rand::random::<f64>()).mul_add(0.1, (-pitch_sin).mul_add(0.3, 0.1)),
+            (rand::random::<f64>() - rand::random::<f64>())
+                .mul_add(0.1, (-pitch_sin).mul_add(0.3, 0.1)),
             (yaw_cos * pitch_cos).mul_add(0.3, horizontal_offset.sin() * l),
         );
 

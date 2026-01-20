@@ -10,7 +10,9 @@ use crate::{
 };
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties as _, ComposterLikeProperties, EnumVariants as _, Integer0To8},
+    block_properties::{
+        BlockProperties as _, ComposterLikeProperties, EnumVariants as _, Integer0To8,
+    },
     composter_increase_chance::get_composter_increase_chance_from_item_id,
     entity::EntityType,
     item::Item,

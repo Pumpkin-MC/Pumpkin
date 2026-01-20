@@ -7,7 +7,8 @@ use std::sync::atomic::Ordering;
 use crate::command::{
     CommandExecutor, CommandResult, CommandSender,
     args::{
-        ConsumedArgs, FindArg as _, bounded_num::BoundedNumArgumentConsumer, time::TimeArgumentConsumer,
+        ConsumedArgs, FindArg as _, bounded_num::BoundedNumArgumentConsumer,
+        time::TimeArgumentConsumer,
     },
     dispatcher::CommandError,
     tree::{

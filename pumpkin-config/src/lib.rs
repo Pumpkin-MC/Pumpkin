@@ -146,14 +146,14 @@ impl Default for BasicConfiguration {
 }
 
 impl BasicConfiguration {
-    #[must_use] 
+    #[must_use]
     pub fn get_world_path(&self) -> PathBuf {
         PathBuf::from(&self.default_level_name)
     }
 }
 
 pub trait LoadConfiguration {
-    #[must_use] 
+    #[must_use]
     fn load(config_dir: &Path) -> Self
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
@@ -211,7 +211,7 @@ pub trait LoadConfiguration {
         config
     }
 
-    #[must_use] 
+    #[must_use]
     fn merge_with_default_toml(parsed_toml: toml::Value) -> (Self, bool)
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
@@ -221,8 +221,7 @@ pub trait LoadConfiguration {
         let default_toml_value =
             toml::Value::try_from(default_config).expect("Failed to parse default config");
 
-        let (merged_value, changed) =
-            Self::merge_toml_values(default_toml_value, parsed_toml);
+        let (merged_value, changed) = Self::merge_toml_values(default_toml_value, parsed_toml);
 
         let config = merged_value
             .try_into()
@@ -231,7 +230,7 @@ pub trait LoadConfiguration {
         (config, changed)
     }
 
-    #[must_use] 
+    #[must_use]
     fn merge_toml_values(base: toml::Value, overlay: toml::Value) -> (toml::Value, bool) {
         match (base, overlay) {
             (toml::Value::Table(mut base_table), toml::Value::Table(overlay_table)) => {

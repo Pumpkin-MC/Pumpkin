@@ -730,11 +730,6 @@ impl LivingEntity {
         }
     }
 
-<<<<<<< HEAD
-    const fn get_fall_sound(distance: i32) -> Sound {
-||||||| 60d65f1f
-    fn get_fall_sound(distance: i32) -> Sound {
-=======
     pub async fn handle_fall_damage(&self, fall_distance: f32, damage_per_distance: f32) {
         // TODO: use attributes
         let safe_fall_distance = 3.0;
@@ -752,7 +747,6 @@ impl LivingEntity {
     }
 
     fn get_fall_sound(distance: i32) -> Sound {
->>>>>>> upstream/master
         if distance > 4 {
             Sound::EntityGenericBigFall
         } else {

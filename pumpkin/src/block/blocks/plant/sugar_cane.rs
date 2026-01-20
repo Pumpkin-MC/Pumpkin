@@ -2,7 +2,9 @@ use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable as _;
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties as _, CactusLikeProperties, EnumVariants as _, Integer0To15},
+    block_properties::{
+        BlockProperties as _, CactusLikeProperties, EnumVariants as _, Integer0To15,
+    },
     tag,
 };
 use pumpkin_macros::pumpkin_block;

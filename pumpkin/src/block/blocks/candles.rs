@@ -1,7 +1,9 @@
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     BlockDirection,
-    block_properties::{BlockProperties as _, CandleLikeProperties, EnumVariants as _, Integer1To4},
+    block_properties::{
+        BlockProperties as _, CandleLikeProperties, EnumVariants as _, Integer1To4,
+    },
     entity::EntityPose,
     tag::{RegistryKey, get_tag_values},
 };

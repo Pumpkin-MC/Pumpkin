@@ -1,4 +1,3 @@
-// Not warn event sending macros
 #![allow(unused_labels)]
 
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
@@ -78,8 +77,6 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
 
         if advanced_config.logging.color {
             // We are technically logging to a file-like object.
-            config.set_write_log_enable_colors(true);
-        } else {
             for level in Level::iter() {
                 config.set_level_color(level, None);
             }
@@ -156,7 +153,10 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         None
     };
 
-    assert!(LOGGER_IMPL.set(logger).is_ok(), "Failed to set logger. already initialized");
+    assert!(
+        LOGGER_IMPL.set(logger).is_ok(),
+        "Failed to set logger. already initialized"
+    );
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);

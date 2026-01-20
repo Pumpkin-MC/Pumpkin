@@ -12,7 +12,9 @@ use pumpkin_world::{
 
 use crate::world::World;
 
-use super::{HorizontalFacingRailExt as _, Rail, RailElevation, RailProperties, StraightRailShapeExt as _};
+use super::{
+    HorizontalFacingRailExt as _, Rail, RailElevation, RailProperties, StraightRailShapeExt as _,
+};
 
 pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &BlockPos) -> bool {
     if !can_place_rail_at(world, pos).await {
