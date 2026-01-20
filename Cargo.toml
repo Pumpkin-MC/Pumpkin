@@ -141,7 +141,6 @@ verbose_file_reads = "warn"
 use_debug = "warn"
 unwrap_used = "warn"
 unwrap_in_result = "warn"
-unused_trait_names = "warn"
 unused_result_ok = "warn"
 
 # Promote specific lints to deny
