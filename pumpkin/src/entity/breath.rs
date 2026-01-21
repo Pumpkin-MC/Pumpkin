@@ -1,5 +1,6 @@
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::fluid::Fluid;
@@ -108,8 +109,19 @@ impl BreathManager {
         let world = player.world();
         let (fluid, state) = world.get_fluid_and_fluid_state(&bp).await;
 
-        if fluid.id != Fluid::WATER.id && fluid.id != Fluid::FLOWING_WATER.id {
-            return false;
+        let is_water_fluid = fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id;
+
+        if !is_water_fluid {
+            let block_here = world.get_block(&bp).await;
+
+            let is_water_plant = block_here == &Block::SEAGRASS
+                || block_here == &Block::TALL_SEAGRASS
+                || block_here == &Block::KELP
+                || block_here == &Block::KELP_PLANT;
+
+            if !is_water_plant {
+                return false;
+            }
         }
 
         let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
@@ -148,7 +160,7 @@ impl BreathManager {
             .await;
     }
 
-    pub async fn reset_air_supply(&self, player: &Player) {
+    pub async fn reset(&self, player: &Player) {
         self.air_supply.store(300, Ordering::Relaxed);
         self.send_air_supply(player).await;
         self.drowning_tick.store(0, Ordering::Relaxed);
