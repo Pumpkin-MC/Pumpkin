@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block,
+    Block, BlockDirection,
     block_properties::{BlockProperties, WallTorchLikeProperties},
     entity::EntityType,
     world::WorldEvent,
@@ -8,7 +8,10 @@ use pumpkin_world::{BlockStateId, world::BlockFlags};
 
 use crate::{
     block::{BlockBehaviour, BlockFuture, BlockMetadata, OnPlaceArgs, PlacedArgs},
-    entity::{Entity, passive::snow_golem::SnowGolemEntity},
+    entity::{
+        Entity,
+        passive::{iron_golem::IronGolemEntity, snow_golem::SnowGolemEntity},
+    },
 };
 
 pub struct CarvedPumpkinBlock;
@@ -68,6 +71,47 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                 );
                 let golem = SnowGolemEntity::make(entity).await;
                 args.world.spawn_entity(golem).await;
+                return;
+            }
+
+            if upper == &Block::IRON_BLOCK && lower == &Block::IRON_BLOCK {
+                for dir in [BlockDirection::North, BlockDirection::West] {
+                    let opposite = dir.opposite();
+                    let arm1 = down_pos.offset(dir.to_offset());
+                    let arm2 = down_pos.offset(opposite.to_offset());
+
+                    if args.world.get_block(&arm1).await == &Block::IRON_BLOCK
+                        && args.world.get_block(&arm2).await == &Block::IRON_BLOCK
+                    {
+                        let pattern = [*args.position, down_pos, down_pos.down(), arm1, arm2];
+
+                        for p in pattern {
+                            args.world
+                                .set_block_state(
+                                    &p,
+                                    Block::AIR.default_state.id,
+                                    BlockFlags::NOTIFY_LISTENERS,
+                                )
+                                .await;
+                            args.world
+                                .sync_world_event(
+                                    WorldEvent::BlockBroken,
+                                    p,
+                                    Block::IRON_BLOCK.default_state.id.into(),
+                                )
+                                .await;
+                        }
+
+                        let entity = Entity::new(
+                            args.world.clone(),
+                            down_pos.down().to_centered_f64(),
+                            &EntityType::IRON_GOLEM,
+                        );
+                        let golem = IronGolemEntity::make(entity).await;
+                        args.world.spawn_entity(golem).await;
+                        return;
+                    }
+                }
             }
         })
     }

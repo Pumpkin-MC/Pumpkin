@@ -16,7 +16,7 @@ use crate::{
             creeper::CreeperEntity, drowned::DrownedEntity, zombie::ZombieEntity,
             zombie_villager::ZombieVillagerEntity,
         },
-        passive::{snow_golem::SnowGolemEntity, wolf::WolfEntity},
+        passive::{iron_golem::IronGolemEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity},
     },
     world::World,
 };
@@ -35,6 +35,7 @@ pub async fn from_type(
         id if id == EntityType::ZOMBIE_VILLAGER.id => ZombieVillagerEntity::make(entity).await,
         id if id == EntityType::CREEPER.id => CreeperEntity::make(entity).await,
         id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::make(entity).await,
+        id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::make(entity).await,
         id if id == EntityType::WOLF.id => WolfEntity::make(entity).await,
         id if id == EntityType::WITHER.id => WitherEntity::make(entity).await,
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
