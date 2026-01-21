@@ -1573,9 +1573,10 @@ impl Player {
             }
         }
 
-        // Reset air supply on death
+        // Reset air supply & drowning ticks on death
         self.breath_manager.air_supply.store(300, Ordering::Relaxed);
-        self.breath_manager.sync_air(self, 300).await;
+        self.breath_manager.send_air_supply(self).await;
+        self.breath_manager.drowning_tick.store(0, Ordering::Relaxed);
 
         self.client
             .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
