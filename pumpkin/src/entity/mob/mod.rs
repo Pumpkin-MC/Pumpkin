@@ -21,6 +21,7 @@ pub mod creeper;
 pub mod drowned;
 pub mod skeleton;
 pub mod zombie;
+pub mod zombie_villager;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
@@ -74,22 +75,22 @@ impl MobEntity {
     }
 
     async fn set_mob_flag(&self, flag: u8, value: bool) {
-        let index = flag;
-        let mut b = self.mob_flags.load(Ordering::Relaxed);
-        if value {
-            b |= index;
-        } else {
-            b &= !index;
+        let old_b = self.mob_flags.load(Ordering::Relaxed);
+
+        let new_b = if value { old_b | flag } else { old_b & !flag };
+
+        if new_b != old_b {
+            self.mob_flags.store(new_b, Ordering::Relaxed);
+
+            self.living_entity
+                .entity
+                .send_meta_data(&[Metadata::new(
+                    TrackedData::DATA_MOB_FLAGS,
+                    MetaDataType::Byte,
+                    new_b,
+                )])
+                .await;
         }
-        self.mob_flags.store(b, Ordering::Relaxed);
-        self.living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_MOB_FLAGS,
-                MetaDataType::Byte,
-                b,
-            )])
-            .await;
     }
 }
 

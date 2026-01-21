@@ -53,6 +53,7 @@ pub mod torches;
 pub mod trapdoor;
 pub mod vine;
 pub mod walls;
+pub mod wither_skull;
 
 pub mod banners;
 pub mod shulker_box;

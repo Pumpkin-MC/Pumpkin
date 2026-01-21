@@ -1,7 +1,6 @@
 use std::{
     collections::BTreeMap,
     io::ErrorKind,
-    ops::{AddAssign, SubAssign},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -162,62 +161,60 @@ where
 {
     type Data = Arc<RwLock<S::Data>>;
 
-    // Changed: Return BoxFuture<()>
     fn watch_chunks<'a>(
         &'a self,
         folder: &'a LevelFolder,
         chunks: &'a [Vector2<i32>],
     ) -> BoxFuture<'a, ()> {
+        let paths: Vec<_> = chunks
+            .iter()
+            .map(|chunk| P::file_path(folder, &S::get_chunk_key(chunk)))
+            .collect();
+
         Box::pin(async move {
-            // It is intentional that regions are watched multiple times (once per chunk)
             let mut watchers = self.watchers.write().await;
-            for chunk in chunks {
-                let key = S::get_chunk_key(chunk);
-                let map_key = P::file_path(folder, &key);
-                match watchers.entry(map_key) {
-                    std::collections::btree_map::Entry::Vacant(vacant) => {
-                        let _ = vacant.insert(1);
-                    }
-                    std::collections::btree_map::Entry::Occupied(mut occupied) => {
-                        occupied.get_mut().add_assign(1);
-                    }
-                }
+            for path in paths {
+                watchers
+                    .entry(path)
+                    .and_modify(|count| *count += 1)
+                    .or_insert(1);
             }
         })
     }
 
-    // Changed: Return BoxFuture<()>
     fn unwatch_chunks<'a>(
         &'a self,
         folder: &'a LevelFolder,
         chunks: &'a [Vector2<i32>],
     ) -> BoxFuture<'a, ()> {
+        let paths: Vec<_> = chunks
+            .iter()
+            .map(|chunk| P::file_path(folder, &S::get_chunk_key(chunk)))
+            .collect();
         Box::pin(async move {
             let mut watchers = self.watchers.write().await;
-            for chunk in chunks {
-                let key = S::get_chunk_key(chunk);
-                let map_key = P::file_path(folder, &key);
-                match watchers.entry(map_key) {
-                    std::collections::btree_map::Entry::Vacant(_vacant) => {}
-                    std::collections::btree_map::Entry::Occupied(mut occupied) => {
-                        occupied.get_mut().sub_assign(1);
-                        if occupied.get().is_zero() {
-                            occupied.remove_entry();
-                        }
+
+            for path in paths {
+                if let std::collections::btree_map::Entry::Occupied(mut occupied) =
+                    watchers.entry(path)
+                {
+                    let count = occupied.get_mut();
+                    *count = count.saturating_sub(1);
+
+                    if *count == 0 {
+                        occupied.remove();
                     }
                 }
             }
         })
     }
 
-    // Changed: Return BoxFuture<()>
     fn clear_watched_chunks(&self) -> BoxFuture<'_, ()> {
         Box::pin(async move {
             self.watchers.write().await.clear();
         })
     }
 
-    // Changed: Return BoxFuture<()>
     fn fetch_chunks<'a>(
         &'a self,
         folder: &'a LevelFolder,
@@ -284,7 +281,6 @@ where
         })
     }
 
-    // Changed: Return BoxFuture<Result<(), ChunkWritingError>>
     fn save_chunks<'a>(
         &'a self,
         folder: &'a LevelFolder,
@@ -374,8 +370,6 @@ where
                         // Decrement strong count
                         drop(chunk_serializer);
 
-                        // If there are still no watchers, drop from the locks
-                        let mut locks = self.file_locks.write().await;
 
                         if self
                             .watchers
@@ -384,6 +378,8 @@ where
                             .get(&path)
                             .is_none_or(|count| count.is_zero())
                         {
+                            let mut locks = self.file_locks.write().await;
+
                             let can_remove = if let Some(loader) = locks.get(&path) {
                                 loader.can_remove().await
                             } else {
@@ -410,7 +406,6 @@ where
         })
     }
 
-    // Changed: Return BoxFuture<()>
     fn clean_up_log(&self) -> BoxFuture<'_, ()> {
         Box::pin(async move {
             let locks = self.file_locks.read().await;
@@ -418,11 +413,10 @@ where
         })
     }
 
-    // Changed: Return BoxFuture<()>
     fn block_and_await_ongoing_tasks(&self) -> BoxFuture<'_, ()> {
         Box::pin(async move {
             //we need to block any other operation
-            let serializer_cache = self.file_locks.write().await;
+            let serializer_cache = self.file_locks.read().await;
 
             // Acquire a write lock on all entries to verify they are complete
             let tasks = serializer_cache

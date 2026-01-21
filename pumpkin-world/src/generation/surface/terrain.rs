@@ -152,12 +152,12 @@ impl SurfaceTerrainBuilder {
             if surface_y <= elevation_y {
                 for y in (chunk.bottom_y() as i32..=elevation_y).rev() {
                     let pos = Vector3::new(global_x, y, global_z);
-                    let block_state = chunk.get_block_state(&pos).to_block();
-                    if block_state == Block::from_state_id(chunk.default_block.id) {
+                    let block_state = chunk.get_block_state(&pos).to_block_id();
+                    if block_state == Block::get_raw_id_from_state_id(chunk.default_block.id) {
                         break;
                     }
 
-                    if block_state == &WATER_BLOCK {
+                    if block_state == WATER_BLOCK {
                         return;
                     }
                 }

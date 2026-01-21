@@ -8,7 +8,6 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
-use uuid::Uuid;
 
 pub struct SnowBallItem;
 
@@ -36,13 +35,7 @@ impl ItemBehaviour for SnowBallItem {
                     &position,
                 )
                 .await;
-            let entity = Entity::new(
-                Uuid::new_v4(),
-                world.clone(),
-                position,
-                &EntityType::SNOWBALL,
-                false,
-            );
+            let entity = Entity::new(world.clone(), position, &EntityType::SNOWBALL);
             let snowball = ThrownItemEntity::new(entity, &player.living_entity.entity);
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();

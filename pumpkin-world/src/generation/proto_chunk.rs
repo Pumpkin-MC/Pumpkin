@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 
+use pumpkin_data::block_properties::is_air;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::tag;
@@ -430,8 +431,7 @@ impl ProtoChunk {
 
     #[inline]
     pub fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
-        let state = self.get_block_state(local_pos).to_state();
-        state.is_air()
+        is_air(self.get_block_state(local_pos).0)
     }
 
     #[inline]
@@ -815,12 +815,10 @@ impl ProtoChunk {
 
                             let state = self
                                 .get_block_state(&Vector3::new(local_x, search_y, local_z))
-                                .to_block();
+                                .to_block_id();
 
                             // TODO: Is there a better way to check that its not a fluid?
-                            if !(state != &AIR_BLOCK
-                                && state != &WATER_BLOCK
-                                && state != &LAVA_BLOCK)
+                            if !(state != AIR_BLOCK && state != WATER_BLOCK && state != LAVA_BLOCK)
                             {
                                 min = search_y + 1;
                                 break;

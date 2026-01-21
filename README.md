@@ -13,7 +13,7 @@
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
 <div align="center">
 
-![chunk loading](/assets/pumpkin_chunk_loading.GIF)
+![chunk loading](/assets/pumpkin_chunk_loading.webp)
 
 </div>
 
@@ -35,12 +35,6 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - Networking
   - [x] Encryption
   - [x] Packet Compression
-- Player Configuration
-  - [x] Registries (biome types, paintings, dimensions)
-  - [x] Server Brand
-  - [x] Server Links
-  - [x] Set Resource Pack
-  - [x] Cookies
 - World
   - [x] World Joining
   - [x] Player Tab-list
@@ -53,7 +47,6 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Entity Spawning
   - [x] Item drops (W.I.P)
   - [x] Bossbar
-  - [x] TNT
   - [x] Chunk Loading (Vanilla, Linear)
   - [x] Chunk Generation
   - [x] Chunk Saving (Vanilla, Linear)
@@ -64,7 +57,6 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [ ] Structure Generation
 - Player
   - [x] Skins
-  - [x] Client brand
   - [x] Teleport
   - [x] Movement
   - [x] Animation

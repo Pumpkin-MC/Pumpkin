@@ -16,7 +16,8 @@ impl Ignition {
         location: BlockPos,
         face: BlockDirection,
         block: &Block,
-    ) where
+    ) -> bool
+    where
         F: FnOnce(Arc<World>, BlockPos, u16) -> Fut,
         Fut: Future<Output = ()>,
     {
@@ -24,7 +25,7 @@ impl Ignition {
         let pos = location.offset(face.to_offset());
 
         if world.get_fluid(&location).await.name != Fluid::EMPTY.name {
-            return;
+            return false;
         }
         let fire_block = FireBlockBase::get_fire_type(world, &pos).await;
 
@@ -32,7 +33,7 @@ impl Ignition {
 
         if let Some(new_state_id) = can_be_lit(block, state_id) {
             ignite_logic(world.clone(), location, new_state_id).await;
-            return;
+            return true;
         }
 
         let state_id = FireBlock
@@ -40,7 +41,10 @@ impl Ignition {
             .await;
         if FireBlockBase::can_place_at(world, &pos).await {
             ignite_logic(world.clone(), pos, state_id).await;
+            return true;
         }
+
+        false
     }
 }
 

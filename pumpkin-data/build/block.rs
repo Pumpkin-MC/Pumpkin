@@ -11,7 +11,10 @@ use std::{
 };
 use syn::{Ident, LitInt, LitStr};
 
-use crate::loot::LootTableStruct;
+use crate::{
+    bitsets::{Bitset, gen_u16_bitset},
+    loot::LootTableStruct,
+};
 
 // Takes an array of tuples containing indices paired with values,Add commentMore actions
 // Outputs an array with the values in the appropriate index, gaps filled with None
@@ -425,10 +428,15 @@ impl PistonBehavior {
 }
 
 impl BlockState {
+    const IS_AIR: u16 = 1 << 0;
     const HAS_RANDOM_TICKS: u16 = 1 << 9;
 
     fn has_random_ticks(&self) -> bool {
         self.state_flags & Self::HAS_RANDOM_TICKS != 0
+    }
+
+    pub const fn is_air(&self) -> bool {
+        self.state_flags & Self::IS_AIR != 0
     }
 
     fn to_tokens(&self) -> TokenStream {
@@ -656,6 +664,8 @@ pub(crate) fn build() -> TokenStream {
             .collect();
 
     let mut random_tick_states = Vec::new();
+    let mut air_states = Vec::new();
+
     let mut constants_list = Vec::new();
     let mut block_from_name_entries = Vec::new();
     let mut block_from_item_id_arms = Vec::new();
@@ -675,6 +685,10 @@ pub(crate) fn build() -> TokenStream {
             if state.has_random_ticks() {
                 let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
                 random_tick_states.push(state_id);
+            }
+            if state.is_air() {
+                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                air_states.push(state_id);
             }
         }
 
@@ -814,7 +828,7 @@ pub(crate) fn build() -> TokenStream {
         .iter()
         .map(|shape| shape.to_token_stream());
 
-    let random_tick_state_ids = quote! { #(#random_tick_states)|* };
+    let air_state_ids = quote! { #(#air_states)|* };
 
     let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
     let properties = property_enums.values().map(|prop| prop.to_token_stream());
@@ -850,6 +864,18 @@ pub(crate) fn build() -> TokenStream {
 
     assert_eq!(max_state_id, max_state_id_2);
 
+    let Bitset {
+        items,
+        mod_ident,
+        contains_ident,
+    } = &gen_u16_bitset(
+        "RANDOM_TICKS",
+        &random_tick_states
+            .iter()
+            .map(|it| it.base10_parse().unwrap())
+            .collect::<Vec<u16>>(),
+    );
+
     quote! {
         use crate::{BlockState, Block, CollisionShape, blocks::Flammable};
         use crate::block_state::PistonBehavior;
@@ -859,6 +885,8 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::math::vector3::Vector3;
         use std::collections::BTreeMap;
         use phf;
+
+        #items
 
         #[derive(Clone, Copy, Debug)]
         pub struct BlockProperty {
@@ -893,8 +921,14 @@ pub(crate) fn build() -> TokenStream {
             #(#block_entity_types),*
         ];
 
+        #[inline(always)]
+        pub fn is_air(state_id: u16) -> bool {
+            matches!(state_id, #air_state_ids)
+        }
+
+        #[inline(always)]
         pub fn has_random_ticks(state_id: u16) -> bool {
-            matches!(state_id, #random_tick_state_ids)
+            #mod_ident::#contains_ident(state_id)
         }
 
         pub fn blocks_movement(block_state: &BlockState, block: &Block) -> bool {

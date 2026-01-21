@@ -3,6 +3,7 @@ use pumpkin_data::potion::Effect;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use std::mem;
@@ -32,7 +33,7 @@ use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{CHurtAnimation, CTakeItemEntity};
+use pumpkin_protocol::java::client::play::{CHurtAnimation, CSetPlayerInventory, CTakeItemEntity};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{CDamageEvent, CSetEquipment, Metadata},
@@ -899,6 +900,45 @@ impl LivingEntity {
         false
     }
 
+    async fn damage_armor_items(&self, caller: &dyn EntityBase, damage_amount: f32) {
+        let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
+        let mut equipment_updates = Vec::new();
+
+        for (slot_index, slot) in self.equipment_slots.iter() {
+            if !slot.is_armor_slot() {
+                continue;
+            }
+
+            let equipment = self.entity_equipment.lock().await.get(slot);
+            let updated_stack = {
+                let mut stack = equipment.lock().await;
+                if stack.is_empty() {
+                    None
+                } else if stack.damage_item_with_context(armor_damage, true) {
+                    Some(stack.clone())
+                } else {
+                    None
+                }
+            };
+
+            if let Some(updated_stack) = updated_stack {
+                equipment_updates.push((slot.clone(), updated_stack.clone()));
+                if let Some(player) = caller.get_player() {
+                    player
+                        .enqueue_slot_set_packet(&CSetPlayerInventory::new(
+                            (*slot_index as i32).into(),
+                            &ItemStackSerializer::from(updated_stack),
+                        ))
+                        .await;
+                }
+            }
+        }
+
+        if !equipment_updates.is_empty() {
+            self.send_equipment_changes(&equipment_updates).await;
+        }
+    }
+
     pub async fn held_item(&self, caller: &dyn EntityBase) -> Arc<Mutex<ItemStack>> {
         if let Some(player) = caller.get_player() {
             return player.inventory.held_item();
@@ -1090,6 +1130,10 @@ impl EntityBase for LivingEntity {
                 self.on_death(damage_type, source, cause).await;
             }
 
+            if damage_amount > 0.0 {
+                self.damage_armor_items(caller, damage_amount).await;
+            }
+
             true
         })
     }
@@ -1117,8 +1161,8 @@ impl EntityBase for LivingEntity {
             self.tick_movement(server, caller.clone()).await;
             // TODO
             if caller.get_player().is_none() {
-                self.entity.send_pos_rot().await;
-                self.entity.send_velocity().await;
+                // self.entity.send_pos_rot().await;
+                // self.entity.send_velocity().await;
             }
             self.tick_effects().await;
             // Current active item
@@ -1154,7 +1198,7 @@ impl EntityBase for LivingEntity {
             }
             if self.health.load() <= 0.0 {
                 let time = self.death_time.fetch_add(1, Relaxed);
-                if time == 20 {
+                if time >= 20 && self.entity.is_alive() {
                     // Spawn Death particles
                     self.entity
                         .world

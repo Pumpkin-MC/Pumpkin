@@ -3,7 +3,7 @@ use crate::block::entities::BlockEntity;
 use crate::chunk::format::LightContainer;
 use crate::tick::scheduler::ChunkTickScheduler;
 use palette::{BiomePalette, BlockPalette};
-use pumpkin_data::block_properties::blocks_movement;
+use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
@@ -438,7 +438,7 @@ impl ChunkSections {
         let mut y = first_y;
         while y >= self.min_y {
             if let Some(block_state_id) = self.get_block_absolute_y(relative_x, y, relative_z)
-                && !BlockState::from_id(block_state_id).is_air()
+                && !is_air(block_state_id)
             {
                 return Some(y);
             }
@@ -568,12 +568,14 @@ impl ChunkData {
     }
 
     pub fn get_highest_non_empty_subchunk(&self) -> usize {
-        for (i, sub_chunk) in self.section.sections.iter().enumerate().rev() {
-            if sub_chunk.block_states.non_air_block_count() != 0 {
-                return i;
-            }
-        }
-        0
+        self.section
+            .sections
+            .iter()
+            .enumerate()
+            .rev()
+            .position(|(_, sub)| !sub.block_states.has_only_air())
+            .map(|p| self.section.sections.len() - 1 - p)
+            .unwrap_or(0)
     }
 }
 

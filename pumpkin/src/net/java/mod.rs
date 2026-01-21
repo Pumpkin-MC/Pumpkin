@@ -37,7 +37,6 @@ use pumpkin_protocol::{
     ser::{NetworkWriteExt, ReadingError, WritingError},
 };
 use pumpkin_util::text::TextComponent;
-use tokio::sync::Notify;
 use tokio::{
     io::{BufReader, BufWriter},
     net::{
@@ -50,6 +49,7 @@ use tokio::{
     sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
 };
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 pub mod config;
@@ -82,7 +82,7 @@ pub struct JavaClient {
     /// A collection of tasks associated with this client. The tasks await completion when removing the client.
     tasks: TaskTracker,
     /// An notifier that is triggered when this client is closed.
-    close_interrupt: Arc<Notify>,
+    close_token: CancellationToken,
     /// A queue of serialized packets to send to the network
     outgoing_packet_queue_send: Sender<Bytes>,
     /// A queue of serialized packets to send to the network
@@ -106,7 +106,7 @@ impl JavaClient {
             address: Mutex::new(address),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
             closed: Arc::new(AtomicBool::new(false)),
-            close_interrupt: Arc::new(Notify::new()),
+            close_token: CancellationToken::new(),
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
@@ -221,7 +221,7 @@ impl JavaClient {
     }
 
     pub async fn await_close_interrupt(&self) {
-        self.close_interrupt.notified().await;
+        self.close_token.cancelled().await;
     }
 
     pub async fn get_packet(&self) -> Option<RawPacket> {
@@ -406,19 +406,15 @@ impl JavaClient {
             .outgoing_packet_queue_recv
             .take()
             .expect("This was set in the new fn");
-        let close_interrupt = self.close_interrupt.clone();
+        let close_interrupt = self.close_token.clone();
         let closed = self.closed.clone();
         let writer = self.network_writer.clone();
         let id = self.id;
         self.spawn_task(async move {
             while !closed.load(Ordering::Relaxed) {
                 let recv_result = tokio::select! {
-                    () = close_interrupt.notified() => {
-                        None
-                    },
-                    recv_result = packet_receiver.recv() => {
-                        recv_result
-                    }
+                    () =  close_interrupt.cancelled() => None,
+                    res = packet_receiver.recv() => res,
                 };
 
                 let Some(packet_data) = recv_result else {
@@ -431,7 +427,7 @@ impl JavaClient {
                         log::warn!("Failed to send packet to client {id}: {err}",);
                         // We now need to close the connection to the client since the stream is in an
                         // unknown state
-                        close_interrupt.notify_waiters();
+                        close_interrupt.cancel();
                         closed.store(true, Ordering::Relaxed);
                         break;
                     }
@@ -450,7 +446,7 @@ impl JavaClient {
     ///
     /// This function does not attempt to send any disconnect packets to the client.
     pub fn close(&self) {
-        self.close_interrupt.notify_waiters();
+        self.close_token.cancel();
         self.closed.store(true, Ordering::Relaxed);
     }
 

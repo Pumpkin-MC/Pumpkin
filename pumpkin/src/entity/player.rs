@@ -30,14 +30,14 @@ use uuid::Uuid;
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl};
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockState, tag};
+use pumpkin_data::{Block, BlockState, Enchantment, tag};
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -207,23 +207,6 @@ impl ChunkManager {
 
         let view_distance_i32 = i32::from(view_distance);
 
-        let mut chunks_to_watch = Vec::new();
-        let mut chunks_to_unwatch = Vec::new();
-
-        for pos in &self.chunk_sent {
-            if (pos.x - center.x).abs().max((pos.y - center.y).abs()) > view_distance_i32 {
-                chunks_to_unwatch.push(*pos);
-            }
-        }
-
-        let level_clone = level.clone();
-        let chunks_to_unwatch_clone = chunks_to_unwatch.clone();
-        tokio::spawn(async move {
-            level_clone
-                .mark_chunks_as_not_watched(&chunks_to_unwatch_clone)
-                .await;
-        });
-
         self.chunk_sent.retain(|pos| {
             (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
         });
@@ -243,20 +226,13 @@ impl ChunkManager {
         for dx in (-view_distance_i32)..=view_distance_i32 {
             for dy in (-view_distance_i32)..=view_distance_i32 {
                 let new_pos = center.add_raw(dx, dy);
-                if !self.chunk_sent.contains(&new_pos) {
-                    chunks_to_watch.push(new_pos);
-                    if let Some(chunk) = level.loaded_chunks.get(&new_pos) {
-                        self.push_chunk(new_pos, chunk.value().clone());
-                    }
+                if !self.chunk_sent.contains(&new_pos)
+                    && let Some(chunk) = level.loaded_chunks.get(&new_pos)
+                {
+                    self.push_chunk(new_pos, chunk.value().clone());
                 }
             }
         }
-        let level_clone = level.clone();
-        tokio::spawn(async move {
-            level_clone
-                .mark_chunks_as_newly_watched(&chunks_to_watch)
-                .await;
-        });
     }
 
     pub fn clean_up(&mut self, level: &Arc<Level>) {
@@ -453,13 +429,16 @@ impl Player {
 
         let player_uuid = gameprofile.id;
 
-        let living_entity = LivingEntity::new(Entity::new(
+        let living_entity = LivingEntity::new(Entity::from_uuid(
             player_uuid,
             world.clone(),
             Vector3::new(0.0, 100.0, 0.0),
             &EntityType::PLAYER,
-            matches!(gamemode, GameMode::Creative | GameMode::Spectator),
         ));
+        living_entity.entity.invulnerable.store(
+            matches!(gamemode, GameMode::Creative | GameMode::Spectator),
+            Ordering::Relaxed,
+        );
 
         let inventory = Arc::new(PlayerInventory::new(
             living_entity.entity_equipment.clone(),
@@ -695,12 +674,81 @@ impl Player {
                 _ => {}
             }
             if config.knockback {
-                combat::handle_knockback(attacker_entity, world, victim_entity, knockback_strength)
-                    .await;
+                combat::handle_knockback(attacker_entity, victim_entity, knockback_strength);
             }
         }
 
+        self.damage_held_item(1).await;
+
         if config.swing {}
+    }
+
+    pub async fn sync_hand_slot(&self, slot_index: usize, stack: ItemStack) {
+        self.enqueue_slot_set_packet(&CSetPlayerInventory::new(
+            (slot_index as i32).into(),
+            &ItemStackSerializer::from(stack.clone()),
+        ))
+        .await;
+
+        if slot_index == self.inventory.get_selected_slot() as usize {
+            self.living_entity
+                .send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack)])
+                .await;
+        } else if slot_index == PlayerInventory::OFF_HAND_SLOT {
+            self.living_entity
+                .send_equipment_changes(&[(EquipmentSlot::OFF_HAND, stack)])
+                .await;
+        }
+    }
+
+    pub async fn damage_held_item(&self, amount: i32) -> bool {
+        if matches!(
+            self.gamemode.load(),
+            GameMode::Creative | GameMode::Spectator
+        ) {
+            return false;
+        }
+
+        let slot_index = self.inventory.get_selected_slot() as usize;
+        let stack_arc = self.inventory.held_item();
+        let updated = {
+            let mut stack = stack_arc.lock().await;
+            stack
+                .damage_item_with_context(amount, false)
+                .then_some(stack.clone())
+        };
+
+        if let Some(updated_stack) = updated {
+            self.sync_hand_slot(slot_index, updated_stack).await;
+            return true;
+        }
+
+        false
+    }
+
+    pub async fn apply_tool_damage_for_block_break(&self, state: &BlockState) {
+        if matches!(
+            self.gamemode.load(),
+            GameMode::Creative | GameMode::Spectator
+        ) {
+            return;
+        }
+
+        if state.hardness <= 0.0 {
+            return;
+        }
+
+        let damage = {
+            let stack = self.inventory.held_item();
+            let stack = stack.lock().await;
+            stack
+                .get_data_component::<ToolImpl>()
+                .map_or(0, |tool| tool.damage_per_block as i32)
+        };
+
+        if damage > 0 {
+            self.damage_held_item(damage).await;
+        }
     }
 
     pub async fn set_respawn_point(
@@ -1680,6 +1728,11 @@ impl Player {
                 };
                 self.send_abilities_update().await;
 
+                if gamemode == GameMode::Creative {
+                    self.get_entity().extinguish();
+                    self.get_entity().set_on_fire(false).await;
+                }
+
                 self.living_entity.entity.invulnerable.store(
                     matches!(gamemode, GameMode::Creative | GameMode::Spectator),
                     Ordering::Relaxed,
@@ -1803,13 +1856,7 @@ impl Player {
     pub async fn drop_item(&self, item_stack: ItemStack) {
         let item_pos = self.living_entity.entity.pos.load()
             + Vector3::new(0.0, f64::from(EntityType::PLAYER.eye_height) - 0.3, 0.0);
-        let entity = Entity::new(
-            Uuid::new_v4(),
-            self.world().clone(),
-            item_pos,
-            &EntityType::ITEM,
-            false,
-        );
+        let entity = Entity::new(self.world().clone(), item_pos, &EntityType::ITEM);
 
         let pitch = f64::from(self.living_entity.entity.pitch.load()).to_radians();
         let yaw = f64::from(self.living_entity.entity.yaw.load()).to_radians();
@@ -2070,6 +2117,80 @@ impl Player {
         let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
         let progress = experience::progress_in_level(new_points, new_level);
         self.set_experience(new_level, progress, new_points).await;
+    }
+
+    pub async fn apply_mending_from_xp(&self, mut xp: i32) -> i32 {
+        if xp <= 0 {
+            return xp;
+        }
+
+        let mut candidates: Vec<(usize, EquipmentSlot, Arc<Mutex<ItemStack>>)> = Vec::new();
+
+        let selected_slot = self.inventory.get_selected_slot() as usize;
+        let main_hand = self.inventory.get_stack(selected_slot).await;
+        let main_hand_eligible = {
+            let stack = main_hand.lock().await;
+            stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
+        };
+        if main_hand_eligible {
+            candidates.push((selected_slot, EquipmentSlot::MAIN_HAND, main_hand));
+        }
+
+        let offhand_slot = PlayerInventory::OFF_HAND_SLOT;
+        let off_hand = self.inventory.get_stack(offhand_slot).await;
+        let off_hand_eligible = {
+            let stack = off_hand.lock().await;
+            stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
+        };
+        if off_hand_eligible {
+            candidates.push((offhand_slot, EquipmentSlot::OFF_HAND, off_hand));
+        }
+
+        for (slot_index, slot) in self.inventory.equipment_slots.iter() {
+            if !slot.is_armor_slot() {
+                continue;
+            }
+            let stack = self.inventory.get_stack(*slot_index).await;
+            let eligible = {
+                let stack = stack.lock().await;
+                stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
+            };
+            if eligible {
+                candidates.push((*slot_index, slot.clone(), stack));
+            }
+        }
+
+        if candidates.is_empty() {
+            return xp;
+        }
+
+        let idx = rand::random::<u32>() as usize % candidates.len();
+        let (slot_index, equipment_slot, stack) = candidates.swap_remove(idx);
+
+        let (updated_stack, repaired) = {
+            let mut stack = stack.lock().await;
+            let repaired = stack.repair_item(xp.saturating_mul(2));
+            (stack.clone(), repaired)
+        };
+
+        if repaired <= 0 {
+            return xp;
+        }
+
+        let xp_used = (repaired + 1) / 2;
+        xp = xp.saturating_sub(xp_used);
+
+        self.enqueue_slot_set_packet(&CSetPlayerInventory::new(
+            (slot_index as i32).into(),
+            &ItemStackSerializer::from(updated_stack.clone()),
+        ))
+        .await;
+
+        self.living_entity
+            .send_equipment_changes(&[(equipment_slot, updated_stack)])
+            .await;
+
+        xp
     }
 
     pub fn increment_screen_handler_sync_id(&self) {

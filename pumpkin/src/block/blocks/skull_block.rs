@@ -17,7 +17,6 @@ impl BlockMetadata for SkullBlock {
     fn ids(&self) -> &'static [&'static str] {
         &[
             "skeleton_skull",
-            "wither_skeleton_skull",
             "player_head",
             "zombie_head",
             "creeper_head",

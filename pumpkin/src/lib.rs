@@ -20,7 +20,7 @@ use rustyline::Editor;
 use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
 use std::collections::HashMap;
-use std::io::{Cursor, IsTerminal, stdin};
+use std::io::{Cursor, ErrorKind, IsTerminal, stdin};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -28,8 +28,9 @@ use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
-use tokio::sync::{Mutex, Notify, RwLock};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 pub mod block;
@@ -159,11 +160,11 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
-pub static STOP_INTERRUPT: LazyLock<Notify> = LazyLock::new(Notify::new);
+pub static STOP_INTERRUPT: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 
 pub fn stop_server() {
     SHOULD_STOP.store(true, Ordering::Relaxed);
-    STOP_INTERRUPT.notify_waiters();
+    STOP_INTERRUPT.cancel();
 }
 
 fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
@@ -222,10 +223,36 @@ impl PumpkinServer {
         let mut tcp_listener = None;
 
         if server.basic_config.java_edition {
+            let address = server.basic_config.java_edition_address;
             // Setup the TCP server socket.
-            let listener = tokio::net::TcpListener::bind(server.basic_config.java_edition_address)
-                .await
-                .expect("Failed to start `TcpListener`");
+            let listener = match TcpListener::bind(address).await {
+                Ok(l) => l,
+                Err(e) => match e.kind() {
+                    ErrorKind::AddrInUse => {
+                        log::error!("Error: Address {} is already in use.", address);
+                        log::error!(
+                            "Make sure another instance of the server isn't already running"
+                        );
+                        std::process::exit(1);
+                    }
+                    ErrorKind::PermissionDenied => {
+                        log::error!("Error: Permission denied when binding to {}.", address);
+                        log::error!("You might need sudo/admin privileges to use ports below 1024");
+                        std::process::exit(1);
+                    }
+                    ErrorKind::AddrNotAvailable => {
+                        log::error!(
+                            "Error: The address {} is not available on this machine",
+                            address
+                        );
+                        std::process::exit(1);
+                    }
+                    _ => {
+                        log::error!("Failed to start TcpListener on {}: {}", address, e);
+                        std::process::exit(1);
+                    }
+                },
+            };
             // In the event the user puts 0 for their port, this will allow us to know what port it is running on
             let addr = listener
                 .local_addr()
@@ -466,7 +493,7 @@ impl PumpkinServer {
             },
 
             // Branch for the global stop signal
-            () = STOP_INTERRUPT.notified() => {
+            () = STOP_INTERRUPT.cancelled() => {
                 return false;
             }
         }
@@ -557,7 +584,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
     server.clone().spawn_task(async move {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let t1 = rx.recv();
-            let t2 = STOP_INTERRUPT.notified();
+            let t2 = STOP_INTERRUPT.cancelled();
 
             let result = select! {
                 line = t1 => line,

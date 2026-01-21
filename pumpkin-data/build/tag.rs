@@ -77,6 +77,14 @@ pub(crate) fn build() -> TokenStream {
     }
     .to_token_stream();
 
+    let block_id_map: BTreeMap<String, u16> = blocks_assets
+        .blocks
+        .iter()
+        .map(|b| (b.name.clone(), b.id))
+        .collect();
+    let fluid_id_map: BTreeMap<String, u16> =
+        fluids.iter().map(|f| (f.name.clone(), f.id)).collect();
+
     // Generate tag arrays for each registry key
     let mut tag_dicts = Vec::new();
     let mut match_arms_value = Vec::new();
@@ -84,80 +92,48 @@ pub(crate) fn build() -> TokenStream {
     let mut match_arms_tags_all = Vec::new();
     let mut tag_identifiers = Vec::new();
 
-    for (key, tag_map) in tags.into_iter() {
+    for (key, tag_map) in tags {
         let key_pascal = format_ident!("{}", key.to_pascal_case());
         let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
 
-        // Create a BTreeMap to store tag name -> index mapping
-        let mut tag_values = Vec::new();
+        let mut tag_entries = Vec::new();
+        let mut tag_map_entries = Vec::new();
 
-        // Collect all unique tags
         for (tag_name, values) in tag_map {
-            tag_values.push((tag_name, values));
+            let ids: Vec<u16> = values
+                .iter()
+                .filter_map(|v| match key.as_str() {
+                    "worldgen/biome" => biomes.get(v).map(|b| b.id as u16),
+                    "fluid" => fluid_id_map.get(v).copied(),
+                    "item" => items.get(v).map(|i| i.id),
+                    "block" => block_id_map.get(v).copied(),
+                    "enchantment" => enchantments
+                        .get(&format!("minecraft:{}", v))
+                        .map(|e| e.id as u16),
+                    "entity_type" => entities.get(v).map(|e| e.id),
+                    _ => None,
+                })
+                .collect();
+            let tag_const_name =
+                format_ident!("{}", tag_name.replace([':', '/'], "_").to_uppercase());
+
+            tag_entries.push(quote! {
+                pub const #tag_const_name: Tag = (&[#(#values),*], &[#(#ids),*]);
+            });
+
+            tag_map_entries.push(quote! {
+                #tag_name => &#key_pascal::#tag_const_name
+            });
         }
 
-        tag_values.sort();
-
-        // Generate the static array of tag values
-        let tag_array_entries = tag_values
-            .iter()
-            .map(|(tag_name, values)| {
-                let tag_values_array = values.iter().map(|v| quote! { #v }).collect::<Vec<_>>();
-                let tag_id_array = match &key {
-                    t if t == "worldgen/biome" => values.iter().map(|v| {
-                        let id = biomes.get(v).unwrap().id as u16;
-                        quote! { #id }
-                    }).collect::<Vec<_>>(),
-                    t if t == "fluid" => values.iter().map(|v| {
-                        let id = fluids.iter().find(|i| { &i.name == v }).unwrap().id;
-                        quote! { #id }
-                    }).collect::<Vec<_>>(),
-                    t if t == "item" => values.iter().map(|v| {
-                        let id = items.get(v).unwrap().id;
-                        quote! { #id }
-                    }).collect::<Vec<_>>(),
-                    t if t == "block" => values.iter().map(|v| {
-                        let id = blocks_assets.blocks.iter().find(|i| { &i.name == v }).unwrap().id;
-                        quote! { #id }
-                    }).collect::<Vec<_>>(),
-                    t if t == "enchantment" => values.iter().map(|v| {
-                        let id = enchantments.get(&("minecraft:".to_string() + v)).unwrap().id as u16;
-                        quote! { #id }
-                    }).collect::<Vec<_>>(),
-                    t if t == "entity_type" => values.iter().map(|v| {
-                        let id = entities.get(v).unwrap().id;
-                        quote! { #id }
-                    }).collect::<Vec<_>>(),
-                    _ => Vec::new(),
-                };
-                let mapped_name = format_ident!("{}", tag_name.replace(":", "_").replace("/", "_").to_uppercase());
-                quote! {
-                    pub const #mapped_name: Tag = (&[#(#tag_values_array),*], &[#(#tag_id_array),*]);
-                }
-            })
-            .collect::<Vec<_>>();
-        let tag_array_entries_map = tag_values
-            .iter()
-            .map(|(tag_name, _values)| {
-                let mapped_name = format_ident!(
-                    "{}",
-                    tag_name.replace(":", "_").replace("/", "_").to_uppercase()
-                );
-                quote! {
-                    #tag_name => &#key_pascal::#mapped_name
-                }
-            })
-            .collect::<Vec<_>>();
-        // Add the static array declaration
         tag_dicts.push(quote! {
             #[allow(non_snake_case)]
             pub mod #key_pascal {
-                use crate::tag::Tag;
-
-                #(#tag_array_entries)*
+                use super::Tag;
+                #(#tag_entries)*
             }
-            static #dict_name: phf::Map<&str, &'static Tag> = phf::phf_map! {
-                #(#tag_array_entries_map),*
+            static #dict_name: phf::Map<&'static str, &'static Tag> = phf::phf_map! {
+                #(#tag_map_entries),*
             };
         });
 

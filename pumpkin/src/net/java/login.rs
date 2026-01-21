@@ -90,7 +90,9 @@ impl JavaClient {
                 let verify_token: [u8; 4] = rand::random();
                 // Wait until we have sent the encryption packet to the client
                 self.send_packet_now(
-                    &server.encryption_request(&verify_token, server.basic_config.online_mode),
+                    &server
+                        .encryption_request(&verify_token, server.basic_config.online_mode)
+                        .await,
                 )
                 .await;
             } else {
@@ -107,7 +109,10 @@ impl JavaClient {
         encryption_response: SEncryptionResponse,
     ) {
         log::debug!("Handling encryption");
-        let shared_secret = server.decrypt(&encryption_response.shared_secret).unwrap();
+        let shared_secret = server
+            .decrypt(&encryption_response.shared_secret)
+            .await
+            .unwrap();
 
         if let Err(error) = self.set_encryption(&shared_secret).await {
             self.kick(TextComponent::text(error.to_string())).await;
@@ -207,7 +212,7 @@ impl JavaClient {
         shared_secret: &[u8],
         username: &str,
     ) -> Result<GameProfile, AuthError> {
-        let hash = server.digest_secret(shared_secret);
+        let hash = server.digest_secret(shared_secret).await;
         let ip = self.address.lock().await.ip();
         let profile = authentication::authenticate(
             username,

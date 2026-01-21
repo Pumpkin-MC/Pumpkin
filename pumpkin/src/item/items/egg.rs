@@ -8,7 +8,6 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::Sound;
-use uuid::Uuid;
 
 pub struct EggItem;
 
@@ -37,13 +36,7 @@ impl ItemBehaviour for EggItem {
                 )
                 .await;
             // TODO: Implement eggs the right way, so there is a chance of spawning chickens
-            let entity = Entity::new(
-                Uuid::new_v4(),
-                world.clone(),
-                position,
-                &EntityType::EGG,
-                false,
-            );
+            let entity = Entity::new(world.clone(), position, &EntityType::EGG);
             let egg = ThrownItemEntity::new(entity, &player.living_entity.entity);
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();

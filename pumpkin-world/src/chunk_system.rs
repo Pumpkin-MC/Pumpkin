@@ -9,6 +9,7 @@ TODO
 use crate::block::RawBlockState;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight, ChunkSections, SubChunk};
+use pumpkin_data::block_properties::is_air;
 use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
@@ -825,6 +826,7 @@ impl Chunk {
                 }
             }
         }
+
         let mut chunk = ChunkData {
             light_engine: ChunkLight {
                 sky_light: (0..sections.sections.len())
@@ -1140,9 +1142,7 @@ impl GenerationCache for Cache {
     }
 
     fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
-        GenerationCache::get_block_state(self, local_pos)
-            .to_state()
-            .is_air()
+        is_air(GenerationCache::get_block_state(self, local_pos).0)
     }
 }
 
