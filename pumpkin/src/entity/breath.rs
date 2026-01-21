@@ -35,7 +35,7 @@ impl BreathManager {
             let new_air = (prev + 4).min(300);
             if new_air != prev {
                 self.air_supply.store(new_air, Ordering::Relaxed);
-                self.sync_air(player, new_air).await;
+                self.send_air_supply(player).await;
             }
             self.drowning_tick.store(0, Ordering::Relaxed);
             return;
@@ -58,7 +58,7 @@ impl BreathManager {
             .await
         {
             if self.air_supply.swap(300, Ordering::Relaxed) != 300 {
-                self.sync_air(player, 300).await;
+                self.send_air_supply(player).await;
             }
             self.drowning_tick.store(0, Ordering::Relaxed);
             return;
@@ -68,7 +68,7 @@ impl BreathManager {
             let prev = self.air_supply.fetch_sub(1, Ordering::Relaxed);
             let new_air = (prev - 1).max(0);
             if new_air != prev {
-                self.sync_air(player, new_air).await;
+                self.send_air_supply(player).await;
             }
 
             if new_air <= 0 {
@@ -87,7 +87,7 @@ impl BreathManager {
             let new_air = (prev + 4).min(300);
             if new_air != prev {
                 self.air_supply.store(new_air, Ordering::Relaxed);
-                self.sync_air(player, new_air).await;
+                self.send_air_supply(player).await;
             }
             self.drowning_tick.store(0, Ordering::Relaxed);
         }
@@ -134,8 +134,8 @@ impl BreathManager {
         surface_y > eye_y
     }
 
-    pub async fn sync_air(&self, player: &Player, air: i32) {
-        let air = air.clamp(0, 300);
+    pub async fn send_air_supply(&self, player: &Player) {
+        let air = self.air_supply.load(Ordering::Relaxed).clamp(0, 300);
 
         player
             .living_entity
