@@ -33,7 +33,6 @@ use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
@@ -89,6 +88,7 @@ use crate::server::Server;
 use crate::world::World;
 use crate::{PERMISSION_MANAGER, block};
 
+use super::breath::BreathManager;
 use super::combat::{self, AttackType, player_attack_sound};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
@@ -96,7 +96,6 @@ use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
 use pumpkin_world::chunk_system::ChunkLoading;
-
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
@@ -348,6 +347,8 @@ pub struct Player {
     pub respawn_point: AtomicCell<Option<RespawnPoint>>,
     /// The player's sleep status
     pub sleeping_since: AtomicCell<Option<u8>>,
+    /// Manages the player's breath level
+    pub breath_manager: BreathManager,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
@@ -457,6 +458,7 @@ impl Player {
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
+            breath_manager: BreathManager::default(),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
@@ -1064,9 +1066,8 @@ impl Player {
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
         self.living_entity.tick(self.clone(), server).await;
+        self.breath_manager.tick(self).await;
         self.hunger_manager.tick(self).await;
-
-        self.tick_drowning().await;
 
         // experience handling
         self.tick_experience().await;
@@ -1534,125 +1535,6 @@ impl Player {
         }
     }
 
-    async fn is_eye_in_water(&self) -> bool {
-        let e = &self.living_entity.entity;
-        let pos = e.pos.load();
-
-        let eye_y = pos.y + f64::from(e.entity_dimension.load().eye_height);
-
-        let bp = BlockPos::new(
-            pos.x.floor() as i32,
-            eye_y.floor() as i32,
-            pos.z.floor() as i32,
-        );
-
-        let world = self.world();
-        let (fluid, state) = world.get_fluid_and_fluid_state(&bp).await;
-
-        if fluid.id != Fluid::WATER.id && fluid.id != Fluid::FLOWING_WATER.id {
-            return false;
-        }
-
-        let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
-        let (fluid_above, _) = world.get_fluid_and_fluid_state(&above).await;
-
-        let surface_y = if fluid_above.id == fluid.id {
-            f64::from(bp.0.y as f32 + 1.0)
-        } else {
-            let height: f32 = if state.is_still {
-                1.0
-            } else {
-                let lvl = i32::from(state.level);
-                if lvl >= 8 {
-                    1.0
-                } else {
-                    ((8 - lvl).clamp(1, 8) as f32) / 8.0
-                }
-            };
-            f64::from(bp.0.y as f32 + height)
-        };
-
-        surface_y > eye_y
-    }
-
-    async fn tick_drowning(&self) {
-        let mode = self.gamemode.load();
-
-        if matches!(mode, GameMode::Creative | GameMode::Spectator) {
-            let prev = self.air_supply.load(Ordering::Relaxed);
-            let new_air = (prev + 4).min(300);
-            if new_air != prev {
-                self.air_supply.store(new_air, Ordering::Relaxed);
-                self.sync_air(new_air).await;
-            }
-            self.drowning_tick.store(0, Ordering::Relaxed);
-            return;
-        }
-
-        if !self
-            .world()
-            .level_info
-            .read()
-            .await
-            .game_rules
-            .drowning_damage
-        {
-            return;
-        }
-
-        if self
-            .living_entity
-            .has_effect(&StatusEffect::WATER_BREATHING)
-            .await
-        {
-            if self.air_supply.swap(300, Ordering::Relaxed) != 300 {
-                self.sync_air(300).await;
-            }
-            self.drowning_tick.store(0, Ordering::Relaxed);
-            return;
-        }
-
-        if self.is_eye_in_water().await {
-            let prev = self.air_supply.fetch_sub(1, Ordering::Relaxed);
-            let new_air = (prev - 1).max(0);
-            if new_air != prev {
-                self.sync_air(new_air).await;
-            }
-
-            if new_air <= 0 {
-                let t = self.drowning_tick.fetch_add(1, Ordering::Relaxed) + 1;
-
-                if t >= 20 {
-                    self.drowning_tick.store(0, Ordering::Relaxed);
-                    self.living_entity
-                        .damage(self, 2.0, DamageType::DROWN)
-                        .await;
-                }
-            }
-        } else {
-            let prev = self.air_supply.load(Ordering::Relaxed);
-            let new_air = (prev + 4).min(300);
-            if new_air != prev {
-                self.air_supply.store(new_air, Ordering::Relaxed);
-                self.sync_air(new_air).await;
-            }
-            self.drowning_tick.store(0, Ordering::Relaxed);
-        }
-    }
-
-    async fn sync_air(&self, air: i32) {
-        let air = air.clamp(0, 300);
-
-        self.living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_AIR,
-                MetaDataType::Integer,
-                VarInt(air),
-            )])
-            .await;
-    }
-
     pub async fn set_health(&self, health: f32) {
         self.living_entity.set_health(health).await;
         self.send_health().await;
@@ -1692,8 +1574,8 @@ impl Player {
         }
 
         // Reset air supply on death
-        self.air_supply.store(300, Ordering::Relaxed);
-        self.sync_air(300).await;
+        self.breath_manager.air_supply.store(300, Ordering::Relaxed);
+        self.breath_manager.sync_air(self, 300).await;
 
         self.client
             .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))

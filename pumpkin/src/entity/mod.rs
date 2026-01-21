@@ -55,6 +55,7 @@ use uuid::Uuid;
 
 pub mod ai;
 pub mod boss;
+pub mod breath;
 pub mod decoration;
 pub mod effect;
 pub mod experience_orb;
