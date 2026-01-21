@@ -97,7 +97,7 @@ impl BreathManager {
         let e = &player.living_entity.entity;
         let pos = e.pos.load();
 
-        let eye_y = pos.y + f64::from(e.entity_dimension.load().eye_height);
+        let eye_y = e.get_eye_y();
 
         let bp = BlockPos::new(
             pos.x.floor() as i32,
