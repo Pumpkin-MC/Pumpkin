@@ -57,14 +57,9 @@ impl Explosion {
                         //     continue 'block2;
                         // }
 
-                        let resistance = if state.is_air() && fluid_state.is_empty {
-                            None
-                        } else {
-                            Some(fluid_state.blast_resistance.max(block.blast_resistance))
-                        };
-
-                        if resistance.is_some() {
-                            h -= resistance.unwrap() as f32 * 0.3;
+                        if !state.is_air() || !fluid_state.is_empty {
+                            let resistance = fluid_state.blast_resistance.max(block.blast_resistance);
+                            h -= resistance * 0.3;
                         }
 
                         if h > 0.0 {
