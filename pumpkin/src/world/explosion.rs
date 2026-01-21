@@ -58,11 +58,14 @@ impl Explosion {
                         // }
 
                         let resistance = if state.is_air() && fluid_state.is_empty {
-                            0.0
+                            None
                         } else {
-                            fluid_state.blast_resistance.max(block.blast_resistance)
+                            Some(fluid_state.blast_resistance.max(block.blast_resistance))
                         };
-                        h -= (resistance + 0.3) * 0.3;
+
+                        if resistance.is_some() {
+                            h -= resistance.unwrap() as f32 * 0.3;
+                        }
 
                         if h > 0.0 {
                             map.insert(block_pos, (block, state));
