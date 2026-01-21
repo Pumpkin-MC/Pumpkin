@@ -388,8 +388,6 @@ pub struct Player {
     pub last_sent_health: AtomicI32,
     pub last_sent_food: AtomicU8,
     pub last_food_saturation: AtomicBool,
-    pub air_supply: AtomicI32,
-    pub drowning_tick: AtomicI32,
     /// The player's permission level.
     pub permission_lvl: AtomicCell<PermissionLvl>,
     /// Whether the client has reported that it has loaded.
@@ -511,8 +509,6 @@ impl Player {
             last_sent_health: AtomicI32::new(-1),
             last_sent_food: AtomicU8::new(0),
             last_food_saturation: AtomicBool::new(true),
-            air_supply: AtomicI32::new(300),
-            drowning_tick: AtomicI32::new(0),
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
@@ -1574,11 +1570,7 @@ impl Player {
         }
 
         // Reset air supply & drowning ticks on death
-        self.breath_manager.air_supply.store(300, Ordering::Relaxed);
-        self.breath_manager.send_air_supply(self).await;
-        self.breath_manager
-            .drowning_tick
-            .store(0, Ordering::Relaxed);
+        self.breath_manager.reset_air_supply(self).await;
 
         self.client
             .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
