@@ -58,7 +58,8 @@ impl Explosion {
                         // }
 
                         if !state.is_air() || !fluid_state.is_empty {
-                            let resistance = fluid_state.blast_resistance.max(block.blast_resistance);
+                            let resistance =
+                                fluid_state.blast_resistance.max(block.blast_resistance);
                             h -= resistance * 0.3;
                         }
 
