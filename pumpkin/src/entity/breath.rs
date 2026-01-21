@@ -147,4 +147,10 @@ impl BreathManager {
             )])
             .await;
     }
+
+    pub async fn reset_air_supply(&self, player: &Player) {
+        self.air_supply.store(300, Ordering::Relaxed);
+        self.send_air_supply(player).await;
+        self.drowning_tick.store(0, Ordering::Relaxed);
+    }
 }
