@@ -148,7 +148,7 @@ impl BlockBehaviour for BedBlock {
                     if args.player.gamemode.load() == GameMode::Creative {
                         BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
                     } else {
-                        BlockFlags::NOTIFY_NEIGHBORS
+                        BlockFlags::NOTIFY_ALL
                     },
                 )
                 .await;
@@ -174,11 +174,7 @@ impl BlockBehaviour for BedBlock {
                 let other_props = BedProperties::from_state_id(other_state.id, other_block);
                 if other_props.part != bed_props.part {
                     args.world
-                        .set_block_state(
-                            &other_half_pos,
-                            Block::AIR.default_state.id,
-                            BlockFlags::NOTIFY_ALL,
-                        )
+                        .break_block(&other_half_pos, None, BlockFlags::NOTIFY_ALL)
                         .await;
                 }
             }
