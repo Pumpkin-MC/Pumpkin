@@ -141,16 +141,17 @@ impl BlockBehaviour for BedBlock {
                 args.position.offset(bed_props.facing.to_offset())
             };
 
+            let is_creative = args.player.gamemode.load() == GameMode::Creative;
+            let flags = if bed_props.part == BedPart::Foot && !is_creative {
+                // Breaking foot in survival -> allow head to drop
+                BlockFlags::NOTIFY_NEIGHBORS
+            } else {
+                // Breaking head OR creative mode -> skip drops
+                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+            };
+
             args.world
-                .break_block(
-                    &other_half_pos,
-                    Some(args.player.clone()),
-                    if args.player.gamemode.load() == GameMode::Creative {
-                        BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
-                    } else {
-                        BlockFlags::NOTIFY_ALL
-                    },
-                )
+                .break_block(&other_half_pos, Some(args.player.clone()), flags)
                 .await;
         })
     }
@@ -158,6 +159,15 @@ impl BlockBehaviour for BedBlock {
     fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if args.moved {
+                return;
+            }
+
+            // If the block is being replaced with air (i.e., broken), the `broken` callback
+            // will handle breaking the other half with the correct drop flags. Only handle it here
+            // if the block is being replaced with something else (e.g., piston movement).
+            let new_state_id = args.world.get_block_state_id(args.position).await;
+            let new_block = Block::from_state_id(new_state_id);
+            if new_block == &Block::AIR {
                 return;
             }
 
@@ -174,7 +184,7 @@ impl BlockBehaviour for BedBlock {
                 let other_props = BedProperties::from_state_id(other_state.id, other_block);
                 if other_props.part != bed_props.part {
                     args.world
-                        .break_block(&other_half_pos, None, BlockFlags::NOTIFY_ALL)
+                        .break_block(&other_half_pos, None, BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS)
                         .await;
                 }
             }
