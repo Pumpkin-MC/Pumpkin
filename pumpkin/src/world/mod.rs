@@ -850,7 +850,7 @@ impl World {
             lock.game_rules.random_tick_speed
         };
 
-        const NUM_WORKERS: usize = 10; // TODO non hardcoded value
+        const NUM_WORKERS: usize = 64; // TODO non hardcoded value
 
         let mut ticks = self.tick_data.lock().await;
         ticks.clear();
@@ -944,7 +944,7 @@ impl World {
             random_ticks.append(&mut batch.random_ticks);
             block_entities.append(&mut batch.block_entities);
 
-            worker_pool.push(batch); // put batch structs back into the worker pool
+            worker_pool.push(batch);
         }
         block_ticks.sort_unstable();
         fluid_ticks.sort_unstable();

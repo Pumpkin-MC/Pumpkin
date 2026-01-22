@@ -22,6 +22,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
+use std::ops::Div;
 use std::sync::Mutex;
 use std::{
     collections::HashMap,
@@ -187,7 +188,7 @@ impl Level {
             chunk_listener: listener.clone(),
         });
 
-        let num_threads = num_cpus::get().saturating_sub(2).max(1);
+        let num_threads = (3 * num_cpus::get()).div(12).max(1);
 
         GenerationSchedule::create(
             4,
@@ -198,7 +199,8 @@ impl Level {
             level_ref.thread_tracker.lock().unwrap().as_mut(),
         );
 
-        for thread_id in 0..(num_threads / 2).max(1) {
+        for thread_id in 0..1 {
+            // (num_threads / 2).max(1)
             let level_clone = level_ref.clone();
             let pending_clone = pending_entity_generations.clone();
             let rx = gen_entity_request_rx.clone();
