@@ -34,7 +34,7 @@ pub trait WallMountedBlock: Send + Sync {
     }
 
     /// Gets the direction to check for placement validation based on clicked face
-    /// This returns the BlockDirection that should have a solid surface for placement
+    /// This returns the `BlockDirection` that should have a solid surface for placement
     fn get_placement_direction(
         &self,
         player: &Player,

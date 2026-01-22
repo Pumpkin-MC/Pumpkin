@@ -30,17 +30,20 @@ impl BlockBehaviour for GrindstoneBlock {
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
             // Determine actual placement direction from player click, falling back to state direction
-            let direction = if let (Some(player), Some(use_item_on)) = (args.player, args.use_item_on) {
-                if let Ok(clicked_face) = pumpkin_data::BlockDirection::try_from(use_item_on.face.0) {
-                    WallMountedBlock::get_placement_direction(self, player, clicked_face)
+            let direction =
+                if let (Some(player), Some(use_item_on)) = (args.player, args.use_item_on) {
+                    pumpkin_data::BlockDirection::try_from(use_item_on.face.0).map_or_else(
+                        |_| self.get_direction(args.state.id, args.block),
+                        |clicked_face| {
+                            WallMountedBlock::get_placement_direction(self, player, clicked_face)
+                        },
+                    )
                 } else {
                     self.get_direction(args.state.id, args.block)
-                }
-            } else {
-                self.get_direction(args.state.id, args.block)
-            };
+                };
 
-            WallMountedBlock::can_place_at(self, args.block_accessor, args.position, direction).await
+            WallMountedBlock::can_place_at(self, args.block_accessor, args.position, direction)
+                .await
         })
     }
 
