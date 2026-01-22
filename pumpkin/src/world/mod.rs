@@ -3193,7 +3193,6 @@ impl World {
             .await;
 
         if new_state_id != block_state_id {
-            let flags = flags & !BlockFlags::SKIP_DROPS;
             if is_air(new_state_id) {
                 self.break_block(block_pos, None, flags).await;
             } else {
