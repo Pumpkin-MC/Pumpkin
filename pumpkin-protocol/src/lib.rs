@@ -11,6 +11,7 @@ use codec::var_int::VarInt;
 use pumpkin_util::{
     resource_location::ResourceLocation,
     text::{TextComponent, style::Style},
+    version::MinecraftVersion,
 };
 use ser::{ReadingError, WritingError};
 use serde::{
@@ -311,7 +312,11 @@ pub struct RawPacket {
 }
 
 pub trait ClientPacket: Packet {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError>;
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError>;
 }
 
 pub trait ServerPacket: Packet + Sized {

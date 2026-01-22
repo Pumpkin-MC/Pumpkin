@@ -284,6 +284,7 @@ mod tests {
     use flate2::read::ZlibDecoder;
     use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
     use pumpkin_macros::packet;
+    use pumpkin_util::version::MinecraftVersion;
     use serde::Serialize;
 
     /// Define a custom packet for testing maximum packet size
@@ -339,7 +340,9 @@ mod tests {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
         writer.write_var_int(&VarInt(T::PACKET_ID)).unwrap();
-        packet.write_packet_data(writer).unwrap();
+        packet
+            .write_packet_data(writer, &MinecraftVersion::V_1_21_11)
+            .unwrap();
 
         encoder.write_packet(packet_buf.into()).await.unwrap();
 
@@ -374,7 +377,9 @@ mod tests {
         // Remaining buffer is the payload
         // We need to obtain the expected payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
 
         assert_eq!(buffer, expected_payload);
     }
@@ -402,7 +407,9 @@ mod tests {
         // Read data length VarInt (uncompressed data length)
         let data_length = decode_varint(&mut buffer).expect("Failed to decode data length");
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
         let uncompressed_data_length =
             VarInt(CStatusResponse::PACKET_ID).written_size() + expected_payload.len();
         assert_eq!(data_length as usize, uncompressed_data_length);
@@ -458,7 +465,9 @@ mod tests {
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
         assert_eq!(buffer, expected_payload);
     }
 
@@ -492,7 +501,9 @@ mod tests {
         // Read data length VarInt (uncompressed data length)
         let data_length = decode_varint(&mut buffer).expect("Failed to decode data length");
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
         let uncompressed_data_length =
             VarInt(CStatusResponse::PACKET_ID).written_size() + expected_payload.len();
         assert_eq!(data_length as usize, uncompressed_data_length);
@@ -542,7 +553,9 @@ mod tests {
 
         // Remaining buffer is the payload (empty)
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
 
         assert_eq!(
             buffer.len(),
@@ -587,7 +600,9 @@ mod tests {
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
 
         assert_eq!(buffer, expected_payload);
     }
@@ -639,7 +654,9 @@ mod tests {
 
         // Remaining buffer is the payload
         let mut expected_payload = Vec::new();
-        packet.write_packet_data(&mut expected_payload).unwrap();
+        packet
+            .write_packet_data(&mut expected_payload, &MinecraftVersion::V_1_21_11)
+            .unwrap();
 
         assert_eq!(buffer, expected_payload);
     }

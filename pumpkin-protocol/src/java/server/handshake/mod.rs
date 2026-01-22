@@ -6,6 +6,7 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::HANDSHAKE_INTENTION;
 use pumpkin_macros::packet;
+use pumpkin_util::version::MinecraftVersion;
 
 #[packet(HANDSHAKE_INTENTION)]
 pub struct SHandShake {
@@ -34,6 +35,7 @@ impl ClientPacket for SHandShake {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
+        _version: &MinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.protocol_version)?;
         write.write_string(&self.server_address)?;

@@ -4,6 +4,7 @@ use std::{io::Write, sync::Arc};
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
+use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use pumpkin_protocol::java::server::play::{
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
@@ -36,6 +37,7 @@ use pumpkin_protocol::{
     ser::{NetworkWriteExt, ReadingError, WritingError},
 };
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::version::MinecraftVersion;
 use tokio::{
     io::{BufReader, BufWriter},
     net::{
@@ -55,6 +57,7 @@ pub mod config;
 pub mod handshake;
 pub mod login;
 pub mod play;
+pub mod remapper;
 pub mod status;
 
 use crate::entity::player::Player;
@@ -63,6 +66,7 @@ use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
 pub struct JavaClient {
     pub id: u64,
+    pub version: AtomicCell<MinecraftVersion>,
     /// The client's game profile information.
     pub gameprofile: Mutex<Option<GameProfile>>,
     /// The client's configuration settings, Optional
@@ -106,7 +110,7 @@ impl JavaClient {
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
-
+            version: AtomicCell::new(MinecraftVersion::from_protocol(CURRENT_MC_PROTOCOL)),
             network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
             brand: Mutex::new(None),
@@ -193,7 +197,7 @@ impl JavaClient {
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
-        Self::write_packet(packet, writer).unwrap();
+        self.write_packet(packet, writer).unwrap();
         self.enqueue_packet_data(buf.into()).await;
     }
 
@@ -266,7 +270,7 @@ impl JavaClient {
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
-        Self::write_packet(packet, writer).unwrap();
+        self.write_packet(packet, writer).unwrap();
         self.send_packet_now_data(packet_buf).await;
     }
 
@@ -289,12 +293,13 @@ impl JavaClient {
     }
 
     pub fn write_packet<P: ClientPacket>(
+        &self,
         packet: &P,
         write: impl Write,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_var_int(&VarInt(P::PACKET_ID))?;
-        packet.write_packet_data(write)
+        packet.write_packet_data(write, &self.version.load())
     }
 
     /// Handles an incoming packet, routing it to the appropriate handler based on the current connection state.
@@ -503,8 +508,7 @@ impl JavaClient {
                 self.handle_config_acknowledged(server).await;
             }
             SKnownPacks::PACKET_ID => {
-                self.handle_known_packs(server, SKnownPacks::read(payload)?)
-                    .await;
+                self.handle_known_packs(SKnownPacks::read(payload)?).await;
             }
             SConfigCookieResponse::PACKET_ID => {
                 self.handle_config_cookie_response(&SConfigCookieResponse::read(payload)?);
