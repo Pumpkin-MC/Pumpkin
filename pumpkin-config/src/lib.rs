@@ -43,7 +43,7 @@ use world::LevelConfig;
 ///
 /// This also allows you get some performance or resource boosts.
 /// Important: The configuration should match vanilla by default.
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Debug)]
 #[serde(default)]
 pub struct AdvancedConfiguration {
     pub logging: LoggingConfig,
@@ -58,7 +58,7 @@ pub struct AdvancedConfiguration {
     pub fun: FunConfig,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct BasicConfiguration {
     // Whether Java Edition Client's are Accepted
