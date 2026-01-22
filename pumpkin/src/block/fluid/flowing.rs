@@ -1,12 +1,13 @@
-use std::sync::Arc;
-use std::{collections::HashMap, pin::Pin};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{
-    Block, BlockDirection, tag,
+    Block, BlockDirection,
     fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
+    tag,
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockId, BlockStateId, world::BlockFlags};
+use std::sync::Arc;
+use std::{collections::HashMap, pin::Pin};
 
 use crate::{block::BlockFuture, world::World};
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
@@ -530,7 +531,7 @@ pub trait FlowingFluid: Send + Sync {
             // instead of replacing the whole block with a fluid block state.
             let block = world.get_block(pos).await;
             let current_state_id = world.get_block_state_id(pos).await;
-            
+
             // Check if the block should be broken to drop loot
             if block.id != Block::AIR.id {
                 world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
@@ -541,22 +542,25 @@ pub trait FlowingFluid: Send + Sync {
                 block.properties(current_state_id).and_then(|properties| {
                     let original_props = properties.to_props();
                     // If the block has a waterlogged property, set it to "true".
-                    original_props.iter().any(|(k, _)| *k == "waterlogged").then(|| {
-                        let props: Vec<(&str, &str)> = original_props
-                            .iter()
-                            .map(|(key, value)| {
-                                if *key == "waterlogged" {
-                                    ("waterlogged", "true")
-                                } else {
-                                    (*key, *value)
-                                }
-                            })
-                            .collect();
-                        block.from_properties(&props).to_state_id(block)
-                    })
+                    original_props
+                        .iter()
+                        .any(|(k, _)| *k == "waterlogged")
+                        .then(|| {
+                            let props: Vec<(&str, &str)> = original_props
+                                .iter()
+                                .map(|(key, value)| {
+                                    if *key == "waterlogged" {
+                                        ("waterlogged", "true")
+                                    } else {
+                                        (*key, *value)
+                                    }
+                                })
+                                .collect();
+                            block.from_properties(&props).to_state_id(block)
+                        })
                 })
             };
-            
+
             if let Some(new_state) = new_waterlogged_state {
                 world
                     .set_block_state(pos, new_state, BlockFlags::NOTIFY_ALL)
@@ -631,7 +635,9 @@ pub trait FlowingFluid: Send + Sync {
             // Only allow replacing if the current block state is marked replaceable
             // (e.g. tall grass) or the block is air. This prevents non-replaceable,
             // non-solid blocks from being overwritten by fluids.
-            block_state.replaceable() || block_id == Block::AIR.id || block_state.piston_behavior == pumpkin_data::block_state::PistonBehavior::Destroy
+            block_state.replaceable()
+                || block_id == Block::AIR.id
+                || block_state.piston_behavior == pumpkin_data::block_state::PistonBehavior::Destroy
         })
     }
 

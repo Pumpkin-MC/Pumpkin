@@ -184,7 +184,11 @@ impl BlockBehaviour for BedBlock {
                 let other_props = BedProperties::from_state_id(other_state.id, other_block);
                 if other_props.part != bed_props.part {
                     args.world
-                        .break_block(&other_half_pos, None, BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS)
+                        .break_block(
+                            &other_half_pos,
+                            None,
+                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS,
+                        )
                         .await;
                 }
             }
