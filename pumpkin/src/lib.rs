@@ -171,7 +171,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) -> Option<WorkerGuar
             match &mut *guard {
                 ConsoleOut::Stderr => eprintln!("{msg}"),
                 ConsoleOut::Printer(p) => {
-                    let _ = p.print(msg);
+                    let _ = p.print(if msg.ends_with("\n") { msg } else { msg + "\n" });
                 }
             }
         }
