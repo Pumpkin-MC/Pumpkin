@@ -5,13 +5,15 @@ use pumpkin_util::{
     random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
 };
 
-use super::{
-    chunk_noise::{LAVA_BLOCK, WATER_BLOCK},
-    noise::router::{
-        chunk_density_function::ChunkNoiseFunctionSampleOptions,
-        chunk_noise_router::ChunkNoiseRouter,
-        density_function::{NoisePos, UnblendedNoisePos},
-        surface_height_sampler::SurfaceHeightEstimateSampler,
+use crate::generation::{
+    noise::{
+        LAVA_BLOCK, WATER_BLOCK,
+        router::{
+            chunk_density_function::ChunkNoiseFunctionSampleOptions,
+            chunk_noise_router::ChunkNoiseRouter,
+            density_function::{NoisePos, UnblendedNoisePos},
+            surface_height_sampler::SurfaceHeightEstimateSampler,
+        },
     },
     positions::{MIN_HEIGHT_CELL, block_pos, chunk_pos},
     proto_chunk::StandardChunkFluidLevelSampler,
@@ -696,14 +698,16 @@ mod random_positions_and_hypot {
         block::RawBlockState,
         generation::{
             GlobalRandomConfig, biome_coords,
-            chunk_noise::{BlockStateSampler, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
-            noise::router::{
-                chunk_density_function::{ChunkNoiseFunctionSampleOptions, SampleAction},
-                chunk_noise_router::ChunkNoiseRouter,
-                density_function::UnblendedNoisePos,
-                proto_noise_router::ProtoNoiseRouters,
-                surface_height_sampler::{
-                    SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
+            noise::{
+                BlockStateSampler, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK,
+                router::{
+                    chunk_density_function::{ChunkNoiseFunctionSampleOptions, SampleAction},
+                    chunk_noise_router::ChunkNoiseRouter,
+                    density_function::UnblendedNoisePos,
+                    proto_noise_router::ProtoNoiseRouters,
+                    surface_height_sampler::{
+                        SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
+                    },
                 },
             },
             positions::chunk_pos,

@@ -253,6 +253,11 @@ impl LevelData {
             level_version: MAXIMUM_SUPPORTED_LEVEL_VERSION,
         }
     }
+
+    pub fn set_pos(&mut self, x: i32, z: i32) {
+        self.spawn_x = x;
+        self.spawn_z = z;
+    }
 }
 
 #[derive(Error, Debug)]

@@ -401,6 +401,7 @@ impl StructurePiecesCollector {
 
     pub fn add_piece(&mut self, piece: Box<dyn StructurePieceBase>) {
         self.pieces.push(piece);
+        self.cached_box = None;
     }
 
     #[expect(clippy::borrowed_box)]
