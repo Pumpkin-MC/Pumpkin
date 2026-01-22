@@ -6,6 +6,7 @@ use crate::{
     server::Server,
 };
 use core::str;
+use pumpkin_data::{registry::Registry, tag::RegistryKey};
 use pumpkin_protocol::{
     ConnectionState,
     java::{
@@ -149,9 +150,11 @@ impl JavaClient {
         );
     }
 
-    pub async fn handle_known_packs(&self, server: &Server, _config_acknowledged: SKnownPacks) {
+    pub async fn handle_known_packs(&self, _config_acknowledged: SKnownPacks) {
         log::debug!("Handling known packs");
-        for registry in &server.cached_registry {
+        let mut tags_to_send = Vec::new();
+        let registry = Registry::get_synced(self.version.load());
+        for registry in registry {
             let entries: Vec<RegistryEntry> = registry
                 .registry_entries
                 .iter()
@@ -159,18 +162,13 @@ impl JavaClient {
                 .collect();
             self.send_packet_now(&CRegistryData::new(&registry.registry_id, &entries))
                 .await;
+            if let Some(tag) = RegistryKey::from_string(&registry.registry_id.path)
+                && pumpkin_data::tag::get_registry_key_tags(self.version.load(), tag).is_some()
+            {
+                tags_to_send.push(tag);
+            }
         }
-        self.send_packet_now(&CUpdateTags::new(&[
-            pumpkin_data::tag::RegistryKey::Block,
-            pumpkin_data::tag::RegistryKey::Fluid,
-            pumpkin_data::tag::RegistryKey::Enchantment,
-            pumpkin_data::tag::RegistryKey::WorldgenBiome,
-            pumpkin_data::tag::RegistryKey::Item,
-            pumpkin_data::tag::RegistryKey::EntityType,
-            pumpkin_data::tag::RegistryKey::Dialog,
-            pumpkin_data::tag::RegistryKey::Timeline,
-        ]))
-        .await;
+        self.send_packet_now(&CUpdateTags::new(&tags_to_send)).await;
 
         // We are done with configuring
         log::debug!("Finished config");

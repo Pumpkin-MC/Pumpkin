@@ -1,5 +1,6 @@
 use std::io::{Error, Read, Write};
 
+use pumpkin_util::version::MinecraftVersion;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
@@ -14,7 +15,11 @@ pub trait Packet {
 }
 
 impl<P: Packet + Serialize> ClientPacket for P {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut serializer = serializer::Serializer::new(write);
         self.serialize(&mut serializer)
     }

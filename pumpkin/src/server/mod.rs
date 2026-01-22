@@ -14,7 +14,6 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::registry::Registry;
 use pumpkin_world::dimension::into_level;
 
 use crate::command::CommandSender;
@@ -74,8 +73,6 @@ pub struct Server {
     pub worlds: RwLock<Vec<Arc<World>>>,
     /// All the dimensions that exist on the server.
     pub dimensions: Vec<Dimension>,
-    /// Caches game registries for efficient access.
-    pub cached_registry: Vec<Registry>,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     /// Mojang's public keys, used for chat session signing
@@ -178,8 +175,6 @@ impl Server {
         let server = Self {
             basic_config,
             advanced_config,
-
-            cached_registry: Registry::get_synced(),
             container_id: 0.into(),
             worlds: RwLock::new(vec![]),
             dimensions: vec![

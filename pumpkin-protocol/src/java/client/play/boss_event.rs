@@ -5,6 +5,7 @@ use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, WritingError};
 use pumpkin_data::packet::clientbound::PLAY_BOSS_EVENT;
 use pumpkin_macros::packet;
+use pumpkin_util::version::MinecraftVersion;
 
 #[packet(PLAY_BOSS_EVENT)]
 pub struct CBossEvent<'a> {
@@ -19,7 +20,11 @@ impl<'a> CBossEvent<'a> {
 }
 
 impl ClientPacket for CBossEvent<'_> {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_uuid(self.uuid)?;
