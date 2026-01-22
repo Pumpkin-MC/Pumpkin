@@ -154,7 +154,11 @@ pub fn init_opentelemetry() {
 }
 
 pub fn init_logger(advanced_config: &AdvancedConfiguration) -> Option<WorkerGuard> {
-    let filter = EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new(
+        "info, \
+         h2=off,hyper=off,tonic=off,tower=off,\
+         opentelemetry=warn,opentelemetry_sdk=warn",
+    ));
 
     let (tx, rx) = mpsc::channel::<String>();
     let out = Arc::new(StdMutex::new(ConsoleOut::Stderr));
@@ -225,7 +229,9 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) -> Option<WorkerGuar
     let registry = {
         use opentelemetry::global::tracer;
         init_opentelemetry();
-        let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer("pumpkin"));
+        let otel_layer = tracing_opentelemetry::layer()
+            .with_tracer(tracer("pumpkin"))
+            .with_filter(EnvFilter::new("trace,h2=off,hyper=off,tonic=off,tower=off"));
         tracing_subscriber::registry()
             .with(console_layer)
             .with(file_layer)
