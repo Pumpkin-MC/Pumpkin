@@ -84,6 +84,11 @@ jobs:
 
   merge:
     if: github.repository == 'Pumpkin-MC/Pumpkin'
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     runs-on: ubuntu-latest
     needs:
       - docker-build-deploy
