@@ -32,6 +32,7 @@ use tokio::sync::{Mutex as TokioMutex, RwLock};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tracing::{Instrument, info_span, instrument};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt::writer::BoxMakeWriter;
@@ -120,6 +121,38 @@ impl io::Write for ConsoleChanWriter {
     }
 }
 
+#[cfg(feature = "otel")]
+pub fn init_opentelemetry() {
+    use opentelemetry::{KeyValue, global};
+    use opentelemetry_sdk::Resource;
+
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .build()
+        .expect("Failed to create OTLP span exporter");
+
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_resource(
+            Resource::builder()
+                .with_attributes(vec![
+                    KeyValue::new("service.name", "pumpkin-server"),
+                    KeyValue::new(
+                        "service.optimizations",
+                        if cfg!(debug_assertions) {
+                            "debug"
+                        } else {
+                            "release"
+                        },
+                    ),
+                ])
+                .build(),
+        )
+        .with_batch_exporter(exporter)
+        .build();
+
+    global::set_tracer_provider(provider);
+}
+
 pub fn init_logger(advanced_config: &AdvancedConfiguration) -> Option<WorkerGuard> {
     let filter = EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("info"));
 
@@ -191,7 +224,8 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) -> Option<WorkerGuar
     #[cfg(feature = "otel")]
     let registry = {
         use opentelemetry::global::tracer;
-        let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer("open_telemetry"));
+        init_opentelemetry();
+        let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer("pumpkin"));
         tracing_subscriber::registry()
             .with(console_layer)
             .with(file_layer)
@@ -239,6 +273,7 @@ pub struct PumpkinServer {
 }
 
 impl PumpkinServer {
+    #[instrument(name = "PumpkinServer::new")]
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
@@ -396,15 +431,16 @@ impl PumpkinServer {
             }
         }
 
-        log::info!("Stopped accepting incoming connections");
+        tracing::info!("Stopped accepting incoming connections");
 
         if let Err(e) = self
             .server
             .player_data_storage
             .save_all_players(&self.server)
+            .instrument(info_span!("save_all_players"))
             .await
         {
-            log::error!("Error saving all players during shutdown: {e}");
+            tracing::error!("Error saving all players during shutdown: {e}");
         }
 
         let kick_message = TextComponent::text("Server stopped");
@@ -414,18 +450,21 @@ impl PumpkinServer {
                 .await;
         }
 
-        log::info!("Ending player tasks");
+        tracing::info!("Ending player tasks");
 
         tasks.close();
-        tasks.wait().await;
+        tasks
+            .wait()
+            .instrument(info_span!("PumpkinServer::tasks.wait()"))
+            .await;
 
         self.unload_plugins().await;
 
-        log::info!("Starting save.");
+        tracing::info!("Starting save.");
 
         self.server.shutdown().await;
 
-        log::info!("Completed save!");
+        tracing::info!("Completed save!");
 
         if let Some(rl_storage) = LOGGER_IMPL.wait()
             && let Some(editor) = rl_storage.lock().await.take()
@@ -434,6 +473,7 @@ impl PumpkinServer {
         }
     }
 
+    #[instrument(skip(self, bedrock_clients))]
     pub async fn unified_listener_task(
         &self,
         master_client_id_counter: &mut u64,
@@ -448,7 +488,7 @@ impl PumpkinServer {
                 match tcp_result {
                     Ok((connection, client_addr)) => {
                         if let Err(e) = connection.set_nodelay(true) {
-                            log::warn!("Failed to set TCP_NODELAY: {e}");
+                            tracing::warn!("Failed to set TCP_NODELAY: {e}");
                         }
 
                         let client_id = *master_client_id_counter;
@@ -459,7 +499,9 @@ impl PumpkinServer {
                         } else {
                             format!("{client_addr}")
                         };
-                        log::debug!("Accepted connection from Java Edition: {formatted_address} (id {client_id})");
+                        let new_connection_span = tracing::info_span!("new_java_connection", protocol = "java", client_id, addr = %formatted_address);
+
+                        tracing::info!("Accepted connection from Java Edition: {formatted_address} (id {client_id})");
 
                         let mut java_client = JavaClient::new(connection, client_addr, client_id);
                         java_client.start_outgoing_packet_task();
@@ -474,24 +516,24 @@ impl PumpkinServer {
 
                             let player = java_client.player.lock().await;
                             if let Some(player) = player.as_ref() {
-                                log::debug!("Cleaning up player for id {client_id}");
+                                tracing::debug!("Cleaning up player for id {client_id}");
 
                                 if let Err(e) = server_clone.player_data_storage
                                         .handle_player_leave(player)
                                         .await
                                 {
-                                    log::error!("Failed to save player data on disconnect: {e}");
+                                    tracing::error!("Failed to save player data on disconnect: {e}");
                                 }
 
                                 player.remove().await;
                                 server_clone.remove_player(player).await;
                             } else if java_client.connection_state.load() == Play {
-                                log::error!("No player found for id {client_id}. This should not happen!");
+                                tracing::error!("No player found for id {client_id}. This should not happen!");
                             }
-                        });
+                        }.instrument(new_connection_span));
                     }
                     Err(e) => {
-                        log::error!("Failed to accept Java client connection: {e}");
+                        tracing::error!("Failed to accept Java client connection: {e}");
                         sleep(Duration::from_millis(50)).await;
                     }
                 }

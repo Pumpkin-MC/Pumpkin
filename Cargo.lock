@@ -1893,6 +1893,8 @@ dependencies = [
  "percent-encoding",
  "rand 0.9.2",
  "thiserror",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -2434,6 +2436,7 @@ dependencies = [
  "thread_local",
  "tokio",
  "tokio-util",
+ "tracing",
  "uuid",
 ]
 

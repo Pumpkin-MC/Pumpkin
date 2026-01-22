@@ -24,8 +24,6 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::sync::Mutex;
-use tokio_util::sync::CancellationToken;
-// use std::time::Duration;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -35,7 +33,8 @@ use std::{
     },
     thread,
 };
-// use tokio::runtime::Handle;
+use tokio_util::sync::CancellationToken;
+use tracing::instrument;
 use tokio::{
     select,
     sync::{
@@ -256,8 +255,9 @@ impl Level {
         self.tasks.spawn(task)
     }
 
+    #[instrument(name = "Level::shutdown", skip(self))]
     pub async fn shutdown(&self) {
-        log::info!("Saving level...");
+        tracing::info!("Saving level...");
         self.cancel_token.cancel();
         self.shut_down_chunk_system.store(true, Ordering::Relaxed);
         self.level_channel.notify();
@@ -270,7 +270,7 @@ impl Level {
             lock.drain(..).collect::<Vec<_>>()
         };
 
-        log::info!("Joining {} synchronous threads...", handles.len());
+        tracing::info!("Joining {} synchronous threads...", handles.len());
         tokio::task::spawn_blocking(move || {
             for handle in handles {
                 let _ = handle.join();
@@ -279,11 +279,11 @@ impl Level {
         .await
         .unwrap();
 
-        log::debug!("Awaiting remaining async tasks...");
+        tracing::debug!("Awaiting remaining async tasks...");
         self.tasks.wait().await;
         self.chunk_system_tasks.wait().await;
 
-        log::info!("Flushing savers to disk...");
+        tracing::info!("Flushing savers to disk...");
         self.chunk_saver.block_and_await_ongoing_tasks().await;
         self.entity_saver.block_and_await_ongoing_tasks().await;
 
@@ -425,6 +425,7 @@ impl Level {
         });
     }
 
+    #[instrument(skip(self))]
     // Gets random ticks, block ticks and fluid ticks
     pub async fn get_tick_data(&self) -> TickData {
         let mut ticks = TickData {

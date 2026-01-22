@@ -125,6 +125,7 @@ use serde::Serialize;
 use time::LevelTime;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
+use tracing::{Instrument, debug_span, info_span, instrument};
 
 pub mod border;
 pub mod bossbar;
@@ -228,6 +229,7 @@ impl World {
         }
     }
 
+    #[instrument(name = "World::shutdown", skip(self))]
     pub async fn shutdown(&self) {
         for (uuid, entity) in self.entities.read().await.iter() {
             self.save_entity(uuid, entity).await;
@@ -312,6 +314,7 @@ impl World {
         queue.push(BlockEvent { pos, r#type, data });
     }
 
+    #[instrument(skip(self))]
     pub async fn flush_synced_block_events(self: &Arc<Self>) {
         let events;
         // THIS IS IMPORTANT
@@ -555,70 +558,96 @@ impl World {
             .await;
     }
 
+    #[instrument(name = "World::tick", skip(self, server),
+        fields(
+            dimension = %self.dimension.minecraft_name,
+            loaded_chunks = tracing::field::Empty,
+            player_count = tracing::field::Empty,
+            entity_count = tracing::field::Empty
+    ))]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
         let start = tokio::time::Instant::now();
 
         // 1. Block & Environment
         self.flush_block_updates().await;
         self.flush_synced_block_events().await;
-        self.tick_environment().await;
+        self.tick_environment()
+            .instrument(info_span!("tick_environment"))
+            .await;
 
         // 2. Chunks
         let chunk_start = tokio::time::Instant::now();
-        self.tick_chunks().await;
+        self.tick_chunks()
+            .instrument(info_span!("tick_chunks"))
+            .await;
         let chunk_elapsed = chunk_start.elapsed();
 
         // 3. Players
-        let player_start = tokio::time::Instant::now();
-        let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
-        let player_count = players_to_tick.len();
-        for player in &players_to_tick {
-            player.tick(server).await;
+        let (player_count, players_to_tick, players_elapsed) = async {
+            let player_start = tokio::time::Instant::now();
+            let players_to_tick: Vec<_> = self.players.read().await.values().cloned().collect();
+            for player in &players_to_tick {
+                player.tick(server).await;
+            }
+            (
+                players_to_tick.len(),
+                players_to_tick,
+                player_start.elapsed(),
+            )
         }
-        let player_elapsed = player_start.elapsed();
+        .instrument(info_span!("tick_players"))
+        .await;
 
         // 4. Entities & Collision
-        let entity_start = tokio::time::Instant::now();
-        let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
-        let entity_count = entities_to_tick.len();
+        let (entity_elapsed, entity_count) = async {
+            let entity_start = tokio::time::Instant::now();
+            let entities_to_tick: Vec<_> = self.entities.read().await.values().cloned().collect();
+            let entity_count = entities_to_tick.len();
 
-        for entity in entities_to_tick {
-            entity.get_entity().age.fetch_add(1, Relaxed);
-            entity.tick(entity.clone(), server).await;
+            for entity in entities_to_tick {
+                entity.get_entity().age.fetch_add(1, Relaxed);
+                entity.tick(entity.clone(), server).await;
 
-            for player in &players_to_tick {
-                if player
-                    .living_entity
-                    .entity
-                    .bounding_box
-                    .load()
-                    .expand(1.0, 0.5, 1.0)
-                    .intersects(&entity.get_entity().bounding_box.load())
-                {
-                    entity.on_player_collision(player).await;
-                    break;
+                for player in &players_to_tick {
+                    if player
+                        .living_entity
+                        .entity
+                        .bounding_box
+                        .load()
+                        .expand(1.0, 0.5, 1.0)
+                        .intersects(&entity.get_entity().bounding_box.load())
+                    {
+                        entity.on_player_collision(player).await;
+                        break;
+                    }
                 }
             }
+            (entity_start.elapsed(), entity_count)
         }
-        let entity_elapsed = entity_start.elapsed();
+        .instrument(debug_span!("tick_entities"))
+        .await;
 
         self.level.chunk_loading.lock().unwrap().send_change();
 
-        // 5. Detailed Slow Tick Logging
         let total_elapsed = start.elapsed();
+        let span = tracing::Span::current();
+        span.record("loaded_chunks", self.level.loaded_chunk_count());
+        span.record("player_count", player_count);
+        span.record("entity_count", entity_count);
         if total_elapsed.as_millis() > 50 {
-            log::debug!(
+            tracing::debug!(
                 "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?}",
                 total_elapsed.as_millis(),
                 chunk_elapsed,
                 player_count,
-                player_elapsed,
+                players_elapsed,
                 entity_count,
                 entity_elapsed,
             );
         }
     }
 
+    #[instrument(skip(self))]
     pub async fn flush_block_updates(&self) {
         let mut block_state_updates_by_chunk_section = HashMap::new();
         for (position, block_state_id) in self.unsent_block_changes.lock().await.drain() {

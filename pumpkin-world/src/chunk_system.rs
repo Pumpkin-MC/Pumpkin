@@ -14,6 +14,7 @@ use pumpkin_data::block_properties::is_air;
 use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
+use tracing::{Instrument, debug_span, field, instrument};
 
 use crate::generation::height_limit::HeightLimitView;
 
@@ -1626,71 +1627,86 @@ impl GenerationSchedule {
         true
     }
 
+    #[instrument(skip(recv, send, level, lock), fields(dimension = %level.world_gen.dimension.minecraft_name, id = %tokio::task::id()))]
     async fn io_read_work(
         recv: crossfire::MAsyncRx<ChunkPos>,
         send: crossfire::MTx<(ChunkPos, RecvChunk)>,
         level: Arc<Level>,
         lock: IOLock,
     ) {
-        log::debug!("io read thread start");
+        tracing::debug!("io read task start");
         use crate::biome::hash_seed;
         let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
         let dimension = &level.world_gen.dimension;
         let (t_send, mut t_recv) = tokio::sync::mpsc::channel(2);
         while let Ok(pos) = recv.recv().await {
-            // debug!("io read thread receive chunk pos {pos:?}");
-            {
+            async {
                 let mut data = lock.0.lock().unwrap();
                 while data.contains_key(&pos) {
                     data = tokio::task::block_in_place(|| lock.1.wait(data).unwrap());
                 }
             }
-            level
-                .chunk_saver
-                .fetch_chunks(&level.level_folder, &[pos], t_send.clone())
-                .await;
-            let data = t_recv.recv().await.unwrap();
-            match data {
-                Loaded(chunk) => {
-                    if chunk.read().await.status == ChunkStatus::Full {
-                        if send
-                            .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
-                            .is_err()
-                        {
-                            break;
+            .instrument(debug_span!(
+                "waiting on pending write",
+                pos = field::debug(pos),
+                dimension = %level.world_gen.dimension.minecraft_name, id = %tokio::task::id()
+            ))
+            .await;
+
+            if !async {
+                level
+                    .chunk_saver
+                    .fetch_chunks(&level.level_folder, &[pos], t_send.clone())
+                    .await;
+                let data = t_recv.recv().await.unwrap();
+                match data {
+                    Loaded(chunk) => {
+                        if chunk.read().await.status == ChunkStatus::Full {
+                            if send
+                                .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
+                                .is_err()
+                            {
+                                return false;
+                            }
+                        } else {
+                            // debug!("io read thread receive proto chunk {pos:?}",);
+                            let val =
+                                RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
+                                    chunk.read().await.deref(),
+                                    dimension,
+                                    level.world_gen.default_block,
+                                    biome_mixer_seed,
+                                ))));
+                            if send.send((pos, val)).is_err() {
+                                return false;
+                            }
                         }
-                    } else {
-                        // debug!("io read thread receive proto chunk {pos:?}",);
-                        let val =
-                            RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
-                                chunk.read().await.deref(),
-                                dimension,
-                                level.world_gen.default_block,
-                                biome_mixer_seed,
-                            ))));
-                        if send.send((pos, val)).is_err() {
-                            break;
-                        }
+                        return true;
                     }
-                    continue;
+                    LoadedData::Missing(_) => {}
+                    LoadedData::Error(_) => {
+                        tracing::warn!("chunk data read error pos: {pos:?}. regenerating");
+                    }
                 }
-                LoadedData::Missing(_) => {}
-                LoadedData::Error(_) => {
-                    log::warn!("chunk data read error pos: {pos:?}. regenerating");
+                if send
+                    .send((
+                        pos,
+                        RecvChunk::IO(Proto(Box::new(ProtoChunk::new(
+                            pos.x,
+                            pos.y,
+                            dimension,
+                            level.world_gen.default_block,
+                            biome_mixer_seed,
+                        )))),
+                    ))
+                    .is_err()
+                {
+                    return false;
                 }
+                true
             }
-            if send
-                .send((
-                    pos,
-                    RecvChunk::IO(Proto(Box::new(ProtoChunk::new(
-                        pos.x,
-                        pos.y,
-                        dimension,
-                        level.world_gen.default_block,
-                        biome_mixer_seed,
-                    )))),
-                ))
-                .is_err()
+            .instrument(debug_span!("read", pos = field::debug(pos), dimension = %level.world_gen.dimension.minecraft_name, id = %tokio::task::id()))
+            .await
             {
                 break;
             }
@@ -1698,84 +1714,89 @@ impl GenerationSchedule {
         log::debug!("io read thread stop");
     }
 
+    #[instrument(skip(recv, level, lock), fields(dimension = %level.world_gen.dimension.minecraft_name, id = %tokio::task::id()))]
     async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
-        log::info!("io write thread start",);
+        tracing::info!("io write thread start",);
         while let Ok(data) = recv.recv().await {
-            // debug!("io write thread receive chunks size {}", data.len());
-            let mut vec = Vec::with_capacity(data.len());
-            for (pos, chunk) in data {
-                match chunk {
-                    Chunk::Level(chunk) => vec.push((pos, chunk)),
-                    Proto(chunk) => {
-                        let mut temp = Proto(chunk);
-                        temp.upgrade_to_level_chunk(&level.world_gen.dimension);
-                        let Chunk::Level(chunk) = temp else { panic!() };
-                        vec.push((pos, chunk));
-                    }
-                }
-            }
-            let pos = vec.iter().map(|(pos, _)| *pos).collect_vec();
-            level
-                .chunk_saver
-                .save_chunks(&level.level_folder, vec)
-                .await
-                .unwrap();
-            for i in pos {
-                let mut data = lock.0.lock().unwrap();
-                match data.entry(i) {
-                    Entry::Occupied(mut entry) => {
-                        let rc = entry.get_mut();
-                        if *rc == 1 {
-                            entry.remove();
-                            drop(data);
-                            lock.1.notify_all();
-                        } else {
-                            *rc -= 1;
+            let batch_size = data.len();
+            let batch_span = debug_span!("write batch recv", batch_size, dimension = %level.world_gen.dimension.minecraft_name, id = %tokio::task::id());
+            async {
+                let mut vec = Vec::with_capacity(data.len());
+                for (pos, chunk) in data {
+                    match chunk {
+                        Chunk::Level(chunk) => vec.push((pos, chunk)),
+                        Proto(chunk) => {
+                            let mut temp = Proto(chunk);
+                            temp.upgrade_to_level_chunk(&level.world_gen.dimension);
+                            let Chunk::Level(chunk) = temp else { panic!() };
+                            vec.push((pos, chunk));
                         }
                     }
-                    Entry::Vacant(_) => panic!(),
+                }
+                let pos = vec.iter().map(|(pos, _)| *pos).collect_vec();
+                level
+                    .chunk_saver
+                    .save_chunks(&level.level_folder, vec)
+                    .await
+                    .unwrap();
+                for i in pos {
+                    let mut data = lock.0.lock().unwrap();
+                    match data.entry(i) {
+                        Entry::Occupied(mut entry) => {
+                            let rc = entry.get_mut();
+                            if *rc == 1 {
+                                entry.remove();
+                                drop(data);
+                                lock.1.notify_all();
+                            } else {
+                                *rc -= 1;
+                            }
+                        }
+                        Entry::Vacant(_) => panic!(),
+                    }
                 }
             }
+            .instrument(batch_span)
+            .await;
         }
-        log::info!(
-            "io write thread stop id: {:?} name: {}",
-            thread::current().id(),
+        tracing::info!(
+            "io write thread stop: name: {}",
             thread::current().name().unwrap_or("unknown")
         );
     }
 
+    #[instrument(skip(recv, send, level), fields(dimension = %level.world_gen.dimension.minecraft_name))]
     fn generation_work(
         recv: crossfire::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
         send: crossfire::MTx<(ChunkPos, RecvChunk)>,
         level: Arc<Level>,
     ) {
-        log::debug!(
-            "generation thread start id: {:?} name: {}",
-            thread::current().id(),
-            thread::current().name().unwrap_or("unknown")
-        );
+        tracing::debug!("generation thread start",);
 
         let settings = gen_settings_from_dimension(&level.world_gen.dimension);
         while let Ok((pos, mut cache, stage)) = recv.recv() {
             // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
-            cache.advance(
-                stage,
-                level.block_registry.as_ref(),
-                settings,
-                &level.world_gen.random_config,
-                &level.world_gen.terrain_cache,
-                &level.world_gen.base_router,
-                level.world_gen.dimension,
+            let generate_span = debug_span!(
+                "generation",
+                pos = field::debug(pos),
+                stage = field::debug(stage)
             );
+            generate_span.in_scope(|| {
+                cache.advance(
+                    stage,
+                    level.block_registry.as_ref(),
+                    settings,
+                    &level.world_gen.random_config,
+                    &level.world_gen.terrain_cache,
+                    &level.world_gen.base_router,
+                    level.world_gen.dimension,
+                )
+            });
             if send.send((pos, RecvChunk::Generation(cache))).is_err() {
                 break;
             }
         }
-        log::debug!(
-            "generation thread stop id: {:?} name: {}",
-            thread::current().id(),
-            thread::current().name().unwrap_or("unknown")
-        );
+        tracing::debug!("generation thread stop",);
     }
 
     fn unload_chunk(&mut self) {

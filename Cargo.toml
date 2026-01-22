@@ -36,12 +36,11 @@ tracing-appender = "0.2"
 
 tracing-opentelemetry = "0.32"
 opentelemetry = "0.31"
-opentelemetry_sdk = "0.31"
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
 
 tokio = { version = "1.49", default-features = false }
 syn = { version = "2.0", default-features = false, features=["printing"] }
-
 
 
 thiserror = "2.0"

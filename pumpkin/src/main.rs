@@ -42,6 +42,7 @@
 compile_error!("Compiling for WASI targets is not supported!");
 
 use plugin::PluginManager;
+use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
 use std::{
     io::{self},
@@ -52,8 +53,6 @@ use tokio::signal::ctrl_c;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::RwLock;
-
-use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
 use pumpkin_util::{
@@ -108,7 +107,7 @@ async fn main() {
     let basic_config = BasicConfiguration::load(&config_dir);
     let advanced_config = AdvancedConfiguration::load(&config_dir);
 
-    pumpkin::init_logger(&advanced_config);
+    let worker_guard = pumpkin::init_logger(&advanced_config);
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -167,6 +166,7 @@ async fn main() {
 
     pumpkin_server.start().await;
     log::info!("The server has stopped.");
+    drop(worker_guard);
 }
 
 fn handle_interrupt() {
