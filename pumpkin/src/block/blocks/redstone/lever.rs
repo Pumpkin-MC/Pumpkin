@@ -104,11 +104,26 @@ impl BlockBehaviour for LeverBlock {
 
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
+            // Calculate the actual direction that will be used for placement
+            let direction = if let (Some(player), Some(use_item_on)) = (args.player, args.use_item_on) {
+                // Get the face that was clicked
+                if let Ok(clicked_face) = BlockDirection::try_from(use_item_on.face.0) {
+                    // Get the direction to check for placement validation
+                    WallMountedBlock::get_placement_direction(self, player, clicked_face)
+                } else {
+                    // Fallback to using state if parsing fails (shouldn't happen)
+                    self.get_direction(args.state.id, args.block)
+                }
+            } else {
+                // Fallback to using state if context not available
+                self.get_direction(args.state.id, args.block)
+            };
+
             WallMountedBlock::can_place_at(
                 self,
                 args.block_accessor,
                 args.position,
-                self.get_direction(args.state.id, args.block),
+                direction,
             )
             .await
         })
