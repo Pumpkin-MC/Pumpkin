@@ -23,8 +23,8 @@ use crate::command::CommandSender;
 use crate::command::tree::NodeType;
 use crate::server::Server;
 
-const LOG_DIR: &str = "logs";
-const MAX_ATTEMPTS: u32 = 100;
+pub const LOG_DIR: &str = "logs";
+pub const MAX_ATTEMPTS: u32 = 100;
 
 /// A wrapper for our logger to hold the terminal input while no input is expected in order to
 /// properly flush logs to the output while they happen instead of batched

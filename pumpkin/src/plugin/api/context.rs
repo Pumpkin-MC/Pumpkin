@@ -290,14 +290,12 @@ impl Context {
     }
 
     /// Initializes logging via the log crate for the plugin.
+    /// Note: Logging is now handled by the tracing system with `LogTracer` bridge.
+    /// This method is kept for compatibility but does nothing since logging
+    /// should be initialized globally.
     pub fn init_log(&self) {
-        let logger_arc = self.logger.clone();
-
-        let static_logger = Box::leak(Box::new(logger_arc));
-
-        if let Some(Some((logger_impl, level))) = static_logger.get() {
-            log::set_logger(logger_impl).unwrap();
-            log::set_max_level(*level);
-        }
+        // Logging is now handled globally by the tracing system
+        // No action needed for individual plugins (not tested tho)
+        // TODO: Test
     }
 }

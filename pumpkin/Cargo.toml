@@ -27,6 +27,16 @@ pumpkin-protocol.workspace = true
 pumpkin-macros.workspace = true
 
 log.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-log.workspace = true
+tracing-appender.workspace = true
+
+tracing-opentelemetry = { workspace = true, optional = true }
+opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, features = ["grpc-tonic"], optional = true }
+
 crossbeam.workspace = true
 uuid.workspace = true
 tokio = { workspace = true, features = [
@@ -94,3 +104,4 @@ tempfile.workspace = true
 [features]
 console-subscriber = ["dep:console-subscriber"]
 tokio_taskdump = ["pumpkin-world/tokio_taskdump"]
+otel = ["dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp"]

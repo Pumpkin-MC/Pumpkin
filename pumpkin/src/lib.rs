@@ -1,13 +1,12 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
-use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
+use crate::logging::PumpkinCommandCompleter;
 use crate::net::DisconnectReason;
 use crate::net::bedrock::BedrockClient;
 use crate::net::java::JavaClient;
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::server::{Server, ticker::Ticker};
-use log::{Level, LevelFilter};
 use net::authentication::fetch_mojang_public_keys;
 use plugin::PluginManager;
 use plugin::server::server_command::ServerCommandEvent;
@@ -16,22 +15,28 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::ConnectionState::Play;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
-use rustyline::Editor;
 use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
+use rustyline::{Editor, ExternalPrinter};
 use std::collections::HashMap;
-use std::io::{Cursor, ErrorKind, IsTerminal, stdin};
-use std::str::FromStr;
+use std::io::{self, Cursor, ErrorKind, IsTerminal, stdin};
+use std::mem;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex as StdMutex, OnceLock, mpsc};
 use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex as TokioMutex, RwLock};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_log::LogTracer;
+use tracing_subscriber::fmt::writer::BoxMakeWriter;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{EnvFilter, Layer};
 
 pub mod block;
 pub mod command;
@@ -57,106 +62,155 @@ pub static PERMISSION_MANAGER: LazyLock<Arc<RwLock<PermissionManager>>> = LazyLo
     )))
 });
 
-pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter)>;
+static CONSOLE_LOG_TX: OnceLock<Sender<String>> = OnceLock::new();
+
+pub type LoggerOption =
+    Option<Arc<tokio::sync::Mutex<Option<Editor<PumpkinCommandCompleter, FileHistory>>>>>;
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
-pub fn init_logger(advanced_config: &AdvancedConfiguration) {
-    use simplelog::{ConfigBuilder, SharedLogger, SimpleLogger, WriteLogger};
+enum ConsoleOut {
+    Stderr,
+    Printer(Box<dyn ExternalPrinter + Send>),
+}
+static CONSOLE_OUT: OnceLock<Arc<StdMutex<ConsoleOut>>> = OnceLock::new();
 
-    let logger = if advanced_config.logging.enabled {
-        let mut config = ConfigBuilder::new();
+struct ConsoleChanWriter {
+    tx: Sender<String>,
+    buf: Vec<u8>,
+}
 
-        if advanced_config.logging.timestamp {
-            config.set_time_format_custom(time::macros::format_description!(
-                "[year]-[month]-[day] [hour]:[minute]:[second]"
-            ));
-            config.set_time_level(LevelFilter::Error);
-            let _ = config.set_time_offset_to_local();
-        } else {
-            config.set_time_level(LevelFilter::Off);
+impl ConsoleChanWriter {
+    fn new(tx: Sender<String>) -> Self {
+        Self {
+            tx,
+            buf: Vec::new(),
         }
+    }
 
-        if !advanced_config.logging.color {
-            for level in Level::iter() {
-                config.set_level_color(level, None);
+    fn emit_complete_lines(&mut self) {
+        while let Some(nl) = self.buf.iter().position(|&b| b == b'\n') {
+            let chunk = self.buf.drain(..=nl).collect::<Vec<u8>>();
+            let s = String::from_utf8_lossy(&chunk);
+            let line = s.trim_end_matches('\n');
+            if !line.is_empty() {
+                let _ = self.tx.send(line.to_string());
             }
-        } else {
-            config.set_write_log_enable_colors(true);
         }
+    }
+}
 
-        if !advanced_config.logging.threads {
-            config.set_thread_level(LevelFilter::Off);
-        } else {
-            config.set_thread_level(LevelFilter::Info);
+impl io::Write for ConsoleChanWriter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.buf.extend_from_slice(bytes);
+        self.emit_complete_lines();
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if !self.buf.is_empty() {
+            let buf = mem::take(&mut self.buf);
+            let s = String::from_utf8_lossy(&buf);
+            let line = s.trim_end_matches('\n');
+            if !line.is_empty() {
+                let _ = self.tx.send(line.to_string());
+            }
         }
+        Ok(())
+    }
+}
 
-        let level = std::env::var("RUST_LOG")
-            .ok()
-            .as_deref()
-            .map(LevelFilter::from_str)
-            .and_then(Result::ok)
-            .unwrap_or(LevelFilter::Info);
+pub fn init_logger(advanced_config: &AdvancedConfiguration) -> Option<WorkerGuard> {
+    let filter = EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("info"));
 
-        let file_logger: Option<Box<dyn SharedLogger + 'static>> =
-            if advanced_config.logging.file.is_empty() {
+    let (tx, rx) = mpsc::channel::<String>();
+    let out = Arc::new(StdMutex::new(ConsoleOut::Stderr));
+    let _ = CONSOLE_OUT.set(out.clone());
+    let _ = CONSOLE_LOG_TX.set(tx.clone());
+
+    std::thread::spawn(move || {
+        while let Ok(msg) = rx.recv() {
+            let mut guard = out.lock().unwrap();
+            match &mut *guard {
+                ConsoleOut::Stderr => eprintln!("{msg}"),
+                ConsoleOut::Printer(p) => {
+                    let _ = p.print(msg);
+                }
+            }
+        }
+    });
+
+    let rl_storage: LoggerOption = if advanced_config.commands.use_tty && stdin().is_terminal() {
+        let rl_config = Config::builder()
+            .auto_add_history(true)
+            .completion_type(rustyline::CompletionType::List)
+            .edit_mode(rustyline::EditMode::Emacs)
+            .build();
+
+        match Editor::with_config(rl_config) {
+            Ok(mut editor) => {
+                editor.set_helper(Some(PumpkinCommandCompleter::new()));
+                Some(Arc::new(TokioMutex::new(Some(editor))))
+            }
+            Err(e) => {
+                eprintln!("Failed to init Readline: {e}");
                 None
-            } else {
-                Some(
-                    GzipRollingLogger::new(
-                        level,
-                        {
-                            let mut config = config.clone();
-                            for level in Level::iter() {
-                                config.set_level_color(level, None);
-                            }
-                            config.build()
-                        },
-                        advanced_config.logging.file.clone(),
-                    )
-                    .expect("Failed to initialize file logger.")
-                        as Box<dyn SharedLogger>,
-                )
-            };
-
-        let (logger, rl): (
-            Box<dyn SharedLogger + 'static>,
-            Option<Editor<PumpkinCommandCompleter, FileHistory>>,
-        ) = if advanced_config.commands.use_tty && stdin().is_terminal() {
-            let rl_config = Config::builder()
-                .auto_add_history(true)
-                .completion_type(rustyline::CompletionType::List)
-                .edit_mode(rustyline::EditMode::Emacs)
-                .build();
-            let helper = PumpkinCommandCompleter::new();
-
-            match Editor::with_config(rl_config) {
-                Ok(mut rl) => {
-                    rl.set_helper(Some(helper));
-                    (
-                        WriteLogger::new(level, config.build(), std::io::stdout()),
-                        Some(rl),
-                    )
-                }
-                Err(e) => {
-                    log::warn!(
-                        "Failed to initialize console input ({e}); falling back to simple logger"
-                    );
-                    (SimpleLogger::new(level, config.build()), None)
-                }
             }
-        } else {
-            (SimpleLogger::new(level, config.build()), None)
-        };
-
-        Some((ReadlineLogWrapper::new(logger, file_logger, rl), level))
+        }
     } else {
         None
     };
 
-    if LOGGER_IMPL.set(logger).is_err() {
-        panic!("Failed to set logger. already initialized");
+    let make_console_writer = {
+        let tx = CONSOLE_LOG_TX
+            .get()
+            .expect("Failed to get CONSOLE_LOG_TX")
+            .clone();
+        BoxMakeWriter::new(move || -> Box<dyn io::Write + Send> {
+            Box::new(ConsoleChanWriter::new(tx.clone()))
+        })
+    };
+
+    let console_layer = tracing_subscriber::fmt::layer()
+        .with_writer(make_console_writer)
+        .with_ansi(advanced_config.logging.color)
+        .with_thread_ids(advanced_config.logging.threads)
+        .with_target(true)
+        .with_filter(filter.clone());
+
+    let file_appender =
+        tracing_appender::rolling::daily(logging::LOG_DIR, advanced_config.logging.file.clone());
+    let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_writer(file_writer)
+        .with_ansi(false)
+        .with_thread_ids(advanced_config.logging.threads)
+        .with_target(true)
+        .with_filter(filter);
+
+    #[cfg(feature = "otel")]
+    let registry = {
+        use opentelemetry::global::tracer;
+        let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer("open_telemetry"));
+        tracing_subscriber::registry()
+            .with(console_layer)
+            .with(file_layer)
+            .with(otel_layer)
+    };
+
+    #[cfg(not(feature = "otel"))]
+    let registry = tracing_subscriber::registry()
+        .with(console_layer)
+        .with(file_layer);
+
+    tracing::subscriber::set_global_default(registry).expect("Failed to set tracing subscriber");
+    LogTracer::init().expect("Failed to set LogTracer");
+
+    if LOGGER_IMPL.set(rl_storage).is_err() {
+        panic!("Failed to set logger. Already initialized");
     }
+
+    Some(file_guard)
 }
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
@@ -196,9 +250,10 @@ impl PumpkinServer {
         let mut ticker = Ticker::new();
 
         if server.advanced_config.commands.use_console
-            && let Some((wrapper, _)) = LOGGER_IMPL.wait()
+            && let Some(editor) = LOGGER_IMPL.wait().as_ref()
         {
-            if let Some(rl) = wrapper.take_readline() {
+            let editor = editor.clone();
+            if let Some(rl) = editor.lock().await.take() {
                 setup_console(rl, server.clone());
             } else {
                 if server.advanced_config.commands.use_tty {
@@ -330,7 +385,7 @@ impl PumpkinServer {
     pub async fn start(&self) {
         let tasks = Arc::new(TaskTracker::new());
         let mut master_client_id: u64 = 0;
-        let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
+        let bedrock_clients = Arc::new(TokioMutex::new(HashMap::new()));
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
@@ -372,10 +427,10 @@ impl PumpkinServer {
 
         log::info!("Completed save!");
 
-        if let Some((wrapper, _)) = LOGGER_IMPL.wait()
-            && let Some(rl) = wrapper.take_readline()
+        if let Some(rl_storage) = LOGGER_IMPL.wait()
+            && let Some(editor) = rl_storage.lock().await.take()
         {
-            let _ = rl;
+            drop(editor)
         }
     }
 
@@ -383,7 +438,7 @@ impl PumpkinServer {
         &self,
         master_client_id_counter: &mut u64,
         tasks: &Arc<TaskTracker>,
-        bedrock_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
+        bedrock_clients: &Arc<TokioMutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
     ) -> bool {
         let mut udp_buf = [0; 1496]; // Buffer for UDP receive
 
@@ -550,6 +605,12 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
         let _ = helper.rt.set(tokio::runtime::Handle::current());
     }
 
+    if let Ok(printer) = rl.create_external_printer()
+        && let Some(out) = CONSOLE_OUT.get()
+    {
+        *out.lock().unwrap() = ConsoleOut::Printer(Box::new(printer));
+    }
+
     std::thread::spawn(move || {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let readline = rl.readline("$ ");
@@ -576,8 +637,8 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 }
             }
         }
-        if let Some((wrapper, _)) = LOGGER_IMPL.wait() {
-            wrapper.return_readline(rl);
+        if let Some(rl_storage) = LOGGER_IMPL.wait().as_ref() {
+            *rl_storage.blocking_lock() = Some(rl);
         }
     });
 

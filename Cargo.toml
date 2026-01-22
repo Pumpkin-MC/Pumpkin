@@ -29,8 +29,19 @@ debug = true
 
 [workspace.dependencies]
 log = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-log = "0.2"
+tracing-appender = "0.2"
+
+tracing-opentelemetry = "0.32"
+opentelemetry = "0.31"
+opentelemetry_sdk = "0.31"
+opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
+
 tokio = { version = "1.49", default-features = false }
 syn = { version = "2.0", default-features = false, features=["printing"] }
+
 
 
 thiserror = "2.0"
