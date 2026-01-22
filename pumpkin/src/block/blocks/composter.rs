@@ -50,34 +50,36 @@ impl BlockBehaviour for ComposterBlock {
                 self.clear_composter(args.world, args.position, state_id, args.block)
                     .await;
             }
-            // Determine whether the interaction actually changed the composter.
-            let mut handled = false;
-            if level == 8 {
+            // Determine whether this interaction actually changed the composter.
+            let handled = if level == 8 {
                 self.clear_composter(args.world, args.position, state_id, args.block)
                     .await;
-                handled = true;
-            }
+                true
+            } else {
+                // Take the lock and extract the item id into a temporary to avoid
+                // holding a temporary across an `if let` scrutinee (deadlock risk).
+                let item_id = args.item_stack.lock().await.item.id;
 
-            if level < 7 {
-                if let Some(chance) =
-                    get_composter_increase_chance_from_item_id(args.item_stack.lock().await.item.id)
+                if level < 7
+                    && let Some(chance) = get_composter_increase_chance_from_item_id(item_id)
+                    && (level == 0 || rand::rng().random_bool(f64::from(chance)))
                 {
-                    if level == 0 || rand::rng().random_bool(f64::from(chance)) {
-                        self.update_level_composter(
-                            args.world,
-                            args.position,
-                            state_id,
-                            args.block,
-                            level + 1,
-                        )
+                    self.update_level_composter(
+                        args.world,
+                        args.position,
+                        state_id,
+                        args.block,
+                        level + 1,
+                    )
+                    .await;
+                    args.world
+                        .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
                         .await;
-                        args.world
-                            .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
-                            .await;
-                        handled = true;
-                    }
+                    true
+                } else {
+                    false
                 }
-            }
+            };
 
             if handled {
                 BlockActionResult::Consume
