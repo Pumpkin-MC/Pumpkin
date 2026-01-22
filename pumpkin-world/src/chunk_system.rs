@@ -14,7 +14,7 @@ use pumpkin_data::block_properties::is_air;
 use pumpkin_data::dimension::Dimension;
 use std::default::Default;
 use std::pin::Pin;
-use tracing::{Instrument, debug_span, field, instrument};
+use tracing::{Instrument, debug_span, field, info_span, instrument};
 
 use crate::generation::height_limit::HeightLimitView;
 
@@ -1649,7 +1649,7 @@ impl GenerationSchedule {
             .instrument(debug_span!(
                 "waiting on pending write",
                 pos = field::debug(pos),
-                dimension = %level.world_gen.dimension.minecraft_name, id = %tokio::task::id()
+                dimension = %level.world_gen.dimension.minecraft_name, task_id = %tokio::task::id()
             ))
             .await;
 
@@ -1705,7 +1705,7 @@ impl GenerationSchedule {
                 }
                 true
             }
-            .instrument(debug_span!("read", pos = field::debug(pos), dimension = %level.world_gen.dimension.minecraft_name, id = %tokio::task::id()))
+            .instrument(debug_span!("read", pos = field::debug(pos), dimension = %level.world_gen.dimension.minecraft_name, task_id = %tokio::task::id()))
             .await
             {
                 break;
@@ -1714,12 +1714,12 @@ impl GenerationSchedule {
         log::debug!("io read thread stop");
     }
 
-    #[instrument(skip(recv, level, lock), fields(dimension = %level.world_gen.dimension.minecraft_name, id = %tokio::task::id()))]
+    #[instrument(skip(recv, level, lock), fields(dimension = %level.world_gen.dimension.minecraft_name, task_id = %tokio::task::id()))]
     async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
         tracing::info!("io write thread start",);
         while let Ok(data) = recv.recv().await {
             let batch_size = data.len();
-            let batch_span = debug_span!("write batch recv", batch_size, dimension = %level.world_gen.dimension.minecraft_name, id = %tokio::task::id());
+            let batch_span = debug_span!("write batch recv", batch_size, dimension = %level.world_gen.dimension.minecraft_name, task_id = %tokio::task::id());
             async {
                 let mut vec = Vec::with_capacity(data.len());
                 for (pos, chunk) in data {
@@ -1775,8 +1775,8 @@ impl GenerationSchedule {
 
         let settings = gen_settings_from_dimension(&level.world_gen.dimension);
         while let Ok((pos, mut cache, stage)) = recv.recv() {
-            // debug!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
-            let generate_span = debug_span!(
+            tracing::info!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
+            let generate_span = info_span!(
                 "generation",
                 pos = field::debug(pos),
                 stage = field::debug(stage)
