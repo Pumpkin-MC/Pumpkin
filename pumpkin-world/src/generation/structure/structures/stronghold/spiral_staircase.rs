@@ -129,7 +129,11 @@ impl StructurePieceBase for SpiralStaircasePiece {
             1,
             1,
             pieces_to_process,
-            Some(StrongholdPieceType::FiveWayCrossing),
+            if self.is_structure_start {
+                Some(StrongholdPieceType::FiveWayCrossing)
+            } else {
+                None
+            },
         );
     }
 

@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
@@ -72,8 +71,6 @@ pub struct JavaClient {
     pub server_address: Mutex<String>,
     /// The current connection state of the client (e.g., Handshaking, Status, Play).
     pub connection_state: AtomicCell<ConnectionState>,
-    /// Indicates if the client connection is closed.
-    pub closed: Arc<AtomicBool>,
     /// The client's IP address.
     pub address: Mutex<SocketAddr>,
     /// The client's brand or modpack information, Optional.
@@ -105,7 +102,6 @@ impl JavaClient {
             server_address: Mutex::new(String::new()),
             address: Mutex::new(address),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
-            closed: Arc::new(AtomicBool::new(false)),
             close_token: CancellationToken::new(),
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
@@ -187,7 +183,7 @@ impl JavaClient {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        if self.closed.load(Ordering::Relaxed) {
+        if self.close_token.is_cancelled() {
             None
         } else {
             Some(self.tasks.spawn(task))
@@ -210,7 +206,7 @@ impl JavaClient {
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
         if let Err(err) = self.outgoing_packet_queue_send.send(packet_data).await {
             // This is expected to fail if we are closed
-            if !self.closed.load(Ordering::Relaxed) {
+            if !self.close_token.is_cancelled() {
                 log::error!(
                     "Failed to add packet to the outgoing packet queue for client {}: {}",
                     self.id,
@@ -283,7 +279,7 @@ impl JavaClient {
             .await
         {
             // It is expected that the packet will fail if we are closed
-            if !self.closed.load(Ordering::Relaxed) {
+            if !self.close_token.is_cancelled() {
                 log::warn!("Failed to send packet to client {}: {}", self.id, err);
                 // We now need to close the connection to the client since the stream is in an
                 // unknown state
@@ -406,14 +402,13 @@ impl JavaClient {
             .outgoing_packet_queue_recv
             .take()
             .expect("This was set in the new fn");
-        let close_interrupt = self.close_token.clone();
-        let closed = self.closed.clone();
+        let close_token = self.close_token.clone();
         let writer = self.network_writer.clone();
         let id = self.id;
         self.spawn_task(async move {
-            while !closed.load(Ordering::Relaxed) {
+            while !close_token.is_cancelled() {
                 let recv_result = tokio::select! {
-                    () =  close_interrupt.cancelled() => None,
+                    () =  close_token.cancelled() => None,
                     res = packet_receiver.recv() => res,
                 };
 
@@ -423,12 +418,11 @@ impl JavaClient {
 
                 if let Err(err) = writer.lock().await.write_packet(packet_data).await {
                     // It is expected that the packet will fail if we are closed
-                    if !closed.load(Ordering::Relaxed) {
+                    if !close_token.is_cancelled() {
                         log::warn!("Failed to send packet to client {id}: {err}",);
                         // We now need to close the connection to the client since the stream is in an
                         // unknown state
-                        close_interrupt.cancel();
-                        closed.store(true, Ordering::Relaxed);
+                        close_token.cancel();
                         break;
                     }
                 }
@@ -447,7 +441,10 @@ impl JavaClient {
     /// This function does not attempt to send any disconnect packets to the client.
     pub fn close(&self) {
         self.close_token.cancel();
-        self.closed.store(true, Ordering::Relaxed);
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.close_token.is_cancelled()
     }
 
     async fn handle_login_packet(
