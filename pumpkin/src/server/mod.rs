@@ -16,6 +16,7 @@ use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::registry::Registry;
 use pumpkin_world::dimension::into_level;
+use tracing::{Instrument, info_span, instrument};
 
 use crate::command::CommandSender;
 use pumpkin_macros::send_cancellable;
@@ -40,7 +41,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
 use tokio::sync::{Mutex, OnceCell, RwLock};
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
 mod connection_cache;
@@ -437,13 +438,17 @@ impl Server {
         self.listing.lock().await.remove_player(player);
     }
 
+    #[instrument(name = "Server::shutdown", skip(self))]
     pub async fn shutdown(&self) {
         self.tasks.close();
-        log::debug!("Awaiting tasks for server");
-        self.tasks.wait().await;
-        log::debug!("Done awaiting tasks for server");
+        tracing::debug!("Awaiting tasks for server");
+        self.tasks
+            .wait()
+            .instrument(info_span!("Server::tasks.wait()"))
+            .await;
+        tracing::debug!("Done awaiting tasks for server");
 
-        log::info!("Starting worlds");
+        tracing::info!("Starting worlds");
         for world in self.worlds.read().await.iter() {
             world.shutdown().await;
         }
@@ -454,9 +459,9 @@ impl Server {
             .world_info_writer
             .write_world_info(&level_data, &self.basic_config.get_world_path())
         {
-            log::error!("Failed to save level.dat: {err}");
+            tracing::error!("Failed to save level.dat: {err}");
         }
-        log::info!("Completed worlds");
+        tracing::info!("Completed worlds");
     }
 
     /// Broadcasts a packet to all players in all worlds.
@@ -675,6 +680,7 @@ impl Server {
             .get_digest(secret)
     }
 
+    #[instrument(name = "Server::tick", skip(self), fields(tps = self.get_tps(), mspt = self.get_mspt(), target_tick_rate = self.tick_rate_manager.tickrate()))]
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub async fn tick(self: &Arc<Self>) {
@@ -686,6 +692,7 @@ impl Server {
         }
     }
 
+    #[instrument(skip(self))]
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
     pub async fn tick_players_and_network(&self) {
@@ -700,25 +707,35 @@ impl Server {
             player.tick(self).await;
         }
     }
+
+    #[instrument(name = "Server::tick_worlds", skip(self))]
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
         let worlds = self.worlds.read().await.clone();
-        let mut handles = Vec::with_capacity(worlds.len());
-        for world in &worlds {
-            let world = world.clone();
-            let server = self.clone();
-            handles.push(tokio::spawn(async move {
-                world.tick(&server).await;
-            }));
+        let server = self.clone();
+
+        let mut set = JoinSet::new();
+
+        for world in worlds {
+            let server = server.clone();
+            set.spawn(
+                async move {
+                    world.tick(&server).await;
+                }
+                .in_current_span(),
+            );
         }
-        for handle in handles {
-            // Wait for all world ticks to complete
-            let _ = handle.await;
+
+        // Drain all results
+        while let Some(res) = set.join_next().await {
+            if let Err(join_err) = res {
+                tracing::error!(error = %join_err, "world tick task panicked/cancelled");
+            }
         }
 
         // Global periodic tasks
         if let Err(e) = self.player_data_storage.tick(self).await {
-            log::error!("Error ticking player data: {e}");
+            tracing::error!("Error ticking player data: {e}");
         }
     }
 
@@ -759,7 +776,7 @@ impl Server {
         if mspt <= 0.0 {
             return 0.0;
         }
-        1000.0 / mspt
+        (1000.0 / mspt).min(f64::from(self.tick_rate_manager.tickrate()))
     }
 
     /// Returns a copy of the last 100 tick times.
