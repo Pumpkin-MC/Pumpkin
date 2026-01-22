@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::{collections::HashMap, pin::Pin};
-
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, tag,
     fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
 };
 use pumpkin_util::math::position::BlockPos;
@@ -531,6 +531,11 @@ pub trait FlowingFluid: Send + Sync {
             let block = world.get_block(pos).await;
             let current_state_id = world.get_block_state_id(pos).await;
             
+            // Check if the block should be broken to drop loot
+            if block.id != Block::AIR.id {
+                world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
+            }
+
             // Extract the new state before any await to avoid Send issues
             let new_waterlogged_state = {
                 block.properties(current_state_id).and_then(|properties| {
@@ -605,6 +610,7 @@ pub trait FlowingFluid: Send + Sync {
         Box::pin(async move {
             // let block_state_id = world.get_block_state_id(pos).await;
             let block_state = world.get_block_state(pos).await;
+            let block = Block::from_id(block_id);
 
             if let Some(other_fluid) = Fluid::from_state_id(block_state.id) {
                 if fluid.id != other_fluid.id {
@@ -615,10 +621,17 @@ pub trait FlowingFluid: Send + Sync {
                 }
             }
 
+            // Even if these are PistonBehavior::Destroy, water shouldn't replace them
+            if block.has_tag(&tag::Block::MINECRAFT_DOORS)
+                || block.has_tag(&tag::Block::MINECRAFT_BEDS)
+            {
+                return false;
+            }
+
             // Only allow replacing if the current block state is marked replaceable
             // (e.g. tall grass) or the block is air. This prevents non-replaceable,
             // non-solid blocks from being overwritten by fluids.
-            block_state.replaceable() || block_id == Block::AIR.id
+            block_state.replaceable() || block_id == Block::AIR.id || block_state.piston_behavior == pumpkin_data::block_state::PistonBehavior::Destroy
         })
     }
 
