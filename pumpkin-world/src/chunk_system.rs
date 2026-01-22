@@ -1775,7 +1775,7 @@ impl GenerationSchedule {
 
         let settings = gen_settings_from_dimension(&level.world_gen.dimension);
         while let Ok((pos, mut cache, stage)) = recv.recv() {
-            tracing::info!("generation thread receive chunk pos {pos:?} to stage {stage:?}");
+            tracing::debug!("generation thread received chunk pos {pos:?} to stage {stage:?}");
             let generate_span = info_span!(
                 "generation",
                 pos = field::debug(pos),
