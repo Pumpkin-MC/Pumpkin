@@ -1,7 +1,7 @@
 use std::pin::Pin;
 use std::sync::Weak;
 use std::sync::atomic::Ordering::Relaxed;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::Ordering},
@@ -627,7 +627,15 @@ impl World {
         .instrument(debug_span!("tick_entities"))
         .await;
 
-        self.level.chunk_loading.lock().unwrap().send_change();
+        let chunk_loading_lock_start = Instant::now();
+        let mut guard = self.level.chunk_loading.lock().unwrap();
+        let chunk_loading_lock_elapased = chunk_loading_lock_start.elapsed();
+
+        let span =
+            debug_span!("chunk_loading.send_change", lock_wait = ?chunk_loading_lock_elapased);
+        span.in_scope(|| {
+            guard.send_change();
+        });
 
         let total_elapsed = start.elapsed();
         let span = tracing::Span::current();
