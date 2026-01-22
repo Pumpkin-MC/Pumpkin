@@ -533,28 +533,23 @@ pub trait FlowingFluid: Send + Sync {
             
             // Extract the new state before any await to avoid Send issues
             let new_waterlogged_state = {
-                if let Some(properties) = block.properties(current_state_id) {
+                block.properties(current_state_id).and_then(|properties| {
                     let original_props = properties.to_props();
                     // If the block has a waterlogged property, set it to "true".
-                    if original_props.iter().any(|(k, _)| *k == "waterlogged") {
+                    original_props.iter().any(|(k, _)| *k == "waterlogged").then(|| {
                         let props: Vec<(&str, &str)> = original_props
                             .iter()
                             .map(|(key, value)| {
                                 if *key == "waterlogged" {
                                     ("waterlogged", "true")
                                 } else {
-                                    (key.as_ref(), value.as_ref())
+                                    (*key, *value)
                                 }
                             })
                             .collect();
-                        let new_state = block.from_properties(&props).to_state_id(block);
-                        Some(new_state)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+                        block.from_properties(&props).to_state_id(block)
+                    })
+                })
             };
             
             if let Some(new_state) = new_waterlogged_state {
