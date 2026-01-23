@@ -326,6 +326,7 @@ impl BlockRegistryExt for BlockRegistry {
                 state,
                 block_pos,
                 None,
+                None,
             )
             .await
         })
@@ -501,6 +502,7 @@ impl BlockRegistry {
         block: &Block,
         state: &BlockState,
         position: &BlockPos,
+        direction: Option<BlockDirection>,
         use_item_on: Option<&SUseItemOn>,
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block.id);
@@ -513,6 +515,7 @@ impl BlockRegistry {
                     block,
                     state,
                     position,
+                    direction,
                     player,
                     use_item_on,
                 })

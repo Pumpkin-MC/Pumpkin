@@ -226,6 +226,7 @@ impl BlockBehaviour for FireBlock {
                     block: &Block::FIRE,
                     state: Block::FIRE.default_state,
                     position: args.position,
+                    direction: None,
                     player: None,
                     use_item_on: None,
                 })
@@ -277,6 +278,7 @@ impl BlockBehaviour for FireBlock {
                     block,
                     state: block.default_state,
                     position: pos,
+                    direction: None,
                     player: None,
                     use_item_on: None,
                 })

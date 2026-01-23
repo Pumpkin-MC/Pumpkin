@@ -2017,6 +2017,7 @@ impl JavaClient {
                 block,
                 block.default_state,
                 &final_block_pos,
+                Some(final_face),
                 Some(&use_item_on),
             )
             .await

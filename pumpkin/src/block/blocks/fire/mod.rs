@@ -58,6 +58,7 @@ impl FireBlockBase {
                     block: &Block::SOUL_FIRE,
                     state: Block::SOUL_FIRE.default_state,
                     position: block_pos,
+                    direction: None,
                     player: None,
                     use_item_on: None,
                 })
@@ -71,6 +72,7 @@ impl FireBlockBase {
                     block: &Block::FIRE,
                     state: Block::FIRE.default_state,
                     position: block_pos,
+                    direction: None,
                     player: None,
                     use_item_on: None,
                 })
