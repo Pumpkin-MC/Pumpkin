@@ -1313,6 +1313,7 @@ impl JavaClient {
                                 .block_registry
                                 .broken(world, block, player, &position, server, broken_state)
                                 .await;
+                            player.apply_tool_damage_for_block_break(broken_state).await;
                         } else {
                             player.mining.store(true, Ordering::Relaxed);
                             *player.mining_pos.lock().await = position;
@@ -1381,6 +1382,7 @@ impl JavaClient {
                         .block_registry
                         .broken(world, block, player, &location, server, state)
                         .await;
+                    player.apply_tool_damage_for_block_break(state).await;
 
                     self.update_sequence(player, player_action.sequence.0);
                 }
@@ -1516,6 +1518,12 @@ impl JavaClient {
                 return Ok(());
             }
         }
+        let slot_index = if matches!(hand, Hand::Left) {
+            inventory.get_selected_slot() as usize
+        } else {
+            PlayerInventory::OFF_HAND_SLOT
+        };
+
         let mut stack = item.lock().await;
 
         if stack.is_empty() {
@@ -1523,6 +1531,8 @@ impl JavaClient {
             // If the hand is empty we stop here
             return Ok(());
         }
+
+        let before = stack.clone();
 
         server
             .item_registry
@@ -1545,6 +1555,12 @@ impl JavaClient {
             if player.gamemode.load() != GameMode::Creative {
                 stack.decrement(1);
             }
+        }
+
+        let after = stack.clone();
+        drop(stack);
+        if !after.are_equal(&before) {
+            player.sync_hand_slot(slot_index, after).await;
         }
 
         Ok(())

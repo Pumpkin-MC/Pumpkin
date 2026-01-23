@@ -9,6 +9,10 @@ pub mod item;
 pub mod packet;
 
 #[rustfmt::skip]
+#[path = "generated/jukebox_song.rs"]
+pub mod jukebox_song;
+
+#[rustfmt::skip]
 #[path = "generated/registry.rs"]
 pub mod registry;
 

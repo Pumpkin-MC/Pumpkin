@@ -1,3 +1,4 @@
+use pumpkin_data::block_properties::is_air;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::{HeightMap, include_json_static};
 use serde::Deserialize;
@@ -366,8 +367,8 @@ impl CountOnEveryLayerPlacementModifier {
     }
 
     fn blocks_spawn(state: &RawBlockState) -> bool {
-        let block = state.to_block();
-        state.to_state().is_air() || block == &Block::WATER || block == &Block::LAVA
+        let block = state.to_block_id();
+        is_air(state.0) || block == Block::WATER || block == Block::LAVA
     }
 }
 

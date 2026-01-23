@@ -2,7 +2,7 @@
 
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
-use crate::data_component::DataComponent::{MaxStackSize, Enchantments, Damage, CustomData, MaxDamage, CustomName, ItemName, AttributeModifiers, Food, Consumable, Tool, Equippable, DeathProtection, BlocksAttacks, JukeboxPlayable};
+use crate::data_component::DataComponent::*;
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
 use crate::{AttributeModifierSlot, Block, Enchantment};
@@ -38,12 +38,13 @@ pub trait DataComponentImpl: Send + Sync {
     fn as_any(&self) -> &dyn Any;
     fn as_mut_any(&mut self) -> &mut dyn Any;
 }
-#[must_use] 
+#[must_use]
 pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataComponentImpl>> {
     match id {
         MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
+        Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -151,7 +152,21 @@ impl DataComponentImpl for DamageImpl {
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct UnbreakableImpl;
-#[derive(Clone, Hash, PartialEq, Eq)]
+impl UnbreakableImpl {
+    fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
+impl DataComponentImpl for UnbreakableImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
+    fn get_hash(&self) -> i32 {
+        0
+    }
+    default_impl!(Unbreakable);
+}
+#[derive(Clone, Hash, PartialEq)]
 pub struct CustomNameImpl {
     // TODO make TextComponent const
     pub name: &'static str,
@@ -312,7 +327,7 @@ pub struct ConsumableImpl {
 }
 
 impl ConsumableImpl {
-    #[must_use] 
+    #[must_use]
     pub fn consume_ticks(&self) -> i32 {
         (self.consume_seconds * 20.0) as i32
     }
@@ -466,7 +481,7 @@ impl EquipmentSlot {
         name: Cow::Borrowed("saddle"),
     });
 
-    #[must_use] 
+    #[must_use]
     pub const fn get_entity_slot_id(&self) -> i32 {
         match self {
             Self::MainHand(data) => data.entity_id,
@@ -480,7 +495,7 @@ impl EquipmentSlot {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_from_name(name: &str) -> Option<Self> {
         match name {
             "mainhand" => Some(Self::MAIN_HAND),
@@ -495,12 +510,12 @@ impl EquipmentSlot {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn get_offset_entity_slot_id(&self, offset: i32) -> i32 {
         self.get_entity_slot_id() + offset
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn slot_type(&self) -> EquipmentType {
         match self {
             Self::MainHand(data) => data.slot_type,
@@ -514,7 +529,7 @@ impl EquipmentSlot {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn is_armor_slot(&self) -> bool {
         matches!(
             self.slot_type(),
@@ -522,7 +537,7 @@ impl EquipmentSlot {
         )
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn discriminant(&self) -> i8 {
         match self {
             Self::MainHand(_) => 0,

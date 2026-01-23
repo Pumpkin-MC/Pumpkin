@@ -1,12 +1,13 @@
-use std::sync::Arc;
-use std::{collections::HashMap, pin::Pin};
-
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{
     Block, BlockDirection,
-    fluid::{EnumVariants as _, Falling, Fluid, FluidProperties as _, Level},
+    fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
+    tag,
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockId, BlockStateId, world::BlockFlags};
+use std::sync::Arc;
+use std::{collections::HashMap, pin::Pin};
 
 use crate::{block::BlockFuture, world::World};
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
@@ -131,6 +132,16 @@ pub trait FlowingFluid: Send + Sync {
     ) -> FluidFuture<'a, ()> {
         Box::pin(async move {
             let current_block_state = world.get_block_state(block_pos).await;
+
+            // If the block at this position is no longer this fluid, ignore the scheduled tick.
+            let is_fluid_state_id = fluid
+                .states
+                .iter()
+                .any(|state| state.block_state_id == current_block_state.id);
+            if !is_fluid_state_id {
+                return;
+            }
+
             let current_fluid_state =
                 FlowingFluidProperties::from_state_id(current_block_state.id, fluid);
 
@@ -144,7 +155,7 @@ pub trait FlowingFluid: Send + Sync {
                             .set_block_state(
                                 block_pos,
                                 new_fluid_state.to_state_id(fluid),
-                                BlockFlags::NOTIFY_ALL,
+                                BlockFlags::NOTIFY_LISTENERS,
                             )
                             .await;
                     }
@@ -153,7 +164,7 @@ pub trait FlowingFluid: Send + Sync {
                         .set_block_state(
                             block_pos,
                             Block::AIR.default_state.id,
-                            BlockFlags::NOTIFY_ALL,
+                            BlockFlags::NOTIFY_LISTENERS,
                         )
                         .await;
                 }
@@ -172,9 +183,8 @@ pub trait FlowingFluid: Send + Sync {
     ) -> FluidFuture<'a, ()> {
         Box::pin(async move {
             let below_pos = block_pos.down();
-            let below_can_replace = !self.can_flow_through(world, &below_pos, 0, fluid).await;
 
-            if below_can_replace {
+            if self.can_replace_block(world, &below_pos, fluid).await {
                 let mut new_props = FlowingFluidProperties::default(fluid);
                 new_props.level = Level::L8;
                 new_props.falling = Falling::True;
@@ -328,10 +338,17 @@ pub trait FlowingFluid: Send + Sync {
                     return true;
                 }
             }
-            world
-                .get_block_state(block_pos)
-                .await
-                .is_side_solid(BlockDirection::Up)
+            let state = world.get_block_state(block_pos).await;
+
+            // If the block has a solid top face, water can flow horizontally over it.
+            // This allows water to spread across the tops of solid blocks like stone, dirt, etc.
+            if state.is_side_solid(BlockDirection::Up) {
+                return true;
+            }
+
+            // Also allow flow through replaceable blocks (like tall grass) but not
+            // through non-replaceable non-solid blocks such as doors/fences.
+            state.replaceable()
         })
     }
 
@@ -505,10 +522,53 @@ pub trait FlowingFluid: Send + Sync {
         state_id: BlockStateId,
     ) -> FluidFuture<'a, ()> {
         Box::pin(async move {
+            // If the target block already has waterlogged=true, don't change it.
             if self.is_waterlogged(world, pos).await.is_some() {
                 return;
             }
 
+            // If the block at `pos` has a `waterlogged` property, set it to true
+            // instead of replacing the whole block with a fluid block state.
+            let block = world.get_block(pos).await;
+            let current_state_id = world.get_block_state_id(pos).await;
+
+            // Check if the block should be broken to drop loot
+            if block.id != Block::AIR.id {
+                world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
+            }
+
+            // Extract the new state before any await to avoid Send issues
+            let new_waterlogged_state = {
+                block.properties(current_state_id).and_then(|properties| {
+                    let original_props = properties.to_props();
+                    // If the block has a waterlogged property, set it to "true".
+                    original_props
+                        .iter()
+                        .any(|(k, _)| *k == "waterlogged")
+                        .then(|| {
+                            let props: Vec<(&str, &str)> = original_props
+                                .iter()
+                                .map(|(key, value)| {
+                                    if *key == "waterlogged" {
+                                        ("waterlogged", "true")
+                                    } else {
+                                        (*key, *value)
+                                    }
+                                })
+                                .collect();
+                            block.from_properties(&props).to_state_id(block)
+                        })
+                })
+            };
+
+            if let Some(new_state) = new_waterlogged_state {
+                world
+                    .set_block_state(pos, new_state, BlockFlags::NOTIFY_ALL)
+                    .await;
+                return;
+            }
+
+            // Default: replace the block with the fluid state.
             world
                 .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
                 .await;
@@ -554,6 +614,7 @@ pub trait FlowingFluid: Send + Sync {
         Box::pin(async move {
             // let block_state_id = world.get_block_state_id(pos).await;
             let block_state = world.get_block_state(pos).await;
+            let block = Block::from_id(block_id);
 
             if let Some(other_fluid) = Fluid::from_state_id(block_state.id) {
                 if fluid.id != other_fluid.id {
@@ -564,8 +625,19 @@ pub trait FlowingFluid: Send + Sync {
                 }
             }
 
-            //TODO Add check for blocks that aren't solid
-            matches!(block_id, 0)
+            // Even if these are PistonBehavior::Destroy, water shouldn't replace them
+            if block.has_tag(&tag::Block::MINECRAFT_DOORS)
+                || block.has_tag(&tag::Block::MINECRAFT_BEDS)
+            {
+                return false;
+            }
+
+            // Only allow replacing if the current block state is marked replaceable
+            // (e.g. tall grass) or the block is air. This prevents non-replaceable,
+            // non-solid blocks from being overwritten by fluids.
+            block_state.replaceable()
+                || block_id == Block::AIR.id
+                || block_state.piston_behavior == pumpkin_data::block_state::PistonBehavior::Destroy
         })
     }
 

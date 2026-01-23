@@ -50,8 +50,10 @@ use std::sync::{
     },
 };
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 pub mod ai;
+pub mod boss;
 pub mod decoration;
 pub mod effect;
 pub mod experience_orb;
@@ -367,11 +369,18 @@ pub struct Entity {
 
 impl Entity {
     pub fn new(
+        world: Arc<World>,
+        position: Vector3<f64>,
+        entity_type: &'static EntityType,
+    ) -> Self {
+        Self::from_uuid(Uuid::new_v4(), world, position, entity_type)
+    }
+
+    pub fn from_uuid(
         entity_uuid: uuid::Uuid,
         world: Arc<World>,
         position: Vector3<f64>,
         entity_type: &'static EntityType,
-        invulnerable: bool,
     ) -> Self {
         let floor_x = position.x.floor() as i32;
         let floor_y = position.y.floor() as i32;
@@ -420,7 +429,7 @@ impl Entity {
                 &bounding_box_size,
             )),
             entity_dimension: AtomicCell::new(bounding_box_size),
-            invulnerable: AtomicBool::new(invulnerable),
+            invulnerable: AtomicBool::new(false),
             damage_immunities: Vec::new(),
             data: AtomicI32::new(0),
             fire_ticks: AtomicI32::new(-1),
@@ -1772,10 +1781,11 @@ impl Entity {
         }
     }
 
-    #[expect(clippy::unused_async)]
     pub async fn reset_state(&self) {
         self.pose.store(EntityPose::Standing);
         self.fall_flying.store(false, Relaxed);
+        self.extinguish();
+        self.set_on_fire(false).await;
     }
 }
 

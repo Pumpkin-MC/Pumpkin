@@ -3,6 +3,7 @@ use std::io::Write;
 use bitflags::bitflags;
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_UPDATE;
 use pumpkin_macros::packet;
+use pumpkin_util::version::MinecraftVersion;
 
 use crate::{ClientPacket, Property, WritingError, ser::NetworkWriteExt};
 
@@ -42,7 +43,11 @@ impl<'a> CPlayerInfoUpdate<'a> {
 
 // TODO: Check if we need this custom impl
 impl ClientPacket for CPlayerInfoUpdate<'_> {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_u8(self.actions)?;

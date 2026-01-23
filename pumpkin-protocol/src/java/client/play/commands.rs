@@ -2,6 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_COMMANDS;
 use pumpkin_macros::packet;
+use pumpkin_util::version::MinecraftVersion;
 
 use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
 
@@ -22,7 +23,11 @@ impl<'a> CCommands<'a> {
 }
 
 impl ClientPacket for CCommands<'_> {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list(&self.nodes, |bytebuf, node: &ProtoNode| {
             node.write_to(bytebuf)

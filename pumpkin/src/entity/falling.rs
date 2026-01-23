@@ -5,7 +5,6 @@ use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 use std::sync::{Arc, atomic::Ordering};
-use uuid::Uuid;
 
 use crate::{
     entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity},
@@ -38,13 +37,7 @@ impl FallingEntity {
             .await;
 
         let position = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
-        let entity = Entity::new(
-            Uuid::new_v4(),
-            world.clone(),
-            position,
-            &EntityType::FALLING_BLOCK,
-            false,
-        );
+        let entity = Entity::new(world.clone(), position, &EntityType::FALLING_BLOCK);
         entity.data.store(i32::from(block_state), Ordering::Relaxed);
         let entity = Arc::new(Self::new(entity, block_state));
         world.spawn_entity(entity).await;

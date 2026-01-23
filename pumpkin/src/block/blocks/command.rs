@@ -2,13 +2,10 @@ use std::sync::{Arc, atomic::Ordering};
 
 use log::warn;
 use pumpkin_data::{
-    Block,
-    block_properties::{BlockProperties as _, CommandBlockLikeProperties, Facing},
+    Block, FacingExt,
+    block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
 };
-use pumpkin_util::{
-    GameMode, PermissionLvl,
-    math::{position::BlockPos, vector3::Vector3},
-};
+use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
 use pumpkin_world::{
     BlockStateId,
     block::entities::{BlockEntity, command_block::CommandBlockEntity},
@@ -35,8 +32,7 @@ impl CommandBlock {
         pos: &BlockPos,
         dir: Facing,
     ) -> Option<(BlockPos, CommandBlockLikeProperties)> {
-        let offset = Self::facing_to_offset(dir);
-        let target_pos = pos.offset(offset);
+        let target_pos = pos.offset(dir.to_block_direction().to_offset());
         let block = world.get_block(&target_pos).await;
 
         let allowed_blocks = [
@@ -52,18 +48,6 @@ impl CommandBlock {
         let props = CommandBlockLikeProperties::from_state_id(state_id, block);
 
         Some((target_pos, props))
-    }
-
-    /// Convert a [Facing] into a [Vector3] one block forward in the direction of `facing`
-    const fn facing_to_offset(facing: Facing) -> Vector3<i32> {
-        match facing {
-            Facing::North => Vector3::new(0, 0, -1),
-            Facing::South => Vector3::new(0, 0, 1),
-            Facing::East => Vector3::new(1, 0, 0),
-            Facing::West => Vector3::new(-1, 0, 0),
-            Facing::Up => Vector3::new(0, 1, 0),
-            Facing::Down => Vector3::new(0, -1, 0),
-        }
     }
 
     async fn conditions_met(world: &Arc<World>, pos: &BlockPos, facing: Facing) -> bool {
@@ -143,6 +127,10 @@ impl CommandBlock {
         block_entity: Arc<dyn BlockEntity>,
         command: &str,
     ) {
+        let command_blocks_work = { world.level_info.read().await.game_rules.command_blocks_work };
+        if !command_blocks_work {
+            return;
+        }
         let command_entity: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
         if command.is_empty() {
             command_entity.success_count.store(0, Ordering::Release);
@@ -176,6 +164,11 @@ impl CommandBlock {
         let mut pos = start;
 
         while i > 0 {
+            let command_blocks_work =
+                { world.level_info.read().await.game_rules.command_blocks_work };
+            if !command_blocks_work {
+                return;
+            }
             let block = world.get_block(&pos).await;
 
             if block.id != Block::CHAIN_COMMAND_BLOCK.id {
@@ -203,7 +196,7 @@ impl CommandBlock {
                 }
             }
 
-            pos = pos.offset(Self::facing_to_offset(direction));
+            pos = pos.offset(direction.to_block_direction().to_offset());
 
             i -= 1;
             if i == 0 {
@@ -254,6 +247,17 @@ impl BlockBehaviour for CommandBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
+            let command_blocks_work = {
+                args.world
+                    .level_info
+                    .read()
+                    .await
+                    .game_rules
+                    .command_blocks_work
+            };
+            if !command_blocks_work {
+                return;
+            }
             if let Some(block_entity) = args.world.get_block_entity(args.position).await {
                 if block_entity.resource_location() != CommandBlockEntity::ID {
                     return;
@@ -277,6 +281,17 @@ impl BlockBehaviour for CommandBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
+            let command_blocks_work = {
+                args.world
+                    .level_info
+                    .read()
+                    .await
+                    .game_rules
+                    .command_blocks_work
+            };
+            if !command_blocks_work {
+                return;
+            }
             let Some(block_entity) = args.world.get_block_entity(args.position).await else {
                 return;
             };
@@ -304,7 +319,8 @@ impl BlockBehaviour for CommandBlock {
             Self::chain_execute(
                 &server,
                 args.world.clone(),
-                args.position.offset(Self::facing_to_offset(props.facing)),
+                args.position
+                    .offset(props.facing.to_block_direction().to_offset()),
                 props.facing,
             )
             .await;

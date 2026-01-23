@@ -4,7 +4,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, BrokenArgs, UseWithItemArgs};
 use crate::world::World;
 use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
-use pumpkin_data::registry::SyncedRegistry;
+use pumpkin_data::jukebox_song::JukeboxSong;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
     Block,
@@ -73,7 +73,7 @@ impl BlockBehaviour for JukeboxBlock {
                 return BlockActionResult::Pass;
             };
 
-            let Some(jukebox_song) = SyncedRegistry::get_jukebox_song_index(song) else {
+            let Some(jukebox_song) = JukeboxSong::from_name(song) else {
                 log::error!("Jukebox playable song not registered!");
                 return BlockActionResult::Pass;
             };
@@ -86,7 +86,7 @@ impl BlockBehaviour for JukeboxBlock {
                 .sync_world_event(
                     WorldEvent::JukeboxStartsPlaying,
                     *args.position,
-                    jukebox_song as i32,
+                    jukebox_song.get_id() as i32,
                 )
                 .await;
 

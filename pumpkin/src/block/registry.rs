@@ -46,6 +46,7 @@ use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
+use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
 use crate::block::blocks::redstone::comparator::ComparatorBlock;
@@ -68,6 +69,7 @@ use crate::block::blocks::redstone::tripwire::TripwireBlock;
 use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
 use crate::block::blocks::signs::SignBlock;
 use crate::block::blocks::slabs::SlabBlock;
+use crate::block::blocks::slime::SlimeBlock;
 use crate::block::blocks::snow::LayeredSnowBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
 use crate::block::blocks::stairs::StairBlock;
@@ -76,6 +78,7 @@ use crate::block::blocks::torches::TorchBlock;
 use crate::block::blocks::trapdoor::TrapDoorBlock;
 use crate::block::blocks::vine::VineBlock;
 use crate::block::blocks::walls::WallBlock;
+use crate::block::blocks::wither_skull::WitherSkeletonSkullBlock;
 use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
 use crate::block::{
@@ -153,6 +156,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CactusBlock);
     manager.register(CarpetBlock);
     manager.register(CarvedPumpkinBlock);
+    manager.register(WitherSkeletonSkullBlock);
     manager.register(CampfireBlock);
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
@@ -180,6 +184,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BannerBlock);
     manager.register(SignBlock);
     manager.register(SlabBlock);
+    manager.register(SlimeBlock);
     manager.register(StairBlock);
     manager.register(ShortPlantBlock);
     manager.register(DryVegetationBlock);
@@ -207,6 +212,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NetherPortalBlock);
     manager.register(TallPlantBlock);
     manager.register(NoteBlock);
+    manager.register(PowderSnowBlock);
     manager.register(PumpkinBlock);
     manager.register(CommandBlock);
     manager.register(ComposterBlock);

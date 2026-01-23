@@ -129,8 +129,8 @@ impl ClientPlatform {
     #[must_use]
     pub fn closed(&self) -> bool {
         match self {
-            Self::Java(java) => java.closed.load(Ordering::Relaxed),
-            Self::Bedrock(bedrock) => bedrock.closed.load(Ordering::Relaxed),
+            Self::Java(java) => java.is_closed(),
+            Self::Bedrock(bedrock) => bedrock.is_closed(),
         }
     }
 

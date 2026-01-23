@@ -27,6 +27,18 @@ pub struct Block {
     pub experience: Option<Experience>,
 }
 
+impl PartialEq<u16> for Block {
+    fn eq(&self, other: &u16) -> bool {
+        self.id == *other
+    }
+}
+
+impl PartialEq<Block> for u16 {
+    fn eq(&self, other: &Block) -> bool {
+        *self == other.id
+    }
+}
+
 impl PartialEq for Block {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id

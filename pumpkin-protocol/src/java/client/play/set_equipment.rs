@@ -6,6 +6,7 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::PLAY_SET_EQUIPMENT;
 use pumpkin_macros::packet;
+use pumpkin_util::version::MinecraftVersion;
 use serde::Serialize;
 
 use crate::{
@@ -30,7 +31,11 @@ impl CSetEquipment {
 }
 
 impl ClientPacket for CSetEquipment {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        _version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut write = write;
 
         write.write_var_int(&self.entity_id)?;

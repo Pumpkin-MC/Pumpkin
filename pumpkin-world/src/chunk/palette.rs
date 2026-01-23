@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use pumpkin_data::{Block, BlockState, chunk::Biome};
+use pumpkin_data::{Block, BlockState, block_properties::is_air, chunk::Biome};
 use pumpkin_util::encompassing_bits;
 
 use crate::block::BlockStateCodec;
@@ -475,10 +475,18 @@ impl BlockPalette {
         }
     }
 
+    /// Check if the entire chunk is filled with only air
+    pub fn has_only_air(&self) -> bool {
+        match self {
+            Self::Homogeneous(id) => is_air(*id),
+            Self::Heterogeneous(data) => data.palette.iter().all(|&id| is_air(id)),
+        }
+    }
+
     pub fn non_air_block_count(&self) -> u16 {
         match self {
             Self::Homogeneous(registry_id) => {
-                if !BlockState::from_id(*registry_id).is_air() {
+                if !is_air(*registry_id) {
                     Self::VOLUME as u16
                 } else {
                     0
@@ -489,7 +497,7 @@ impl BlockPalette {
                 .iter()
                 .zip(data.counts.iter())
                 .filter_map(|(registry_id, count)| {
-                    if !BlockState::from_id(*registry_id).is_air() {
+                    if !is_air(*registry_id) {
                         Some(*count)
                     } else {
                         None

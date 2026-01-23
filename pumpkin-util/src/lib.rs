@@ -20,6 +20,7 @@ pub mod resource_location;
 pub mod serde_enum_as_integer;
 pub mod text;
 pub mod translation;
+pub mod version;
 pub mod world_seed;
 
 pub mod jwt;

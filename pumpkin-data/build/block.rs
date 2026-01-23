@@ -428,10 +428,15 @@ impl PistonBehavior {
 }
 
 impl BlockState {
+    const IS_AIR: u16 = 1 << 0;
     const HAS_RANDOM_TICKS: u16 = 1 << 9;
 
     const fn has_random_ticks(&self) -> bool {
         self.state_flags & Self::HAS_RANDOM_TICKS != 0
+    }
+
+    pub const fn is_air(&self) -> bool {
+        self.state_flags & Self::IS_AIR != 0
     }
 
     fn to_tokens(&self) -> TokenStream {
@@ -445,12 +450,15 @@ impl BlockState {
         let opacity = if let Some(opacity) = self.opacity {
             let opacity = LitInt::new(&opacity.to_string(), Span::call_site());
             quote! { #opacity }
-        } else { quote! { 0 } };
+        } else {
+            quote! { 0 }
+        };
         let block_entity_type = if let Some(block_entity_type) = self.block_entity_type {
-            let block_entity_type =
-                LitInt::new(&block_entity_type.to_string(), Span::call_site());
+            let block_entity_type = LitInt::new(&block_entity_type.to_string(), Span::call_site());
             quote! { #block_entity_type }
-        } else { quote! { u16::MAX } };
+        } else {
+            quote! { u16::MAX }
+        };
 
         let collision_shapes = self
             .collision_shapes
@@ -514,13 +522,17 @@ impl ToTokens for Block {
         let experience = if let Some(exp) = &self.experience {
             let exp_tokens = exp.to_token_stream();
             quote! { Some(#exp_tokens) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
         // Generate state tokens
         let states = self.states.iter().map(BlockState::to_tokens);
         let loot_table = if let Some(table) = &self.loot_table {
             let table_tokens = table.to_token_stream();
             quote! { Some(#table_tokens) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
 
         let default_state_ref: &BlockState = self
             .states
@@ -533,7 +545,9 @@ impl ToTokens for Block {
         let flammable = if let Some(flammable) = &self.flammable {
             let flammable_tokens = flammable.to_token_stream();
             quote! { Some(#flammable_tokens) }
-        } else { quote! { None } };
+        } else {
+            quote! { None }
+        };
         tokens.extend(quote! {
             Block {
                 id: #id,
@@ -644,6 +658,8 @@ pub fn build() -> TokenStream {
             .collect();
 
     let mut random_tick_states = Vec::new();
+    let mut air_states = Vec::new();
+
     let mut constants_list = Vec::new();
     let mut block_from_name_entries = Vec::new();
     let mut block_from_item_id_arms = Vec::new();
@@ -663,6 +679,10 @@ pub fn build() -> TokenStream {
             if state.has_random_ticks() {
                 let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
                 random_tick_states.push(state_id);
+            }
+            if state.is_air() {
+                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                air_states.push(state_id);
             }
         }
 
@@ -802,8 +822,10 @@ pub fn build() -> TokenStream {
         .iter()
         .map(quote::ToTokens::to_token_stream);
 
-    let block_props = block_properties.iter().map(quote::ToTokens::to_token_stream);
-    let properties = property_enums.values().map(quote::ToTokens::to_token_stream);
+    let air_state_ids = quote! { #(#air_states)|* };
+
+    let block_props = block_properties.iter().map(|prop| prop.to_token_stream());
+    let properties = property_enums.values().map(|prop| prop.to_token_stream());
 
     let block_entity_types = blocks_assets
         .block_entity_types
@@ -892,6 +914,11 @@ pub fn build() -> TokenStream {
         pub const BLOCK_ENTITY_TYPES: &[&str] = &[
             #(#block_entity_types),*
         ];
+
+        #[inline(always)]
+        pub fn is_air(state_id: u16) -> bool {
+            matches!(state_id, #air_state_ids)
+        }
 
         #[inline(always)]
         pub fn has_random_ticks(state_id: u16) -> bool {
@@ -1121,7 +1148,8 @@ fn get_be_data_from_nbt<R: Read>(reader: &mut R) -> BTreeMap<String, (u32, u32)>
                     name = String::from_utf8(name_buf)
                         .unwrap()
                         .strip_prefix("minecraft:")
-                        .unwrap().to_owned();
+                        .unwrap()
+                        .to_owned();
                 }
                 "states" => {
                     let mut byte = read_byte(reader);

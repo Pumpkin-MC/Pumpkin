@@ -14,7 +14,6 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::registry::Registry;
 use pumpkin_world::dimension::into_level;
 
 use crate::command::CommandSender;
@@ -39,7 +38,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, OnceCell, RwLock};
 use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 
@@ -59,7 +58,7 @@ pub struct Server {
     pub advanced_config: AdvancedConfiguration,
 
     /// Handles cryptographic keys for secure communication.
-    key_store: KeyStore,
+    key_store: OnceCell<Arc<KeyStore>>,
     /// Manages server status information.
     listing: Mutex<CachedStatus>,
     /// Saves server branding information.
@@ -74,8 +73,6 @@ pub struct Server {
     pub worlds: RwLock<Vec<Arc<World>>>,
     /// All the dimensions that exist on the server.
     pub dimensions: Vec<Dimension>,
-    /// Caches game registries for efficient access.
-    pub cached_registry: Vec<Registry>,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     /// Mojang's public keys, used for chat session signing
@@ -178,8 +175,6 @@ impl Server {
         let server = Self {
             basic_config,
             advanced_config,
-
-            cached_registry: Registry::get_synced(),
             container_id: 0.into(),
             worlds: RwLock::new(vec![]),
             dimensions: vec![
@@ -190,7 +185,7 @@ impl Server {
             command_dispatcher,
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
-            key_store: KeyStore::new(),
+            key_store: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
@@ -208,59 +203,86 @@ impl Server {
             level_info: level_info.clone(),
             _locker: Arc::new(locker),
         };
-
         let server = Arc::new(server);
-        let weak = Arc::downgrade(&server);
-        let level_config = &server.advanced_config.world;
+        let level_config = Arc::new(server.advanced_config.world.clone());
+
+        let server_clone = server.clone();
+        tokio::spawn(async move {
+            server_clone
+                .key_store
+                .get_or_init(|| async { Arc::new(KeyStore::new()) })
+                .await;
+        });
+
+        let weak_server = Arc::downgrade(&server);
 
         log::info!("Loading Overworld: {seed}");
-        let overworld = World::load(
-            into_level(
-                Dimension::OVERWORLD,
-                level_config,
-                world_path.clone(),
-                block_registry.clone(),
-                seed,
-            ),
-            level_info.clone(),
-            Dimension::OVERWORLD,
-            block_registry.clone(),
-            weak.clone(),
-        );
-        log::info!("Loading Nether: {seed}");
-        let nether = World::load(
-            into_level(
-                Dimension::THE_NETHER,
-                level_config,
-                world_path.clone(),
-                block_registry.clone(),
-                seed,
-            ),
-            level_info.clone(),
-            Dimension::THE_NETHER,
-            block_registry.clone(),
-            weak.clone(),
-        );
-        log::info!("Loading End: {seed}");
-        let end = World::load(
-            into_level(
-                Dimension::THE_END,
-                level_config,
-                world_path,
-                block_registry.clone(),
-                seed,
-            ),
-            level_info,
-            Dimension::THE_END,
-            block_registry,
-            weak,
-        );
-        *server
-            .worlds
-            .try_write()
-            .expect("Nothing should hold a lock of worlds before server startup") =
-            // vec![overworld.into()];
-            vec![overworld.into(), nether.into(), end.into()];
+        let overworld_task = tokio::task::spawn_blocking({
+            let path = world_path.clone();
+            let registry = block_registry.clone();
+            let level_info = level_info.clone();
+            let weak = weak_server.clone();
+            let config = level_config.clone();
+            move || {
+                World::load(
+                    into_level(Dimension::OVERWORLD, &config, path, registry.clone(), seed),
+                    level_info,
+                    Dimension::OVERWORLD,
+                    registry,
+                    weak,
+                )
+            }
+        });
+
+        let nether_task = tokio::task::spawn_blocking({
+            let path = world_path.clone();
+            let registry = block_registry.clone();
+            let level_info = level_info.clone();
+            let weak = weak_server.clone();
+            let config = level_config.clone();
+            move || {
+                World::load(
+                    into_level(Dimension::THE_NETHER, &config, path, registry.clone(), seed),
+                    level_info,
+                    Dimension::THE_NETHER,
+                    registry,
+                    weak,
+                )
+            }
+        });
+
+        let end_task = tokio::task::spawn_blocking({
+            let path = world_path.clone();
+            let registry = block_registry.clone();
+            let level_info = level_info.clone();
+            let weak = weak_server.clone();
+            let config = level_config.clone();
+            move || {
+                World::load(
+                    into_level(Dimension::THE_END, &config, path, registry.clone(), seed),
+                    level_info,
+                    Dimension::THE_END,
+                    registry,
+                    weak,
+                )
+            }
+        });
+
+        let (overworld_res, nether_res, end_res) =
+            tokio::join!(overworld_task, nether_task, end_task);
+
+        let overworld = overworld_res.expect("Overworld load panicked");
+        let nether = nether_res.expect("Nether load panicked");
+        let end = end_res.expect("End load panicked");
+
+        {
+            let mut worlds = server.worlds.write().await;
+            worlds.push(overworld.into());
+            worlds.push(nether.into());
+            worlds.push(end.into());
+        };
+
+        log::info!("All worlds loaded successfully.");
         server
     }
 
@@ -623,21 +645,29 @@ impl Server {
         &self.listing
     }
 
-    pub fn encryption_request<'a>(
+    pub async fn encryption_request<'a>(
         &'a self,
         verification_token: &'a [u8; 4],
         should_authenticate: bool,
     ) -> CEncryptionRequest<'a> {
         self.key_store
+            .get_or_init(|| async { Arc::new(KeyStore::new()) })
+            .await
             .encryption_request("", verification_token, should_authenticate)
     }
 
-    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptionError> {
-        self.key_store.decrypt(data)
+    pub async fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptionError> {
+        self.key_store
+            .get_or_init(|| async { Arc::new(KeyStore::new()) })
+            .await
+            .decrypt(data)
     }
 
-    pub fn digest_secret(&self, secret: &[u8]) -> String {
-        self.key_store.get_digest(secret)
+    pub async fn digest_secret(&self, secret: &[u8]) -> String {
+        self.key_store
+            .get_or_init(|| async { Arc::new(KeyStore::new()) })
+            .await
+            .get_digest(secret)
     }
 
     /// Main server tick method. This now handles both player/network ticking (which always runs)
@@ -709,6 +739,22 @@ impl Server {
             return 0;
         }
         self.aggregated_tick_times_nanos.load(Ordering::Relaxed) / sample_size as i64
+    }
+
+    /// Returns the average Milliseconds Per Tick (MSPT).
+    pub fn get_mspt(&self) -> f64 {
+        let avg_nanos = self.get_average_tick_time_nanos();
+        // Convert nanoseconds to decimal milliseconds
+        avg_nanos as f64 / 1_000_000.0
+    }
+
+    /// Returns the Ticks Per Second (TPS).
+    pub fn get_tps(&self) -> f64 {
+        let mspt = self.get_mspt();
+        if mspt <= 0.0 {
+            return 0.0;
+        }
+        1000.0 / mspt
     }
 
     /// Returns a copy of the last 100 tick times.

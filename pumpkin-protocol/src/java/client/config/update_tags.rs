@@ -9,6 +9,7 @@ use pumpkin_data::{
 };
 use pumpkin_macros::packet;
 use pumpkin_util::resource_location::ResourceLocation;
+use pumpkin_util::version::MinecraftVersion;
 
 #[packet(CONFIG_UPDATE_TAGS)]
 pub struct CUpdateTags<'a> {
@@ -23,14 +24,18 @@ impl<'a> CUpdateTags<'a> {
 }
 
 impl ClientPacket for CUpdateTags<'_> {
-    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+    fn write_packet_data(
+        &self,
+        write: impl Write,
+        version: &MinecraftVersion,
+    ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_list(self.tags, |p, registry_key| {
             p.write_resource_location(&ResourceLocation::vanilla(
                 registry_key.identifier_string(),
             ))?;
 
-            let values = get_registry_key_tags(registry_key);
+            let values = get_registry_key_tags(*version, *registry_key).unwrap();
             p.write_var_int(&values.len().try_into().map_err(|_| {
                 WritingError::Message(format!("{} isn't representable as a VarInt", values.len()))
             })?)?;

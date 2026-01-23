@@ -21,8 +21,7 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, item::ItemStack, tick::TickPriority, world::BlockFlags};
-use rand::Rng as _;
-use uuid::Uuid;
+use rand::Rng;
 
 #[pumpkin_block("minecraft:composter")]
 pub struct ComposterBlock;
@@ -144,13 +143,7 @@ impl ComposterBlock {
         };
 
         let item_entity = ItemEntity::new(
-            Entity::new(
-                Uuid::new_v4(),
-                world.clone(),
-                item_position,
-                &EntityType::ITEM,
-                false,
-            ),
+            Entity::new(world.clone(), item_position, &EntityType::ITEM),
             ItemStack::new(1, &Item::BONE_MEAL),
         )
         .await;

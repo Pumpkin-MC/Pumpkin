@@ -1,18 +1,15 @@
 #![allow(dead_code)]
 
-pub mod aquifer_sampler;
 mod biome;
 mod blender;
 mod block_predicate;
 mod block_state_provider;
 pub mod carver;
-pub mod chunk_noise;
 mod feature;
 pub mod generator;
 pub mod height_limit;
 pub mod height_provider;
 pub mod noise;
-pub mod ore_sampler;
 pub mod positions;
 pub mod proto_chunk;
 pub mod rule;

@@ -50,15 +50,19 @@ impl Explosion {
                     while h > 0.0 {
                         let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
                         let (block, state) = world.get_block_and_state(&block_pos).await;
+                        let (_, fluid_state) = world.get_fluid_and_fluid_state(&block_pos).await;
 
                         // if !world.is_in_build_limit(&block_pos) {
                         //     // Pass by reference
                         //     continue 'block2;
                         // }
 
-                        if !state.is_air() {
-                            h -= (block.blast_resistance + 0.3) * 0.3;
+                        if !state.is_air() || !fluid_state.is_empty {
+                            let resistance =
+                                fluid_state.blast_resistance.max(block.blast_resistance);
+                            h -= resistance * 0.3;
                         }
+
                         if h > 0.0 {
                             map.insert(block_pos, (block, state));
                         }

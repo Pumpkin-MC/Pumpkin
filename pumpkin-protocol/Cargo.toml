@@ -9,8 +9,6 @@ workspace = true
 
 [features]
 default = ["query"]
-serverbound = []
-clientbound = []
 query = []
 
 [dependencies]

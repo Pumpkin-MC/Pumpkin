@@ -29,6 +29,7 @@ mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
+mod jukebox_song;
 pub mod loot;
 mod message_type;
 mod meta_data_type;
@@ -73,6 +74,7 @@ pub fn main() {
         (game_rules::build, "game_rules.rs"),
         (registry::build, "registry.rs"),
         (dimension::build, "dimension.rs"),
+        (jukebox_song::build, "jukebox_song.rs"),
         (sound_category::build, "sound_category.rs"),
         (entity_pose::build, "entity_pose.rs"),
         (scoreboard_slot::build, "scoreboard_slot.rs"),
