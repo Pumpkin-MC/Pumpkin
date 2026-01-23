@@ -46,46 +46,35 @@ impl BlockBehaviour for ComposterBlock {
             let state_id = args.world.get_block_state_id(args.position).await;
             let props = ComposterLikeProperties::from_state_id(state_id, args.block);
             let level = props.get_level();
+
             if level == 8 {
                 self.clear_composter(args.world, args.position, state_id, args.block)
                     .await;
+                return BlockActionResult::Consume;
             }
-            // Determine whether this interaction actually changed the composter.
-            let handled = if level == 8 {
-                self.clear_composter(args.world, args.position, state_id, args.block)
-                    .await;
-                true
-            } else {
-                // Take the lock and extract the item id into a temporary to avoid
-                // holding a temporary across an `if let` scrutinee (deadlock risk).
-                let item_id = args.item_stack.lock().await.item.id;
 
-                if level < 7
-                    && let Some(chance) = get_composter_increase_chance_from_item_id(item_id)
-                    && (level == 0 || rand::rng().random_bool(f64::from(chance)))
-                {
-                    self.update_level_composter(
-                        args.world,
-                        args.position,
-                        state_id,
-                        args.block,
-                        level + 1,
-                    )
-                    .await;
-                    args.world
-                        .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
-                        .await;
-                    true
-                } else {
-                    false
-                }
-            };
+            let item_id = args.item_stack.lock().await.item.id;
 
-            if handled {
-                BlockActionResult::Consume
-            } else {
-                BlockActionResult::Pass
+            if level < 7
+                && let Some(chance) = get_composter_increase_chance_from_item_id(item_id)
+                && (level == 0 || rand::rng().random_bool(f64::from(chance)))
+            {
+                self.update_level_composter(
+                    args.world,
+                    args.position,
+                    state_id,
+                    args.block,
+                    level + 1,
+                )
+                .await;
+                args.world
+                    .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
+                    .await;
+
+                return BlockActionResult::Consume;
             }
+
+            BlockActionResult::Pass
         })
     }
 
