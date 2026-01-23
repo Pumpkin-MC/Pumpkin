@@ -3,7 +3,7 @@ use std::io::{Seek, SeekFrom};
 
 use crate::{
     BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, END_ID, Error, INT_ARRAY_ID, INT_ID, LIST_ID,
-    LONG_ARRAY_ID, LONG_ID, NbtTag, Write, get_nbt_string, io,
+    LONG_ARRAY_ID, LONG_ID, NbtTag, get_nbt_string, io,
 };
 use io::Read;
 use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};

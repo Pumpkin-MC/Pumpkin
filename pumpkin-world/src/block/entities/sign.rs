@@ -37,22 +37,22 @@ pub enum DyeColor {
 impl From<DyeColor> for String {
     fn from(value: DyeColor) -> Self {
         match value {
-            DyeColor::White => "white".to_string(),
-            DyeColor::Orange => "orange".to_string(),
-            DyeColor::Magenta => "magenta".to_string(),
-            DyeColor::LightBlue => "light_blue".to_string(),
-            DyeColor::Yellow => "yellow".to_string(),
-            DyeColor::Lime => "lime".to_string(),
-            DyeColor::Pink => "pink".to_string(),
-            DyeColor::Gray => "gray".to_string(),
-            DyeColor::LightGray => "light_gray".to_string(),
-            DyeColor::Cyan => "cyan".to_string(),
-            DyeColor::Purple => "purple".to_string(),
-            DyeColor::Blue => "blue".to_string(),
-            DyeColor::Brown => "brown".to_string(),
-            DyeColor::Green => "green".to_string(),
-            DyeColor::Red => "red".to_string(),
-            DyeColor::Black => "black".to_string(),
+            DyeColor::White => "white".to_owned(),
+            DyeColor::Orange => "orange".to_owned(),
+            DyeColor::Magenta => "magenta".to_owned(),
+            DyeColor::LightBlue => "light_blue".to_owned(),
+            DyeColor::Yellow => "yellow".to_owned(),
+            DyeColor::Lime => "lime".to_owned(),
+            DyeColor::Pink => "pink".to_owned(),
+            DyeColor::Gray => "gray".to_owned(),
+            DyeColor::LightGray => "light_gray".to_owned(),
+            DyeColor::Cyan => "cyan".to_owned(),
+            DyeColor::Purple => "purple".to_owned(),
+            DyeColor::Blue => "blue".to_owned(),
+            DyeColor::Brown => "brown".to_owned(),
+            DyeColor::Green => "green".to_owned(),
+            DyeColor::Red => "red".to_owned(),
+            DyeColor::Black => "black".to_owned(),
         }
     }
 }
@@ -176,17 +176,17 @@ impl From<NbtTag> for Text {
             .get_list("messages")
             .unwrap()
             .iter()
-            .filter_map(|tag| tag.extract_string().map(|s| s.to_string()))
+            .filter_map(|tag| tag.extract_string().map(|s| s.to_owned()))
             .collect();
         Self {
             has_glowing_text: AtomicBool::new(has_glowing_text),
             color: AtomicI8::new(DyeColor::from(color) as i8),
             messages: Arc::new(std::sync::Mutex::new([
                 // its important that we use unwrap_or since otherwise we may crash on older versions
-                messages.first().unwrap_or(&"".to_string()).clone(),
-                messages.get(1).unwrap_or(&"".to_string()).clone(),
-                messages.get(2).unwrap_or(&"".to_string()).clone(),
-                messages.get(3).unwrap_or(&"".to_string()).clone(),
+                messages.first().unwrap_or(&"".to_owned()).clone(),
+                messages.get(1).unwrap_or(&"".to_owned()).clone(),
+                messages.get(2).unwrap_or(&"".to_owned()).clone(),
+                messages.get(3).unwrap_or(&"".to_owned()).clone(),
             ])),
         }
     }

@@ -15,22 +15,22 @@ impl ResourceLocation {
     pub fn from(location: &str) -> Self {
         let names = location.split_once(":").unwrap_or_default();
         Self {
-            namespace: names.0.to_string(),
-            path: names.1.to_string(),
+            namespace: names.0.to_owned(),
+            path: names.1.to_owned(),
         }
     }
 
     pub fn vanilla(path: &str) -> Self {
         Self {
-            namespace: "minecraft".to_string(),
-            path: path.to_string(),
+            namespace: "minecraft".to_owned(),
+            path: path.to_owned(),
         }
     }
 
     pub fn pumpkin(path: &str) -> Self {
         Self {
-            namespace: "pumpkin".to_string(),
-            path: path.to_string(),
+            namespace: "pumpkin".to_owned(),
+            path: path.to_owned(),
         }
     }
 }
@@ -46,8 +46,8 @@ impl FromStr for ResourceLocation {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.split_once(':') {
             Some((namespace, path)) => Ok(ResourceLocation {
-                namespace: namespace.to_string(),
-                path: path.to_string(),
+                namespace: namespace.to_owned(),
+                path: path.to_owned(),
             }),
             None => Err(()),
         }
@@ -81,8 +81,8 @@ impl<'de> Deserialize<'de> for ResourceLocation {
             ) -> Result<Self::Value, E> {
                 match resource_location.split_once(":") {
                     Some((namespace, path)) => Ok(ResourceLocation {
-                        namespace: namespace.to_string(),
-                        path: path.to_string(),
+                        namespace: namespace.to_owned(),
+                        path: path.to_owned(),
                     }),
                     None => Err(serde::de::Error::custom("resource location can't be split")),
                 }

@@ -25,8 +25,8 @@ impl Visitor<'_> for TagVisitor {
     }
     fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
         match v.strip_prefix('#') {
-            Some(v) => Ok(TagType::Tag(v.to_string())),
-            None => Ok(TagType::Item(v.to_string())),
+            Some(v) => Ok(TagType::Tag(v.to_owned())),
+            None => Ok(TagType::Item(v.to_owned())),
         }
     }
 }

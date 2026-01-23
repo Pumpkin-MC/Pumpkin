@@ -66,7 +66,7 @@ pub trait BlockEntity: Send + Sync {
         nbt: &'a mut NbtCompound,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            nbt.put_string("id", self.resource_location().to_string());
+            nbt.put_string("id", self.resource_location().to_owned());
             let position = self.get_position();
             nbt.put_int("x", position.0.x);
             nbt.put_int("y", position.0.y);

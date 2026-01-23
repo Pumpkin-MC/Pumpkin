@@ -187,7 +187,7 @@ pub fn decode_header_get_x5u(header_b64: &str) -> Result<String, AuthError> {
     if let Some(x5u) = header_json.get("x5u")
         && let Some(s) = x5u.as_str()
     {
-        return Ok(s.to_string());
+        return Ok(s.to_owned());
     }
     Err(AuthError::MissingX5U)
 }
@@ -262,7 +262,7 @@ pub fn verify_chain(raw_chain: &[&str], mojang_key_b64: &str) -> Result<PlayerCl
         if let Some(id_pk) = payload_json.get("identityPublicKey")
             && let Some(s) = id_pk.as_str()
         {
-            next_public_b64 = s.to_string();
+            next_public_b64 = s.to_owned();
         }
     }
 

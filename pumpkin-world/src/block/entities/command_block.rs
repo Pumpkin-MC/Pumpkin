@@ -55,8 +55,8 @@ impl BlockEntity for CommandBlockEntity {
         let condition_met = AtomicBool::new(nbt.get_bool("conditionMet").unwrap_or(false));
         let auto = AtomicBool::new(nbt.get_bool("auto").unwrap_or(false));
         let powered = AtomicBool::new(nbt.get_bool("powered").unwrap_or(false));
-        let command = Mutex::new(nbt.get_string("Command").unwrap_or("").to_string());
-        let last_output = Mutex::new(nbt.get_string("LastOutput").unwrap_or("").to_string());
+        let command = Mutex::new(nbt.get_string("Command").unwrap_or("").to_owned());
+        let last_output = Mutex::new(nbt.get_string("LastOutput").unwrap_or("").to_owned());
         let track_output = AtomicBool::new(nbt.get_bool("TrackOutput").unwrap_or(false));
         let success_count =
             AtomicU32::new(nbt.get_int("SuccessCount").unwrap_or(0).cast_unsigned());

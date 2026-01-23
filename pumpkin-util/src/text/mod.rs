@@ -36,7 +36,7 @@ impl<'de> Deserialize<'de> for TextComponent {
             fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(TextComponentBase {
                     content: TextContent::Text {
-                        text: Cow::from(v.to_string()),
+                        text: Cow::from(v.to_owned()),
                     },
                     style: Default::default(),
                     extra: vec![],

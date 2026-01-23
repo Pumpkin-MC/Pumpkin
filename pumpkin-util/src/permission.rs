@@ -30,8 +30,8 @@ pub struct Permission {
 impl Permission {
     pub fn new(node: &str, description: &str, default: PermissionDefault) -> Self {
         Self {
-            node: node.to_string(),
-            description: description.to_string(),
+            node: node.to_owned(),
+            description: description.to_owned(),
             default,
             children: HashMap::new(),
         }
@@ -39,7 +39,7 @@ impl Permission {
 
     /// Add a child permission with a specific value
     pub fn add_child(&mut self, child: &str, value: bool) -> &mut Self {
-        self.children.insert(child.to_string(), value);
+        self.children.insert(child.to_owned(), value);
         self
     }
 }
@@ -97,7 +97,7 @@ impl PermissionAttachment {
 
     /// Set a permission value
     pub fn set_permission(&mut self, node: &str, value: bool) {
-        self.permissions.insert(node.to_string(), value);
+        self.permissions.insert(node.to_owned(), value);
     }
 
     /// Unset a permission
@@ -171,7 +171,7 @@ impl PermissionManager {
                 let key_parts: Vec<&str> = node_parts[1].split('.').collect();
 
                 // Check wildcard permissions at each level
-                let mut current_node = namespace.to_string();
+                let mut current_node = namespace.to_owned();
                 if let Some(value) = attachment.has_permission_set(&format!("{current_node}:*")) {
                     return value;
                 }

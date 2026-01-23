@@ -146,44 +146,44 @@ impl WorldGenSettings {
         // TODO: Adjust according to enabled worlds
         let mut dimensions = Dimensions::new();
         dimensions.insert(
-            "minecraft:overworld".to_string(),
+            "minecraft:overworld".to_owned(),
             Dimension {
                 generator: Generator {
-                    settings: "minecraft:overworld".to_string(),
+                    settings: "minecraft:overworld".to_owned(),
                     biome_source: BiomeSource::WithPreset {
-                        preset: "minecraft:overworld".to_string(),
-                        biome_type: "minecraft:multi_noise".to_string(),
+                        preset: "minecraft:overworld".to_owned(),
+                        biome_type: "minecraft:multi_noise".to_owned(),
                     },
-                    generator_type: "minecraft:noise".to_string(),
+                    generator_type: "minecraft:noise".to_owned(),
                 },
-                dimension_type: "minecraft:overworld".to_string(),
+                dimension_type: "minecraft:overworld".to_owned(),
             },
         );
         dimensions.insert(
-            "minecraft:the_nether".to_string(),
+            "minecraft:the_nether".to_owned(),
             Dimension {
                 generator: Generator {
-                    settings: "minecraft:nether".to_string(),
+                    settings: "minecraft:nether".to_owned(),
                     biome_source: BiomeSource::WithPreset {
-                        preset: "minecraft:nether".to_string(),
-                        biome_type: "minecraft:multi_noise".to_string(),
+                        preset: "minecraft:nether".to_owned(),
+                        biome_type: "minecraft:multi_noise".to_owned(),
                     },
-                    generator_type: "minecraft:noise".to_string(),
+                    generator_type: "minecraft:noise".to_owned(),
                 },
-                dimension_type: "minecraft:the_nether".to_string(),
+                dimension_type: "minecraft:the_nether".to_owned(),
             },
         );
         dimensions.insert(
-            "minecraft:the_end".to_string(),
+            "minecraft:the_end".to_owned(),
             Dimension {
                 generator: Generator {
-                    settings: "minecraft:end".to_string(),
+                    settings: "minecraft:end".to_owned(),
                     biome_source: BiomeSource::Simple {
-                        biome_type: "minecraft:the_end".to_string(),
+                        biome_type: "minecraft:the_end".to_owned(),
                     },
-                    generator_type: "minecraft:noise".to_string(),
+                    generator_type: "minecraft:noise".to_owned(),
                 },
-                dimension_type: "minecraft:the_end".to_string(),
+                dimension_type: "minecraft:the_end".to_owned(),
             },
         );
 
@@ -210,10 +210,10 @@ pub struct WorldVersion {
 impl Default for WorldVersion {
     fn default() -> Self {
         Self {
-            name: CURRENT_MC_VERSION.to_string(),
+            name: CURRENT_MC_VERSION.to_owned(),
             id: MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
             snapshot: false,
-            series: "main".to_string(),
+            series: "main".to_owned(),
         }
     }
 }
@@ -234,7 +234,7 @@ impl LevelData {
             clear_weather_time: -1,
             data_packs: DataPacks {
                 disabled: vec![],
-                enabled: vec!["vanilla".to_string()],
+                enabled: vec!["vanilla".to_owned()],
             },
             data_version: MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
             day_time: 0,
@@ -243,7 +243,7 @@ impl LevelData {
             game_rules: GameRuleRegistry::default(),
             world_gen_settings: WorldGenSettings::new(seed),
             last_played: -1,
-            level_name: "world".to_string(),
+            level_name: "world".to_owned(),
             spawn_x: 0,
             spawn_y: 200,
             spawn_z: 0,

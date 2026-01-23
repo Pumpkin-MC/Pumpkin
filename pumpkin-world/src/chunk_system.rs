@@ -289,7 +289,7 @@ impl ChunkLoading {
     ) {
         debug!("high_priority {pri:?}");
 
-        let mut header = "X/Y".to_string();
+        let mut header = "X/Y".to_owned();
         for y in sy..=ty {
             header.push_str(&format!("{y:4}"));
         }
@@ -1443,7 +1443,7 @@ impl GenerationSchedule {
             io_lock.clone(),
         ));
 
-        let builder = thread::Builder::new().name("Schedule Thread".to_string());
+        let builder = thread::Builder::new().name("Schedule Thread".to_owned());
         thread_tracker.push(
             builder
                 .spawn(move || {
