@@ -2,7 +2,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(default)]
 pub struct QueryConfig {
     pub enabled: bool,

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, SocketAddr};
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(default)]
 pub struct RCONConfig {
     /// Whether RCON is enabled.

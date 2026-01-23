@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 // Lets face it, the only reason we play this game is because of fun 🙃
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(default)]
 pub struct FunConfig {
     pub april_fools: bool,

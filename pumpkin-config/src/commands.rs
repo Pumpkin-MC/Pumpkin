@@ -1,7 +1,7 @@
 use pumpkin_util::PermissionLvl;
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(default)]
 pub struct CommandsConfig {
     /// Whether commands from the console are accepted.

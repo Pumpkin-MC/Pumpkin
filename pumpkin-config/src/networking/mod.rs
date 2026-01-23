@@ -13,7 +13,7 @@ pub mod proxy;
 pub mod query;
 pub mod rcon;
 
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Debug)]
 pub struct NetworkingConfig {
     pub authentication: AuthenticationConfig,
     pub query: QueryConfig,
