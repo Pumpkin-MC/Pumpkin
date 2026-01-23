@@ -7,7 +7,8 @@ use std::{
 use crate::{LoggerOption, command::client_suggestions, plugin::TypedPayloadHandler};
 use pumpkin_util::{
     PermissionLvl,
-    permission::{Permission, PermissionManager}, resource_location::ResourceLocation,
+    permission::{Permission, PermissionManager},
+    resource_location::ResourceLocation,
 };
 use tokio::sync::RwLock;
 

@@ -664,10 +664,10 @@ impl JavaClient {
             SCustomPayload::PACKET_ID => {
                 let raw = SCustomPayload::read(payload)?;
                 let handlers = server.payload_handlers.read().await;
-                if let Some(handler) = handlers.get(&raw.channel) {
-                    if let Err(e) = handler.handle(player.clone(), server.clone(), &raw.data) {
-                        log::warn!("Failed to handle custom payload {}: {}", raw.channel, e);
-                    }
+                if let Some(handler) = handlers.get(&raw.channel)
+                    && let Err(e) = handler.handle(player.clone(), server.clone(), &raw.data)
+                {
+                    log::warn!("Failed to handle custom payload {}: {}", raw.channel, e);
                 }
             }
             _ => {
