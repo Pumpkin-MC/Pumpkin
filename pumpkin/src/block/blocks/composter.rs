@@ -16,6 +16,7 @@ use pumpkin_data::{
     item::Item,
     world::WorldEvent,
 };
+use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, item::ItemStack, tick::TickPriority, world::BlockFlags};
@@ -47,18 +48,28 @@ impl BlockBehaviour for ComposterBlock {
             let props = ComposterLikeProperties::from_state_id(state_id, args.block);
             let level = props.get_level();
 
+            // Check if the composter is full
             if level == 8 {
                 self.clear_composter(args.world, args.position, state_id, args.block)
                     .await;
                 return BlockActionResult::Consume;
             }
 
-            let item_id = args.item_stack.lock().await.item.id;
+            let mut item_stack = args.item_stack.lock().await;
+            let item_id = item_stack.item.id;
 
-            if level < 7
-                && let Some(chance) = get_composter_increase_chance_from_item_id(item_id)
-                && (level == 0 || rand::rng().random_bool(f64::from(chance)))
-            {
+            // Check if the item is consumable by the composter
+            let Some(chance) = get_composter_increase_chance_from_item_id(item_id) else {
+                return BlockActionResult::Pass;
+            };
+
+            // Consume one item from the stack (if in survival mode)
+            if !args.player.has_infinite_materials() {
+                item_stack.decrement(1);
+            }
+
+            // Determine if the composter level should increase
+            if level < 7 && (level == 0 || rand::rng().random_bool(f64::from(chance))) {
                 self.update_level_composter(
                     args.world,
                     args.position,
@@ -70,11 +81,10 @@ impl BlockBehaviour for ComposterBlock {
                 args.world
                     .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
                     .await;
-
-                return BlockActionResult::Consume;
             }
 
-            BlockActionResult::Pass
+            // Consume the item
+            BlockActionResult::Consume
         })
     }
 
