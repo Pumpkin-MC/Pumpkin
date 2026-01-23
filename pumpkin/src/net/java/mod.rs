@@ -662,7 +662,13 @@ impl JavaClient {
                     .await;
             }
             SCustomPayload::PACKET_ID => {
-                // TODO: this fixes Failed to handle player packet id for now
+                let raw = SCustomPayload::read(payload)?;
+                let handlers = server.payload_handlers.read().await;
+                if let Some(handler) = handlers.get(&raw.channel) {
+                    if let Err(e) = handler.handle(player.clone(), server.clone(), &raw.data) {
+                        log::warn!("Failed to handle custom payload {}: {}", raw.channel, e);
+                    }
+                }
             }
             _ => {
                 log::warn!("Failed to handle player packet id {}", packet.id);

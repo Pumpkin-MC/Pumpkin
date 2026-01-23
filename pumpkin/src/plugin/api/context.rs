@@ -4,10 +4,10 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use crate::{LoggerOption, command::client_suggestions};
+use crate::{LoggerOption, command::client_suggestions, plugin::TypedPayloadHandler};
 use pumpkin_util::{
     PermissionLvl,
-    permission::{Permission, PermissionManager},
+    permission::{Permission, PermissionManager}, resource_location::ResourceLocation,
 };
 use tokio::sync::RwLock;
 
@@ -255,6 +255,51 @@ impl Context {
             _phantom: std::marker::PhantomData,
         };
         handlers_vec.push(Box::new(typed_handler));
+    }
+
+    /// Registers a custom payload handler for a specific channel.
+    ///
+    /// This method allows plugins to register a handler function for custom payload packets
+    /// sent through a specific channel. The handler function will be called with the deserialized
+    /// payload data when a custom payload packet is received on the specified channel.
+    ///
+    /// # Type Parameters
+    /// - `T`: The type to deserialize the payload data into. Must implement `serde::de::DeserializeOwned`.
+    /// - `H`: The type of the handler function.
+    ///
+    /// # Arguments
+    /// - `channel`: The channel name to register the handler for.
+    /// - `handler`: The handler function to call with the deserialized data.
+    ///
+    /// # Example
+    /// ```
+    /// // Define a struct for the payload data
+    /// #[derive(serde::Deserialize)]
+    /// struct MyPayload {
+    ///     value: i32,
+    /// }
+    ///
+    /// // Register the handler
+    /// context.register_payload("my:channel", |player, server, data| {
+    ///     println!("Received payload with value: {}", data.value);
+    /// }).await;
+    /// ```
+    pub async fn register_payload<T, H>(&self, channel: impl Into<ResourceLocation>, handler: H)
+    where
+        T: serde::de::DeserializeOwned + Send + Sync + 'static,
+        H: Fn(Arc<Player>, Arc<Server>, T) + Send + Sync + 'static,
+    {
+        let channel_name = channel.into();
+        let typed_handler = TypedPayloadHandler {
+            handler: Arc::new(handler),
+            _phantom: std::marker::PhantomData,
+        };
+
+        self.server
+            .payload_handlers
+            .write()
+            .await
+            .insert(channel_name, Box::new(typed_handler));
     }
 
     /// Registers a custom plugin loader that can load additional plugin types.
