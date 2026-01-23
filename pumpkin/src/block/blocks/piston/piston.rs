@@ -6,6 +6,7 @@ use pumpkin_data::{
         BlockProperties, MovingPistonLikeProperties, PistonHeadLikeProperties, PistonType,
     },
     block_state::PistonBehavior,
+    sound::{Sound, SoundCategory},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
@@ -13,6 +14,7 @@ use pumpkin_world::{
     block::entities::{has_block_block_entity, piston::PistonBlockEntity},
     world::BlockFlags,
 };
+use rand::Rng;
 
 use crate::{
     block::{
@@ -153,6 +155,17 @@ impl BlockBehaviour for PistonBlock {
                         BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
                     )
                     .await;
+                // Play piston extend sound
+                let pitch = rand::rng().random_range(0.6f32..0.85);
+                world
+                    .play_sound_fine(
+                        Sound::BlockPistonExtend,
+                        SoundCategory::Blocks,
+                        &pos.to_centered_f64(),
+                        0.5,
+                        pitch,
+                    )
+                    .await;
                 return true;
             }
             // Reduce Piston
@@ -244,6 +257,17 @@ impl BlockBehaviour for PistonBlock {
                     )
                     .await;
             }
+            // Play piston contract sound
+            let pitch = rand::rng().random_range(0.6f32..0.75);
+            world
+                .play_sound_fine(
+                    Sound::BlockPistonContract,
+                    SoundCategory::Blocks,
+                    &pos.to_centered_f64(),
+                    0.5,
+                    pitch,
+                )
+                .await;
             true
         })
     }
