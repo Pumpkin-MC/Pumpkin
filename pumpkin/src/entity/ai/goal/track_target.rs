@@ -20,7 +20,7 @@ pub struct TrackTargetGoal {
     can_navigate_flag: i32,
     check_can_navigate_cooldown: i32,
     time_without_visibility: i32,
-    max_time_without_visibility: i32, // Default 60
+    max_time_without_visibility: i32,
 }
 
 #[expect(dead_code)]
@@ -45,7 +45,7 @@ impl TrackTargetGoal {
 
     // TODO: get from entity attribute
     pub fn get_follow_range(_mob: &MobEntity) -> f32 {
-        1.0
+        32.0
     }
 
     fn can_navigate_to_entity(&mut self, mob: &dyn Mob, _target: &LivingEntity) -> bool {
@@ -103,14 +103,12 @@ impl Goal for TrackTargetGoal {
             let mob = mob.get_mob_entity();
             let mob_target = mob.target.lock().await;
 
-            // We need to decide which target to use for the check
             let target = if mob_target.is_some() {
                 (*mob_target).clone()
             } else {
                 self.target.clone()
             };
 
-            // Drop the guard immediately after access to release the lock
             drop(mob_target);
 
             if target.is_none() {
@@ -125,17 +123,14 @@ impl Goal for TrackTargetGoal {
             self.can_navigate_flag = 0;
             self.check_can_navigate_cooldown = 0;
             self.time_without_visibility = 0;
-            // No await needed here
         })
     }
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             let mob = mob.get_mob_entity();
-
             let mut mob_target = mob.target.lock().await;
             *mob_target = None;
-
             self.target = None;
         })
     }

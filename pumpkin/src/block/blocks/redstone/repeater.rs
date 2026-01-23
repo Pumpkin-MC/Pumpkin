@@ -162,7 +162,7 @@ impl BlockBehaviour for RepeaterBlock {
                 self,
                 args.world,
                 *args.position,
-                BlockState::from_id(args.state_id).id,
+                args.state_id,
                 args.block,
             )
             .await;

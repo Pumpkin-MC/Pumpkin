@@ -7,7 +7,7 @@ pub(crate) fn build() -> TokenStream {
     println!("cargo:rerun-if-changed=../assets/tracked_data.json");
 
     let mut handlers: Vec<(String, u8)> =
-        serde_json::from_str::<std::collections::HashMap<String, u8>>(
+        serde_json::from_str::<std::collections::BTreeMap<String, u8>>(
             &fs::read_to_string("../assets/tracked_data.json").unwrap(),
         )
         .expect("Failed to parse tracked_data.json")

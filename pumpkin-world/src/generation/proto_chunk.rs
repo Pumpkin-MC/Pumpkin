@@ -1133,6 +1133,13 @@ impl BlockAccessor for ProtoChunk {
         Box::pin(async move { self.get_block_state(&position.0).to_state() })
     }
 
+    fn get_block_state_id<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = BlockStateId> + Send + 'a>> {
+        Box::pin(async move { self.get_block_state(&position.0).0 })
+    }
+
     fn get_block_and_state<'a>(
         &'a self,
         position: &'a BlockPos,

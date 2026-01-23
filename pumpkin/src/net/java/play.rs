@@ -324,7 +324,7 @@ impl JavaClient {
 
                 if !player.abilities.lock().await.flying {
                     player.living_entity
-                        .update_fall_distance(
+                        .fall(
                             player.clone(),
                             height_difference,
                             packet.collision & FLAG_ON_GROUND != 0,
@@ -449,7 +449,7 @@ impl JavaClient {
                     .await;
                 if !player.abilities.lock().await.flying {
                     player.living_entity
-                        .update_fall_distance(
+                        .fall(
                             player.clone(),
                             height_difference,
                             (packet.collision & FLAG_ON_GROUND) != 0,
@@ -2036,6 +2036,11 @@ impl JavaClient {
         let _replaced_id = world
             .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
             .await;
+        self.send_packet_now(&CBlockUpdate::new(
+            final_block_pos,
+            VarInt(i32::from(new_state)),
+        ))
+        .await;
 
         server
             .block_registry

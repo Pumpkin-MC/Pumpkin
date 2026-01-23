@@ -1,16 +1,17 @@
 use crate::entity::mob::Mob;
 use std::{any::TypeId, ops::BitOr, pin::Pin, ptr};
 
-pub mod active_target_goal;
-pub mod ambient_stand_goal;
+pub mod active_target;
+pub mod ambient_stand;
+pub mod creeper_ignite;
 pub mod goal_selector;
-pub mod look_around_goal;
+pub mod look_around;
 pub mod look_at_entity;
-mod melee_attack_goal;
-pub mod move_to_target_pos_goal;
-pub mod step_and_destroy_block_goal;
-mod track_target_goal;
-pub mod zombie_attack_goal;
+mod melee_attack;
+pub mod move_to_target_pos;
+pub mod step_and_destroy_block;
+mod track_target;
+pub mod zombie_attack;
 
 #[must_use]
 pub fn to_goal_ticks(server_ticks: i32) -> i32 {

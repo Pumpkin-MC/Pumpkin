@@ -9,7 +9,7 @@ use core::str;
 use pumpkin_protocol::{
     ConnectionState,
     java::{
-        client::config::{CFinishConfig, CRegistryData, CUpdateTags},
+        client::config::{CFinishConfig, CRegistryData, CUpdateTags, RegistryEntry},
         server::config::{
             ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
             SConfigResourcePack, SKnownPacks, SPluginMessage,
@@ -152,11 +152,13 @@ impl JavaClient {
     pub async fn handle_known_packs(&self, server: &Server, _config_acknowledged: SKnownPacks) {
         log::debug!("Handling known packs");
         for registry in &server.cached_registry {
-            self.send_packet_now(&CRegistryData::new(
-                &registry.registry_id,
-                &registry.registry_entries,
-            ))
-            .await;
+            let entries: Vec<RegistryEntry> = registry
+                .registry_entries
+                .iter()
+                .map(|r| RegistryEntry::new(r.entry_id.clone(), r.data.clone()))
+                .collect();
+            self.send_packet_now(&CRegistryData::new(&registry.registry_id, &entries))
+                .await;
         }
         self.send_packet_now(&CUpdateTags::new(&[
             pumpkin_data::tag::RegistryKey::Block,

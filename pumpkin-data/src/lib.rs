@@ -9,6 +9,10 @@ pub mod item;
 pub mod packet;
 
 #[rustfmt::skip]
+#[path = "generated/registry.rs"]
+pub mod registry;
+
+#[rustfmt::skip]
 #[path = "generated/screen.rs"]
 pub mod screen;
 

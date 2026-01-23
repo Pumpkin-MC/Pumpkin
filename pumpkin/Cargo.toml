@@ -24,7 +24,6 @@ pumpkin-inventory.workspace = true
 pumpkin-world.workspace = true
 pumpkin-data.workspace = true
 pumpkin-protocol.workspace = true
-pumpkin-registry.workspace = true
 pumpkin-macros.workspace = true
 
 log.workspace = true
@@ -55,7 +54,7 @@ rand.workspace = true
 num-bigint.workspace = true
 
 # Console line reading
-rustyline-async.workspace = true
+rustyline.workspace = true
 
 # encryption
 rsa = { workspace = true, features = ["sha1"] }

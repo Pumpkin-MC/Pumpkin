@@ -29,6 +29,10 @@ pub struct RegistryEntry {
 
 // TODO: No unwraps
 impl RegistryEntry {
+    pub fn new(entry_id: ResourceLocation, data: Option<Box<[u8]>>) -> Self {
+        Self { entry_id, data }
+    }
+
     pub fn from_nbt(name: &str, nbt: &impl Serialize) -> Self {
         let mut data_buf = Vec::new();
         pumpkin_nbt::serializer::to_bytes_unnamed(nbt, &mut data_buf).unwrap();

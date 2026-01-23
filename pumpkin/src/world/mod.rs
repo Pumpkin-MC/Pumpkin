@@ -606,7 +606,7 @@ impl World {
         // 5. Detailed Slow Tick Logging
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
-            log::warn!(
+            log::debug!(
                 "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?}",
                 total_elapsed.as_millis(),
                 chunk_elapsed,
@@ -695,7 +695,7 @@ impl World {
         let tick_data = self.level.get_tick_data().await;
         for scheduled_tick in tick_data.block_ticks {
             let block = self.get_block(&scheduled_tick.position).await;
-            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
+            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
                 pumpkin_block
                     .on_scheduled_tick(OnScheduledTickArgs {
                         world: self,
@@ -707,7 +707,7 @@ impl World {
         }
         for scheduled_tick in tick_data.fluid_ticks {
             let fluid = self.get_fluid(&scheduled_tick.position).await;
-            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid) {
+            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid.id) {
                 pumpkin_fluid
                     .on_scheduled_tick(self, fluid, &scheduled_tick.position)
                     .await;
@@ -718,7 +718,7 @@ impl World {
         // TODO: ^ find this deadlock ^
         for scheduled_tick in tick_data.random_ticks {
             let block = self.get_block(&scheduled_tick.position).await;
-            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block) {
+            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
                 pumpkin_block
                     .random_tick(RandomTickArgs {
                         world: self,
@@ -1044,33 +1044,29 @@ impl World {
 
         let mut positions = Vec::new();
 
-        // Include downwards for fences
-
         let min = BlockPos::floored_v(bounding_box.min.add_raw(0.0, -0.50001, 0.0));
-
         let max = bounding_box.max_block_pos();
+        let pos_iter = BlockPos::iterate(min, max);
 
-        for x in min.0.x..=max.0.x {
-            for y in min.0.y..=max.0.y {
-                for z in min.0.z..=max.0.z {
-                    let pos = BlockPos::new(x, y, z);
+        for pos in pos_iter {
+            let state = self.get_block_state(&pos).await;
 
-                    let state = self.get_block_state(&pos).await;
+            if state.is_air() {
+                continue;
+            }
 
-                    let collided = Self::check_collision(
-                        &bounding_box,
-                        pos,
-                        state,
-                        true,
-                        |collision_shape: &BoundingBox| {
-                            collisions.push(*collision_shape);
-                        },
-                    );
+            let collided = Self::check_collision(
+                &bounding_box,
+                pos,
+                state,
+                true,
+                |collision_shape: &BoundingBox| {
+                    collisions.push(*collision_shape);
+                },
+            );
 
-                    if collided {
-                        positions.push((collisions.len(), pos));
-                    }
-                }
+            if collided {
+                positions.push((collisions.len(), pos));
             }
         }
 
@@ -2981,7 +2977,7 @@ impl World {
             let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos).await;
 
             if let Some(neighbor_pumpkin_block) =
-                self.block_registry.get_pumpkin_block(neighbor_block)
+                self.block_registry.get_pumpkin_block(neighbor_block.id)
             {
                 neighbor_pumpkin_block
                     .on_neighbor_update(OnNeighborUpdateArgs {
@@ -2995,7 +2991,7 @@ impl World {
             }
 
             if let Some(neighbor_pumpkin_fluid) =
-                self.block_registry.get_pumpkin_fluid(neighbor_fluid)
+                self.block_registry.get_pumpkin_fluid(neighbor_fluid.id)
             {
                 neighbor_pumpkin_fluid
                     .on_neighbor_update(self, neighbor_fluid, &neighbor_pos, false)
@@ -3011,7 +3007,8 @@ impl World {
     ) {
         let neighbor_block = self.get_block(neighbor_block_pos).await;
 
-        if let Some(neighbor_pumpkin_block) = self.block_registry.get_pumpkin_block(neighbor_block)
+        if let Some(neighbor_pumpkin_block) =
+            self.block_registry.get_pumpkin_block(neighbor_block.id)
         {
             neighbor_pumpkin_block
                 .on_neighbor_update(OnNeighborUpdateArgs {
@@ -3450,6 +3447,13 @@ impl BlockAccessor for World {
         position: &'a BlockPos,
     ) -> Pin<Box<dyn Future<Output = &'static BlockState> + Send + 'a>> {
         Box::pin(async move { Self::get_block_state(self, position).await })
+    }
+
+    fn get_block_state_id<'a>(
+        &'a self,
+        position: &'a BlockPos,
+    ) -> Pin<Box<dyn Future<Output = BlockStateId> + Send + 'a>> {
+        Box::pin(async move { Self::get_block_state_id(self, position).await })
     }
 
     fn get_block_and_state<'a>(

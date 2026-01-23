@@ -1,14 +1,14 @@
 use super::{Mob, MobEntity};
-use crate::entity::ai::goal::look_around_goal::LookAroundGoal;
-use crate::entity::ai::goal::move_to_target_pos_goal::MoveToTargetPos;
-use crate::entity::ai::goal::step_and_destroy_block_goal::{
+use crate::entity::ai::goal::look_around::LookAroundGoal;
+use crate::entity::ai::goal::move_to_target_pos::MoveToTargetPos;
+use crate::entity::ai::goal::step_and_destroy_block::{
     StepAndDestroyBlockGoal, Stepping, SteppingFuture,
 };
-use crate::entity::ai::goal::zombie_attack_goal::ZombieAttackGoal;
+use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalFuture, ParentHandle};
 use crate::entity::{
     Entity, NBTStorage,
-    ai::goal::{active_target_goal::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
+    ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
 use crate::world::World;
 use pumpkin_data::Block;
