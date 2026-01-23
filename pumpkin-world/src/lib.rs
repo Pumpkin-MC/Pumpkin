@@ -24,7 +24,7 @@ pub type BlockStateId = u16;
 pub const CURRENT_MC_VERSION: &str = "1.21.11";
 pub const LOWEST_SUPPRORTED_PROTOCOL_VERSION: u32 = 773;
 
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.32";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.130";
 pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 898;
 
 #[macro_export]
